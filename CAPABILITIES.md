@@ -260,7 +260,7 @@ A session that can approve or push for itself makes every other rule optional.
 - THEN the guard blocks it
 
 ### Capability: contribute-from-outside
-A person without write access can suggest what a project should do, from a one-line issue to a spec change in a pull request from a fork, and its maintainer can land what they accept, with the person credited as its author. Code from outside can't land by that route, and landing a suggestion runs none of the person's code.
+A person without write access can suggest what a project should do, from a one-line issue to a spec change in a pull request from a fork, and its maintainer can land what they accept, with the person credited as its author. Issues enter the backlog only on the maintainer's yes, and the maintainer sees which are new, which the backlog has taken in and which are fixed. Code from outside can't land by that route, and landing a suggestion runs none of the person's code.
 
 #### Why
 Open-source projects grow through people outside them, but under CLM nobody reviews code and a land runs the branch's checks on the lander's machine, so what outsiders can safely offer is intent.
@@ -274,6 +274,11 @@ Open-source projects grow through people outside them, but under CLM nobody revi
 - GIVEN a branch from a fork that changes a code file, pushed as `spec/x`
 - WHEN the maintainer runs `clm land spec/x`
 - THEN it refuses, naming the file, the project's check command doesn't run and `main` is unchanged
+
+#### Scenario: a fixed issue shows
+- GIVEN an open issue taken in as a backlog item, and a change that resolved the item and has landed
+- WHEN the maintainer runs `clm intake`
+- THEN it names the issue as resolved by that change, so the maintainer can close it
 
 ### Capability: report-defects
 A person or session can report a defect in CLM itself from inside a session, where it happened.

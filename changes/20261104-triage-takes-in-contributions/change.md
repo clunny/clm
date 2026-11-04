@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 ## Intent
@@ -18,10 +18,14 @@ Every issue and pull request is treated alike, whoever wrote it, the maintainer'
 3. **Draft changes straight from issues, with no backlog step.** The issue isn't in git (`git-is-truth`), claims are keyed on backlog items, and nothing would record that the issue was taken in. Rejected.
 
 ## Design
-- **`host`** gets `list`: the open issues and pull requests, each with its number, kind, author and title; on `git` and `none` it lists nothing. `clm contribution list` prints it.
+- **`host`** gets `list`: the open issues and pull requests, each with its number, kind and author, and no text the author wrote; on `git` and `none` it lists nothing. It is a library call only: `clm intake` is its one caller, so no `clm contribution list` (`yagni`).
 - **`model`**: a backlog item may carry `issues: [<number>...]`, the host's issues it was taken in from.
+- **`clm`** dispatches `clm intake` to `clm-triage`.
 - **`orchestrator.triage`** gets `clm intake`, depending on `host`: after fetching, one line per open issue or pull request, by number: `issue <n> new`, `issue <n> imported <slug>` when an item on `origin/main` names it, `issue <n> resolved <change> <slug>` when an item that named it was deleted from `origin/main`'s backlog and a change's `resolves` or `from` names that slug (the deleted item read from `origin/main`'s history), and `pull <n> <author>`.
 - **`plugin`**: an `issue-verifier` agent with only `Read`, `Glob` and `Grep`, so it runs nothing, writes nothing and can't reach the host; and a *Contributions* choice in the triage skill, worked before the others since it feeds them: save each `new` issue's `clm contribution show` text under `.clm/intake/`, launch one verifier on all of them together (so it can find duplicates) with the session's own model, show the human each issue's own text beside the verdict and the whole proposed item, and on a yes land the items on a code branch and label and comment on the issue; close the issues the verdicts rule out, and the `resolved` ones, with a comment, each on the human's yes; and take each `pull` line through `/clm:contribution`'s steps, with the verifier's overlap check beside it.
+
+- **`CAPABILITIES.md`**: `contribute-from-outside` says issues enter the backlog only on the maintainer's yes, with a scenario for a fixed issue `clm intake` names. The guide's `contributions` page and glossary say how triage takes the inbox in.
+- **Decisions**: `issues-enter-through-the-backlog` and `untrusted-text-read-only-verifier`.
 
 ## Outcome
 A triage run shows the inbox and works it to empty: every open issue is a backlog item, closed or left on the human's word, and fixed issues get closed.

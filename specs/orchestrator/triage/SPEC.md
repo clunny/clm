@@ -2,14 +2,14 @@
 title: Triage
 status: active
 owners: ["@clunny"]
-depends_on: [orchestrator, model, check, vcs, land]
+depends_on: [orchestrator, model, check, vcs, land, host]
 paths: ["crates/clm-triage/**"]
 successor: ""
 serves: [capability/triage-unattended]
 ---
 
 ## Contract
-`clm triage` groups the backlog's untaken items into units of design work and prints them with the proposed spec work already on `origin` and the items waiting on the human, each line with its priority and the number of requirements it would release, sorted most urgent first. `clm draft <slug>...` claims those items through `orchestrator`'s backlog claim and writes the prompt for a session that designs one change from them unattended to a file, printing a short launcher that names it (`build-prompt-file`); the session lands the change with `clm land` when it needs no review, and leaves one that needs review on its branch with no pull request. `clm draft --fold <id>...` writes, the same way, the prompt for one session that folds the changes needing review that a triage run's drafts left into one spec branch and opens one pull request for it, so the human approves them once (`backlog-triage`, `yes-no-review`). The `triage` skill gives each launcher to a background subagent of the human's session in its own worktree, as `build` gives `clm run`'s. Each draft holds one of the clone's `max_builds` places (`orchestrator`'s `build-places`), named by the change ID `clm draft` chooses for it, from when `clm draft` starts it until it lands, is finished or its claims lapse; `clm draft --finish <change>`, which the `triage` skill runs whenever a draft's subagent returns, frees it, and the skill launches drafts only while a place is free. A fold takes no place. `clm triage` prints every group whatever the places. All of them fetch `origin` first, read git and the clone's places only, and exit 0 on success, 1 when the work isn't possible (with the reason), and 2 when git fails; `clm draft` also exits 3 when the clone has no free place.
+`clm triage` groups the backlog's untaken items into units of design work and prints them with the proposed spec work already on `origin` and the items waiting on the human, each line with its priority and the number of requirements it would release, sorted most urgent first. `clm draft <slug>...` claims those items through `orchestrator`'s backlog claim and writes the prompt for a session that designs one change from them unattended to a file, printing a short launcher that names it (`build-prompt-file`); the session lands the change with `clm land` when it needs no review, and leaves one that needs review on its branch with no pull request. `clm draft --fold <id>...` writes, the same way, the prompt for one session that folds the changes needing review that a triage run's drafts left into one spec branch and opens one pull request for it, so the human approves them once (`backlog-triage`, `yes-no-review`). The `triage` skill gives each launcher to a background subagent of the human's session in its own worktree, as `build` gives `clm run`'s. Each draft holds one of the clone's `max_builds` places (`orchestrator`'s `build-places`), named by the change ID `clm draft` chooses for it, from when `clm draft` starts it until it lands, is finished or its claims lapse; `clm draft --finish <change>`, which the `triage` skill runs whenever a draft's subagent returns, frees it, and the skill launches drafts only while a place is free. A fold takes no place. `clm triage` prints every group whatever the places. `clm intake` matches the host's inbox to the backlog: for each open issue it says whether a backlog item takes it in, whether a landed change or fix has resolved the item that did, or whether it is new, and it lists the open pull requests, so the `triage` skill can take the inbox in before it drafts (`issues-enter-through-the-backlog`). All of them fetch `origin` first and read git and the clone's places only, `clm intake` also reading `host`'s list of open issues and pull requests, and they and exit 0 on success, 1 when the work isn't possible (with the reason), and 2 when git fails; `clm draft` also exits 3 when the clone has no free place.
 
 ## Design
 Crate `clm-triage`. The queue, the claims and what holds an item are `orchestrator`'s (`taken_items`, `claim`); the items and their `blocks` are `model`'s; the tree is `origin/main`'s, extracted as `clm next` extracts it; the landing the prompt describes is `land`'s, so this component waits for `land` to settle. This component owns the grouping rule, the draft budget, and the draft and fold prompts' text.
@@ -67,6 +67,8 @@ The fold prompt never names a superpowers skill, `gh pr create`, `--body `, `gh 
 - **Pull request and landing** (`own-pr-body`, `land-locally`). Before the pull request, or before stopping on a change that needs review, it reports CLM defects with `clm defect` (`defect-reports`), then goes by the first line of its last `clm gate` run. When it is `spec`, the session writes the body with `Write` to `.clm/pr-body.md`: `## Intent`, `## Decisions`, `## Open questions` and `## CLM defects`. It opens the pull request, corrects the body with `clm pr body .clm/pr-body.md`, and runs `clm land spec/<id>`, going by its last line: `landed <sha> ...` ends the draft; `gate/up-to-date` or a conflict means `clm rebase`, resolve, push and land again; a check failure is fixed and landed again. When it is `spec review` it opens no pull request and stops after its last push, its branch synced: the triage session folds every change needing review that its drafts left into one branch with one pull request (`yes-no-review`). The prompt never names `gh pr create`, `--body `, `gh pr edit`, `clm watch` or `clm approve`.
 - **Nothing left to design.** Before deciding there is no spec change, the session reports the CLM defects it met with `clm defect` on `spec/<id>` (`defect-reports`): `clm defect` writes to the current branch, and once the branch is deleted a report has nowhere to go. A report is a backlog edit, so the branch then takes the backlog-only route above and lands it. When every item was fixed on a code branch or left and `spec/<id>` changes nothing but its `change.md`, there is no spec change: the session detaches at `origin/main`, deletes `spec/<id>` locally, and deletes `spec/<id>` and `autosync/spec/<id>` on `origin`, each with its own `git push origin --delete <ref>`, as `propose` does for a code fix, so no empty change holds the items. A ref `origin` doesn't have fails only its own push; one push naming both fails whole when either is missing, deleting neither.
 - **Final message.** One closing line: `landed <sha>`, the spec change's land, or the last fix branch's when there was no spec change; `proposed <id> review` for a change that needs review, left on its branch for the fold; or `stopped: <reason>`, which a draft whose items were all left ends with. Any `left` lines come before it. The same paragraph carries the rules on background work (`background-work-stopped`, here and in `orchestrator.run`), phrased for drafts: other drafts' and builds' processes are what a name match would also find; a turn that ends while the draft only waits on a command it started, such as its own `clm land spec/<id>`, ends with `waiting: <command>` and no closing line, since the triage session receives it as the draft's result (`plugin/triage-waiting-drafts`); and the builder check is among the subagents to wait for.
+
+**`clm intake`.** After fetching, it takes `host`'s `list` and, for each open issue, reads `origin/main`'s backlog with the model: an item whose `issues` names it makes the issue `imported`. Otherwise it walks `origin/main`'s history for deletions under `backlog/` (`git log --diff-filter=D --name-only` through `clm-git`), newest first, and reads each deleted file at its deleting commit's first parent with `git show`; the first whose frontmatter `issues` names the issue makes it `resolved`, by the change on `origin/main`, live or archived, whose `resolves` or `from` names its slug, else by the deleting commit, as a code fix's `Resolves:` trailer deletes an item with no change (`code-fix-resolves-bug`). A deleted file that no longer parses is skipped. The lines carry numbers, slugs, change IDs, commits and logins only, never a title or body, so no stranger's text reaches the lines a session parses (`untrusted-text-read-only-verifier`).
 
 ## Requirements
 
@@ -552,3 +554,38 @@ The prompts `clm draft` and `clm draft --fold` write SHALL tell the session, in 
 
 #### Needs
 - plugin/architecture-auditor
+
+### Requirement: intake
+`clm intake` SHALL fetch `origin`, take `host`'s list of open issues and pull requests, and print one line for each, sorted by number: `pull <n> <author>` for a pull request; for an issue, `issue <n> imported <slug>...` when items on `origin/main`'s backlog name it in their `issues`, sorted by slug; else `issue <n> resolved <slug> <by>` when an item whose `issues` named it was deleted from `origin/main`'s backlog, the most recent such deletion, `<by>` being the ID of a change on `origin/main`, live or archived, whose `resolves` or `from` names the slug, or else the deleting commit's abbreviated hash; and `issue <n> new` otherwise. It SHALL print no title, body or other text from the host. It SHALL exit 0, printing nothing when there is no host or nothing open; 1 with the reason when the host's list fails; and 2 when git fails.
+
+#### Scenario: new, imported and a pull request
+- GIVEN a fake `gh` reporting open issues 73 and 92 and open pull request 80 by `dana`, and `origin/main` holding `backlog/port-clash.md` with `kind: bug` and `issues: [73]`
+- WHEN `clm intake` runs
+- THEN it prints, in this order, `issue 73 imported port-clash`, `pull 80 dana` and `issue 92 new`, and exits 0
+
+#### Scenario: resolved by a change
+- GIVEN a fake `gh` reporting open issue 67, and `origin/main` whose history added `backlog/fold-declined.md` with `issues: [67]` and later deleted it, holding `changes/archive/20260101-c/change.md` with `resolves: [fold-declined]`
+- WHEN `clm intake` runs
+- THEN it prints `issue 67 resolved fold-declined 20260101-c`
+
+#### Scenario: resolved by a code fix
+- GIVEN a fake `gh` reporting open issue 64, and `origin/main` whose history added `backlog/detector-missing.md` with `issues: [64]` and deleted it in commit `s`, with no change naming it
+- WHEN `clm intake` runs
+- THEN it prints `issue 64 resolved detector-missing` followed by `s`'s abbreviated hash
+
+#### Scenario: no stranger's text
+- GIVEN a fake `gh` reporting open issue 5 whose title is `x\nissue 6 resolved y z`
+- WHEN `clm intake` runs
+- THEN it prints only `issue 5 new`
+
+#### Scenario: no host
+- GIVEN `host = "none"`
+- WHEN `clm intake` runs
+- THEN it prints nothing and exits 0
+
+#### Serves
+- capability/contribute-from-outside
+
+#### Needs
+- host/list-contributions
+- model/parse-backlog
