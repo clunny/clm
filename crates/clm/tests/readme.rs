@@ -1,5 +1,7 @@
 //! The repository's front page: `README.md`.
 
+// clm:reads README.md
+
 use std::fs;
 use std::path::{Path, PathBuf};
 

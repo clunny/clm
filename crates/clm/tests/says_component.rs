@@ -1,6 +1,8 @@
 //! What `clm` prints says component, ancestors and placeholder component, never the
 //! old words (clm/says-component, `component-words`).
 
+// clm:reads README.md
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;

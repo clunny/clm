@@ -1,6 +1,12 @@
 //! A term a completed rename retired stays out of the text CLM ships or works from
 //! (clm/retired-terms).
 
+// clm:reads specs/**
+// clm:reads ARCHITECTURE.md
+// clm:reads CAPABILITIES.md
+// clm:reads CLAUDE.md
+// clm:reads README.md
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
