@@ -58,11 +58,20 @@ fn repo() -> FakeRepo {
     repo
 }
 
-fn setup_with(repo: FakeRepo) -> (Fake, String) {
+/// `o/a` as `repo`, a user who can read it and, when `real`, a real `Replica` object built
+/// from it, which answers the writes (`writes-to-object`).
+fn setup_as(repo: FakeRepo, real: bool) -> (Fake, String) {
     let fake = Fake::default();
     fake.gh.add_repo("o/a", repo);
     let cookie = fake.user("u", &["o/a"]);
+    if real {
+        fake.real_object("o/a");
+    }
     (fake, cookie)
+}
+
+fn setup_with(repo: FakeRepo) -> (Fake, String) {
+    setup_as(repo, true)
 }
 
 /// `x`'s version in `CAPABILITIES.md` now.
@@ -115,7 +124,7 @@ const GIT: &str = "https://api.github.com/repos/o/a/git";
 #[test]
 fn the_objects_report() {
     // req:web.worker/capabilities@9e23bf9c
-    let (fake, cookie) = setup_with(repo());
+    let (fake, cookie) = setup_as(repo(), false);
     let view = json!({"report": {"capabilities": [{"slug": "x"}]}, "signed": true});
     fake.set_view("o/a", "capabilities", view.clone());
     let res = fake.handle(get("/api/repos/o/a/capabilities", &cookie));
@@ -129,7 +138,7 @@ fn the_objects_report() {
 
 #[test]
 fn decide_appends_decided() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     let res = decide(&fake, &cookie, "x", &body(&version(), "low", "cut"));
     assert_eq!(res.status, 200, "{res:?}");
@@ -163,13 +172,10 @@ fn decide_appends_decided() {
     assert_eq!(last["decision"], "cut");
     assert_eq!(last["settles"], json!(["fr"]));
     assert_eq!(&body_json(&res), last, "the answer is the record");
-    // The object is told the ledger moved, as GitHub's webhook will, so a read with `fresh`
-    // right after shows the decision.
-    let told = fake.replicas.asked("o/a");
-    assert_eq!(told.len(), 1);
-    let sent = told[0].body.as_ref().unwrap();
-    assert_eq!(told[0].path, "/event");
-    assert_eq!(sent["body"]["ref"], "refs/heads/clm/ledger/clunny/web");
+    // One post to the object, and nothing else is told of the write.
+    let asked = fake.replicas.asked("o/a");
+    assert_eq!(asked.len(), 1);
+    assert_eq!(asked[0].path, "/write");
     // Settled now: a second decision settles nothing.
     let res = decide(&fake, &cookie, "x", &body(&version(), "high", "keep"));
     assert_eq!(res.status, 200);
@@ -198,7 +204,7 @@ fn push(fake: &Fake, sha: &str, files: FileMap) {
 
 #[test]
 fn decide_moved_version_409() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     let seen = version();
     // `x` is reworded on main after the page was drawn.
@@ -223,7 +229,7 @@ fn decide_moved_version_409() {
 
 #[test]
 fn decide_percent_decodes_the_slug() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     assert_eq!(
         decide(&fake, &cookie, "%78", &body(&version(), "low", "cut")).status,
@@ -233,7 +239,7 @@ fn decide_percent_decodes_the_slug() {
 
 #[test]
 fn decide_refuses_specs_that_dont_load() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     let mut broken = files_now();
     broken.insert(
@@ -252,10 +258,16 @@ fn decide_refuses_specs_that_dont_load() {
 
 #[test]
 fn github_fails_502() {
-    // req:web.worker/decide@bfd28177
-    let mut repo = repo();
-    repo.signers_fail = true;
-    let (fake, cookie) = setup_with(repo);
+    // req:web.worker/decide@fb1ef580
+    let (fake, cookie) = setup_with(repo());
+    // The object has its views; GitHub then fails the read of the default branch's ref.
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .ref_fails
+        .insert("main".into());
     assert_eq!(
         decide(&fake, &cookie, "x", &body(&version(), "low", "cut")).status,
         502
@@ -265,7 +277,7 @@ fn github_fails_502() {
 
 #[test]
 fn decide_append_fails_502() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let mut repo = repo();
     // The user's ledger branch exists but its `records.jsonl` can't be read, so no append.
     repo.branches
@@ -279,7 +291,7 @@ fn decide_append_fails_502() {
 
 #[test]
 fn decide_bad_body_422_no_request() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     let v = version();
     for bad in [
@@ -295,6 +307,10 @@ fn decide_bad_body_422_no_request() {
     ] {
         let before = fake.gh.calls.borrow().len();
         assert_eq!(decide(&fake, &cookie, "x", &bad).status, 422, "{bad:?}");
+        assert!(
+            fake.replicas.asked("o/a").is_empty(),
+            "{bad:?}: the object is not asked"
+        );
         assert_eq!(
             fake.gh.calls.borrow().len(),
             before,
@@ -306,7 +322,7 @@ fn decide_bad_body_422_no_request() {
 
 #[test]
 fn decide_signed_422() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     sign_main(&fake);
     let res = decide(&fake, &cookie, "x", &body("0123abcd", "high", "keep"));
@@ -320,7 +336,7 @@ fn decide_signed_422() {
 
 #[test]
 fn decide_unknown_capability_422() {
-    // req:web.worker/decide@bfd28177
+    // req:web.worker/decide@fb1ef580
     let (fake, cookie) = setup_with(repo());
     let res = decide(&fake, &cookie, "nope", &body(&version(), "high", "keep"));
     assert_eq!(res.status, 422);

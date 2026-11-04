@@ -40,10 +40,13 @@ fn graph(files: &FileMap) -> clm_model::Graph {
     clm_model::load_files(&files).0
 }
 
+/// `o/a` as `repo`, a user who can read it and a real `Replica` object built from it, which
+/// answers the writes (`writes-to-object`).
 fn setup_with(repo: FakeRepo) -> (Fake, String) {
     let fake = Fake::default();
     fake.gh.add_repo("o/a", repo);
     let cookie = fake.user("u", &["o/a"]);
+    fake.real_object("o/a");
     (fake, cookie)
 }
 
@@ -92,7 +95,7 @@ const GIT: &str = "https://api.github.com/repos/o/a/git";
 
 #[test]
 fn decide_appends_decided() {
-    // req:web.worker/architecture-decide@4b2aecfa
+    // req:web.worker/architecture-decide@296cef09
     let (fake, cookie) = setup();
     let res = decide(&fake, &cookie, "e", &body(&version(), "medium", "redesign"));
     assert_eq!(res.status, 200, "{res:?}");
@@ -134,7 +137,7 @@ fn decide_appends_decided() {
 
 #[test]
 fn decide_percent_decodes_the_slug() {
-    // req:web.worker/architecture-decide@4b2aecfa
+    // req:web.worker/architecture-decide@296cef09
     let (fake, cookie) = setup();
     assert_eq!(
         decide(&fake, &cookie, "%65", &body(&version(), "low", "cut")).status,
@@ -144,7 +147,7 @@ fn decide_percent_decodes_the_slug() {
 
 #[test]
 fn not_an_entry_or_moved_version() {
-    // req:web.worker/architecture-decide@4b2aecfa
+    // req:web.worker/architecture-decide@296cef09
     let (fake, cookie) = setup();
     let res = decide(&fake, &cookie, "nope", &body(&version(), "high", "keep"));
     assert_eq!(res.status, 422);
@@ -161,7 +164,7 @@ fn not_an_entry_or_moved_version() {
 
 #[test]
 fn bad_body_and_broken_specs_422() {
-    // req:web.worker/architecture-decide@4b2aecfa
+    // req:web.worker/architecture-decide@296cef09
     let (fake, cookie) = setup();
     let v = version();
     for bad in [
@@ -173,6 +176,10 @@ fn bad_body_and_broken_specs_422() {
         let before = fake.gh.calls.borrow().len();
         assert_eq!(decide(&fake, &cookie, "e", &bad).status, 422, "{bad:?}");
         assert_eq!(fake.gh.calls.borrow().len(), before, "no GitHub request");
+        assert!(
+            fake.replicas.asked("o/a").is_empty(),
+            "the object is not asked"
+        );
     }
     let mut broken = files_now();
     broken.insert("specs/c/SPEC.md".into(), b"no frontmatter\n".to_vec());
@@ -186,7 +193,7 @@ fn bad_body_and_broken_specs_422() {
 
 #[test]
 fn signed_422() {
-    // req:web.worker/architecture-decide@4b2aecfa
+    // req:web.worker/architecture-decide@296cef09
     let (fake, cookie) = setup();
     let mut signed = files_now();
     signed.insert(
@@ -205,10 +212,15 @@ fn signed_422() {
 
 #[test]
 fn github_fails_502() {
-    // req:web.worker/architecture-decide@4b2aecfa
-    let mut repo = FakeRepo::new("111", files_now());
-    repo.signers_fail = true;
-    let (fake, cookie) = setup_with(repo);
+    // req:web.worker/architecture-decide@296cef09
+    let (fake, cookie) = setup();
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .ref_fails
+        .insert("main".into());
     assert_eq!(
         decide(&fake, &cookie, "e", &body(&version(), "low", "cut")).status,
         502
