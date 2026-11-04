@@ -26,6 +26,7 @@ A land on a tree whose code was already checked skips `[land] check`, because `c
 - `check.affected`: a file the coverage scan reads that holds `clm:reads <glob>` is a *reader* of the changed paths, doc-only included, that its glob matches. Readers join the `file` lines (`affected-readers`, `affected-files`, `doc-only-selects-nothing`), and `--readers` prints them alone.
 - `land`: on a tree whose code key is checked, the land runs `clm affected --base <sha> --readers` in its temporary worktree. Empty output goes on as today, with no lock. Any line moves the attempt into the land tree under the lock, where it runs `[land] check` with that selection, appending no second `checked` record. A failed selection runs every test (`selected-tests`, `land`, the Design's **Readers of checked code**).
 - `clm` and `init`: this repository's tests that read its own doc-only files carry the markers (`clm/doc-readers-marked`, `init/doc-readers-marked`).
+- `ci`'s Design, which said a checked tree runs only `clm check --no-detectors`, says the readers still run.
 - `CLAUDE.md`'s gotcha on checked trees says the readers still run. `docs/decisions/doc-readers-marked.md` records the choice.
 
 ## Edge cases and workarounds
