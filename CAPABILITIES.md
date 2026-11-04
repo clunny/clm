@@ -18,6 +18,17 @@ People adopt what they understand, and until now CLM explained itself only once 
 - WHEN they read the homepage's first screen and follow Get started
 - THEN they have seen that CLM reconciles the code to the intent they declare, and they are on the guide's quickstart, with the commands that install CLM
 
+### Capability: see-site-use
+The maintainer can see how many people visit the public site, where they come from, and how far they get from the homepage to installing CLM, the pages they read, what they click and whether they copy the install command, with no cookies and no personal data collected.
+
+#### Why
+Without it nobody can tell whether the site does what `learn-clm` asks, or where newcomers give up.
+
+#### Scenario: from homepage to a copied command
+- GIVEN the site as released, with its analytics website ID, and the analytics service stubbed
+- WHEN a visitor opens the homepage, clicks Get started and copies the install command on the quickstart
+- THEN the service has loaded on both pages with that website ID and Do Not Track honoured, and received a `click` labelled Get started and a `copy-command` naming the quickstart and the command
+
 ### Capability: adopt-clm
 A person can bring a new or existing repository under CLM: set up its tooling and get a first spec, drafted from a conversation or recovered from the code.
 
