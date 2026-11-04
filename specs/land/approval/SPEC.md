@@ -129,6 +129,9 @@ With `approval = "other"`, `clm land` SHALL count an `approved` record only when
 - WHEN `clm land spec/x` runs from a checkout of `spec/x`
 - THEN it exits 2 naming `origin/main:clm.toml` and `approval`, runs no check, and `main` and the ledger are unchanged
 
+#### Needs
+- gate/files-outside-spec-paths
+
 #### Serves
 - capability/approve-intent
 - architecture/land-policy-from-base
