@@ -18,6 +18,7 @@ fn project_and_contributor() -> (Repo, Repo) {
     let first = repo.clm(&["land", "impl/f"]);
     assert!(first.status.success(), "{}", printed(&first));
     // The first land ran the check; forget that, to see only what the next one does.
+    assert!(marker(&repo).exists(), "the first land ran the check");
     std::fs::remove_file(marker(&repo)).unwrap();
     repo.git(&["pull", "-q", "origin", "main"]);
     let bob = repo.clone_as("bob");
@@ -58,6 +59,10 @@ fn code_from_outside() {
     let out = repo.clm(&["land", "spec/x"]);
     let text = printed(&out);
     assert!(!out.status.success(), "{text}");
+    assert!(
+        text.contains("a spec branch holds only spec paths"),
+        "{text}"
+    );
     assert!(text.contains("src/lib.rs"), "{text}");
     assert!(!text.lines().any(|l| l.starts_with("landed ")), "{text}");
     assert!(!marker(&repo).exists(), "the project's check command ran");
