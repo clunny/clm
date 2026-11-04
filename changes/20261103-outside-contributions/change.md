@@ -33,6 +33,7 @@ The usual open-source route doesn't fit CLM. Claims, ledgers and `clm land` all 
 - `land/spec-branch-holds-spec-paths`, using `gate/files-outside-spec-paths`: `clm land` refuses such a branch before any check runs.
 - Capability `contribute-from-outside`, with its test.
 - The guide page `contributions`: the levels, credit, security reasoning, limits and a `CONTRIBUTING.md` starter.
+- `host/contribution-operations` and `clm/contribution-command`: `clm contribution` reads, fetches, comments on, closes and labels contributions, and opens a pull request on a fork's parent. The skills may not name `gh pr` or `gh api` (`plugin/skills`), and `host-adapters` holds everything host-specific in the adapter, so the skills use these rather than `gh`.
 - `plugin/propose-in-a-fork`: `/clm:propose` asks whether a fork contributes back and, if so, stops at a pull request on the parent.
 - `plugin/contribution-skill`: `/clm:contribution <number>` takes in a pull request or issue on the maintainer's side.
 

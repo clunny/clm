@@ -10,12 +10,15 @@ Why not code: nobody reviews code (`ai-writes-code`), and `clm land` runs the me
 
 This is method, so it's in the guide's `contributions` page and the plugin's skills (`method-in-the-plugin`), and each project chooses whether to take contributions. `/clm:contribution` is the maintainer's side and `/clm:propose` the contributor's, stopping at the pull request when the work goes back to a parent. Asking whether it does keeps a hard fork, whose owner lands on its own `main`, working as any other project.
 
+Both skills reach the host through `clm contribution`, since everything host-specific stays in the adapter (`host-adapters`). Those commands only read and respond: the judging stays with the skill, the human and `clm land`.
+
 An idea is agreed in an issue first, since a spec costs its author model use. The maintainer's session rebases, so contributors needn't chase `main`. Credit is the commit's author: `clm land` keeps the commits, and a rebase keeps their author.
 
 Left for later: collaborators with write access, which on this repository can run `clm land` with nothing on the host limiting them. Before the first, turn on `docs/allowed_signers` and `approval = "other"`.
 
 Rejected:
 - **Fork pull requests with code, landed after reading them.** It asks the maintainer to review code, which `ai-writes-code` says no human does, and they'd be running it.
-- **A `clm pr accept <number>` command.** A product feature before any pull request has arrived (`yagni`). `spec-branches-hold-spec-paths` holds at the last step; revisit if volume justifies it.
+- **A `clm pr accept <number>` command that judges and pushes in one step.** More machinery than the route needs before any pull request has arrived (`yagni`). `spec-branches-hold-spec-paths` holds at the last step; revisit if volume justifies it.
 - **An Actions workflow closing code pull requests.** It needs `pull_request_target`, a known risk, is a second hosted decision-maker beside `land-locally`, and copies the gate's path list.
+- **Letting these two skills name `gh`, as an exemption.** Smaller, but it writes GitHub into the method every host's projects share, against `host-adapters`.
 - **A rule in `CLAUDE.md` alone.** Other projects would never read it.

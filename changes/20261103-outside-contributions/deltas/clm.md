@@ -12,6 +12,9 @@ component: clm
 - WHEN a test reads it
 - THEN it holds `/plugin marketplace add clunny/clm`, `/plugin install clm@clm`, `docs/guide/quickstart.md`, `CONTRIBUTING.md`, `.github/SECURITY.md`, `LICENSE`, `ARCHITECTURE.md`, `CAPABILITIES.md` and `arXiv:2606.27045`, and each relative link in it names a file or directory that exists
 
+#### Needs
+- ci/security-policy
+
 #### Serves
 - capability/learn-clm
 
@@ -22,6 +25,30 @@ component: clm
 - GIVEN this repository's `CONTRIBUTING.md`
 - WHEN a test reads it
 - THEN it names each spec path, `backlog/<slug>.md`, `kind: idea`, `priority`, `/clm:propose`, `Allow edits by maintainers` and `clm guide contributions`, and doesn't hold `cargo clippy`
+
+#### Serves
+- capability/contribute-from-outside
+
+### Requirement: contribution-command
+`clm contribution` SHALL give `host`'s contribution operations as subcommands: `parent` (printing `none` when there is no parent), `sync`, `open <branch> --title <title> --body-file <file>`, `show <number>`, `fetch <number> <branch>`, `comment <number> --body-file <file> [--close]` and `label <number> <label>`. `show` SHALL print each field on its own labelled line, each changed file on its own line and the body last. A subcommand SHALL exit 1 with the reason when the operation fails or there is no host.
+
+#### Scenario: show
+- GIVEN `host = "github"` and a fake `gh` reporting pull request 7 with changed file `backlog/x.md`
+- WHEN `clm contribution show 7` runs
+- THEN it prints the author, the head repository's URL and branch, and `backlog/x.md`, and exits 0
+
+#### Scenario: no parent
+- GIVEN `host = "none"`
+- WHEN `clm contribution parent` runs
+- THEN it prints `none` and exits 0
+
+#### Scenario: no host
+- GIVEN `host = "none"`
+- WHEN `clm contribution comment 7 --body-file c.md` runs
+- THEN it exits 1 saying there is no host
+
+#### Needs
+- host/contribution-operations
 
 #### Serves
 - capability/contribute-from-outside

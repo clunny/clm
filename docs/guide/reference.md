@@ -32,6 +32,7 @@
 | `clm next` | the components ready to build |
 | `clm rebase` | rebase onto `main`, regenerate `specs/`, run the checks |
 | `clm pr open` | open a branch's pull request on the host, for reading its diff |
+| `clm contribution` | what `/clm:contribution` and `/clm:propose` use for a fork or outside contribution: `parent`, `sync`, `open`, `show`, `fetch`, `comment`, `label` |
 | `clm approve <branch>` | record your approval of the diff of a branch that needs review; Claude Code asks you to confirm it |
 | `clm land <branch>` | land a branch on `main`: gate it, merge it, run the checks on the result and push `main` |
 | `clm wrap-up` | clean up landed work, and say whether the session can end |

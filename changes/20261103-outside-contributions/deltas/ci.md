@@ -16,12 +16,12 @@ component: ci
 - capability/contribute-from-outside
 
 ### Requirement: code-of-conduct
-`.github/CODE_OF_CONDUCT.md` SHALL be the Contributor Covenant version 2.1, unchanged but for its contact, which SHALL be `conduct@clm-app.dev`.
+`.github/CODE_OF_CONDUCT.md` SHALL be the Contributor Covenant version 2.1, taken from `https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.md`, unchanged but for its contact, which SHALL be `conduct@clm-app.dev`.
 
 #### Scenario: a contributor reads it
 - GIVEN this repository's `.github/CODE_OF_CONDUCT.md`
 - WHEN a test reads it
-- THEN it holds `Contributor Covenant`, `version 2.1` and `conduct@clm-app.dev`, and no placeholder in square brackets
+- THEN it holds `Contributor Covenant`, `version 2.1` and `conduct@clm-app.dev`, and doesn't hold `[INSERT`
 
 #### Serves
 - capability/contribute-from-outside
