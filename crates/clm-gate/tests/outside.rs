@@ -105,3 +105,22 @@ fn a_rename_branch() {
             .is_empty()
     );
 }
+
+// req:gate/files-outside-spec-paths@b74ab213
+#[test]
+fn a_rename_branch_with_an_extra_code_edit() {
+    let dir = base();
+    let d = dir.path();
+    git(d, &["checkout", "-q", "-b", "pr"]);
+    let change = "---\nstatus: proposed\nrenames:\n  - requirement: a/x\n    to: y\n---\n\n## Intent\nRename.\n";
+    write(d, "changes/r/change.md", change);
+    git(d, &["add", "-A"]);
+    rename(d, "r").unwrap();
+    write(d, "crates/a/src/lib.rs", "pub fn other() {}\n");
+    commit(d, "rename and edit");
+    let files = files_outside_spec_paths(d, "main", "HEAD").unwrap();
+    assert!(
+        files.contains(&"crates/a/src/lib.rs".to_string()),
+        "{files:?}"
+    );
+}
