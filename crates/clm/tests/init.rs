@@ -138,7 +138,7 @@ fn host_line(dir: &Path) -> String {
 
 #[test]
 fn empty_repository() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let hosts = fake_hosts();
@@ -206,7 +206,7 @@ const ENFORCED: [&str; 12] = [
 
 #[test]
 fn init_writes_capabilities() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     let out = init(&dir, &["--lang", "rust"], &hosts);
@@ -506,7 +506,7 @@ fn root_outside_skips_clm_files_and_escapes() {
 
 #[test]
 fn no_remote() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(host_line(&dir), "host = \"none\"");
@@ -514,7 +514,7 @@ fn no_remote() {
 
 #[test]
 fn host_given() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     init(&dir, &["--host", "git"], &fake_hosts());
@@ -535,7 +535,7 @@ fn host_given() {
 
 #[test]
 fn host_from_origin() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     for (url, host) in [
         ("git@github.com:o/r.git", "github"),
         ("https://GitHub.com/o/r", "github"),
@@ -551,7 +551,7 @@ fn host_from_origin() {
 
 #[test]
 fn project_files_kept() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Our rules\n");
     write(&dir, "clm.toml", "defects = \"off\"\n");
@@ -1025,7 +1025,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
 
 #[test]
 fn not_a_repository() {
-    // req:init/init-files@e92fe31e
+    // req:init/init-files@8acd552f
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join("plain");
     fs::create_dir(&dir).unwrap();
