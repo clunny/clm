@@ -38,6 +38,9 @@ fn title(markdown: &str) -> &str {
 }
 
 #[cfg(test)]
+mod entry_pages;
+
+#[cfg(test)]
 mod links;
 
 #[cfg(test)]

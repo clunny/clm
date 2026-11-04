@@ -20,7 +20,7 @@ pub(super) fn links_out(file: &str, markdown: &str, pages: &[&str]) -> Vec<Strin
 
 /// `markdown` with every line of a fenced code block (```` ``` ```` or `~~~`, fences
 /// included) blanked, so the scanner sees only the rest.
-fn outside_fences(markdown: &str) -> String {
+pub(super) fn outside_fences(markdown: &str) -> String {
     let mut fence: Option<(u8, usize)> = None;
     let mut out = String::with_capacity(markdown.len());
     for line in markdown.split_inclusive('\n') {
@@ -78,7 +78,7 @@ fn targets(text: &str) -> Vec<String> {
 
 /// Where the code span opening at `start` ends, or just past its backticks when no run of
 /// as many closes it, in which case they are literal.
-fn past_code_span(bytes: &[u8], start: usize) -> usize {
+pub(super) fn past_code_span(bytes: &[u8], start: usize) -> usize {
     let n = bytes[start..].iter().take_while(|&&b| b == b'`').count();
     let mut i = start + n;
     while i < bytes.len() {
