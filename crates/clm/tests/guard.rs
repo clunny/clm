@@ -623,9 +623,10 @@ fn guard_in(cwd: &Path, command: &str, env: &[(&str, &str)]) -> (Option<i32>, St
 
 #[test]
 fn defect_ask_says_pull_request() {
-    // req:plugin.hooks.guard/defect-ask-says-pull-request@796adc3f
+    // req:plugin.hooks.guard/defect-ask-says-pull-request@c62dad6a
     let nowhere = TempDir::new().unwrap();
-    let (code, reason) = guard_in(nowhere.path(), "clm defect --title x", &[]);
+    let command = "clm defect --title x <<'EOF'\nThe gate misfired.\nEOF";
+    let (code, reason) = guard_in(nowhere.path(), command, &[]);
     assert_eq!(code, Some(0));
     assert!(reason.contains("## CLM defects"), "{reason}");
     assert!(reason.contains("pull request body"), "{reason}");
