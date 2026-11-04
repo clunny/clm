@@ -1880,6 +1880,7 @@ fn triage_launches_drafts() {
     }
     let own = sentence_with(&body, "own context");
     assert!(own.contains("Never design"), "{own}");
+    assert!(own.contains("triage-revises-declined-fold"), "{own}");
     // The closing lines, and a stopped draft is never retried.
     let stopped = sentence_with(&body, "`stopped: <reason>`");
     for needle in ["tell the user", "never retry"] {
@@ -4638,6 +4639,10 @@ fn architecture_audit() {
     }
     let launch = sentence_with(check, "`architecture-auditor`");
     assert!(launch.contains(OWN_MODEL), "{launch}");
+    assert!(launch.contains("only the change ID"), "{launch}");
+    let fix = sentence_with(check, "each `architecture-auditor` finding");
+    assert!(fix.contains("## Open questions"), "{fix}");
+    assert!(check.contains("and so does the audit"), "{check}");
     let contribution = skill_body("contribution");
     assert_eq!(
         architecture_audit_gaps("contribution", &contribution),
@@ -4671,6 +4676,8 @@ fn triage_revises_a_declined_fold() {
         "ask again",
         "the one design",
         "plain no",
+        "switch into the worktree that holds `spec/<batch>`",
+        "edit there each folded change",
     ] {
         assert!(step.contains(needle), "{needle}");
     }
