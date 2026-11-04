@@ -258,6 +258,10 @@ mod tests {
             inputs("clm defect <<EOF\ncost `date`\nEOF", "clm"),
             [heredoc("cost `date`", false)]
         );
+        assert_eq!(
+            inputs("clm defect <<EOF\ncost \\$5\nEOF", "clm"),
+            [heredoc("cost \\$5", false)]
+        );
     }
 
     // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
@@ -322,6 +326,11 @@ mod tests {
             inputs("bash -c 'clm defect < f' <<'EOF'\nx\nEOF", "clm"),
             [Stdin::File]
         );
+        assert_eq!(
+            inputs("bash -c 'clm defect < f' <<'EOF'\nx\nEOF", "bash"),
+            [heredoc("x", true)]
+        );
+        assert_eq!(inputs("bash -c 'clm defect < f'", "bash"), [Stdin::Own]);
         assert_eq!(inputs("bash <<'EOF'\nclm defect\nEOF", "clm"), [Stdin::Own]);
     }
 }
