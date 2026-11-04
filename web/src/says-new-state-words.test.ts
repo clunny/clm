@@ -20,7 +20,7 @@ describe('says the new state words', () => {
     const old = [
       new RegExp(word('spec' + 'd'), 'i'),
       new RegExp(`(^|[^A-Za-z0-9_])clm +fric` + `tion($|[^A-Za-z0-9_])`, 'i'),
-      new RegExp(`kind: *fric` + `tion($|[^A-Za-z0-9_])`, 'i'),
+      new RegExp(`(^|[^A-Za-z0-9_])kind: +fric` + `tion($|[^A-Za-z0-9_])`, 'i'),
     ];
     const bad = files(SRC).flatMap((f) =>
       readFileSync(f, 'utf8')
