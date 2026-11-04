@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # A detector requires its manifest, and the bootstrap passes before any code exists
