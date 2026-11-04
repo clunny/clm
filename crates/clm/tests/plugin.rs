@@ -4284,3 +4284,173 @@ fn build_skill_is_named_build() {
     let gaps = old_skill_name_gaps(&files);
     assert!(gaps.is_empty(), "{gaps:#?}");
 }
+
+/// The `## Contributing back from a fork` section of a `propose` skill, up to the next `## `.
+fn fork_section(body: &str) -> &str {
+    let Some(at) = body.find("## Contributing back from a fork") else {
+        return "";
+    };
+    let section = &body[at..];
+    &section[..section[3..]
+        .find("\n## ")
+        .map_or(section.len(), |end| end + 3)]
+}
+
+/// What `propose-in-a-fork` asks of the `propose` skill, one line per missing piece.
+fn fork_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "propose",
+        fork_section(body),
+        &[
+            "## Contributing back from a fork",
+            "clm contribution parent",
+            "clm contribution sync",
+            "clm contribution open",
+            "Allow edits by maintainers",
+            "clm guide contributions",
+            "clm land",
+            "clm approve",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn propose_in_a_fork() {
+    // req:plugin/propose-in-a-fork@c67f83af
+    let body = skill_body("propose");
+    assert_eq!(fork_gaps(&body), Vec::<String>::new());
+    let section = fork_section(&body);
+    // Asked once, before the branch is cut.
+    let ask = sentence_with(section, "clm contribution parent");
+    for needle in ["once", "before cutting the branch", "parent", "own project"] {
+        assert!(ask.contains(needle), "{needle}: {ask}");
+    }
+    // Work going back: sync first, neither land nor approve, then open the pull request.
+    let sync = sentence_with(section, "clm contribution sync");
+    assert!(sync.contains("first"), "{sync}");
+    let no_land = sentence_with(section, "neither");
+    assert!(
+        no_land.contains("clm land") && no_land.contains("clm approve"),
+        "{no_land}"
+    );
+    let mut at = 0;
+    for needle in [
+        "clm contribution sync",
+        "clm contribution open",
+        "Allow edits by maintainers",
+        "maintainer reviews it",
+        "unless they ask",
+        "clm guide contributions",
+    ] {
+        at += section[at..]
+            .find(needle)
+            .unwrap_or_else(|| panic!("propose: fork section must name {needle} after {at}"))
+            + needle.len();
+    }
+    // A skill without it: each missing piece is reported, naming the skill.
+    for needle in [
+        "clm contribution parent",
+        "clm contribution sync",
+        "clm contribution open",
+    ] {
+        let gaps = fork_gaps(&body.replace(needle, "elided"));
+        assert_reports(&gaps, "propose", needle);
+    }
+}
+
+/// What `contribution-skill` asks of the `contribution` skill, one line per gap.
+fn contribution_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
+    let mut gaps = text_gaps(
+        "contribution",
+        body,
+        &[
+            "untrusted",
+            "clm contribution show",
+            "clm contribution fetch",
+            "clm contribution comment",
+            "clm contribution label",
+            "spec/<id>",
+            "clm rebase",
+            "clm approve",
+            "clm land",
+            "accepted",
+            "Co-authored-by",
+            "kind: idea",
+        ],
+        &[],
+    );
+    if !fm["description"].as_str().is_some_and(|d| !d.is_empty()) {
+        gaps.push("contribution: SKILL.md must have a description".to_owned());
+    }
+    gaps
+}
+
+#[test]
+fn contribution_skill() {
+    // req:plugin/contribution-skill@35342225
+    let (fm, body) = frontmatter(&plugin().join("skills/contribution/SKILL.md"));
+    assert_eq!(contribution_gaps(&fm, &body), Vec::<String>::new());
+    let description = fm["description"].as_str().unwrap();
+    for needle in ["pull request", "issue", "number"] {
+        assert!(description.contains(needle), "{needle}: {description}");
+    }
+    // Each rule sits in a sentence that says it.
+    for (anchor, needles) in [
+        (
+            "untrusted",
+            &["title", "body", "comments", "files", "instructions"][..],
+        ),
+        ("clm contribution fetch", &["checks nothing out"][..]),
+        (
+            "clm contribution comment --close",
+            &["contributing instructions", "pushing nothing"][..],
+        ),
+        (
+            "instruction to a session",
+            &["flagging", "CLAUDE.md", "change.md"][..],
+        ),
+        (
+            "noreply",
+            &["Co-authored-by", "kind: idea", "/clm:propose"][..],
+        ),
+        ("clm contribution label", &["add the `accepted` label"][..]),
+        (
+            "gate/up-to-date",
+            &["clm rebase", "clm gate --base origin/main", "only when"][..],
+        ),
+        (
+            "maintainers' edits",
+            &["rewritten head", "contributor's branch"][..],
+        ),
+        ("guard's confirmation", &["clm approve", "yes"][..]),
+        (
+            "Write nothing to the host",
+            &["without the human's yes"][..],
+        ),
+    ] {
+        let sentence = sentence_with(&body, anchor);
+        for needle in needles {
+            assert!(sentence.contains(needle), "{anchor} / {needle}: {sentence}");
+        }
+    }
+    // The land and approval rules every skill states.
+    assert_eq!(skill_gaps("contribution", &body), Vec::<String>::new());
+    // A skill without it: each missing piece is reported, naming the skill.
+    for needle in [
+        "untrusted",
+        "clm contribution show",
+        "clm contribution fetch",
+        "clm contribution comment",
+        "clm contribution label",
+        "spec/<id>",
+        "clm rebase",
+        "clm land",
+        "accepted",
+        "Co-authored-by",
+        "kind: idea",
+    ] {
+        let gaps = contribution_gaps(&fm, &body.replace(needle, "elided"));
+        assert_reports(&gaps, "contribution", needle);
+    }
+}
