@@ -16,9 +16,6 @@ pub(crate) struct Judged {
     /// Whether a pipe (`|` or `|&`) ends the segment, so its output goes to a later command.
     pub(crate) piped: bool,
     /// What feeds its standard input (`guard-standard-input`).
-    // The defect ask reads it (`plugin.hooks.guard/defect-approval`); until then only the
-    // walk's own tests do.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) stdin: Stdin,
 }
 
