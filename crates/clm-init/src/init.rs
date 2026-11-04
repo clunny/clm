@@ -460,6 +460,8 @@ fn outside(root: &Path) -> Result<String, String> {
     )
     .into_iter()
     .filter(|f| !ROOT_PATHS.contains(&f.as_str()))
+    // A staged file removed from disk isn't one `git add -A` commits.
+    .filter(|f| root.join(f).symlink_metadata().is_ok())
     .map(|f| match f.split_once('/') {
         Some((dir, _)) => format!("{dir}/**"),
         None => f,
