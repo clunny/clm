@@ -58,8 +58,10 @@ fn a_code_file_among_spec_files() {
     write(d, "crates/x/src/lib.rs", "pub fn x() {}\n");
     write(d, "crates/b/src/lib.rs", "pub fn b() {}\n");
     commit(d, "pr");
-    // something else checked out, with an uncommitted edit
+    // something else checked out: `main`, which moved on since, with an uncommitted edit
     git(d, &["checkout", "-q", "main"]);
+    write(d, "crates/m/src/lib.rs", "pub fn m() {}\n");
+    commit(d, "main moves");
     write(d, "crates/a/src/lib.rs", "pub fn changed() {}\n");
     let files = files_outside_spec_paths(d, "main", "pr").unwrap();
     assert_eq!(files, ["crates/b/src/lib.rs", "crates/x/src/lib.rs"]);
