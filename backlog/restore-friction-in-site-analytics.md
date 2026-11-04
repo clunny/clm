@@ -9,4 +9,4 @@ origin: 20261104-found-by-search-and-agents
 
 **Waits on:** `clm/old-state-and-key-names-retired` current at `381faa28`, so the retired-terms test no longer flags the bare word.
 
-**Then:** on a spec branch, restore the original wording in that sentence, wherever the change then lives (`changes/20261104-site-analytics/` or, once archived, `changes/archive/20261104-site-analytics/`), run `cargo test -p clm --test retired_terms` to confirm it passes, and delete this item in the same branch.
+**Then:** on a spec branch, restore the original wording in that sentence of `changes/20261104-site-analytics/change.md`, run `cargo test -p clm --test retired_terms` to confirm it passes, and delete this item in the same branch. If the change has been archived by then, leave it as it is, since `changes/archive/` is never edited, and just delete this item.
