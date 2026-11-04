@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-build-that-hands-back-a-waiting-line-can-end-without-a-closing]
 ---
 
