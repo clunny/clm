@@ -30,8 +30,9 @@ fn security_policy_says_where_to_report() {
         &read("SECURITY.md"),
         &[
             "https://github.com/clunny/clm/security/advisories/new",
+            "public issue",
             "latest release",
-            "clm",
+            "`clm` binary",
             "plugin",
             "web app",
         ],
@@ -63,7 +64,11 @@ fn issue_forms_parse_and_say_what_is_asked() {
             assert!(form.get(key).is_some(), "{name} lacks {key}");
         }
     }
-    assert!(read("ISSUE_TEMPLATE/idea.yml").contains("accepted"));
+    assert_holds(
+        "idea.yml",
+        &read("ISSUE_TEMPLATE/idea.yml"),
+        &["one line", "accepted"],
+    );
     let config = parse("config.yml");
     assert_eq!(config["blank_issues_enabled"], Value::Bool(false));
     assert_holds(
@@ -88,7 +93,8 @@ fn pull_request_template_lists_the_spec_paths() {
             "CAPABILITIES.md",
             "CLAUDE.md",
             "CONTRIBUTING.md",
-            "closed",
+            "closed without review",
+            "Which issue",
         ],
     );
 }
