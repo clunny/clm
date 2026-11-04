@@ -283,6 +283,7 @@ fn detectors_from_the_repository() {
             command: vec!["cargo".into(), "machete".into()],
             hint: None,
             timeout: 600,
+            requires: None,
         }]
     );
     assert_eq!(s.detectors.layer, Layer::File(f.repo_file()));
@@ -1218,6 +1219,53 @@ fn detector_timeout_must_be_a_whole_number_of_at_least_1() {
         let e = f.load(&[]).unwrap_err();
         assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
         assert!(e.message.contains("`detectors`"), "{bad}: {}", e.message);
+    }
+}
+
+#[test]
+fn detector_requires_set() {
+    // req:config/detector-requires-setting@5f78cf14
+    let f = Fixture::new(
+        None,
+        Some(
+            "[[detectors]]\nname = \"knip\"\ncommand = [\"node_modules/.bin/knip\"]\nrequires = \"package.json\"\n",
+        ),
+    );
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.detectors.value[0].name, "knip");
+    assert_eq!(
+        s.detectors.value[0].requires.as_deref(),
+        Some("package.json")
+    );
+}
+
+#[test]
+fn detector_requires_left_out() {
+    // req:config/detector-requires-setting@5f78cf14
+    let f = Fixture::new(
+        None,
+        Some("[[detectors]]\nname = \"machete\"\ncommand = [\"cargo-machete\"]\n"),
+    );
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.detectors.value[0].requires, None);
+}
+
+#[test]
+fn detector_requires_must_be_a_non_empty_string() {
+    // req:config/detector-requires-setting@5f78cf14
+    for bad in ["\"\"", "5", "[\"a\"]", "true"] {
+        let text = format!("[[detectors]]\nname = \"k\"\ncommand = [\"k\"]\nrequires = {bad}\n");
+        let f = Fixture::new(None, None).local(&text);
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(
+            e.source,
+            Some(f.local_file().display().to_string()),
+            "{bad}"
+        );
+        assert!(e.message.contains("`detectors`"), "{bad}: {}", e.message);
+        let f = Fixture::new(None, Some(&text));
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
     }
 }
 
