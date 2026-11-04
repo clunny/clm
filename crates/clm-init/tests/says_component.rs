@@ -1,5 +1,10 @@
 //! The text `clm-init` prints and writes says component, never the old words
 //! (`component-words`).
+//!
+//! It reads CLM's own `ARCHITECTURE.md`, so it holds the marker that selects it when that file
+//! changes (`doc-readers-marked`):
+//!
+//! clm:reads ARCHITECTURE.md
 
 use std::fs;
 use std::path::{Path, PathBuf};
