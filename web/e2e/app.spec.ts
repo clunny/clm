@@ -977,6 +977,7 @@ test.describe('links to the site', () => {
     const first = page.locator('.mtop > *').first();
     await expect(first).toHaveAttribute('href', '/');
     await expect(first).toHaveAttribute('aria-label', /CLM homepage/);
+    await expect(first).toBeVisible();
     expect(await page.locator('.mtop > *').evaluateAll((els) => els.findIndex((e) => e.tagName === 'SELECT'))).toBe(1);
   });
 });
@@ -994,5 +995,5 @@ test('the sign-in page says CLM works without the web app and links to early acc
   await expect(card.locator('a[href="/guide/quickstart"]')).toBeVisible();
   await expect(card.locator('a', { hasText: 'Request early access' })).toHaveAttribute('href', 'https://github.com/clunny/clm/issues/new?template=early-access.yml');
   await expect(card.locator('a', { hasText: 'Sign in with GitHub' })).toHaveAttribute('href', '/auth/login');
-  await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toBeVisible();
+  await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
 });
