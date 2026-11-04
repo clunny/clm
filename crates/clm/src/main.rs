@@ -4,6 +4,8 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
+mod closed_stdout;
+
 #[derive(Parser)]
 #[command(
     name = "clm",
@@ -704,6 +706,10 @@ enum Config {
 }
 
 fn main() -> ExitCode {
+    closed_stdout::run(dispatch)
+}
+
+fn dispatch() -> ExitCode {
     match Cli::parse().command {
         Command::Check { no_detectors, root } => {
             let root = repo_root(root);
