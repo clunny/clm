@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-commands-panic-on-a-closed-stdout-pipe]
 ---
 
