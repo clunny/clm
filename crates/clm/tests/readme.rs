@@ -7,7 +7,7 @@ fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-// req:clm/readme-front-page@dcb1846c
+// req:clm/readme-front-page@83830808
 #[test]
 fn readme_is_the_front_page() {
     let readme = fs::read_to_string(repo().join("README.md")).expect("README.md exists");
@@ -39,5 +39,23 @@ fn readme_is_the_front_page() {
         }
         let path = target.split('#').next().unwrap();
         assert!(repo().join(path).exists(), "link {target} exists");
+    }
+}
+
+// req:clm/readme-front-page@83830808
+#[test]
+fn readme_links_the_site_first_and_credits_its_sources() {
+    let readme = fs::read_to_string(repo().join("README.md")).expect("README.md exists");
+    let site = readme
+        .find("https://clm-app.dev")
+        .expect("README.md links the site");
+    let first_section = readme.find("\n## ").expect("README.md has a section");
+    assert!(site < first_section, "the site link comes before the first ## heading");
+    for needle in [
+        "https://kubernetes.io/docs/concepts/architecture/controller/",
+        "https://github.com/obra/superpowers",
+        "https://claude.com/blog/the-ai-native-sdlc-playbook",
+    ] {
+        assert!(readme.contains(needle), "README.md links {needle}");
     }
 }

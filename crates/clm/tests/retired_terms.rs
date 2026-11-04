@@ -27,7 +27,7 @@ const RETIRED: &[&str] = &[
     "clm friction",
     "`kind: human`",
     "specd",
-    "friction",
+    "`kind: friction`",
 ];
 
 #[derive(Debug, PartialEq)]
@@ -282,7 +282,7 @@ fn the_help_of_every_command_is_read() {
 fn the_repository_holds_no_retired_term() {
     // req:clm/node-names-retired@0f17de38
     // req:clm/architecture-term-retired@7e356236
-    // req:clm/old-state-and-key-names-retired@ab16e190
+    // req:clm/old-state-and-key-names-retired@381faa28
     // req:clm/retired-terms@7ddad81b
     let root: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut all = gather(&root);
@@ -432,26 +432,38 @@ fn the_old_flags_and_subcommand_are_refused() {
 
 #[test]
 fn the_old_state_and_key_names_are_on_the_list() {
-    // req:clm/old-state-and-key-names-retired@ab16e190
-    for term in ["specd", "friction", "clm friction", "`kind: human`"] {
+    // req:clm/old-state-and-key-names-retired@381faa28
+    let forms = ["specd", "clm friction", "`kind: friction`", "`kind: human`"];
+    for term in forms {
         assert!(RETIRED.contains(&term), "{term}");
     }
     assert!(!RETIRED.contains(&"burdens"));
     assert!(!RETIRED.contains(&"human"));
-    let full = ["specd", "friction", "clm friction", "`kind: human`"];
+    assert!(!RETIRED.contains(&"friction"));
     let fixture = files(&[(
         "docs/guide/a.md",
-        "run `clm friction`\nit is specd\n`kind: human`\n`kind: human-task`\nhuman_burdens\nthe human lines\n",
+        "run `clm friction`\nit is specd\n`kind: human`\n`kind: human-task`\nhuman_burdens\nthe human lines\n`kind: friction`\n",
     )]);
-    let hits = check(&full, &fixture);
+    let hits = check(&forms, &fixture);
     let mut lines: Vec<usize> = hits.iter().map(|h| h.line).collect();
     lines.dedup();
-    assert_eq!(lines, [1, 2, 3]);
+    assert_eq!(lines, [1, 2, 3, 7]);
+}
+
+#[test]
+fn the_plain_word_is_free() {
+    // req:clm/old-state-and-key-names-retired@381faa28
+    let fixture = files(&[(
+        "docs/guide/a.md",
+        "where most friction after install lies\nrun `clm friction` now\nuse `kind: friction` here\n",
+    )]);
+    let lines: Vec<usize> = check(RETIRED, &fixture).iter().map(|h| h.line).collect();
+    assert_eq!(lines, [2, 3]);
 }
 
 #[test]
 fn the_old_workaround_subcommand_is_refused() {
-    // req:clm/old-state-and-key-names-retired@ab16e190
+    // req:clm/old-state-and-key-names-retired@381faa28
     let old = ["fric", "tion"].concat();
     let err = clm_refuses(&[&old, "a/x", "--title", "x"]);
     assert!(err.contains("unrecognized subcommand"), "{err}");
