@@ -270,6 +270,10 @@ fn scenario_why_it_isnt_ready() {
     assert!(refused(claim(&r.work, "c", 4)).contains("backlog/q"));
     let converged = refused(claim(&r.work, "d", 4));
     assert!(converged.contains("converged"), "{converged}");
+    assert!(converged.contains("`d`"), "{converged}");
+    assert!(converged.contains("no spec change"), "{converged}");
+    assert!(converged.contains("takes no claim"), "{converged}");
+    assert!(converged.contains("branch of its own"), "{converged}");
     assert!(converged.contains("clm land"), "{converged}");
     assert!(refused(claim(&r.work, "ghost", 4)).contains("no component"));
     assert!(refused(claim(&r.work, "x/b", 4)).contains("isn't a component"));
