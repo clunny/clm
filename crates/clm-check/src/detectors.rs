@@ -67,7 +67,7 @@ fn spawn(root: &Path, command: &[String]) -> std::io::Result<Child> {
     let Some((program, args)) = command.split_first() else {
         return Err(std::io::Error::other("empty command"));
     };
-    let mut cmd = Command::new(program);
+    let mut cmd = Command::new(program_path(root, program));
     cmd.args(args)
         .current_dir(root)
         .stdin(Stdio::null())
@@ -76,6 +76,19 @@ fn spawn(root: &Path, command: &[String]) -> std::io::Result<Child> {
     #[cfg(unix)]
     std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
     cmd.spawn()
+}
+
+/// A relative first word holding a `/` joined onto the absolute repository root, so it names the
+/// root's tool whatever the platform does with a relative program path; any other word as given
+/// (`detector-relative-command`).
+fn program_path(root: &Path, program: &str) -> PathBuf {
+    let path = Path::new(program);
+    if path.is_relative() && program.contains('/') {
+        let root = std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf());
+        root.join(path)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 /// Copies `stream` to our stderr line by line, on a thread of its own.
@@ -133,4 +146,23 @@ fn kill(child: &mut Child) {
 #[cfg(not(unix))]
 fn kill(child: &mut Child) {
     let _ = child.kill();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_relative_path_is_joined_onto_the_absolute_root() {
+        // req:check/detector-relative-command@9c07fea0
+        let joined = program_path(Path::new("sub/.."), "node_modules/.bin/knip");
+        assert!(joined.is_absolute(), "{joined:?}");
+        assert!(
+            joined.ends_with("sub/../node_modules/.bin/knip"),
+            "{joined:?}"
+        );
+        for plain in ["cargo", "/usr/bin/env"] {
+            assert_eq!(program_path(Path::new("r"), plain), Path::new(plain));
+        }
+    }
 }
