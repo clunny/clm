@@ -102,6 +102,9 @@ pub struct Detector {
     /// How many seconds `clm check` lets it run before stopping it (`detector-timeouts`); at
     /// least 1.
     pub timeout: u64,
+    /// A path relative to the repository root; `clm check` skips the detector while nothing
+    /// exists there (`detector-requires-manifest`). Never empty.
+    pub requires: Option<String>,
 }
 
 /// A detector's `timeout` when its table sets none.
@@ -118,6 +121,8 @@ struct RawDetector {
     hint: Option<String>,
     /// Read raw so an invalid `timeout`'s error names `detectors`, which toml's own wouldn't.
     timeout: Option<toml::Value>,
+    /// Read raw so an invalid `requires`'s error names `detectors`.
+    requires: Option<toml::Value>,
 }
 
 /// The size in tokens above which `clm sync` files a split item for a node whose
@@ -654,11 +659,21 @@ fn detectors(raw: Vec<RawDetector>, path: &Path) -> Result<Vec<Detector>, Error>
                 ))
             })?,
         };
+        let requires = match d.requires {
+            None => None,
+            Some(toml::Value::String(s)) if !s.is_empty() => Some(s),
+            Some(value) => {
+                return Err(fail(format!(
+                    "has `requires` {value}: expected a non-empty path"
+                )));
+            }
+        };
         detectors.push(Detector {
             name: d.name,
             command: d.command,
             hint: d.hint,
             timeout,
+            requires,
         });
     }
     Ok(detectors)
