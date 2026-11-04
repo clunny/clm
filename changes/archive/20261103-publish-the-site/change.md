@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 human_burdens:
   - "Opening the site can't be taken back: search engines and archives keep what they crawl"
   - "The site opens only when you dispatch the next release, whose web job deploys it"
