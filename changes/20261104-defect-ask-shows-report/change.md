@@ -24,6 +24,8 @@ The human chose approach 1, and refusing over asking when the report can't be sh
 
 - `plugin.hooks.guard.shell/guard-standard-input` (added): each piece the walk yields says what feeds its standard input: its heredoc's body and whether the shell expands it, a here-string, a file, or a pipe.
 - `plugin.hooks.guard/defect-approval` (modified): the ask's reason quotes each `clm defect` segment's own line and its report; a segment whose report the guard can't show is refused.
+- `plugin.hooks/defect-rule` (modified): with `defects = "ask"`, the session-start rule tells sessions to send the report as a `<<'EOF'` heredoc, so they don't meet the refusal first.
+- Refused too: a heredoc with no line ending it, and any `<&` input. A refusal wins over another rule's ask.
 - The guard's Design no longer claims Claude Code shows the command with the reason.
 - Decision `defect-ask-shows-report`.
 
