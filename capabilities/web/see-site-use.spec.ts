@@ -43,7 +43,13 @@ const TYPES: Record<string, string> = {
 /** Serves `dir` as static files, with `/x` answered by `x.html` as the deployment does. */
 function serve(dir: string): Promise<{ base: string; server: Server }> {
   const server = createServer((req, res) => {
-    const path = decodeURIComponent(new URL(req.url!, 'http://x').pathname)
+    let path: string
+    try {
+      path = decodeURIComponent(new URL(req.url!, 'http://x').pathname)
+    } catch {
+      res.writeHead(400).end('bad request')
+      return
+    }
     const candidates = [path, `${path}.html`, join(path, 'index.html')]
     const file = candidates.map((c) => join(dir, c)).find((f) => existsSync(f) && statSync(f).isFile())
     if (!file) {
@@ -70,10 +76,13 @@ test('a visitor goes from the homepage to a copied install command', async ({ pa
   const env = { ...process.env, SITE_OUT: out, UMAMI_WEBSITE_ID: WEBSITE_ID, GITHUB_STARS: '1234', GITHUB_API: 'http://127.0.0.1:9' }
   delete env.INSTALL_REPO
   delete env.GUIDE_DIR
-  execFileSync('npx', ['vitepress', 'build', '.'], { cwd: join(root, 'web', 'site'), env, stdio: 'pipe', maxBuffer: 1 << 28 })
-  const { base, server } = await serve(out)
   const outside: string[] = []
+  let server: Server | undefined
   try {
+    execFileSync('npx', ['vitepress', 'build', '.'], { cwd: join(root, 'web', 'site'), env, stdio: 'pipe', maxBuffer: 1 << 28 })
+    const served = await serve(out)
+    server = served.server
+    const base = served.base
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
     await page.route('**/*', async (route) => {
       const url = route.request().url()
@@ -107,7 +116,7 @@ test('a visitor goes from the homepage to a copied install command', async ({ pa
     ])
     expect(outside).toEqual([])
   } finally {
-    server.close()
+    server?.close()
     rmSync(out, { recursive: true, force: true })
   }
 })
