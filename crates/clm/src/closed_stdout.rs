@@ -59,6 +59,7 @@ mod tests {
 
     #[test]
     fn only_a_broken_pipe_counts() {
+        // req:clm/closed-stdout@e1df9220
         assert!(is_closed_stdout(
             "failed printing to stdout: Broken pipe (os error 32)"
         ));
