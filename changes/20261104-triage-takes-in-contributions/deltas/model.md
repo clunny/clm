@@ -2,6 +2,24 @@
 component: model
 ---
 
+## ADDED Requirements
+
+### Requirement: parse-backlog-item
+`clm-model` SHALL offer `parse_backlog_item(slug, text)`, which parses one backlog file's text by `parse-backlog`'s rules for its frontmatter keys and values alone, returning the item or the violations, and checks nothing against a graph: not that its components, origin, `blocks` or `requirement` exist. `clm intake` reads items deleted at older commits with it, whose components may since have gone.
+
+#### Scenario: a deleted item's components are gone
+- GIVEN the text of a backlog file with `kind: bug`, `components: [ghost]` and `issues: [67]`
+- WHEN `parse_backlog_item("x", text)` runs
+- THEN it returns item `x` with issues `[67]` and no violation
+
+#### Scenario: an unknown key
+- GIVEN the text of a backlog file with `kind: bug` and `colour: red`
+- WHEN `parse_backlog_item("x", text)` runs
+- THEN it returns a violation naming `colour`
+
+#### Serves
+- capability/contribute-from-outside
+
 ## MODIFIED Requirements
 
 ### Requirement: parse-backlog <!-- base: 043adb6595864b3e -->
