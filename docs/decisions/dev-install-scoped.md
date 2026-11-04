@@ -8,7 +8,7 @@ A contributor wants to build CLM with its own `main` and use the release in ever
 
 **One settings file, read from every worktree.** On Claude Code 2.1.318, a linked worktree reads the main checkout's `.claude/settings.local.json`, `env` and `enabledPlugins` alike. `dogfood-from-main` rejected a separately named marketplace because worktree sessions would stay on the release; that no longer holds. So `scripts/dev-install.sh` puts the binary and a `clm-dev` marketplace in `<common>/clm-dev`, and the settings file sets `CLM_BIN`, enables `<name>@clm-dev` and turns off `<name>@clm`. The shared `clm` record stays on GitHub.
 
-**In place, through symlinks.** A marketplace's name comes from its `marketplace.json`, so `clm-dev` needs its own. The script writes it from the tracked one and symlinks each plugin's folder to the main worktree. Claude Code loads a directory marketplace's plugins with no cached copy, so a skill edit still applies at the next session.
+**In place, through symlinks** (replaced by `dev-marketplace-in-place`: Claude Code refuses a hook module symlinked out of the marketplace). A marketplace's name comes from its `marketplace.json`, so `clm-dev` needs its own. The script writes it from the tracked one and symlinks each plugin's folder to the main worktree. Claude Code loads a directory marketplace's plugins with no cached copy, so a skill edit still applies at the next session.
 
 **The way back to GitHub changes.** `claude plugin marketplace add clunny/clm` doesn't reset a directory record. `remove` and then `add` does, and drops the installed plugin records, so setup does it only for a record that is this clone's own and says what it dropped.
 
