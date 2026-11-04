@@ -212,33 +212,6 @@ The Flight tab SHALL show, under the chart line of each component, the runs this
 - WHEN its agent is listed `waiting` at the next 30-second redraw
 - THEN its row is drawn again with `waiting`
 
-### Requirement: panel-windows
-The panel SHALL read a `$.plugin.root` or session `cwd` that starts with a drive letter and a separator (`C:\` or `C:/`) as a Windows path: it SHALL turn each `\` in it into `/` before it looks for the CLM repository (`views-panel`) or the shim, and stop at the drive's root, `C:/`, which it looks in too; the `cwd` it runs commands at stays as given. With such a `$.plugin.root`, when it has found the `clm` plugin's `bin/clm`, it SHALL run that `sh` script through Git Bash, as `[<bash>, <shim>, ...args]`, where `<bash>` is `bin/bash.exe` under the directory three levels above the one `git --exec-path` prints, trimmed and with `\` read as `/` (`C:/Program Files/Git/mingw64/libexec/git-core` gives `C:/Program Files/Git/bin/bash.exe`). It SHALL run `git --exec-path` only then, and at most once while the module is loaded, keeping its answer, a failure included, until the module reloads. When that command can't start, exits non-zero, prints a path with fewer than three levels, or `<bash>` isn't a file, it SHALL run `clm` from PATH, as when it finds no shim (`panel-package`). It SHALL never run a bare `bash` or `sh`, which on Windows may start WSL's. With any other `$.plugin.root` it SHALL run the shim directly, as now, and not run `git --exec-path`.
-
-#### Scenario: shim through Git Bash
-- GIVEN a `$.plugin.root` of `C:\Users\u\.claude\plugins\cache\clm\clm-panel\0.7.0`, a directory `C:/Users/u/.claude/plugins/cache/clm/clm/0.7.0` holding a file `bin/clm`, a `git --exec-path` that prints `C:/Program Files/Git/mingw64/libexec/git-core`, and a file `C:/Program Files/Git/bin/bash.exe`
-- WHEN the pane runs `clm view flight` twice
-- THEN both runs' argv is `C:/Program Files/Git/bin/bash.exe`, `C:/Users/u/.claude/plugins/cache/clm/clm/0.7.0/bin/clm`, then the `clm view` arguments, and `git --exec-path` ran once
-
-#### Scenario: no Git Bash
-- GIVEN the same root and shim, and, in turn, a `git --exec-path` that exits 1, one that can't start, and one that prints the path above with no `C:/Program Files/Git/bin/bash.exe` file
-- WHEN the pane runs `clm view flight` twice in each
-- THEN each run's argv is `clm` then the `clm view` arguments, no argv starts with `bash` or `sh`, and `git --exec-path` ran once in each
-
-#### Scenario: repository on a drive
-- GIVEN a session `cwd` of `C:\work\repo\crates` and a file `C:/work/repo/specs/SPEC.md`, with the plugin root of the scenarios above
-- WHEN the person runs `/clm:view flight`
-- THEN it answers with the view, not that the directory isn't a CLM repository
-
-#### Scenario: not on Windows
-- GIVEN a `$.plugin.root` of `/plugins/clm/plugin-panel` and a file `/plugins/clm/plugin/bin/clm`
-- WHEN the pane runs `clm view flight`
-- THEN its argv starts with `/plugins/clm/plugin/bin/clm`, and `git --exec-path` never runs
-
-#### Serves
-- capability/watch-beside-chat
-- capability/install-and-release
-
 ### Requirement: blocker-chains
 On the terminal surface the Blockers tab SHALL draw each root's line (`view/blockers-root-lines`) as a pressable line holding the same text and colours, matched to the root by its position among those lines and the `blockers` model's `roots`, from `clm view blockers --format json` run as the chart is, and SHALL draw the lines of a root's tree only while that root is unfolded. Every root SHALL start folded. Pressing a root's line SHALL fold or unfold that root alone, without rerunning a `clm` command whose output the pane already holds for this generation. Which roots are unfolded SHALL be kept, by root name, across redraws and a reload, and a root the model doesn't list SHALL be drawn as nothing and keep its state for when it comes back. When the lines can't be matched (their count differs from the model's, or the JSON run fails or doesn't parse), the tab SHALL draw every line as before, unfolded and not pressable. Other surfaces SHALL draw every chain as before.
 

@@ -1,7 +1,8 @@
 ---
 title: "The shim keeps MSYS path conversion; the panel runs the shim through the Git Bash git names"
 date: 2026-10-27
-status: accepted
+status: superseded
+superseded_by: no-windows-support
 ---
 
 `windows-binaries` runs `clm.exe` from the `sh` shim under Git Bash. Two places where a POSIX path meets a native Windows process were left unchecked (`20261027-release-reach`): MSYS's conversion of arguments and environment values when Git Bash execs `clm.exe`, and the panel, a hooks module in Node, starting the `sh` shim.

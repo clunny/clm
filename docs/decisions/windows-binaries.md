@@ -1,7 +1,8 @@
 ---
 title: "Windows gets one x86_64 binary, run by the shim under Git Bash"
 date: 2026-10-27
-status: accepted
+status: superseded
+superseded_by: no-windows-support
 ---
 
 Claude Code on native Windows runs the Bash tool, and plugin hooks written as shell commands, through Git Bash when Git for Windows is installed (Claude Code's setup and hooks documentation, read 2026-10-27). The plugin's `bin/clm` is a POSIX `sh` script, so under Git Bash it runs as it does elsewhere, given a Windows binary to download. The release therefore adds `x86_64-pc-windows-msvc`, built on `windows-latest` with the MSVC tools the image ships.

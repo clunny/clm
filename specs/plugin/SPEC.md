@@ -263,32 +263,27 @@ The plugin SHALL ship `agents/spec-auditor.md` with a `name` of `spec-auditor` a
 - model/parse-backlog
 
 ### Requirement: shim-targets
-`plugin/bin/clm` SHALL download `clm-x86_64-unknown-linux-musl.tar.gz` on `Linux x86_64`, `clm-aarch64-unknown-linux-musl.tar.gz` on `Linux aarch64`, `clm-x86_64-apple-darwin.tar.gz` on `Darwin x86_64`, `clm-aarch64-apple-darwin.tar.gz` on `Darwin arm64`, and `clm-x86_64-pc-windows-msvc.tar.gz` where `uname -s` starts with `MINGW` or `MSYS` (Git Bash), or with `UCRT64_NT-`, `CLANG64_NT-` or `CLANGARM64_NT-` (the MSYS2 environments whose shells report their own name), and `uname -m` is `x86_64` or `aarch64`. On Windows it SHALL unpack, cache and exec `clm.exe`, the file that asset holds, in place of `clm`. On any other platform it SHALL download nothing and fail as `binary-shim` describes, saying there's no prebuilt `clm` for that platform. Each target it maps SHALL be written as one `target=<target>` assignment, which `ci/release`'s prepare step reads.
+`plugin/bin/clm` SHALL download `clm-x86_64-unknown-linux-musl.tar.gz` on `Linux x86_64`, `clm-aarch64-unknown-linux-musl.tar.gz` on `Linux aarch64`, `clm-x86_64-apple-darwin.tar.gz` on `Darwin x86_64` and `clm-aarch64-apple-darwin.tar.gz` on `Darwin arm64`, and map no other platform. On any other platform, Windows's Git Bash and MSYS2 shells included (`no-windows-support`), it SHALL download nothing and fail as `binary-shim` describes, saying there's no prebuilt `clm` for that platform. Each target it maps SHALL be written as one `target=<target>` assignment, which `ci/release`'s prepare step reads. Its text SHALL name no Windows target and no `clm.exe`.
 
 #### Scenario: Linux arm64
 - GIVEN an empty cache, a `uname` that reports `Linux` and `aarch64`, and a `gh` that serves release assets
 - WHEN `bin/clm status` runs
 - THEN `gh` is asked for `clm-aarch64-unknown-linux-musl.tar.gz`
 
-#### Scenario: Windows
-- GIVEN an empty cache, a `uname` that reports `MINGW64_NT-10.0` and `x86_64`, and a `gh` that serves a `clm-x86_64-pc-windows-msvc.tar.gz` holding a fake `clm.exe` and its matching checksum
-- WHEN `bin/clm status` runs
-- THEN `gh` is asked for `clm-x86_64-pc-windows-msvc.tar.gz`, the cache holds `clm.exe`, and the fake `clm.exe` runs with `status`
-
 #### Scenario: unsupported platform
 - GIVEN an empty cache and a `uname` that reports `FreeBSD` and `amd64`
 - WHEN `bin/clm status` runs
 - THEN `gh` is not called, and it exits 1 saying there's no prebuilt `clm` for that platform
 
-#### Scenario: MSYS2 environments
-- GIVEN an empty cache, and a `uname` that reports `UCRT64_NT-10.0-22631` and `x86_64`, and in a second run `CLANGARM64_NT-10.0-22631` and `aarch64`, each with a `gh` that serves a `clm-x86_64-pc-windows-msvc.tar.gz` holding a fake `clm.exe` and its matching checksum
+#### Scenario: Windows unsupported
+- GIVEN an empty cache, and a `uname` that reports `MINGW64_NT-10.0` and `x86_64`, and in a second run `UCRT64_NT-10.0-22631` and `x86_64`
 - WHEN `bin/clm status` runs
-- THEN `gh` is asked for `clm-x86_64-pc-windows-msvc.tar.gz` both times, and the fake `clm.exe` runs with `status`
+- THEN `gh` is not called either time, and each run exits 1 saying there's no prebuilt `clm` for that platform
 
-#### Scenario: Cygwin stays unsupported
-- GIVEN an empty cache and a `uname` that reports `CYGWIN_NT-10.0` and `x86_64`
-- WHEN `bin/clm status` runs
-- THEN `gh` is not called, and it exits 1 saying there's no prebuilt `clm` for that platform
+#### Scenario: no Windows target in the shim
+- GIVEN the text of `plugin/bin/clm`
+- WHEN the tests run
+- THEN its `target=` assignments are exactly the four targets above, and the test fails when the text names `windows` or `clm.exe`
 
 #### Serves
 - capability/install-and-release
@@ -673,25 +668,6 @@ The plugin SHALL ship `skills/triage/SKILL.md` with a `description` in its front
 #### Serves
 - capability/build-from-spec
 - capability/work-concurrently
-
-### Requirement: shim-path-conversion
-`plugin/bin/clm` SHALL NOT set `MSYS2_ARG_CONV_EXCL` or `MSYS_NO_PATHCONV`, nor name them, leaving Git Bash's conversion of absolute POSIX path arguments to Windows paths on (`windows-paths-in-shim-and-panel`), and on Windows it SHALL pass its arguments to `clm.exe` unchanged.
-
-#### Scenario: Windows arguments and environment
-- GIVEN a cached `clm.exe` that records its arguments and environment, a `uname` that reports `MINGW64_NT-10.0` and `x86_64`, and `MSYS2_ARG_CONV_EXCL` and `MSYS_NO_PATHCONV` unset
-- WHEN `bin/clm pr open spec/x --body-file /tmp/body.md` runs
-- THEN the binary runs with exactly those arguments, and sees neither variable set
-
-#### Scenario: no conversion switch in the shim
-- GIVEN the text of `plugin/bin/clm`
-- WHEN the tests run
-- THEN the test fails when the text names `MSYS2_ARG_CONV_EXCL` or `MSYS_NO_PATHCONV`
-
-#### Needs
-- clm/renamed-commands
-
-#### Serves
-- capability/install-and-release
 
 ### Requirement: health-skill
 The plugin SHALL ship `skills/health/SKILL.md` with a `description` in its frontmatter. It SHALL tell Claude to run `clm health`, to summarise each section for the human, naming the reconsider candidates with their scores and what each signal means, to launch the `spec-slimmer` subagent for each component a `design-heavy`, `history-words`, `outlier-size` or `unexercised` line names, to list the cuts it proposes, and to end by pointing at `/clm:propose` for acting on any of it and at `clm guide using-clm` for what the signals mean. It SHALL tell Claude to edit no spec, file no backlog item and land nothing from this skill.
