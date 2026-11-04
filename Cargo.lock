@@ -442,6 +442,7 @@ dependencies = [
  "clm-config",
  "clm-git",
  "serde_json",
+ "tempfile",
  "toml",
 ]
 
