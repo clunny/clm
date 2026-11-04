@@ -1757,6 +1757,13 @@ fn check(root: &Path, detectors: bool) -> Vec<clm_check::Violation> {
                 .detectors
                 .value
                 .into_iter()
+                .filter(|d| match &d.requires {
+                    Some(path) if !root.join(path).exists() => {
+                        eprintln!("{} skipped: no {path}", d.name);
+                        false
+                    }
+                    _ => true,
+                })
                 .map(|d| clm_check::Detector {
                     name: d.name,
                     command: d.command,

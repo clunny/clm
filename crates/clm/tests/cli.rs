@@ -1412,3 +1412,32 @@ fn scenario_relative_detector_tool_installed() {
     assert!(!stdout.contains("check/detectors"), "{stdout}");
     assert_eq!(out.status.code(), Some(0), "{stdout}");
 }
+
+const REQUIRES_DETECTOR: &str = "[[detectors]]\nname = \"knip\"\ncommand = [\"sh\", \"-c\", \"touch ran; exit 3\"]\nrequires = \"package.json\"\n";
+
+#[test]
+fn check_skips_a_detector_whose_required_file_is_missing() {
+    // req:clm/detector-requires-skip@3977bf75
+    let dir = detector_repo(Some(REQUIRES_DETECTOR));
+    let out = clm_check(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(out.status.code(), Some(0), "{stdout}{stderr}");
+    assert!(!stdout.contains("check/detectors"), "{stdout}");
+    assert!(stderr.contains("knip skipped: no package.json"), "{stderr}");
+    assert!(!dir.path().join("ran").exists());
+}
+
+#[test]
+fn check_runs_a_detector_whose_required_file_exists() {
+    // req:clm/detector-requires-skip@3977bf75
+    let dir = detector_repo(Some(REQUIRES_DETECTOR));
+    write(dir.path(), "package.json", "{}");
+    let out = clm_check(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.contains("clm.toml: check/detectors: knip failed (exit 3)"),
+        "{stdout}"
+    );
+    assert!(dir.path().join("ran").exists());
+}
