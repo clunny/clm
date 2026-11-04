@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # The guide's entry pages stay written for a newcomer
