@@ -547,4 +547,4 @@ Loading SHALL give each detector an optional `requires`: the path its `[[detecto
 - THEN it fails naming `clm.local.toml` and `detectors`
 
 #### Serves
-- capability/no-dead-weight
+- capability/adopt-clm

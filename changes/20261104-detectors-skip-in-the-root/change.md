@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 # Detectors skip in the root, and the recheck's other fixes
