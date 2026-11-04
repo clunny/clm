@@ -4413,10 +4413,10 @@ fn contribution_skill() {
             "noreply",
             &["Co-authored-by", "kind: idea", "/clm:propose"][..],
         ),
-        ("clm contribution label", &["accepted"][..]),
+        ("clm contribution label", &["add the `accepted` label"][..]),
         (
             "gate/up-to-date",
-            &["clm rebase", "clm gate --base origin/main"][..],
+            &["clm rebase", "clm gate --base origin/main", "only when"][..],
         ),
         (
             "maintainers' edits",
