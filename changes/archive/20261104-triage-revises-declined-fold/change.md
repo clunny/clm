@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # Triage revises a fold the human declines with a different design
