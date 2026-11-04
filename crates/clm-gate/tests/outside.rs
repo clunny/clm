@@ -43,7 +43,11 @@ fn base() -> TempDir {
     write(d, "specs/SPEC.md", ROOT);
     write(d, "specs/a/SPEC.md", A);
     write(d, "crates/a/src/lib.rs", "pub fn a() {}\n");
-    write(d, "crates/a/tests/t.rs", "// req:a/x@00000000\n");
+    write(
+        d,
+        "crates/a/tests/t.rs",
+        concat!("// req", ":a/x@00000000\n"),
+    );
     commit(d, "base");
     dir
 }
