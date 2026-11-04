@@ -133,9 +133,10 @@
 .foot a { color: var(--h-faint); }
 
 /* The GitHub link: an icon with the star count. */
-.gh-icon { vertical-align: -3px; margin-right: 5px; }
-.hero .btn.g { color: var(--h-muted); border: 1px solid var(--h-line); }
-.hero .btn.g .gh-icon { margin-right: 6px; vertical-align: -2px; }
+.gh-icon { flex: none; margin-right: 5px; }
+.VPNavBarMenuLink > span:has(.gh-icon) { display: inline-flex; align-items: center; white-space: nowrap; }
+.hero .btn.g { color: var(--h-muted); border: 1px solid var(--h-line); display: inline-flex; align-items: center; line-height: 1.5; }
+.hero .btn.g .gh-icon { margin-right: 6px; }
 .cmd code { font-family: inherit; }
 
 /* The guide's small footer, and the privacy page's. */

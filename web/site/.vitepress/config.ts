@@ -72,7 +72,7 @@ export default defineConfig({
       { text: 'How it works', link: '/#how-it-works', activeMatch: '^$' },
       { text: 'Guide', link: '/guide/', activeMatch: '^/guide/(?!quickstart)' },
       { text: 'Get started', link: '/guide/quickstart' },
-      { text: 'Sign in', link: '/app/', target: '_self' },
+      { text: 'Web app', link: '/app/', target: '_self' },
       {
         text: `${githubIcon}<span class="gh-count">${stars ?? 'GitHub'}</span>`,
         link: githubUrl,

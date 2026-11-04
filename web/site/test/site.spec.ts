@@ -132,3 +132,19 @@ test('npmrc ignores install scripts', () => {
   const npmrc = readFileSync(join(siteDir, '.npmrc'), 'utf8')
   expect(npmrc.split('\n').map((l) => l.trim())).toContain('ignore-scripts=true')
 })
+
+test('the nav reads How it works, Guide, Get started, Web app, and every link to the app reads Web app', async ({
+  page,
+}) => {
+  // req:web.site/nav-web-app@4bd0b477
+  for (const path of ['/', '/guide/quickstart']) {
+    await page.goto(path)
+    const nav = await page.locator('.VPNavBarMenu a').allTextContents()
+    expect(nav.map((t) => t.trim()).slice(0, 4), path).toEqual(['How it works', 'Guide', 'Get started', 'Web app'])
+    await expect(page.locator('.VPNavBarMenu a', { hasText: 'Web app' })).toHaveAttribute('href', '/app/')
+    const toApp = await page.locator('a[href="/app/"]').allTextContents()
+    expect(toApp.length, path).toBeGreaterThan(0)
+    for (const text of toApp) expect(text.trim(), path).toBe('Web app')
+    expect(await page.getByRole('link', { name: 'Sign in' }).count(), path).toBe(0)
+  }
+})
