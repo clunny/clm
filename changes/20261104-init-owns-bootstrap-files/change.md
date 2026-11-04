@@ -28,4 +28,4 @@ status: applied
 ## Constraints
 
 - `clm survey` and `clm survey --components` keep reading the index alone (`tracked-files-in-git-layer`); only `clm init`'s `outside` reads the untracked files.
-- The listing goes through `clm-git`, as every other git call in `clm-init` does.
+- The listing goes through `clm-git` (`vcs`), as every other git call in `clm-init` does: `vcs/files-to-commit` adds `files_to_commit`, which `init/init-root-ownership` needs.
