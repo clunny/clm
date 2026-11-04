@@ -11,3 +11,5 @@ A project's graph is first shaped when `/clm:init` drafts its node map, and boun
 Rejected:
 - **`propose` owns it (first split).** By the first split the graph has already been drawn, possibly flat, by a session that was never told nodes nest, which is what happened in `20261025-size-budgets-and-stale-docs`.
 - **Each skill carries the whole explanation.** Three copies of the same prose drift; the guide is the one source (`method-in-the-plugin`), and the skills say only what the step in front of them needs.
+
+**Amended 2026-11-04** (`20261104-guide-for-newcomers`). Using CLM now describes the workflows only, and how a change flows and where decisions go moved to How it works, so `init`'s closing summary points at `clm guide using-clm` and `clm guide how-it-works` (`guide-entry-pages-for-newcomers`).
