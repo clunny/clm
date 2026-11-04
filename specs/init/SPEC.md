@@ -63,7 +63,7 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 #### Scenario: empty repository
 - GIVEN an empty git repository whose `origin` is `https://github.com/o/r.git`
 - WHEN `clm init --lang rust` runs
-- THEN all six files exist, `clm-check.sh` is executable and runs `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, `.github/` doesn't exist, and `clm check` exits 0
+- THEN all six files exist, `clm-check.sh` is executable and holds `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, `.github/` doesn't exist, and `clm check` exits 0
 
 #### Scenario: human layers
 - GIVEN an empty git repository, and another holding a `CAPABILITIES.md` of its own
@@ -578,7 +578,7 @@ Each test file under `crates/clm-init/tests/` that reads a file of this reposito
 - check.affected/affected-readers
 
 ### Requirement: init-without-manifest
-For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL run the language's line only when, as the script runs, its manifest exists in the CLM root: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
+For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first change to the CLM root (the parent of the script's own directory), wherever it is run from, and then run each language's line only when its manifest exists there: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
 
 #### Scenario: empty repository, every language
 - GIVEN an empty git repository, and on `PATH` a `cargo`, `npm` and `pytest` that each exit 1
@@ -599,4 +599,4 @@ For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL run t
 - capability/adopt-clm
 
 #### Needs
-- check/detector-requires
+- clm/check-passes-requires
