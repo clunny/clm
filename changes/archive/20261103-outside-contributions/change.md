@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P3
 human_burdens:
   - "Changes public settings on clunny/clm once this lands: profile, features, merge options, a ruleset on main, security features and Actions approvals (docs/decisions/github-repo-settings.md)"
