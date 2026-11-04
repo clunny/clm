@@ -23,6 +23,7 @@ Consequences:
 - Setup deletes a `clm` that `cargo install` put in `~/.cargo/bin` from a path, which earlier setups did, and leaves any other, printing that it runs ahead of the shim.
 - Sessions running during setup lose their binary until restarted.
 - The script now needs `claude` on `PATH`.
+- Outside a session no `clm` is on `PATH`, so `clm check` there, through `cargo run`, needs `<common>/clm-dev/bin` on `PATH` for its `unreferenced-public-items` detector. `CONTRIBUTING.md` says so.
 
 Alternatives considered:
 - **The shim picks the binary by the current repository, and `clm run` passes `--plugin-dir`.** It doesn't rely on that Claude Code behaviour, but every adopter's shim runs an extra `git` call for a concern only contributors have, and sessions started by hand in a worktree still need an answer.
