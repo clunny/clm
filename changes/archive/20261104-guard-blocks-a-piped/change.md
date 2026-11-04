@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - guard-blocks-a-piped-clm-hashes-land-as-a-piped-land
 ---
