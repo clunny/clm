@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - the-build-skill-says-clm-next-waits-on-settled-dependencies
 ---

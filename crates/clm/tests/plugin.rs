@@ -2659,6 +2659,48 @@ fn build_watches() {
     assert!(stop.contains("TaskStop"), "{stop}");
 }
 
+/// What `build-says-what-is-ready` asks of a `build` skill.
+fn ready_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "build",
+        body,
+        &[
+            "needs-alone-order",
+            "component-reconciliation",
+            "#### Needs",
+            "depends_on",
+        ],
+        &[
+            "dependencies are all settled",
+            "settles the components that depend on it",
+        ],
+    )
+}
+
+#[test]
+fn build_says_what_is_ready() {
+    // req:plugin/build-says-what-is-ready@d0ad7ac6
+    let body = skill_body("build");
+    assert_eq!(ready_gaps(&body), Vec::<String>::new());
+    // a build skill that orders by dependencies
+    let gaps = ready_gaps(&format!("{body}\nwhose dependencies are all settled"));
+    assert_reports(&gaps, "build", "dependencies are all settled");
+    let gaps = ready_gaps(&format!(
+        "{body}\nit settles the components that depend on it"
+    ));
+    assert_reports(&gaps, "build", "settles the components that depend on it");
+    let ready = sentence_with(&body, "no blocking backlog item");
+    for needle in [
+        "needs-alone-order",
+        "component-reconciliation",
+        "#### Needs",
+    ] {
+        assert!(ready.contains(needle), "{needle}: {ready}");
+    }
+    let order = sentence_with(&body, "does not order builds");
+    assert!(order.contains("depends_on"), "{order}");
+}
+
 /// What `build-resumes-limited-builds` asks of a `build` skill.
 fn resume_gaps(body: &str) -> Vec<String> {
     text_gaps(
