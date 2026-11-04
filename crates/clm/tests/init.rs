@@ -1350,21 +1350,28 @@ fn empty_repository_every_language() {
         toml.contains("command = [\"node_modules/.bin/knip\"]"),
         "{toml}"
     );
-    for manifest in ["Cargo.toml", "package.json", "pyproject.toml"] {
-        assert!(
-            toml.contains(&format!("requires = \"{manifest}\"\n")),
-            "{manifest}: {toml}"
-        );
-    }
     let check = clm(&dir, &["check"], &path_with(&failing));
     assert_eq!(check.status.code(), Some(0), "{check:?}");
     let err = String::from_utf8_lossy(&check.stderr);
-    for detector in [
-        "rust-unused-dependencies",
-        "typescript-dead-code",
-        "python-dead-code",
+    for (detector, manifest) in [
+        ("rust-unused-dependencies", "Cargo.toml"),
+        ("typescript-dead-code", "package.json"),
+        ("python-dead-code", "pyproject.toml"),
     ] {
-        assert!(err.contains(detector) && err.contains("skipped"), "{err}");
+        // Each detector's own table names its manifest.
+        let table = toml
+            .split("[[detectors]]")
+            .find(|t| t.contains(&format!("name = \"{detector}\"")))
+            .unwrap_or_else(|| panic!("{detector}: {toml}"));
+        assert!(
+            table.contains(&format!("requires = \"{manifest}\"\n")),
+            "{table}"
+        );
+        assert!(
+            err.lines()
+                .any(|l| l.starts_with(&format!("{detector} skipped"))),
+            "{err}"
+        );
     }
     // From the root and from elsewhere, the script finds nothing to run and passes.
     fs::create_dir(dir.join("sub")).unwrap();
@@ -1398,6 +1405,19 @@ fn manifest_added_later() {
 }
 
 #[test]
+fn rust_and_python_manifests() {
+    // req:init/init-without-manifest@30800928
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "rust", "--lang", "python"], &fake_hosts());
+    write(&dir, "Cargo.toml", "");
+    write(&dir, "pyproject.toml", "");
+    let recorder = stubs(&["cargo", "pytest"], 0);
+    let out = run_check_script(&dir, &dir, &recorder);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(host_calls(&recorder), "cargo test\npytest \n");
+}
+
+#[test]
 fn dependencies_not_installed() {
     // req:init/init-without-manifest@30800928
     let (_tmp, dir) = repo();
@@ -1405,11 +1425,12 @@ fn dependencies_not_installed() {
     init(&dir, &["--lang", "typescript"], &fake_hosts());
     let check = clm(&dir, &["check"], &path_with(&fake_hosts()));
     assert_eq!(check.status.code(), Some(1), "{check:?}");
-    let err = String::from_utf8_lossy(&check.stdout);
-    let line = err
+    // Violations print on stdout.
+    let violations = String::from_utf8_lossy(&check.stdout);
+    let line = violations
         .lines()
         .find(|l| l.starts_with("clm.toml: check/detectors: typescript-dead-code could not run:"))
-        .unwrap_or_else(|| panic!("{err}"));
+        .unwrap_or_else(|| panic!("{violations}"));
     assert!(
         line.ends_with(
             "; install with: npm ci (or npm install --save-dev knip when package.json doesn't list it)"
