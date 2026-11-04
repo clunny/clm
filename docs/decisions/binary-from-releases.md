@@ -15,3 +15,5 @@ Answers `cli-distribution`. Teams shouldn't need a Rust toolchain to use CLM, so
 Rejected: `cargo install` as the main path (needs Rust, slow first run); committing binaries to the repo (bloats git history).
 
 (Amended 2026-11-03, `20261103-publish-the-site`: `clunny/clm` is public, so its releases are, and any account whose `gh` is signed in gets a binary. No mirror or bucket is needed. The shim keeps `gh`, which `gh release download` needs signed in, and the quickstart already asks for it (`yagni`); downloading without `gh` would be a change of its own when someone needs it.)
+
+(Amended 2026-11-04, `20261104-found-by-search-and-agents`: someone needs it now. The shim downloads the release's asset and its checksum with `curl` from `https://github.com/clunny/clm/releases/download/v<version>/`, the public repository's release, so installing CLM needs no `gh` and no sign-in. `curl` ships with macOS and nearly every Linux; where it is missing, the shim fails as for any failed download, printing the `cargo install` command. The checksum check is unchanged.)

@@ -5,7 +5,7 @@ From nothing to your first change built, for a new project or an existing one.
 ## You need
 
 - [Claude Code](https://claude.com/claude-code).
-- The GitHub CLI, `gh`, signed in (`gh auth login`). The plugin downloads CLM's binary with it from the releases of the public repository `clunny/clm`.
+- `git`, and `curl` (macOS and most Linux have it). The plugin downloads CLM's binary with it, on first use, from the releases of the public repository [`clunny/clm`](https://github.com/clunny/clm): no GitHub account or sign-in is needed. CLM runs on Linux and macOS.
 - A git repository for your project, where you can push to `main`. A host (GitHub today) is optional: it holds the remote and shows a pull request per branch, but runs no checks and makes no decisions.
 
 ## 1. Install the plugin
