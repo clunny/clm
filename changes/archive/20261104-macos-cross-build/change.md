@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # Cross-build the macOS release binaries on Linux
