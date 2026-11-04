@@ -11,6 +11,7 @@ Teams that build with AI sessions and want people to review intent, not code: pr
 ## Why it is useful
 
 - Each session gets context scoped to one component and its ancestors, not the whole repository.
+- It writes per-component contracts that say what each part promises its neighbours.
 - Every requirement is proven by a test that cites it, and a check blocks drift between spec and code.
 - Specs, claims, approvals and lands are committed files and branches: no server owns them.
 
