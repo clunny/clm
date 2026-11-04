@@ -712,12 +712,12 @@ When the reader of `clm`'s stdout has gone, a print to it SHALL end the command 
 - capability/contribute-from-outside
 
 ### Requirement: contribution-command
-`clm contribution` SHALL give `host`'s contribution operations as subcommands: `parent` (printing `none` when there is no parent), `sync`, `open <branch> --title <title> --body-file <file>`, `show <number>`, `fetch <number> <branch>`, `comment <number> --body-file <file> [--close]` and `label <number> <label>`. `show` SHALL print each field on its own labelled line, each changed file on its own line and the body last. A subcommand SHALL exit 1 with the reason when the operation fails or there is no host.
+`clm contribution` SHALL give `host`'s contribution operations as subcommands: `parent` (printing `none` when there is no parent), `sync`, `open <branch> --title <title> --body-file <file>`, `show <number>`, `fetch <number> <branch>`, `comment <number> --body-file <file> [--close]` and `label <number> <label>`. `show` SHALL print each field on its own labelled line, the author's numeric account ID among them, each changed file on its own line and the body last. A subcommand SHALL exit 1 with the reason when the operation fails or there is no host.
 
 #### Scenario: show
 - GIVEN `host = "github"` and a fake `gh` reporting pull request 7 with changed file `backlog/x.md`
 - WHEN `clm contribution show 7` runs
-- THEN it prints the author, the head repository's URL and branch, and `backlog/x.md`, and exits 0
+- THEN it prints the author, the author's numeric account ID, the head repository's URL and branch, and `backlog/x.md`, and exits 0
 
 #### Scenario: no parent
 - GIVEN `host = "none"`

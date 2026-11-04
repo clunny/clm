@@ -1452,3 +1452,4 @@ The plugin SHALL ship `agents/issue-verifier.md` with a `name` of `issue-verifie
 #### Needs
 - orchestrator.triage/intake
 - model/parse-backlog
+- clm/contribution-command

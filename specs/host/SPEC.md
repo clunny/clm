@@ -143,7 +143,7 @@ The scan reads each file with its whitespace removed, so a call rustfmt splits a
 - THEN it exits 1 and `gh` wasn't called
 
 ### Requirement: contribution-operations
-`clm-host` SHALL offer, on `github`, through `gh` and `clm-git`'s layer: `parent`, the fork's parent as `<owner>/<name>`, or nothing when `origin` isn't a fork; `sync`, bringing `origin`'s `main` up to its parent's without force; `open_on_parent(branch, title, body file)`, opening a pull request from `<owner>:<branch>` to the parent's `main`, or returning the URL of the open one; `show(number)`, returning a pull request's author, state, title, body, head repository URL, head branch, whether maintainers may edit and changed files, or an issue's author, state, title and body; `fetch(number, branch)`, making a local branch at a pull request's head without checking it out, refusing a branch that exists; `comment(number, body file, close)`, adding a comment and closing when `close` is set; and `label(number, label)`. On `git` and `none`, `parent` SHALL return nothing and each other operation SHALL report that there is no host, running no `gh`.
+`clm-host` SHALL offer, on `github`, through `gh` and `clm-git`'s layer: `parent`, the fork's parent as `<owner>/<name>`, or nothing when `origin` isn't a fork; `sync`, bringing `origin`'s `main` up to its parent's without force; `open_on_parent(branch, title, body file)`, opening a pull request from `<owner>:<branch>` to the parent's `main`, or returning the URL of the open one; `show(number)`, returning a pull request's author, its author's numeric account ID (from `gh api users/<login>`, which a `Co-authored-by` trailer's `<id>+<login>@users.noreply.github.com` address needs), state, title, body, head repository URL, head branch, whether maintainers may edit and changed files, or an issue's author, its author's numeric account ID, state, title and body; `fetch(number, branch)`, making a local branch at a pull request's head without checking it out, refusing a branch that exists; `comment(number, body file, close)`, adding a comment and closing when `close` is set; and `label(number, label)`. On `git` and `none`, `parent` SHALL return nothing and each other operation SHALL report that there is no host, running no `gh`.
 
 #### Scenario: a fork's parent
 - GIVEN `host = "github"` and a fake `gh` whose `repo view` reports a fork of `clunny/clm`
@@ -158,7 +158,7 @@ The scan reads each file with its whitespace removed, so a call rustfmt splits a
 #### Scenario: a pull request's files
 - GIVEN a fake `gh` reporting pull request 7 with changed files `backlog/x.md` and `crates/a/src/lib.rs`
 - WHEN `show` runs for 7
-- THEN it returns both files, the head repository's URL and whether maintainers may edit
+- THEN it returns both files, the head repository's URL, whether maintainers may edit and the author's numeric account ID
 
 #### Scenario: closing with a comment
 - GIVEN a fake `gh`
