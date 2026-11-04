@@ -211,3 +211,48 @@ fn open_prints_the_parents_pull_request() {
     assert_eq!(code, Some(0), "{err}");
     assert_eq!(out, "https://github.com/clunny/clm/pull/9\n");
 }
+
+#[test]
+fn a_failing_operation_exits_1_with_its_reason() {
+    // req:clm/contribution-command@84f0a2d6
+    let (r, gh) = (checkout("github"), fake_gh());
+    write_exec(
+        &gh.dir.path().join("bin/gh"),
+        "#!/bin/sh\necho 'gh exploded' >&2\nexit 1\n",
+    );
+    for args in [
+        &["contribution", "label", "7", "idea"][..],
+        &["contribution", "show", "7"][..],
+        &["contribution", "sync"][..],
+    ] {
+        let (code, _, err) = clm(&r.work, &gh, args);
+        assert_eq!(code, Some(1), "{args:?}: {err}");
+        assert!(err.contains("gh exploded"), "{args:?}: {err}");
+    }
+}
+
+#[test]
+fn comment_without_close_leaves_it_open() {
+    // req:clm/contribution-command@84f0a2d6
+    let (r, gh) = (checkout("github"), fake_gh());
+    let (code, _, err) = clm(
+        &r.work,
+        &gh,
+        &["contribution", "comment", "7", "--body-file", "c.md"],
+    );
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(gh.calls(), vec!["issue comment 7 --body-file c.md"]);
+}
+
+#[test]
+fn sync_reaches_the_host() {
+    // req:clm/contribution-command@84f0a2d6
+    let (r, gh) = (checkout("github"), fake_gh());
+    let (code, _, err) = clm(&r.work, &gh, &["contribution", "sync"]);
+    assert_eq!(code, Some(0), "{err}");
+    let calls = gh.calls();
+    assert!(
+        calls.iter().any(|c| c.starts_with("repo sync dana/clm")),
+        "{calls:?}"
+    );
+}

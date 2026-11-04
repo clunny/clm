@@ -1468,10 +1468,14 @@ fn pr(page: Page) -> ExitCode {
 fn contribution_command(contribution: Contribution) -> ExitCode {
     match contribution {
         Contribution::Parent { root } => hosted("contribution parent", root, |host, root| {
-            Ok(Some(host.parent(root)?.unwrap_or_else(|| "none".into())))
+            Ok(Some(
+                host.parent(root)
+                    .map_err(refused)?
+                    .unwrap_or_else(|| "none".into()),
+            ))
         }),
         Contribution::Sync { root } => hosted("contribution sync", root, |host, root| {
-            host.sync(root).map(|()| None)
+            host.sync(root).map(|()| None).map_err(refused)
         }),
         Contribution::Open {
             branch,
@@ -1481,17 +1485,21 @@ fn contribution_command(contribution: Contribution) -> ExitCode {
         } => hosted("contribution open", root, |host, root| {
             host.open_on_parent(root, &branch, &title, &body_file)
                 .map(Some)
+                .map_err(refused)
         }),
         Contribution::Show { number, root } => hosted("contribution show", root, |host, root| {
             host.show(root, number)
                 .map(|shown| Some(shown_text(&shown)))
+                .map_err(refused)
         }),
         Contribution::Fetch {
             number,
             branch,
             root,
         } => hosted("contribution fetch", root, |host, root| {
-            host.fetch(root, number, &branch).map(|()| None)
+            host.fetch(root, number, &branch)
+                .map(|()| None)
+                .map_err(refused)
         }),
         Contribution::Comment {
             number,
@@ -1499,15 +1507,28 @@ fn contribution_command(contribution: Contribution) -> ExitCode {
             close,
             root,
         } => hosted("contribution comment", root, |host, root| {
-            host.comment(root, number, &body_file, close).map(|()| None)
+            host.comment(root, number, &body_file, close)
+                .map(|()| None)
+                .map_err(refused)
         }),
         Contribution::Label {
             number,
             label,
             root,
         } => hosted("contribution label", root, |host, root| {
-            host.label(root, number, &label).map(|()| None)
+            host.label(root, number, &label)
+                .map(|()| None)
+                .map_err(refused)
         }),
+    }
+}
+
+/// A failed `gh` or `git` is a refusal for `clm contribution`: every failure exits 1 with its
+/// reason.
+fn refused(e: clm_host::Error) -> clm_host::Error {
+    match e {
+        clm_host::Error::Git(why) => clm_host::Error::Refused(why),
+        other => other,
     }
 }
 
