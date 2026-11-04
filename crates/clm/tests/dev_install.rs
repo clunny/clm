@@ -11,16 +11,34 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 const MARK: &str = "# clm dev-install";
-const INSTALL: &str = "install --locked --path crates/clm --target-dir target/install";
 
-/// Prints a line, records each run (`<cwd>|<args>`) and
-/// installs a fake `clm` where `cargo install` would.
+/// Prints a line, records each run (`<cwd>|<args>`) and installs a fake `clm` under the
+/// `--root` it is given, as `cargo install` would; `uninstall` is only recorded.
 const STUB_CARGO: &str = r#"#!/bin/sh
 echo "stub cargo output"
 printf '%s|%s\n' "$PWD" "$*" >> "$STUB_RECORD"
-mkdir -p "$CARGO_HOME/bin"
-printf '#!/bin/sh\necho "clm 0.7.0 (stub)"\n' > "$CARGO_HOME/bin/clm"
-chmod +x "$CARGO_HOME/bin/clm"
+[ "$1" != uninstall ] || exit 0
+root=$CARGO_HOME
+prev=
+for a in "$@"; do
+	[ "$prev" = --root ] && root=$a
+	prev=$a
+done
+mkdir -p "$root/bin"
+printf '#!/bin/sh\necho "clm 0.7.0 (stub)"\n' > "$root/bin/clm"
+chmod +x "$root/bin/clm"
+"#;
+
+/// Records each run (`<cwd>|<args>`) in `$STUB_CLAUDE_RECORD`. `plugin marketplace list --json`
+/// prints `$STUB_CLAUDE_LIST` (`[]` when unset); a command whose arguments hold
+/// `$STUB_CLAUDE_FAIL` fails, and every `plugin` command fails when `$STUB_CLAUDE_FAIL_ALL` is set.
+const STUB_CLAUDE: &str = r#"#!/bin/sh
+printf '%s|%s\n' "$PWD" "$*" >> "$STUB_CLAUDE_RECORD"
+[ -z "${STUB_CLAUDE_FAIL_ALL:-}" ] || exit 1
+case "$*" in *"${STUB_CLAUDE_FAIL:-@@none@@}"*) echo "stub claude failing" >&2; exit 1 ;; esac
+case "$*" in
+"plugin marketplace list --json") printf '%s\n' "${STUB_CLAUDE_LIST:-[]}" ;;
+esac
 "#;
 
 struct Clone {
@@ -67,7 +85,14 @@ fn clone() -> Clone {
     git(&main, &["config", "user.email", "t@example.com"]);
     write(
         &main.join(".claude-plugin/marketplace.json"),
-        r#"{ "name": "clm", "plugins": [] }"#,
+        r#"{ "name": "clm", "plugins": [
+            { "name": "clm", "source": "./plugin" },
+            { "name": "clm-panel", "source": "./plugin-panel" } ] }"#,
+    );
+    write(&main.join("plugin/.claude-plugin/plugin.json"), "{}\n");
+    write(
+        &main.join("plugin-panel/.claude-plugin/plugin.json"),
+        "{}\n",
     );
     let script = main.join("scripts/dev-install.sh");
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/dev-install.sh");
@@ -91,6 +116,8 @@ fn clone() -> Clone {
     let stub = root.join("stub");
     write(&stub.join("cargo"), STUB_CARGO);
     executable(&stub.join("cargo"));
+    write(&stub.join("claude"), STUB_CLAUDE);
+    executable(&stub.join("claude"));
     fs::create_dir_all(root.join("home")).unwrap();
     Clone {
         tmp,
@@ -115,6 +142,47 @@ impl Clone {
 
     fn hook(&self) -> PathBuf {
         self.main.join(".git/hooks/reference-transaction")
+    }
+
+    /// `<common>/clm-dev`, where the script installs everything.
+    fn dev(&self) -> PathBuf {
+        self.main.join(".git/clm-dev")
+    }
+
+    fn claude_record(&self) -> PathBuf {
+        self.root().join("claude-record")
+    }
+
+    /// The stub `claude`'s runs, as `<cwd>|<args>` lines.
+    fn claude_runs(&self) -> Vec<String> {
+        fs::read_to_string(self.claude_record())
+            .map(|t| t.lines().map(str::to_string).collect())
+            .unwrap_or_default()
+    }
+
+    /// The stub `claude`'s runs of `plugin` commands other than the marketplace listing.
+    fn claude_changes(&self) -> Vec<String> {
+        self.claude_runs()
+            .into_iter()
+            .filter(|r| !r.ends_with("|plugin marketplace list --json"))
+            .collect()
+    }
+
+    /// The stub `claude` lists `clm` as a directory source at `path`.
+    fn lists_clm_at(&self, path: &Path) -> (String, String) {
+        (
+            "STUB_CLAUDE_LIST".to_string(),
+            json!([{ "name": "clm", "source": "directory", "path": path.display().to_string() }])
+                .to_string(),
+        )
+    }
+
+    /// `$CARGO_HOME/.crates.toml` recording `clm` from `source`.
+    fn record_cargo_install(&self, source: &str) {
+        write(
+            &self.cargo_home().join(".crates.toml"),
+            &format!("[v1]\n\"clm 0.7.0 ({source})\" = [\"clm\"]\n"),
+        );
     }
 
     fn settings(&self) -> PathBuf {
@@ -142,22 +210,36 @@ impl Clone {
             .env("CARGO_HOME", self.cargo_home())
             .env_remove("CARGO_INSTALL_ROOT")
             .env("STUB_RECORD", self.record())
+            .env("STUB_CLAUDE_RECORD", self.claude_record())
             .output()
             .unwrap()
     }
 
-    /// The script with the stub `cargo` first on the real `PATH`.
+    /// The script with the stubs first on the real `PATH`.
     fn run(&self, cwd: &Path, args: &[&str]) -> Output {
-        let path = format!("{}:{}", self.stub.display(), std::env::var("PATH").unwrap());
-        self.run_with_path(cwd, args, &path)
+        self.run_env(cwd, args, &[])
     }
 
-    /// A `PATH` of one directory: the stub `cargo` and every program on the real `PATH`
-    /// but `jq`.
-    fn path_without_jq(&self) -> String {
-        let dir = self.root().join("nojq");
+    /// `run` with more variables set.
+    fn run_env(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
+        let path = format!("{}:{}", self.stub.display(), std::env::var("PATH").unwrap());
+        let mut cmd = Command::new("sh");
+        cmd.arg(self.main.join("scripts/dev-install.sh")).args(args);
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        self.in_env(cmd, cwd, &path)
+    }
+
+    /// A `PATH` of one directory: the stubs and every program on the real `PATH` but `skip`.
+    fn path_without(&self, skip: &str) -> String {
+        let dir = self.root().join(format!("no-{skip}"));
         fs::create_dir_all(&dir).unwrap();
-        std::os::unix::fs::symlink(self.stub.join("cargo"), dir.join("cargo")).unwrap();
+        for stub in ["cargo", "claude"] {
+            if stub != skip {
+                std::os::unix::fs::symlink(self.stub.join(stub), dir.join(stub)).unwrap();
+            }
+        }
         for part in std::env::var("PATH").unwrap().split(':') {
             let Ok(entries) = fs::read_dir(part) else {
                 continue;
@@ -165,7 +247,7 @@ impl Clone {
             for entry in entries.flatten() {
                 let name = entry.file_name();
                 let link = dir.join(&name);
-                if name != "jq" && fs::symlink_metadata(&link).is_err() {
+                if name != skip && fs::symlink_metadata(&link).is_err() {
                     let _ = std::os::unix::fs::symlink(entry.path(), link);
                 }
             }
@@ -188,11 +270,19 @@ fn text(out: &Output) -> String {
 
 #[test]
 fn a_fresh_clone_is_set_up_from_a_linked_worktree() {
-    // req:clm/dev-install@295dabed
+    // req:clm/dev-install@a54821cc
     let c = clone();
     let out = c.run(&c.linked, &[]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
-    assert_eq!(c.cargo_runs(), [format!("{}|{INSTALL}", c.main.display())]);
+    let dev = c.dev();
+    assert_eq!(
+        c.cargo_runs(),
+        [format!(
+            "{}|install --locked --path crates/clm --root {} --target-dir target/install",
+            c.main.display(),
+            dev.display()
+        )]
+    );
     let hook = fs::read_to_string(c.hook()).unwrap();
     assert!(hook.lines().any(|l| l == MARK), "{hook}");
     assert!(hook.contains(&format!("{}/scripts/dev-install.sh", c.main.display())));
@@ -201,34 +291,172 @@ fn a_fresh_clone_is_set_up_from_a_linked_worktree() {
         fs::metadata(c.hook()).unwrap().permissions().mode() & 0o111,
         0
     );
+    let marketplace: Value = serde_json::from_str(
+        &fs::read_to_string(dev.join("marketplace/.claude-plugin/marketplace.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(marketplace["name"], json!("clm-dev"));
+    assert_eq!(marketplace["plugins"][0]["name"], json!("clm"));
+    for plugin in ["plugin", "plugin-panel"] {
+        assert_eq!(
+            fs::read_link(dev.join("marketplace").join(plugin)).unwrap(),
+            c.main.join(plugin)
+        );
+    }
+    let market = dev.join("marketplace").display().to_string();
+    let main = c.main.display();
+    assert_eq!(
+        c.claude_changes(),
+        [
+            format!("{main}|plugin marketplace add {market}"),
+            format!("{main}|plugin install clm@clm-dev --scope local"),
+            format!("{main}|plugin install clm-panel@clm-dev --scope local"),
+        ]
+    );
     let settings = c.settings_json();
     assert_eq!(
         settings["env"]["CLM_BIN"],
-        json!(c.cargo_home().join("bin/clm").display().to_string())
+        json!(dev.join("bin/clm").display().to_string())
     );
-    assert_eq!(
-        settings["extraKnownMarketplaces"]["clm"],
-        json!({ "source": { "source": "directory", "path": c.main.display().to_string() } })
-    );
+    assert_eq!(settings["enabledPlugins"]["clm@clm-dev"], json!(true));
+    assert_eq!(settings["enabledPlugins"]["clm@clm"], json!(false));
+    assert_eq!(settings["enabledPlugins"]["clm-panel@clm-dev"], json!(true));
+    assert_eq!(settings["enabledPlugins"]["clm-panel@clm"], json!(false));
+    assert!(settings.get("extraKnownMarketplaces").is_none());
     let printed = text(&out);
     assert!(printed.contains("clm 0.7.0 (stub)"), "{printed}");
     assert!(printed.contains("origin/main"), "{printed}");
+    assert!(printed.contains("restarted"), "{printed}");
+    assert!(printed.contains("plain `clm`"), "{printed}");
+}
+
+#[test]
+fn nothing_outside_the_clone_holds_the_build() {
+    // req:clm/dev-install@a54821cc
+    let c = clone();
+    c.record_cargo_install("registry+https://example.com");
+    let out = c.run(&c.main, &[]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(
+        !c.cargo_home().join("bin").exists(),
+        "wrote under CARGO_HOME/bin"
+    );
+    for run in c.claude_runs() {
+        assert!(!run.contains("marketplace remove"), "{run}");
+        assert!(!run.contains("--scope user"), "{run}");
+    }
+}
+
+#[test]
+fn an_earlier_setup_moves() {
+    // req:clm/dev-install@a54821cc
+    let c = clone();
+    let old_bin = c.cargo_home().join("bin/clm").display().to_string();
+    write(
+        &c.settings(),
+        &json!({
+            "env": { "CLM_BIN": old_bin },
+            "extraKnownMarketplaces": { "clm": { "source": { "source": "directory",
+                "path": c.main.display().to_string() } } }
+        })
+        .to_string(),
+    );
+    c.record_cargo_install("path+file:///somewhere/clm");
+    let (k, v) = c.lists_clm_at(&c.main);
+    let out = c.run_env(&c.linked, &[], &[(&k, &v)]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let changes = c.claude_changes();
+    let main = c.main.display();
+    assert_eq!(changes[0], format!("{main}|plugin marketplace remove clm"));
+    assert_eq!(
+        changes[1],
+        format!("{main}|plugin marketplace add clunny/clm")
+    );
+    assert!(
+        c.cargo_runs().iter().any(|r| r.ends_with("|uninstall clm")),
+        "{:?}",
+        c.cargo_runs()
+    );
+    let settings = c.settings_json();
+    assert_eq!(
+        settings["env"]["CLM_BIN"],
+        json!(c.dev().join("bin/clm").display().to_string())
+    );
+    assert!(
+        settings.get("extraKnownMarketplaces").is_none(),
+        "{settings}"
+    );
+    assert!(text(&out).contains("installs it again"), "{}", text(&out));
+}
+
+#[test]
+fn a_release_install_is_left_in_place_and_named() {
+    // req:clm/dev-install@a54821cc
+    let c = clone();
+    c.record_cargo_install("git+https://github.com/clunny/clm#abc");
+    let release = c.root().join("release/bin");
+    write(&release.join("clm"), "#!/bin/sh\n");
+    executable(&release.join("clm"));
+    let path = format!(
+        "{}:{}:{}",
+        c.stub.display(),
+        release.display(),
+        std::env::var("PATH").unwrap()
+    );
+    let out = c.run_with_path(&c.main, &[], &path);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(
+        c.cargo_runs().iter().all(|r| !r.contains("uninstall")),
+        "{:?}",
+        c.cargo_runs()
+    );
+    let printed = text(&out);
+    assert!(
+        printed.contains(&release.join("clm").display().to_string()),
+        "{printed}"
+    );
+    assert!(printed.contains("ahead of the plugin's shim"), "{printed}");
+}
+
+#[test]
+fn another_clones_marketplace_record_is_kept() {
+    // req:clm/dev-install@a54821cc
+    let other = json!([{ "name": "clm", "source": "github", "repo": "clunny/clm" }]).to_string();
+    let c = clone();
+    let out = c.run_env(&c.main, &[], &[("STUB_CLAUDE_LIST", &other)]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(
+        c.claude_runs()
+            .iter()
+            .all(|r| !r.contains("marketplace remove"))
+    );
+
+    let c = clone();
+    let (k, v) = c.lists_clm_at(&c.root().join("elsewhere"));
+    let out = c.run_env(&c.main, &[], &[(&k, &v)]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(
+        c.claude_runs()
+            .iter()
+            .all(|r| !r.contains("marketplace remove"))
+    );
 }
 
 #[test]
 fn existing_settings_are_kept_and_a_second_run_changes_nothing() {
-    // req:clm/dev-install@295dabed
+    // req:clm/dev-install@a54821cc
     let c = clone();
     write(
         &c.settings(),
-        r#"{"enabledPlugins": {"x@y": true}, "env": {"OTHER": "1"}}"#,
+        r#"{"permissions": {"allow": ["x"]}, "enabledPlugins": {"x@y": true}, "env": {"OTHER": "1"}}"#,
     );
     assert_eq!(c.run(&c.main, &[]).status.code(), Some(0));
     let settings = c.settings_json();
-    assert_eq!(settings["enabledPlugins"], json!({"x@y": true}));
+    assert_eq!(settings["permissions"], json!({"allow": ["x"]}));
+    assert_eq!(settings["enabledPlugins"]["x@y"], json!(true));
+    assert_eq!(settings["enabledPlugins"]["clm@clm-dev"], json!(true));
     assert_eq!(settings["env"]["OTHER"], json!("1"));
     assert!(settings["env"]["CLM_BIN"].is_string());
-    assert!(settings["extraKnownMarketplaces"]["clm"].is_object());
     let (first, hook) = (fs::read(c.settings()).unwrap(), fs::read(c.hook()).unwrap());
     assert_eq!(c.run(&c.linked, &[]).status.code(), Some(0));
     assert_eq!(fs::read(c.settings()).unwrap(), first);
@@ -244,11 +472,13 @@ fn refuses(c: &Clone, out: Output, reason: &str) {
 
 #[test]
 fn refuses_before_changing_anything() {
-    // req:clm/dev-install@295dabed
-    let c = clone();
-    let out = c.run_with_path(&c.main, &[], &c.path_without_jq());
-    refuses(&c, out, "jq");
-    assert!(!c.hook().exists() && !c.settings().exists());
+    // req:clm/dev-install@a54821cc
+    for skip in ["jq", "claude"] {
+        let c = clone();
+        let out = c.run_with_path(&c.main, &[], &c.path_without(skip));
+        refuses(&c, out, skip);
+        assert!(!c.hook().exists() && !c.settings().exists() && !c.dev().exists());
+    }
 
     let c = clone();
     git(&c.main, &["switch", "-q", "-c", "topic"]);
@@ -274,7 +504,13 @@ fn refuses_before_changing_anything() {
     assert!(!c.hook().exists());
 
     // Valid JSON that isn't an object to edit is refused before anything changes too.
-    for bad in ["[]", r#"{"env": "x"}"#] {
+    for bad in [
+        "[]",
+        "null",
+        r#"{"env": "x"}"#,
+        r#"{"env": false}"#,
+        r#"{"enabledPlugins": []}"#,
+    ] {
         let c = clone();
         write(&c.settings(), bad);
         let out = c.run(&c.main, &[]);
@@ -282,11 +518,41 @@ fn refuses_before_changing_anything() {
         assert_eq!(fs::read_to_string(c.settings()).unwrap(), bad);
         assert!(!c.hook().exists());
     }
+
+    // A marketplace plugin whose source isn't inside the checkout.
+    let c = clone();
+    write(
+        &c.main.join(".claude-plugin/marketplace.json"),
+        r#"{ "name": "clm", "plugins": [{ "name": "x", "source": "../x" }] }"#,
+    );
+    let out = c.run(&c.main, &[]);
+    refuses(&c, out, "source");
+    assert!(!c.hook().exists() && !c.dev().exists());
+
+    // Claude Code's marketplace listing fails, or isn't a JSON array.
+    for (k, v) in [("STUB_CLAUDE_FAIL_ALL", "1"), ("STUB_CLAUDE_LIST", "{}")] {
+        let c = clone();
+        let out = c.run_env(&c.main, &[], &[(k, v)]);
+        refuses(&c, out, "marketplace list");
+        assert!(!c.hook().exists() && !c.dev().exists());
+    }
+}
+
+#[test]
+fn a_failing_claude_command_stops_it() {
+    // req:clm/dev-install@a54821cc
+    let c = clone();
+    write(&c.settings(), r#"{"env": {"OTHER": "1"}}"#);
+    let before = fs::read(c.settings()).unwrap();
+    let out = c.run_env(&c.main, &[], &[("STUB_CLAUDE_FAIL", "plugin install")]);
+    assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+    assert!(text(&out).contains("plugin install"), "{}", text(&out));
+    assert_eq!(fs::read(c.settings()).unwrap(), before);
 }
 
 #[test]
 fn an_empty_settings_file_is_filled_and_keeps_its_mode() {
-    // req:clm/dev-install@295dabed
+    // req:clm/dev-install@a54821cc
     let c = clone();
     write(&c.settings(), "");
     fs::set_permissions(c.settings(), fs::Permissions::from_mode(0o644)).unwrap();
@@ -301,7 +567,7 @@ fn an_empty_settings_file_is_filled_and_keeps_its_mode() {
 
 #[test]
 fn a_foreign_hook_is_replaced_with_force() {
-    // req:clm/dev-install@295dabed
+    // req:clm/dev-install@a54821cc
     let c = clone();
     write(&c.hook(), "#!/bin/sh\necho mine\n");
     let out = c.run(&c.main, &["--force"]);
@@ -317,9 +583,11 @@ const STUB_REBUILD_CARGO: &str = r#"#!/bin/sh
 [ -z "${STUB_SLEEP:-}" ] || sleep "$STUB_SLEEP"
 echo "stub cargo output"
 src=
+root=$CARGO_HOME
 prev=
 for a in "$@"; do
 	[ "$prev" = --path ] && src=$a
+	[ "$prev" = --root ] && root=$a
 	prev=$a
 done
 head=$(git -C "${src%/crates/clm}" rev-parse HEAD)
@@ -332,9 +600,9 @@ if [ -n "${STUB_MOVE_TO:-}" ] && [ ! -e "$STUB_RECORD" ]; then
 	git -C "$STUB_MAIN" update-ref refs/remotes/origin/main "$STUB_MOVE_TO"
 fi
 printf '%s|%s|%s\n' "$PWD" "$*" "$head" >> "$STUB_RECORD"
-mkdir -p "$CARGO_HOME/bin"
-printf '#!/bin/sh\necho "clm 0.7.0 (%s)"\n' "$(echo "$head" | cut -c1-12)" > "$CARGO_HOME/bin/clm"
-chmod +x "$CARGO_HOME/bin/clm"
+mkdir -p "$root/bin"
+printf '#!/bin/sh\necho "clm 0.7.0 (%s)"\n' "$(echo "$head" | cut -c1-12)" > "$root/bin/clm"
+chmod +x "$root/bin/clm"
 "#;
 
 impl Clone {
@@ -365,14 +633,17 @@ impl Clone {
         );
     }
 
-    /// An installed fake `clm` whose `--version` names `commit`.
+    /// An installed fake `clm` whose `--version` names `commit`, where the script installs it.
     fn install_clm_at(&self, commit: &str) {
-        let bin = self.cargo_home().join("bin/clm");
+        self.install_clm_in(&self.dev().join("bin/clm"), commit);
+    }
+
+    fn install_clm_in(&self, bin: &Path, commit: &str) {
         write(
-            &bin,
+            bin,
             &format!("#!/bin/sh\necho \"clm 0.7.0 ({})\"\n", &commit[..12]),
         );
-        executable(&bin);
+        executable(bin);
     }
 
     /// `--rebuild` in `cwd` with the rebuild stub `cargo` first on `PATH`.
@@ -414,7 +685,7 @@ fn clone_to_rebuild(path: &str) -> (Clone, String) {
 
 #[test]
 fn a_rust_change_on_origin_main_is_built_in_the_background() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     let (c, b) = clone_to_rebuild("crates/clm/src/main.rs");
     let head = git(&c.main, &["rev-parse", "HEAD"]);
     let start = Instant::now();
@@ -435,8 +706,9 @@ fn a_rust_change_on_origin_main_is_built_in_the_background() {
     let runs = c.cargo_runs();
     assert_eq!(runs.len(), 1, "{runs:?}");
     let want = format!(
-        "install --locked --path {}/crates/clm --target-dir {}/target/install|{b}",
+        "install --locked --path {}/crates/clm --root {} --target-dir {}/target/install|{b}",
         src.display(),
+        c.dev().display(),
         c.main.display()
     );
     assert!(runs[0].ends_with(&want), "{runs:?}");
@@ -452,7 +724,7 @@ fn a_rust_change_on_origin_main_is_built_in_the_background() {
 
 #[test]
 fn nothing_to_rebuild() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     // Only a spec changed between the installed commit and origin/main.
     let (c, _b) = clone_to_rebuild("specs/SPEC.md");
     assert_eq!(c.rebuild(&c.main, &[]).status.code(), Some(0));
@@ -475,7 +747,7 @@ fn nothing_to_rebuild() {
 
 #[test]
 fn one_rebuild_at_a_time() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     // A running process holds the lock.
     let (c, _b) = clone_to_rebuild("crates/clm/src/main.rs");
     let mut sleeper = Command::new("sleep").arg("30").spawn().unwrap();
@@ -507,7 +779,7 @@ fn one_rebuild_at_a_time() {
 
 #[test]
 fn a_dead_rebuilds_lock_is_replaced() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     let (c, _b) = clone_to_rebuild("crates/clm/src/main.rs");
     let mut done = Command::new("true").spawn().unwrap();
     done.wait().unwrap();
@@ -520,7 +792,7 @@ fn a_dead_rebuilds_lock_is_replaced() {
 
 #[test]
 fn a_move_during_a_rebuild_is_built_too() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     let (c, b) = clone_to_rebuild("crates/clm/src/main.rs");
     let next = c.commit_on_side("Cargo.lock");
     let out = c.rebuild(&c.main, &[("STUB_MOVE_TO", &next)]);
@@ -536,7 +808,7 @@ fn a_move_during_a_rebuild_is_built_too() {
 
 #[test]
 fn the_hook_fires_on_a_lands_push_only() {
-    // req:clm/dev-install@295dabed
+    // req:clm/dev-install@a54821cc
     let c = clone();
     assert_eq!(c.run(&c.main, &[]).status.code(), Some(0));
     let record = c.root().join("hook-record");
@@ -567,7 +839,7 @@ fn the_hook_fires_on_a_lands_push_only() {
 
 #[test]
 fn an_earlier_post_merge_hook_is_removed_only_when_ours() {
-    // req:clm/dev-install@295dabed
+    // req:clm/dev-install@a54821cc
     let c = clone();
     write(&c.post_merge(), &format!("#!/bin/sh\n{MARK}\nexit 0\n"));
     let out = c.run(&c.main, &[]);
@@ -586,35 +858,94 @@ fn an_earlier_post_merge_hook_is_removed_only_when_ours() {
 
 #[test]
 fn remove_undoes_the_setup() {
-    // req:clm/dev-install-remove@4ecdc62e
+    // req:clm/dev-install-remove@30248948
     let c = clone();
-    write(&c.settings(), r#"{"enabledPlugins": {"x@y": true}}"#);
+    write(&c.settings(), r#"{"permissions": {"allow": ["x"]}}"#);
     assert_eq!(c.run(&c.main, &[]).status.code(), Some(0));
-    assert!(c.hook().exists());
+    assert!(c.hook().exists() && c.dev().exists());
     write(&c.post_merge(), &format!("#!/bin/sh\n{MARK}\n"));
     fs::create_dir_all(c.common().join("clm-install-src")).unwrap();
+    let before = c.claude_runs().len();
     let out = c.run(&c.linked, &["--remove"]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
     assert!(!c.hook().exists(), "hook left");
     assert!(!c.post_merge().exists(), "post-merge hook left");
-    assert_eq!(c.settings_json(), json!({"enabledPlugins": {"x@y": true}}));
-    assert!(
-        text(&out).contains("claude plugin marketplace add clunny/clm"),
-        "{}",
-        text(&out)
+    assert!(!c.dev().exists(), "clm-dev left");
+    assert_eq!(c.settings_json(), json!({"permissions": {"allow": ["x"]}}));
+    let main = c.main.display();
+    let after: Vec<String> = c.claude_changes().split_off(3);
+    assert_eq!(
+        after,
+        [
+            format!("{main}|plugin uninstall clm@clm-dev --scope local"),
+            format!("{main}|plugin uninstall clm-panel@clm-dev --scope local"),
+            format!("{main}|plugin marketplace remove clm-dev"),
+        ]
     );
-    assert!(
-        c.cargo_home().join("bin/clm").exists(),
-        "binary uninstalled"
-    );
+    assert!(c.claude_runs().len() > before);
+    assert!(text(&out).contains("release"), "{}", text(&out));
     assert!(c.common().join("clm-install-src").exists());
     let again = c.run(&c.main, &["--remove"]);
     assert_eq!(again.status.code(), Some(0), "{}", text(&again));
 }
 
 #[test]
+fn an_earlier_setup_is_undone() {
+    // req:clm/dev-install-remove@30248948
+    let c = clone();
+    let old_bin = c.cargo_home().join("bin/clm").display().to_string();
+    write(
+        &c.settings(),
+        &json!({
+            "env": { "CLM_BIN": old_bin },
+            "extraKnownMarketplaces": { "clm": { "source": { "source": "directory",
+                "path": c.main.display().to_string() } } }
+        })
+        .to_string(),
+    );
+    c.record_cargo_install("path+file:///somewhere/clm");
+    let (k, v) = c.lists_clm_at(&c.main);
+    let out = c.run_env(&c.main, &["--remove"], &[(&k, &v)]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    let main = c.main.display();
+    assert_eq!(
+        c.claude_changes(),
+        [
+            format!("{main}|plugin marketplace remove clm"),
+            format!("{main}|plugin marketplace add clunny/clm"),
+        ]
+    );
+    assert!(c.cargo_runs().iter().any(|r| r.ends_with("|uninstall clm")));
+    assert_eq!(c.settings_json(), json!({}));
+}
+
+#[test]
+fn remove_goes_on_when_claude_code_has_already_forgotten() {
+    // req:clm/dev-install-remove@30248948
+    let c = clone();
+    assert_eq!(c.run(&c.main, &[]).status.code(), Some(0));
+    let out = c.run_env(&c.main, &["--remove"], &[("STUB_CLAUDE_FAIL_ALL", "1")]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(!c.dev().exists());
+    assert_eq!(c.settings_json(), json!({}));
+}
+
+#[test]
+fn remove_without_claude_refuses_when_clm_dev_exists() {
+    // req:clm/dev-install-remove@30248948
+    let c = clone();
+    assert_eq!(c.run(&c.main, &[]).status.code(), Some(0));
+    let settings = fs::read(c.settings()).unwrap();
+    let out = c.run_with_path(&c.main, &["--remove"], &c.path_without("claude"));
+    assert_eq!(out.status.code(), Some(1), "{}", text(&out));
+    assert!(text(&out).contains("claude"), "{}", text(&out));
+    assert!(c.hook().exists() && c.dev().exists());
+    assert_eq!(fs::read(c.settings()).unwrap(), settings);
+}
+
+#[test]
 fn remove_keeps_foreign_hooks() {
-    // req:clm/dev-install-remove@4ecdc62e
+    // req:clm/dev-install-remove@30248948
     let c = clone();
     write(&c.hook(), "#!/bin/sh\necho mine\n");
     write(&c.post_merge(), "#!/bin/sh\necho theirs\n");
@@ -631,8 +962,33 @@ fn remove_keeps_foreign_hooks() {
 }
 
 #[test]
+fn a_clone_set_up_before_moving_is_rebuilt_where_it_was() {
+    // req:clm/dev-install-rebuild@a526b301
+    let c = clone();
+    let a = git(&c.main, &["rev-parse", "HEAD"]);
+    let old_bin = c.cargo_home().join("bin/clm");
+    c.install_clm_in(&old_bin, &a);
+    write(
+        &c.settings(),
+        &json!({ "env": { "CLM_BIN": old_bin.display().to_string() } }).to_string(),
+    );
+    let b = c.commit_on_side("crates/clm/src/main.rs");
+    c.set_origin_main(&b);
+    let out = c.rebuild(&c.main, &[]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    c.wait_unlocked();
+    let runs = c.cargo_runs();
+    assert_eq!(runs.len(), 1, "{runs:?}");
+    assert!(
+        runs[0].contains(&format!("--root {} ", c.cargo_home().display())),
+        "{runs:?}"
+    );
+    assert!(!c.dev().exists());
+}
+
+#[test]
 fn the_build_ignores_the_hooks_git_environment() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     let (c, b) = clone_to_rebuild("crates/clm/src/main.rs");
     let head = git(&c.main, &["rev-parse", "HEAD"]);
     let git_dir = c.common().display().to_string();
@@ -649,7 +1005,7 @@ fn the_build_ignores_the_hooks_git_environment() {
 
 #[test]
 fn a_failed_build_frees_the_lock_and_is_not_repeated() {
-    // req:clm/dev-install-rebuild@1f1802fc
+    // req:clm/dev-install-rebuild@a526b301
     let (c, _b) = clone_to_rebuild("crates/clm/src/main.rs");
     let out = c.rebuild(&c.main, &[("STUB_FAIL", "1")]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
