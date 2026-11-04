@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-run-allows-compile-only-fixes-in-other-components-only-for]
 ---
 
