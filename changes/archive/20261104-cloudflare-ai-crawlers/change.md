@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [cloudflare-ai-crawlers]
 ---
 
