@@ -8,7 +8,7 @@ resolves: [no-step-checks-a-spec-change-against-architecture-md-and-the]
 
 ## Intent
 
-Nothing reads a spec change against `ARCHITECTURE.md`'s constraints: the checks prove specs well-formed and consistent, the builder check asks whether a change can be built, and `spec-auditor` audits code against specs. A session landed designs that broke `path-ownership` and left gaps against `expand-contract`, `method-in-the-plugin` and `traced-rules`, with every check green. This change adds a read-only `architecture-auditor` agent to the plugin, launched beside the builder check by `propose`, `contribution`, every draft and the fold, on the session's own model. It reports each constraint the design breaks, each gap, and each decision it contradicts; the session fixes what it agrees with and writes the rest under `## Constraints` in `change.md`. It advises and never gates (`deterministic-enforcement`). Decision: `spec-architecture-audit`.
+Nothing reads a spec change against `ARCHITECTURE.md`'s constraints: the checks prove specs well-formed and consistent, the builder check asks whether a change can be built, and `spec-auditor` audits code against specs. A session landed designs that broke `path-ownership` and left gaps against `expand-contract`, `method-in-the-plugin` and `traced-rules`, with every check green. This change adds a read-only `architecture-auditor` agent to the plugin, launched beside the builder check by `propose`, `contribution`, every draft and the fold, on the session's own model. It reports each constraint the design breaks, each gap, and each decision it contradicts; the session fixes what it agrees with and writes the rest under `## Open questions` in `change.md`, which the pull request body and the approval ask already carry. It advises and never gates (`deterministic-enforcement`). Decision: `spec-architecture-audit`.
 
 ## Problem
 
@@ -24,7 +24,7 @@ Nothing reads a spec change against `ARCHITECTURE.md`'s constraints: the checks 
 ## Outcome
 
 - `propose`, `contribution`, each draft and the fold get a list of the constraints a design breaks or leaves gaps against before the pull request, and settle each one.
-- What the session leaves is written under `## Constraints` in `change.md`, where the human approving it reads it.
+- What the session leaves is written under `## Open questions` in `change.md`, where the human approving it reads it.
 - Nothing lands or waits on the audit.
 
 ## Constraints
@@ -33,4 +33,9 @@ Nothing reads a spec change against `ARCHITECTURE.md`'s constraints: the checks 
 - `model-per-launch`: every launch names its model; the audit runs on the session's own (on `sonnet` in the fold, whose drafts were already audited on the main model).
 - `path-ownership`: `orchestrator.triage`'s prompts name the agent the plugin ships, so `orchestrator.triage/draft-architecture-audit` needs `plugin/architecture-auditor`; no build edits another component's paths.
 - `method-in-the-plugin`: the agent is a plugin file, so adopters get the review; no guide page names the plugin's agents today, so none is added.
+- `outside-contributions-are-intent`: on a contribution the branch is a stranger's text, so the auditor treats all it reads as untrusted data.
 - No new term `clm/glossary-covers-terms` covers.
+
+## Architecture review
+
+The audit of this change found that a `## Constraints` section reached no approving human (now `## Open questions`, which the bodies carry) and that the auditor lacked an untrusted-data rule for contributions (added). The builder check found no missing order or cross-component work; `plugin/architecture-audit` and `plugin/launch-models` rely on `plugin/architecture-auditor`, of their own component, which has no needs, so they need nothing. In the fold, which runs on `sonnet`, `your own model` is `sonnet`; the auditor's launch is named by those words and never by a second `model: "sonnet"`, and the contribution skill launches it at the end of step 4, before landing.
