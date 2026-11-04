@@ -24,6 +24,25 @@ impl From<clm_git::Error> for Error {
     }
 }
 
+/// A pull request or an issue, as `show` reports it. What it holds is a stranger's text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Shown {
+    pub pull_request: bool,
+    pub author: String,
+    pub state: String,
+    pub title: String,
+    pub body: String,
+    /// A pull request's head repository URL.
+    pub head_repo_url: Option<String>,
+    pub head_branch: Option<String>,
+    pub maintainers_can_edit: bool,
+    pub files: Vec<String>,
+}
+
+fn no_host<T>() -> Result<T, Error> {
+    Err(Error::Refused("there is no host".into()))
+}
+
 /// What CLM asks of a git host. One implementation per `host` setting.
 pub trait Host {
     /// Opens the page for `branch` against `main`, titled `title` with `body_file`'s
@@ -50,6 +69,55 @@ pub trait Host {
         body_file: &Path,
         repo: &str,
     ) -> Result<String, Error>;
+
+    /// The fork's parent as `<owner>/<name>`; `None` when [`REMOTE`] isn't a fork.
+    fn parent(&self, _root: &Path) -> Result<Option<String>, Error> {
+        Ok(None)
+    }
+
+    /// Brings [`REMOTE`]'s `main` up to its parent's, without force.
+    fn sync(&self, _root: &Path) -> Result<(), Error> {
+        no_host()
+    }
+
+    /// Opens a pull request from this fork's `branch` to the parent's `main`, or finds the
+    /// open one, and returns its URL.
+    fn open_on_parent(
+        &self,
+        _root: &Path,
+        _branch: &str,
+        _title: &str,
+        _body_file: &Path,
+    ) -> Result<String, Error> {
+        no_host()
+    }
+
+    /// Pull request or issue `number`.
+    fn show(&self, _root: &Path, _number: u64) -> Result<Shown, Error> {
+        no_host()
+    }
+
+    /// Makes local `branch` at pull request `number`'s head, without checking it out;
+    /// refuses a branch that exists.
+    fn fetch(&self, _root: &Path, _number: u64, _branch: &str) -> Result<(), Error> {
+        no_host()
+    }
+
+    /// Comments `body_file`'s contents on `number`, closing it when `close` is set.
+    fn comment(
+        &self,
+        _root: &Path,
+        _number: u64,
+        _body_file: &Path,
+        _close: bool,
+    ) -> Result<(), Error> {
+        no_host()
+    }
+
+    /// Adds `label` to `number`.
+    fn label(&self, _root: &Path, _number: u64, _label: &str) -> Result<(), Error> {
+        no_host()
+    }
 
     /// Deletes [`REMOTE`]'s `branch` when its tip is still `lease`: plain git on every host,
     /// and nothing to do without that remote or when the branch is already gone.
