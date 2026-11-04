@@ -314,6 +314,24 @@ pub fn tracked_matching(root: &Path, globs: &[String]) -> Result<Vec<PathBuf>, E
     ls_files(root, &pathspecs)
 }
 
+/// Every file a `git add -A` in `root` would commit: the index's files and the untracked
+/// ones git's standard excludes don't ignore, relative to `root`, each once, sorted.
+pub fn files_to_commit(root: &Path) -> Result<Vec<PathBuf>, Error> {
+    let args = [
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "--deduplicate",
+    ];
+    let out = run(root, "git", &args, Options::default())?;
+    // git lists the index's files, then the untracked ones: merge them into one order.
+    let mut names: Vec<&[u8]> = nul_separated(&out).collect();
+    names.sort_unstable();
+    Ok(names.into_iter().map(path_from_bytes).collect())
+}
+
 fn ls_files(root: &Path, pathspecs: &[String]) -> Result<Vec<PathBuf>, Error> {
     let mut args = vec!["ls-files", "-z", "--cached", "--deduplicate"];
     if !pathspecs.is_empty() {
