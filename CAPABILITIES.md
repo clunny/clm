@@ -248,6 +248,22 @@ A session that can approve or push for itself makes every other rule optional.
 - WHEN it runs `git push`
 - THEN the guard blocks it
 
+### Capability: contribute-from-outside
+A person without write access can suggest what a project should do, from a one-line issue to a spec change in a pull request from a fork, and its maintainer can land what they accept, with the person credited as its author. Code from outside can't land by that route, and landing a suggestion runs none of the person's code.
+
+#### Why
+Open-source projects grow through people outside them, but under CLM nobody reviews code and a land runs the branch's checks on the lander's machine, so what outsiders can safely offer is intent.
+
+#### Scenario: a suggestion lands
+- GIVEN a branch from a fork, by another author, that only adds a backlog item, pushed as `spec/x`, and a `main` whose code has already been checked
+- WHEN the maintainer runs `clm land spec/x`
+- THEN it lands, the contributor's commit is on `main` under their name, and the project's check command doesn't run
+
+#### Scenario: code from outside
+- GIVEN a branch from a fork that changes a code file, pushed as `spec/x`
+- WHEN the maintainer runs `clm land spec/x`
+- THEN it refuses, naming the file, the project's check command doesn't run and `main` is unchanged
+
 ### Capability: report-defects
 A person or session can report a defect in CLM itself from inside a session, where it happened.
 

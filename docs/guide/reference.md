@@ -12,6 +12,7 @@
 | `/clm:propose` | turn an intent into one spec branch, and see it landed |
 | `/clm:build` | build everything ready, in parallel, until the queue is empty |
 | `/clm:triage` | draft the backlog into spec changes unattended, then ask you to approve the ones that need review |
+| `/clm:contribution` | take in a contributor's pull request or issue: judge its files, show it to you, close it or land it on your yes |
 | `/clm:health` | read the health report and propose cuts, for you to take to `/clm:propose` |
 
 ## Commands
