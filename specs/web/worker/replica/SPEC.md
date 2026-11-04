@@ -104,7 +104,7 @@ While a repo has open pages, the object SHALL list its refs and open pull reques
 - THEN the object made no request to GitHub
 
 ### Requirement: writes-through-object
-A write SHALL be validated against the replica after the object has brought itself up to the tip, by reading the default branch's ref and applying any push it hasn't seen, and SHALL be appended with the requester's token and applied to the replica before the answer. A decide or a proposal SHALL recompute before the answer, so a read right after it shows the record. While the replica has no views to answer (`Preparing`), a write SHALL answer 503 `{"preparing": <share>}` as a read does, start the build when none is under way, and append nothing. When the object can't read the ref, or can't move its tip to it, a write SHALL answer 502 and append nothing, so nothing is judged against a tip it knows to be behind.
+A write SHALL be validated against the replica after the object has brought itself up to the tip, by reading the default branch's ref and applying any push it hasn't seen, and SHALL be appended with the requester's token and applied to the replica before the answer. A decide or a proposal SHALL recompute before the answer, so a read right after it shows the record. While the replica has no views to answer (`Preparing`), a write SHALL answer 503 `{"preparing": <share>}` as a read does, before it reads the ref, start the build when none is under way, and append nothing. When the object can't read the ref, or its tip isn't that ref's commit after applying the push, a write SHALL answer 502 and append nothing, so nothing is judged against a tip it knows to be behind; a tip that moved with files still to fetch has moved.
 
 #### Needs
 - replica/validate-writes
