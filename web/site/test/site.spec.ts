@@ -43,7 +43,7 @@ test('the homepage first screen shows the headline, Get started and the four sta
 })
 
 test('the homepage holds its five sections in order with the credits linked', async ({ page }) => {
-  // req:web.site/homepage-sections@8c610a77
+  // req:web.site/homepage-sections@16b02280
   await page.goto('/')
   const headings = await page.locator('.clm-home .sec .k').allTextContents()
   expect(headings.map((h) => h.trim())).toEqual([
@@ -57,6 +57,7 @@ test('the homepage holds its five sections in order with the credits linked', as
   const credits = page.locator('.clm-home .sec').nth(4)
   for (const href of [
     'https://arxiv.org/html/2606.27045v2',
+    'https://kubernetes.io/docs/concepts/architecture/controller/',
     'https://github.com/obra/superpowers',
     'https://claude.com/blog/the-ai-native-sdlc-playbook',
   ]) {
@@ -70,7 +71,7 @@ test('the install commands name the one configured repository', () => {
   const out = join(siteDir, '.test-dist', 'repo')
   execFileSync('npx', ['vitepress', 'build', '.'], {
     cwd: siteDir,
-    env: { ...process.env, SITE_OUT: out, INSTALL_REPO: 'someone/clm-public' },
+    env: { ...process.env, SITE_OUT: out, INSTALL_REPO: 'someone/clm-public', GITHUB_STARS: '1' },
     stdio: 'pipe',
   })
   const html = readFileSync(join(out, 'index.html'), 'utf8')
@@ -94,7 +95,7 @@ test('the install commands default to the public repository', () => {
   test.setTimeout(180_000)
   // req:web.site/install-repository@b53df95f
   const out = join(siteDir, '.test-dist', 'default-repo')
-  const env = { ...process.env, SITE_OUT: out }
+  const env = { ...process.env, SITE_OUT: out, GITHUB_STARS: '1' }
   delete env.INSTALL_REPO
   execFileSync('npx', ['vitepress', 'build', '.'], { cwd: siteDir, env, stdio: 'pipe' })
   const html = readFileSync(join(out, 'index.html'), 'utf8')

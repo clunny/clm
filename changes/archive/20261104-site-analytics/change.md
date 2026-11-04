@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 human_burdens:
   - "Create an Umami Cloud account (free Hobby tier) and a website for clm-app.dev; Umami becomes the processor of the site's visit data"
   - "Set the website's ID as the repository's Actions variable UMAMI_WEBSITE_ID, and define the homepage-to-install funnel in Umami's dashboard"

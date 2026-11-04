@@ -104,7 +104,7 @@
 .sec .k { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--h-accent); margin-bottom: 8px; }
 .sec h2 { font-size: 26px; margin: 0 0 12px; color: var(--h-strong); font-weight: 750; letter-spacing: -0.01em; border: 0; padding: 0; }
 .sec p { color: var(--h-muted); font-size: 15px; max-width: 700px; margin: 0 0 14px; }
-.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 18px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
 .tile { background: var(--h-card); border: 1px solid var(--h-line); border-radius: 10px; padding: 16px; font-size: 14px; color: var(--h-muted); }
 .tile b { display: block; margin-bottom: 6px; font-size: 15px; }
@@ -131,6 +131,16 @@
   display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
 }
 .foot a { color: var(--h-faint); }
+
+/* The GitHub link: an icon with the star count. */
+.gh-icon { vertical-align: -3px; margin-right: 5px; }
+.hero .btn.g { color: var(--h-muted); border: 1px solid var(--h-line); }
+.hero .btn.g .gh-icon { margin-right: 6px; vertical-align: -2px; }
+.cmd code { font-family: inherit; }
+
+/* The guide's small footer, and the privacy page's. */
+.site-foot { padding: 16px 24px; font-size: 12px; text-align: center; border-top: 1px solid var(--vp-c-divider); }
+.site-foot a { color: var(--vp-c-text-3); }
 
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; padding: 32px 20px 28px; min-height: 0; }
