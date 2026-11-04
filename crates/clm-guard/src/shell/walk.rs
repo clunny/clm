@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use super::command::{self, Command};
-use super::scan::{self, Segment, Sep};
+use super::scan::{self, Input, Segment, Sep};
 
 /// A segment as judged: its text and tokens, and the checkout it runs in.
 pub(crate) struct Judged {
@@ -15,6 +15,43 @@ pub(crate) struct Judged {
     pub(crate) lost: Option<String>,
     /// Whether a pipe (`|` or `|&`) ends the segment, so its output goes to a later command.
     pub(crate) piped: bool,
+    /// What feeds its standard input (`guard-standard-input`).
+    // The defect ask reads it (`plugin.hooks.guard/defect-approval`); until then only the
+    // walk's own tests do.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) stdin: Stdin,
+}
+
+/// What feeds a piece's standard input, as the shell decides it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Stdin {
+    /// The command's own: no redirection and no pipe into it.
+    Own,
+    /// The output of the earlier segment of its pipeline.
+    Pipe,
+    /// A file, or a descriptor duplicated or closed. Its contents are never read.
+    File,
+    /// A here-string (`<<<`).
+    HereString,
+    /// A heredoc: its body as the shell sends it, and whether it sends it as written.
+    Heredoc { body: String, as_written: bool },
+}
+
+impl Stdin {
+    /// The input of `segment`, which a pipe feeds when `piped` (the segment before it ended
+    /// with `|` or `|&`): its last input redirection wins.
+    fn of(segment: &Segment, piped: bool) -> Stdin {
+        match segment.inputs.last() {
+            Some(Input::Heredoc { body, as_written }) => Stdin::Heredoc {
+                body: body.clone(),
+                as_written: *as_written,
+            },
+            Some(Input::HereString) => Stdin::HereString,
+            Some(Input::File) => Stdin::File,
+            None if piped => Stdin::Pipe,
+            None => Stdin::Own,
+        }
+    }
 }
 
 impl Judged {
@@ -75,6 +112,7 @@ fn collect(segments: &[Segment], cwd: Option<&Path>, place: Place, out: &mut Vec
             checkout: here.dir.clone(),
             lost: here.lost.clone(),
             piped: segment.sep.pipes(),
+            stdin: Stdin::of(segment, i > 0 && segments[i - 1].sep.pipes()),
         });
         let run = |text: &str, from: Place, out: &mut Vec<Judged>| {
             collect(&scan::segments(text), cwd, from, out);
@@ -170,4 +208,119 @@ fn moved(dir: &Option<PathBuf>, command: &Command) -> Option<PathBuf> {
         dir.push(d);
     }
     Some(dir)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The standard input of each piece of `command` whose first token is `name`.
+    fn inputs(command: &str, name: &str) -> Vec<Stdin> {
+        walk(command, None)
+            .into_iter()
+            .filter(|j| j.tokens.first().map(String::as_str) == Some(name))
+            .map(|j| j.stdin)
+            .collect()
+    }
+
+    fn heredoc(body: &str, as_written: bool) -> Stdin {
+        Stdin::Heredoc {
+            body: body.to_string(),
+            as_written,
+        }
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn a_quoted_heredoc_is_sent_as_written() {
+        assert_eq!(
+            inputs("clm defect --title x <<'EOF'\ncost $HOME\nEOF", "clm"),
+            [heredoc("cost $HOME", true)]
+        );
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn an_unquoted_heredoc_is_sent_as_written_only_without_expansions() {
+        assert_eq!(
+            inputs("clm defect <<EOF\nplain words\nEOF", "clm"),
+            [heredoc("plain words", true)]
+        );
+        assert_eq!(
+            inputs("clm defect <<EOF\ncost $HOME\nEOF", "clm"),
+            [heredoc("cost $HOME", false)]
+        );
+        assert_eq!(
+            inputs("clm defect <<E\\OF\ncost $HOME\nEOF", "clm"),
+            [heredoc("cost $HOME", true)]
+        );
+        assert_eq!(
+            inputs("clm defect <<EOF\ncost `date`\nEOF", "clm"),
+            [heredoc("cost `date`", false)]
+        );
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn a_dash_heredoc_loses_its_leading_tabs() {
+        assert_eq!(
+            inputs("clm defect <<-'EOF'\n\ta\n\t\tb\n\tEOF", "clm"),
+            [heredoc("a\nb", true)]
+        );
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn the_last_redirection_wins() {
+        assert_eq!(
+            inputs("clm defect <<'EOF' < f\nr\nEOF", "clm"),
+            [Stdin::File]
+        );
+        assert_eq!(
+            inputs("cat r | clm defect <<'EOF'\nr\nEOF", "clm"),
+            [heredoc("r", true)]
+        );
+        assert_eq!(
+            inputs("clm defect < f <<< x <<'EOF'\nr\nEOF", "clm"),
+            [heredoc("r", true)]
+        );
+        assert_eq!(inputs("clm defect 3< f", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("clm defect 0<&3", "clm"), [Stdin::File]);
+        assert_eq!(inputs("clm defect <> f", "clm"), [Stdin::File]);
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn other_sources() {
+        assert_eq!(inputs("clm defect < r.md", "clm"), [Stdin::File]);
+        assert_eq!(inputs("cat r.md | clm defect", "clm"), [Stdin::Pipe]);
+        assert_eq!(inputs("cat r.md |& clm defect", "clm"), [Stdin::Pipe]);
+        assert_eq!(inputs("clm defect <<< \"$R\"", "clm"), [Stdin::HereString]);
+        assert_eq!(inputs("clm defect", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("cat r.md; clm defect", "clm"), [Stdin::Own]);
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn a_heredoc_inside_a_substitution_belongs_to_its_own_piece() {
+        let walked = walk("git commit -m \"$(cat <<'EOF'\nmsg\nEOF\n)\"", None);
+        let of = |name: &str| {
+            walked
+                .iter()
+                .find(|j| j.tokens.first().map(String::as_str) == Some(name))
+                .map(|j| j.stdin.clone())
+        };
+        assert_eq!(of("git"), Some(Stdin::Own));
+        assert_eq!(of("cat"), Some(heredoc("msg", true)));
+    }
+
+    // req:plugin.hooks.guard.shell/guard-standard-input@1b42414f
+    #[test]
+    fn a_script_and_a_body_judged_as_commands_keep_their_own_input() {
+        assert_eq!(
+            inputs("bash -c 'clm defect < f' <<'EOF'\nx\nEOF", "clm"),
+            [Stdin::File]
+        );
+        assert_eq!(inputs("bash <<'EOF'\nclm defect\nEOF", "clm"), [Stdin::Own]);
+    }
 }

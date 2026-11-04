@@ -44,6 +44,28 @@ pub(crate) struct Segment {
     pub subs: Vec<String>,
     /// The words of its here-strings, with their quotes removed (`guard-here-strings`).
     pub herestrings: Vec<String>,
+    /// Its input redirections that name standard input, in the order written
+    /// (`guard-standard-input`). Only the source, never what a file holds.
+    pub inputs: Vec<Input>,
+}
+
+/// An input redirection of a segment, as the shell reads it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Input {
+    /// A heredoc: its body as the shell sends it, and whether it sends it as written.
+    Heredoc { body: String, as_written: bool },
+    /// A here-string (`<<<`).
+    HereString,
+    /// A file (`<`, `<>`), or a descriptor duplicated or closed (`<&`).
+    File,
+}
+
+/// An input redirection as scanned, before a heredoc's body is known.
+#[derive(Clone)]
+enum Raw {
+    Heredoc { op: usize, quoted: bool, tabs: bool },
+    HereString,
+    File,
 }
 
 /// `command`'s segments. When the scan ends inside a quote or a substitution, the quotes
@@ -96,6 +118,7 @@ struct Done {
     words: Vec<Word>,
     sep: Sep,
     subs: Vec<String>,
+    inputs: Vec<Raw>,
 }
 
 struct Scanner<'a> {
@@ -109,6 +132,8 @@ struct Scanner<'a> {
     nested: Vec<Heredoc>,
     /// Operators on the current line whose bodies start after it: offset, word, `<<-`.
     pending: Vec<(usize, String, bool)>,
+    /// The current segment's input redirections, in order.
+    inputs: Vec<Raw>,
     done: Vec<Done>,
     words: Vec<Word>,
     word: String,
@@ -130,6 +155,7 @@ impl<'a> Scanner<'a> {
             heredocs: Vec::new(),
             nested: Vec::new(),
             pending: Vec::new(),
+            inputs: Vec::new(),
             done: Vec::new(),
             words: Vec::new(),
             word: String::new(),
@@ -260,15 +286,21 @@ impl<'a> Scanner<'a> {
                     self.tick = !self.tick;
                     self.end_segment(i, Sep::Backtick);
                 }
-                '<' if quotes && text[i..].starts_with("<<<") => {
+                '<' if text[i..].starts_with("<<<") => {
+                    self.input(Raw::HereString);
                     self.redirection('<');
                     self.word.push_str("<<");
                     width = 3;
                 }
-                '<' if quotes && text[i..].starts_with("<<") => {
+                '<' if text[i..].starts_with("<<") => {
                     let tabs = text[i + 2..].starts_with('-');
-                    if let Some(word) = heredoc_word(&text[i + 2 + usize::from(tabs)..]) {
+                    if let Some((word, quoted)) = heredoc_word(&text[i + 2 + usize::from(tabs)..]) {
                         self.pending.push((i, word, tabs));
+                        self.input(Raw::Heredoc {
+                            op: i,
+                            quoted,
+                            tabs,
+                        });
                     }
                     self.redirection('<');
                     self.word.push('<');
@@ -278,7 +310,12 @@ impl<'a> Scanner<'a> {
                         width += 1;
                     }
                 }
-                '<' | '>' => self.redirection(c),
+                '<' | '>' => {
+                    if c == '<' {
+                        self.input(Raw::File);
+                    }
+                    self.redirection(c)
+                }
                 _ => {
                     self.word.push(c);
                     self.started = true;
@@ -288,6 +325,18 @@ impl<'a> Scanner<'a> {
         }
         self.end_segment(text.len(), Sep::Newline);
         self.finish(quote.is_some())
+    }
+
+    /// Notes an input redirection when it names standard input: a descriptor's digits
+    /// before the operator, other than `0`, name another (`3<f`).
+    fn input(&mut self, raw: Raw) {
+        let other = !self.redirect
+            && self.word != "0"
+            && !self.word.is_empty()
+            && self.word.bytes().all(|b| b.is_ascii_digit());
+        if !other {
+            self.inputs.push(raw);
+        }
     }
 
     /// Adds a redirection operator's character to the current word, which a file
@@ -321,6 +370,7 @@ impl<'a> Scanner<'a> {
             words: std::mem::take(&mut self.words),
             sep,
             subs: std::mem::take(&mut self.subs),
+            inputs: std::mem::take(&mut self.inputs),
         });
         let len = match sep {
             Sep::AndAnd | Sep::OrOr | Sep::PipeAmp => 2,
@@ -349,6 +399,31 @@ impl<'a> Scanner<'a> {
         at
     }
 
+    /// `raw` as an input; a heredoc operator whose body the scan didn't find is none.
+    fn input_of(&self, raw: &Raw) -> Option<Input> {
+        Some(match raw {
+            Raw::HereString => Input::HereString,
+            Raw::File => Input::File,
+            Raw::Heredoc { op, quoted, tabs } => {
+                let h = self.heredocs.iter().find(|h| h.op == *op)?;
+                let body = &self.text[h.start..h.end];
+                let body = if *tabs {
+                    let lines: Vec<&str> = body
+                        .split('\n')
+                        .map(|l| l.trim_start_matches('\t'))
+                        .collect();
+                    lines.join("\n")
+                } else {
+                    body.to_string()
+                };
+                Input::Heredoc {
+                    as_written: *quoted || !body.contains(['$', '`', '\\']),
+                    body,
+                }
+            }
+        })
+    }
+
     fn finish(self, unbalanced: bool) -> Scan {
         let text = self.text;
         let mut segments: Vec<Segment> = self
@@ -362,6 +437,7 @@ impl<'a> Scanner<'a> {
                 subs: d.subs.clone(),
                 // A scan that ignores quotes runs because they don't balance.
                 herestrings: herestrings(&d.words, self.known.is_some()),
+                inputs: d.inputs.iter().filter_map(|r| self.input_of(r)).collect(),
             })
             .collect();
         for h in &self.heredocs {
@@ -443,7 +519,7 @@ fn substitution(text: &str, from: usize) -> Option<(usize, Vec<Heredoc>)> {
             (None, '<') if text[i..].starts_with("<<<") => width = 3,
             (None, '<') if text[i..].starts_with("<<") => {
                 let tabs = text[i + 2..].starts_with('-');
-                if let Some(word) = heredoc_word(&text[i + 2 + usize::from(tabs)..]) {
+                if let Some((word, _)) = heredoc_word(&text[i + 2 + usize::from(tabs)..]) {
                     pending.push((i, word, tabs));
                 }
                 width = 2 + usize::from(tabs);
@@ -516,8 +592,9 @@ fn herestrings(words: &[Word], unbalanced: bool) -> Vec<String> {
 }
 
 /// The word after a heredoc operator, past optional spaces: quoted in `'` or `"`, or bare
-/// up to a space or an operator character, with quotes and backslashes removed.
-fn heredoc_word(rest: &str) -> Option<String> {
+/// up to a space or an operator character, with quotes and backslashes removed, and whether
+/// there were any (the shell then sends the body as written).
+fn heredoc_word(rest: &str) -> Option<(String, bool)> {
     let rest = rest.trim_start_matches([' ', '\t']);
     let word = match rest.chars().next() {
         Some(q @ ('\'' | '"')) => rest[1..].split(q).next().unwrap_or_default(),
@@ -526,6 +603,7 @@ fn heredoc_word(rest: &str) -> Option<String> {
             .next()
             .unwrap_or_default(),
     };
-    let word = word.replace(['\\', '\'', '"'], "");
-    (!word.is_empty()).then_some(word)
+    let clean = word.replace(['\\', '\'', '"'], "");
+    let quoted = clean.len() != word.len() || rest.starts_with(['\'', '"']);
+    (!clean.is_empty()).then_some((clean, quoted))
 }
