@@ -6,7 +6,7 @@ A small team, an idea and a few hours. With CLM, the humans spend the time on th
 
 **Hour one: set up and set intent.** One person runs `/clm:init` on a new repository and does the bootstrap steps. The team agrees the idea in a sentence and the few constraints that matter, and the first spec change comes out of that conversation: a root component and two or three first components. Keep it coarse; you'll reshape it all day. Approve it and start `/clm:build` straight away.
 
-**The rest of the day: intent and building overlap.** While the first components are being built, the team is already fleshing out the next ones with `/clm:propose`. Each change that lands leaves its components with requirements to build, and the builders pick up each component as soon as the components it depends on are in place. Nobody waits for a sprint to end, because there are no sprints.
+**The rest of the day: intent and building overlap.** While the first components are being built, the team is already fleshing out the next ones with `/clm:propose`. Each change that lands leaves its components with requirements to build, and the builders pick up each component as soon as it has work ready, holding back only a requirement whose `#### Needs` aren't built yet. Nobody waits for a sprint to end, because there are no sprints.
 
 ## No plan to maintain
 

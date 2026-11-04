@@ -1,5 +1,7 @@
 # Reference
 
+The skills, the commands' settings and where to read more: a page to look things up in once you've used CLM.
+
 - [Spec format](../spec-format.md) (`clm guide spec-format`): components, requirements and scenarios, deltas, building by component, decisions and the backlog.
 - Why CLM works the way it does: CLM's own repository records each significant choice in CLM as a file in its `docs/decisions/`, with its reasons and what was rejected. Your project records its own choices the same way, in its `docs/decisions/`.
 - CLM's own architectural constraints are in its repository's `ARCHITECTURE.md`, and its component map in the Design of its root component, `specs/SPEC.md`. The architectural constraints that `clm init` puts in your project's `ARCHITECTURE.md` come from there.
@@ -11,7 +13,7 @@
 | `/clm:init` | bring a new or existing repository under CLM |
 | `/clm:propose` | turn an intent into one spec branch, and see it landed |
 | `/clm:build` | build everything ready, in parallel, until the queue is empty |
-| `/clm:triage` | draft the backlog into spec changes unattended, then ask you to approve the ones that need review |
+| `/clm:triage` | work the backlog down from a menu: approve designed changes, answer questions, brainstorm ideas, draft bugs in the background, and approve the drafts that need review in one go |
 | `/clm:contribution` | take in a contributor's pull request or issue: judge its files, show it to you, close it or land it on your yes |
 | `/clm:health` | read the health report and propose cuts, for you to take to `/clm:propose` |
 
@@ -55,7 +57,8 @@
 | `detectors` | the repository's | dead-code and unused-dependency tools `clm check` runs |
 | `host` | the repository's | where the remote lives: `github` (the default), `git` or `none`; pull requests, branch deletion and issues go through it |
 | `approval` | the repository's | whose approval lets a branch that needs review land: `any` (the default), anyone's, the author's included; `other`, only someone who wrote none of the branch's commits |
-| `land` | the repository's | `[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check` |
+| `land` | the repository's | `[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check`; optional `target_cap_gb`: the size, in gigabytes, above which a land removes its shared build directory `.clm/land` after its push |
+| `affected` | the repository's | `[affected]` with `all`: globs of changed files that make `clm affected` select every test, such as a lockfile or the toolchain pin |
 | `component_size` | the repository's | `[component_size]` with `spec_tokens` (default 12000) and `code_tokens` (default 40000): the size above which a component with no `size_budget` is oversized ([Shaping the graph](shaping-the-graph.md)) |
 | `health` | the repository's | `[health]` with `reconsider` (default 3), `scenarios` (6), `exceptions` (4), `stale_days` (30) and `lcov` (a path): the thresholds behind `clm health` and the reconsider questions `clm rebase` files, and the coverage file it reads |
 | `effort` | the repository's | `[effort]` with `workaround_flag` (default 3): the unsettled workarounds on one capability at which `clm workaround` stops a build to ask whether to redesign it |

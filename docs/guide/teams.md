@@ -4,7 +4,7 @@ CLM is built for several people and several Claude sessions working on one proje
 
 ## Who does what
 
-- **Intent owners** (product, tech leads, anyone who decides what the system does) propose changes with `/clm:propose` and review spec changes. Each component lists `owners`, so the right person reviews changes to it.
+- **Intent owners** (product, tech leads, anyone who decides what the system does) propose changes with `/clm:propose` and review spec changes. Each component lists `owners`, the people who answer for it, so you know whom to ask about it.
 - **Reviewers** approve the spec changes that need review with `clm approve`. The question is always "is this what we want?", never "is this code right?". Programs answer that one.
 - **Builders** run `/clm:build`, which drains the queue with unattended sessions. Anyone can run it, on any machine. Several people running it at once share the work rather than duplicate it.
 - **Claude** writes all the code, keeps the backlog, and reports problems with CLM itself.
@@ -25,7 +25,7 @@ One person often plays every role. A team splits them so intent never waits on b
 
 ## Reviewing as a team
 
-- Approve in a Claude Code session, where Claude runs `clm approve <branch>` and you confirm the command, or with Approve in the web app. Either way it's an `approved` record in your own ledger branch, naming you.
+- Approve in a Claude Code session, where Claude runs `clm approve <branch>` and you confirm the command, or with Approve in the web app. Either way it's an `approved` record in your own ledger branch, naming you. In a repository that signs its records (`docs/allowed_signers`), only a signed approval counts, so the web app shows the `clm approve <branch>` command to run in your clone instead.
 - In the web app you can also comment on a requirement in a branch's diff, or ask for changes. A change request holds the branch: `clm land` prints what you asked and lands nothing until the author pushes a change or you approve. Both are records in your ledger branch, like an approval.
 - Approval is pinned to the branch's diff. A rebase or a merge of `main` that touched only other files keeps it, and any change to a file the branch changes drops it.
 - Who may approve is the project's choice: `approval = "any"` in `clm.toml` (the default) counts anyone's approval, the author's included, and `approval = "other"` counts only someone who wrote none of the branch's commits.
