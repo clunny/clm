@@ -71,6 +71,7 @@ fn readers_of_checked_code() {
     assert_eq!(copied, "file crates/a/tests/r.rs\n");
     // In the land tree, under the lock `check_dir` shows.
     assert_eq!(f.lines("check-dir.log"), ["land-tree"]);
+    assert_eq!(f.lines("check-lock.log"), ["held"]);
     assert_eq!(f.landed().len(), 1);
     assert_eq!(f.checked(), [key]);
 }

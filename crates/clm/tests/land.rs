@@ -382,6 +382,23 @@ fn selection_fails_says_why() {
 }
 
 #[test]
+fn readers_selection_fails_says_why() {
+    // req:land/selected-tests@3c8754b6
+    let f = Fixture::new("");
+    f.write("affected-fails", "");
+    f.branch("impl/a", &[("ARCHITECTURE.md", "# x\n")]);
+    f.mark_checked("origin/main");
+    let out = land(&f, bin(), &f.work(), &["impl/a"], &[])
+        .output()
+        .unwrap();
+    let stderr = text(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    let line = "clm affected failed: no graph here; the check runs every test";
+    assert!(stderr.lines().any(|l| l == line), "{stderr}");
+    assert_eq!(f.lines("check-selection.log"), ["CLM_SELECTION=unset"]);
+}
+
+#[test]
 fn check_log_cant_be_created() {
     // req:land/check-log@153c9698
     let f = Fixture::new("");
