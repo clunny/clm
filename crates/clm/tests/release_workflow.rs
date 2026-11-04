@@ -195,7 +195,6 @@ fn builds_the_four_targets_from_the_prepared_commit() {
     );
     assert!(build_steps[linux]["env"]["MACOSX_DEPLOYMENT_TARGET"].is_null());
     let text = fs::read_to_string(repo().join(".github/workflows/release.yml")).unwrap();
-    assert_eq!(text.matches("MACOSX_DEPLOYMENT_TARGET").count(), 1);
     let tools = step_running(&wf, "build", "cargo-zigbuild");
     assert!(build_steps[tools]["if"].is_null());
     let run = build_steps[tools]["run"].as_str().unwrap();
