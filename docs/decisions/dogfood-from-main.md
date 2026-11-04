@@ -8,6 +8,8 @@ CLM is built with CLM, and its sessions should use the CLM being built, not the 
 - **The binary from `main`.** `.claude/settings.local.json` sets `CLM_BIN` to `~/.cargo/bin/clm`, which the plugin's `bin/clm` shim runs. An untracked `.git/hooks/post-merge` rebuilds it after a pull on `main` that changes `crates/`, `Cargo.toml` or `Cargo.lock`, in the background: `cargo install --locked --path crates/clm --target-dir target/install`, logged to `.git/clm-install.log`. (`rebuild-on-origin-main` later replaced that hook with a `reference-transaction` hook that rebuilds whenever `origin/main` moves.)
 - **The plugin from the checkout.** `.claude/settings.local.json` redefines the `clm` marketplace as `{ "source": { "source": "directory", "path": "<checkout>" } }`. Claude Code then rewrites the user-level marketplace record (`~/.claude/plugins/known_marketplaces.json`) to that folder, and loads `clm@clm` from `<checkout>/plugin` in place, with no cache. The first session after the edit still runs the cached copy; later ones run the folder.
 
+(`dev-install-scoped` later moved the binary and the plugin into the clone with a `clm-dev` marketplace, so other projects keep the release. Claude Code had by then begun reading the main checkout's local settings from a linked worktree, and `claude plugin marketplace add clunny/clm`, named below, doesn't reset a directory record.)
+
 The shared `.claude/settings.json` is unchanged: fresh clones, teammates and adopters get the released plugin from GitHub.
 
 Consequences:
