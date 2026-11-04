@@ -65,3 +65,29 @@ The root's `paths` name `crates/clm`'s manifest, build script, sources and top-l
 | `config` | Settings: environment, the clone's `clm.local.toml`, the repo's `clm.toml`, the user's `config.toml`, defaults |
 | `capability` | The capabilities' black-box tests, one file per capability (`human-layer-proof`) |
 | `init` | Adoption: `clm init` sets up a repo's tooling, `clm survey` maps an existing codebase, `clm guide` prints the guide |
+
+## MODIFIED Requirements
+
+### Requirement: contribution-command <!-- base: 84f0a2d6f46b61b7 -->
+`clm contribution` SHALL give `host`'s contribution operations as subcommands: `parent` (printing `none` when there is no parent), `sync`, `open <branch> --title <title> --body-file <file>`, `show <number>`, `fetch <number> <branch>`, `comment <number> --body-file <file> [--close]` and `label <number> <label>`. `show` SHALL print each field on its own labelled line, the author's numeric account ID among them, each changed file on its own line and the body last. A subcommand SHALL exit 1 with the reason when the operation fails or there is no host.
+
+#### Scenario: show
+- GIVEN `host = "github"` and a fake `gh` reporting pull request 7 with changed file `backlog/x.md`
+- WHEN `clm contribution show 7` runs
+- THEN it prints the author, the author's numeric account ID, the head repository's URL and branch, and `backlog/x.md`, and exits 0
+
+#### Scenario: no parent
+- GIVEN `host = "none"`
+- WHEN `clm contribution parent` runs
+- THEN it prints `none` and exits 0
+
+#### Scenario: no host
+- GIVEN `host = "none"`
+- WHEN `clm contribution comment 7 --body-file c.md` runs
+- THEN it exits 1 saying there is no host
+
+#### Needs
+- host/contribution-operations
+
+#### Serves
+- capability/contribute-from-outside

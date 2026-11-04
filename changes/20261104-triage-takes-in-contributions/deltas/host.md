@@ -14,6 +14,39 @@ The one place CLM talks to a git host beyond `git` itself (`host-adapters`). The
 
 A caller never runs `gh` itself; everything host-specific is here, and a new host is a new adapter. One caller is exempt, by name (`git-through-layer`): `clm-hooks`' release guard, which looks up the GitHub Actions run that a session's own `gh run rerun` targets, on the repository and host that command names, whatever the `host` setting says (`release-guard-runs-gh`).
 
+## MODIFIED Requirements
+
+### Requirement: contribution-operations <!-- base: 6134fd80e9a2c4d1 -->
+`clm-host` SHALL offer, on `github`, through `gh` and `clm-git`'s layer: `parent`, the fork's parent as `<owner>/<name>`, or nothing when `origin` isn't a fork; `sync`, bringing `origin`'s `main` up to its parent's without force; `open_on_parent(branch, title, body file)`, opening a pull request from `<owner>:<branch>` to the parent's `main`, or returning the URL of the open one; `show(number)`, returning a pull request's author, its author's numeric account ID (from `gh api users/<login>`, which a `Co-authored-by` trailer's `<id>+<login>@users.noreply.github.com` address needs), state, title, body, head repository URL, head branch, whether maintainers may edit and changed files, or an issue's author, its author's numeric account ID, state, title and body; `fetch(number, branch)`, making a local branch at a pull request's head without checking it out, refusing a branch that exists; `comment(number, body file, close)`, adding a comment and closing when `close` is set; and `label(number, label)`. On `git` and `none`, `parent` SHALL return nothing and each other operation SHALL report that there is no host, running no `gh`.
+
+#### Scenario: a fork's parent
+- GIVEN `host = "github"` and a fake `gh` whose `repo view` reports a fork of `clunny/clm`
+- WHEN `parent` runs
+- THEN it returns `clunny/clm`
+
+#### Scenario: opening on the parent
+- GIVEN that fake `gh`, with `origin` owned by `dana`
+- WHEN `open_on_parent` runs for `spec/x`
+- THEN `gh` got `pr create` with `--repo clunny/clm`, `--base main` and `--head dana:spec/x`
+
+#### Scenario: a pull request's files
+- GIVEN a fake `gh` reporting pull request 7 with changed files `backlog/x.md` and `crates/a/src/lib.rs`
+- WHEN `show` runs for 7
+- THEN it returns both files, the head repository's URL, whether maintainers may edit and the author's numeric account ID
+
+#### Scenario: closing with a comment
+- GIVEN a fake `gh`
+- WHEN `comment` runs for 7 with `close` set
+- THEN `gh` got the comment's body and closed 7
+
+#### Scenario: no host
+- GIVEN `host = "none"`
+- WHEN `show` runs for 7
+- THEN it reports that there is no host, and no `gh` ran
+
+#### Serves
+- capability/contribute-from-outside
+
 ## ADDED Requirements
 
 ### Requirement: list-contributions
