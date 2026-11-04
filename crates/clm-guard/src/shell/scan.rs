@@ -311,7 +311,8 @@ impl<'a> Scanner<'a> {
                     }
                 }
                 '<' | '>' => {
-                    if c == '<' {
+                    // `<(` is a process substitution, an argument and no redirection.
+                    if c == '<' && next != Some('(') {
                         self.input(Raw::File);
                     }
                     self.redirection(c)

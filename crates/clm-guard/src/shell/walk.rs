@@ -297,6 +297,7 @@ mod tests {
         assert_eq!(inputs("cat r.md |& clm defect", "clm"), [Stdin::Pipe]);
         assert_eq!(inputs("clm defect <<< \"$R\"", "clm"), [Stdin::HereString]);
         assert_eq!(inputs("clm defect", "clm"), [Stdin::Own]);
+        assert_eq!(inputs("clm defect <(echo r)", "clm"), [Stdin::Own]);
         assert_eq!(inputs("cat r.md; clm defect", "clm"), [Stdin::Own]);
     }
 
