@@ -1,6 +1,8 @@
 //! The tests that read this repository's own doc-only files name them in a reads marker, so a
 //! land that changes one runs them (clm/doc-readers-marked).
 
+// clm:reads specs/**
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
