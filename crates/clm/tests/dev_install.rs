@@ -389,6 +389,12 @@ fn a_plugin_that_fails_to_load_stops_it() {
     let out = c.run_env(&c.main, &[], &[("STUB_CLAUDE_PLUGINS", &list)]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out));
 
+    // An entry for a plugin the marketplace doesn't list is not this script's to judge.
+    let c = clone();
+    let list = plugin_list(&c.main, &errors).replace("clm@clm-dev", "other@clm-dev");
+    let out = c.run_env(&c.main, &[], &[("STUB_CLAUDE_PLUGINS", &list)]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+
     let c = clone();
     let list = plugin_list(&c.main, &[]);
     let out = c.run_env(&c.main, &[], &[("STUB_CLAUDE_PLUGINS", &list)]);
@@ -991,6 +997,21 @@ fn remove_reads_an_earlier_setups_marketplace_when_the_manifest_is_missing() {
         ]
     );
     assert!(!c.dev().exists());
+
+    // With only the manifest file left and claude present, it is read and deleted.
+    let c = clone();
+    write(
+        &c.main.join(".clm/dev-marketplace.json"),
+        r#"{ "name": "clm-dev", "plugins": [{ "name": "only", "source": "./x" }] }"#,
+    );
+    let out = c.run(&c.main, &["--remove"]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out));
+    assert!(!c.main.join(".clm/dev-marketplace.json").exists());
+    assert!(
+        c.claude_changes()[0].ends_with("plugin uninstall only@clm-dev --scope local"),
+        "{:?}",
+        c.claude_changes()
+    );
 
     // With only the manifest file left and no claude, it refuses and changes nothing.
     let c = clone();
