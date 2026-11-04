@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 # A rename is an adding requirement and a removing one
