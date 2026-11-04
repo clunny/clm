@@ -133,8 +133,9 @@ mod tests {
     #[test]
     fn a_command_in_a_fenced_block_is_allowed() {
         // req:init/guide-entry-pages@55895485
-        let md =
-            format!("{GOOD_QUICK}\n```\nclm status\n```\n\nthe skill `/clm:build` and `clm` alone");
+        let md = format!(
+            "{GOOD_QUICK}\n~~~\n`clm status`\n~~~\n\n```\nclm land\n```\n\nthe skill `/clm:build` and `clm` alone"
+        );
         assert!(problems("quickstart", &md).is_empty());
     }
 }
