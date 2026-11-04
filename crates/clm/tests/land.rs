@@ -366,7 +366,7 @@ fn check_only_checks_the_working_tree() {
 
 #[test]
 fn selection_fails_says_why() {
-    // req:land/selected-tests@64c312ff
+    // req:land/selected-tests@3c8754b6
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -376,6 +376,23 @@ fn selection_fails_says_why() {
     let stderr = text(&out.stderr);
     assert!(out.status.success(), "{stderr}");
     // The first non-empty line of its stderr, trimmed, on one line.
+    let line = "clm affected failed: no graph here; the check runs every test";
+    assert!(stderr.lines().any(|l| l == line), "{stderr}");
+    assert_eq!(f.lines("check-selection.log"), ["CLM_SELECTION=unset"]);
+}
+
+#[test]
+fn readers_selection_fails_says_why() {
+    // req:land/selected-tests@3c8754b6
+    let f = Fixture::new("");
+    f.write("affected-fails", "");
+    f.branch("impl/a", &[("ARCHITECTURE.md", "# x\n")]);
+    f.mark_checked("origin/main");
+    let out = land(&f, bin(), &f.work(), &["impl/a"], &[])
+        .output()
+        .unwrap();
+    let stderr = text(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
     let line = "clm affected failed: no graph here; the check runs every test";
     assert!(stderr.lines().any(|l| l == line), "{stderr}");
     assert_eq!(f.lines("check-selection.log"), ["CLM_SELECTION=unset"]);

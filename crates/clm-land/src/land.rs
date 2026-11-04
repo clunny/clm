@@ -6,6 +6,7 @@ use std::path::Path;
 use clm_git::REMOTE;
 use clm_ledger::{Body, Entry, LandKind};
 
+use crate::Selected;
 use crate::exe::Exe;
 use crate::lock;
 use crate::scratch::Scratch;
@@ -198,29 +199,54 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
 
         // 6. The checks, unless the code was checked, and the gate again. The merge commit's
         // code key is its tree's.
-        if checked_with(&fold, &key) {
+        let checked = checked_with(&fold, &key);
+        // Whether `[land] check` runs, and the selection it gets: on unchecked code the tests
+        // the branch can break, on checked code only the readers of what differs
+        // (`land/selected-tests`).
+        let mut runs = !checked && check.is_some();
+        let mut selection = None;
+        if check.is_some() {
+            match repo.selection(exe, dir.path(), &base, checked) {
+                Selected::Nothing => {}
+                Selected::Tests(s) => {
+                    selection = Some(s);
+                    runs = true;
+                }
+                Selected::Failed => runs = true,
+            }
+        }
+        // Readers to run on checked code: the check compiles into the shared target, so
+        // under its lock and in the land tree, not the temporary worktree.
+        let land_tree_for_readers;
+        let dir: &Scratch = match &target {
+            Some((target, true)) if checked && runs => {
+                lock = Some(lock::lock(target)?.0);
+                drop(temp.take());
+                land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
+                &land_tree_for_readers
+            }
+            _ => dir,
+        };
+        if runs && let (Some(check), Some((target, shared))) = (&check, &target) {
+            let mut vars: Vec<(&str, &Path)> = selection
+                .iter()
+                .map(|s| ("CLM_SELECTION", s.path.as_path()))
+                .collect();
+            // Incremental data in the target every land shares only grows, so a check
+            // that builds there runs without it unless the caller asked for it
+            // (`land/shared-land-target`).
+            let incremental;
+            if *shared {
+                incremental = repo.incremental();
+                vars.push(("CARGO_INCREMENTAL", Path::new(&incremental)));
+            }
+            // Kept for a failing check, by branch, beside `.clm/land`.
+            let log = places.join("land-logs").join(format!("{branch}.log"));
+            repo.project_check(dir.path(), check, Some(target), &vars, ON_MERGE, Some(&log))?;
+        }
+        if checked {
             repo.clm_check(exe, dir.path(), false, ON_MERGE)?;
         } else {
-            if let Some(check) = &check {
-                let (target, shared) = target.as_ref().expect("a check has a target");
-                // The tests the branch can break, against the `main` it fetched.
-                let selection = repo.selection(exe, dir.path(), &base);
-                let mut vars: Vec<(&str, &Path)> = selection
-                    .iter()
-                    .map(|s| ("CLM_SELECTION", s.path.as_path()))
-                    .collect();
-                // Incremental data in the target every land shares only grows, so a check
-                // that builds there runs without it unless the caller asked for it
-                // (`land/shared-land-target`).
-                let incremental;
-                if *shared {
-                    incremental = repo.incremental();
-                    vars.push(("CARGO_INCREMENTAL", Path::new(&incremental)));
-                }
-                // Kept for a failing check, by branch, beside `.clm/land`.
-                let log = places.join("land-logs").join(format!("{branch}.log"));
-                repo.project_check(dir.path(), check, Some(target), &vars, ON_MERGE, Some(&log))?;
-            }
             repo.clm_check(exe, dir.path(), true, ON_MERGE)?;
             repo.append(Body::Checked {
                 code_key: key.clone(),

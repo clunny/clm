@@ -14,8 +14,8 @@ use tempfile::TempDir;
 mod exec;
 pub use exec::write_exec;
 
-/// Logs its args and directory, prints `affected-out` when it exists, and fails with a
-/// reason on stderr when `affected-fails` exists.
+/// Logs its args and directory, prints `affected-out` when it exists (`readers-out` when
+/// given `--readers`), and fails with a reason on stderr when `affected-fails` exists.
 const FAKE_AFFECTED: &str = r#"
 echo "$*" >> "$DIR/affected.log"
 pwd -P >> "$DIR/affected-pwd.log"
@@ -23,7 +23,9 @@ if [ -e "$DIR/affected-fails" ]; then
   printf '\n   \n  no graph here  \nmore\n' >&2
   exit 1
 fi
-if [ -e "$DIR/affected-out" ]; then cat "$DIR/affected-out"; fi
+if [[ " $* " == *" --readers "* ]]; then
+  if [ -e "$DIR/readers-out" ]; then cat "$DIR/readers-out"; fi
+elif [ -e "$DIR/affected-out" ]; then cat "$DIR/affected-out"; fi
 "#;
 
 /// Logs HEAD and its args, prints `gate-out`. With `needs-approval` present it blocks with
@@ -456,6 +458,20 @@ impl Fixture {
         );
         let left: Vec<_> = fs::read_dir(self.tmpdir()).unwrap().collect();
         assert!(left.is_empty(), "left in TMPDIR: {left:?}");
+    }
+
+    /// A `checked` record for the code key of `rev` with the fixture's check command, and
+    /// that key.
+    pub fn mark_checked(&self, rev: &str) -> String {
+        let key = clm_ledger::code_key(&self.work(), rev).unwrap();
+        self.append(
+            &self.work(),
+            Body::Checked {
+                code_key: key.clone(),
+                command: self.check_command(),
+            },
+        );
+        key
     }
 
     /// The command `[land] check` names.
