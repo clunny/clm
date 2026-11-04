@@ -30,5 +30,5 @@ The Rust runtime ignores `SIGPIPE`, so the print returns a broken pipe error, an
 ## Edge cases
 
 - Matching std's message text: the pinned toolchain and the rule's test hold it.
-- A view (`clm status`) already writes without a panic and exits 1, which the rule allows, so it stays as it is. A report of violations also exits 1, ignoring the failed write.
+- `clm view` already writes without a panic and exits 1, which the rule allows, so it stays as it is. A report of violations through the same writer also exits 1, ignoring the failed write. `clm status` uses `print!`, so the new handling covers it.
 - A failed print to stderr stays a panic: `2>&1 | head` shares one pipe, so its text has nowhere to be seen.
