@@ -4340,6 +4340,7 @@ fn propose_in_a_fork() {
         "clm contribution open",
         "Allow edits by maintainers",
         "maintainer reviews it",
+        "unless they ask",
         "clm guide contributions",
     ] {
         at += section[at..]
