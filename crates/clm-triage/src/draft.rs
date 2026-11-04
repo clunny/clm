@@ -430,7 +430,11 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          Then the builder check (`blocked-by-backlog`): launch a fresh subagent that reads the \
          change as its builder, without this conversation, and lists its questions, with the \
          Agent tool's `model` set to `sonnet` (`model: \"sonnet\"`), the model builds run on \
-         (`model-per-launch`); never launch a subagent without naming its model. Ask it, for \
+         (`model-per-launch`); never launch a subagent without naming its model. In the same \
+         message, launch the `architecture-auditor` subagent beside it, with the Agent tool's \
+         `model` set to the alias of your own model, in the words `your own model`, since the \
+         audit is a design review (`model-per-launch`), giving it only the change ID and the \
+         path of your checkout. Ask the builder check's subagent, for \
          each requirement the change adds or modifies, which requirements not yet current it \
          relies on, of any component, among the change's own and those `clm pending` lists, \
          answering `none` for a requirement that relies on none \
@@ -469,14 +473,10 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          deltas on `clm hashes <component>` first (a no-op when its bases are current), your own \
          change listing the item in `resolves`. A `human-task` \
          item it adds is a burden: declare one for it in \
-         `human_burdens`. In the same message as the builder check's subagent, launch the \
-         `architecture-auditor` subagent beside it, with the Agent tool's `model` set to the \
-         alias of your own model, in the words `your own model`, since the audit is a design \
-         review (`model-per-launch`), giving it only the change ID and the path of your \
-         checkout. Fix in the change each finding you agree with, and write each one you leave \
-         under `## Open questions` in `change.md`, with why, since the pull request body \
-         carries the open questions to the human. The audit advises and never gates \
-         (`spec-architecture-audit`). When the builder check or the audit changed the change \
+         `human_burdens`. Fix in the change each `architecture-auditor` finding you agree \
+         with, and write each one you leave under `## Open questions` in `change.md`, with \
+         why, since the pull request body carries the open questions to the human. The audit \
+         advises and never gates (`spec-architecture-audit`). When the builder check or the audit changed the change \
          (any edit to \
          `changes/<id>/` or `backlog/`), run `clm check`, commit, and {rebase}, which \
          re-applies the edited deltas, since the change is `applied` by then and \
