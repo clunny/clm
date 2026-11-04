@@ -2,6 +2,7 @@
 title: "No step checks a spec change against ARCHITECTURE.md and the decisions it touches"
 kind: bug
 components: [plugin]
+priority: P1
 ---
 
 Step: /clm:contribution and /clm:propose, from designing a change to landing it.
