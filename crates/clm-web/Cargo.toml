@@ -18,7 +18,6 @@ serde_json.workspace = true
 sha2.workspace = true
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 base64.workspace = true
-futures = { version = "0.3", default-features = false, features = ["async-await"] }
 hmac = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

@@ -519,7 +519,7 @@ const SIGNED_TTL: u64 = 86_400;
 
 /// The answer to a write a signed repository counts only when signed with a key the Worker
 /// doesn't hold: 422 with the command that makes it (`signed-repository`).
-pub fn signed_refusal(command: String) -> Response {
+pub(crate) fn signed_refusal(command: String) -> Response {
     let mut res = Response::json(&serde_json::json!({"error": "signed", "command": command}));
     res.status = 422;
     res
