@@ -25,7 +25,7 @@ fn main() {
     let pages = table::pages(&guide_dir, &spec_format).unwrap_or_else(|e| panic!("{e}"));
     let mut out = format!("const PAGES: [(&str, &str); {}] = [\n", pages.len());
     for (name, file) in &pages {
-        // `{:?}` escapes a Windows path's backslashes (`windows-build`).
+        // `{:?}` escapes a Windows path's backslashes.
         out.push_str(&format!("    ({name:?}, include_str!({file:?})),\n"));
     }
     out.push_str("];\n");
