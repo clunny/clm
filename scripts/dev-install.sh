@@ -93,6 +93,14 @@ claude_in_main() {
 	(cd "$main" && claude "$@") || return 1
 }
 
+# Runs `claude` in the root directory, outside every project: Claude Code's
+# `plugin marketplace remove` also empties the marketplace's entries in the settings of the
+# project it runs in, the tracked `.claude/settings.json` among them.
+claude_in_root() {
+	say "claude $* (in the root directory)"
+	(cd / && claude "$@") || return 1
+}
+
 # Step 5: an earlier setup's directory marketplace `clm` at this checkout goes back to GitHub.
 # $1 is the output of `claude plugin marketplace list --json`; $2 is `die` or `warn`.
 retire_directory_marketplace() {
@@ -105,7 +113,7 @@ retire_directory_marketplace() {
 			fi
 		done)
 	[ -n "$found" ] || return 0
-	if claude_in_main plugin marketplace remove clm && claude_in_main plugin marketplace add clunny/clm; then
+	if claude_in_root plugin marketplace remove clm && claude_in_main plugin marketplace add clunny/clm; then
 		say "each project that enables the plugin installs it again at its next session"
 	elif [ "$2" = die ]; then
 		die "claude plugin marketplace remove clm or add clunny/clm failed"
@@ -237,7 +245,7 @@ if [ "$mode" = remove ]; then
 		for n in $(plugin_names "$listed"); do
 			claude_in_main plugin uninstall "$n@$DEV_MARKET" --scope local || say "going on"
 		done
-		claude_in_main plugin marketplace remove "$DEV_MARKET" || say "going on"
+		claude_in_root plugin marketplace remove "$DEV_MARKET" || say "going on"
 		rm -rf "$dev" "$dev_market"
 		say "removed $dev and $dev_market"
 	fi

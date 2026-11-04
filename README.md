@@ -1,12 +1,12 @@
 # CLM
 
-A Claude Code plugin for spec-driven development by teams.
+A Claude Code plugin for spec-driven development, solo or as a team. Site: <https://clm-app.dev>.
 
 Humans own the spec and design. AI writes all the code. Deterministic checks keep the two in sync, and git is the only channel between people and sessions.
 
 ## Who it is for
 
-Teams that build with AI sessions and want people to review intent, not code: product owners, architects and developers who would rather settle what a system must do than read every diff.
+People, solo or in a team, who build with AI sessions and want to review intent, not code: product owners, architects and developers who would rather settle what a system must do than read every diff.
 
 ## Why it is useful
 
@@ -15,7 +15,7 @@ Teams that build with AI sessions and want people to review intent, not code: pr
 - Every requirement is proven by a test that cites it, and a check blocks drift between spec and code.
 - Specs, claims, approvals and lands are committed files and branches: no server owns them.
 
-CLM implements the *Spec Growth Engine* ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)). Its team workflow draws on the [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook).
+CLM implements the *Spec Growth Engine* ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)). Its loop works like a Kubernetes [controller](https://kubernetes.io/docs/concepts/architecture/controller/), reconciling code to the declared spec. Its team workflow draws on the [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), its builds follow [superpowers](https://github.com/obra/superpowers), and its specs owe a debt to [OpenSpec](https://github.com/Fission-AI/OpenSpec).
 
 ## Install
 
