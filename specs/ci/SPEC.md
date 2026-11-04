@@ -33,7 +33,7 @@ It runs one `cargo test -p <package> <targets>` per package, in package order, s
 
 **Toolchain** (`pinned-rust-toolchain`). The release workflow installs the toolchain `rust-toolchain.toml` names with `rustup show`, rather than `dtolnay/rust-toolchain@stable`. The file pins an exact version with `rustfmt`, `clippy` and the `wasm32-unknown-unknown` target, so the release builds with the same compiler as a local session. The release `build` job adds its matrix target on top with `rustup target add <target>`.
 
-**The release workflow.** `.github/workflows/release.yml` runs only on `workflow_dispatch` (`release-by-dispatch`), with one required input, `version`. It has `permissions: contents: write` and `concurrency: { group: release, cancel-in-progress: false }`, so two releases never run at once. It is the one job on a hosted runner, because the macOS and Windows binaries can't be built on this machine; it runs a few times a week at most. Its jobs run in order, each needing the one before:
+**The release workflow.** `.github/workflows/release.yml` runs only on `workflow_dispatch` (`release-by-dispatch`), with one required input, `version`. It has `permissions: contents: write` and `concurrency: { group: release, cancel-in-progress: false }`, so two releases never run at once. It is the one job on a hosted runner, because the macOS binaries can't be built on this machine; it runs a few times a week at most. Its jobs run in order, each needing the one before:
 1. `prepare` runs `.github/scripts/release-prepare.sh <version>`. The logic lives in a script so tests can run it against a temporary repository whose `origin` is a local bare repository, with a fake `gh` on `PATH`. The script fails unless the `release` preconditions hold. Among them, every target `plugin/bin/clm` maps a platform to is a `target:` in the build matrix of `.github/workflows/release.yml` (`shim-assets-before-release`): the script reads both files as text, the shim's `target=<target>` assignments and the matrix's `target: <target>` lines, so a release whose shim would ask for an asset the release doesn't hold fails here, before anything is built, naming the asset.
 
    When `version` is higher than the workspace version, the script:
@@ -46,16 +46,15 @@ It runs one `cargo test -p <package> <targets>` per package, in package order, s
 2. `build` checks out `sha` and builds `clm` with `--release --locked -p clm` for each target:
    - `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` on `ubuntu-latest`, with `cargo zigbuild` (`static-linux-binaries`). Zig is the C compiler and linker for both, so one step builds either target with nothing from `apt`. The job installs Zig from PyPI (`pip install ziglang==<x.y.z>`) and `cargo-zigbuild` with `cargo install --locked --version <x.y.z> cargo-zigbuild`, each pinned to its newest release at build time. After building, the step fails unless `file` reports the binary `statically linked` or `static-pie linked`;
    - `aarch64-apple-darwin` on `macos-latest`;
-   - `x86_64-apple-darwin` on `macos-latest`, cross-built;
-   - `x86_64-pc-windows-msvc` on `windows-latest`, with the MSVC tools the image ships (`windows-binaries`). Its steps run with `shell: bash`, the image's Git Bash, so the pack step is the same script as the other targets'.
+   - `x86_64-apple-darwin` on `macos-latest`, cross-built.
 
-   `clm survey`'s tree-sitter grammars are C, which the `cc` crate compiles at build time (`tree-sitter-analysis`), so every target needs a C compiler for it: Zig on Linux, Apple's `clang` on macOS, MSVC's `cl` on Windows. The binaries are self-contained, so no one who installs `clm` needs a compiler. Each target packs `clm-<target>.tar.gz`, containing just `clm` (`clm.exe` on Windows), and `clm-<target>.tar.gz.sha256`, and passes them on as a workflow artifact. Windows gets a `.tar.gz` too: the shim runs in Git Bash, whose `tar` reads it, so the shim has one unpacking path.
+   `clm survey`'s tree-sitter grammars are C, which the `cc` crate compiles at build time (`tree-sitter-analysis`), so every target needs a C compiler for it: Zig on Linux and Apple's `clang` on macOS. The binaries are self-contained, so no one who installs `clm` needs a compiler. Each target packs `clm-<target>.tar.gz`, containing just `clm`, and `clm-<target>.tar.gz.sha256`, and passes them on as a workflow artifact.
 3. `publish` runs `gh release create v<version> --target <sha> --generate-notes` with every asset, so the release is published with all its binaries at once. Then, when there was a bump, it merges `release/v<version>` into `main` and pushes `main`, then deletes the branch. The push is a fast-forward when `main` hasn't moved and a merge commit otherwise, and it retries if the push races. Only the release workflow changes the version, so the merge can't conflict. If the push still fails, the release is out but `main` names the old version. The job then fails, printing the `git` commands that merge `release/v<version>` into `main`, for a human to run. This push is the one push to `main` that isn't a `clm land`; `clm ledger verify` knows a release merge by its `Release v` message and doesn't report it, so `main` still audits clean.
 4. `web` (`web-deploy`) builds `web/` and deploys the Worker and its assets with `wrangler deploy`, using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. It runs after `publish`, so a failed deploy doesn't undo the release. It can be rerun on its own.
 
 A run that fails before `publish` publishes nothing and leaves `main` as it was, so it can be dispatched again. Events made with the workflow token start no workflows. That's why one dispatched workflow does every step. Deploying `web` on release, not on merge, matches how the plugin ships.
 
-The Linux binaries are static `-musl` builds, so they run on any Linux of their architecture, whatever its glibc. There is no `-gnu` asset: a plugin version's shim downloads only its own version's release, so no shim that names a `-gnu` asset ever reads a release built after this. There is no `aarch64-pc-windows-msvc` asset: Windows on Arm runs the x86_64 binary under emulation, and the shim sends it there.
+The Linux binaries are static `-musl` builds, so they run on any Linux of their architecture, whatever its glibc. There is no `-gnu` asset: a plugin version's shim downloads only its own version's release, so no shim that names a `-gnu` asset ever reads a release built after this. There is no Windows asset (`no-windows-support`): the shim maps no Windows platform, so no shim of this version or a later one asks for one, and a plugin version that still maps one reads only its own version's release.
 
 The code key lives in `ledger`, landing in `land` and approval pinning in the ledger's fingerprints.
 
@@ -64,8 +63,8 @@ The code key lives in `ledger`, landing in `land` and approval pinning in the le
 ### Requirement: release
 The release workflow SHALL run only on `workflow_dispatch`, with a `version` input. It SHALL fail, publishing nothing and leaving `main` unchanged, unless all of these hold: it runs from `main`; `version` is `MAJOR.MINOR.PATCH`; `version` is not lower than the workspace version; no release or tag `v<version>` exists; and every target `plugin/bin/clm` downloads an asset for is a target of the workflow's build matrix. Otherwise it SHALL:
 - when `version` is higher than the workspace version, commit a bump of the workspace version, `Cargo.lock`, `plugin/.claude-plugin/plugin.json` and `plugin-panel/.claude-plugin/plugin.json` to `version`, and run the tests on that commit;
-- build `clm` from that commit for `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin` and `x86_64-pc-windows-msvc`, failing unless each Linux binary is statically linked;
-- publish the release `v<version>` at that commit with `clm-<target>.tar.gz`, holding `clm` (`clm.exe` for the Windows target), and `clm-<target>.tar.gz.sha256` for every target;
+- build `clm` from that commit for `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin` and `aarch64-apple-darwin`, and for no Windows target (`no-windows-support`), failing unless each Linux binary is statically linked;
+- publish the release `v<version>` at that commit with `clm-<target>.tar.gz`, holding `clm`, and `clm-<target>.tar.gz.sha256` for every target;
 - only after publishing, bring the bump commit into `main`, with a commit message starting `Release v`.
 
 It SHALL be the only workflow in `.github/workflows/`.
@@ -88,7 +87,7 @@ It SHALL be the only workflow in `.github/workflows/`.
 #### Scenario: workflow shape
 - GIVEN the release workflow file
 - WHEN it is parsed
-- THEN it triggers only on `workflow_dispatch` with a required `version` input, its build matrix lists exactly the five targets above and no `-gnu` target, the Linux targets build with `cargo zigbuild` and check the binary is statically linked, the Windows target runs on `windows-latest` and packs `clm.exe`, and the job that pushes to `main` runs `gh release create` before the push
+- THEN it triggers only on `workflow_dispatch` with a required `version` input, its build matrix lists exactly the four targets above, with no `-gnu` and no `windows` target and no `windows-latest` runner, the Linux targets build with `cargo zigbuild` and check the binary is statically linked, and the job that pushes to `main` runs `gh release create` before the push
 
 #### Scenario: only workflow
 - GIVEN `.github/workflows/`
@@ -107,9 +106,6 @@ It SHALL be the only workflow in `.github/workflows/`.
 
 #### Serves
 - capability/install-and-release
-
-#### Needs
-- init/windows-build
 
 ### Requirement: web-checks
 `.github/scripts/ci-check.sh` SHALL build `clm-web` for `wasm32-unknown-unknown`, build `clm-model` and `clm-context` for it, build `clm-check`, `clm-orchestrator`, `clm-view` and `clm-ledger` for it with default features disabled, and run the `web/` and `plugin-panel/` test suites, failing if any of these fail. Whenever it runs `web/`'s suite it SHALL then run `npm ci --ignore-scripts` and `npm test` in `web/site/` (`web.site`), and then in `capabilities/web/`, and whenever it runs `plugin-panel/`'s suite it SHALL then run them in `capabilities/panel/`, failing if either fails; a package directory without a `package.json` SHALL run nothing (`capability-browser-packages`).
