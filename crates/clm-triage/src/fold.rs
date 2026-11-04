@@ -300,7 +300,17 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a \
          human can supply into `question` or `human-task` backlog items whose `blocks` name the \
          requirements that wait (`requirement-blocks`); and list the rest under \
-         `## Open questions`. When that changed anything, run `clm check`, commit, and \
+         `## Open questions`. In the same message as the builder check's subagent, launch the \
+         `architecture-auditor` subagent beside it, with the Agent tool's `model` set to the \
+         alias of your own model, in the words `your own model`, since the audit is a design \
+         review (`model-per-launch`), giving it only the change IDs and the path of your \
+         checkout and asking it about the same elements where two changes met. Fix in the \
+         changes each finding you agree with, and write each one you leave under \
+         `## Open questions` in the `change.md` of the folded change whose element it \
+         concerns, with why, since the pull request body carries each change's open questions \
+         to the human approving it. The audit advises and never gates \
+         (`spec-architecture-audit`). When the builder check or the audit changed anything, \
+         run `clm check`, commit, and \
          {REBASE}, then run `clm gate --base origin/main` again.\n\n\
          Never push to, rebase or delete a folded change's branch ({branches}).\n\n\
          After each commit, {REBASE}, then push with `git push --force-with-lease`. Read \
