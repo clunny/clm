@@ -41,6 +41,10 @@ old_hook=$(cd "$main" && git rev-parse --path-format=absolute --git-path hooks/p
 settings=$main/.claude/settings.local.json
 dev=$common/clm-dev
 tracked_market=$main/.claude-plugin/marketplace.json
+# The marketplace is the main worktree itself, through the tracked manifest renamed
+# (dev-marketplace-in-place); `old_market` is what earlier setups wrote: symlinks under $dev.
+dev_market=$main/.clm/dev-marketplace.json
+old_market=$dev/marketplace
 
 # Whether the hook file $1 is one this script wrote.
 ours() { [ -f "$1" ] && grep -qxF "$MARK" "$1"; }
@@ -212,8 +216,8 @@ if [ "$mode" = remove ]; then
 	command -v jq >/dev/null 2>&1 || die "jq is not on PATH"
 	have_claude=
 	command -v claude >/dev/null 2>&1 && have_claude=1
-	if [ -d "$dev" ] && [ -z "$have_claude" ]; then
-		die "claude is not on PATH, and $dev holds the plugin marketplace it must remove"
+	if { [ -d "$dev" ] || [ -f "$dev_market" ]; } && [ -z "$have_claude" ]; then
+		die "claude is not on PATH, and $dev or $dev_market holds the plugin marketplace it must remove"
 	fi
 	if [ -f "$settings" ]; then
 		settings_ok || die "$settings isn't a JSON object CLM can edit"
@@ -227,13 +231,15 @@ if [ "$mode" = remove ]; then
 		fi
 	done
 	names=$(plugin_names)
-	if [ -d "$dev" ]; then
-		for n in $(plugin_names "$dev/marketplace/.claude-plugin/marketplace.json"); do
+	if [ -d "$dev" ] || [ -f "$dev_market" ]; then
+		listed=$dev_market
+		[ -f "$listed" ] || listed=$old_market/.claude-plugin/marketplace.json
+		for n in $(plugin_names "$listed"); do
 			claude_in_main plugin uninstall "$n@$DEV_MARKET" --scope local || say "going on"
 		done
 		claude_in_main plugin marketplace remove "$DEV_MARKET" || say "going on"
-		rm -rf "$dev"
-		say "removed $dev"
+		rm -rf "$dev" "$dev_market"
+		say "removed $dev and $dev_market"
 	fi
 	if [ -f "$settings" ]; then
 		names_json=$(printf '%s\n' "$names" | jq -R . | jq -sc 'map(select(. != ""))')
@@ -299,31 +305,44 @@ if ours "$old_hook"; then
 	say "removed the earlier post-merge hook $old_hook"
 fi
 
-# 4. The marketplace: the tracked one under another name, each plugin's folder a symlink to the
-# main worktree's, so the plugins load in place.
+# 4. The marketplace: the tracked manifest under another name, in the main worktree's ignored
+# `.clm/`, so Claude Code resolves each plugin's `./` source inside the main worktree.
 names=$(plugin_names)
-mkdir -p "$dev/marketplace/.claude-plugin"
-jq --arg name "$DEV_MARKET" '.name = $name' "$tracked_market" >"$dev/marketplace/.claude-plugin/marketplace.json"
-jq -r '.plugins[]?.source' "$tracked_market" | while IFS= read -r source; do
-	rel=${source#./}
-	mkdir -p "$(dirname "$dev/marketplace/$rel")"
-	ln -sfn "$main/$rel" "$dev/marketplace/$rel"
-done
-say "wrote the marketplace $DEV_MARKET in $dev/marketplace"
+mkdir -p "$main/.clm"
+jq --arg name "$DEV_MARKET" '.name = $name' "$tracked_market" >"$dev_market"
+say "wrote the marketplace manifest $DEV_MARKET at $dev_market"
 
 # 5. An earlier setup's marketplace record goes back to GitHub.
 retire_directory_marketplace "$list" die
 
 # 6. Claude Code learns the marketplace and installs its plugins for this clone only.
-claude_in_main plugin marketplace add "$dev/marketplace" || die "claude plugin marketplace add $dev/marketplace failed; run the script again to finish"
+claude_in_main plugin marketplace add "$dev_market" || die "claude plugin marketplace add $dev_market failed; run the script again to finish"
 for n in $names; do
 	claude_in_main plugin install "$n@$DEV_MARKET" --scope local ||
 		die "claude plugin install $n@$DEV_MARKET --scope local failed; run the script again to finish"
 done
+# The marketplace an earlier setup wrote is not read any more.
+if [ -e "$old_market" ] || [ -L "$old_market" ]; then
+	rm -rf "$old_market"
+	say "removed the earlier marketplace $old_market"
+fi
+# Each plugin must load: Claude Code reports one that doesn't in `errors`.
+names_json=$(printf '%s\n' "$names" | jq -R . | jq -sc 'map(select(. != ""))')
+say "claude plugin list --json"
+loaded=$(cd "$main" && claude plugin list --json) || die "claude plugin list --json failed; run the script again to finish"
+printf '%s' "$loaded" | jq -e 'type == "array"' >/dev/null 2>&1 ||
+	die "claude plugin list --json didn't print a JSON array; run the script again to finish"
+broken=$(printf '%s' "$loaded" | jq -r --arg main "$main" --argjson names "$names_json" '
+	.[] | select(.projectPath == $main and ((.errors // []) | length > 0)
+		and (.id as $id | $names | any(. as $n | $id == $n + "@clm-dev")))
+	| "\(.id): \(.errors | join("; "))"')
+if [ -n "$broken" ]; then
+	printf 'dev-install: failed to load: %s\n' "$broken" >&2
+	die "a plugin of $DEV_MARKET doesn't load; the settings file is as it was"
+fi
 
 # 7. The settings point sessions of this clone at this clm and these plugins.
 mkdir -p "$main/.claude"
-names_json=$(printf '%s\n' "$names" | jq -R . | jq -sc 'map(select(. != ""))')
 edit_settings '.env.CLM_BIN = $bin
 	| reduce $names[] as $n (.; .enabledPlugins[$n + "@clm-dev"] = true | .enabledPlugins[$n + "@clm"] = false)
 	| del(.extraKnownMarketplaces.clm)
