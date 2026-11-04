@@ -29,7 +29,9 @@ Crate `crates/clm-web`, in Rust with `workers-rs`, built for `wasm32-unknown-unk
 
 **Spec branches and reviews.** `web.worker.review` answers the spec-branch list, a branch's review and its writes as before, from `web.worker.platform`'s live state, kept in the Cache API for 60 seconds, and `fresh` works for them as before. Moving them into the replica waits until they show up over budget.
 
-**Proposals** (`web-proposals-as-ledger-records`, `proposals`). `POST /api/repos/{o}/{r}/proposals` takes an object with `/title`, `/body` and `/nodes`: `title` a string of 1 to 120 characters once trimmed, without a line break; `body` a string of at most 8,000 characters; `/nodes` a list of at most 10 component IDs the snapshot's graph holds. The title and body are stored trimmed; the body may be empty; the components are deduplicated and may be empty. The slug is the title in kebab case as `clm defect` slugs one (`plugin.hooks/defect-backlog`), in a dozen lines of this crate's own, since `clm-hooks` isn't built for wasm: lowercased, split on anything but ASCII letters and digits, the words joined with `-` while the result stays within 64 bytes (a first word longer than that cut to 64), with no fallback name. The body is checked first, before any request to GitHub, as Approve's is; then the access check; then the request goes to the repo's `Replica` object (`POST /write`, `writes-through-object`), which checks the slug against its state brought up to the tip and appends. The 422 and 409 answers are `proposals`'s: a taken slug is one the backlog has, `resolved` holds or an open proposal the implementation response would list has (an unwithdrawn `proposed` record whose slug is neither filed nor resolved), so the person changes the title. A slug `resolved` holds is spent for good, since `clm rebase` never files it, and an unwithdrawn record whose item was filed or resolved takes its slug only through the backlog or `resolved`, never as a proposal of its own. A valid proposal appends the `proposed` record, with `slug`, `title`, `body` and `/nodes`, with the four writes Approve makes, answering 200 with `{"id"}`. `DELETE /api/repos/{o}/{r}/proposals/{id}` decides from the requester's own `clm/ledger/<login>/web` read at its tip, as the push routes do, never from the minute-old fold, so it withdraws only what that ledger holds: other people's proposals and one already withdrawn answer 404. The implementation response's `proposals` are the implementation view's, which leaves out those `clm rebase` files, by the rule it files by (`replica/open-proposals`), each with `mine` added, whether the writer is `<login>/web`, the requester's. The object applies the record and recomputes before it answers, so the app's reload after the write (`fresh`) shows it. The Worker files nothing: an item reaches `main` through `clm rebase` on the next `impl/*` branch and that branch's land.
+**Writes through the object** (`writes-to-object`). A proposal, a withdrawal and a decision pass through the Worker in one post to the repo's `Replica` object, `POST /write`, reached through the `Replicas` trait the views use, so each costs the Worker its access check and that post and reads no view, ledger or spec file. The body is the requester's login and token, which the object keeps no longer than the request, with `"kind"` and the write's fields: `"propose"` with `title`, `body` and `nodes` as the body check left them; `"withdraw"` with `id`; `"decide"` with `id` (`capability/<slug>` or `architecture/<slug>`, the slug percent-decoded), `version`, `value` and `decision`. The route answers the object's status and body as it gave them, so its refusals, its 503 `{"preparing": <share>}` and its 502 reach the app unchanged, and answers 503 `{"error": "unavailable"}` when the object can't be reached, as the view routes do. Nothing else is told of the write: GitHub's `push` webhook for the append reaches an object that has already applied it. Since these routes' scenarios name what is written and answered, `clm-web`'s tests drive them through a real `clm_web_replica::Object` over the fake GitHub, with `clm-web-replica` and `clm-replica` (its `Store`) as dev-dependencies, and only `writes-to-object`'s own scenarios script the object.
+
+**Proposals** (`web-proposals-as-ledger-records`, `proposals`). `POST /api/repos/{o}/{r}/proposals` takes an object with `/title`, `/body` and `/nodes`: `title` a string of 1 to 120 characters once trimmed, without a line break; `body` a string of at most 8,000 characters; `/nodes` a list of at most 10 component IDs the replica's graph holds. The title and body are stored trimmed; the body may be empty; the components are deduplicated and may be empty. The slug is the title in kebab case as `clm defect` slugs one (`plugin.hooks/defect-backlog`), in `replica`'s `validate`, since `clm-hooks` isn't built for wasm: lowercased, split on anything but ASCII letters and digits, the words joined with `-` while the result stays within 64 bytes (a first word longer than that cut to 64), with no fallback name. The Worker computes no slug: its body check refuses, as 422 `slug`, a title that lowercases to no ASCII letter or digit, the one whose slug would be empty. The body is checked first, before any request to GitHub, as Approve's is; then the access check; then the request goes to the repo's `Replica` object (`POST /write`, `writes-through-object`), which checks the slug against its state brought up to the tip and appends. The 422 and 409 answers are `proposals`'s: a taken slug is one the backlog has, `resolved` holds or an open proposal the implementation response would list has (an unwithdrawn `proposed` record whose slug is neither filed nor resolved), so the person changes the title. A slug `resolved` holds is spent for good, since `clm rebase` never files it, and an unwithdrawn record whose item was filed or resolved takes its slug only through the backlog or `resolved`, never as a proposal of its own. A valid proposal appends the `proposed` record, with `slug`, `title`, `body` and `/nodes`, with the four writes Approve makes, answering 200 with `{"id"}`. `DELETE /api/repos/{o}/{r}/proposals/{id}` goes to the object in the same way, which decides from the requester's own `clm/ledger/<login>/web` read at its tip, as the push routes do, never from the minute-old fold, so it withdraws only what that ledger holds: other people's proposals and one already withdrawn answer 404. The implementation response's `proposals` are the implementation view's, which leaves out those `clm rebase` files, by the rule it files by (`replica/open-proposals`), each with `mine` added, whether the writer is `<login>/web`, the requester's. The object applies the record and recomputes before it answers, so the app's reload after the write (`fresh`) shows it. The Worker files nothing: an item reaches `main` through `clm rebase` on the next `impl/*` branch and that branch's land.
 
 **Decide** (`decide`, `architecture-decide`, decision `effort-records`). The body is checked before any request to GitHub; then the access check; then the request goes to the repo's `Replica` object (`POST /write`), which brings itself up to the tip, so the version the person saw is compared with the entry's version at the tip now, as approve compares the fingerprint, and answers `decide`'s refusals from `replica/validate-writes`. A valid decision appends through `clm-web-platform`'s `ledger::append` with the requester's token, settling the flags `clm_effort::unsettled` names over the ledgers the object holds, which include every append it has seen. The `signed` refusal exists because a signed repository counts only records signed with a key the Worker doesn't hold (`signed-repository`). The capabilities and architecture views have no history: commits, the backlog items' lives and the sizes need git, so those numbers are absent and the app says to run `clm capabilities <slug>` for them.
 
@@ -256,7 +258,7 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 - web.live/builds-for-wasm
 
 ### Requirement: proposals
-`POST /api/repos/{o}/{r}/proposals` with `/title`, `/body` and `/nodes` SHALL append a `proposed` record with the title, its kebab-case slug, the body and the components to `clm/ledger/<login>/web` through the Git Data API with the requester's own token, making no other write to the repository, and answer 200 with the record's `id`. It SHALL answer 422 with `{"error": <field>}`, writing nothing, for a title that is empty or over 120 characters once trimmed or holds a line break, a body over 8,000 characters, a component the snapshot's graph doesn't hold, or a slug that is empty, and 409 with `{"error": "taken"}`, writing nothing, when the slug is taken: the snapshot's backlog holds an item of that slug, the snapshot's `resolved` holds it, or the fold holds an open proposal with it that the implementation response lists. `DELETE /api/repos/{o}/{r}/proposals/{id}` SHALL append a `withdrawn` record naming `{id}` when the requester's own web ledger, read at its tip, holds a `proposed` record of that `id` no `withdrawn` record in it names, and answer 404, writing nothing, for any other `id`. The implementation response SHALL carry `proposals`: the implementation view's (`replica/open-proposals`), in its order, each with `mine` added, whether the writer is the requester's `<login>/web`. Each route SHALL make the access check every API route makes.
+`POST /api/repos/{o}/{r}/proposals` with `/title`, `/body` and `/nodes` SHALL, through `writes-to-object`, append a `proposed` record with the title, its kebab-case slug, the body and the components to `clm/ledger/<login>/web` through the Git Data API with the requester's own token, making no other write to the repository, and answer 200 with the record's `id`. It SHALL answer 422 with `{"error": <field>}`, writing nothing, for a title that is empty or over 120 characters once trimmed or holds a line break, a body over 8,000 characters, a component the replica's graph doesn't hold, or a slug that is empty, and 409 with `{"error": "taken"}`, writing nothing, when the slug is taken: the replica's backlog holds an item of that slug, its `resolved` holds it, or its fold holds an open proposal with it. `DELETE /api/repos/{o}/{r}/proposals/{id}` SHALL, through `writes-to-object`, append a `withdrawn` record naming `{id}` when the requester's own web ledger, read at its tip, holds a `proposed` record of that `id` no `withdrawn` record in it names, and answer 404, writing nothing, for any other `id`. The implementation response SHALL carry `proposals`: the implementation view's (`replica/open-proposals`), in its order, each with `mine` added, whether the writer is the requester's `<login>/web`. Each route SHALL make the access check every API route makes.
 
 #### Scenario: proposed
 - GIVEN a signed-in user `alice` who can read `o/a`, whose graph holds component `a`
@@ -264,14 +266,19 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 - THEN the writes made are exactly a blob, a tree, a commit and a ref update on `clm/ledger/alice/web`, with her token, the new `records.jsonl` ends with a `proposed` line with slug `export-csv`, that title, body and components, and the answer carries its `id`
 
 #### Scenario: refused
-- GIVEN the same, where `backlog/export-csv.md` is in the snapshot
+- GIVEN the same, where the replica's tip holds `backlog/export-csv.md`
 - WHEN she posts the same, then `/title` `"Dark mode"`, `/body` `""` and `/nodes` `["nope"]`
 - THEN the first answers 409 and the second 422, and nothing is written
 
 #### Scenario: taken by a change
-- GIVEN the same, where the snapshot's `resolved` holds `export-csv`
+- GIVEN the same, where the replica's `resolved` holds `export-csv`
 - WHEN she posts `/title` `"Export CSV"`, `/body` `""` and `/nodes` `[]`
 - THEN the answer is 409 with `error` `taken`, and nothing is written
+
+#### Scenario: the slug
+- GIVEN the same
+- WHEN she posts `/title` `"  Dark mode: on/off!  "`, a title of 70 `a`s, a title of 62 `a`s, a space and `bb`, then `/title` `"!!!"`, each with `/body` `""` and `/nodes` `[]`
+- THEN the first three append `proposed` lines with slugs `dark-mode-on-off`, 64 `a`s and 62 `a`s, and the last answers 422 with `error` `slug`, asking neither GitHub nor the object
 
 #### Scenario: withdrawn
 - GIVEN `clm/ledger/alice/web` holding `proposed` `p1` and `clm/ledger/bob/web` holding `proposed` `p2`
@@ -291,6 +298,8 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 #### Needs
 - ledger/proposal-records
 - replica/open-proposals
+- replica/validate-writes
+- web.worker.replica/writes-through-object
 
 ### Requirement: capabilities
 `GET /api/repos/<o>/<r>/capabilities` SHALL answer the repo's `Replica` object's capabilities view, `{"report", "signed"}` (`replica/capabilities-report`), as `views-from-replica` answers a view.
@@ -312,7 +321,7 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 - THEN the answer is that view
 
 ### Requirement: decide
-`POST /api/repos/<o>/<r>/capabilities/<slug>/decide` SHALL append a `decided` record for `capability/<slug>`, with the body's `value` and `decision` and `settles` the flags `clm_effort::unsettled` names over the default branch's tip and the ledgers as they are now, to `clm/ledger/<login>/web` through the Git Data API with the requester's own token, making no other write, and SHALL answer 200 with the record. It SHALL answer 422 and write nothing for a body without a string `version` of 8 lowercase hex digits, a `value` of `high`, `medium` or `low` and a `decision` of `keep`, `cut`, `redesign` or `accept` (checked before any request to GitHub), for a tip whose specs don't load, for a `<slug>`, percent-decoded, that `CAPABILITIES.md` doesn't hold at the tip, and, with the body `{"error": "signed", "command": "clm capabilities decide <slug> --value <value> --decision <decision>"}`, for a repository whose default branch's tip holds `docs/allowed_signers`; it SHALL answer 409 and write nothing when `version` isn't the capability's version now. The 422 cases are checked before the 409 one. When the Worker can't read the tip, its files, the ledgers or whether it is signed, or the append fails, it SHALL answer 502 and write nothing more.
+`POST /api/repos/<o>/<r>/capabilities/<slug>/decide` SHALL, through `writes-to-object`, append a `decided` record for `capability/<slug>`, with the body's `value` and `decision` and `settles` the flags `clm_effort::unsettled` names over the default branch's tip and the ledgers the object holds, to `clm/ledger/<login>/web` through the Git Data API with the requester's own token, making no other write, and SHALL answer 200 with the record. It SHALL answer 422 and write nothing for a body without a string `version` of 8 lowercase hex digits, a `value` of `high`, `medium` or `low` and a `decision` of `keep`, `cut`, `redesign` or `accept` (checked before any request to GitHub), for a tip whose specs don't load, for a `<slug>`, percent-decoded, that `CAPABILITIES.md` doesn't hold at the tip, and, with the body `{"error": "signed", "command": "clm capabilities decide <slug> --value <value> --decision <decision>"}`, for a repository whose default branch's tip holds `docs/allowed_signers`; it SHALL answer 409 and write nothing when `version` isn't the capability's version now. The 422 cases are checked before the 409 one. When the object can't read the tip, or the append fails, the route SHALL answer 502 and write nothing more.
 
 #### Serves
 - capability/review-capability-cost
@@ -322,6 +331,8 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 
 #### Needs
 - ledger/decision-records
+- replica/validate-writes
+- web.worker.replica/writes-through-object
 
 #### Scenario: decide
 - GIVEN a capability `x` at version `v` with one unsettled flag `f`
@@ -335,7 +346,7 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 
 #### Scenario: bad body
 - WHEN the user decides `x` with no body, a `version` that isn't 8 lowercase hex digits, a `value` of `huge` or a `decision` of `maybe`
-- THEN the Worker answers 422 each time, makes no request to GitHub and no write
+- THEN the Worker answers 422 each time, makes no request to GitHub or the object and no write
 
 #### Scenario: signed
 - GIVEN a default branch whose tip holds `docs/allowed_signers`, and a stale `version`
@@ -347,7 +358,7 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 - THEN the Worker answers 422 both times and makes no write
 
 #### Scenario: GitHub fails
-- GIVEN a GitHub that fails the query asking whether the tip holds `docs/allowed_signers`
+- GIVEN a GitHub that fails the read of the default branch's ref
 - WHEN the user decides `x`
 - THEN the Worker answers 502 and no write is made
 
@@ -418,6 +429,8 @@ When sign-in completes for an invited login, the callback SHALL send the browser
 #### Needs
 - ledger/decision-records
 - effort/unsettled-flags
+- replica/validate-writes
+- web.worker.replica/writes-through-object
 
 #### Scenario: decide
 - GIVEN an architectural constraint `e` at version `v` with one unsettled flag `f`
@@ -509,4 +522,45 @@ The Worker SHALL handle no scheduled event: `crates/clm-web/src/worker.rs` SHALL
 - THEN it succeeds
 
 #### Serves
+- capability/follow-from-browser
+
+### Requirement: writes-to-object
+The proposal, withdrawal and decide routes SHALL, after their body check and the access check, make one post to the repo's `Replica` object's `/write`, and answer the status and body it answers, as it gave them, reading no view, no ledger and no spec file, and making no other request to the object or, beyond the access check, to GitHub. The post's body SHALL be the requester's `login` and `token` with: `kind` `propose` and the trimmed `title` and `body` and the deduplicated `nodes`; `kind` `withdraw` and the `id`; or `kind` `decide`, the `id` `capability/<slug>` or `architecture/<slug>` with the slug percent-decoded, and the body's `version`, `value` and `decision`. When the object can't be reached, the route SHALL answer 503 `{"error": "unavailable"}`. A failed body check or access check SHALL post nothing.
+
+#### Scenario: a proposal passed on
+- GIVEN `alice`, signed in with token `u`, who can read `o/a`, and a fake object that answers `/write` with 409 `{"error": "taken"}`
+- WHEN she posts `/title` `" Export CSV "`, `/body` `""` and `/nodes` `["a", "a"]`
+- THEN the answer is 409 `{"error": "taken"}`, the object was asked once, on `/write`, with `login` `alice`, `token` `u`, `kind` `propose`, `title` `Export CSV` and `nodes` `["a"]`, and GitHub was asked nothing beyond the access check
+
+#### Scenario: a decision passed on
+- GIVEN the same, and a fake object that answers `/write` with 200 and a body `b`
+- WHEN she posts `{"version": "0123abcd", "value": "low", "decision": "cut"}` to `.../architecture/my%20e/decide`
+- THEN the answer is 200 with body `b`, and the one post names `kind` `decide`, `id` `architecture/my e`, that `version`, `value` and `decision`
+
+#### Scenario: a withdrawal passed on
+- GIVEN the same, and a fake object that answers `/write` with 404
+- WHEN she deletes `.../proposals/p1`
+- THEN the answer is 404, and the one post names `kind` `withdraw` and `id` `p1`
+
+#### Scenario: preparing
+- GIVEN a fake object that answers `/write` with 503 `{"preparing": 0.4}`
+- WHEN she posts a valid proposal
+- THEN the answer is 503 `{"preparing": 0.4}`
+
+#### Scenario: object down
+- GIVEN a fake object that fails every request
+- WHEN she posts a valid proposal, a valid decision and a withdrawal
+- THEN each answer is 503 `{"error": "unavailable"}`, and nothing is written
+
+#### Scenario: no access
+- GIVEN `alice`, who can't read `o/private`
+- WHEN she posts a valid proposal to it
+- THEN the answer is 404, and the object was asked nothing
+
+#### Needs
+- web.worker.replica/writes-through-object
+
+#### Serves
+- capability/propose-intent
+- capability/review-capability-cost
 - capability/follow-from-browser
