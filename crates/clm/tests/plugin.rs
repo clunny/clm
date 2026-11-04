@@ -767,11 +767,16 @@ fn guide_pages() -> Vec<String> {
     pages
 }
 
+/// The guide page a `propose` skill names by path (`propose-adds-glossary-terms`).
+const GLOSSARY_PATH: &str = "docs/guide/glossary.md";
+
 /// What `method-pointers` asks of every skill and agent: no `docs/guide/` path, and every
 /// `clm guide <page>` it names one of `pages`. One line per gap naming the file and text.
 fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
     let mut gaps: Vec<String> = Vec::new();
-    if text.contains("docs/guide/") {
+    // The glossary is the one page a skill names by path (`propose-adds-glossary-terms`):
+    // it is a spec path of this repository that a spec branch edits.
+    if text.replace(GLOSSARY_PATH, "").contains("docs/guide/") {
         gaps.push(format!(
             "{name}: must not name docs/guide/; name `clm guide <page>`"
         ));
@@ -2578,7 +2583,7 @@ fn propose_nests_splits() {
         );
     }
     assert!(
-        !body.contains("docs/guide/"),
+        !body.replace(GLOSSARY_PATH, "").contains("docs/guide/"),
         "propose: SKILL.md must not name docs/guide/"
     );
     // The carved-out part becomes a child of the component it came from.
@@ -3127,23 +3132,11 @@ mod exec;
 use exec::write_exec as executable;
 
 /// The release targets, with the `uname -s` and `uname -m` that map to each.
-const TARGETS: [(&str, &str, &str); 11] = [
+const TARGETS: [(&str, &str, &str); 4] = [
     ("Linux", "x86_64", "x86_64-unknown-linux-musl"),
     ("Linux", "aarch64", "aarch64-unknown-linux-musl"),
     ("Darwin", "x86_64", "x86_64-apple-darwin"),
     ("Darwin", "arm64", "aarch64-apple-darwin"),
-    ("MINGW64_NT-10.0", "x86_64", "x86_64-pc-windows-msvc"),
-    ("MINGW64_NT-10.0-26100", "aarch64", "x86_64-pc-windows-msvc"),
-    ("MSYS_NT-10.0", "x86_64", "x86_64-pc-windows-msvc"),
-    ("MSYS_NT-10.0", "aarch64", "x86_64-pc-windows-msvc"),
-    // MSYS2's environments whose shells report their own name.
-    ("UCRT64_NT-10.0-22631", "x86_64", "x86_64-pc-windows-msvc"),
-    ("CLANG64_NT-10.0-22631", "x86_64", "x86_64-pc-windows-msvc"),
-    (
-        "CLANGARM64_NT-10.0-22631",
-        "aarch64",
-        "x86_64-pc-windows-msvc",
-    ),
 ];
 
 /// Each release target once.
@@ -3151,17 +3144,8 @@ fn release_targets() -> std::collections::BTreeSet<&'static str> {
     TARGETS.iter().map(|(_, _, target)| *target).collect()
 }
 
-/// The file a target's asset holds and the shim caches: `clm.exe` on Windows.
-fn exe(target: &str) -> &'static str {
-    if target.contains("-windows-") {
-        "clm.exe"
-    } else {
-        "clm"
-    }
-}
-
-/// A copy of the shim in a plugin dir of version 9.9.9, a fake `gh` serving the assets in
-/// `assets/`, and an empty cache.
+/// A copy of the shim in a plugin dir of version 9.9.9, a fake `curl` serving the assets in
+/// `assets/`, a `gh` that logs its calls, and an empty cache.
 struct Shim {
     dir: TempDir,
 }
@@ -3188,12 +3172,18 @@ impl Shim {
             "{\n  \"name\": \"clm\",\n  \"version\": \"9.9.9\"\n}\n",
         )
         .unwrap();
-        // `gh release download <tag> ... --dir <dir>`: logs its arguments, copies the assets.
+        // `curl -fsSL -o <file> <url>`: logs its arguments, copies the asset the url names, and
+        // fails like `-f` does when there is none.
+        executable(
+            &d.join("fakebin/curl"),
+            "#!/bin/sh\necho \"$*\" >> \"$SHIM_TEST/curl.log\"\n\
+             while [ $# -gt 1 ]; do [ \"$1\" = -o ] && out=$2; shift; done\n\
+             cp \"$SHIM_TEST/assets/$(basename \"$1\")\" \"$out\" 2>/dev/null || exit 22\n",
+        );
+        // The shim has no use for `gh`: any call is logged, and fails.
         executable(
             &d.join("fakebin/gh"),
-            "#!/bin/sh\necho \"$*\" >> \"$SHIM_TEST/gh.log\"\n\
-             while [ $# -gt 0 ]; do [ \"$1\" = --dir ] && dir=$2; shift; done\n\
-             cp \"$SHIM_TEST\"/assets/* \"$dir\"/\n",
+            "#!/bin/sh\necho \"$*\" >> \"$SHIM_TEST/gh.log\"\nexit 1\n",
         );
         Shim { dir }
     }
@@ -3207,16 +3197,14 @@ impl Shim {
     fn serve(&self, corrupt: bool) {
         let stage = self.path("stage");
         fs::create_dir_all(&stage).unwrap();
-        for name in ["clm", "clm.exe"] {
-            executable(
-                &stage.join(name),
-                &format!("#!/bin/sh\necho \"cached {name} $*\" >> \"$SHIM_TEST/runs.log\"\n"),
-            );
-        }
+        executable(
+            &stage.join("clm"),
+            "#!/bin/sh\necho \"cached clm $*\" >> \"$SHIM_TEST/runs.log\"\n",
+        );
         for target in release_targets() {
             let asset = format!("clm-{target}.tar.gz");
             let ok = Command::new("tar")
-                .args(["czf", &format!("../assets/{asset}"), exe(target)])
+                .args(["czf", &format!("../assets/{asset}"), "clm"])
                 .current_dir(&stage)
                 .status()
                 .unwrap();
@@ -3254,8 +3242,6 @@ impl Shim {
             .env("SHIM_TEST", self.dir.path())
             .env("XDG_CACHE_HOME", self.path("cache"))
             .env_remove("CLM_BIN")
-            .env_remove(PATH_CONVERSION_SWITCHES[0])
-            .env_remove(PATH_CONVERSION_SWITCHES[1])
             .envs(env.iter().copied())
             .stdin(Stdio::null())
             .output()
@@ -3266,28 +3252,38 @@ impl Shim {
         fs::read_to_string(self.path(rel)).unwrap_or_default()
     }
 
+    /// How many release assets `curl` was asked for.
+    fn downloads(&self) -> usize {
+        self.read("curl.log")
+            .lines()
+            .filter(|l| l.ends_with(".tar.gz"))
+            .count()
+    }
+
     fn cached(&self) -> bool {
-        ["clm", "clm.exe"]
-            .iter()
-            .any(|name| self.path(&format!("cache/clm/9.9.9/{name}")).exists())
+        self.path("cache/clm/9.9.9/clm").exists()
     }
 }
 
 #[test]
 fn shim_first_use_downloads_once() {
-    // req:plugin/binary-shim@818f20de
+    // req:plugin/binary-shim@38609dbc
     let shim = Shim::new();
     shim.serve(false);
     for _ in 0..2 {
         let out = shim.run(&["status"], &[]);
         assert!(out.status.success(), "{out:?}");
     }
-    let gh = shim.read("gh.log");
-    assert_eq!(gh.lines().count(), 1, "{gh}");
-    assert!(
-        gh.starts_with("release download v9.9.9 --repo clunny/clm"),
-        "{gh}"
-    );
+    let curl = shim.read("curl.log");
+    let url = "https://github.com/clunny/clm/releases/download/v9.9.9/clm-";
+    let asked = |suffix: &str| {
+        curl.lines()
+            .filter(|l| l.ends_with(&format!(".tar.gz{suffix}")) && l.contains(url))
+            .count()
+    };
+    assert_eq!((asked(""), asked(".sha256")), (1, 1), "{curl}");
+    assert_eq!(shim.downloads(), 1, "{curl}");
+    assert_eq!(shim.read("gh.log"), "", "the shim needs no gh");
     assert_eq!(
         shim.read("runs.log"),
         "cached clm status\ncached clm status\n"
@@ -3302,7 +3298,7 @@ fn shim_first_use_downloads_once() {
 
 #[test]
 fn shim_bad_checksum_caches_nothing() {
-    // req:plugin/binary-shim@818f20de
+    // req:plugin/binary-shim@38609dbc
     let shim = Shim::new();
     shim.serve(true);
     let out = shim.run(&["status"], &[]);
@@ -3313,7 +3309,7 @@ fn shim_bad_checksum_caches_nothing() {
 
 #[test]
 fn shim_without_a_release_says_how_to_install() {
-    // req:plugin/binary-shim@818f20de
+    // req:plugin/binary-shim@38609dbc
     let shim = Shim::new();
     fs::remove_dir(shim.path("assets")).unwrap();
     let out = shim.run(&["status"], &[]);
@@ -3334,17 +3330,9 @@ fn shim_without_a_release_says_how_to_install() {
             "{out:?}"
         );
     }
-    assert_eq!(
-        shim.read("gh.log").lines().count(),
-        2,
-        "status, then one hook"
-    );
+    assert_eq!(shim.downloads(), 2, "status, then one hook");
     shim.run(&["status"], &[]);
-    assert_eq!(
-        shim.read("gh.log").lines().count(),
-        3,
-        "commands always retry"
-    );
+    assert_eq!(shim.downloads(), 3, "commands always retry");
     assert!(!shim.cached());
 }
 
@@ -3373,19 +3361,19 @@ fn session_start_says_the_guard_is_off(shim: &Shim, tag: &str) {
 
 #[test]
 fn shim_session_start_without_a_binary_says_the_guard_is_off() {
-    // req:plugin/binary-shim@818f20de
+    // req:plugin/binary-shim@38609dbc
     let shim = Shim::new();
     fs::remove_dir(shim.path("assets")).unwrap();
     session_start_says_the_guard_is_off(&shim, "v9.9.9");
-    assert_eq!(shim.read("gh.log").lines().count(), 1);
+    assert_eq!(shim.downloads(), 1);
     // The second run skips the download (`.unavailable`) and still says so.
     session_start_says_the_guard_is_off(&shim, "v9.9.9");
-    assert_eq!(shim.read("gh.log").lines().count(), 1);
+    assert_eq!(shim.downloads(), 1);
 }
 
 #[test]
 fn shim_without_a_version_fails() {
-    // req:plugin/binary-shim@818f20de
+    // req:plugin/binary-shim@38609dbc
     let shim = Shim::new();
     shim.serve(false);
     fs::write(shim.path("plugin/.claude-plugin/plugin.json"), "{}\n").unwrap();
@@ -3396,12 +3384,12 @@ fn shim_without_a_version_fails() {
     let out = shim.run(&["hook", "guard"], &[]);
     assert_eq!((out.status.code(), out.stdout.len()), (Some(0), 0));
     session_start_says_the_guard_is_off(&shim, "v<version>");
-    assert_eq!(shim.read("gh.log"), "");
+    assert_eq!(shim.read("curl.log"), "");
 }
 
 #[test]
 fn shim_downloads_the_target_for_each_platform() {
-    // req:plugin/shim-targets@ac8086e1
+    // req:plugin/shim-targets@7df28173
     for (system, machine, target) in TARGETS {
         let shim = Shim::new();
         shim.serve(false);
@@ -3410,32 +3398,27 @@ fn shim_downloads_the_target_for_each_platform() {
             let out = shim.run(&["status"], &[]);
             assert!(out.status.success(), "{system} {machine}: {out:?}");
         }
-        let gh = shim.read("gh.log");
+        let curl = shim.read("curl.log");
         assert!(
-            gh.contains(&format!("--pattern clm-{target}.tar.gz ")),
-            "{system} {machine}: {gh}"
+            curl.lines()
+                .any(|l| l.ends_with(&format!("/clm-{target}.tar.gz"))),
+            "{system} {machine}: {curl}"
         );
-        assert_eq!(gh.lines().count(), 1, "{system} {machine}: {gh}");
-        let exe = exe(target);
-        assert!(
-            shim.path(&format!("cache/clm/9.9.9/{exe}")).exists(),
-            "{system} {machine}: {exe} isn't cached"
-        );
-        let runs = shim.read("runs.log");
+        assert_eq!(shim.downloads(), 1, "{system} {machine}: {curl}");
+        assert!(shim.cached(), "{system} {machine}: the binary isn't cached");
         assert_eq!(
-            runs.lines()
-                .filter(|l| *l == format!("cached {exe} status"))
-                .count(),
-            2,
-            "{system} {machine}: {runs}"
+            shim.read("runs.log"),
+            "cached clm status\ncached clm status\n",
+            "{system} {machine}"
         );
     }
 }
 
 #[test]
 fn shim_maps_each_target_in_one_assignment() {
-    // req:plugin/shim-targets@ac8086e1
-    // `ci/release`'s prepare step reads the shim's `target=<target>` assignments.
+    // req:plugin/shim-targets@7df28173
+    // `ci/release`'s prepare step reads the shim's `target=<target>` assignments: exactly
+    // the four targets, and no others.
     let shim = fs::read_to_string(plugin().join("bin/clm")).unwrap();
     for target in release_targets() {
         assert_eq!(
@@ -3444,14 +3427,43 @@ fn shim_maps_each_target_in_one_assignment() {
             "target={target}"
         );
     }
+    let assignments = shim
+        .lines()
+        .filter(|l| l.trim_start().contains(") target=") && !l.contains("target= "))
+        .count();
+    assert_eq!(assignments, release_targets().len(), "{shim}");
+}
+
+/// What `shim-targets` forbids the shim's text to name: a Windows target or `clm.exe`.
+fn windows_words(shim: &str) -> Vec<&'static str> {
+    let lower = shim.to_lowercase();
+    ["windows", "clm.exe"]
+        .into_iter()
+        .filter(|word| lower.contains(word))
+        .collect()
+}
+
+#[test]
+fn shim_names_no_windows_target() {
+    // req:plugin/shim-targets@7df28173
+    let shim = fs::read_to_string(plugin().join("bin/clm")).unwrap();
+    assert_eq!(windows_words(&shim), Vec::<&str>::new());
+    // The text fails the check when a comment names Windows in any case, or `clm.exe`.
+    assert_eq!(windows_words("# runs on WINDOWS\n"), ["windows"]);
+    assert_eq!(windows_words("exe=clm.exe\n"), ["clm.exe"]);
 }
 
 #[test]
 fn shim_on_an_unsupported_platform_fails() {
-    // req:plugin/binary-shim@818f20de
-    // req:plugin/shim-targets@ac8086e1
-    // Cygwin's own `uname` stays unsupported: only Git Bash and MSYS2 run the Windows build.
-    for (system, machine) in [("FreeBSD", "amd64"), ("CYGWIN_NT-10.0", "x86_64")] {
+    // req:plugin/binary-shim@38609dbc
+    // req:plugin/shim-targets@7df28173
+    // Windows's shells (MSYS2, Cygwin and the rest) get no binary either (`no-windows-support`).
+    for (system, machine) in [
+        ("FreeBSD", "amd64"),
+        ("CYGWIN_NT-10.0", "x86_64"),
+        ("MINGW64_NT-10.0", "x86_64"),
+        ("UCRT64_NT-10.0-22631", "x86_64"),
+    ] {
         let shim = Shim::new();
         shim.serve(false);
         shim.platform(system, machine);
@@ -3462,73 +3474,18 @@ fn shim_on_an_unsupported_platform_fails() {
         for words in ["no prebuilt clm", &platform, "cargo install"] {
             assert!(err.contains(words), "{words} missing from {err}");
         }
-        assert_eq!(shim.read("gh.log"), "");
+        assert_eq!(shim.read("curl.log"), "");
         let out = shim.run(&["hook", "guard"], &[]);
         assert_eq!((out.status.code(), out.stdout.len()), (Some(0), 0));
         session_start_says_the_guard_is_off(&shim, "v9.9.9");
-        assert_eq!(shim.read("gh.log"), "");
+        assert_eq!(shim.read("curl.log"), "");
         assert!(!shim.cached());
-    }
-}
-
-/// The variables that would turn Git Bash's path conversion off
-/// (`windows-paths-in-shim-and-panel`).
-const PATH_CONVERSION_SWITCHES: [&str; 2] = ["MSYS2_ARG_CONV_EXCL", "MSYS_NO_PATHCONV"];
-
-#[test]
-fn shim_passes_windows_arguments_unchanged() {
-    // req:plugin/shim-path-conversion@98bed5b8
-    let shim = Shim::new();
-    shim.platform("MINGW64_NT-10.0", "x86_64");
-    let cached = shim.path("cache/clm/9.9.9");
-    fs::create_dir_all(&cached).unwrap();
-    // A cached `clm.exe` that records each argument on its own line, then the switches.
-    executable(
-        &cached.join("clm.exe"),
-        "#!/bin/sh\nfor a in \"$@\"; do echo \"arg $a\"; done >> \"$SHIM_TEST/runs.log\"\n\
-         echo \"MSYS2_ARG_CONV_EXCL=${MSYS2_ARG_CONV_EXCL-unset}\" >> \"$SHIM_TEST/runs.log\"\n\
-         echo \"MSYS_NO_PATHCONV=${MSYS_NO_PATHCONV-unset}\" >> \"$SHIM_TEST/runs.log\"\n",
-    );
-    let out = shim.run(
-        &["pr", "open", "spec/x", "--body-file", "/tmp/body.md"],
-        &[],
-    );
-    assert!(out.status.success(), "{out:?}");
-    assert_eq!(
-        shim.read("runs.log"),
-        "arg pr\narg open\narg spec/x\narg --body-file\narg /tmp/body.md\n\
-         MSYS2_ARG_CONV_EXCL=unset\nMSYS_NO_PATHCONV=unset\n"
-    );
-    assert_eq!(
-        shim.read("gh.log"),
-        "",
-        "the cached binary runs without a download"
-    );
-}
-
-/// The switches the shim's text names: none, so Git Bash converts absolute paths.
-fn path_conversion_switches(shim: &str) -> Vec<&'static str> {
-    PATH_CONVERSION_SWITCHES
-        .into_iter()
-        .filter(|switch| shim.contains(switch))
-        .collect()
-}
-
-#[test]
-fn shim_leaves_path_conversion_on() {
-    // req:plugin/shim-path-conversion@98bed5b8
-    let shim = fs::read_to_string(plugin().join("bin/clm")).unwrap();
-    assert_eq!(path_conversion_switches(&shim), Vec::<&str>::new());
-    // no conversion switch in the shim
-    for switch in PATH_CONVERSION_SWITCHES {
-        let edited = format!("{shim}\nexport {switch}=1\n");
-        assert_eq!(path_conversion_switches(&edited), [switch]);
     }
 }
 
 #[test]
 fn shim_prefers_clm_bin() {
-    // req:plugin/binary-shim@818f20de
+    // req:plugin/binary-shim@38609dbc
     let shim = Shim::new();
     let stub = shim.path("own-clm");
     executable(
@@ -3541,7 +3498,7 @@ fn shim_prefers_clm_bin() {
     );
     assert!(out.status.success(), "{out:?}");
     assert_eq!(shim.read("runs.log"), "own next --expiry 2\n");
-    assert_eq!(shim.read("gh.log"), "");
+    assert_eq!(shim.read("curl.log"), "");
 }
 
 #[test]
@@ -3948,24 +3905,28 @@ fn has_word(line: &str, word: &str) -> bool {
         .any(|(at, _)| word_at(line, at, word))
 }
 
-/// The old word `line` holds, if any: `specd` and `friction` as words, `human` as a backlog
-/// kind (`kind: human`, or in backticks after the word kind), and `burdens` as the key
-/// (inside backticks, or before `: [`). A line holding `clm:remove-by` is exempt.
+/// The old word `line` holds, if any: `specd` as a word of its own, `friction` after `clm `
+/// or as a backlog kind (`kind: friction`, or in backticks after the word kind; the plain
+/// English word keeps it), `human` as a backlog kind, and `burdens` as the key (inside
+/// backticks, or before `: [`). A line holding `clm:remove-by` is exempt.
 fn old_word(line: &str) -> Option<&'static str> {
     if line.contains(concat!("clm:remove", "-by")) {
         return None;
     }
-    for word in ["specd", "friction"] {
-        if has_word(line, word) {
-            return Some(word);
-        }
+    if has_word(line, "specd") {
+        return Some("specd");
     }
-    for lead in ["kind: ", "kind `"] {
-        if line.match_indices(lead).any(|(at, _)| {
-            let at = at + lead.len();
-            line[at..].starts_with("human") && word_at(line, at, "human")
-        }) {
-            return Some("human");
+    for (word, leads) in [
+        ("friction", &["clm ", "kind: ", "kind `"][..]),
+        ("human", &["kind: ", "kind `"][..]),
+    ] {
+        for lead in leads {
+            if line.match_indices(lead).any(|(at, _)| {
+                let at = at + lead.len();
+                line[at..].starts_with(word) && word_at(line, at, word)
+            }) {
+                return Some(word);
+            }
         }
     }
     if line.contains("`burdens`") || line.contains("burdens: [") {
@@ -4005,7 +3966,7 @@ fn plugin_files(dir: &Path, out: &mut Vec<(String, String)>) {
 
 #[test]
 fn plugin_says_new_words() {
-    // req:plugin/skills-say-new-words@0989267b
+    // req:plugin/skills-say-new-words@8eeb6251
     let mut files = Vec::new();
     plugin_files(&plugin(), &mut files);
     assert!(files.len() > 5);
@@ -4024,7 +3985,9 @@ fn plugin_says_new_words() {
     let fixture = |line: &str| vec![("skills/x/SKILL.md".to_string(), format!("ok\n{line}\n"))];
     for (line, word) in [
         ("`status: specd`", "specd"),
-        ("a friction flag", "friction"),
+        ("run `clm friction` here", "friction"),
+        ("an item of kind: friction here", "friction"),
+        ("an item of kind `friction` here", "friction"),
         ("an item of kind: human here", "human"),
         ("an item of kind `human` here", "human"),
         ("the `burdens` key", "burdens"),
@@ -4038,6 +4001,7 @@ fn plugin_says_new_words() {
     }
     for line in [
         "status: unbuilt",
+        "a friction flag, as plain English",
         "kind: human-task and `human` lines",
         "the human_burdens key, naming burdens",
         "specd, friction and kind: human on a clm:remove-by line",
@@ -4452,5 +4416,42 @@ fn contribution_skill() {
     ] {
         let gaps = contribution_gaps(&fm, &body.replace(needle, "elided"));
         assert_reports(&gaps, "contribution", needle);
+    }
+}
+
+/// What `propose-adds-glossary-terms` asks of a `propose` skill: one paragraph (a line of
+/// the skill) holding the glossary path, the rule, and the words for each kind of term.
+fn glossary_terms_gaps(body: &str) -> Vec<String> {
+    let must = [
+        "docs/guide/glossary.md",
+        "clm/glossary-covers-terms",
+        "command",
+        "status",
+        "kind",
+        "frontmatter",
+    ];
+    let paragraph = body
+        .lines()
+        .find(|line| line.contains(must[0]) && line.contains(must[1]));
+    match paragraph {
+        Some(line) => text_gaps("propose", line, &must, &[]),
+        None => text_gaps("propose", "", &must, &[]),
+    }
+}
+
+#[test]
+fn propose_adds_glossary_terms() {
+    // req:plugin/propose-adds-glossary-terms@fd6a2597
+    let body = skill_body("propose");
+    assert_eq!(glossary_terms_gaps(&body), Vec::<String>::new());
+    // a skill without it
+    // the path, the rule and each kind of term are named in the paragraph
+    for word in [
+        "docs/guide/glossary.md",
+        "clm/glossary-covers-terms",
+        "frontmatter",
+    ] {
+        let gaps = glossary_terms_gaps(&body.replace(word, "elided"));
+        assert!(gaps.iter().any(|g| g.contains(word)), "{word}: {gaps:?}");
     }
 }

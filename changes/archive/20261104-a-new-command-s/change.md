@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-new-command-s-glossary-entry-can-t-ride-on-its-code-branch
 ---
