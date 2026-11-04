@@ -1,0 +1,13 @@
+name: Idea
+description: Suggest what CLM should do. One line is enough.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggestion
+      description: >-
+        What should CLM do? A suggestion may be one line. A maintainer's `accepted`
+        label is the yes to take it further, into a spec change.
+    validations:
+      required: true
