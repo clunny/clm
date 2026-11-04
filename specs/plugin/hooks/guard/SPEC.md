@@ -20,7 +20,7 @@ A `cargo run` is how this repository's `CLAUDE.md` tells sessions to run CLM, so
 
 **Re-run lookups** (`release-run-lookup`). With no `-R`/`--repo`, the guard asks `gh repo view --json url` which repository a `gh run rerun` targets, since `gh api` takes `{owner}/{repo}` from the checkout but its host from `GH_HOST` or the default host, not from that repository; the lookup then asks the host the re-run asks.
 
-**Approval** (`approve-in-session`). The `ask` permission decision is `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": ...}}` on stdout and exit 0. Claude Code then shows the human the command before it runs, in any permission mode; unattended sessions run under `dontAsk`, which denies `ask`, so they can never approve. A `clm defect` ask (`defect-approval`) is made the same way; its reason says the report leaves the project as a public issue, and that when no one can approve (an unattended session), the defect goes under `## CLM defects` in the pull request body instead.
+**Approval** (`approve-in-session`). The `ask` permission decision is `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": ...}}` on stdout and exit 0. Claude Code then shows the human the reason before the command runs, in any permission mode; it doesn't promise to show the command beside it, so a reason that asks the human to judge text quotes that text; unattended sessions run under `dontAsk`, which denies `ask`, so they can never approve. A `clm defect` ask (`defect-approval`) is made the same way; its reason quotes each `clm defect` line and the report it sends (`defect-ask-shows-report`), says the report leaves the project as a public issue, and that when no one can approve (an unattended session), the defect goes under `## CLM defects` in the pull request body instead.
 
 ## Requirements
 
@@ -195,22 +195,40 @@ In the scenarios below, a fake `gh` for `o/r` answers `repo view --json url` wit
 - host/git-through-layer
 
 ### Requirement: defect-approval
-`clm hook guard` SHALL answer a `Bash` command with a segment that runs `clm defect`, or a `cargo run` that `approve-guard` treats as running it, with the `ask` permission decision, printing `hookSpecificOutput` with `permissionDecision: "ask"` and a reason that names `## CLM defects`, and exit 0, when the `defects` setting for the event's `cwd` is `ask` or can't be loaded, and no other guard rule blocks the command. When another guard rule also asks, it SHALL print one `ask` decision whose reason gives both rules' reasons. No guard rule SHALL match the heredoc body of such a segment. With `backlog` or `off` it SHALL treat the segment like any other.
+`clm hook guard` SHALL judge a `Bash` command with a segment that runs `clm defect`, or a `cargo run` that `approve-guard` treats as running it, whose arguments hold neither `--help` nor `-h`, when the `defects` setting for the event's `cwd` is `ask` or can't be loaded and no other guard rule blocks the command (`defect-ask-shows-report`). A segment's report *can be shown* when its standard input (`guard-standard-input`) is a heredoc the shell sends as written. When every such segment's report can be shown, the guard SHALL print `hookSpecificOutput` with `permissionDecision: "ask"` and a reason that names `## CLM defects` and quotes, for each such segment in order, its own text as written, without its body, and its report, the body whole, and exit 0. When a segment's report can't be shown, it SHALL exit 2, writing to stderr a reason that names `defect-ask-shows-report`, says the guard can't show the report to the human, and tells the session to send the report as the body of a `<<'EOF'` heredoc on the `clm defect` line. When another guard rule also asks, it SHALL print one `ask` decision whose reason gives both rules' reasons. No guard rule SHALL match the heredoc body of such a segment. With `backlog` or `off` it SHALL treat the segment like any other.
+
+#### Needs
+- plugin.hooks.guard.shell/guard-standard-input
 
 #### Scenario: asking
-- GIVEN an event whose `cwd` has no settings, and a command whose first line is `clm defect --title "x" <<'EOF'`, followed by a report
+- GIVEN an event whose `cwd` has no settings, and a command whose first line is `clm defect --title "x" --component gate <<'EOF'`, followed by a line `The gate misfired.` and `EOF`
 - WHEN `clm hook guard` runs on it
-- THEN it prints the `ask` decision with a reason naming `## CLM defects`, and exits 0
+- THEN it prints the `ask` decision with a reason naming `## CLM defects` and holding `clm defect --title "x" --component gate` and `The gate misfired.`, and exits 0
 
 #### Scenario: asking through cargo run
-- GIVEN an event whose `cwd` has no settings, and a command whose first line is `cargo run -q -p clm -- defect --title "x" <<'EOF'`, followed by a report
+- GIVEN an event whose `cwd` has no settings, and a command whose first line is `cargo run -q -p clm -- defect --title "x" <<'EOF'`, followed by a line `The gate misfired.` and `EOF`
 - WHEN `clm hook guard` runs on it
-- THEN it prints the `ask` decision with a reason naming `## CLM defects`, and exits 0
+- THEN it prints the `ask` decision with a reason naming `## CLM defects` and holding `The gate misfired.`, and exits 0
 
-#### Scenario: backlog
-- GIVEN an event whose `cwd` is a repository with `defects = "backlog"`, and the same command
+#### Scenario: an unquoted heredoc with nothing to expand
+- GIVEN an event whose `cwd` has no settings, and the command `clm defect --title x <<EOF` followed by a line `plain words` and `EOF`
+- WHEN `clm hook guard` runs on it
+- THEN it prints the `ask` decision with a reason holding `plain words`, and exits 0
+
+#### Scenario: a report it can't show
+- GIVEN an event whose `cwd` has no settings, and each of the commands `clm defect --title x < report.md`, `cat report.md | clm defect --title x`, `clm defect --title x <<< "$R"`, `clm defect --title x`, and `clm defect --title x <<EOF` followed by a line `cost $HOME` and `EOF`
+- WHEN `clm hook guard` runs on each
+- THEN each exits 2 with a reason naming `defect-ask-shows-report` and `<<'EOF'`
+
+#### Scenario: help
+- GIVEN an event whose `cwd` has no settings, and the command `clm defect --help`
 - WHEN `clm hook guard` runs on it
 - THEN it prints nothing and exits 0
+
+#### Scenario: backlog
+- GIVEN an event whose `cwd` is a repository with `defects = "backlog"`, and the commands `clm defect --title "x" <<'EOF'` followed by a report, and `clm defect --title x < report.md`
+- WHEN `clm hook guard` runs on each
+- THEN each prints nothing and exits 0
 
 #### Scenario: quoting a blocked command
 - GIVEN an event whose `cwd` has no settings, and a `clm defect --title "x" <<'EOF'` command whose report has a line `clm approve spec/x` and a line `git push origin main`
@@ -218,12 +236,12 @@ In the scenarios below, a fake `gh` for `o/r` answers `repo view --json url` wit
 - THEN it prints the `ask` decision and exits 0
 
 #### Scenario: block wins
-- GIVEN an event whose `cwd` has no settings, and a command with a segment running `clm defect` and a segment `git push origin main`
+- GIVEN an event whose `cwd` has no settings, and a command with a segment running `clm defect` with a `<<'EOF'` report and a segment `git push origin main`
 - WHEN `clm hook guard` runs on it
 - THEN it exits 2 naming `guard-blocks-push-to-main`
 
 #### Scenario: two asks
-- GIVEN an event whose `cwd` has no settings, and a command with a segment running `clm defect` and a segment `clm approve spec/x`
+- GIVEN an event whose `cwd` has no settings, and a command with a segment running `clm defect` with a `<<'EOF'` report and a segment `clm approve spec/x`
 - WHEN `clm hook guard` runs on it
 - THEN it prints one `ask` decision with a reason naming both `## CLM defects` and `humans-review-intent`, and exits 0
 
@@ -313,7 +331,7 @@ The reason of the `clm defect` ask (`defect-approval`) SHALL say that, when no o
 
 #### Scenario: the defect ask
 - GIVEN `defects = "ask"`
-- WHEN `clm hook guard` reads a `Bash` event running `clm defect --title x`
+- WHEN `clm hook guard` reads a `Bash` event running `clm defect --title x` with its report in a `<<'EOF'` heredoc
 - THEN the `ask` decision's reason names `## CLM defects` and `pull request body`, and doesn't hold the word `page`
 
 #### Serves
