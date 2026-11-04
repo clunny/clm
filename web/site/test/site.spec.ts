@@ -66,7 +66,7 @@ test('the homepage holds its five sections in order with the credits linked', as
 
 test('the install commands name the one configured repository', () => {
   test.setTimeout(180_000)
-  // req:web.site/install-repository@279812cd
+  // req:web.site/install-repository@b53df95f
   const out = join(siteDir, '.test-dist', 'repo')
   execFileSync('npx', ['vitepress', 'build', '.'], {
     cwd: siteDir,
@@ -88,6 +88,17 @@ test('the install commands name the one configured repository', () => {
   }
   walk(siteDir)
   expect(named).toEqual(['.vitepress/config.ts'])
+})
+
+test('the install commands default to the public repository', () => {
+  test.setTimeout(180_000)
+  // req:web.site/install-repository@b53df95f
+  const out = join(siteDir, '.test-dist', 'default-repo')
+  const env = { ...process.env, SITE_OUT: out }
+  delete env.INSTALL_REPO
+  execFileSync('npx', ['vitepress', 'build', '.'], { cwd: siteDir, env, stdio: 'pipe' })
+  const html = readFileSync(join(out, 'index.html'), 'utf8')
+  expect(html).toContain('/plugin marketplace add ' + 'clunny' + '/clm')
 })
 
 test('the homepage and the guide fit a phone without scrolling sideways', async ({ page }) => {
