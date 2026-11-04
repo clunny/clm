@@ -24,11 +24,12 @@ The builder check of `20261104-detectors-skip-in-the-root` found that adding a f
 
 - `ARCHITECTURE.md`'s `path-ownership` names an addition beside a removal in its first exception and gains the scenario `addition forces a fix` (a hand edit, reviewed with the change).
 - `orchestrator.run/removal-breaks-dependant` (modified) has the prompt allow the fixes an addition forces, set to the value under which the provider behaves as before, and say what is not such a fix; it keeps its slug, since the removal half is unchanged and `path-ownership`'s `#### Enforced by` names it.
-- `docs/decisions/forced-fixes-cover-additions.md`, with amendments on `contract-removal-needs` and `path-ownership-by-prompt`.
+- `docs/decisions/forced-fixes-cover-additions.md`, with amendments on `contract-removal-needs`, `path-ownership-by-prompt` and `rename-adds-then-removes`.
 
 ## Constraints
 
-- `rename-adds-then-removes` is untouched: a rename's users still move by their own requirements.
+- `rename-adds-then-removes` keeps its route: a rename's users still move by their own requirements. Its adding requirement may rely on the struct-literal fix when it adds a field, which an amendment there says (from the architecture audit).
+- A build that meets a rename, an added variant's arm or a field with no behaviour-preserving value leaves the requirement unbuilt and files a `question` item with `blocks`, as for a removal another component still uses (made explicit after the builder check).
 - The added-variant case stays a design matter: the adding requirement must not widen a type a user matches exhaustively.
 
 ## Edge cases and workarounds

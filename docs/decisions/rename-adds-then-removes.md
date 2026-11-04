@@ -20,3 +20,5 @@ Refines `contract-removal-needs` and `expand-contract`.
 Rejected:
 - **A deferred contract change for every rename.** It works, but it leaves a change `proposed` and a `deferred` item for the human to judge, when needs within one change order the same steps with nothing to remember.
 - **Allow a build to edit its users' code for a rename.** `architecture/path-ownership` keeps each build inside its component; `clm run`'s compile-only fixes cover only what a removal forces, not a move to a name the users choose to read.
+
+(Amended 2026-11-04, `20261104-clm-run-allows-compile`: `clm run`'s compile-only fixes now cover what an addition forces too (`forced-fixes-cover-additions`), so the rejected option above reads "cover only what a removal or an addition forces". A rename's adding requirement that adds a struct field may rely on that fix, setting the field in users' struct literals to the value under which the provider behaves as before, since their behaviour stays as it stands; a user's move to the new name is still never such a fix.)
