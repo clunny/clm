@@ -1,6 +1,6 @@
 # Quickstart
 
-Install CLM, bring a new or existing project under it, and see your first change built.
+From nothing to your first change built, for a new project or an existing one.
 
 ## You need
 
