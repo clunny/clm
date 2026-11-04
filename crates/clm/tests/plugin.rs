@@ -2737,6 +2737,44 @@ fn build_says_what_is_ready() {
     assert!(order.contains("depends_on"), "{order}");
 }
 
+/// What `build-unclosed-builds` asks of a `build` skill.
+fn unclosed_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "build",
+        body,
+        &["landed impl/<component>", "unclosed-build-reads-finish"],
+        &[],
+    )
+}
+
+#[test]
+fn build_unclosed_builds() {
+    // req:plugin/build-unclosed-builds@5ceba149
+    let body = skill_body("build");
+    assert_eq!(unclosed_gaps(&body), Vec::<String>::new());
+    // a build skill that counts every unclosed build as a stop
+    let bare = body.replace("landed impl/<component>", "landed");
+    assert_reports(&unclosed_gaps(&bare), "build", "landed impl/<component>");
+    let finish = sentence_with(&body, "landed impl/<component>");
+    assert!(finish.contains("clm run --finish <component>"), "{finish}");
+    for needle in [
+        "tell the human that it landed without its closing line",
+        "don't count it as a stop",
+        "never by reading `origin` with a `git` command of your own",
+    ] {
+        assert!(finish.contains(needle), "{needle}: {finish}");
+    }
+    let steps = numbered_steps(&body);
+    let step = steps
+        .iter()
+        .find(|s| s.contains("landed impl/<component>"))
+        .expect("a step holds the rule");
+    assert!(
+        step.contains("hasn't returned"),
+        "the step that reads a build's return"
+    );
+}
+
 /// What `build-resumes-limited-builds` asks of a `build` skill.
 fn resume_gaps(body: &str) -> Vec<String> {
     text_gaps(
