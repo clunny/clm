@@ -83,5 +83,6 @@ fn a_marker_is_the_text_and_the_glob_up_to_whitespace() {
 #[test]
 fn text_without_a_marker_reads_nothing() {
     // req:check.affected/affected-readers@94edd10f
-    assert!(reads_in("// clm:remove-by 20261104-x\n// req:a/b@12345678\n").is_empty());
+    let text = concat!("// clm:remove", "-by 20261104-x\n// req", ":a/b@12345678\n");
+    assert!(reads_in(text).is_empty());
 }
