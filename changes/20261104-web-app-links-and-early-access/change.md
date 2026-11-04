@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 # Links between the site and the web app, and early access
