@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P1
 resolves: [no-step-checks-a-spec-change-against-architecture-md-and-the]
 ---
