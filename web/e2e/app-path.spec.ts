@@ -43,7 +43,9 @@ async function serve(): Promise<Site> {
     const candidates = [base, `${base}.html`, join(base, 'index.html')];
     const file = candidates.find((f) => f.startsWith(DIST) && existsSync(f) && statSync(f).isFile());
     if (!file) {
-      res.writeHead(404, { 'x-from': 'network' }).end('not found');
+      // `not_found_handling = "404-page"`: the site's own 404 page, with status 404.
+      const page404 = join(DIST, '404.html');
+      res.writeHead(404, { 'content-type': 'text/html', 'x-from': 'network' }).end(existsSync(page404) ? readFileSync(page404) : 'not found');
       return;
     }
     res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'x-from': 'network' }).end(readFileSync(file));
@@ -71,7 +73,7 @@ async function signedOut(context: BrowserContext): Promise<void> {
   await context.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
 }
 
-// req:web/app-at-app-path@958f6b2a
+// req:web/app-at-app-path@73ca0e1f
 test.describe('app at /app/', () => {
   test('built tree: the app under app/, the site at the root, the invited list under _clm/', () => {
     const app = readFileSync(join(DIST, 'app/index.html'), 'utf8');
@@ -98,12 +100,25 @@ test.describe('app at /app/', () => {
   });
 });
 
+// req:web/site-served-directly@f8994877
+test('a missing page gets the site\'s 404 page with status 404', async ({ page }) => {
+  const site = await serve();
+  try {
+    const res = await page.goto(`${site.origin}/guide/nothing-here`);
+    expect(res?.status()).toBe(404);
+    expect(existsSync(join(DIST, '404.html'))).toBe(true);
+    expect(await page.content()).toContain(readFileSync(join(DIST, '404.html'), 'utf8').match(/<title>([^<]*)<\/title>/)![1]);
+  } finally {
+    await site.stop();
+  }
+});
+
 // req:web/invited-users@cfd18219
 test('the build holds the invited list under _clm/, beside the app', () => {
   expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(['clunny']);
 });
 
-// req:web/installable@ffe7e4d3
+// req:web/installable@e711892d
 test.describe('installed app scope', () => {
   test('manifest and service worker are the app only: id, start_url and scope /app/, no cache of /guide/', async ({ browser }) => {
     const site = await serve();
@@ -147,7 +162,7 @@ test.describe('installed app scope', () => {
   });
 });
 
-// req:web/retire-root-service-worker@725f2001
+// req:web/retire-root-service-worker@df279fd8
 test.describe('the old root service worker', () => {
   const rootScopes = (page: import('@playwright/test').Page) =>
     page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).map((r) => new URL(r.scope).pathname));

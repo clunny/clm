@@ -45,9 +45,9 @@ crons = []
 directory = "./dist"
 # The Worker reads `_clm/` (the invited list) through this binding.
 binding = "ASSETS"
-# The site is at the root and the app under /app/. Everything outside /app/ but the retiring
-# /sw.js (web/retire-root-service-worker) goes to the Worker first, which decides who sees the
-# site (web.worker/site-behind-sign-in) and answers `/_clm/*` (the invited list) 404. The app's
-# own files are served directly. The app routes by hash, so a missing path is a 404, not a page.
-not_found_handling = "none"
-run_worker_first = ["/*", "!/app/*", "!/sw.js"]
+# The site is at the root and the app under /app/. Only the API, sign-in, the webhook, the
+# invited list (which the Worker answers 404) and `/app` (redirected to `/app/`) go to the
+# Worker first; the assets answer everything else to everyone, the retiring /sw.js included
+# (web/site-served-directly). A missing path gets the site's /404.html with status 404.
+not_found_handling = "404-page"
+run_worker_first = ["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]

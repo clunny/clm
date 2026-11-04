@@ -43,13 +43,14 @@ describe('wrangler.toml', () => {
     return rules.some((r) => !r.startsWith('!') && matches(r)) && !rules.some((r) => r.startsWith('!') && matches(r.slice(1)));
   };
 
-  it('sends everything outside /app/ but /sw.js to the Worker, with no fallback page (req:web/app-at-app-path@958f6b2a)', () => {
-    for (const path of ['/', '/app', '/guide/quickstart', '/api/repos', '/auth/login', '/_clm/invited.json']) {
+  it('sends only the API, sign-in, webhook, invited list and /app to the Worker (req:web/site-served-directly@f8994877)', () => {
+    for (const path of ['/api/repos', '/auth/login', '/webhook', '/_clm/invited.json', '/app']) {
       expect(toWorker(path), path).toBe(true);
     }
-    for (const path of ['/app/', '/app/main.js', '/app/sw.js', '/sw.js']) {
+    for (const path of ['/', '/guide/quickstart', '/404.html', '/app/', '/app/main.js', '/sw.js']) {
       expect(toWorker(path), path).toBe(false);
     }
-    expect(rawConfig.assets?.not_found_handling).toBe('none');
+    expect(rawConfig.assets?.run_worker_first).toEqual(['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app']);
+    expect(rawConfig.assets?.not_found_handling).toBe('404-page');
   });
 });

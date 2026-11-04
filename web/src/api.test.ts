@@ -1,4 +1,4 @@
-// req:web/installable@ffe7e4d3 (offline data with its age) and the retry on 401 that the Worker's
+// req:web/installable@e711892d (offline data with its age) and the retry on 401 that the Worker's
 // one-use refresh tokens need (changes/20261022-web-ui/tasks/web.md).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError, Offline, SignedOut, get, post, send } from './api';

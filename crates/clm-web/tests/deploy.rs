@@ -41,8 +41,9 @@ fn binds_the_kv_namespace() {
 }
 
 #[test]
-fn serves_the_app_and_sends_everything_outside_it_to_the_worker() {
+fn sends_only_the_api_and_its_paths_to_the_worker() {
     // req:web/invited-users@cfd18219
+    // req:web/site-served-directly@f8994877
     // `/_clm/*` reaches the Worker, which answers 404, so the invited list is never
     // served to someone without a session.
     let w = wrangler();
@@ -54,8 +55,8 @@ fn serves_the_app_and_sends_everything_outside_it_to_the_worker() {
         .iter()
         .filter_map(Value::as_str)
         .collect();
-    // Everything outside the app's own files and the retiring `/sw.js` (`/_clm/*` among it).
-    assert_eq!(first, ["/*", "!/app/*", "!/sw.js"]);
+    // Only the API, sign-in, webhook, invited list and `/app`; the assets answer the rest.
+    assert_eq!(first, ["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]);
 }
 
 #[test]
