@@ -174,7 +174,7 @@ The scan reads each file with its whitespace removed, so a call rustfmt splits a
 - capability/contribute-from-outside
 
 ### Requirement: list-contributions
-`clm-host` SHALL offer `list`, which on `github` returns the repository's open issues and open pull requests, each with its number, whether it is an issue or a pull request, and its author's login, through `gh issue list` and `gh pr list` with `--state open` and `--json`, asking for every one rather than `gh`'s default first page. It SHALL return no title, body or other text the author wrote, so nothing a caller prints from it carries a stranger's words. On `git` and `none` it SHALL return an empty list and run no `gh`.
+`clm-host` SHALL offer `list`, which on `github` returns the repository's open issues and open pull requests, each with its number, whether it is an issue or a pull request, and its author's login, through `gh issue list` and `gh pr list` with `--state open` and `--json`, each with `--limit 1000` rather than `gh`'s default of 30; an author whose account is gone is `ghost`, as `gh` reports it. It SHALL return no title, body or other text the author wrote, so nothing a caller prints from it carries a stranger's words. On `git` and `none` it SHALL return an empty list and run no `gh`.
 
 #### Scenario: issues and pull requests
 - GIVEN `host = "github"` and a fake `gh` reporting open issue 73 by `clunny` and open pull request 80 by `dana`
