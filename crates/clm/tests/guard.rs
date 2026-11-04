@@ -635,7 +635,7 @@ fn defect_ask_says_pull_request() {
 
 #[test]
 fn guard_asks_before_filing_a_defect() {
-    // req:plugin.hooks.guard/defect-approval@1989a7b3
+    // req:plugin.hooks.guard/defect-approval@bf60a27a
     let nowhere = TempDir::new().unwrap();
     let report = "clm defect --title \"x\" <<'EOF'\nThe gate misfired.\nEOF";
     // asking: no settings, so `defects` is `ask`.
@@ -650,15 +650,15 @@ fn guard_asks_before_filing_a_defect() {
     assert_eq!(code, Some(0));
     assert!(reason.contains("## CLM defects"), "{reason}");
     for command in [
-        "/home/u/.claude/plugins/clm/bin/clm defect --title x < r.md",
-        "env X=1 clm defect --title x < r.md",
+        "/home/u/.claude/plugins/clm/bin/clm defect --title x <<'EOF'\nr\nEOF",
+        "env X=1 clm defect --title x <<'EOF'\nr\nEOF",
         // asking through cargo run
         "cargo run -q -p clm -- defect --title \"x\" <<'EOF'\nThe gate misfired.\nEOF",
-        "cargo run --bin clm defect --title x < r.md",
+        "cargo run --bin clm defect --title x <<'EOF'\nr\nEOF",
         // whichever package it runs (`guard-asks-any-cargo-run`)
-        "cargo run -p clm-web -- defect --title x",
-        "cargo run -- defect --title x < r.md",
-        "cargo r --manifest-path crates/clm/Cargo.toml defect --title x < r.md",
+        "cargo run -p clm-web -- defect --title x <<'EOF'\nr\nEOF",
+        "cargo run -- defect --title x <<'EOF'\nr\nEOF",
+        "cargo r --manifest-path crates/clm/Cargo.toml defect --title x <<'EOF'\nr\nEOF",
     ] {
         let (code, reason) = guard_in(nowhere.path(), command, &[]);
         assert_eq!(code, Some(0), "{command}");
@@ -671,6 +671,11 @@ fn guard_asks_before_filing_a_defect() {
     assert_eq!(guard_in(off.path(), report, &[]), (Some(0), String::new()));
     let cargo = "cargo run -q -p clm -- defect --title \"x\" <<'EOF'\nreport\nEOF";
     assert_eq!(guard_in(repo.path(), cargo, &[]), (Some(0), String::new()));
+    let unshown = "clm defect --title x < report.md";
+    assert_eq!(
+        guard_in(repo.path(), unshown, &[]),
+        (Some(0), String::new())
+    );
     // The command's own `CLM_DEFECTS` is the one `clm defect` reads.
     for (set, asks) in [
         ("ask", true),
@@ -709,7 +714,7 @@ fn guard_asks_before_filing_a_defect() {
 
 #[test]
 fn guard_ignores_a_defect_report_body() {
-    // req:plugin.hooks.guard/defect-approval@1989a7b3
+    // req:plugin.hooks.guard/defect-approval@bf60a27a
     let nowhere = TempDir::new().unwrap();
     let quoting = "clm approve spec/x\ngit push origin main";
     // quoting a blocked command, under each form of the heredoc operator.
@@ -758,7 +763,7 @@ fn guard_ignores_a_defect_report_body() {
 
 #[test]
 fn guard_block_wins_over_a_defect_ask() {
-    // req:plugin.hooks.guard/defect-approval@1989a7b3
+    // req:plugin.hooks.guard/defect-approval@bf60a27a
     let nowhere = TempDir::new().unwrap();
     // block wins: the push guard's block wins over the defect's ask.
     let (code, reason) = guard_in(
@@ -778,5 +783,79 @@ fn guard_block_wins_over_a_defect_ask() {
     assert!(
         reason.contains("## CLM defects") && reason.contains("humans-review-intent"),
         "{reason}"
+    );
+}
+
+#[test]
+fn guard_quotes_the_defect_report_it_asks_about() {
+    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    let nowhere = TempDir::new().unwrap();
+    let command = "clm defect --title \"x\" --component gate <<'EOF'\nThe gate misfired.\nEOF";
+    let (code, reason) = guard_in(nowhere.path(), command, &[]);
+    assert_eq!(code, Some(0), "{reason}");
+    assert!(reason.contains("## CLM defects"), "{reason}");
+    assert!(
+        reason.contains("clm defect --title \"x\" --component gate"),
+        "{reason}"
+    );
+    assert!(reason.contains("The gate misfired."), "{reason}");
+    // An unquoted heredoc with nothing to expand is sent as written.
+    let (code, reason) = guard_in(
+        nowhere.path(),
+        "clm defect --title x <<EOF\nplain words\nEOF",
+        &[],
+    );
+    assert_eq!(code, Some(0), "{reason}");
+    assert!(reason.contains("plain words"), "{reason}");
+    // Each segment's report is quoted, in order.
+    let (_, reason) = guard_in(
+        nowhere.path(),
+        "clm defect --title a <<'EOF'\nfirst\nEOF\nclm defect --title b <<'EOF'\nsecond\nEOF",
+        &[],
+    );
+    let (a, b) = (reason.find("first"), reason.find("second"));
+    assert!(a.is_some() && b.is_some() && a < b, "{reason}");
+}
+
+#[test]
+fn guard_refuses_a_defect_report_it_cannot_show() {
+    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    let nowhere = TempDir::new().unwrap();
+    for command in [
+        "clm defect --title x < report.md",
+        "cat report.md | clm defect --title x",
+        "clm defect --title x <<< \"$R\"",
+        "clm defect --title x",
+        "clm defect --title x <<EOF\ncost $HOME\nEOF",
+        "clm defect --title x <<EOF\nno end",
+    ] {
+        let (code, reason) = guard_in(nowhere.path(), command, &[]);
+        assert_eq!(code, Some(2), "{command}: {reason}");
+        assert!(reason.contains("defect-ask-shows-report"), "{reason}");
+        assert!(reason.contains("<<'EOF'"), "{reason}");
+    }
+    // A refusal wins over any ask, and one unshown report refuses the lot.
+    let (code, reason) = guard_in(
+        nowhere.path(),
+        "clm defect --title a <<'EOF'\nr\nEOF\nclm defect --title b\nclm approve spec/x",
+        &[],
+    );
+    assert_eq!(code, Some(2), "{reason}");
+    // Help files nothing, and neither does a segment under `backlog`.
+    for command in [
+        "clm defect --help",
+        "clm defect -h",
+        "cargo run -- defect -h",
+    ] {
+        assert_eq!(
+            guard_in(nowhere.path(), command, &[]),
+            (Some(0), String::new()),
+            "{command}"
+        );
+    }
+    let repo = clm_repo(Some("defects = \"backlog\"\n"));
+    assert_eq!(
+        guard_in(repo.path(), "clm defect --title x < report.md", &[]),
+        (Some(0), String::new())
     );
 }

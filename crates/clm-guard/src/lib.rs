@@ -13,7 +13,7 @@ use serde_json::Value;
 use clm_hooks::settings;
 use push::Reach;
 use shell::command;
-use shell::walk::{Judged, walk};
+use shell::walk::{Judged, Stdin, walk};
 
 /// What the guard answers a `PreToolUse` event with.
 #[derive(Debug, PartialEq, Eq)]
@@ -104,6 +104,30 @@ pub fn guard(event: &str) -> Decision {
             plain = j.tokens.join(" ")
         ));
     }
+    // `clm defect` reads `CLM_DEFECTS` from its own environment, which the segment can set.
+    // Loaded once, and only when a segment runs `clm defect` without its own value.
+    let asks_by_settings = std::cell::OnceCell::new();
+    let files_issue = |j: &&Judged| {
+        runs_defect(&j.tokens)
+            && match j.command().assigned("CLM_DEFECTS") {
+                Some(v) => !matches!(v, "backlog" | "off"),
+                None => *asks_by_settings.get_or_init(|| {
+                    settings(cwd).map_or(true, |s| s.defects.value == clm_config::Defects::Ask)
+                }),
+            }
+    };
+    // Each such segment's report is shown to the human when the guard can
+    // (`defect-ask-shows-report`): a heredoc the shell sends as written.
+    let filings: Vec<&Judged> = judged.iter().filter(|j| files_issue(j)).collect();
+    if filings.iter().any(|j| shown_report(j).is_none()) {
+        reasons.push(
+            "clm: the guard can't show the human this `clm defect` report \
+             (`defect-ask-shows-report`), and the report leaves the project as a public issue. \
+             Send the report as the body of a `<<'EOF'` heredoc on the `clm defect` line, so \
+             the human can read it before confirming."
+                .to_string(),
+        );
+    }
     if !reasons.is_empty() {
         return Decision::Block(reasons.join("\n"));
     }
@@ -120,27 +144,19 @@ pub fn guard(event: &str) -> Decision {
             )
         })
         .collect();
-    // `clm defect` reads `CLM_DEFECTS` from its own environment, which the segment can set.
-    // Loaded once, and only when a segment runs `clm defect` without its own value.
-    let asks_by_settings = std::cell::OnceCell::new();
-    let files_issue = |j: &&Judged| {
-        runs_defect(&j.tokens)
-            && match j.command().assigned("CLM_DEFECTS") {
-                Some(v) => !matches!(v, "backlog" | "off"),
-                None => *asks_by_settings.get_or_init(|| {
-                    settings(cwd).map_or(true, |s| s.defects.value == clm_config::Defects::Ask)
-                }),
-            }
-    };
-    if judged.iter().any(|j| files_issue(&j)) {
-        asks.push(
+    if !filings.is_empty() {
+        let quoted: Vec<String> = filings
+            .iter()
+            .filter_map(|j| shown_report(j).map(|r| format!("{}\n{r}", j.text)))
+            .collect();
+        asks.push(format!(
             "clm: `clm defect` files its report as a public issue on `clunny/clm`, so the \
              report leaves this project (`defect-reports`). Confirm only if you, the human, have read \
              it and it holds no project content: no files, code, specs or output. When no one \
              can approve (an unattended session), list the defect under `## CLM defects` in \
-             the pull request body instead."
-                .to_string(),
-        );
+             the pull request body instead. The command and its report:\n{}",
+            quoted.join("\n\n")
+        ));
     }
     if asks.is_empty() {
         Decision::Allow
@@ -184,12 +200,25 @@ fn clm_call(tokens: &[String]) -> Option<ClmCall<'_>> {
 }
 
 /// Whether a segment with `tokens` runs `clm defect`, or is a `cargo run` with a token
-/// `defect`.
+/// `defect`, and asks for no help: `--help` or `-h` files nothing.
 fn runs_defect(tokens: &[String]) -> bool {
-    match clm_call(tokens) {
-        Some(ClmCall::Clm(args)) => args.first().is_some_and(|a| a == "defect"),
-        Some(ClmCall::CargoRun(tokens)) => tokens.iter().any(|t| t == "defect"),
-        None => false,
+    let (runs, args) = match clm_call(tokens) {
+        Some(ClmCall::Clm(args)) => (args.first().is_some_and(|a| a == "defect"), args),
+        Some(ClmCall::CargoRun(args)) => (args.iter().any(|t| t == "defect"), args),
+        None => return false,
+    };
+    runs && !args.iter().any(|t| t == "--help" || t == "-h")
+}
+
+/// The report a `clm defect` segment sends, when it is a heredoc the shell sends as written
+/// (`defect-ask-shows-report`).
+fn shown_report(j: &Judged) -> Option<&str> {
+    match &j.stdin {
+        Stdin::Heredoc {
+            body,
+            as_written: true,
+        } => Some(body),
+        _ => None,
     }
 }
 
