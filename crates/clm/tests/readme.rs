@@ -57,6 +57,7 @@ fn readme_links_the_site_first_and_credits_its_sources() {
     for needle in [
         "https://kubernetes.io/docs/concepts/architecture/controller/",
         "https://github.com/obra/superpowers",
+        "https://github.com/Fission-AI/OpenSpec",
         "https://claude.com/blog/the-ai-native-sdlc-playbook",
     ] {
         assert!(readme.contains(needle), "README.md links {needle}");

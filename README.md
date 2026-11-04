@@ -15,7 +15,7 @@ People, solo or in a team, who build with AI sessions and want to review intent,
 - Every requirement is proven by a test that cites it, and a check blocks drift between spec and code.
 - Specs, claims, approvals and lands are committed files and branches: no server owns them.
 
-CLM implements the *Spec Growth Engine* ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)). Its loop is a [controller](https://kubernetes.io/docs/concepts/architecture/controller/)'s, reconciling code to the declared spec, its team workflow draws on the [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), and its builds follow [superpowers](https://github.com/obra/superpowers).
+CLM implements the *Spec Growth Engine* ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)). Its loop works like a Kubernetes [controller](https://kubernetes.io/docs/concepts/architecture/controller/), reconciling code to the declared spec. Its team workflow draws on the [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), its builds follow [superpowers](https://github.com/obra/superpowers), and its specs owe a debt to [OpenSpec](https://github.com/Fission-AI/OpenSpec).
 
 ## Install
 
