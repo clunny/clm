@@ -5,8 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// The old names completed renames replaced (`plain-terms-renames`). A change that
-/// completes a rename adds the names it retires.
+/// The old names completed renames replaced (`plain-terms-renames`), each in a form ordinary
+/// English never takes. A change that completes a rename adds the names it retires.
 const RETIRED: &[&str] = &[
     "clm sync",
     "clm checkpoint",
@@ -23,7 +23,6 @@ const RETIRED: &[&str] = &[
     "--node",
     "--nodes",
     "node_size",
-    "spine",
     "clm friction",
     "`kind: human`",
     "specd",
@@ -75,6 +74,19 @@ fn contains_term(line: &str, term: &str) -> bool {
     })
 }
 
+/// The old name of the status `unbuilt`, the one coined word that isn't English.
+const COINED: &str = "specd";
+
+/// The terms of `terms` that are a bare word: no space, hyphen, underscore or backtick, and not
+/// the coined `specd`. Plain English must not join the list on its own.
+fn bare_words<'a>(terms: &[&'a str]) -> Vec<&'a str> {
+    terms
+        .iter()
+        .copied()
+        .filter(|t| *t != COINED && !t.contains([' ', '-', '_', '`']))
+        .collect()
+}
+
 /// Every retired term found in `files` (path and text), in file and line order.
 fn check(terms: &[&str], files: &[(String, String)]) -> Vec<Hit> {
     let mut hits = Vec::new();
@@ -120,12 +132,12 @@ fn walk(dir: &Path, root: &Path, skip: &[&str], out: &mut Vec<(String, String)>)
     }
 }
 
-/// The files CLM ships or works from: history (`changes/archive/`, `docs/decisions/`,
-/// `backlog/`) is never read.
+/// The files CLM ships or works from: history and proposals (`changes/`, `docs/decisions/`,
+/// `backlog/`) are never read.
 fn gather(root: &Path) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    for dir in ["docs/guide", "plugin", "specs", "changes", "web/src"] {
-        walk(&root.join(dir), root, &["changes/archive"], &mut out);
+    for dir in ["docs/guide", "plugin", "specs", "web/src"] {
+        walk(&root.join(dir), root, &[], &mut out);
     }
     for file in [
         "docs/spec-format.md",
@@ -203,7 +215,7 @@ fn files(items: &[(&str, &str)]) -> Vec<(String, String)> {
 
 #[test]
 fn a_retired_term_in_a_skill_is_reported() {
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let fixture = files(&[(
         "plugin/skills/x/SKILL.md",
         "fine\nmake it a   Grommet  Stub today\n",
@@ -220,7 +232,7 @@ fn a_retired_term_in_a_skill_is_reported() {
 
 #[test]
 fn a_line_marked_remove_by_is_exempt() {
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let text = concat!(
         "`clm frob` still runs `clm twiddle` // clm:remove",
         "-by 20261201-x\n`clm frob` here\n"
@@ -233,7 +245,7 @@ fn a_line_marked_remove_by_is_exempt() {
 
 #[test]
 fn history_is_not_read() {
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     for rel in [
@@ -248,17 +260,20 @@ fn history_is_not_read() {
         fs::write(path, "frobbed\n").unwrap();
     }
     let hits = check(&["frobbed"], &gather(root));
-    let mut paths: Vec<&str> = hits.iter().map(|h| h.path.as_str()).collect();
-    paths.sort();
-    assert_eq!(
-        paths,
-        ["changes/20261101-live/change.md", "docs/guide/g.md"]
-    );
+    let paths: Vec<&str> = hits.iter().map(|h| h.path.as_str()).collect();
+    assert_eq!(paths, ["docs/guide/g.md"]);
+}
+
+#[test]
+fn no_plain_english_word_is_on_the_list() {
+    // req:clm/retired-terms@c9fe5ba8
+    assert_eq!(bare_words(&["clm frob", "--frob", "frob"]), ["frob"]);
+    assert_eq!(bare_words(RETIRED), Vec::<&str>::new());
 }
 
 #[test]
 fn only_whole_words_match() {
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let fixture = files(&[("docs/guide/a.md", "frobnicate\nxfrob\nfrob_x\nfrob2\n")]);
     assert!(check(&["frob"], &fixture).is_empty());
     let fixture = files(&[("docs/guide/a.md", "grommetstub\n")]);
@@ -270,7 +285,7 @@ fn only_whole_words_match() {
 
 #[test]
 fn the_help_of_every_command_is_read() {
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let all = gather_help();
     let paths: Vec<&str> = all.iter().map(|(p, _)| p.as_str()).collect();
     assert!(paths.contains(&"clm --help"));
@@ -280,10 +295,10 @@ fn the_help_of_every_command_is_read() {
 
 #[test]
 fn the_repository_holds_no_retired_term() {
-    // req:clm/node-names-retired@0f17de38
+    // req:clm/node-names-retired@2d40cbc7
     // req:clm/architecture-term-retired@7e356236
     // req:clm/old-state-and-key-names-retired@381faa28
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let root: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let mut all = gather(&root);
     all.extend(gather_help());
@@ -297,14 +312,13 @@ fn the_repository_holds_no_retired_term() {
 
 #[test]
 fn every_named_path_is_read() {
-    // req:clm/retired-terms@7ddad81b
+    // req:clm/retired-terms@c9fe5ba8
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let named = [
         "docs/guide/a/b.md",
         "plugin/skills/x/SKILL.md",
         "specs/n/SPEC.md",
-        "changes/c/change.md",
         "web/src/app/x.ts",
         "docs/spec-format.md",
         "ARCHITECTURE.md",
@@ -375,12 +389,11 @@ fn architecture_holds_constraint_blocks() {
 
 #[test]
 fn the_old_flags_and_words_are_on_the_list() {
-    // req:clm/node-names-retired@0f17de38
+    // req:clm/node-names-retired@2d40cbc7
     for term in [
         "--node",
         "--nodes",
         "node_size",
-        "spine",
         "frontier stub",
         "frontier stubs",
     ] {
@@ -388,12 +401,16 @@ fn the_old_flags_and_words_are_on_the_list() {
     }
     // The new flag and the bare words for a component stay clear of the list.
     assert!(!RETIRED.contains(&"node") && !RETIRED.contains(&"nodes"));
+    assert!(
+        !RETIRED.contains(&"spine"),
+        "the old word for ancestors is plain English"
+    );
     let fixture = files(&[(
         "docs/guide/a.md",
-        "pass --node x\npass --component x\nthe [node_size] table\na node and nodes\nthe Spine and Frontier  Stub\n",
+        "pass --node x\npass --component x\nthe [node_size] table\na node and nodes\nthe spine and Frontier  Stub\n",
     )]);
     let lines: Vec<usize> = check(RETIRED, &fixture).iter().map(|h| h.line).collect();
-    assert_eq!(lines, [1, 3, 5, 5]);
+    assert_eq!(lines, [1, 3, 5]);
 }
 
 /// Runs `clm` in an empty directory, where clap refuses an unknown argument before
@@ -416,7 +433,7 @@ fn clm_refuses(args: &[&str]) -> String {
 
 #[test]
 fn the_old_flags_and_subcommand_are_refused() {
-    // req:clm/node-names-retired@0f17de38
+    // req:clm/node-names-retired@2d40cbc7
     let node = ["--no", "de"].concat();
     let nodes = ["--no", "des"].concat();
     let err = clm_refuses(&["defect", "--title", "x", &node, "gate"]);

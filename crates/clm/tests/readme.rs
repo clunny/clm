@@ -50,7 +50,10 @@ fn readme_links_the_site_first_and_credits_its_sources() {
         .find("https://clm-app.dev")
         .expect("README.md links the site");
     let first_section = readme.find("\n## ").expect("README.md has a section");
-    assert!(site < first_section, "the site link comes before the first ## heading");
+    assert!(
+        site < first_section,
+        "the site link comes before the first ## heading"
+    );
     for needle in [
         "https://kubernetes.io/docs/concepts/architecture/controller/",
         "https://github.com/obra/superpowers",
