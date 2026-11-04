@@ -42,6 +42,7 @@ export function trackSiteEvents(win: Window, doc: Document): (path: string) => v
       const link = target.closest('a[href]') as HTMLAnchorElement | null
       if (!link) return
       if (link.host !== win.location.host) {
+        if (!/^https?:$/.test(link.protocol)) return
         track(win, 'outbound', { url: link.href, path })
       } else if (link.closest('.VPNav, .clm-home .btn')) {
         const label = (link.textContent ?? '').replace(/\s*[↓→]\s*$/, '').trim()

@@ -45,4 +45,5 @@ test('the GitHub links name the install repository', () => {
   const home = read(out, 'index.html')
   expect(home).toContain('href="https://github.com/someone/clm-public"')
   expect(home).not.toContain(`https://github.com/${repo}"`)
+  expect(read(out, 'guide/quickstart.html')).toContain('href="https://github.com/someone/clm-public"')
 })

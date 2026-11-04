@@ -11,7 +11,9 @@ export async function readStars(repo: string): Promise<string | undefined> {
   const given = process.env.GITHUB_STARS
   if (given !== undefined && given !== '') {
     const n = Number(given)
-    return Number.isFinite(n) ? formatStars(n) : undefined
+    if (Number.isFinite(n)) return formatStars(n)
+    console.warn(`warning: GITHUB_STARS=${given} isn't a number; the GitHub link shows without a count`)
+    return undefined
   }
   const api = process.env.GITHUB_API || 'https://api.github.com'
   try {

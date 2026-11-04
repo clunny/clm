@@ -96,7 +96,7 @@ test('robots.txt has one group for every crawler and names the sitemap', () => {
 test('the sitemap lists the pages and nothing under /app/', () => {
   // req:web.site/crawler-files@4c151612
   const urls = Array.from(read(mainDist, 'sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g), (m) => m[1])
-  for (const path of ['/', '/guide/quickstart', '/guide/spec-format', '/privacy']) {
+  for (const path of ['/', '/guide/', '/guide/quickstart', '/guide/spec-format', '/privacy']) {
     expect(urls).toContain(SITE + path)
   }
   const guides = readdirSync(join(repoDocs, 'guide')).filter((f) => f.endsWith('.md') && f !== 'README.md')
@@ -145,7 +145,8 @@ test("each guide file's Markdown copy is its text with the links rewritten", () 
     const page = name === 'README.md' ? 'index' : name.slice(0, -3)
     const file = join(repoDocs, 'guide', name)
     const copy = read(mainDist, `guide/${page}.md`)
-    expect(copy, name).toContain(readFileSync(file, 'utf8').split('\n')[0])
+    const guide = { name: page, file, title: '', summary: '' }
+    expect(copy, name).toBe(rewriteLinks(readFileSync(file, 'utf8'), guide, SITE, 'clunny' + '/clm'))
     // No link to another guide file or into the repository stays relative.
     expect(copy.replace(/```[\s\S]*?```/g, ''), name).not.toMatch(/\]\((\.\.?\/|[\w-]+\.md)/)
   }

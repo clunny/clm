@@ -71,7 +71,7 @@ test('the install commands name the one configured repository', () => {
   const out = join(siteDir, '.test-dist', 'repo')
   execFileSync('npx', ['vitepress', 'build', '.'], {
     cwd: siteDir,
-    env: { ...process.env, SITE_OUT: out, INSTALL_REPO: 'someone/clm-public' },
+    env: { ...process.env, SITE_OUT: out, INSTALL_REPO: 'someone/clm-public', GITHUB_STARS: '1' },
     stdio: 'pipe',
   })
   const html = readFileSync(join(out, 'index.html'), 'utf8')
@@ -95,7 +95,7 @@ test('the install commands default to the public repository', () => {
   test.setTimeout(180_000)
   // req:web.site/install-repository@b53df95f
   const out = join(siteDir, '.test-dist', 'default-repo')
-  const env = { ...process.env, SITE_OUT: out }
+  const env = { ...process.env, SITE_OUT: out, GITHUB_STARS: '1' }
   delete env.INSTALL_REPO
   execFileSync('npx', ['vitepress', 'build', '.'], { cwd: siteDir, env, stdio: 'pipe' })
   const html = readFileSync(join(out, 'index.html'), 'utf8')

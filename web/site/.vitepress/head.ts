@@ -43,7 +43,7 @@ export function describePage(pageData: PageData, facts: HeadFacts): void {
   const own = join(facts.pagesDir, relativePath)
   if (existsSync(own)) {
     const { title, summary } = titleAndSummary(readFileSync(own, 'utf8'))
-    pageData.title = `${title} | CLM`
+    pageData.title = `${title ?? relativePath} | CLM`
     pageData.titleTemplate = false
     if (summary) pageData.description = summary
   }
