@@ -1372,3 +1372,43 @@ fn help_calls_a_branchs_pull_request_a_pull_request() {
         .join(" ");
     assert!(fold.contains("one pull request"), "{draft}");
 }
+
+const KNIP_DETECTOR: &str =
+    "[[detectors]]\nname = \"knip\"\ncommand = [\"node_modules/.bin/knip\"]\nhint = \"npm ci\"\n";
+
+/// `clm check --root <root>` run from `repo/sub`, so a relative first word can't resolve there.
+fn check_from_subdirectory(repo: &Path) -> Output {
+    let sub = repo.join("sub");
+    fs::create_dir_all(&sub).unwrap();
+    check_command(repo).current_dir(&sub).output().unwrap()
+}
+
+#[test]
+fn scenario_relative_detector_tool_not_installed() {
+    // req:check/detector-relative-command@9c07fea0
+    let dir = detector_repo(Some(KNIP_DETECTOR));
+    let out = check_from_subdirectory(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{stdout}");
+    let line = stdout.trim_end();
+    assert!(
+        line.starts_with("clm.toml: check/detectors: knip could not run:"),
+        "{stdout}"
+    );
+    assert!(line.ends_with("; install with: npm ci"), "{stdout}");
+}
+
+#[cfg(unix)]
+#[test]
+fn scenario_relative_detector_tool_installed() {
+    // req:check/detector-relative-command@9c07fea0
+    use std::os::unix::fs::PermissionsExt;
+    let dir = detector_repo(Some(KNIP_DETECTOR));
+    write(dir.path(), "node_modules/.bin/knip", "#!/bin/sh\nexit 0\n");
+    let tool = dir.path().join("node_modules/.bin/knip");
+    fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
+    let out = check_from_subdirectory(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(!stdout.contains("check/detectors"), "{stdout}");
+    assert_eq!(out.status.code(), Some(0), "{stdout}");
+}
