@@ -10,7 +10,7 @@ GitHub's settings aren't in git, so this is their record. The proposing session 
 |---|---|---|
 | Profile | A description, and the topics `claude-code`, `spec-driven-development`, `ai-coding`, `developer-tools` and `rust` | So people can find it and tell what it is |
 | Features | Wiki and Projects off, Issues on, Discussions off | Documents and plans live in git (`git-is-truth`), and issues are enough for one maintainer |
-| Merging | Merge commits only, with squash and rebase off; head branches deleted on merge | GitHub requires one method. If someone uses the button by mistake, this keeps authorship |
+| Merging | Merge commits only, with squash and rebase off; automatic deletion of head branches off | GitHub requires one method. If someone uses the button by mistake, this keeps authorship. `clm land` deletes its own branches, and GitHub's deletion raced it: each land warned that it had kept a branch GitHub had already removed |
 | `main` | A ruleset blocking force-pushes and deletion | `clm land` and the release push `main` as fast-forwards, so neither is affected |
 | Security | Private vulnerability reporting and Dependabot alerts on, Dependabot security pull requests off | Its pull requests would be code branches, which `ai-writes-code` leaves to builds, so an alert goes through the backlog |
 | Actions | Approval required before workflows run for all outside contributors | No workflow runs on a pull request today; this keeps a new one from running a stranger's code unseen |
