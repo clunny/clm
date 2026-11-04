@@ -24,7 +24,7 @@ The operator has checked the Cloudflare zone for `clm-app.dev`: no AI crawler is
 
 ## Outcome
 
-`web.site`'s Design says the operator keeps Cloudflare's AI crawler blocking and managed `robots.txt` off for the zone, checked on 2026-11-04. No requirement changes, so nothing is pending to build.
+`web.site`'s Design says the operator keeps Cloudflare's AI crawler blocking and managed `robots.txt` off for the zone; the date it was checked, 2026-11-04, stays here and in the decision, not in the Design (`spec-is-current`). No requirement changes, so nothing is pending to build.
 
 ## Constraints and edge cases
 
