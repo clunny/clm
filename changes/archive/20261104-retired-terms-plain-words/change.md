@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # The retired-terms test keeps only old names, and skips changes
