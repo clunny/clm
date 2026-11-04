@@ -67,7 +67,8 @@ async fn complete_sign_in<P: Platform>(p: &P, mut session: Session) -> Response 
         return Response::html(502, invited::NO_LOGIN).with_header("set-cookie", clear_state);
     };
     if !invited::is_invited(p, login).await {
-        return Response::html(403, invited::NOT_INVITED).with_header("set-cookie", clear_state);
+        return Response::html(403, &invited::not_invited_page())
+            .with_header("set-cookie", clear_state);
     }
     session.login = login.into();
     let sealed = session::seal(p, &session).await;
