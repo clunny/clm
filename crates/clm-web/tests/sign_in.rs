@@ -275,7 +275,7 @@ fn not_invited_page_points_to_quickstart_and_early_access() {
         "href=\"/guide/quickstart\"",
         "href=\"/\"",
         "not invited",
-        "early access",
+        "is in early access",
         "optional",
     ] {
         assert!(html.contains(want), "missing {want}: {html}");
