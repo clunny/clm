@@ -479,7 +479,9 @@ fn web_deploy_takes_the_website_id_from_a_variable_and_the_workflow_token() {
         if path.is_dir() {
             files.extend(fs::read_dir(&path).unwrap().map(|e| e.unwrap().path()));
         } else if let Ok(text) = fs::read_to_string(&path) {
-            for line in text.lines().filter(|l| l.contains("UMAMI_WEBSITE_ID:")) {
+            let sets =
+                |l: &&str| l.contains("UMAMI_WEBSITE_ID:") || l.contains("UMAMI_WEBSITE_ID=");
+            for line in text.lines().filter(sets) {
                 assert!(
                     line.contains("vars.UMAMI_WEBSITE_ID"),
                     "{}: {line}",
