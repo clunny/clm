@@ -1,0 +1,18 @@
+name: Bug
+description: Something CLM did that it should not have, or did not do.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, what you expected and what you got.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `clm --version`.
+    validations:
+      required: false

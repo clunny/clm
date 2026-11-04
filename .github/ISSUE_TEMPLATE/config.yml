@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/clunny/clm/security/advisories/new
+    about: Report security problems privately, never in a public issue.
+  - name: Contributing to CLM
+    url: https://github.com/clunny/clm/blob/main/CONTRIBUTING.md
+    about: How to set a clone up and what kinds of contribution CLM takes.
