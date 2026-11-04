@@ -22,14 +22,14 @@ CLM's public site at `https://clm-app.dev`: the homepage at `/` and the user gui
 3. *Not a vibe-coded mess*: every rule has a test, drift can't land, nothing dead.
 4. *Solo or as a team*: git is the only channel.
 5. *Standing on shoulders*: the Spec Growth Engine paper ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)), Kubernetes's [controllers](https://kubernetes.io/docs/concepts/architecture/controller/), [superpowers](https://github.com/obra/superpowers) and Anthropic's [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), each with what CLM took from it, as `docs/guide/why-clm.md` says.
-It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM" with a Privacy link to `/privacy`; the guide's pages, whose default layout has no footer, get a small footer with the same link through a slot of VitePress's layout in the theme. The nav holds How it works, Guide, Get started and Sign in (to `/app/`), then the GitHub link (below). The mockup predates the GitHub button and the fourth credit; they follow its button and credit styles.
+It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM" with links to the guide, the web app (reading Web app) and `/privacy`; the guide's pages, whose default layout has no footer, get a small footer with the Privacy link through a slot of VitePress's layout in the theme. The nav holds How it works, Guide, Get started and Web app (to `/app/`, the invite-only web app), then the GitHub link (below). The mockup predates the GitHub button and the fourth credit; they follow its button and credit styles.
 
 **The install repository.** The repository the homepage's install commands name (`/plugin marketplace add <repo>`) is one value in the site's config (overridable by `INSTALL_REPO` for tests): `clunny/clm`, which is public, so a visitor adopts CLM on their own (`public-site`).
 
 **Look.** Inter for text, JetBrains Mono for commands; the app's indigo accent with a sky gradient, the mockup's dark palette and a light one. The site follows the system's light or dark setting, with VitePress's own switch kept. At phone widths the ring sits below the first screen's text, the side-by-side panels stack, and nothing scrolls sideways.
 
 **Analytics** (`site-analytics-umami`). When the build's environment sets `UMAMI_WEBSITE_ID`, every page's head holds `<script defer src="https://cloud.umami.is/script.js" data-website-id="<id>" data-do-not-track="true">`; when it is unset or empty, no built file names Umami, so tests, local builds and forks report nothing, and the operator's ID lives only in the repository's Actions variable (`ci/web-deploy`). Umami's script records page views itself, VitePress's in-site navigation included. One module of the theme records the rest by calling `window.umami.track(name, data)`, doing nothing when `window.umami` is missing (blocked, Do Not Track, or a build without an ID), and never delaying a click's navigation:
-- a click on a same-host link in the nav or among the homepage's buttons (Get started, How it works, Guide, Sign in): the event `click`, with `label` the element's text and `path` the page's;
+- a click on a same-host link in the nav or among the homepage's buttons (Get started, How it works, Guide, Web app): the event `click`, with `label` the element's text and `path` the page's;
 - a click on any link to another host: the event `outbound` only, with `url` the link's and `path` the page's;
 - a copied command, by a code block's copy button or by copying a selection inside a command (the homepage's install commands, a guide code block): the event `copy-command`, with `path` the page's and `command` the command's first line, trimmed. VitePress's copy button writes to the clipboard without a `copy` event, so it is caught by its click, and a selection by the document's `copy` event when the selection lies inside a `pre` or code block. The script tag is added per page in the config's head (`transformHead` or `head`, the builder's choice), so the 404 page carries it too.
 The app under `/app/` is a build of its own and loads no analytics. The site serves no cookie and the theme stores nothing in the browser for analytics. The funnel and the undercount (judged against Cloudflare's own traffic numbers for the zone) are read in the dashboards, not in code.
@@ -150,12 +150,17 @@ When the build's environment sets `UMAMI_WEBSITE_ID`, every page of the built si
 - capability/see-site-use
 
 ### Requirement: click-events
-A click on Get started, How it works, Sign in or a nav link SHALL call `window.umami.track("click", { label, path })` with the element's text and the page's path, and a click on a link to another host SHALL call `window.umami.track("outbound", { url, path })`; when `window.umami` is missing, a click SHALL do what it does without analytics, with no error.
+A click on Get started, How it works, Web app or a nav link SHALL call `window.umami.track("click", { label, path })` with the element's text and the page's path, and a click on a link to another host SHALL call `window.umami.track("outbound", { url, path })`; when `window.umami` is missing, a click SHALL do what it does without analytics, with no error.
 
 #### Scenario: Get started
 - GIVEN the built homepage with a stub `window.umami.track` that records its calls, and navigation held
 - WHEN the visitor clicks Get started
 - THEN the stub was called with `"click"` and `{ label: "Get started", path: "/" }`, and the page goes on to `/guide/quickstart`
+
+#### Scenario: Web app
+- GIVEN the built homepage with the stub, and navigation held
+- WHEN the visitor clicks the nav's Web app
+- THEN the stub was called with `"click"` and `{ label: "Web app", path: "/" }`
 
 #### Scenario: outbound link
 - GIVEN the built homepage with the stub
@@ -305,3 +310,14 @@ The nav of every page, and the homepage's first screen, SHALL link to `https://g
 - GIVEN `INSTALL_REPO=someone/clm-public` and `GITHUB_STARS=5`
 - WHEN the site is built
 - THEN the GitHub links name `https://github.com/someone/clm-public`
+
+### Requirement: nav-web-app
+The nav of every page SHALL hold, in order, How it works, Guide, Get started and Web app, Web app linking to `/app/`. Every link on the site to `/app/`, the homepage's footer's included, SHALL read Web app, and no link SHALL read Sign in.
+
+#### Scenario: homepage and a guide page
+- GIVEN the built site
+- WHEN a test reads the links on `/` and on `/guide/quickstart`
+- THEN on both the nav's link reading `Web app` leads to `/app/` and comes after Get started, every link to `/app/` reads `Web app`, and no link reads `Sign in`
+
+#### Serves
+- capability/learn-clm
