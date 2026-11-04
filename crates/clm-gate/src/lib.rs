@@ -258,11 +258,23 @@ pub fn files_outside_spec_paths(
     )
     .map_err(|e| e.to_string())?;
     let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
-    let mut files: Vec<String> = changed_files(repo, &format!("{base}...{head}"))?
-        .into_iter()
-        .map(|(_, path)| path)
-        .filter(|path| !is_spec_path(path))
-        .collect();
+    let mut files = Vec::new();
+    for (status, path) in changed_files(repo, &format!("{base}...{head}"))? {
+        if is_spec_path(&path) {
+            continue;
+        }
+        if path == POLICY {
+            let at = At {
+                repo,
+                merge_base: &merge_base,
+                head: &head,
+            };
+            if policy_changed(&at, status)? {
+                continue;
+            }
+        }
+        files.push(path);
+    }
     files.sort();
     if !files.is_empty()
         && clm_rename::replays(repo, &merge_base, &head).map_err(|e| e.to_string())?
