@@ -2757,6 +2757,22 @@ fn build_unclosed_builds() {
     assert_reports(&unclosed_gaps(&bare), "build", "landed impl/<component>");
     let finish = sentence_with(&body, "landed impl/<component>");
     assert!(finish.contains("clm run --finish <component>"), "{finish}");
+    for needle in [
+        "tell the human that it landed without its closing line",
+        "don't count it as a stop",
+        "never by reading `origin` with a `git` command of your own",
+    ] {
+        assert!(finish.contains(needle), "{needle}: {finish}");
+    }
+    let steps = numbered_steps(&body);
+    let step = steps
+        .iter()
+        .find(|s| s.contains("landed impl/<component>"))
+        .expect("a step holds the rule");
+    assert!(
+        step.contains("hasn't returned"),
+        "the step that reads a build's return"
+    );
 }
 
 /// What `build-resumes-limited-builds` asks of a `build` skill.
