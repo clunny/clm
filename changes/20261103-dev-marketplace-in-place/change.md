@@ -1,5 +1,6 @@
 ---
 status: applied
+priority: P2
 human_burdens:
   - "Once the change is built, run `scripts/dev-install.sh` once in each set-up clone, then restart its sessions: until then the clone's panel stays unloaded."
 ---
