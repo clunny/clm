@@ -13,7 +13,9 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${port}` },
   webServer: {
     command: `npm run build && npx vitepress preview . --port ${port}`,
-    env: { SITE_OUT: '.test-dist/main' },
+    // No website ID, so the build holds no analytics script and the tests stub the service; a
+    // star count given, so no build waits on GitHub (`github-link`).
+    env: { SITE_OUT: '.test-dist/main', UMAMI_WEBSITE_ID: '', GITHUB_STARS: '1234', INSTALL_REPO: '' },
     url: `http://localhost:${port}/`,
     timeout: 180_000,
     reuseExistingServer: false,
