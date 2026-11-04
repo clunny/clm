@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # Own the files the bootstrap commits

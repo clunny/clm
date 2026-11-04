@@ -84,6 +84,9 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     }
     files.write("ARCHITECTURE.md", ARCHITECTURE)?;
     files.write("CAPABILITIES.md", CAPABILITIES)?;
+    // The root spec's `outside` reads the files the bootstrap commit will hold, which depend
+    // on the `.gitignore` as `clm init` leaves it (`init-root-ownership`).
+    files.ignore_session_files()?;
     // The root spec lists the index, so only when it will be written.
     let spec = if root.join("specs/SPEC.md").exists() {
         String::new()
@@ -92,7 +95,6 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     };
     files.write("specs/SPEC.md", &spec)?;
     files.write("CLAUDE.md", CLAUDE)?;
-    files.ignore_session_files()?;
 
     let mut out = files.out;
     let steps = next_steps(
@@ -449,18 +451,22 @@ fn root_spec(root: &Path) -> Result<String, String> {
         .replace("{{outside}}", &outside(root)?))
 }
 
-/// The root's `outside`, as a YAML flow list: the top-level entry of each code file the index
-/// holds, other than those the root owns, as `<dir>/**` or the file's name, each once, sorted
+/// The root's `outside`, as a YAML flow list: the top-level entry of each code file the
+/// bootstrap commit will hold (`clm-git`'s `files_to_commit`), other than those the root owns, as `<dir>/**` or the file's name, each once, sorted
 /// by bytes.
 fn outside(root: &Path) -> Result<String, String> {
-    let entries: std::collections::BTreeSet<String> = crate::survey::code_files(root)?
-        .into_iter()
-        .filter(|f| !ROOT_PATHS.contains(&f.as_str()))
-        .map(|f| match f.split_once('/') {
-            Some((dir, _)) => format!("{dir}/**"),
-            None => f,
-        })
-        .collect();
+    let entries: std::collections::BTreeSet<String> = crate::survey::code_only(
+        crate::survey::lossy(clm_git::files_to_commit(root).map_err(|e| e.to_string())?),
+    )
+    .into_iter()
+    .filter(|f| !ROOT_PATHS.contains(&f.as_str()))
+    // A staged file removed from disk isn't one `git add -A` commits.
+    .filter(|f| root.join(f).symlink_metadata().is_ok())
+    .map(|f| match f.split_once('/') {
+        Some((dir, _)) => format!("{dir}/**"),
+        None => f,
+    })
+    .collect();
     let quoted: Vec<String> = entries
         .iter()
         .map(|e| format!("\"{}\"", yaml_string(e)))

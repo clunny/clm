@@ -389,6 +389,18 @@ fn an_outside_glob_over_a_covered_file_exempts_nothing() {
 }
 
 #[test]
+fn survey_reads_the_index_alone() {
+    // req:init/init-root-ownership@82afadf4
+    let repo = repo(TWO_CRATES);
+    fs::write(repo.path().join("untracked.txt"), "x\n").unwrap();
+    assert!(!survey(repo.path()).contains("untracked.txt"));
+    let map = format!("components:\n{}", a_and_b("b"));
+    fs::write(repo.path().join("map.yml"), map).unwrap();
+    let out = clm(repo.path(), &["survey", "--components", "map.yml"]);
+    assert!(!stdout(&out).contains("untracked.txt"), "{out:?}");
+}
+
+#[test]
 fn the_code_files_check_reads() {
     // req:init/survey-components@9d709f1d
     let mut files = TWO_CRATES.to_vec();
