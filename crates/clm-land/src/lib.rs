@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn check_runs_outside_ci() {
-        // req:land/land@cd889d18
+        // req:land/land@c409726a
         let target = Path::new("/r/.clm/land");
         let command = super::check_command("true", Path::new("/w"), Some(target));
         let envs: Vec<_> = command.get_envs().collect();
