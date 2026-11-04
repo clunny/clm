@@ -193,14 +193,22 @@ fn runs_defect(tokens: &[String]) -> bool {
     }
 }
 
-/// Whether a segment with `tokens` runs `clm land`, or is a `cargo run` with a token `land`,
-/// and asks for no help after it: `--help` or `-h` lands nothing, so a pipe hides no verdict.
+/// Whether a segment with `tokens` runs `clm land`, or is a `cargo run` whose `land` token is
+/// `land`, and asks for no help after it: `--help` or `-h` lands nothing, so a pipe hides no verdict.
 fn runs_land(tokens: &[String]) -> bool {
     let after_land = match clm_call(tokens) {
         Some(ClmCall::Clm(args)) if args.first().is_some_and(|a| a == "land") => &args[1..],
-        Some(ClmCall::CargoRun(tokens)) => match tokens.iter().position(|t| t == "land") {
-            Some(i) => &tokens[i + 1..],
-            None => return false,
+        // The binary's first argument is the token after the first `--`; with no `--`, the
+        // guard can't tell cargo's tokens from the binary's, so the first `land` counts.
+        Some(ClmCall::CargoRun(tokens)) => match tokens.iter().position(|t| t == "--") {
+            Some(d) => match tokens.get(d + 1) {
+                Some(t) if t == "land" => &tokens[d + 2..],
+                _ => return false,
+            },
+            None => match tokens.iter().position(|t| t == "land") {
+                Some(i) => &tokens[i + 1..],
+                None => return false,
+            },
         },
         _ => return false,
     };
