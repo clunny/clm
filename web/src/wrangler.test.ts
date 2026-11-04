@@ -50,6 +50,7 @@ describe('wrangler.toml', () => {
     for (const path of ['/', '/guide/quickstart', '/404.html', '/app/', '/app/main.js', '/sw.js']) {
       expect(toWorker(path), path).toBe(false);
     }
+    expect(rawConfig.assets?.run_worker_first).toEqual(['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app']);
     expect(rawConfig.assets?.not_found_handling).toBe('404-page');
   });
 });

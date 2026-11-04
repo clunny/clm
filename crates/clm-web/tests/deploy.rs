@@ -43,6 +43,7 @@ fn binds_the_kv_namespace() {
 #[test]
 fn sends_only_the_api_and_its_paths_to_the_worker() {
     // req:web/invited-users@cfd18219
+    // req:web/site-served-directly@f8994877
     // `/_clm/*` reaches the Worker, which answers 404, so the invited list is never
     // served to someone without a session.
     let w = wrangler();
