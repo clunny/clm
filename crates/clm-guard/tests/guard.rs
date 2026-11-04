@@ -875,6 +875,7 @@ fn help_piped_is_allowed() {
         "clm land -h | head",
         "clm land impl/x --help |& head",
         "cargo run -q -p clm -- land --help | head",
+        "cargo run -q -p clm -- land --help land | head",
     ] {
         allows(&bash(command));
     }
