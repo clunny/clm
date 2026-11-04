@@ -1123,19 +1123,23 @@ fn landed_build(r: &Repo, f: &Fake) -> PathBuf {
 
 #[test]
 fn scenario_landed_build_tidied() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let out = finished(&r, "b");
     assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
     assert!(!wt.exists(), "the landed worktree is gone");
     assert!(out.contains("freed b"), "{out}");
-    assert!(out.contains(&format!("removed {}", wt.display())), "{out}");
+    let removed = format!("removed {}", wt.display());
+    assert!(out.contains(&removed), "{out}");
+    let landed = out.find("landed impl/b").expect(&out);
+    assert!(out.find("freed b").unwrap() < landed, "{out}");
+    assert!(landed < out.find(&removed).unwrap(), "{out}");
 }
 
 #[test]
 fn scenario_stopped_build_kept() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     let wt = resumable(&r, &f);
     let pushed = remote_tip(&r, "impl/b");
@@ -1143,6 +1147,7 @@ fn scenario_stopped_build_kept() {
     assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
     assert!(wt.exists(), "the worktree stays");
     assert!(!out.contains("removed"), "{out}");
+    assert!(!out.lines().any(|l| l.starts_with("landed")), "{out}");
     assert_eq!(remote_tip(&r, "impl/b"), pushed, "origin/impl/b unchanged");
     assert_eq!(local_tip(&r, "impl/b"), pushed, "impl/b unchanged");
     let p = prompt(&r, &f, "b", &[]);
@@ -1152,12 +1157,14 @@ fn scenario_stopped_build_kept() {
 
 #[test]
 fn scenario_dirty_worktree_kept() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     fs::write(wt.join("notes.txt"), "mine\n").unwrap();
     let out = finished(&r, "b");
     assert!(wt.join("notes.txt").exists());
+    assert!(out.contains("landed impl/b"), "{out}");
+    assert!(out.find("landed impl/b") < out.find("kept"), "{out}");
     assert!(
         out.contains(&format!("kept {}: uncommitted changes", wt.display())),
         "{out}"
@@ -1166,7 +1173,7 @@ fn scenario_dirty_worktree_kept() {
 
 #[test]
 fn scenario_checkout_outside_the_worktrees_directory() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     prompt(&r, &f, "b", &[]);
     let other = r.work.parent().unwrap().join("other");
@@ -1181,16 +1188,28 @@ fn scenario_checkout_outside_the_worktrees_directory() {
 }
 
 #[test]
+fn finish_prints_landed_with_no_worktree() {
+    // req:orchestrator.run/run-finish@62f7802d
+    let (r, f) = (repo(), fake());
+    let wt = landed_build(&r, &f);
+    git(&r.work, &["worktree", "unlock", wt.to_str().unwrap()]);
+    git(&r.work, &["worktree", "remove", wt.to_str().unwrap()]);
+    let out = finished(&r, "b");
+    assert!(out.contains("landed impl/b"), "{out}");
+}
+
+#[test]
 fn scenario_nothing_to_finish() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let r = repo();
     let out = finished(&r, "b");
     assert!(!out.contains("freed"), "{out}");
+    assert!(!out.lines().any(|l| l.starts_with("landed")), "{out}");
 }
 
 #[test]
 fn finish_from_a_linked_worktree_looks_under_the_main_one() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let session = r.work.parent().unwrap().join("session");
@@ -1206,7 +1225,7 @@ fn finish_from_a_linked_worktree_looks_under_the_main_one() {
 
 #[test]
 fn finish_never_removes_the_worktree_it_runs_in() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let ran = clm_finish_in(&r, &wt, "b");
@@ -1217,7 +1236,7 @@ fn finish_never_removes_the_worktree_it_runs_in() {
 
 #[test]
 fn finish_keeps_a_branch_landed_only_locally() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     // `origin/impl/b` gets a commit `origin/main` lacks, so not every tip has landed.
@@ -1238,11 +1257,12 @@ fn finish_keeps_a_branch_landed_only_locally() {
     );
     let out = finished(&r, "b");
     assert!(wt.exists(), "{out}");
+    assert!(!out.lines().any(|l| l.starts_with("landed")), "{out}");
 }
 
 #[test]
 fn finish_fails_in_git_with_exit_2() {
-    // req:orchestrator.run/run-finish@df34cd4a
+    // req:orchestrator.run/run-finish@62f7802d
     let r = repo();
     git(&r.work, &["remote", "set-url", "origin", "/no/such/origin"]);
     assert_eq!(clm_finish(&r, "b").code, Some(2));

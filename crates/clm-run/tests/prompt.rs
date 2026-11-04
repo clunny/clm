@@ -339,27 +339,45 @@ fn scenario_no_shared_install() {
 
 #[test]
 fn scenario_removal_breaks_dependant() {
-    // req:orchestrator.run/removal-breaks-dependant@85d13797
+    // req:orchestrator.run/removal-breaks-dependant@fb1ba857
     let p = prompt(&job());
     let obsolete = p
         .find("For an `obsolete` requirement, remove the code and tests its markers mark")
         .expect("the general obsolete instruction stays");
     let rule = p
-        .find("Never edit another component's code or tests to absorb what your component removes, except")
+        .find("Never edit another component's code or tests to absorb what your component removes from or adds to its Contract, except")
         .expect("the removal rule");
     assert!(obsolete < rule, "beside the obsolete instruction: {p}");
     for needle in [
-        "keep the old path working, leave the requirement unbuilt",
+        "leave the requirement unbuilt",
         "add a `question` backlog item whose `components` name both components",
         "with `blocks` naming the requirement",
         "saying which component uses what",
         "the CLI's dispatch, the workspace manifest and its lockfile, aren't another component's code",
-        "the compile-only and test-fixture fixes the removal forces (`architecture/path-ownership`)",
+        "the compile-only and test-fixture fixes the removal or the addition forces (`architecture/path-ownership`, `forced-fixes-cover-additions`)",
         "only name what you remove",
         "an assertion on a removed field or state",
         "and nothing that component's code does depends on it",
         "name each one under `## Fixes in other components` in your pull request body",
-        "still uses what the requirement removes, beyond such a fix,",
+        "still uses what the requirement removes, or because what it adds needs more there than such a fix",
+        "keep the old path working and that component building as it stands",
+    ] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+}
+
+#[test]
+fn scenario_addition_forces_a_fix() {
+    // req:orchestrator.run/removal-breaks-dependant@fb1ba857
+    let p = prompt(&job());
+    for needle in [
+        "or only build a value that gains a field (a struct literal, in code or in a fixture, that must now name the added field)",
+        "sets that field to the value under which the provider behaves as before",
+        "so the other component's behaviour doesn't change",
+        "A rename is not such a fix (`rename-adds-then-removes`)",
+        "neither is an arm for an added variant that another component matches exhaustively",
+        "an added field with no value under which the provider behaves as before",
+        "since those decide what the other component does",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
@@ -367,7 +385,7 @@ fn scenario_removal_breaks_dependant() {
 
 #[test]
 fn removal_rule_for_an_obsolete_requirement_is_in_every_prompt() {
-    // req:orchestrator.run/removal-breaks-dependant@85d13797
+    // req:orchestrator.run/removal-breaks-dependant@fb1ba857
     let mut j = job();
     j.pending.retain(|i| i.state != "obsolete");
     let p = prompt(&j);

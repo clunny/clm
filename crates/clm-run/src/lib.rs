@@ -324,14 +324,23 @@ pub fn prompt(job: &Job) -> String {
          that says only `#### Untested` needs no proof. \
          For an `obsolete` requirement, remove the \
          code and tests its markers mark (`no-dead-code`). Re-citing a marker of your own requirement, wherever its file sits, is allowed (`architecture/path-ownership`). Never edit another component's code or \
-         tests to absorb what your component removes, except for the compile-only and test-fixture \
-         fixes the removal forces (`architecture/path-ownership`): where another component's code or \
+         tests to absorb what your component removes from or adds to its Contract, except for the \
+         compile-only and test-fixture fixes the removal or the addition forces \
+         (`architecture/path-ownership`, `forced-fixes-cover-additions`): where another component's code or \
          tests only name what you remove, such as a `match` arm on a removed variant, a fixture \
          that sets a removed field or an assertion on a removed field or state, and nothing \
-         that component's code does depends on it, make the fix and name each one under \
-         `## Fixes in other components` in your pull request body. When building a requirement would break \
-         another component's code or tests because that component still uses what the requirement \
-         removes, beyond such a fix, keep the old path working, leave the requirement unbuilt, and add a \
+         that component's code does depends on it, or only build a value that gains a field (a struct \
+         literal, in code or in a fixture, that must now name the added field) and the fix sets that \
+         field to the value under which the provider behaves as before, so the other component's \
+         behaviour doesn't change, make the fix and name each one under \
+         `## Fixes in other components` in your pull request body. A rename is not such a fix \
+         (`rename-adds-then-removes`), and neither is an arm for an added variant that another \
+         component matches exhaustively, nor an added field with no value under which the provider \
+         behaves as before, since those decide what the other component does. When building a \
+         requirement would break another component's code or tests because that component still uses \
+         what the requirement removes, or because what it adds needs more there than such a fix (a \
+         rename, an arm for an added variant or a field with no such value), keep the old path \
+         working and that component building as it stands, leave the requirement unbuilt, and add a \
          `question` backlog item whose `components` name both components, with `blocks` naming the \
          requirement, saying which component uses what, so a spec branch gives the requirement the \
          `#### Needs` it lacks. For an `obsolete` requirement, remove its markers and tests as \
@@ -693,6 +702,8 @@ pub fn finish(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Erro
         done.push(format!("freed {node}"));
     }
     if landed(root, &branch)? {
+        // How `build` learns that a build whose subagent ended without a closing line landed.
+        done.push(format!("landed {branch}"));
         let list = worktrees(root)?;
         // Claude Code's worktrees, under the main worktree whichever worktree this runs in.
         let ours = match list.first() {
