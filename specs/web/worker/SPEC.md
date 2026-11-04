@@ -10,7 +10,7 @@ serves: [capability/follow-from-browser]
 ---
 
 ## Contract
-The Cloudflare Worker behind `web`: it serves the browser app's static assets under `/app/`, and answers what `web/wrangler.toml`'s `run_worker_first` routes to it: every path of the public site (`web.site`), which it serves from the assets only to a signed-in invited person until launch and otherwise answers with the sign-in page (`site-behind-sign-in`), `/auth/*` (GitHub sign-in, which returns to `/app/`), `/api/*` (JSON for the app: the user's repos, a repo's snapshot, its live state, a spec branch's review, approve, comments and change requests on a spec branch, proposals for the backlog, what each capability and each architectural constraint costs and a decision on one, the live socket and push subscriptions), `/webhook`, and `/_clm/*`, which it answers 404 so the invited list is never served raw. The app calls nothing else, and every response shape it reads is this component's contract: changing one is a change here that `web` builds against. The Worker alone holds a user's token, passing it to the repo's `Replica` object only for a decision's, a proposal's or a withdrawal's append, which keeps it no longer than that request; it writes to the repository only to append an `approved`, `subscribed`, `unsubscribed`, `proposed`, `withdrawn`, `commented`, `changes_requested` or `decided` record to the user's web ledger (`per-writer-ledgers`, `push-subscriptions-in-ledger`, `web-proposals-as-ledger-records`, `web-review-feedback-as-ledger-records`), and keeps only state that can be deleted at any time (`web-derived-cache`): caches, each repo's replica, which its `Replica` object (`web.worker.replica`) holds, derived from git and rebuilt from it when lost (`web-repo-replica`), and the open pages' sockets, which its `Live` objects (`web.live`) hold and which store nothing (`web-live-channel`). Its webhook passes each repo's events to the repo's `Replica` object, which recomputes the views, tells the `Live` object, and sends Web Push notifications to the subscriptions in the repo's ledgers. The views are computed by `replica` with the `model`, `check`, `orchestrator`, `view`, `ledger` and `effort` crates compiled to wasm, so the Worker shows what `clm` would report and decides nothing.
+The Cloudflare Worker behind `web`: it is deployed with the browser app's static assets under `/app/` and the public site (`web.site`) at the root, which the assets answer without it (`web/site-served-directly`), and answers what `web/wrangler.toml`'s `run_worker_first` routes to it: `/app`, which it redirects to `/app/` (`reserved-paths`), `/auth/*` (GitHub sign-in, which returns to `/app/`), `/api/*` (JSON for the app: the user's repos, a repo's snapshot, its live state, a spec branch's review, approve, comments and change requests on a spec branch, proposals for the backlog, what each capability and each architectural constraint costs and a decision on one, the live socket and push subscriptions), `/webhook`, and `/_clm/*`, which it answers 404 so the invited list is never served raw (`reserved-paths`). The app calls nothing else, and every response shape it reads is this component's contract: changing one is a change here that `web` builds against. The Worker alone holds a user's token, passing it to the repo's `Replica` object only for a decision's, a proposal's or a withdrawal's append, which keeps it no longer than that request; it writes to the repository only to append an `approved`, `subscribed`, `unsubscribed`, `proposed`, `withdrawn`, `commented`, `changes_requested` or `decided` record to the user's web ledger (`per-writer-ledgers`, `push-subscriptions-in-ledger`, `web-proposals-as-ledger-records`, `web-review-feedback-as-ledger-records`), and keeps only state that can be deleted at any time (`web-derived-cache`): caches, each repo's replica, which its `Replica` object (`web.worker.replica`) holds, derived from git and rebuilt from it when lost (`web-repo-replica`), and the open pages' sockets, which its `Live` objects (`web.live`) hold and which store nothing (`web-live-channel`). Its webhook passes each repo's events to the repo's `Replica` object, which recomputes the views, tells the `Live` object, and sends Web Push notifications to the subscriptions in the repo's ledgers. The views are computed by `replica` with the `model`, `check`, `orchestrator`, `view`, `ledger` and `effort` crates compiled to wasm, so the Worker shows what `clm` would report and decides nothing.
 
 Three children answer parts of it beneath this component's router, session and access check: `web.worker.review` the spec-branch list, a spec branch's review, approve, comments and change requests; `web.worker.replica` the views and the writes that need them; and `web.worker.platform` the layer every route stands on. None changes a route or a response shape: what the app reads stays this component's contract.
 
@@ -362,31 +362,6 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 - WHEN the user decides `x`
 - THEN the Worker answers 502 and no write is made
 
-### Requirement: site-behind-sign-in
-For a request to any path outside `/app/`, `/sw.js`, `/api/*`, `/auth/*`, `/webhook` and `/_clm/*`, the Worker SHALL answer with the assets' response to that request, `fetch_asset` given the incoming request (status, headers and body as they give them, a page, script, style, font or image alike, and a HEAD, a 304 or a 206 as the assets answer it), with its `Cache-Control` header, matched in any case, set to `private` in place of any the assets gave, and the session cookie renewed as the API routes renew it, only when the request carries a valid session of an invited login, and otherwise SHALL answer 401 with a small sign-in page of its own that links to `/auth/login` and holds nothing of the site. A signed-in request for a path the assets answer 404 SHALL get the body of a plain `GET` of the site's `/404.html` (no headers of the request carried over) with status 404 and `Cache-Control: private`, a bare 404 when that is missing too, and a request for `/app`, with a session or without, SHALL be redirected to `/app/`.
-
-#### Needs
-- web.worker.platform/asset-responses
-
-#### Scenario: signed in
-- GIVEN a valid session of `clunny`, who is on the invited list, and the fake's assets holding pages at `/` and `/guide/quickstart` as `text/html` and `/fonts/inter.woff2` as `font/woff2` (the fake maps paths as given; resolving `/` to `index.html` is the binding's)
-- WHEN the browser requests `/`, `/guide/quickstart` and `/fonts/inter.woff2`
-- THEN the Worker answers each with the assets' status, `Content-Type` and bytes, each with `Cache-Control: private`
-
-#### Scenario: signed out
-- GIVEN a request with no session cookie
-- WHEN it asks for `/`, `/guide/quickstart` or a script the site's pages load
-- THEN each answer is 401 with the sign-in page, linking to `/auth/login`, and none holds the site's text
-
-#### Scenario: missing page and bare app path
-- GIVEN a valid session of `clunny`, and the fake's assets holding `/404.html` but not `/guide/nothing-here`
-- WHEN the browser requests `/guide/nothing-here` and `/app`
-- THEN the first answers 404 with the bytes of `/404.html` and `Cache-Control: private`, and the second redirects to `/app/`
-
-#### Serves
-- architecture/invite-only-web
-- capability/learn-clm
-
 ### Requirement: sign-in-opens-app
 When sign-in completes for an invited login, the callback SHALL send the browser to `/app/`.
 
@@ -564,3 +539,27 @@ The proposal, withdrawal and decide routes SHALL, after their body check and the
 - capability/propose-intent
 - capability/review-capability-cost
 - capability/follow-from-browser
+
+### Requirement: reserved-paths
+The Worker SHALL redirect a request for `/app`, with a session or without, to `/app/`, and SHALL answer a request for any path its routes don't answer, `/_clm/*` among them, with a bare 404, reading no session and no asset, so the invited list is never served raw and the Worker holds no page of the site.
+
+#### Needs
+- web/site-served-directly
+
+#### Scenario: bare app path
+- GIVEN a request for `/app`, with a valid session and then with none
+- WHEN the Worker answers
+- THEN each is a redirect to `/app/`
+
+#### Scenario: the invited list
+- GIVEN the fake's assets holding `/_clm/invited.json`
+- WHEN `/_clm/invited.json` is requested with a valid session of `clunny` and then with none
+- THEN each answer is 404 with an empty body
+
+#### Scenario: a path the assets should have answered
+- GIVEN the fake's assets holding a page at `/guide/quickstart`
+- WHEN a request for `/guide/quickstart` reaches the Worker with a valid session of `clunny` and then with none
+- THEN each answer is 404 with an empty body, holding none of the page's text and no sign-in page
+
+#### Serves
+- architecture/invite-only-web
