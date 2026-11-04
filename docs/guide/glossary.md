@@ -56,7 +56,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Ledger:** the record of approvals, checks and lands, kept on one branch per writer (`clm ledger`). *Usually:* an audit log.
 - **Writer:** the name your ledger records are made under.
 - **Fingerprint:** a hash of a branch's diff, which an approval is tied to (`clm fingerprint`).
-- **Host:** where the remote lives, `github`, `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`).
+- **Host:** where the remote lives, `github`, `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`, `clm contribution` for a fork's pull requests and issues).
 - **Reconnect:** pushing a `main` that was landed with no remote to a newly added `origin` (`clm reconnect`).
 
 ## The backlog and the project's health
