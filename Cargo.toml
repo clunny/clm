@@ -1,0 +1,57 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+version = "0.14.0"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+clm-model = { path = "crates/clm-model" }
+clm-check = { path = "crates/clm-check" }
+clm-coverage = { path = "crates/clm-coverage" }
+clm-gate = { path = "crates/clm-gate" }
+clm-fingerprint = { path = "crates/clm-fingerprint" }
+clm-apply = { path = "crates/clm-apply" }
+clm-context = { path = "crates/clm-context" }
+clm-orchestrator = { path = "crates/clm-orchestrator" }
+clm-checkpoint = { path = "crates/clm-checkpoint" }
+clm-hooks = { path = "crates/clm-hooks" }
+clm-guard = { path = "crates/clm-guard" }
+clm-sync = { path = "crates/clm-sync" }
+clm-regenerate = { path = "crates/clm-regenerate" }
+clm-config = { path = "crates/clm-config" }
+clm-init = { path = "crates/clm-init" }
+clm-view = { path = "crates/clm-view" }
+clm-view-repo = { path = "crates/clm-view-repo" }
+clm-git = { path = "crates/clm-git" }
+clm-run = { path = "crates/clm-run" }
+clm-host = { path = "crates/clm-host" }
+clm-ledger = { path = "crates/clm-ledger" }
+clm-effort = { path = "crates/clm-effort" }
+clm-approval = { path = "crates/clm-approval" }
+clm-land = { path = "crates/clm-land" }
+clm-triage = { path = "crates/clm-triage" }
+clm-unreferenced = { path = "crates/clm-unreferenced" }
+clm-affected = { path = "crates/clm-affected" }
+clm-runner = { path = "crates/clm-runner" }
+clm-web-live = { path = "crates/clm-web-live" }
+clm-web-platform = { path = "crates/clm-web-platform" }
+clm-web-review = { path = "crates/clm-web-review" }
+clm-web-replica = { path = "crates/clm-web-replica" }
+clm-replica = { path = "crates/clm-replica" }
+clm-health = { path = "crates/clm-health" }
+clm-rename = { path = "crates/clm-rename" }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+sha2 = "0.10"
+clap = { version = "4", features = ["derive"] }
+tempfile = "3"
+toml = "0.8"
+base64 = "0.22"
+
+[profile.dev]
+debug = 0

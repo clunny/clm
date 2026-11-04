@@ -1,0 +1,17 @@
+[package]
+name = "clm-gate"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-git.workspace = true
+clm-fingerprint.workspace = true
+clm-model.workspace = true
+clm-rename.workspace = true
+serde_yaml.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

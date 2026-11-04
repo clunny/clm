@@ -1,0 +1,87 @@
+#!/bin/sh
+# The plugin's `clm` (binary-from-releases): runs $CLM_BIN, else the cached release binary
+# for this plugin's version, downloading and verifying it first when it's missing.
+set -u
+
+if [ -n "${CLM_BIN:-}" ]; then
+  exec "$CLM_BIN" "$@"
+fi
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+
+tmp=
+cache=
+# No binary: say how to get one, and exit 1. A hook exits 0 instead, so a missing binary
+# never breaks a session, and stays silent except at session start, which says the guard
+# is off (say-guard-is-off): SessionStart's stdout reaches Claude's context. A hook also
+# marks the failure, so for the next hour hooks skip the download instead of retrying it
+# on every tool call.
+fail() {
+  [ -n "$tmp" ] && rm -rf "$tmp"
+  install="cargo install --git https://github.com/clunny/clm --tag v${version:-<version>} clm"
+  if [ "${1:-}" = hook ]; then
+    [ -d "$cache" ] && : > "$cache/.unavailable"
+    if [ "${2:-}" = session-start ]; then
+      echo "clm: no clm binary ($reason), so the CLM state and the guard on \`clm approve\` are unavailable. Install it with: $install, and set CLM_BIN."
+    fi
+    exit 0
+  fi
+  echo "clm: $reason. Install it with:" >&2
+  echo "  $install" >&2
+  echo "and set CLM_BIN to the installed binary's path." >&2
+  exit 1
+}
+
+version=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+  "$root/.claude-plugin/plugin.json" | head -n 1)
+reason="can't read the version from $root/.claude-plugin/plugin.json"
+[ -n "$version" ] || fail "$@"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/clm/$version"
+# Each target is one `target=<target>` assignment, which the release's prepare step reads
+# (shim-targets). Windows, under Git Bash or MSYS2, runs the x86_64 build, emulated on
+# arm64; Cygwin stays unsupported. Arguments pass unchanged, so Git Bash's conversion of
+# absolute POSIX paths to Windows ones stays on (windows-paths-in-shim-and-panel).
+exe=clm
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) target=x86_64-unknown-linux-musl ;;
+  Linux-aarch64) target=aarch64-unknown-linux-musl ;;
+  Darwin-x86_64) target=x86_64-apple-darwin ;;
+  Darwin-arm64) target=aarch64-apple-darwin ;;
+  MINGW*-x86_64 | MINGW*-aarch64 | MSYS*-x86_64 | MSYS*-aarch64 | \
+  UCRT64_NT-*-x86_64 | UCRT64_NT-*-aarch64 | CLANG64_NT-*-x86_64 | CLANG64_NT-*-aarch64 | \
+  CLANGARM64_NT-*-x86_64 | CLANGARM64_NT-*-aarch64)
+    target=x86_64-pc-windows-msvc
+    exe=clm.exe ;;
+  *) target= ;;
+esac
+bin="$cache/$exe"
+
+if [ ! -x "$bin" ]; then
+  reason="a recent download failed"
+  if [ "${1:-}" = hook ] && [ -n "$(find "$cache/.unavailable" -mmin -60 2>/dev/null)" ]; then
+    fail "$@"
+  fi
+  reason="there's no prebuilt clm for $(uname -s) $(uname -m)"
+  [ -n "$target" ] || fail "$@"
+  asset="clm-$target.tar.gz"
+  reason="can't create $cache"
+  mkdir -p "$cache" || fail "$@"
+  # Download into a temporary directory inside the cache, so the final move is atomic and
+  # an interrupted download never leaves a bad binary.
+  tmp=$(mktemp -d "$cache/.download.XXXXXX") || fail "$@"
+  reason="can't download $asset for v$version with gh"
+  gh release download "v$version" --repo clunny/clm \
+    --pattern "$asset" --pattern "$asset.sha256" --dir "$tmp" >/dev/null 2>&1 || fail "$@"
+  reason="the download of $asset doesn't match its checksum"
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$tmp" && sha256sum -c "$asset.sha256") >/dev/null 2>&1 || fail "$@"
+  else
+    (cd "$tmp" && shasum -a 256 -c "$asset.sha256") >/dev/null 2>&1 || fail "$@"
+  fi
+  reason="$asset holds no $exe"
+  tar xzf "$tmp/$asset" -C "$tmp" "$exe" >/dev/null 2>&1 && [ -f "$tmp/$exe" ] || fail "$@"
+  chmod +x "$tmp/$exe" && mv -f "$tmp/$exe" "$bin" || fail "$@"
+  rm -rf "$tmp" "$cache/.unavailable"
+fi
+
+exec "$bin" "$@"

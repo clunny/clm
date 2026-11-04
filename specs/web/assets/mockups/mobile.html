@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLM · Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e14;--surface:#11161f;--surface2:#161c27;--border:#232b3a;--border2:#2e3849;--text:#e7eaf1;--body:#cfd4df;--muted:#8b94a7;--faint:#5d6679;
+--accent:#8b9cff;--accent-bg:#8b9cff1f;--accent-ring:#8b9cff2e;--on-accent:#0b0e14;--accent-grad:linear-gradient(180deg,#9aa9ff,#7d8ff7);
+--green:#3ddc97;--green-bg:#3ddc971a;--amber:#f5b942;--amber-bg:#f5b9421c;--sky:#5cc8ff;--sky-bg:#5cc8ff1a;--rose:#ff6b8a;--rose-bg:#ff6b8a1c;
+--del-text:#ffb1c1;--ins-text:#a6f3cf;--edge:#3a4559;--grid:#ffffff10;--page:#05070b;--frame:#1d2330}
+:root[data-theme=light]{--bg:#f5f6fa;--surface:#fff;--surface2:#f2f4f8;--border:#e4e8f0;--border2:#d4dae5;--text:#121826;--body:#2e3646;--muted:#5d677a;--faint:#8a93a6;
+--accent:#4f5fe8;--accent-bg:#4f5fe814;--accent-ring:#4f5fe826;--on-accent:#fff;--accent-grad:linear-gradient(180deg,#6170f0,#4757e0);
+--green:#0e9f65;--green-bg:#0e9f6514;--amber:#b7791f;--amber-bg:#d9921a17;--sky:#0a8bd0;--sky-bg:#0a8bd014;--rose:#dc3558;--rose-bg:#dc355812;
+--del-text:#b4233f;--ins-text:#0b7a4c;--edge:#c3cad8;--grid:#0000000d;--page:#e3e6ee;--frame:#c9cfdb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:24px}
+code{font-family:"JetBrains Mono",monospace;font-size:11.5px}
+.top{display:flex;justify-content:space-between;align-items:center;max-width:1180px;margin:0 auto 18px}
+.top h2{margin:0;font-size:18px}.top p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.theme{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:2px}
+.theme button{border:0;background:none;color:var(--muted);padding:5px 10px;border-radius:7px;cursor:pointer}
+.theme button.on{background:var(--surface2);color:var(--text)}
+.row{display:flex;gap:28px;justify-content:center;flex-wrap:wrap}
+.lbl{text-align:center;color:var(--muted);font-size:13px;margin-top:10px;max-width:330px}
+.phone{width:330px;height:690px;border-radius:44px;background:var(--frame);padding:10px;box-shadow:0 20px 50px #0005}
+.scr{width:100%;height:100%;border-radius:35px;background:var(--bg);overflow:hidden;position:relative;display:flex;flex-direction:column}
+.sbar{height:34px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:12px;font-weight:600;flex:0 0 auto}
+.hdr{padding:4px 16px 10px;flex:0 0 auto}
+.hdr .c{font-size:12px;color:var(--muted)} .hdr h1{font-size:19px;margin:2px 0 6px;letter-spacing:-.01em}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;font-size:11px;font-weight:550;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.hard{background:var(--rose-bg);color:var(--rose)}.wait{background:var(--amber-bg);color:var(--amber)}.ok{background:var(--green-bg);color:var(--green)}.acc{background:var(--accent-bg);color:var(--accent)}.mute{background:var(--surface2);color:var(--muted)}
+.seg{display:flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;margin:10px 16px 0}
+.seg div{flex:1;text-align:center;padding:5px 0;border-radius:7px;font-size:12.5px;color:var(--muted);font-weight:550}
+.seg .on{background:var(--surface2);color:var(--text)}
+.body{flex:1;overflow:hidden;padding:12px 16px 0;position:relative}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.h{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;margin-bottom:6px}
+.card p{margin:0;color:var(--body);font-size:13px}
+.req{border:1px solid var(--border);border-radius:12px;margin-top:8px;overflow:hidden}
+.req .rh{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--surface2);font-family:"JetBrains Mono",monospace;font-size:12px}
+.req .rb{padding:8px 10px;font-size:12.5px;color:var(--body)}
+del{background:var(--rose-bg);color:var(--del-text);border-radius:3px;padding:0 2px}
+ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border-radius:3px;padding:0 2px}
+.sticky{position:absolute;left:0;right:0;bottom:62px;padding:10px 16px 12px;background:linear-gradient(transparent,var(--bg) 30%)}
+.btn{width:100%;border:0;border-radius:12px;padding:12px;font:inherit;font-weight:600;background:var(--accent-grad);color:var(--on-accent)}
+.tabbar{height:62px;flex:0 0 auto;border-top:1px solid var(--border);background:var(--surface);display:flex;justify-content:space-around;align-items:center;padding-bottom:6px}
+.tabbar div{display:flex;flex-direction:column;align-items:center;font-size:10.5px;color:var(--muted);gap:2px;position:relative}
+.tabbar div b{font-size:17px;font-weight:400;line-height:1}
+.tabbar .on{color:var(--accent)}
+.tabbar .bdg{position:absolute;top:-4px;right:-8px;background:var(--amber);color:#1a1300;font-size:9px;font-weight:700;border-radius:9px;padding:0 5px}
+/* graph */
+.canvas{position:absolute;inset:0;background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:16px 16px}
+.stage{position:absolute;left:-18px;top:6px;width:680px;height:420px;transform:scale(.54);transform-origin:0 0}
+.stage svg{position:absolute;inset:0}
+.e{fill:none;stroke:var(--edge);stroke-width:2}.eh{fill:none;stroke:var(--accent);stroke-width:2.6}
+.n{position:absolute;width:128px;height:56px;margin:-28px 0 0 -64px;background:var(--surface2);border:1.5px solid var(--border2);border-radius:12px;padding:7px 10px}
+.n .t{font-weight:650;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.n .s{width:9px;height:9px;border-radius:50%;background:var(--green)}
+.n .p{height:5px;border-radius:4px;background:var(--border);margin-top:9px;overflow:hidden}.n .p i{display:block;height:100%;background:var(--green)}
+.n.unbuilt{border-style:dashed}.n.unbuilt .s{background:var(--sky)}
+.n.hit{border-color:var(--accent);box-shadow:0 0 0 5px var(--accent-ring)}
+.zoom{position:absolute;right:12px;top:10px;display:flex;flex-direction:column;gap:6px}
+.zoom span{width:32px;height:32px;border-radius:9px;background:var(--surface);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border2);border-radius:20px 20px 0 0;padding:8px 16px 14px;box-shadow:0 -10px 30px #0006}
+.grab{width:38px;height:4px;border-radius:4px;background:var(--border2);margin:0 auto 10px}
+.mini{border:1px solid var(--border);border-radius:10px;padding:7px 9px;margin-top:7px;font-size:12px;color:var(--body)}
+.mini b{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:11.5px;display:flex;justify-content:space-between;margin-bottom:3px}
+/* runs */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 10px}
+.stat .v{font-size:19px;font-weight:650}.stat .l{font-size:10.5px;color:var(--muted)}
+.vstep{display:flex;gap:10px}
+.rail{display:flex;flex-direction:column;align-items:center;width:16px}
+.rail .d{width:12px;height:12px;border-radius:50%;border:2px solid var(--border2);background:var(--bg);margin-top:12px}
+.rail .d.done{background:var(--green);border-color:var(--green)}.rail .d.run{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-ring)}
+.rail .ln{flex:1;width:2px;background:var(--border)}
+.stp{flex:1;border:1px solid var(--border);border-radius:12px;background:var(--surface2);padding:8px 10px;margin-bottom:8px}
+.stp.run{border-color:var(--accent)}
+.stp .k{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600}
+.stp .nm{font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center;margin:1px 0 3px}
+.stp .d2{font-size:11.5px;color:var(--muted)}
+.lease{height:4px;border-radius:4px;background:var(--border);margin-top:6px;overflow:hidden}.lease i{display:block;height:100%;background:var(--accent)}
+.offline{margin:0 16px;padding:6px 10px;border-radius:9px;background:var(--amber-bg);color:var(--amber);font-size:11.5px;font-weight:550}
+</style>
+<script>try{const t=localStorage.getItem('clm-theme');document.documentElement.dataset.theme=(!t||t==='system')?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}</script>
+</head><body>
+<div class="top"><div><h2>Mobile and installed (PWA)</h2><p>Bottom tab bar replaces the sidebar. Real data from PR #49 and plugin-spec-gaps; times are made up.</p></div>
+<div class="theme"><button data-t="light">☀</button><button data-t="system">◐</button><button data-t="dark">☾</button></div></div>
+
+<div class="row">
+ <!-- PR document -->
+ <div><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="hdr"><div class="c">‹ Spec PRs · clunny/clm</div><h1>Plugin spec gaps</h1>
+   <div class="chips"><span class="chip hard">HARD</span><span class="chip wait">● Your approval</span><span class="chip mute">#49</span></div></div>
+  <div class="seg" style="margin-top:0"><div class="on">Document</div><div>Graph</div><div>Diff</div></div>
+  <div class="body">
+   <div class="card"><div class="h">Intent</div><p><b>Problem.</b> <code>label-guard</code> blocks reads and misses GraphQL label IDs; the shim contradicts the Design; session status misses subdirectories.</p></div>
+   <div class="card"><div class="h">plugin · 2 modified</div>
+    <div class="req"><div class="rh">label-guard<span class="chip wait">Modified</span></div><div class="rb">…exit 2 when <del>it contains spec-approved and -l</del> <ins>a segment runs gh pr edit with a label flag</ins>…</div></div>
+    <div class="req"><div class="rh">binary-shim<span class="chip wait">Modified</span></div><div class="rb">With no binary, <del>exit 1</del> <ins>say the guard is off and exit 0</ins></div></div>
+   </div>
+   <div class="card"><div class="h">Decisions</div><p><code>guard-matches-writes</code> · <code>say-guard-is-off</code></p></div>
+  </div>
+  <div class="sticky"><button class="btn">Approve intent</button></div>
+  <div class="tabbar"><div><b>◇</b>Graph</div><div class="on"><b>⇄</b>PRs<span class="bdg">1</span></div><div><b>▶</b>Build</div><div><b>☰</b>Backlog</div></div>
+ </div></div><div class="lbl"><b>PR review.</b> One column, segmented Document / Graph / Diff, Approve pinned above the tab bar.</div></div>
+
+ <!-- Graph + sheet -->
+ <div><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="hdr" style="padding-bottom:6px"><div class="c">clunny/clm</div><h1>Spec graph</h1></div>
+  <div class="body" style="padding:0">
+   <div class="canvas">
+    <div class="stage">
+     <svg viewBox="0 0 680 420" width="680" height="420"><g class="e">
+      <path d="M190 153 C190 168.5,190 168.5,190 182"/><path d="M190 153 C190 210,320 210,320 267"/><path d="M190 153 C190 252.5,320 252.5,320 352"/><path d="M490 153 C490 168.5,190 168.5,190 182"/><path d="M190 238 C190 252.5,80 252.5,80 267"/><path d="M190 238 C190 295,320 295,320 352"/><path d="M470 238 C470 252.5,320 252.5,320 267"/><path d="M470 238 C470 295,320 295,320 352"/><path d="M80 323 C80 337.5,320 337.5,320 352"/><path d="M320 323 C320 337.5,320 337.5,320 352"/><path d="M560 323 C560 337.5,320 337.5,320 352"/></g>
+      <g class="eh"><path d="M340 68 C340 83.5,190 83.5,190 97"/><path d="M340 68 C340 125,190 125,190 182"/><path d="M340 68 C340 167.5,320 167.5,320 267"/><path d="M340 68 C340 167.5,560 167.5,560 267"/></g></svg>
+     <div class="n hit" style="left:340px;top:40px"><div class="t">plugin<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n" style="left:190px;top:125px"><div class="t">orchestrator<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n" style="left:490px;top:125px"><div class="t">ci<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n" style="left:190px;top:210px"><div class="t">check<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n" style="left:470px;top:210px"><div class="t">gate<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n" style="left:80px;top:295px"><div class="t">apply<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n" style="left:320px;top:295px"><div class="t">context<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+     <div class="n unbuilt" style="left:560px;top:295px"><div class="t">sync<span class="s"></span></div><div class="p"><i style="width:0"></i></div></div>
+     <div class="n" style="left:320px;top:380px"><div class="t">model<span class="s"></span></div><div class="p"><i style="width:100%"></i></div></div>
+    </div>
+    <div class="zoom"><span>＋</span><span>－</span><span>⤢</span></div>
+   </div>
+   <div class="sheet">
+    <div class="grab"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">plugin</b><span class="chip ok">active · 7/7</span></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:2px">Skills, hooks, subagents · depends on check, context, orchestrator, sync</div>
+    <div class="mini"><b>label-guard<span class="chip wait">#49</span></b>Modified in a PR awaiting approval</div>
+    <div class="mini"><b>Building now</b>plugin-spec-gaps/plugin · claim live</div>
+   </div>
+  </div>
+  <div class="tabbar"><div class="on"><b>◇</b>Graph</div><div><b>⇄</b>PRs<span class="bdg">1</span></div><div><b>▶</b>Build</div><div><b>☰</b>Backlog</div></div>
+ </div></div><div class="lbl"><b>Graph.</b> Pan and pinch to zoom; tap a node and its inspector slides up as a sheet you can drag taller.</div></div>
+
+ <!-- Implementation, offline -->
+ <div><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span>✈ ▮</span></div>
+  <div class="hdr"><div class="c">clunny/clm</div><h1>Implementation</h1></div>
+  <div class="offline">Offline · showing data from 12 min ago</div>
+  <div class="body">
+   <div class="stats"><div class="stat"><div class="v">1</div><div class="l">In flight</div></div><div class="stat"><div class="v" style="color:var(--green)">1</div><div class="l">Working</div></div><div class="stat"><div class="v" style="color:var(--rose)">0</div><div class="l">Blocked</div></div></div>
+   <div class="card" style="padding:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b>Plugin spec gaps</b><span class="chip acc">1 of 3</span></div>
+    <div class="vstep"><div class="rail"><span class="d done"></span><span class="ln"></span></div><div class="stp"><div class="k">Plan</div><div class="nm">plan.md<span class="chip ok">Merged</span></div><div class="d2">PR #50 · CI ✓</div></div></div>
+    <div class="vstep"><div class="rail"><span class="d run"></span><span class="ln"></span></div><div class="stp run"><div class="k">Task · plugin</div><div class="nm">3 requirements<span class="chip acc">Working</span></div><div class="d2">Last push 38 min ago · no PR yet</div><div class="lease"><i style="width:84%"></i></div></div></div>
+    <div class="vstep"><div class="rail"><span class="d"></span></div><div class="stp"><div class="k">Finish</div><div class="nm">archive<span class="chip mute">Waiting</span></div></div></div>
+   </div>
+  </div>
+  <div class="tabbar"><div><b>◇</b>Graph</div><div><b>⇄</b>PRs<span class="bdg">1</span></div><div class="on"><b>▶</b>Build</div><div><b>☰</b>Backlog</div></div>
+ </div></div><div class="lbl"><b>Build, launched from the home screen while offline.</b> The pipeline becomes a vertical timeline; cached data is shown and marked stale.</div></div>
+</div>
+<script>
+function setTheme(t){try{localStorage.setItem('clm-theme',t)}catch(e){}
+ document.documentElement.dataset.theme=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+ document.querySelectorAll('.theme button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));}
+let s='system';try{s=localStorage.getItem('clm-theme')||'system'}catch(e){}
+document.querySelectorAll('.theme button').forEach(b=>b.onclick=()=>setTheme(b.dataset.t));setTheme(s);
+</script>
+</body></html>

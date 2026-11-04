@@ -1,0 +1,206 @@
+name: Release
+
+# A human dispatches a release (release-by-dispatch). It bumps the version when it's new,
+# builds clm for every target, publishes the release, then brings the bump into main.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, MAJOR.MINOR.PATCH
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.prepare.outputs.sha }}
+      bumped: ${{ steps.prepare.outputs.bumped }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: toolchain
+        run: rustup show
+      # `release-prepare.sh` runs the tests, and `this_repository_is_clean` runs the detectors.
+      - name: detector tools
+        run: .github/scripts/detector-tools.sh
+      - name: prepare
+        id: prepare
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/release-prepare.sh "$VERSION"
+
+  build:
+    needs: prepare
+    strategy:
+      matrix:
+        # `plugin/bin/clm` downloads one of these per platform; `release-prepare.sh` fails
+        # when it names a target that isn't here (shim-assets-before-release).
+        include:
+          # Static, so they run on any Linux of their architecture (static-linux-binaries).
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            exe: clm
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            exe: clm
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            exe: clm
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            exe: clm
+          # With the MSVC tools the image ships (windows-binaries).
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            exe: clm.exe
+    runs-on: ${{ matrix.os }}
+    # Git Bash on Windows, so every target runs the same steps.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      # In the checkout, so the target goes on the toolchain rust-toolchain.toml pins.
+      - name: toolchain
+        run: rustup show
+      - name: target
+        run: rustup target add ${{ matrix.target }}
+      # Zig is the C compiler and linker for both Linux targets, so nothing comes from apt.
+      - name: zig
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          python3 -m pip install --break-system-packages ziglang==0.17.0
+          cargo install --locked --version 0.24.0 cargo-zigbuild
+      - name: build
+        if: "!endsWith(matrix.target, '-musl')"
+        run: cargo build --release --locked -p clm --target ${{ matrix.target }}
+      - name: build static
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          cargo zigbuild --release --locked -p clm --target ${{ matrix.target }}
+          bin=target/${{ matrix.target }}/release/clm
+          linked=$(file "$bin")
+          echo "$linked"
+          case $linked in
+            *"statically linked"* | *"static-pie linked"*) ;;
+            *) echo "::error::$bin isn't statically linked" >&2; exit 1 ;;
+          esac
+      - name: pack
+        env:
+          ASSET: clm-${{ matrix.target }}.tar.gz
+        # macOS has no `sha256sum`; both write the line `sha256sum -c` reads.
+        run: |
+          tar czf "$ASSET" -C target/${{ matrix.target }}/release ${{ matrix.exe }}
+          if command -v sha256sum >/dev/null; then
+            sha256sum "$ASSET" > "$ASSET.sha256"
+          else
+            shasum -a 256 "$ASSET" > "$ASSET.sha256"
+          fi
+      - uses: actions/upload-artifact@v6
+        with:
+          name: clm-${{ matrix.target }}
+          path: |
+            clm-${{ matrix.target }}.tar.gz
+            clm-${{ matrix.target }}.tar.gz.sha256
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: clm-*
+          merge-multiple: true
+          path: assets
+      - name: release
+        id: release
+        env:
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        # A failed upload leaves a draft, which would block dispatching this version again.
+        run: |
+          gh release create "v$VERSION" --target "$SHA" --generate-notes assets/* || {
+            gh release delete "v$VERSION" --yes || true
+            exit 1
+          }
+          echo "released=true" >> "$GITHUB_OUTPUT"
+      # The one push to `main` that isn't a `clm land`: `clm ledger verify` knows it by its
+      # `Release v` message, which a merge commit gets from `-m` and a fast-forward from the bump.
+      - name: merge into main
+        if: needs.prepare.outputs.bumped == 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          branch="release/v$VERSION"
+          for try in 1 2 3; do
+            if git fetch origin main "$branch" &&
+              git checkout -B main origin/main &&
+              git merge --no-edit -m "Release v$VERSION" "origin/$branch" &&
+              git push origin main; then
+              git push origin --delete "$branch" ||
+                echo "::warning::couldn't delete $branch; delete it by hand"
+              exit 0
+            fi
+            echo "merging $branch into main failed (try $try)" >&2
+            git merge --abort 2>/dev/null || true
+            sleep $((try * 5))
+          done
+          echo "v$VERSION is released, but main still names the old version. To fix it, run:" >&2
+          echo "  git fetch origin main $branch" >&2
+          echo "  git checkout -B main origin/main" >&2
+          echo "  git merge --no-edit -m 'Release v$VERSION' origin/$branch" >&2
+          echo "  git push origin main" >&2
+          echo "  git push origin --delete $branch" >&2
+          exit 1
+
+  # Deploys the released commit's Worker (web-deploy). After `publish`, so a failed deploy
+  # doesn't undo the release; rerun this job on its own. It runs whenever the release was
+  # created, even if bringing the bump into main failed. `wrangler.toml`'s build command
+  # builds the app and the Rust, so the job needs only the toolchain and Node.
+  web:
+    needs: [prepare, publish]
+    if: ${{ !cancelled() && needs.publish.outputs.released == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: toolchain
+        run: rustup show
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: install
+        working-directory: web
+        run: npm ci --ignore-scripts
+      - name: deploy
+        working-directory: web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy

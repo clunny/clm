@@ -1,0 +1,10 @@
+{
+  "name": "clm-panel",
+  "version": "0.14.0",
+  "description": "The CLM panel: the spec, the work in flight and what blocks it, beside the chat, and /clm:view.",
+  "author": { "name": "Christopher Lunny" },
+  "license": "MIT",
+  "repository": "https://github.com/clunny/clm",
+  "dependencies": ["clm"],
+  "types": "./types/index.d.ts"
+}

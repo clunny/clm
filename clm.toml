@@ -1,0 +1,51 @@
+# CLM settings for this repository (see specs/config/SPEC.md).
+# File CLM defect reports as `kind: bug` backlog items on the current branch.
+defects = "backlog"
+
+# The remote is on GitHub: pages, branch deletion and issues go through its adapter.
+host = "github"
+
+# `clm land` runs this in the tree it lands, before `clm check` (land-locally).
+[land]
+check = ".github/scripts/ci-check.sh"
+
+# A change to any of these selects every test in `clm affected` (graph-test-selection): the
+# workspace's manifest and lockfile and the toolchain pin, which every crate builds with; the
+# CLI's dispatch, which every test in crates/clm/tests/ runs through; and the check script,
+# which does the selecting.
+[affected]
+all = [
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "crates/clm/src/**",
+    ".github/scripts/ci-check.sh",
+]
+
+# `clm health`'s `unexercised` signal reads this lcov tracefile, which
+# .github/scripts/coverage.sh writes (lcov-coverage-signal); the counts keep their defaults.
+[health]
+lcov = "target/lcov.info"
+
+# `clm check` runs these (check/detectors). ci-check.sh and the release install their tools
+# with .github/scripts/detector-tools.sh, whose install line each `hint` repeats.
+# `cargo-machete` runs directly, not as `cargo machete`: under `cargo run` or `cargo test` it
+# inherits `CARGO_PKG_NAME`, decides it wasn't run by cargo, and reads `machete` as a path.
+[[detectors]]
+name = "unused-dependencies"
+command = ["cargo-machete"]
+hint = "cargo install --locked --version 0.9.2 cargo-machete"
+
+# `clm unreferenced` lists the `pub` items of the workspace's libraries that nothing outside their
+# own library uses (public-item-detector). Each `--allow` entry names one item, under a comment
+# giving its reason: kept (live by a route the name match can't see, saying which) or pending
+# (waiting for its node's clean-up, the backlog item named). A stale entry is a finding too, so
+# the list only shrinks: the build that narrows an item deletes its entry in the same diff
+# (unreferenced-allow-then-narrow). The detector runs the first `clm` on PATH: the clone's
+# installed one, built from main (dogfood-from-main).
+[[detectors]]
+name = "unreferenced-public-items"
+command = [
+    "clm", "unreferenced",
+]
+hint = "scripts/dev-install.sh"

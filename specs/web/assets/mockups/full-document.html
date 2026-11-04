@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLM · Full document</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e14;--surface:#11161f;--surface2:#161c27;--border:#232b3a;--border2:#2e3849;--text:#e7eaf1;--body:#cfd4df;--muted:#8b94a7;--faint:#5d6679;
+--accent:#8b9cff;--accent-bg:#8b9cff1f;--accent-ring:#8b9cff2e;--on-accent:#0b0e14;--accent-grad:linear-gradient(180deg,#9aa9ff,#7d8ff7);
+--green:#3ddc97;--green-bg:#3ddc971a;--amber:#f5b942;--amber-bg:#f5b9421c;--rose:#ff6b8a;--rose-bg:#ff6b8a1c;
+--del-text:#ffb1c1;--ins-text:#a6f3cf;--page:#05070b;--frame:#1d2330}
+:root[data-theme=light]{--bg:#f5f6fa;--surface:#fff;--surface2:#f2f4f8;--border:#e4e8f0;--border2:#d4dae5;--text:#121826;--body:#2e3646;--muted:#5d677a;--faint:#8a93a6;
+--accent:#4f5fe8;--accent-bg:#4f5fe814;--accent-ring:#4f5fe826;--on-accent:#fff;--accent-grad:linear-gradient(180deg,#6170f0,#4757e0);
+--green:#0e9f65;--green-bg:#0e9f6514;--amber:#b7791f;--amber-bg:#d9921a17;--rose:#dc3558;--rose-bg:#dc355812;
+--del-text:#b4233f;--ins-text:#0b7a4c;--page:#e3e6ee;--frame:#c9cfdb}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font:14px/1.55 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:24px}
+code{font-family:"JetBrains Mono",monospace;font-size:12px}
+.top{display:flex;justify-content:space-between;align-items:center;max-width:1260px;margin:0 auto 16px}
+.top h2{margin:0;font-size:18px}.top p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.theme{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:2px}
+.theme button{border:0;background:none;color:var(--muted);padding:5px 10px;border-radius:7px;cursor:pointer}
+.theme button.on{background:var(--surface2);color:var(--text)}
+.wrap{display:flex;gap:26px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.chip{display:inline-flex;font-size:11.5px;font-weight:550;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.wait{background:var(--amber-bg);color:var(--amber)}.ok{background:var(--green-bg);color:var(--green)}.mute{background:var(--surface2);color:var(--muted)}.hard{background:var(--rose-bg);color:var(--rose)}
+del{background:var(--rose-bg);color:var(--del-text);border-radius:3px;padding:0 2px}
+ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border-radius:3px;padding:0 2px}
+/* desktop */
+.desk{width:880px;background:var(--bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;box-shadow:0 20px 50px #0004}
+.bar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+.bar .l{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.bar .l b{color:var(--text);font-family:"JetBrains Mono",monospace;font-weight:500}
+.nav{display:flex;align-items:center;gap:6px}
+.nav .pos{font-size:12.5px;color:var(--muted);margin:0 4px}
+.ib{width:30px;height:30px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);display:grid;place-items:center;color:var(--text);cursor:pointer}
+.seg{display:inline-flex;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:2px;margin-right:8px}
+.seg span{font-size:12px;padding:4px 10px;border-radius:7px;color:var(--muted);font-weight:550}
+.seg .on{background:var(--surface);color:var(--text)}
+.cols{display:grid;grid-template-columns:200px 1fr;height:600px}
+.toc{border-right:1px solid var(--border);padding:14px 10px;font-size:12.5px;overflow:hidden;background:var(--surface)}
+.toc .t{padding:4px 8px;border-radius:7px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.toc .t.sub{padding-left:20px;font-family:"JetBrains Mono",monospace;font-size:11.5px}
+.toc .t.cur{background:var(--accent-bg);color:var(--text)}
+.toc .m{width:7px;height:7px;border-radius:50%;background:var(--amber)}
+.toc .h{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600;margin:4px 8px 6px}
+.doc{overflow:hidden;padding:18px 34px 0 26px;position:relative}
+.doc h1{font-size:20px;margin:0 0 2px}
+.fm{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--faint);margin-bottom:14px}
+.doc h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:16px 0 6px}
+.doc h4{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:500;margin:12px 0 4px;display:flex;gap:8px;align-items:center}
+.doc p{margin:0 0 8px;color:var(--body)}
+.ctx{opacity:.62}
+.chg{position:relative;padding:8px 12px;margin:0 -12px 8px;border-radius:10px}
+.chg::before{content:"";position:absolute;left:-6px;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--amber)}
+.chg.focus{background:var(--amber-bg);box-shadow:0 0 0 1px color-mix(in srgb,var(--amber) 45%,transparent)}
+.chg .why{font-size:11.5px;color:var(--amber);font-weight:600;margin-bottom:3px}
+.fold{font-size:12px;color:var(--faint);border:1px dashed var(--border2);border-radius:8px;padding:4px 10px;display:inline-block;margin:4px 0 8px}
+.fade{position:absolute;left:0;right:0;bottom:0;height:60px;background:linear-gradient(transparent,var(--bg))}
+.scn{font-size:12.5px;color:var(--muted);border-left:2px solid var(--border2);padding-left:10px;margin:6px 0}
+.scn.new{border-color:var(--green);color:var(--ins-text)}
+/* phone */
+.phone{width:330px;height:690px;border-radius:44px;background:var(--frame);padding:10px;box-shadow:0 20px 50px #0005}
+.scr{width:100%;height:100%;border-radius:35px;background:var(--bg);overflow:hidden;position:relative;display:flex;flex-direction:column}
+.sbar{height:34px;display:flex;justify-content:space-between;align-items:center;padding:0 26px;font-size:12px;font-weight:600}
+.ph{padding:2px 16px 8px;border-bottom:1px solid var(--border)}
+.ph .c{font-size:12px;color:var(--muted)}
+.ph b{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:14px}
+.pb{flex:1;overflow:hidden;padding:12px 16px;position:relative;font-size:13px}
+.pb h3{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:10px 0 4px}
+.pb h4{font-family:"JetBrains Mono",monospace;font-size:12.5px;font-weight:500;margin:8px 0 3px}
+.pb p{margin:0 0 6px;color:var(--body)}
+.pb .chg{margin:0 -8px 8px;padding:8px 10px}
+.pb .chg::before{left:-4px}
+.pnav{position:absolute;left:12px;right:12px;bottom:14px;background:var(--surface);border:1px solid var(--border2);border-radius:14px;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;box-shadow:0 8px 24px #0006}
+.pnav .pos{font-size:12.5px;color:var(--muted)}
+.lbl{text-align:center;color:var(--muted);font-size:13px;margin-top:10px;max-width:330px}
+</style>
+<script>try{const t=localStorage.getItem('clm-theme');document.documentElement.dataset.theme=(!t||t==='system')?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){}</script>
+</head><body>
+<div class="top"><div><h2>Full document view of a changed node</h2><p>From a requirement card, "Open in full" shows <code>specs/plugin/SPEC.md</code> as it will read after the PR, scrolled to the first change, with every change marked.</p></div>
+<div class="theme"><button data-t="light">☀</button><button data-t="system">◐</button><button data-t="dark">☾</button></div></div>
+
+<div class="wrap">
+ <div>
+ <div class="desk">
+  <div class="bar">
+   <div class="l">‹ PR #49 · <b>plugin</b> <span class="chip hard">HARD</span></div>
+   <div class="nav"><div class="seg"><span class="on">Changes inline</span><span>After</span><span>Before</span></div>
+     <span class="ib">↑</span><span class="pos">Change <b style="color:var(--text)">1</b> of 6</span><span class="ib">↓</span></div>
+  </div>
+  <div class="cols">
+   <div class="toc">
+    <div class="h">Outline</div>
+    <div class="t">Contract</div>
+    <div class="t cur">Design <span class="m"></span></div>
+    <div class="t">Requirements</div>
+    <div class="t sub">package</div>
+    <div class="t sub">binary-shim <span class="m"></span></div>
+    <div class="t sub">label-guard <span class="m"></span></div>
+    <div class="t sub">session-status <span class="m"></span></div>
+    <div class="t sub">hooks-wired</div>
+    <div class="t sub">skills</div>
+    <div class="t sub">spec-auditor</div>
+    <div class="h" style="margin-top:16px">Changed here</div>
+    <div class="t">Design · 3 paragraphs</div><div class="t">Requirements · 3</div><div class="t">Scenarios · +4</div>
+   </div>
+   <div class="doc">
+    <h1>Plugin</h1>
+    <div class="fm">status: active · depends_on: check, context, orchestrator, sync</div>
+    <h3>Contract</h3>
+    <p class="ctx">The Claude Code plugin <code>clm</code>, installed from this repo's marketplace. It provides the <code>clm</code> command on the Bash tool's PATH; hooks that call <code>clm hook &lt;name&gt;</code>; skills <code>propose</code> and <code>implement</code>; and the <code>spec-auditor</code> subagent.</p>
+    <h3>Design</h3>
+    <p class="ctx"><code>bin/clm</code> is a POSIX <code>sh</code> shim. It runs, in order of preference: <code>$CLM_BIN</code>; the cached binary for its version; a fresh, checksum-verified download from the release.</p>
+    <div class="chg focus"><div class="why">Change 1 · Design paragraph modified</div>
+     <p>When it has no binary, the shim prints the <code>cargo install</code> command and exits 1, except for <code>clm hook ...</code>, which must never break a session: <del>it exits 0</del> <ins>it exits 0, silent apart from <code>hook session-start</code>, which says the CLM state and the <code>spec-approved</code> guard are unavailable and how to install (<code>say-guard-is-off</code>)</ins>.</p></div>
+    <p class="ctx"><code>hooks/hooks.json</code> wires <code>SessionStart</code> and <code>PreToolUse</code> on <code>Bash</code> to <code>clm hook …</code>. A hook that can't do its work stays silent and exits 0, except that the guard blocks.</p>
+    <div class="chg"><div class="why">Change 2 · Design paragraph added</div>
+     <p><ins>The guard (<code>guard-matches-writes</code>) splits the command into segments at <code>|</code>, <code>;</code>, <code>&amp;</code> and newlines, and each segment into tokens with quotes stripped. A segment's <code>gh</code> call starts at its first token that is <code>gh</code> or ends in <code>/gh</code>…</ins></p></div>
+    <div class="fold">⋯ 2 unchanged paragraphs</div>
+    <h3>Requirements</h3>
+    <div class="fold">⋯ package (unchanged)</div>
+    <h4>binary-shim <span class="chip wait">Change 4</span></h4>
+    <p class="ctx">…When no binary can be had it SHALL cache nothing, and…</p>
+    <div class="fade"></div>
+   </div>
+  </div>
+ </div>
+ <div class="lbl" style="max-width:880px;margin:10px auto 0">Unchanged text is dimmed for context; long unchanged runs fold. ↑ ↓ (or <code>j</code>/<code>k</code>) jump between changes, and the outline dots show where they are.</div>
+ </div>
+
+ <div><div class="phone"><div class="scr">
+  <div class="sbar"><span>9:41</span><span>●●● ▮</span></div>
+  <div class="ph"><div class="c">‹ PR #49</div><b>specs/plugin/SPEC.md</b></div>
+  <div class="pb">
+   <h3>Design</h3>
+   <p class="ctx" style="opacity:.62"><code>bin/clm</code> is a POSIX <code>sh</code> shim. It runs <code>$CLM_BIN</code>, the cached binary, or a verified download.</p>
+   <div class="chg focus"><div class="why">Change 1 · modified</div>
+    <p>…except for <code>clm hook ...</code>, which must never break a session: <del>it exits 0</del> <ins>it exits 0, silent apart from <code>hook session-start</code>, which says the <code>spec-approved</code> guard is unavailable</ins>.</p></div>
+   <p style="opacity:.62"><code>hooks/hooks.json</code> wires <code>SessionStart</code> and <code>PreToolUse</code>…</p>
+   <div class="chg"><div class="why">Change 2 · added</div><p><ins>The guard splits the command into segments at <code>|</code>, <code>;</code>, <code>&amp;</code>…</ins></p></div>
+   <div class="fold">⋯ 2 unchanged paragraphs</div>
+  </div>
+  <div class="pnav"><span class="ib">↑</span><span class="pos">Change <b style="color:var(--text)">1</b> of 6 · Design</span><span class="ib">↓</span></div>
+ </div></div><div class="lbl"><b>Mobile.</b> Same document, one column; a floating bar steps through the changes. Swipe for Before / After.</div></div>
+</div>
+<script>
+function setTheme(t){try{localStorage.setItem('clm-theme',t)}catch(e){}
+ document.documentElement.dataset.theme=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+ document.querySelectorAll('.theme button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));}
+let s='system';try{s=localStorage.getItem('clm-theme')||'system'}catch(e){}
+document.querySelectorAll('.theme button').forEach(b=>b.onclick=()=>setTheme(b.dataset.t));setTheme(s);
+</script>
+</body></html>

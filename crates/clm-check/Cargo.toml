@@ -1,0 +1,87 @@
+[package]
+name = "clm-check"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["checkout", "detectors"]
+# Checking a checkout on disk (`run`, `status`, `coverage`, `backlog`); off for wasm builds.
+checkout = ["dep:clm-apply", "dep:clm-git", "clm-coverage/checkout"]
+# Spawning detector commands; off for wasm builds.
+detectors = ["dep:clm-git", "dep:libc"]
+
+[[test]]
+name = "assets"
+required-features = ["checkout"]
+
+[[test]]
+name = "backlog_entry_shape"
+required-features = ["checkout"]
+
+[[test]]
+name = "coverage"
+required-features = ["checkout"]
+
+[[test]]
+name = "detectors"
+required-features = ["checkout", "detectors"]
+
+[[test]]
+name = "ownership"
+required-features = ["checkout"]
+
+[[test]]
+name = "paths_disjoint"
+required-features = ["checkout"]
+
+[[test]]
+name = "undeclared_imports"
+required-features = ["checkout"]
+
+[[test]]
+name = "unowned_files"
+required-features = ["checkout"]
+
+[[test]]
+name = "skipped_tests"
+required-features = ["checkout"]
+
+[[test]]
+name = "pending"
+required-features = ["checkout"]
+
+[[test]]
+name = "priority_caps"
+required-features = ["checkout"]
+
+[[test]]
+name = "remove_by"
+required-features = ["checkout"]
+
+[[test]]
+name = "removed_names"
+required-features = ["checkout"]
+
+[[test]]
+name = "size"
+required-features = ["checkout", "detectors"]
+
+[[test]]
+name = "status"
+required-features = ["checkout"]
+
+[dependencies]
+clm-model.workspace = true
+clm-coverage = { workspace = true, default-features = false }
+clm-apply = { workspace = true, optional = true }
+clm-git = { workspace = true, optional = true }
+
+[target.'cfg(unix)'.dependencies]
+# `killpg`, to stop a detector together with the processes it started.
+libc = { version = "0.2", optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+toml.workspace = true

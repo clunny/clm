@@ -1,0 +1,14 @@
+---
+title: "The release guard looks re-runs up through the REST API, by workflow file"
+date: 2026-10-26
+status: accepted
+---
+
+Refines `flaky-failures-rerun`'s release-run rule. The guard looked a re-run's run up with `gh run view <id> --json workflowName,path`, but `gh` 2.45 (Ubuntu's packaged version) has no `path` field there. The lookup failed, a failed lookup blocks, and so every `gh run rerun` was refused as a release on that `gh`, filed three times as a bug.
+
+So the guard asks the REST API, which every `gh` serves: `gh api repos/<owner>/<repo>/actions/runs/<id>`, whose `path` and `name` say which workflow the run belongs to. A re-run by job ID (`--job`, `-j`) is first looked up with `gh api repos/<owner>/<repo>/actions/jobs/<id>` for its `run_id`, so re-running one job of a release run is judged like re-running the run. The lookup asks the repository and host the re-run targets: the segment's `-R`/`--repo`, with a host in it passed as `--hostname`; otherwise the repository `gh repo view --json url` reports, its host passed as `--hostname`. Every `gh` call runs in the checkout after any `cd` the guard can follow, as for pushes, with the segment's `GH_REPO=` and `GH_HOST=` in its environment, so `gh` resolves the repository as it would for the re-run. The guard first let `gh api` fill `{owner}/{repo}` itself, but `gh api` takes its host from `GH_HOST` or the default host, not from that repository, so in a checkout on a GitHub Enterprise host, or with `GH_REPO=<host>/<owner>/<repo>`, the lookup asked github.com: usually a wrong block, and a wrong allow when a same-named repository there had a CI run with that ID. `gh repo view` resolves the repository and its host with the same code as `gh run rerun`, so the guard needn't parse remotes or `gh repo set-default` itself; a `repo view` that fails counts as a failed lookup. A run is a release run when its workflow file (cut at any `@`) is named `release.yml` or `release.yaml`, or its workflow is named `release`, in any case, and `gh workflow run` recognises the release workflow the same way. A lookup that fails or can't be read still blocks, and the lookups share a 30-second budget, so the guard always answers before the hook's own timeout, which Claude Code treats as allowing.
+
+Alternatives considered:
+- `gh run view --json workflowName` alone: every `gh` has the field, but a workflow's name is whatever it says, so a release workflow named `Publish` would be re-run unguarded.
+- Retrying without `path` when `gh` rejects it: precise on a new `gh` and name-only on an old one, so how strong the guard is would depend on the installed version.
+- Taking the host from a host in `GH_REPO=` and from the checkout's remote: it copies `gh`'s choice of remote (`upstream`, `github`, `origin`, or the one `gh repo set-default` names), and a copy that drifts asks the wrong host again.

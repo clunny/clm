@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo *)",
+      "Bash(npm ci *)",
+      "Bash(npm install --ignore-scripts *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npx playwright test *)",
+      "Bash(.github/scripts/ci-check.sh)",
+      "Bash(.github/scripts/ci-check.sh *)"
+    ]
+  },
+  "enabledPlugins": {
+    "clm@clm": true,
+    "clm-panel@clm": true
+  },
+  "extraKnownMarketplaces": {
+    "clm": {
+      "source": {
+        "source": "github",
+        "repo": "clunny/clm"
+      },
+      "autoUpdate": true
+    }
+  }
+}

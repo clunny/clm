@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLM homepage mockup</title>
+<!-- web.site's homepage, as the human approved it on 2026-11-01. The dashed line marks roughly
+     where a laptop's first screen ends. Copy is the starting text; the layout is the reference. -->
+<style>
+  .pg { font-family: Inter, system-ui, sans-serif; background:#0b0e1a; color:#e6e8f2; border-radius:12px; overflow:hidden; line-height:1.5; max-width:1040px; margin:0 auto }
+  .pg .nav { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#9aa0b8; padding:18px 36px }
+  .pg .nav b { color:#fff; font-size:16px; letter-spacing:.05em }
+  .pg .nav .si { border:1px solid #3a3f5c; padding:5px 10px; border-radius:6px; color:#c9cde0 }
+  .hero { padding:48px 36px 40px; display:grid; grid-template-columns:1.05fr .95fr; gap:36px; align-items:center;
+          background: radial-gradient(ellipse at 75% 40%, #1d2150 0%, #0b0e1a 65%) }
+  .hero h1 { font-size:44px; line-height:1.08; margin:0 0 16px; color:#fff; font-weight:800; letter-spacing:-.02em }
+  .hero h1 em { font-style:normal; background:linear-gradient(90deg,#8b93ff,#5ec8ff); -webkit-background-clip:text; color:transparent }
+  .hero p { font-size:17px; color:#b7bcd3; margin:0 0 22px }
+  .ctas { display:flex; gap:10px; align-items:center }
+  .btn { padding:10px 16px; border-radius:8px; font-size:14px; font-weight:600 }
+  .btn.p { background:#6b73ff; color:#fff } .btn.s { color:#c9cde0 }
+  .cmd { font-family:'JetBrains Mono',monospace; font-size:12px; color:#9ad1ff; margin-top:14px; opacity:.85 }
+  /* loop diagram */
+  .ring { position:relative; width:320px; height:320px; margin:0 auto }
+  .ring .circle { position:absolute; inset:40px; border:2px dashed #3a4170; border-radius:50% }
+  .ring .core { position:absolute; inset:115px; border-radius:50%; background:#141834; border:1px solid #2f3566; display:flex; align-items:center; justify-content:center; text-align:center; font-size:12px; color:#9aa0b8 }
+  .ring .core b { display:block; color:#fff; font-size:14px }
+  .ring .st { position:absolute; background:#151933; border:1px solid #2f3566; border-radius:9px; padding:7px 10px; font-size:12px; width:116px; text-align:center }
+  .ring .st b { display:block; color:#fff; font-size:13px }
+  .ring .st small { color:#9aa0b8 }
+  .ring .t { top:6px; left:102px } .ring .r { top:136px; right:-14px; border-color:#2f7d5a }
+  .ring .bt { bottom:6px; left:102px; border-color:#a8455a } .ring .l { top:136px; left:-14px }
+  .fold { border-top:2px dashed #e0a43a; position:relative; margin:0 }
+  .fold span { position:absolute; right:12px; top:-11px; background:#e0a43a; color:#1a1300; font-size:11px; font-weight:700; padding:2px 8px; border-radius:4px }
+  .sec { padding:44px 36px; border-top:1px solid #1b1f38 }
+  .sec .k { font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:#8b93ff; margin-bottom:8px }
+  .sec h2 { font-size:26px; margin:0 0 12px; color:#fff; font-weight:750; letter-spacing:-.01em }
+  .sec p { color:#b7bcd3; font-size:15px; max-width:700px; margin:0 0 14px }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:18px }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px }
+  .tile { background:#121630; border:1px solid #232849; border-radius:10px; padding:16px; font-size:14px; color:#b7bcd3 }
+  .tile b { display:block; color:#fff; margin-bottom:6px; font-size:15px }
+  .tile.you { border-top:3px solid #8b93ff } .tile.ai { border-top:3px solid #5ec8ff }
+  .tile ul { margin:6px 0 0; padding-left:18px }
+  .insp { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px }
+  .insp div { border-radius:10px; padding:14px 16px; font-size:14px }
+  .insp .k8 { background:#121630; border:1px solid #232849; color:#9aa0b8 }
+  .insp .clm { background:#141b34; border:1px solid #3a4f8c; color:#c9d6f5 }
+  .insp b { color:#fff; display:block; margin-bottom:4px }
+  .note { font-size:13px; color:#8a90a8; font-style:italic }
+  .credits { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px }
+  .credits div { background:#121630; border:1px solid #232849; border-radius:10px; padding:14px; font-size:13px; color:#9aa0b8 }
+  .credits b { color:#fff; display:block; margin-bottom:4px; font-size:14px }
+  .final { text-align:center; padding:52px 36px 56px; background: radial-gradient(ellipse at 50% 0%, #1d2150 0%, #0b0e1a 70%) }
+  .final h2 { font-size:28px; color:#fff; margin:0 0 10px }
+  .final pre { display:inline-block; text-align:left; background:#0f1224; border:1px solid #2a2f52; border-radius:8px; padding:12px 18px; font-family:'JetBrains Mono',monospace; font-size:13px; color:#9ad1ff; margin:14px 0 18px }
+  .foot { padding:16px 36px; font-size:12px; color:#6f7590; border-top:1px solid #1b1f38; display:flex; justify-content:space-between }
+</style>
+<style>body{margin:0;padding:24px;background:#05070f}</style>
+</head><body>
+<div class="pg">
+  <div class="nav"><b>CLM</b><span>How it works &nbsp;·&nbsp; Guide &nbsp;·&nbsp; Get started &nbsp;&nbsp;<span class="si">Sign in</span></span></div>
+
+  <div class="hero">
+    <div>
+      <h1>Declare the intent.<br><em>AI builds the code to match. CLM keeps it matching.</em></h1>
+      <p>Build software solo or as a team with AI writing every line — and still have a project you can maintain. You own what the system is for; CLM reconciles the code to it, change after change.</p>
+      <div class="ctas"><span class="btn p">Get started</span><span class="btn s">How it works ↓</span></div>
+      <div class="cmd">/plugin install clm · /clm:init</div>
+    </div>
+    <div class="ring">
+      <div class="circle"></div>
+      <div class="core"><div><b>Your intent</b>specs in git</div></div>
+      <div class="st t"><b>Declare</b><small>you approve, yes or no</small></div>
+      <div class="st r"><b>Build</b><small>AI, test-first</small></div>
+      <div class="st bt"><b>Prove</b><small>a test cites every rule</small></div>
+      <div class="st l"><b>Reconcile</b><small>drift is rebuilt</small></div>
+    </div>
+  </div>
+
+  <div class="fold"><span>first screen ends ≈ here</span></div>
+
+  <div class="sec">
+    <div class="k">The split</div>
+    <h2>You own the what. AI owns the how.</h2>
+    <p>You and your team decide the architecture and the capabilities, with AI helping you think them through. Everything below that line is the AI's: designs, code, tests. You review intent, never diffs.</p>
+    <div class="grid2">
+      <div class="tile you"><b>You</b>Architecture: what must always hold.<br>Capabilities: what people can do with it.<br>One yes or no on each change that matters.</div>
+      <div class="tile ai"><b>AI</b>Turns intent into a graph of specs.<br>Builds every node, test-first, in parallel.<br>Fixes what drifts, defers what's big.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="k">The loop</div>
+    <h2>Reconciliation, borrowed from Kubernetes</h2>
+    <p>CLM isn't a Kubernetes tool. It borrows one idea from it: declare the state you want, and let a controller close the gap, again and again.</p>
+    <div class="insp">
+      <div class="k8"><b>Kubernetes</b>You declare the cluster you want. A controller compares it with what's running and acts until they match.</div>
+      <div class="clm"><b>CLM</b>You declare the system you want. CLM compares it with the code — by content hash, per requirement — and AI builds until every requirement is proven again.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="k">Not a vibe-coded mess</div>
+    <h2>Still maintainable a year from now</h2>
+    <div class="grid3">
+      <div class="tile"><b>Every rule has a test</b>A requirement counts as built only when a passing test cites it at its current version.</div>
+      <div class="tile"><b>Drift can't land</b>Change a requirement and the code behind it is stale until it's rebuilt. Programs check it, not prose.</div>
+      <div class="tile"><b>Nothing dead</b>Code no requirement asks for is removed. The spec describes the present; git keeps the past.</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="k">Solo or as a team</div>
+    <h2>Git is the only channel</h2>
+    <p>Specs, claims, approvals and lands are files and branches in your repository. Many sessions — or many people — build at once, each on its own node, each landing through the same checks. No server to run, nothing to keep in sync.</p>
+  </div>
+
+  <div class="sec">
+    <div class="k">Standing on shoulders</div>
+    <h2>Where the ideas come from</h2>
+    <div class="credits">
+      <div><b>The Spec Growth Engine</b>The spec graph: per-component contracts, dependency-scoped context, blocking drift checks.</div>
+      <div><b>superpowers</b>The craft: brainstorming before writing, test-driven builds, verification before done.</div>
+      <div><b>Anthropic's AI-native SDLC</b>The workflow: intent written down first, humans review intent, AI implements.</div>
+    </div>
+  </div>
+
+  <div class="final">
+    <h2>Start with one conversation</h2>
+    <div class="note" style="font-style:normal;color:#b7bcd3">In Claude Code, on a new project or an existing one:</div>
+    <pre>/plugin marketplace add &lt;public repo&gt;
+/plugin install clm@clm
+/clm:init</pre><br>
+    <span class="btn p">Read the quickstart</span>
+  </div>
+  <div class="foot"><span>CLM is built with CLM.</span><span>Guide · GitHub · Sign in</span></div>
+</div>
+
+</body></html>

@@ -1,0 +1,22 @@
+---
+title: "A capability waits in the queue until every rule that serves it has been built"
+date: 2026-11-01
+status: accepted
+---
+
+Refines `needs-alone-order` and `human-layer-proof`. A capability's test is black-box: it drives the product through the rules that serve it. When a change adds a capability together with new rules, the test can't pass until those rules are built. A rule says what it relies on with `#### Needs`, but an entry of `CAPABILITIES.md` can't hold one (`docs/spec-format.md`), and the `capability` node's Design prose isn't read by the queue. So nothing held a new capability back except a backlog item filed by hand (`backlog/learn-clm-waits-on-the-site`). Every change that adds a capability with new rules runs into this.
+
+Now `clm pending` blocks a pending capability on each `specd` requirement whose effective serves names it (`check.coverage/pending-report`). The blockers go in `needs_pending`, beside the requirement's needs, so the queue, the blockers view, the build prompt, effective priority (`priority-orders-nodes`) and the `web` Worker read them unchanged. A blocked capability passes its priority on to the rules it waits on, as a blocked requirement does.
+
+- **Only `specd` rules count.** A `specd` rule has never been built, so no test could exercise it. A `behind` rule has been built and only changed, so a capability whose test already runs doesn't wait for an unrelated edit to an old rule.
+- **Build order, not a dependency.** It adds no edge to the graph and isn't a `Needs`, so the model's rules for needs don't apply to it: a required `capability` node may wait on rules of an optional node (`optional-nodes`, `web-optional`). It can't deadlock, since a `Needs` can't name an entry and an entry's serves is empty, so nothing waits on a capability in turn.
+- **A repository that doesn't build an optional node.** The wait is computed from the rules the specs hold. A repository that does without an optional node leaves that node out of its specs (`web-optional`), so it has no rules to wait on. A repository that keeps the node has its rules in the queue like any other, and the capability waits only as long as they do; a serving rule that a backlog item or a need holds back shows as the next link in the capability's blocker chain, never as a silent wait.
+
+Rejected:
+- **`#### Needs` on capability entries.** Extra syntax in the product manager's file, which they must remember to keep in step with the rules; `serves` already says which rules a capability rests on.
+- **A backlog item per new capability** with `blocks`, as today. A hand-written wait, which every such change must remember and which nothing removes when the rules are built.
+- **A count instead of the list** (`waiting on <n> serving rules` in `clm pending`). Suggested as a way to show the wait; naming each rule shows it too, in the blocker format every reader of `needs_pending` already parses, where a count would be a second field each would have to learn.
+
+(Amended 2026-11-01, `20261101-serving-rules-inherit-a`: the human confirmed that the serving rules inherit a capability's priority, and `orchestrator/priority-orders-nodes` now states it: priority seeds through every wait a requirement has, its `Needs`, the requirements a move took an obsolete one to, and the `specd` rules serving a capability. The list that holds those waits is renamed from `needs_pending` to `waits_on`, through `expand-contract`; `20261101-needs-pending-goes` removes the old name.)
+
+**Would change if** a capability served by many rules regularly waits on rules its test doesn't exercise; then a capability could name the rules it waits on, or the serving rules be narrowed.

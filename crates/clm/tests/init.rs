@@ -1,0 +1,1298 @@
+//! `clm init`: setting up a repository's CLM tooling, with a fake `gh` on `PATH` that it
+//! must never call.
+
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::process::{Command, Output};
+use std::sync::{PoisonError, RwLock};
+
+use clm_model::RenameKind;
+use tempfile::TempDir;
+
+/// A process forked while another thread holds a just-written executable open for writing
+/// inherits that descriptor, and running the file then fails with "text file busy". Writing
+/// executables holds this lock exclusively, and every spawn shares it.
+static FORKS: RwLock<()> = RwLock::new(());
+
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = {
+        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .output()
+            .unwrap()
+    };
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+fn write(root: &Path, rel: &str, content: &str) {
+    let path = root.join(rel);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(path, content).unwrap();
+}
+
+fn read(root: &Path, rel: &str) -> String {
+    fs::read_to_string(root.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"))
+}
+
+/// An empty git repository in a directory named `shop`.
+fn repo() -> (TempDir, std::path::PathBuf) {
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join("shop");
+    fs::create_dir(&dir).unwrap();
+    git(&dir, &["init", "-q", "-b", "main"]);
+    (tmp, dir)
+}
+
+/// A directory holding a fake `gh` that appends its arguments as one line to `log` and
+/// fails: `clm init` never calls it.
+fn fake_hosts() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+    let script = format!(
+        "#!/bin/sh\nprintf 'gh %s\\n' \"$*\" >> '{log}'\nexit 1\n",
+        log = dir.path().join("log").display(),
+    );
+    let path = dir.path().join("gh");
+    fs::write(&path, script).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    dir
+}
+
+/// Every call the fake `gh` saw.
+fn host_calls(hosts: &TempDir) -> String {
+    fs::read_to_string(hosts.path().join("log")).unwrap_or_default()
+}
+
+fn path_with(hosts: &TempDir) -> String {
+    format!(
+        "{}:{}",
+        hosts.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    )
+}
+
+/// Runs `clm <args>` in `cwd` with `path` as `PATH` and no user settings.
+fn clm(cwd: &Path, args: &[&str], path: &str) -> Output {
+    let config = TempDir::new().unwrap();
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+    Command::new(env!("CARGO_BIN_EXE_clm"))
+        .args(args)
+        .current_dir(cwd)
+        .env("PATH", path)
+        .env("XDG_CONFIG_HOME", config.path())
+        .env_remove("CLM_AUTOSYNC")
+        .env_remove("CLM_DEFECTS")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap()
+}
+
+/// Runs `clm init <args>` in `cwd`, expecting exit 0 and no call to `gh`; returns
+/// stdout.
+fn init(cwd: &Path, args: &[&str], hosts: &TempDir) -> String {
+    let mut all = vec!["init"];
+    all.extend(args);
+    let out = clm(cwd, &all, &path_with(hosts));
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(host_calls(hosts), "", "clm init called a host");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+const FILES: [&str; 6] = [
+    "clm.toml",
+    "scripts/clm-check.sh",
+    "ARCHITECTURE.md",
+    "CAPABILITIES.md",
+    "specs/SPEC.md",
+    "CLAUDE.md",
+];
+
+/// Sets `origin` to `url`.
+fn origin(dir: &Path, url: &str) {
+    git(dir, &["remote", "add", "origin", url]);
+}
+
+/// The `host` line of `clm.toml`.
+fn host_line(dir: &Path) -> String {
+    let toml = read(dir, "clm.toml");
+    toml.lines()
+        .find(|l| l.starts_with("host = "))
+        .unwrap_or_else(|| panic!("no host: {toml}"))
+        .to_owned()
+}
+
+#[test]
+fn empty_repository() {
+    // req:init/init-files@e92fe31e
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    let hosts = fake_hosts();
+    let out = init(&dir, &["--lang", "rust"], &hosts);
+    for file in FILES {
+        assert!(dir.join(file).is_file(), "{file} missing");
+        assert!(out.contains(&format!("wrote {file}\n")), "{out}");
+    }
+    assert!(!dir.join(".github").exists(), "{out}");
+    let check = dir.join("scripts/clm-check.sh");
+    assert_eq!(
+        fs::metadata(&check).unwrap().permissions().mode() & 0o111,
+        0o111
+    );
+    let script = read(&dir, "scripts/clm-check.sh");
+    assert!(script.starts_with("#!/usr/bin/env bash\n"), "{script}");
+    assert!(script.lines().any(|l| l == "cargo test"), "{script}");
+    let toml = read(&dir, "clm.toml");
+    assert!(toml.contains("command = [\"cargo-machete\"]"), "{toml}");
+    assert!(toml.lines().any(|l| l == "host = \"github\""), "{toml}");
+    assert!(toml.lines().any(|l| l == "approval = \"any\""), "{toml}");
+    assert!(toml.contains("`other`"), "{toml}");
+    assert!(
+        toml.contains("\n[land]\ncheck = \"scripts/clm-check.sh\"\n"),
+        "{toml}"
+    );
+    let spec = read(&dir, "specs/SPEC.md");
+    assert!(spec.contains("title: \"shop\"\n"), "{spec}");
+    assert!(spec.contains("status: unbuilt\n"), "{spec}");
+    let check = clm(&dir, &["check"], &path_with(&hosts));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+    // `clm` reads the settings back as written.
+    assert_eq!(config(&dir, "host"), "github");
+    assert_eq!(config(&dir, "approval"), "any");
+    assert_eq!(config(&dir, "land"), "check=scripts/clm-check.sh");
+}
+
+/// The element names `clm hashes <layer>` prints in `dir`.
+fn layer_entries(dir: &Path, layer: &str, hosts: &TempDir) -> Vec<String> {
+    let out = clm(dir, &["hashes", layer], &path_with(hosts));
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    String::from_utf8(out.stdout)
+        .unwrap()
+        .lines()
+        .map(|l| l.split(' ').next().unwrap().to_string())
+        .collect()
+}
+
+/// The architectural constraints `clm` enforces in any repository, as CLM's own
+/// `ARCHITECTURE.md` names them.
+const ENFORCED: [&str; 12] = [
+    "ai-writes-code",
+    "humans-review-intent",
+    "deterministic-enforcement",
+    "proven-by-tests",
+    "no-silent-drift",
+    "git-is-truth",
+    "hash-based-staleness",
+    "regenerate-dont-merge",
+    "ancestor-scoped-context",
+    "spec-is-current",
+    "fold-small-defer-large",
+    "no-dead-code",
+];
+
+#[test]
+fn init_writes_capabilities() {
+    // req:init/init-files@e92fe31e
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    let out = init(&dir, &["--lang", "rust"], &hosts);
+    assert!(out.contains("wrote CAPABILITIES.md\n"), "{out}");
+    let caps = read(&dir, "CAPABILITIES.md");
+    assert!(caps.contains("\n## Capabilities\n"), "{caps}");
+    // No entry the project's own tests would have to prove.
+    for layer in ["capability", "architecture"] {
+        assert_eq!(layer_entries(&dir, layer, &hosts), Vec::<String>::new());
+    }
+    let pending = clm(&dir, &["pending"], &path_with(&hosts));
+    assert_eq!(String::from_utf8_lossy(&pending.stdout), "", "{pending:?}");
+    // The rules `clm` enforces are named, outside `## Constraints`.
+    let arch = read(&dir, "ARCHITECTURE.md");
+    let enforced = &arch[arch.find("\n## Enforced by clm\n").expect(&arch)..];
+    let enforced = &enforced[..enforced.find("\n## Constraints\n").expect(&arch)];
+    for slug in ENFORCED {
+        assert!(
+            enforced.contains(&format!("**`{slug}`**")),
+            "{slug}: {arch}"
+        );
+    }
+    // ... and each is one of CLM's own architecture requirements.
+    let own =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"))
+            .unwrap();
+    let (graph, _) = clm_model::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    for slug in ENFORCED {
+        // A slug a change has since renamed counts under its new name.
+        let renamed = graph
+            .changes
+            .values()
+            .flat_map(|c| &c.renames)
+            .filter(|r| {
+                r.kind == RenameKind::Requirement && r.name == format!("architecture/{slug}")
+            })
+            .map(|r| r.to.rsplit('/').next().unwrap_or(&r.to));
+        assert!(
+            std::iter::once(slug)
+                .chain(renamed)
+                .any(|s| entry_heading(&own, s).is_some()),
+            "{slug}"
+        );
+    }
+    let check = clm(&dir, &["check"], &path_with(&hosts));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+
+    // An existing CAPABILITIES.md is the project's.
+    let (_tmp2, other) = repo();
+    write(&other, "CAPABILITIES.md", "# Ours\n");
+    let out = init(&other, &["--lang", "rust"], &hosts);
+    assert_eq!(read(&other, "CAPABILITIES.md"), "# Ours\n");
+    assert!(out.contains("kept CAPABILITIES.md\n"), "{out}");
+}
+
+#[test]
+fn template_says_pull_request() {
+    // req:init/template-says-pull-request@f22d765f
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let arch = read(&dir, "ARCHITECTURE.md");
+    let line = arch
+        .lines()
+        .find(|l| l.starts_with("- **`git-is-truth`**"))
+        .expect(&arch);
+    assert!(line.contains("a pull request's URL"), "{line}");
+    assert!(!line.contains("page's URL"), "{line}");
+    // No template calls a host's pull request a page; only the guide has pages.
+    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-init/templates");
+    for entry in fs::read_dir(templates).unwrap() {
+        let path = entry.unwrap().path();
+        for line in fs::read_to_string(&path).unwrap().lines() {
+            assert!(!line.contains("page's"), "{}: {line}", path.display());
+        }
+    }
+}
+
+#[test]
+fn template_says_architectural_constraint() {
+    // req:init/template-says-architectural-constraint@04de37bd
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &[], &hosts);
+    let arch = read(&dir, "ARCHITECTURE.md");
+    let claude = read(&dir, "CLAUDE.md");
+    assert!(
+        arch.contains("\nThe architectural constraints:"),
+        "preamble: {arch}"
+    );
+    assert!(arch.contains("\n## Constraints\n"), "{arch}");
+    assert!(!arch.contains("## Requirements"), "{arch}");
+    assert!(
+        claude.contains("architectural constraints apply to all work"),
+        "{claude}"
+    );
+    assert_eq!(
+        layer_entries(&dir, "architecture", &hosts),
+        Vec::<String>::new()
+    );
+    let old = |text: &str| {
+        let words: Vec<String> = text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect();
+        words
+            .windows(2)
+            .any(|w| w[0] == "architecture" && w[1].starts_with("requirement"))
+    };
+    assert!(!old(&arch) && !old(&claude));
+    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-init/templates");
+    for entry in fs::read_dir(templates).unwrap() {
+        let path = entry.unwrap().path();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(!old(&text), "{} holds the old term", path.display());
+    }
+    let check = clm(&dir, &["check"], &path_with(&hosts));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+}
+
+#[test]
+fn templates_say_new_words() {
+    // req:init/templates-say-new-words@46b3713f
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &[], &hosts);
+    assert!(read(&dir, "specs/SPEC.md").contains("\nstatus: unbuilt\n"));
+    let arch = read(&dir, "ARCHITECTURE.md");
+    let line = arch
+        .lines()
+        .find(|l| l.starts_with("- **`humans-review-intent`**"))
+        .expect(&arch);
+    assert!(line.contains("`human_burdens`"), "{line}");
+    assert!(!line.contains("`burdens`"), "{line}");
+    // No template holds a word `plain-terms-renames` replaced.
+    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-init/templates");
+    for entry in fs::read_dir(templates).unwrap() {
+        let path = entry.unwrap().path();
+        for line in fs::read_to_string(&path).unwrap().lines() {
+            assert!(
+                !line.contains("specd")
+                    && !line.contains("kind: human\n")
+                    && !line.contains("kind: friction")
+                    && !line
+                        .split(|c: char| !c.is_alphanumeric() && c != '_')
+                        .any(|w| w == "burdens"),
+                "{}: {line}",
+                path.display()
+            );
+        }
+    }
+    // The model loads the tree with no violation.
+    let check = clm(&dir, &["check"], &path_with(&hosts));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+}
+
+#[test]
+fn architecture_template_proof() {
+    // req:init/architecture-template-proof@4b06a668
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let arch = read(&dir, "ARCHITECTURE.md");
+    // The preamble says how an entry is proved, and that no test cites one.
+    let preamble = &arch[..arch.find("\n## Enforced by clm\n").expect(&arch)];
+    for needle in [
+        "under `#### Enforced by`",
+        "under `#### Untested`, or both",
+        "A test never cites an entry",
+    ] {
+        assert!(preamble.contains(needle), "{needle}: {preamble}");
+    }
+    assert!(!arch.contains(concat!("req", ":architecture/")), "{arch}");
+    // `no-silent-drift` is stated as CLM's own entry states it.
+    let own =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"))
+            .unwrap();
+    let start = entry_heading(&own, "no-silent-drift").expect("no-silent-drift");
+    let statement = own[start..].lines().next().unwrap();
+    assert!(statement.contains("pending, not drift"), "{statement}");
+    let line = arch
+        .lines()
+        .find(|l| l.starts_with("- **`no-silent-drift`**"))
+        .expect(&arch);
+    assert_eq!(line, format!("- **`no-silent-drift`**: {statement}"));
+}
+
+#[test]
+fn claude_md_points_at_the_guide() {
+    // req:init/claude-md-points-at-guide@7f48ae23
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let claude = read(&dir, "CLAUDE.md");
+    assert!(claude.contains("`clm guide`"), "{claude}");
+    assert!(
+        !claude.contains("https://") && !claude.contains("http://"),
+        "{claude}"
+    );
+}
+
+#[test]
+fn claude_md_names_the_skills() {
+    // req:init/claude-md-names-the-skills@78ac3449
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let claude = read(&dir, "CLAUDE.md");
+    assert!(claude.contains("/clm:propose"), "{claude}");
+    assert!(claude.contains("/clm:build"), "{claude}");
+    assert!(!claude.contains("/clm:implement"), "{claude}");
+}
+
+/// The frontmatter line of `specs/SPEC.md` that starts with `key: `.
+fn spec_key(dir: &Path, key: &str) -> String {
+    let spec = read(dir, "specs/SPEC.md");
+    spec.lines()
+        .find(|l| l.starts_with(&format!("{key}: ")))
+        .unwrap_or_else(|| panic!("no {key}: {spec}"))
+        .to_owned()
+}
+
+const ROOT_PATHS: &str = r#"paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]"#;
+
+#[test]
+fn root_owns_what_init_writes_and_leaves_the_code_outside() {
+    // req:init/init-root-ownership@8c7cd82c
+    let (_tmp, dir) = repo();
+    for file in [
+        "src/main.rs",
+        "src/lib/x.rs",
+        "scripts/build.sh",
+        "README.md",
+        "docs/a.md",
+    ] {
+        write(&dir, file, "x\n");
+    }
+    // An untracked file isn't the repository's code yet.
+    git(&dir, &["add", "src", "scripts", "README.md", "docs"]);
+    write(&dir, "notes.txt", "x\n");
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "paths"), ROOT_PATHS);
+    assert_eq!(
+        spec_key(&dir, "outside"),
+        r#"outside: ["README.md", "scripts/**", "src/**"]"#
+    );
+}
+
+#[test]
+fn root_outside_in_an_empty_repository() {
+    // req:init/init-root-ownership@8c7cd82c
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "paths"), ROOT_PATHS);
+    assert_eq!(spec_key(&dir, "outside"), "outside: []");
+}
+
+#[test]
+fn root_outside_skips_clm_files_and_escapes() {
+    // req:init/init-root-ownership@8c7cd82c
+    // CLM's own files are the root's or spec paths; a name with `"` or `\` is escaped as YAML.
+    let (_tmp, dir) = repo();
+    for file in [
+        "clm.toml",
+        ".gitignore",
+        "scripts/clm-check.sh",
+        "ARCHITECTURE.md",
+        "CAPABILITIES.md",
+        "CLAUDE.md",
+        "specs/x/SPEC.md",
+        "changes/c/change.md",
+        "backlog/b.md",
+        "a\"b\\c.txt",
+        "Zed",
+    ] {
+        write(&dir, file, "x\n");
+    }
+    git(&dir, &["add", "-A"]);
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(
+        spec_key(&dir, "outside"),
+        r#"outside: ["Zed", "a\"b\\c.txt"]"#
+    );
+}
+
+#[test]
+fn no_remote() {
+    // req:init/init-files@e92fe31e
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(host_line(&dir), "host = \"none\"");
+}
+
+#[test]
+fn host_given() {
+    // req:init/init-files@e92fe31e
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    init(&dir, &["--host", "git"], &fake_hosts());
+    assert_eq!(host_line(&dir), "host = \"git\"");
+    for host in ["none", "github"] {
+        let (_tmp, dir) = repo();
+        init(&dir, &["--host", host], &fake_hosts());
+        assert_eq!(host_line(&dir), format!("host = \"{host}\""));
+    }
+
+    for bad in ["gitlab", "azure"] {
+        let (_tmp, dir) = repo();
+        let out = clm(&dir, &["init", "--host", bad], &path_with(&fake_hosts()));
+        assert_ne!(out.status.code(), Some(0), "{bad}: {out:?}");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
+    }
+}
+
+#[test]
+fn host_from_origin() {
+    // req:init/init-files@e92fe31e
+    for (url, host) in [
+        ("git@github.com:o/r.git", "github"),
+        ("https://GitHub.com/o/r", "github"),
+        ("https://dev.azure.com/o/p/_git/r", "git"),
+        ("ssh://git@example.com/srv/r.git", "git"),
+    ] {
+        let (_tmp, dir) = repo();
+        origin(&dir, url);
+        init(&dir, &[], &fake_hosts());
+        assert_eq!(host_line(&dir), format!("host = \"{host}\""), "{url}");
+    }
+}
+
+#[test]
+fn project_files_kept() {
+    // req:init/init-files@e92fe31e
+    let (_tmp, dir) = repo();
+    write(&dir, "CLAUDE.md", "# Our rules\n");
+    write(&dir, "clm.toml", "defects = \"off\"\n");
+    let out = init(&dir, &["--lang", "rust"], &fake_hosts());
+    assert_eq!(read(&dir, "CLAUDE.md"), "# Our rules\n");
+    assert_eq!(read(&dir, "clm.toml"), "defects = \"off\"\n");
+    assert!(out.contains("kept CLAUDE.md\n"), "{out}");
+    assert!(out.contains("kept clm.toml\n"), "{out}");
+    assert!(out.contains("wrote ARCHITECTURE.md\n"), "{out}");
+}
+
+/// `clm config get <key>`'s value in `dir`.
+fn config(dir: &Path, key: &str) -> String {
+    let out = clm(dir, &["config", "get", key], "/usr/bin:/bin");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let line = String::from_utf8(out.stdout).unwrap();
+    line.split('\t').next().unwrap().to_owned()
+}
+
+#[test]
+fn two_languages() {
+    // req:init/init-detectors@f534f33f
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "rust", "--lang", "python"], &fake_hosts());
+    assert_eq!(
+        config(&dir, "detectors"),
+        "rust-unused-dependencies,python-dead-code"
+    );
+    let toml = read(&dir, "clm.toml");
+    assert_eq!(toml.matches("\nhint = ").count(), 2, "{toml}");
+}
+
+#[test]
+fn existing_codebase() {
+    // req:init/init-detectors@f534f33f
+    let (_tmp, dir) = repo();
+    write(&dir, "src/main.rs", "fn main() {}\n");
+    init(&dir, &["--lang", "rust", "--no-detectors"], &fake_hosts());
+    assert_eq!(config(&dir, "detectors"), "");
+    // The check script still builds the language.
+    let script = read(&dir, "scripts/clm-check.sh");
+    assert!(script.lines().any(|l| l == "cargo test"), "{script}");
+}
+
+#[test]
+fn repeated_and_unknown_languages() {
+    // req:init/init-detectors@f534f33f
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &["--lang", "rust", "--lang", "rust"], &hosts);
+    assert_eq!(config(&dir, "detectors"), "rust-unused-dependencies");
+
+    let (_tmp, dir) = repo();
+    let out = clm(&dir, &["init", "--lang", "cobol"], &path_with(&hosts));
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains("cobol") && err.contains("rust, typescript, python"),
+        "{err}"
+    );
+    assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
+}
+
+/// Commits everything in `dir`.
+fn commit_all(dir: &Path) {
+    git(dir, &["add", "-A"]);
+    git(dir, &["commit", "-q", "-m", "x"]);
+}
+
+#[test]
+fn upgrade() {
+    // req:init/init-rerun@6580fa19
+    // Initialised by an earlier `clm`, which also wrote a workflow; the project edited its
+    // check script and settings since.
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    let hosts = fake_hosts();
+    init(&dir, &["--lang", "rust"], &hosts);
+    let check = format!("{}make lint\n", read(&dir, "scripts/clm-check.sh"));
+    write(&dir, "scripts/clm-check.sh", &check);
+    write(&dir, "clm.toml", "host = \"git\"\n");
+    write(
+        &dir,
+        ".github/workflows/clm.yml",
+        "# Generated by clm init (clm 0.2.0).\n",
+    );
+    commit_all(&dir);
+
+    let out = init(&dir, &["--lang", "rust", "--lang", "python"], &hosts);
+    assert!(out.contains("kept scripts/clm-check.sh\n"), "{out}");
+    assert!(out.contains("kept clm.toml\n"), "{out}");
+    assert!(out.contains("kept .gitignore\n"), "{out}");
+    assert_eq!(
+        git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
+}
+
+#[test]
+fn upgrade_adds_capabilities() {
+    // req:init/init-rerun@6580fa19
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &["--lang", "rust"], &hosts);
+    fs::remove_file(dir.join("CAPABILITIES.md")).unwrap();
+    commit_all(&dir);
+    let out = init(&dir, &["--lang", "rust"], &hosts);
+    assert!(out.contains("wrote CAPABILITIES.md\n"), "{out}");
+    assert_eq!(
+        git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+        "?? CAPABILITIES.md\n"
+    );
+}
+
+#[test]
+fn idempotent() {
+    // req:init/init-rerun@6580fa19
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &["--lang", "rust", "--lang", "typescript"], &hosts);
+    let first: Vec<(String, Vec<u8>)> = FILES
+        .iter()
+        .chain(&[".gitignore"])
+        .map(|f| (f.to_string(), fs::read(dir.join(f)).unwrap()))
+        .collect();
+    commit_all(&dir);
+    init(&dir, &["--lang", "rust", "--lang", "typescript"], &hosts);
+    assert_eq!(
+        git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
+
+    // The same inputs in another repository give the same bytes.
+    let (_tmp2, other) = repo();
+    init(&other, &["--lang", "rust", "--lang", "typescript"], &hosts);
+    for (file, bytes) in first {
+        assert_eq!(fs::read(other.join(&file)).unwrap(), bytes, "{file}");
+    }
+}
+
+/// The text after `Next steps (yours):`.
+fn next_steps(out: &str) -> String {
+    let (_, steps) = out
+        .split_once("Next steps (yours):\n")
+        .unwrap_or_else(|| panic!("no next steps: {out}"));
+    steps.to_owned()
+}
+
+/// Asserts the steps name nothing of hosted CI.
+fn no_ci(steps: &str) {
+    for word in [
+        "CLM_RELEASES_TOKEN",
+        "auto-merge",
+        "Actions",
+        "status check",
+    ] {
+        assert!(!steps.contains(word), "{word}: {steps}");
+    }
+}
+
+#[test]
+fn next_steps_name_the_push_and_clm_land() {
+    // req:init/init-next-steps@d7dda542
+    let (_tmp, dir) = repo();
+    let steps = next_steps(&init(&dir, &["--lang", "rust"], &fake_hosts()));
+    assert!(steps.contains("push them to `main`"), "{steps}");
+    assert!(steps.contains("`clm land`"), "{steps}");
+    no_ci(&steps);
+
+    // On a host, `main` may be protected: the identity that runs `clm land` must get through.
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+    assert!(steps.contains("protects `main`"), "{steps}");
+    assert!(steps.contains("runs `clm land` push"), "{steps}");
+    no_ci(&steps);
+}
+
+#[test]
+fn next_steps_skip_what_is_done() {
+    // req:init/init-next-steps@d7dda542
+    // The push is left after a local commit, and not once `origin/main` has the files; the
+    // protection step stays, since `clm init` can't ask the host.
+    let (tmp, dir) = repo();
+    let hosts = fake_hosts();
+    let steps = next_steps(&init(&dir, &[], &hosts));
+    assert_eq!(steps.lines().count(), 1, "{steps}");
+    commit_all(&dir);
+    // With no remote, committing is all there is to do.
+    let out = init(&dir, &[], &hosts);
+    assert!(!out.contains("Next steps (yours):"), "{out}");
+    // Once a remote is added, the push is left; the kept `clm.toml` still says `none`, so
+    // no protection step.
+    git(&dir, &["remote", "add", "origin", "/nowhere.git"]);
+    let steps = next_steps(&init(&dir, &[], &hosts));
+    assert!(steps.contains("push them to `main`"), "{steps}");
+    assert!(!steps.contains("protects `main`"), "{steps}");
+    git(&dir, &["remote", "remove", "origin"]);
+
+    write(
+        &dir,
+        "clm.toml",
+        "host = \"git\"\n[land]\ncheck = \"scripts/clm-check.sh\"\n",
+    );
+    commit_all(&dir);
+    let origin_dir = tmp.path().join("origin.git");
+    git(tmp.path(), &["init", "-q", "--bare", "origin.git"]);
+    origin(&dir, origin_dir.to_str().unwrap());
+    git(&dir, &["push", "-q", "origin", "main"]);
+    let steps = next_steps(&init(&dir, &[], &hosts));
+    assert!(!steps.contains("push them to `main`"), "{steps}");
+    assert_eq!(steps.lines().count(), 1, "{steps}");
+    assert!(steps.contains("protects `main`"), "{steps}");
+}
+
+/// The header the old template wrote on the first line of `.github/workflows/clm.yml`.
+const OLD_WORKFLOW: &str = "# Generated by clm init (clm 0.5.0). Do not edit: run clm init \
+                            again to regenerate.\nname: CLM\n";
+
+/// A repository `clm init` set up before forge adapters: `clm.toml` with `merge` and no
+/// `host` or `[land]`, the generated workflow and the build script it called, committed.
+fn pre_forge_repository(dir: &Path, toml: &str) {
+    write(dir, "clm.toml", toml);
+    write(dir, ".github/workflows/clm.yml", OLD_WORKFLOW);
+    write(dir, ".github/scripts/clm-build.sh", "#!/bin/sh\nmake\n");
+    commit_all(dir);
+}
+
+const PRE_FORGE_TOML: &str = "approval = \"any\"\nmerge = \"auto\"\n";
+
+/// The index of the first step line holding every one of `words`.
+fn step(steps: &str, words: &[&str]) -> usize {
+    steps
+        .lines()
+        .position(|l| words.iter().all(|w| l.contains(w)))
+        .unwrap_or_else(|| panic!("no step naming {words:?}: {steps}"))
+}
+
+#[test]
+fn upgrade_steps_for_a_repository_set_up_before_forge_adapters() {
+    // req:init/init-next-steps@d7dda542
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    pre_forge_repository(&dir, PRE_FORGE_TOML);
+    let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+    assert_eq!(read(&dir, "clm.toml"), PRE_FORGE_TOML);
+    assert_eq!(read(&dir, ".github/workflows/clm.yml"), OLD_WORKFLOW);
+    assert_eq!(
+        read(&dir, ".github/scripts/clm-build.sh"),
+        "#!/bin/sh\nmake\n"
+    );
+    let order = [
+        step(&steps, &["`host = \"github\"`", "clm.toml"]),
+        step(&steps, &["`merge`", "clm.toml"]),
+        step(
+            &steps,
+            &[
+                "`[land]`",
+                "`check = \"scripts/clm-check.sh\"`",
+                ".github/scripts/clm-build.sh",
+            ],
+        ),
+        step(&steps, &["Delete `.github/workflows/clm.yml`"]),
+        step(&steps, &["push them to `main`"]),
+    ];
+    assert!(order.is_sorted() && order[0] == 0, "{order:?}: {steps}");
+    no_ci(&steps);
+}
+
+#[test]
+fn upgrade_host_step_without_a_remote() {
+    // req:init/init-next-steps@d7dda542
+    let (_tmp, dir) = repo();
+    pre_forge_repository(&dir, PRE_FORGE_TOML);
+    let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+    step(&steps, &["`host = \"none\"`"]);
+    // Without `clm-build.sh`, the `[land]` step names nothing to move.
+    let (_tmp, dir) = repo();
+    write(&dir, "clm.toml", "host = \"git\"\n[land]\n");
+    let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+    assert!(!steps.contains("clm-build.sh"), "{steps}");
+    step(&steps, &["`[land]`"]);
+    // Any `check`, even empty, counts as set.
+    let (_tmp, dir) = repo();
+    write(&dir, "clm.toml", "host = \"git\"\n[land]\ncheck = \"\"\n");
+    let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+    assert!(!steps.contains("[land]"), "{steps}");
+}
+
+#[test]
+fn upgrade_steps_for_settings_that_arent_toml() {
+    // req:init/init-next-steps@d7dda542
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    pre_forge_repository(&dir, "host = \n");
+    let steps = next_steps(&init(&dir, &[], &fake_hosts()));
+    for word in ["host =", "merge", "[land]"] {
+        assert!(!steps.contains(word), "{word}: {steps}");
+    }
+    step(&steps, &["Delete `.github/workflows/clm.yml`"]);
+    step(&steps, &["push them to `main`"]);
+}
+
+#[test]
+fn old_workflow_at_the_top_of_a_subdirectory_clm_repository() {
+    // req:init/init-next-steps@d7dda542
+    let hosts = fake_hosts();
+    let (_tmp0, model) = repo();
+    init(&model, &[], &hosts);
+    let (_tmp, dir) = repo();
+    let tool = dir.join("tool");
+    for file in FILES.iter().chain(&[".gitignore"]) {
+        write(&tool, file, &read(&model, file));
+    }
+    write(&dir, ".github/workflows/clm.yml", OLD_WORKFLOW);
+    // Under the CLM repository too: each is named by its path from the git repository's top.
+    write(&tool, ".github/workflows/clm.yml", OLD_WORKFLOW);
+    commit_all(&dir);
+    let steps = next_steps(&init(&tool, &[], &hosts));
+    assert_eq!(
+        git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
+    step(&steps, &["Delete `.github/workflows/clm.yml`"]);
+    step(&steps, &["Delete `tool/.github/workflows/clm.yml`"]);
+    step(&steps, &["push them to `main`"]);
+}
+
+#[test]
+fn no_upgrade_steps_for_current_settings() {
+    // req:init/init-next-steps@d7dda542
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    let hosts = fake_hosts();
+    init(&dir, &["--lang", "rust"], &hosts);
+    commit_all(&dir);
+    let steps = next_steps(&init(&dir, &["--lang", "rust"], &hosts));
+    for word in ["clm.toml", "merge", "clm.yml"] {
+        assert!(!steps.contains(word), "{word}: {steps}");
+    }
+}
+
+#[test]
+fn no_upgrade_step_for_the_projects_own_workflow() {
+    // req:init/init-next-steps@d7dda542
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &[], &hosts);
+    write(&dir, ".github/workflows/clm.yml", "name: CLM\n");
+    commit_all(&dir);
+    let out = init(&dir, &[], &hosts);
+    assert!(!out.contains("clm.yml"), "{out}");
+    // A byte-order mark before the old header still marks the generated workflow.
+    write(
+        &dir,
+        ".github/workflows/clm.yml",
+        &format!("\u{feff}{OLD_WORKFLOW}"),
+    );
+    step(&next_steps(&init(&dir, &[], &hosts)), &["clm.yml"]);
+}
+
+#[test]
+fn rerun_from_a_subdirectory() {
+    // req:init/init-root@79bcb63a
+    let (_tmp, dir) = repo();
+    let hosts = fake_hosts();
+    init(&dir, &["--lang", "rust"], &hosts);
+    write(&dir, "src/main.rs", "fn main() {}\n");
+    commit_all(&dir);
+    let out = init(&dir.join("src"), &["--lang", "rust"], &hosts);
+    assert!(out.contains("kept specs/SPEC.md\n"), "{out}");
+    assert_eq!(git(&dir, &["status", "--porcelain"]), "");
+    assert_eq!(fs::read_dir(dir.join("src")).unwrap().count(), 1);
+}
+
+#[test]
+fn clm_repository_in_a_subdirectory() {
+    // req:init/init-root@79bcb63a
+    // `tool/` holds files an earlier `clm` wrote, its workflow among them; the git
+    // repository's top has none. The workflow is the project's now and stays as it is, and
+    // a clean `git status` (untracked files included) shows nothing written outside `tool/`.
+    let hosts = fake_hosts();
+    let (_tmp0, model) = repo();
+    init(&model, &["--lang", "rust"], &hosts);
+    let (_tmp, dir) = repo();
+    let tool = dir.join("tool");
+    // An earlier `clm` wrote other bytes than this one, and the project has edited them.
+    for file in FILES {
+        write(&tool, file, &format!("{}\n# edited\n", read(&model, file)));
+    }
+    write(
+        &tool,
+        ".github/workflows/clm.yml",
+        "# Generated by clm init (clm 0.2.0).\n",
+    );
+    write(&tool, ".gitignore", IGNORED);
+    fs::create_dir_all(tool.join("changes")).unwrap();
+    write(&dir, "README.md", "# shop\n");
+    commit_all(&dir);
+
+    let out = init(&tool.join("changes"), &["--lang", "rust"], &hosts);
+    for file in FILES {
+        assert!(out.contains(&format!("kept {file}\n")), "{out}");
+    }
+    assert!(!out.contains("wrote .github"), "{out}");
+    assert_eq!(
+        git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+        ""
+    );
+}
+
+#[test]
+fn no_clm_repository() {
+    // req:init/init-root@79bcb63a
+    let (_tmp, dir) = repo();
+    write(&dir, "src/main.rs", "fn main() {}\n");
+    init(&dir.join("src"), &["--lang", "rust"], &fake_hosts());
+    for file in FILES {
+        assert!(dir.join(file).is_file(), "{file} missing");
+    }
+    assert_eq!(fs::read_dir(dir.join("src")).unwrap().count(), 1);
+}
+
+#[test]
+fn search_stops_at_the_git_repository() {
+    // req:init/init-root@79bcb63a
+    // A git repository nested in a CLM repository is a repository of its own.
+    let (_tmp, outer) = repo();
+    let hosts = fake_hosts();
+    init(&outer, &[], &hosts);
+    let inner = outer.join("vendor/lib");
+    fs::create_dir_all(&inner).unwrap();
+    git(&inner, &["init", "-q", "-b", "main"]);
+    init(&inner, &[], &hosts);
+    for file in FILES {
+        assert!(inner.join(file).is_file(), "{file} missing");
+    }
+}
+
+#[test]
+fn search_stops_at_the_top_without_a_git_entry() {
+    // req:init/init-root@79bcb63a
+    // A work tree with its git directory elsewhere has no `.git`: the search still ends at
+    // its top, not at a CLM repository above it.
+    let tmp = TempDir::new().unwrap();
+    write(tmp.path(), "specs/SPEC.md", "outside\n");
+    let tree = tmp.path().join("tree");
+    fs::create_dir(&tree).unwrap();
+    let git_dir = TempDir::new().unwrap();
+    git(git_dir.path(), &["init", "-q", "--bare", "-b", "main", "."]);
+    let hosts = fake_hosts();
+    let config = TempDir::new().unwrap();
+    let out = {
+        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        Command::new(env!("CARGO_BIN_EXE_clm"))
+            .arg("init")
+            .current_dir(&tree)
+            .env("PATH", path_with(&hosts))
+            .env("XDG_CONFIG_HOME", config.path())
+            .env("GIT_DIR", git_dir.path())
+            .env("GIT_WORK_TREE", &tree)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .output()
+            .unwrap()
+    };
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(tree.join("specs/SPEC.md").is_file(), "{out:?}");
+    assert!(!tmp.path().join("clm.toml").exists(), "{out:?}");
+}
+
+#[test]
+fn not_a_repository() {
+    // req:init/init-files@e92fe31e
+    let tmp = TempDir::new().unwrap();
+    let dir = tmp.path().join("plain");
+    fs::create_dir(&dir).unwrap();
+    let hosts = fake_hosts();
+    let config = TempDir::new().unwrap();
+    let out = {
+        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        Command::new(env!("CARGO_BIN_EXE_clm"))
+            .args(["init", "--lang", "rust"])
+            .current_dir(&dir)
+            .env("PATH", path_with(&hosts))
+            .env("XDG_CONFIG_HOME", config.path())
+            .env("GIT_CEILING_DIRECTORIES", tmp.path())
+            .output()
+            .unwrap()
+    };
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("git"),
+        "{out:?}"
+    );
+    assert_eq!(fs::read_dir(&dir).unwrap().count(), 0, "nothing written");
+    assert_eq!(host_calls(&hosts), "");
+}
+
+/// The `.gitignore` `clm init` writes when there is none.
+const IGNORED: &str = "clm.local.toml\n.clm/\n.claude/worktrees/\n";
+
+/// The three paths the scenarios ask git about, and what `git check-ignore` prints for them.
+const SESSION_PATHS: [&str; 3] = ["clm.local.toml", ".clm/pr-body.md", ".claude/worktrees/x/f"];
+const ALL_IGNORED: &str = "clm.local.toml\n.clm/pr-body.md\n.claude/worktrees/x/f\n";
+
+/// `git check-ignore` of the session paths in `dir`.
+fn check_ignore(dir: &Path) -> Output {
+    let config = TempDir::new().unwrap();
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+    Command::new("git")
+        .arg("check-ignore")
+        .args(SESSION_PATHS)
+        .current_dir(dir)
+        .env("XDG_CONFIG_HOME", config.path())
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .unwrap()
+}
+
+/// Runs `clm init` in a fresh repository whose `.gitignore` is `before`, checks git then
+/// ignores every session path, and returns the file's bytes after and the output.
+fn init_with_ignore(before: &[u8]) -> (Vec<u8>, String) {
+    let (_tmp, dir) = repo();
+    fs::write(dir.join(".gitignore"), before).unwrap();
+    let out = init(&dir, &[], &fake_hosts());
+    let check = check_ignore(&dir);
+    assert_eq!(
+        check.stdout,
+        ALL_IGNORED.as_bytes(),
+        "{before:?}: {check:?}"
+    );
+    (fs::read(dir.join(".gitignore")).unwrap(), out)
+}
+
+#[test]
+fn ignore_file_written_in_a_new_repository() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    let (_tmp, dir) = repo();
+    let out = init(&dir, &[], &fake_hosts());
+    assert_eq!(read(&dir, ".gitignore"), IGNORED);
+    assert!(out.contains("wrote .gitignore\n"), "{out}");
+    let check = check_ignore(&dir);
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+    assert_eq!(check.stdout, ALL_IGNORED.as_bytes(), "{check:?}");
+}
+
+#[test]
+fn empty_ignore_file() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    let (after, out) = init_with_ignore(b"");
+    assert_eq!(after, IGNORED.as_bytes());
+    assert!(
+        out.contains(
+            "added clm.local.toml to .gitignore\nadded .clm/ to .gitignore\n\
+             added .claude/worktrees/ to .gitignore\n"
+        ),
+        "{out}"
+    );
+}
+
+#[test]
+fn ignore_lines_appended() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    // Each keeps its bytes and gains the missing entries, in order, each on a line of its own.
+    for (before, after) in [
+        (
+            "node_modules/",
+            "node_modules/\nclm.local.toml\n.clm/\n.claude/worktrees/\n",
+        ),
+        (
+            "# ours\n/target/\n",
+            "# ours\n/target/\nclm.local.toml\n.clm/\n.claude/worktrees/\n",
+        ),
+        (
+            "clm.local.toml.bak\n.clm-old/\n",
+            "clm.local.toml.bak\n.clm-old/\nclm.local.toml\n.clm/\n.claude/worktrees/\n",
+        ),
+        // A Windows-authored file gains CRLF lines.
+        (
+            "target/\r\n/clm.local.toml\r\n",
+            "target/\r\n/clm.local.toml\r\n.clm/\r\n.claude/worktrees/\r\n",
+        ),
+        // Some already listed, a directory without its final `/`.
+        (
+            "/clm.local.toml\n/.clm\n",
+            "/clm.local.toml\n/.clm\n.claude/worktrees/\n",
+        ),
+        // Git reads the leading spaces as part of the pattern, so it matches nothing.
+        (
+            "  clm.local.toml\n.clm/\n.claude/worktrees/\n",
+            "  clm.local.toml\n.clm/\n.claude/worktrees/\nclm.local.toml\n",
+        ),
+        // A later negation un-ignores it; the appended line goes after it, so it wins.
+        (
+            "clm.local.toml\n.clm/\n.claude/worktrees/\n!clm.local.toml\n",
+            "clm.local.toml\n.clm/\n.claude/worktrees/\n!clm.local.toml\nclm.local.toml\n",
+        ),
+    ] {
+        let (bytes, out) = init_with_ignore(before.as_bytes());
+        assert_eq!(String::from_utf8(bytes).unwrap(), after, "{before:?}");
+        assert!(!out.contains("kept .gitignore"), "{out}");
+    }
+    let (_, out) = init_with_ignore(b"/clm.local.toml\n/.clm\n");
+    assert!(
+        out.contains("added .claude/worktrees/ to .gitignore\n") && !out.contains("added .clm/"),
+        "{out}"
+    );
+    for before in [
+        "  clm.local.toml\n.clm/\n.claude/worktrees/\n",
+        "clm.local.toml\n.clm/\n.claude/worktrees/\n!clm.local.toml\n",
+    ] {
+        let (_, out) = init_with_ignore(before.as_bytes());
+        assert!(
+            out.contains("added clm.local.toml to .gitignore\n")
+                && out.matches("added ").count() == 1,
+            "{out}"
+        );
+    }
+
+    // A file that isn't UTF-8 keeps its bytes.
+    let (bytes, _) = init_with_ignore(b"# caf\xe9\n");
+    assert_eq!(
+        bytes,
+        b"# caf\xe9\nclm.local.toml\n.clm/\n.claude/worktrees/\n"
+    );
+}
+
+#[test]
+fn ignore_lines_already_listed() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    for before in [
+        "/clm.local.toml\n.clm/\n/.claude/worktrees\n",
+        "node_modules/\nclm.local.toml  \n/.clm/  \n.claude/worktrees",
+        "clm.local.toml\r\n.clm\r\n.claude/worktrees/\r\n",
+        // A broader pattern is a listing.
+        "clm.local.toml\n.clm/\n.claude/\n",
+        "/.clm/*\n.claude/\nclm.local.toml\n",
+    ] {
+        let (after, out) = init_with_ignore(before.as_bytes());
+        assert_eq!(String::from_utf8(after).unwrap(), before);
+        assert!(out.contains("kept .gitignore\n"), "{out}");
+        assert!(!out.contains("added"), "{out}");
+    }
+}
+
+#[test]
+fn tracked_local_settings_kept() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    // Git reports a tracked file as not ignored unless told to read the patterns alone.
+    let (_tmp, dir) = repo();
+    let before = "clm.local.toml\n.clm/\n.claude/worktrees/\n";
+    write(&dir, ".gitignore", before);
+    // Every probe path tracked, so none of the three probes may lean on the index.
+    for path in SESSION_PATHS {
+        write(&dir, path, "");
+    }
+    git(&dir, &["add", "-f", ".gitignore"]);
+    git(
+        &dir,
+        &["add", "-f"]
+            .into_iter()
+            .chain(SESSION_PATHS)
+            .collect::<Vec<_>>(),
+    );
+    git(&dir, &["commit", "-q", "-m", "x"]);
+    let hosts = fake_hosts();
+    for run in 1..=2 {
+        let out = init(&dir, &[], &hosts);
+        assert_eq!(read(&dir, ".gitignore"), before, "run {run}");
+        assert!(out.contains("kept .gitignore\n"), "run {run}: {out}");
+        assert!(!out.contains("added"), "run {run}: {out}");
+    }
+}
+
+#[test]
+fn ignore_check_failure_leaves_the_file() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    // Git refuses a probe path beyond a symbolic link: `clm init` fails with git's message.
+    let (_tmp, dir) = repo();
+    let elsewhere = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), dir.join(".clm")).unwrap();
+    write(&dir, ".gitignore", "node_modules/\n");
+    let hosts = fake_hosts();
+    let out = clm(&dir, &["init"], &path_with(&hosts));
+    assert_ne!(out.status.code(), Some(0), "{out:?}");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // The command and git's own words.
+    assert!(
+        stderr.contains("check-ignore") && stderr.contains("symbolic link"),
+        "{stderr}"
+    );
+    assert_eq!(read(&dir, ".gitignore"), "node_modules/\n");
+}
+
+#[test]
+fn ignore_file_in_a_parent_counts() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    // An ignore file elsewhere counts as git counts it.
+    let (_tmp, dir) = repo();
+    write(&dir, ".gitignore", "clm.local.toml\n");
+    write(&dir, "tool/specs/SPEC.md", "");
+    write(&dir, "tool/.gitignore", ".clm/\n");
+    let out = init(&dir.join("tool"), &[], &fake_hosts());
+    assert_eq!(read(&dir, "tool/.gitignore"), ".clm/\n.claude/worktrees/\n");
+    assert!(
+        out.contains("added .claude/worktrees/ to .gitignore\n")
+            && out.matches("added ").count() == 1,
+        "{out}"
+    );
+}
+
+#[test]
+fn ignore_file_in_a_subdirectory_clm_repository() {
+    // req:init/init-ignores-local-settings@b0683dfd
+    let hosts = fake_hosts();
+    let (_tmp0, model) = repo();
+    init(&model, &[], &hosts);
+    let (_tmp, dir) = repo();
+    let tool = dir.join("tool");
+    for file in FILES {
+        write(&tool, file, &read(&model, file));
+    }
+    let out = init(&tool, &[], &hosts);
+    assert!(out.contains("wrote .gitignore\n"), "{out}");
+    assert_eq!(read(&tool, ".gitignore"), IGNORED);
+    assert!(!dir.join(".gitignore").exists());
+}
+
+#[test]
+fn upgrade_adds_the_ignore_lines() {
+    // req:init/init-rerun@6580fa19
+    for (before, after) in [
+        (
+            "/target/\n",
+            "/target/\nclm.local.toml\n.clm/\n.claude/worktrees/\n",
+        ),
+        // The one-line file an earlier `clm init` wrote.
+        ("clm.local.toml\n", IGNORED),
+    ] {
+        let (_tmp, dir) = repo();
+        let hosts = fake_hosts();
+        init(&dir, &["--lang", "rust"], &hosts);
+        write(&dir, ".gitignore", before);
+        commit_all(&dir);
+        init(&dir, &["--lang", "rust"], &hosts);
+        assert_eq!(
+            git(&dir, &["status", "--porcelain", "--untracked-files=all"]),
+            " M .gitignore\n"
+        );
+        assert_eq!(read(&dir, ".gitignore"), after);
+    }
+}
+
+/// The offset just past the heading of CLM's own architecture entry `slug`,
+/// under either heading form (`### Requirement:` or `### Constraint:`).
+fn entry_heading(own: &str, slug: &str) -> Option<usize> {
+    ["Requirement", "Constraint"].iter().find_map(|kind| {
+        let heading = format!("\n### {kind}: {slug}\n");
+        own.find(&heading).map(|i| i + heading.len())
+    })
+}

@@ -1,0 +1,26 @@
+---
+title: "A requirement declares the requirements of other nodes it needs, and waits on them like a blocked one"
+date: 2026-10-24
+status: accepted
+---
+
+`node-reconciliation` orders work by the node graph alone: a node is ready when every node in its `depends_on` is settled. That misses a dependency between one requirement and one requirement of another node that `depends_on` shouldn't carry: `ci/web-checks` runs the test suite of a package that `plugin/panel-package` creates, but `ci` has no use for `plugin`'s contract, and declaring the node dependency would hold all of `ci` behind all of `plugin`. With nothing to say so, `clm next` offered `ci` and each unattended run dead-ended on the one requirement until `plugin` landed.
+
+Now a requirement may hold a `#### Needs` block naming requirements of other nodes. It is read as `requirement-blocks` reads a backlog item's `blocks`: a requirement whose needs aren't all current is *blocked*, left out of its node's work and of its priority; a node whose pending requirements are all blocked is settled, so nothing above it stalls and a need can't deadlock through `depends_on`; the queue, `clm pending`, the prompt and the blockers view name the needed requirement as the blocker, and the chain continues into its node. The blocked requirement's priority passes to the needed requirement's node, so urgent work pulls forward what it waits for. The test that makes the needed requirement current releases it, and nothing else does.
+
+The need lives in the spec, not in a backlog item, for the reasons `node-reconciliation` gave for deriving the queue: it is structure, like `depends_on`, declared once and computed against the markers each time the queue is read, not a wait written by hand against another change. The model validates it for life: a need naming a removed requirement is a loading error, so the spec PR that removes a requirement edits what needed it, as it already must for `blocks`; a cycle of needs is an error, since it is the only way a need could wait forever; and a need within one node is an error, since order within a node is the build session's. The block is body text, so `clm apply` carries it unchanged and it is part of the requirement's version.
+
+An unattended session can't make a spec change, so one that discovers a missing need still raises a `question` item with `blocks`, as `requirement-blocks` has it; the human's spec PR adds the `Needs` and deletes the item. `propose`'s builder check asks for needs up front, which is where they are cheapest.
+
+A need runs one way, and a scenario that waits is never settled as a build order. Two requirements of different nodes can wait on each other for different parts: `model/parse-backlog` needed `orchestrator.triage/triage` to read kinds without an exhaustive `match` before the model added the `friction` kind, while `triage`'s scenario for that kind could load no such item until the model did. The need for the scenario couldn't go on `triage`, since the model rejects the cycle, and the change settled it as an order (`triage` first, the scenario once the model lands), which leaves nothing the queue reads: once `triage` was cited at its version the node was converged, and nothing built the scenario. Two rules follow. At design time, a scenario the builder can't test until another node's pending requirement is built belongs to a requirement that needs it, and when that requirement needs the scenario's own back, the scenario is split into a requirement of its own that holds the need: needs of different requirements of two nodes in opposite directions are not a cycle, and the split requirement stays `specd` until what it needs is current. The builder check asks for the split where it asks for needs. And a need whose only reason was that first ordering is dropped once the needed requirement's Design guarantees it, since a need is a standing wait: with `triage`'s Design reading kinds with `matches!`, keeping `parse-backlog`'s need on it would block the model again at every later edit of `triage`, against `depends_on`, for nothing. So `parse-backlog` lost its need and `triage` took one on `parse-backlog`, which is what its scenario waits for.
+
+`clm context` is unchanged: a need says when a requirement can be built, not what its builder must read, and `spine-scoped-context` stays with the spine and one-hop contracts.
+
+Refines `requirement-blocks`: a blocker is a backlog item or a pending requirement of another node.
+
+Rejected:
+- **A self-releasing backlog item** (`blocks` plus `until: [<node>/<slug>]`, ignored once those are current and deleted by `clm sync`). A session could record it in a code PR with no human step, but it is a hand-written wait in a transient file and leaves the spec silent about a real dependency.
+- **A node dependency.** Too coarse: the whole node waits, and its context grows by a contract it doesn't use.
+- **Deriving waits from paths named in requirement text.** Heuristic, and the text can't say which requirement creates a path.
+
+Refined by `builder-check-asks-order`: a requirement that relies on a pending requirement of its own node that has a `#### Needs` block carries those needs too, since a same-node need stays an error.

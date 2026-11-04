@@ -1,0 +1,53 @@
+# The `web` node's Worker and its static assets (specs/web/SPEC.md, Deploy). The release
+# workflow runs `npx wrangler deploy` here (ci/web-deploy). README.md says how the account,
+# the GitHub App and the secrets were set up.
+name = "clm"
+main = "../crates/clm-web/build/index.js"
+compatibility_date = "2026-10-01"
+routes = [{ pattern = "clm-app.dev", custom_domain = true }]
+
+[build]
+# The browser app into ./dist, then the Rust Worker for wasm32 with worker-build, pinned to
+# the `worker` crate's version so its wasm-bindgen matches.
+command = "npm run build && npm run build:worker"
+
+[[kv_namespaces]]
+binding = "CLM"
+id = "9fa493aaa0a54d219b2dfebb5f681b9e"
+
+# `web.live`'s Durable Object, which holds the open pages' sockets. The Free plan has only
+# SQLite-backed Durable Objects, so the class is created under `new_sqlite_classes`.
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "Live"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Live"]
+
+# `web.worker.replica`'s Durable Object, which keeps a repo's views (web-repo-replica), in a
+# migration of its own after `Live`'s.
+[[durable_objects.bindings]]
+name = "REPLICA"
+class_name = "Replica"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Replica"]
+
+# Nothing runs on a schedule (the `Replica` objects use their own alarms). The key stays,
+# empty: `wrangler deploy` leaves the deployed triggers alone when `crons` is absent
+# (web/no-cron-trigger).
+[triggers]
+crons = []
+
+[assets]
+directory = "./dist"
+# The Worker reads `_clm/` (the invited list) through this binding.
+binding = "ASSETS"
+# The site is at the root and the app under /app/. Everything outside /app/ but the retiring
+# /sw.js (web/retire-root-service-worker) goes to the Worker first, which decides who sees the
+# site (web.worker/site-behind-sign-in) and answers `/_clm/*` (the invited list) 404. The app's
+# own files are served directly. The app routes by hash, so a missing path is a 404, not a page.
+not_found_handling = "none"
+run_worker_first = ["/*", "!/app/*", "!/sw.js"]

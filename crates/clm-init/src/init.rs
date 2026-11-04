@@ -1,0 +1,525 @@
+//! `clm init`: writes CLM's files into a git repository and prints the human's next steps.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use clm_config::Host;
+use clm_git::{REMOTE, git};
+
+const ARCHITECTURE: &str = include_str!("../templates/architecture.md");
+const CAPABILITIES: &str = include_str!("../templates/capabilities.md");
+const ROOT_SPEC: &str = include_str!("../templates/spec.md");
+const CLAUDE: &str = include_str!("../templates/claude.md");
+
+/// What `clm land` runs before `clm check`, written by `clm init` for the project to edit.
+const CHECK_SCRIPT: &str = "scripts/clm-check.sh";
+
+/// The code files `clm init` writes, which the root node it writes owns (its `paths`).
+const ROOT_PATHS: [&str; 3] = [".gitignore", "clm.toml", CHECK_SCRIPT];
+
+/// What `clm init` was asked for.
+#[derive(Debug, Clone, Default)]
+pub struct Options {
+    /// The `--lang` values, in order; repeats count once.
+    pub langs: Vec<String>,
+    /// False with `--no-detectors`.
+    pub detectors: bool,
+    /// `--host`, when given; otherwise read from [`REMOTE`]'s URL.
+    pub host: Option<Host>,
+}
+
+/// A language `--lang` accepts: its detector and its build line.
+struct Lang {
+    name: &'static str,
+    detector: &'static str,
+    command: &'static str,
+    hint: &'static str,
+    build: &'static str,
+}
+
+const LANGS: [Lang; 3] = [
+    Lang {
+        name: "rust",
+        detector: "rust-unused-dependencies",
+        command: r#"["cargo-machete"]"#,
+        hint: "cargo install --locked cargo-machete",
+        build: "cargo test",
+    },
+    Lang {
+        name: "typescript",
+        detector: "typescript-dead-code",
+        command: r#"["npx", "--no-install", "knip"]"#,
+        hint: "npm install --save-dev knip",
+        build: "npm ci && npm test",
+    },
+    Lang {
+        name: "python",
+        detector: "python-dead-code",
+        command: r#"["vulture", "."]"#,
+        hint: "pip install vulture",
+        build: "pytest",
+    },
+];
+
+/// Sets up CLM's tooling in the CLM repository found from `cwd`, or at the top of the git
+/// repository holding it when there is none (`init-root`). Returns the report to print, or
+/// why nothing was written. Calls no host: every file is the project's once written.
+pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
+    let langs = langs(&opts.langs)?;
+    let top = top_level(cwd)?;
+    // `git` prints the top with symlinks resolved; so are the directories searched.
+    let cwd = fs::canonicalize(cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
+    let root = clm_root(&cwd, &top).unwrap_or(&top).to_path_buf();
+    let host = opts.host.unwrap_or_else(|| host_of(&root));
+    let mut files = Files {
+        root: &root,
+        out: String::new(),
+        paths: Vec::new(),
+        wrote: Vec::new(),
+    };
+
+    let toml = clm_toml(host, if opts.detectors { &langs } else { &[] });
+    let kept_toml = !files.write("clm.toml", &toml)?;
+    if files.write(CHECK_SCRIPT, &check_script(&langs))? {
+        make_executable(&root.join(CHECK_SCRIPT)).map_err(|e| format!("{CHECK_SCRIPT}: {e}"))?;
+    }
+    files.write("ARCHITECTURE.md", ARCHITECTURE)?;
+    files.write("CAPABILITIES.md", CAPABILITIES)?;
+    // The root spec lists the index, so only when it will be written.
+    let spec = if root.join("specs/SPEC.md").exists() {
+        String::new()
+    } else {
+        root_spec(&root)?
+    };
+    files.write("specs/SPEC.md", &spec)?;
+    files.write("CLAUDE.md", CLAUDE)?;
+    files.ignore_session_files()?;
+
+    let mut out = files.out;
+    let steps = next_steps(
+        &root,
+        &files.paths,
+        &files.wrote,
+        configured_host(&root, host),
+        upgrade_steps(&root, &top, kept_toml, host),
+        cfg!(unix),
+    );
+    if !steps.is_empty() {
+        out.push_str("\nNext steps (yours):\n");
+        for step in steps {
+            out.push_str(&format!("- {step}\n"));
+        }
+    }
+    Ok(out)
+}
+
+/// Writes CLM's files into `root`, noting each as `wrote` or `kept` in `out` (or, for
+/// `.gitignore`, `added`).
+struct Files<'a> {
+    root: &'a Path,
+    out: String,
+    /// Every file's path, written or kept.
+    paths: Vec<&'static str>,
+    /// The files written whole, each a subset of `paths`.
+    wrote: Vec<&'static str>,
+}
+
+impl Files<'_> {
+    /// Writes `rel` when it's missing; returns whether it did.
+    fn write(&mut self, rel: &'static str, content: &str) -> Result<bool, String> {
+        self.paths.push(rel);
+        let path = self.root.join(rel);
+        if path.exists() {
+            self.out.push_str(&format!("kept {rel}\n"));
+            return Ok(false);
+        }
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        }
+        fs::write(&path, content).map_err(|e| format!("{rel}: {e}"))?;
+        self.out.push_str(&format!("wrote {rel}\n"));
+        self.wrote.push(rel);
+        Ok(true)
+    }
+
+    /// Makes `.gitignore` list each of [`IGNORED`] (`init-ignores-session-files`): writes it
+    /// when missing, appends each entry git doesn't already ignore, in order, noting `added
+    /// <entry> to .gitignore` for each, and leaves every other byte as it was. The file is
+    /// read as bytes, so one that isn't UTF-8 is still kept or appended to, and a CRLF file
+    /// gains CRLF lines. Git decides what is ignored, and a git failure fails `clm init`
+    /// before the file is touched.
+    fn ignore_session_files(&mut self) -> Result<(), String> {
+        let rel = ".gitignore";
+        let path = self.root.join(rel);
+        let mut bytes = match fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let lines = IGNORED.map(|(entry, _)| format!("{entry}\n")).concat();
+                self.write(rel, &lines)?;
+                return Ok(());
+            }
+            Err(e) => return Err(format!("{rel}: {e}")),
+        };
+        self.paths.push(rel);
+        let mut missing = Vec::new();
+        for (entry, probe) in IGNORED {
+            if !ignored(self.root, probe)? {
+                missing.push(entry);
+            }
+        }
+        if missing.is_empty() {
+            self.out.push_str(&format!("kept {rel}\n"));
+            return Ok(());
+        }
+        let eol: &[u8] = if bytes.windows(2).any(|w| w == b"\r\n") {
+            b"\r\n"
+        } else {
+            b"\n"
+        };
+        if !bytes.is_empty() && !bytes.ends_with(b"\n") {
+            bytes.extend_from_slice(eol);
+        }
+        for entry in &missing {
+            bytes.extend_from_slice(entry.as_bytes());
+            bytes.extend_from_slice(eol);
+        }
+        fs::write(&path, bytes).map_err(|e| format!("{rel}: {e}"))?;
+        for entry in missing {
+            self.out.push_str(&format!("added {entry} to {rel}\n"));
+        }
+        Ok(())
+    }
+}
+
+/// The entries `.gitignore` must list, in the order they're written, each with the path
+/// git is asked about: one clone's settings (`local-settings`), a session's scratch files
+/// and the session worktrees.
+const IGNORED: [(&str, &str); 3] = [
+    ("clm.local.toml", "clm.local.toml"),
+    (".clm/", ".clm/pr-body.md"),
+    (".claude/worktrees/", ".claude/worktrees/x/f"),
+];
+
+/// Whether git ignores `probe` in `root`: `git check-ignore -q --no-index` exits 0 when it
+/// does and 1 when it doesn't; anything else is git's error. `--no-index` reads the patterns
+/// whatever the index holds, so a tracked `clm.local.toml` the file lists still counts. One
+/// path a call, since `-q` with several can't tell them apart.
+fn ignored(root: &Path, probe: &str) -> Result<bool, String> {
+    match git(root, &["check-ignore", "-q", "--no-index", probe]) {
+        Ok(_) => Ok(true),
+        Err(clm_git::Error::Failed { status, .. }) if status.code() == Some(1) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// The languages named, each once, in the order first given; an unknown one is an error.
+fn langs(names: &[String]) -> Result<Vec<&'static Lang>, String> {
+    let mut found: Vec<&'static Lang> = Vec::new();
+    for name in names {
+        let Some(lang) = LANGS.iter().find(|l| l.name == name) else {
+            let known: Vec<&str> = LANGS.iter().map(|l| l.name).collect();
+            return Err(format!(
+                "unknown language `{name}`; known: {}",
+                known.join(", ")
+            ));
+        };
+        if !found.iter().any(|l| l.name == lang.name) {
+            found.push(lang);
+        }
+    }
+    Ok(found)
+}
+
+/// The first of `cwd` and its ancestors with `specs/SPEC.md`, looking no higher than the
+/// first that holds `.git` (a directory, or a worktree's file): `clm-hooks`' rule. Nor
+/// higher than `top`, for a work tree whose git directory is elsewhere.
+fn clm_root<'a>(cwd: &'a Path, top: &Path) -> Option<&'a Path> {
+    for dir in cwd.ancestors() {
+        if dir.join("specs/SPEC.md").is_file() {
+            return Some(dir);
+        }
+        if dir == top || dir.join(".git").exists() {
+            return None;
+        }
+    }
+    None
+}
+
+/// The top level of the git repository holding `cwd`.
+fn top_level(cwd: &Path) -> Result<PathBuf, String> {
+    match git(cwd, &["rev-parse", "--show-toplevel"]) {
+        // In the canonical form `root` takes, so the two compare equal on every platform
+        // (git prints `C:/...` on Windows, where `canonicalize` gives `\\?\C:\...`).
+        Ok(top) => fs::canonicalize(&top).map_err(|e| format!("{top}: {e}")),
+        Err(clm_git::Error::Failed { stderr, .. }) => {
+            Err(format!("not in a git repository: {stderr}"))
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Where [`REMOTE`] lives, from its URL, or `none` without one. Asks no host.
+fn host_of(root: &Path) -> Host {
+    let Ok(url) = git(root, &["remote", "get-url", REMOTE]) else {
+        return Host::None;
+    };
+    let url = url.to_ascii_lowercase();
+    if url.contains("github.com") {
+        Host::Github
+    } else {
+        Host::Git
+    }
+}
+
+/// The repository's `host`: what a `clm.toml` it kept sets, else `written`, the one it wrote.
+fn configured_host(root: &Path, written: Host) -> Host {
+    match clm_config::load(Some(root), &clm_config::process_env) {
+        Ok(settings) if matches!(settings.host.layer, clm_config::Layer::File(_)) => {
+            settings.host.value
+        }
+        _ => written,
+    }
+}
+
+/// The steps a repository `clm init` set up before `20261025-forge-adapters` still needs,
+/// each naming the file and the exact text to add or delete; it changes none of them. A kept
+/// `clm.toml` is read as plain TOML, not through `config`'s loader, which rejects `merge`;
+/// one that isn't TOML gets no step, since every command that loads it reports its error.
+/// The old workflow and build script are looked for under `root` and at the git
+/// repository's `top`, where the old `clm init` may have written them, and named by their
+/// path from `top`. `host` is the one `clm init` would have written.
+fn upgrade_steps(root: &Path, top: &Path, kept_toml: bool, host: Host) -> Vec<String> {
+    const WORKFLOW: &str = ".github/workflows/clm.yml";
+    const BUILD: &str = ".github/scripts/clm-build.sh";
+    let mut dirs = vec![root];
+    if top != root {
+        dirs.push(top);
+    }
+    // `rel` in `dir`, by its path from `top`.
+    let named = |dir: &Path, rel: &str| match dir.strip_prefix(top) {
+        Ok(sub) if !sub.as_os_str().is_empty() => {
+            format!("{}/{rel}", sub.to_string_lossy().replace('\\', "/"))
+        }
+        _ => rel.to_owned(),
+    };
+    let mut steps = Vec::new();
+    let settings = kept_toml
+        .then(|| fs::read_to_string(root.join("clm.toml")).ok())
+        .flatten()
+        .and_then(|text| text.parse::<toml::Table>().ok());
+    if let Some(settings) = settings {
+        if !settings.contains_key("host") {
+            steps.push(format!(
+                "Add `host = \"{host}\"` to `clm.toml`, where the remote lives; without it \
+                 `clm` takes `github`."
+            ));
+        }
+        if settings.contains_key("merge") {
+            steps.push(
+                "Delete `merge` from `clm.toml`: it is no longer a setting, and every `clm` \
+                 command that loads the settings stops on it."
+                    .into(),
+            );
+        }
+        let check_set = match settings.get("land") {
+            None => false,
+            Some(toml::Value::Table(land)) => land.contains_key("check"),
+            // A `land` that isn't a table is `config`'s to report.
+            Some(_) => true,
+        };
+        if !check_set {
+            let mut step = format!(
+                "Add `[land]` with `check = \"{CHECK_SCRIPT}\"` to `clm.toml`: `clm land` runs \
+                 it before `clm check`."
+            );
+            if let Some(dir) = dirs.iter().find(|d| d.join(BUILD).is_file()) {
+                let build = named(dir, BUILD);
+                step.push_str(&format!(
+                    " Move the project's edits from `{build}` into `{CHECK_SCRIPT}`, then \
+                     delete `{build}`."
+                ));
+            }
+            steps.push(step);
+        }
+    }
+    for dir in &dirs {
+        let generated = fs::read_to_string(dir.join(WORKFLOW)).is_ok_and(|text| {
+            text.trim_start_matches('\u{feff}')
+                .starts_with("# Generated by clm init")
+        });
+        if generated {
+            steps.push(format!(
+                "Delete `{}`: it calls `clm ci`, which no longer exists, and branches land \
+                 through `clm land`.",
+                named(dir, WORKFLOW)
+            ));
+        }
+    }
+    steps
+}
+
+/// Sets the check script's mode so it runs; where the platform has no Unix file modes, the
+/// next steps say how to commit it executable instead (`windows-build`).
+#[cfg(unix)]
+fn make_executable(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))
+}
+
+#[cfg(not(unix))]
+fn make_executable(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// The steps left for the human: `upgrades` first, then, when the platform has no
+/// `file_modes` and `clm init` wrote the check script, marking it executable in the index,
+/// then the push, skipped once `git` shows it done and nothing else is left to commit.
+/// Whether the host protects `main` would take asking it, so that step stays, as a
+/// conditional. `paths` are all of CLM's files, written or kept; `wrote` those written.
+fn next_steps(
+    root: &Path,
+    paths: &[&str],
+    wrote: &[&str],
+    host: Host,
+    upgrades: Vec<String>,
+    file_modes: bool,
+) -> Vec<String> {
+    let mut steps = upgrades;
+    if !file_modes && wrote.contains(&CHECK_SCRIPT) {
+        steps.push(format!(
+            "After staging `{CHECK_SCRIPT}`, run `git update-index --chmod=+x {CHECK_SCRIPT}`, \
+             so it is committed executable and `clm land` can run it on Linux and macOS."
+        ));
+    }
+    // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or
+    // there's no remote to push to.
+    let mut status = vec!["status", "--porcelain", "--"];
+    status.extend(paths);
+    let remote_main = format!("{REMOTE}/main");
+    let mut diff = vec!["diff", "--quiet", remote_main.as_str(), "--"];
+    diff.extend(paths);
+    let no_remote = git(root, &["remote", "get-url", REMOTE]).is_err();
+    let pushed = git(root, &status).is_ok_and(|s| s.trim().is_empty())
+        && (no_remote || git(root, &diff).is_ok());
+    if !pushed || !steps.is_empty() {
+        steps.push(
+            "Commit these files and push them to `main` yourself; from then on every branch \
+             lands through `clm land`."
+                .into(),
+        );
+    }
+    if host != Host::None {
+        steps.push(
+            "If the host protects `main`, let the identity that runs `clm land` push it (a \
+             bypass or an allowed pusher)."
+                .into(),
+        );
+    }
+    steps
+}
+
+fn clm_toml(host: Host, langs: &[&Lang]) -> String {
+    let mut text = format!(
+        "# CLM settings for this repository (`clm config get <key>` shows each).\n\
+         \n\
+         # Where the remote lives: `none`, `git` or `github`.\n\
+         host = \"{host}\"\n\
+         # Whose approval of a spec change counts: `any` writer's, the author's included; set\n\
+         # `other` to count only a person's other than the branch's commit authors.\n\
+         approval = \"any\"\n\
+         \n\
+         # What `clm land` runs in the tree it lands, before `clm check`.\n\
+         [land]\n\
+         check = \"{CHECK_SCRIPT}\"\n"
+    );
+    if !langs.is_empty() {
+        text.push_str(
+            "\n# `clm check` runs these detectors of dead code and unused dependencies \
+             (`no-dead-code`).\n",
+        );
+    }
+    for lang in langs {
+        text.push_str(&format!(
+            "\n[[detectors]]\nname = \"{}\"\ncommand = {}\nhint = \"{}\"\n",
+            lang.detector, lang.command, lang.hint
+        ));
+    }
+    text
+}
+
+fn check_script(langs: &[&Lang]) -> String {
+    let mut text = String::from(
+        "#!/usr/bin/env bash\n\
+         # Builds and tests this repository. `clm land` runs it before `clm check`; edit it to\n\
+         # suit.\n\
+         set -euo pipefail\n",
+    );
+    for lang in langs {
+        text.push_str(lang.build);
+        text.push('\n');
+    }
+    text
+}
+
+/// The root node, titled after the repository's directory, owning the files `clm init`
+/// writes and leaving the repository's other code `outside` until its nodes take it
+/// (`init-root-ownership`).
+fn root_spec(root: &Path) -> Result<String, String> {
+    let name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "project".into());
+    // `outside` last, so no file name it holds is taken for a placeholder.
+    Ok(ROOT_SPEC
+        .replace("{{title}}", &yaml_string(&name))
+        .replace("{{name}}", &name)
+        .replace("{{outside}}", &outside(root)?))
+}
+
+/// The root's `outside`, as a YAML flow list: the top-level entry of each code file the index
+/// holds, other than those the root owns, as `<dir>/**` or the file's name, each once, sorted
+/// by bytes.
+fn outside(root: &Path) -> Result<String, String> {
+    let entries: std::collections::BTreeSet<String> = crate::survey::code_files(root)?
+        .into_iter()
+        .filter(|f| !ROOT_PATHS.contains(&f.as_str()))
+        .map(|f| match f.split_once('/') {
+            Some((dir, _)) => format!("{dir}/**"),
+            None => f,
+        })
+        .collect();
+    let quoted: Vec<String> = entries
+        .iter()
+        .map(|e| format!("\"{}\"", yaml_string(e)))
+        .collect();
+    Ok(format!("[{}]", quoted.join(", ")))
+}
+
+/// `text` escaped for a YAML double-quoted string.
+fn yaml_string(text: &str) -> String {
+    text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CHMOD: &str = "git update-index --chmod=+x scripts/clm-check.sh";
+
+    #[test]
+    fn chmod_step_only_without_file_modes() {
+        // req:init/windows-build@03cde96d
+        let tmp = tempfile::TempDir::new().unwrap();
+        git(tmp.path(), &["init", "-q"]).unwrap();
+        let wrote = [CHECK_SCRIPT, "clm.toml"];
+        let steps = next_steps(tmp.path(), &wrote, &wrote, Host::None, Vec::new(), false);
+        let chmod: Vec<&String> = steps.iter().filter(|s| s.contains(CHMOD)).collect();
+        assert_eq!(chmod.len(), 1, "{steps:?}");
+        let steps = next_steps(tmp.path(), &wrote, &wrote, Host::None, Vec::new(), true);
+        assert!(!steps.iter().any(|s| s.contains(CHMOD)), "{steps:?}");
+        // A script the project already had keeps the mode it was committed with.
+        let kept = ["clm.toml"];
+        let steps = next_steps(tmp.path(), &wrote, &kept, Host::None, Vec::new(), false);
+        assert!(!steps.iter().any(|s| s.contains(CHMOD)), "{steps:?}");
+    }
+}

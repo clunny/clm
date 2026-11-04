@@ -1,0 +1,25 @@
+[package]
+name = "clm-web-live"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# Binds the core to `worker`'s Durable Object types. `clm-web` enables it on wasm32.
+durable = ["dep:worker"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
+sha2.workspace = true
+base64.workspace = true
+# RFC 8291 and RFC 8292 in pure Rust, with the randomness a parameter, so no `getrandom`.
+p256 = { version = "0.13", default-features = false, features = ["ecdh", "ecdsa"] }
+hkdf = "0.12"
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Pinned with `clm-web`'s: `worker-build` must match its `wasm-bindgen`.
+worker = { version = "=0.8.7", optional = true }

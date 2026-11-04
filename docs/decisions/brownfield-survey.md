@@ -1,0 +1,17 @@
+---
+title: "An existing codebase's spec graph is drawn from a deterministic survey, then filled per node"
+date: 2026-10-22
+status: accepted
+---
+
+Bringing an existing codebase under CLM recovers as much of its spec graph as the code, tests and docs support, for the whole codebase at once. The per-node work can't start until there are nodes, so it runs in passes:
+
+1. **Map.** `clm survey` prints a compact, deterministic map: directories with file and line counts per language, manifests, test locations, docs and ADRs, and the import edges between directories, extracted with tree-sitter (`tree-sitter-analysis`). One agent drafts the node map (nodes, `paths`, `depends_on`, a line of responsibility each) from it and the docs. `clm survey --nodes` reports uncovered files, overlapping paths and imports `depends_on` doesn't allow, and the agent revises until it reports nothing.
+2. **Check in.** The human sees the node map and corrects it before anything else is written: boundaries are the costliest thing to get wrong and the cheapest to fix here.
+3. **Fill.** One subagent per node, given only its paths, writes the Contract, Design and requirements. Requirements describe what the code does today, not what it should; bugs become `bug` backlog items.
+
+The result is an ordinary change in a HARD spec PR. Its nodes' builds prove each requirement by citing it at its current version (`req:<node>/<slug>@<version>`) in existing tests or new ones. Until every requirement the change added is cited, `clm pending` lists the rest as `specd` and the change isn't complete; once all are current, `clm sync` archives it (`archive-on-sync`, `sync/archive-complete`). Detectors start off (`clm init --no-detectors`) so the existing code passes `clm check`; the builds remove the dead code in their nodes, and the root node's build adds the detectors to `clm.toml`. (Amended 2026-10-27, `20261027-survey-and-paths-helper`: this used to say the change's tasks proved the requirements, `check/requirement-coverage` kept it from finishing, and its `finish` turned the detectors on. `20261023-reconciliation-fixes` removed that rule, and work is built per node rather than per change's tasks (`node-reconciliation`).)
+
+Existing CI workflows' build and test steps move into the check script `clm land` runs (`scripts/clm-check.sh`, `[land] check`) and those workflows are removed in the bootstrap commit the human pushes to `main`, before the spec branch is cut, because `clm land` lands on that script and `clm check`, and a failing test elsewhere could still land. They are code paths, so they can't ride on the spec branch: a branch holding spec and code paths is `mixed`, which the gate blocks. The skill warns the human first and the init change lists what moved under `## Significant`. Deploy, release and scheduled workflows stay. (Amended 2026-10-26, `20261026-plugin-skill-fixes`: the move used to be "in the same change", into `.github/scripts/clm-build.sh`, which the gate's `mixed` rule never allowed and `land-locally` replaced with `scripts/clm-check.sh`.)
+
+Rejected: the agent exploring the code with search tools alone, which works on a small repository but doesn't fit one context on a large one and draws a different map each run. Adopting a part of the codebase at a time was deferred here, and is now `incremental-adoption`: the first change may leave part of the code `outside` every node for later changes to adopt. (Amended 2026-10-27, `20261027-incremental-adoption`.)

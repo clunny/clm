@@ -1,0 +1,19 @@
+[package]
+name = "clm-web-review"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-model.workspace = true
+clm-gate.workspace = true
+clm-ledger = { workspace = true, default-features = false }
+clm-web-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+futures = { version = "0.3", default-features = false, features = ["async-await"] }
+
+[dev-dependencies]
+clm-web-platform = { workspace = true, features = ["fake"] }
+tempfile.workspace = true

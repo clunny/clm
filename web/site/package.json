@@ -1,0 +1,16 @@
+{
+  "name": "clm-site",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63",
+    "@types/node": "^26.6.5",
+    "vitepress": "^1.6.4"
+  }
+}

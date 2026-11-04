@@ -1,0 +1,18 @@
+[package]
+name = "clm-coverage"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["checkout"]
+# Reading a checkout's markers (`scan`, through `git`); off for wasm builds.
+checkout = ["dep:clm-git"]
+
+[dependencies]
+clm-model.workspace = true
+clm-git = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true

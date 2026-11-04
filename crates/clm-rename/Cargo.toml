@@ -1,0 +1,17 @@
+[package]
+name = "clm-rename"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-model.workspace = true
+clm-apply.workspace = true
+clm-git.workspace = true
+clm-fingerprint.workspace = true
+clm-coverage.workspace = true
+serde_yaml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

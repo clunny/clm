@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CLM · Spec review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14;--surface:#11161f;--surface2:#161c27;--border:#232b3a;--border2:#2e3849;
+  --text:#e7eaf1;--body:#cfd4df;--muted:#8b94a7;--faint:#5d6679;
+  --accent:#8b9cff;--accent-bg:#8b9cff1f;--accent-ring:#8b9cff2e;--on-accent:#0b0e14;--accent-grad:linear-gradient(180deg,#9aa9ff,#7d8ff7);
+  --green:#3ddc97;--green-bg:#3ddc971a;--amber:#f5b942;--amber-bg:#f5b9421c;
+  --sky:#5cc8ff;--sky-bg:#5cc8ff1a;--rose:#ff6b8a;--rose-bg:#ff6b8a1c;
+  --del-text:#ffb1c1;--ins-text:#a6f3cf;--edge:#3a4559;--grid:#ffffff10;--shadow:0 8px 24px #0008;--tabshadow:0 1px 3px #0006;
+}
+:root[data-theme=light]{
+  --bg:#f5f6fa;--surface:#ffffff;--surface2:#f2f4f8;--border:#e4e8f0;--border2:#d4dae5;
+  --text:#121826;--body:#2e3646;--muted:#5d677a;--faint:#8a93a6;
+  --accent:#4f5fe8;--accent-bg:#4f5fe814;--accent-ring:#4f5fe826;--on-accent:#ffffff;--accent-grad:linear-gradient(180deg,#6170f0,#4757e0);
+  --green:#0e9f65;--green-bg:#0e9f6514;--amber:#b7791f;--amber-bg:#d9921a17;
+  --sky:#0a8bd0;--sky-bg:#0a8bd014;--rose:#dc3558;--rose-bg:#dc355812;
+  --del-text:#b4233f;--ins-text:#0b7a4c;--edge:#c3cad8;--grid:#0000000d;--shadow:0 8px 24px #1a22381a;--tabshadow:0 1px 3px #1a223822;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;transition:background .2s,color .2s}
+code,.mono{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12.5px}
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.sb{background:var(--surface);border-right:1px solid var(--border);padding:18px 14px;display:flex;flex-direction:column;gap:18px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#8b9cff,#5cc8ff);display:grid;place-items:center;font-style:normal;color:#0b0e14;font-size:13px}
+.repo{border:1px solid var(--border);background:var(--surface2);border-radius:10px;padding:8px 10px;font-size:13px;display:flex;justify-content:space-between;align-items:center}
+.repo small{display:block;color:var(--muted);font-size:11px}
+.navh{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:0 8px 6px}
+.nv{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;color:var(--muted);cursor:pointer;font-weight:500}
+.nv:hover{background:var(--surface2);color:var(--text)}
+.nv.on{background:var(--accent-bg);color:var(--text)}
+.nv .c{font-size:11px;background:var(--surface2);border:1px solid var(--border);padding:0 7px;border-radius:10px;color:var(--muted)}
+.nv.on .c{color:var(--accent)}
+.nv .c.live{color:var(--green);border-color:var(--green)}
+.team .nv{font-weight:400}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px}
+.foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between}
+.user{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.av{width:28px;height:28px;border-radius:50%;background:var(--border2);display:grid;place-items:center;color:var(--text);font-weight:600;font-size:12px}
+.theme{display:inline-flex;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:2px}
+.theme button{border:0;background:none;color:var(--muted);padding:4px 7px;border-radius:7px;cursor:pointer;font-size:13px}
+.theme button.on{background:var(--surface);color:var(--text);box-shadow:var(--tabshadow)}
+.main{padding:22px 28px;overflow:hidden}
+.crumb{color:var(--muted);font-size:13px;margin-bottom:6px}
+.head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:16px}
+.head h1{font-size:22px;margin:0 0 6px;font-weight:650;letter-spacing:-.01em}
+.meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:550;padding:2px 9px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.chip.hard{background:var(--rose-bg);color:var(--rose)}
+.chip.wait{background:var(--amber-bg);color:var(--amber)}
+.chip.ok{background:var(--green-bg);color:var(--green)}
+.chip.sky{background:var(--sky-bg);color:var(--sky)}
+.chip.acc{background:var(--accent-bg);color:var(--accent)}
+.chip.node{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+.chip.mute{background:var(--surface2);color:var(--muted)}
+.btns{display:flex;gap:8px}
+.btn{border:1px solid var(--border2);background:var(--surface2);color:var(--text);padding:8px 14px;border-radius:9px;font:inherit;font-weight:550;cursor:pointer}
+.btn.pri{background:var(--accent-grad);border-color:transparent;color:var(--on-accent)}
+.tabs{display:inline-flex;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:3px;margin-bottom:16px}
+.tab{padding:6px 14px;border-radius:7px;color:var(--muted);cursor:pointer;font-weight:550;font-size:13px}
+.tab.on{background:var(--surface2);color:var(--text);box-shadow:var(--tabshadow)}
+.view{display:none}.view.on{display:block}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px}
+.doc{display:grid;grid-template-columns:1fr 300px;gap:18px}
+.sec{padding:18px 20px}
+h3.h{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600}
+.intent{color:var(--body)} .intent li{margin:4px 0}
+.req{border:1px solid var(--border);border-radius:12px;margin-top:12px;overflow:hidden}
+.req .rh{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.req .rh b{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:500}
+.mod{background:var(--amber-bg);color:var(--amber)}
+.req .rb{padding:12px 14px;color:var(--body);font-size:13.5px}
+del{background:var(--rose-bg);color:var(--del-text);text-decoration:line-through;border-radius:3px;padding:0 2px}
+ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border-radius:3px;padding:0 2px}
+.scn{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.scn span{font-size:12px;border:1px dashed var(--border2);border-radius:8px;padding:3px 8px;color:var(--muted)}
+.scn span.new{border-style:solid;border-color:var(--green);color:var(--green)}
+.aside .sec+.sec{border-top:1px solid var(--border)}
+.kv{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;color:var(--muted)}.kv b{color:var(--text);font-weight:550}
+.dec{padding:8px 10px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);margin-top:8px;font-size:13px}
+.dec code{color:var(--accent)}
+.gwrap{display:grid;grid-template-columns:1fr 320px;gap:18px}
+.canvas{position:relative;height:470px;border-radius:14px;background:var(--surface);border:1px solid var(--border);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:18px 18px;overflow:hidden}
+.stage{position:absolute;left:50%;top:22px;width:680px;height:420px;margin-left:-340px}
+.stage svg{position:absolute;inset:0;overflow:visible}
+.e{fill:none;stroke:var(--edge);stroke-width:1.4}
+.eh{fill:none;stroke:var(--accent);stroke-width:1.8;opacity:.9}
+.n{position:absolute;width:128px;height:56px;margin:-28px 0 0 -64px;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:7px 10px;cursor:pointer;transition:.15s}
+.n:hover{border-color:var(--accent);transform:translateY(-1px)}
+.n .t{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px}
+.n .s{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}
+.n .p{height:4px;border-radius:4px;background:var(--border);margin-top:8px;overflow:hidden}.n .p i{display:block;height:100%;background:var(--green)}
+.n .f{font-size:11px;color:var(--muted);margin-top:3px}
+.n.unbuilt{border-style:dashed}.n.unbuilt .s{background:var(--sky);box-shadow:0 0 0 3px var(--sky-bg)}
+.n.hit{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-ring),var(--shadow)}
+.badge{position:absolute;top:-9px;right:-8px;background:var(--amber);color:#1a1300;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 7px}
+.legend{position:absolute;left:14px;bottom:12px;display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.root{position:absolute;left:14px;top:12px;font-size:12px;color:var(--muted)}
+.insp .sec{padding:16px 18px}
+.insp .sec+.sec{border-top:1px solid var(--border)}
+.mini{border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-top:8px;font-size:12.5px;color:var(--body)}
+.mini b{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:12px;display:flex;justify-content:space-between;margin-bottom:4px}
+.pill{font-size:11px;border-radius:6px;padding:1px 6px;border:1px solid var(--border2);color:var(--muted);margin:2px 4px 0 0;display:inline-block}
+.kan{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.colh{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;margin:0 4px 10px}
+.colh .c{color:var(--muted);font-weight:500}
+.bi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px}
+.bi .ttl{font-weight:550;font-size:13.5px;margin-bottom:8px}
+.bi .slug{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--faint)}
+.bi .link{font-size:12px;color:var(--accent);margin-top:6px}
+/* orchestration */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:18px}
+.stat{padding:14px 16px}
+.stat .v{font-size:24px;font-weight:650;letter-spacing:-.02em}
+.stat .l{font-size:12px;color:var(--muted)}
+.runs{display:grid;grid-template-columns:1fr 320px;gap:18px}
+.chg{padding:18px 20px;margin-bottom:16px}
+.chg .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.chg .top b{font-size:15px}
+.chg .sub{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.pbar{height:6px;border-radius:6px;background:var(--border);overflow:hidden;display:flex;margin-bottom:16px}
+.pbar i{display:block;height:100%}
+.pipe{display:flex;align-items:stretch;gap:0}
+.stp{flex:1;border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--surface2);position:relative;min-width:0}
+.stp .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600}
+.stp .nm{font-weight:600;font-size:13.5px;margin:2px 0 6px;display:flex;justify-content:space-between;align-items:center}
+.stp .d{font-size:12px;color:var(--muted);line-height:1.45}
+.stp .d code{font-size:11.5px}
+.stp.done{border-color:color-mix(in srgb,var(--green) 45%,var(--border))}
+.stp.run{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring)}
+.stp.blk{border-color:color-mix(in srgb,var(--rose) 50%,var(--border))}
+.arrow{width:26px;display:grid;place-items:center;color:var(--faint)}
+.par{display:flex;flex-direction:column;gap:8px;flex:1.1}
+.lease{height:4px;border-radius:4px;background:var(--border);margin-top:8px;overflow:hidden}.lease i{display:block;height:100%;background:var(--accent)}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 var(--green);animation:p 1.8s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 60%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.feed .sec{padding:16px 18px}
+.ev{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.ev:last-child{border-bottom:0}
+.ev .ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-size:12px;flex:0 0 24px}
+.ev .tm{color:var(--faint);font-size:11.5px}
+.ev .tx{color:var(--body)}
+.note{font-size:12px;color:var(--faint);margin-top:6px}
+</style>
+<script>
+(function(){let t;try{t=localStorage.getItem('clm-theme')}catch(e){}
+if(!t||t==='system')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';
+document.documentElement.dataset.theme=t;})();
+</script>
+</head>
+<body>
+<div class="app">
+  <aside class="sb">
+    <div class="logo"><i>◆</i>CLM</div>
+    <div class="repo"><div>clunny/clm<small>9 nodes · 58/58 proven</small></div><span style="color:var(--muted)">⌄</span></div>
+    <div>
+      <div class="navh">Repository</div>
+      <div class="nv" data-go="pr-graph">Spec graph</div>
+      <div class="nv" data-go="pr-doc">Spec PRs <span class="c">1</span></div>
+      <div class="nv on" data-go="runs">Implementation <span class="c live">● 1</span></div>
+      <div class="nv" data-go="backlog">Backlog <span class="c">12</span></div>
+    </div>
+    <div class="team">
+      <div class="navh">Team repos</div>
+      <div class="nv"><span><span class="dot" style="background:var(--amber)"></span>it-solve/billing</span><span class="c">2</span></div>
+      <div class="nv"><span><span class="dot" style="background:var(--green)"></span>it-solve/portal</span></div>
+    </div>
+    <div class="foot">
+      <div class="user"><div class="av">CL</div>clunny</div>
+      <div class="theme" title="Theme"><button data-t="light">☀</button><button data-t="system">◐</button><button data-t="dark">☾</button></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="prhead" style="display:none">
+      <div class="crumb">Spec PRs / #49</div>
+      <div class="head">
+        <div>
+          <h1>Plugin spec gaps</h1>
+          <div class="meta"><span class="chip hard">HARD gate</span><span class="chip wait">● Awaiting your approval</span><span class="chip node">plugin</span><span>resolves <code>plugin-spec-gaps</code></span><span>· opened 2h ago by Claude</span></div>
+        </div>
+        <div class="btns"><button class="btn">Raw diff</button><button class="btn pri">Approve intent</button></div>
+      </div>
+      <div class="tabs"><div class="tab on" data-go="pr-doc">Document</div><div class="tab" data-go="pr-graph">Graph</div></div>
+    </div>
+
+    <!-- IMPLEMENTATION -->
+    <section class="view on" id="runs">
+      <div class="crumb">Implementation</div>
+      <div class="head"><div><h1>Implementation</h1><div class="meta">Approved changes being built · read from <code>plan.md</code>, <code>impl/*</code> branches and PRs</div></div>
+        <div class="btns"><button class="btn">History</button></div></div>
+      <div class="stats">
+        <div class="card stat"><div class="v">1</div><div class="l">Changes in flight</div></div>
+        <div class="card stat"><div class="v" style="color:var(--green)">1</div><div class="l">Sessions working</div></div>
+        <div class="card stat"><div class="v" style="color:var(--accent)">0</div><div class="l">PRs in CI</div></div>
+        <div class="card stat"><div class="v">0</div><div class="l">Ready, unclaimed</div></div>
+        <div class="card stat"><div class="v" style="color:var(--rose)">0</div><div class="l">Blocked or stale</div></div>
+      </div>
+      <div class="runs">
+        <div>
+          <div class="card chg">
+            <div class="top"><b>Plugin spec gaps</b><span class="chip acc">Building · 1 of 3</span></div>
+            <div class="sub"><code>20261021-plugin-spec-gaps</code> · approved in #49 · 3 requirements on <span class="pill">plugin</span></div>
+            <div class="pbar"><i style="width:33%;background:var(--green)"></i><i style="width:33%;background:var(--accent);opacity:.55"></i></div>
+            <div class="pipe">
+              <div class="stp done"><div class="k">Plan</div><div class="nm">plan.md <span class="chip ok">Merged</span></div><div class="d">PR #50 · CI ✓<br>1 task, context <code>769bf71b</code></div></div>
+              <div class="arrow">→</div>
+              <div class="par">
+                <div class="stp run"><div class="k">Task · plugin</div><div class="nm"><span>binary-shim, label-guard, session-status</span><span class="pulse"></span></div>
+                  <div class="d">Claimed on <code>impl/…/plugin</code> · last push 38 min ago<br>Tests: 1 of 3 requirements proven · no PR yet</div>
+                  <div class="lease"><i style="width:84%"></i></div><div class="note">Claim lapses in 3 h 22 m without a push</div></div>
+              </div>
+              <div class="arrow">→</div>
+              <div class="stp"><div class="k">Finish</div><div class="nm">archive <span class="chip mute">Waiting</span></div><div class="d">Starts when the plugin task merges. Deletes <code>backlog/plugin-spec-gaps</code>.</div></div>
+            </div>
+          </div>
+
+          <div class="card chg" style="opacity:.92">
+            <div class="top"><b>Example: a change with parallel tasks</b><span class="chip hard">1 blocked</span></div>
+            <div class="sub">Illustrative only: how tasks with <code>waits_for</code> and a blocked contract would show</div>
+            <div class="pbar"><i style="width:20%;background:var(--green)"></i><i style="width:20%;background:var(--green)"></i><i style="width:20%;background:var(--accent);opacity:.55"></i><i style="width:20%;background:var(--rose);opacity:.6"></i></div>
+            <div class="pipe">
+              <div class="stp done"><div class="k">Plan</div><div class="nm">plan.md <span class="chip ok">Merged</span></div><div class="d">3 tasks</div></div>
+              <div class="arrow">→</div>
+              <div class="par">
+                <div class="stp done"><div class="k">Task · model</div><div class="nm">graph-export <span class="chip ok">Merged</span></div><div class="d">PR #61 · 2/2 proven</div></div>
+                <div class="stp run"><div class="k">Task · check</div><div class="nm">export-schema <span class="chip acc">PR #63 · CI running</span></div><div class="d">Waited for model ✓</div></div>
+                <div class="stp blk"><div class="k">Task · context</div><div class="nm">bundle-json <span class="chip hard">Blocked</span></div><div class="d">Contract must change → spec PR #64 awaiting approval</div></div>
+              </div>
+              <div class="arrow">→</div>
+              <div class="stp"><div class="k">Finish</div><div class="nm">archive <span class="chip mute">Waiting</span></div><div class="d">Needs all tasks merged</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="feed card">
+          <div class="sec"><h3 class="h">Activity</h3>
+            <div class="ev"><div class="ic" style="background:var(--accent-bg);color:var(--accent)">↑</div><div><div class="tx">Pushed 3 commits to <code>impl/…/plugin</code></div><div class="tm">38 min ago · session on herdr-2</div></div></div>
+            <div class="ev"><div class="ic" style="background:var(--green-bg);color:var(--green)">✓</div><div><div class="tx">PR #50 <b>Plan plugin-spec-gaps</b> merged by CI</div><div class="tm">1 h ago</div></div></div>
+            <div class="ev"><div class="ic" style="background:var(--sky-bg);color:var(--sky)">⚑</div><div><div class="tx">Claimed <code>plugin-spec-gaps/plugin</code></div><div class="tm">1 h ago</div></div></div>
+            <div class="ev"><div class="ic" style="background:var(--sky-bg);color:var(--sky)">⚑</div><div><div class="tx">Claimed <code>plugin-spec-gaps/plan</code></div><div class="tm">2 h ago</div></div></div>
+            <div class="ev"><div class="ic" style="background:var(--green-bg);color:var(--green)">◆</div><div><div class="tx">You approved spec PR #49</div><div class="tm">2 h ago</div></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOCUMENT -->
+    <section class="view" id="pr-doc">
+      <div class="doc">
+        <div>
+          <div class="card sec intent">
+            <h3 class="h">Intent</h3>
+            <b>Problem.</b> Building the plugin's first slice exposed places where its spec is wrong or silent:
+            <ul>
+              <li><code>label-guard</code> blocks reads like <code>gh pr list --label spec-approved</code>.</li>
+              <li><code>label-guard</code> misses GraphQL label IDs.</li>
+              <li><code>binary-shim</code> contradicts the Design when there's no binary.</li>
+              <li><code>session-status</code> sees no state from a subdirectory.</li>
+            </ul>
+            <b>Outcome.</b> The guard judges each command segment; the shim says the guard is off; session-start walks up to the git root.
+          </div>
+          <div class="card sec" style="margin-top:16px">
+            <h3 class="h">plugin · Requirements</h3>
+            <div class="req">
+              <div class="rh"><b>label-guard</b><span class="chip mod">Modified</span></div>
+              <div class="rb">It SHALL exit 2, naming <code>humans-review-intent</code>, when the command <del>contains spec-approved and one of -l, --label or /labels</del> <ins>contains addLabelsToLabelable, or a segment that contains spec-approved and runs gh pr|issue edit|create with a label flag, or a writing gh api call</ins>.
+                <div class="scn"><span>adding the label</span><span>adding through the API</span><span class="new">+ reading labels passes</span><span class="new">+ GraphQL by label ID</span></div></div>
+            </div>
+            <div class="req">
+              <div class="rh"><b>binary-shim</b><span class="chip mod">Modified</span></div>
+              <div class="rb">When no binary can be had it SHALL cache nothing, and <del>exit 1</del> <ins>for <code>hook session-start</code>, say the CLM state and the spec-approved guard are unavailable and exit 0; for other hooks, exit 0 silently; otherwise exit 1</ins>.
+                <div class="scn"><span>first use</span><span>bad checksum</span><span class="new">+ guard without a binary</span><span class="new">+ session start without a binary</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="aside card">
+          <div class="sec"><h3 class="h">Impact</h3>
+            <div class="kv">Nodes touched<b>1</b></div><div class="kv">Requirements<b>2 modified</b></div><div class="kv">Scenarios<b>+4</b></div><div class="kv">Design<b>3 paragraphs</b></div><div class="kv">Dependents affected<b>none</b></div></div>
+          <div class="sec"><h3 class="h">Decisions</h3>
+            <div class="dec"><code>guard-matches-writes</code><br><span style="color:var(--muted)">Judge each command segment; block writes, let reads through.</span></div>
+            <div class="dec"><code>say-guard-is-off</code><br><span style="color:var(--muted)">With no binary, session start says the guard is off.</span></div></div>
+          <div class="sec"><h3 class="h">Checks</h3>
+            <div class="kv">clm check<b style="color:var(--green)">✓ passed</b></div><div class="kv">Applied to specs/<b style="color:var(--green)">✓ matches deltas</b></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GRAPH -->
+    <section class="view" id="pr-graph">
+      <div class="gwrap">
+        <div class="canvas">
+          <div class="root">clm · root</div>
+          <div class="stage">
+            <svg viewBox="0 0 680 420" width="680" height="420">
+              <defs>
+                <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" style="fill:var(--edge)"/></marker>
+                <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,1L9,5L0,9z" style="fill:var(--accent)"/></marker>
+              </defs>
+              <g class="e" marker-end="url(#a)">
+                <path d="M190 153 C190 168.5,190 168.5,190 182"/><path d="M190 153 C190 210,320 210,320 267"/><path d="M190 153 C190 252.5,320 252.5,320 352"/>
+                <path d="M490 153 C490 168.5,190 168.5,190 182"/><path d="M190 238 C190 252.5,80 252.5,80 267"/><path d="M190 238 C190 295,320 295,320 352"/>
+                <path d="M470 238 C470 252.5,320 252.5,320 267"/><path d="M470 238 C470 295,320 295,320 352"/><path d="M80 323 C80 337.5,320 337.5,320 352"/>
+                <path d="M320 323 C320 337.5,320 337.5,320 352"/><path d="M560 323 C560 337.5,320 337.5,320 352"/>
+              </g>
+              <g class="eh" marker-end="url(#ah)">
+                <path d="M340 68 C340 83.5,190 83.5,190 97"/><path d="M340 68 C340 125,190 125,190 182"/><path d="M340 68 C340 167.5,320 167.5,320 267"/><path d="M340 68 C340 167.5,560 167.5,560 267"/>
+              </g>
+            </svg>
+            <div class="n hit" style="left:340px;top:40px"><span class="badge">2 changed</span><div class="t">plugin<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">7/7 proven</div></div>
+            <div class="n" style="left:190px;top:125px"><div class="t">orchestrator<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">5/5 proven</div></div>
+            <div class="n" style="left:490px;top:125px"><div class="t">ci<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">5/5 proven</div></div>
+            <div class="n" style="left:190px;top:210px"><div class="t">check<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">9/9 proven</div></div>
+            <div class="n" style="left:470px;top:210px"><div class="t">gate<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">10/10 proven</div></div>
+            <div class="n" style="left:80px;top:295px"><div class="t">apply<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">9/9 proven</div></div>
+            <div class="n" style="left:320px;top:295px"><div class="t">context<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">4/4 proven</div></div>
+            <div class="n unbuilt" style="left:560px;top:295px"><div class="t">sync<span class="s"></span></div><div class="p"><i style="width:0"></i></div><div class="f">unbuilt</div></div>
+            <div class="n" style="left:320px;top:380px"><div class="t">model<span class="s"></span></div><div class="p"><i style="width:100%"></i></div><div class="f">9/9 proven</div></div>
+          </div>
+          <div class="legend"><span><span class="dot" style="background:var(--green);margin:0"></span>active</span><span><span class="dot" style="background:var(--sky);margin:0"></span>unbuilt</span><span><span class="dot" style="background:var(--accent);margin:0"></span>touched by PR</span><span>→ depends on</span></div>
+        </div>
+        <div class="insp card">
+          <div class="sec"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:16px">plugin</b><span class="chip ok">active</span></div>
+            <div style="color:var(--muted);font-size:13px;margin-top:4px">Claude Code plugin: skills, hooks, subagents</div>
+            <div style="margin-top:8px"><span class="pill">check</span><span class="pill">context</span><span class="pill">orchestrator</span><span class="pill">sync</span></div></div>
+          <div class="sec"><h3 class="h">In this PR</h3>
+            <div class="mini"><b>label-guard<span class="chip mod">Modified</span></b><del>contains spec-approved and -l…</del> <ins>a segment running gh pr edit with a label flag…</ins></div>
+            <div class="mini"><b>binary-shim<span class="chip mod">Modified</span></b><del>exit 1</del> <ins>say the guard is off, exit 0</ins></div></div>
+          <div class="sec"><h3 class="h">Building now</h3><div style="font-size:13px;color:var(--muted)"><span class="pulse" style="display:inline-block;margin-right:6px"></span>plugin-spec-gaps/plugin · 1 of 3 proven</div></div>
+          <div class="sec"><h3 class="h">Backlog on this node</h3>
+            <div style="font-size:13px;color:var(--muted)">continuous-evals · release-platforms · release-process · session-push-guard</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BACKLOG -->
+    <section class="view" id="backlog">
+      <div class="crumb">Backlog</div>
+      <div class="head"><div><h1>Backlog</h1><div class="meta">12 items across 7 nodes</div></div><div class="btns"><button class="btn">Filter by node</button></div></div>
+      <div class="kan">
+        <div><div class="colh"><span class="dot" style="background:var(--rose);margin:0"></span>Bugs <span class="c">1</span></div>
+          <div class="bi"><div class="ttl">Plugin spec gaps found while building the first slice</div><span class="pill">plugin</span><div class="link">→ being fixed by plugin-spec-gaps</div><div class="slug">plugin-spec-gaps</div></div></div>
+        <div><div class="colh"><span class="dot" style="background:var(--sky);margin:0"></span>Questions <span class="c">1</span></div>
+          <div class="bi"><div class="ttl">When are spec edits auto-committed and pushed, and to which branch?</div><span class="pill">sync</span><div class="slug">autosync-policy</div></div></div>
+        <div><div class="colh"><span class="dot" style="background:var(--amber);margin:0"></span>Deferred <span class="c">3</span></div>
+          <div class="bi"><div class="ttl">Use change.md gate tiers in the merge gate</div><span class="pill">gate</span><div class="slug">gate-tiers</div></div>
+          <div class="bi"><div class="ttl">Re-apply deltas when an applied spec PR must rebase</div><span class="pill">sync</span><div class="slug">reapply-after-rebase</div></div>
+          <div class="bi"><div class="ttl">Markers in skipped tests shouldn't count as coverage</div><span class="pill">check</span><div class="slug">skipped-tests</div></div></div>
+        <div><div class="colh"><span class="dot" style="background:var(--accent);margin:0"></span>Ideas <span class="c">7</span></div>
+          <div class="bi"><div class="ttl">Stop unattended sessions pushing to main</div><span class="pill">orchestrator</span><span class="pill">plugin</span><div class="slug">session-push-guard</div></div>
+          <div class="bi"><div class="ttl">Build the sync node: autosync and merge drivers</div><span class="pill">sync</span><div class="slug">sync-node</div></div>
+          <div class="bi"><div class="ttl">One-step release: bump in a PR, publish on merge</div><span class="pill">ci</span><span class="pill">plugin</span><div class="slug">release-process</div></div>
+          <div style="color:var(--muted);font-size:13px;margin-left:4px">+ 4 more</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+<script>
+const views={'pr-graph':0,'pr-doc':1,'runs':2,'backlog':3};
+document.querySelectorAll('[data-go]').forEach(el=>el.addEventListener('click',()=>{
+  const v=el.dataset.go;
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on',s.id===v));
+  document.getElementById('prhead').style.display=(v==='pr-doc'||v==='pr-graph')?'':'none';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.go===v));
+  const nv=document.querySelectorAll('.nv[data-go]');nv.forEach(n=>n.classList.remove('on'));nv[views[v]].classList.add('on');
+}));
+function setTheme(t){try{localStorage.setItem('clm-theme',t)}catch(e){}
+  const eff=t==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t;
+  document.documentElement.dataset.theme=eff;
+  document.querySelectorAll('.theme button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));}
+let saved='system';try{saved=localStorage.getItem('clm-theme')||'system'}catch(e){}
+document.querySelectorAll('.theme button').forEach(b=>b.addEventListener('click',()=>setTheme(b.dataset.t)));
+setTheme(saved);
+</script>
+</body></html>

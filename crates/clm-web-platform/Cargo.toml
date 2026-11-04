@@ -1,0 +1,28 @@
+[package]
+name = "clm-web-platform"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# The fake GitHub and platform the Worker's tests drive (`web.worker.platform/shared-layer`).
+fake = ["dep:futures-executor", "dep:hmac", "dep:tempfile"]
+
+[dependencies]
+clm-model.workspace = true
+clm-gate.workspace = true
+clm-ledger = { workspace = true, default-features = false }
+clm-orchestrator = { workspace = true, default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+base64.workspace = true
+futures-executor = { version = "0.3", optional = true }
+hmac = { version = "0.12", optional = true }
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+clm-ledger.workspace = true
+tempfile.workspace = true
+clm-web-platform = { workspace = true, features = ["fake"] }

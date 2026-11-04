@@ -1,0 +1,36 @@
+---
+title: "Capabilities are proven by black-box tests of a capability node; architecture entries by the rules they name, or an explicit reason they can't be"
+date: 2026-10-30
+status: accepted
+---
+
+Settles `backlog/capability-tests`, left open by the re-founding (`human-layers`), and how the architecture entries are proven, which phase 6 left at a marker on whichever test came to hand. Brainstormed with the human on 2026-10-30.
+
+**Capabilities.** A capability test is a black-box test at the product's public boundary, written from the capability's scenarios: it uses only what a user or client can touch and checks only what they can see. For a CLI that is the binary and its files, for a service HTTP, for a library its public API, for an app a driven browser. It never reaches into internals, which is what makes it survive a rewrite of the parts below, and what node tests, which prove the parts, don't give: the hand-offs between nodes. It is deterministic, with what lies beyond the boundary (a model, the network, a paid service) stubbed by default, because it runs at land and a flaky land gets retried until it passes. Coverage counts one citation, as for any rule; that each scenario is covered is the method's rule and the `spec-auditor`'s finding, never a program's, which can't tell what a test proves.
+
+- **Where.** Capabilities cut across the nodes, so they get a node of their own: the top-level node `capability`, whose requirements are `CAPABILITIES.md`'s entries (`model/reserved-ids`). Its `SPEC.md` holds no requirements of its own, only the project's harness in its Design, which the AI owns: the boundary, the tools, where the tests live. That is how the pattern generalises: CLM fixes what a capability test is, and each project's `capability` node says how its own run. The node has its own `paths`, so its build never crosses `path-ownership`, and its own place in `clm next`.
+- **For CLM.** The `clm` binary in a temporary repository with a bare remote, the hook command for the guard, and the web app's and panel's suites for the three capabilities that live there. A scenario that starts with a skill is tested from the commands the skill runs, with no Claude session.
+- **Selection.** `capability` depends on the root, so `graph-test-selection`'s dependant walk runs its tests when anything in the CLI's tree changes; the release's full run is the backstop. No separate integration checkpoint: it would find breakage after the land that caused it and need someone to work out which.
+- **Order.** The running `clm` rejects `specs/capability/`, so this change relaxes `model/reserved-ids` and the node is created by a later change once that is built (`backlog/capability-node`, `checks-relax-before-use`).
+
+**Architecture.** An entry is one of four kinds, and how it is proven follows from the kind:
+1. *structural*, a property of every file or of the whole graph (no dead code, every rule traced, every file owned): enforced by a check that ranges over the whole tree at every land, a `clm check` rule, a detector or a whole-workspace test, never by an example;
+2. *a choke point*, one path with every other blocked (only `clm land` pushes `main`): its path and each bypass it blocks, as complete as the list of bypasses;
+3. *local*, a mechanism of one or two nodes (signed records, lease claims): the rules that state it;
+4. *a judgement* (`yagni`, `reuse-first`): no program can check it.
+
+Each entry names its proof in `ARCHITECTURE.md` itself: an `#### Enforced by` block listing the rules that enforce it, an `#### Untested` block saying why no program can, or both when it is part mechanism and part judgement. An entry is current when every rule it names is current; it is never cited by a test, never pending itself and never queued, since its rules are built by their own nodes. `clm check` fails an entry with neither block (`check/unenforced`). There is no stored kind: a program could do nothing with it. Whether the named rules are enough is the one thing no program can judge, so the list sits in the file the architect reviews, and adding, dropping or renaming an enforcing rule needs that review.
+
+The sorting of 2026-10-30, with the human: three entries cut as restatements or node rules (`no-stacked-prs`, covered by `land-locally` and `node-reconciliation`; `no-shared-install`, which stays as `orchestrator.run/no-shared-install`; `web-on-free-plan`, which stays in `web.worker`'s Design); `no-silent-drift` reworded to what actually blocks; 10 entries untested; the rest enforced, with four rules added where a gap showed (`clm/health-isolated`, `clm/judges-read-only-git`, `orchestrator.runner/runner-needs-guard`, `ci/no-workflow-pushes-main`) and two gaps deferred (`backlog/path-ownership-at-land`, and checking `specs/` against its sources on the whole tree, since accepted).
+
+**Gap accepted: `specs/` on a branch that adds no change.** `land/derived-specs` compares `specs/` with what regenerating gives only when the branch adds a change, and no `clm check` rule does it over the whole tree. Accepted by `20261030-derived-specs-whole-tree` (`yagni`): `specs/` is the record of the present, not a cache of the change log (it predates the first change, `clm init` writes it, and `impl/*` and finish branches edit it by design, as `derived-specs-fingerprint` says), so there is nothing to regenerate it from. A branch that adds no change keeps its `specs/` edits in the fingerprint, and `clm check` judges the graph they leave; what needs review is decided by the files a branch touches, not by whether a change carried the edit, so a hand edit gets past no review a change would have had. `no-silent-drift` and `regenerate-dont-merge` stay enforced as listed.
+
+**Known limit, accepted.** A project whose capabilities really need a live service, or whose end-to-end suite is too slow for every land, has no slow tier: a cited test runs whenever its node is selected, and `check/skipped-tests` refuses the usual skip. Accepted by `20261030-slow-test-tier`, with no tier and no finer selection through `serves` (`yagni`): a capability test stubs what lies beyond the boundary, the release's full run is the backstop, and a behaviour only the live service can show is `#### Untested`, with the reason.
+
+Rejected:
+- **Tests citing architecture entries**, the phase 6 practice: a marker on one example proves one clause of a cross-cutting rule, and the tests that prove an entry live in the nodes that enforce it, which no single build may edit.
+- **`#### Proves` on node rules** in place of `#### Enforced by` on the entry: lands on checks, so the AI would decide what counts as enough enforcement unseen.
+- **An `architecture` node** beside `capability`: its proof is other nodes' rules, so it would have nothing of its own to build.
+- **A list of exempt entries in `clm.toml` or the root spec**: separates the reason from what it excuses, and lands without review.
+- **Live model calls or the network in capability tests**, banned or allowed per project: a ban would push real end-to-end tests out of coverage; allowing them at every land makes the land slow and flaky.
+- **A separate integration checkpoint before release** in place of selection at land.

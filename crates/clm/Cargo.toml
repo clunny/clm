@@ -1,0 +1,42 @@
+[package]
+name = "clm"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-model.workspace = true
+clm-check.workspace = true
+clm-gate.workspace = true
+clm-apply.workspace = true
+clm-context.workspace = true
+clm-orchestrator.workspace = true
+clm-checkpoint.workspace = true
+clm-run.workspace = true
+clm-guard.workspace = true
+clm-hooks.workspace = true
+clm-sync.workspace = true
+clm-config.workspace = true
+clm-init.workspace = true
+clm-view.workspace = true
+clm-view-repo.workspace = true
+clm-ledger.workspace = true
+clm-effort.workspace = true
+clm-land.workspace = true
+clm-triage.workspace = true
+clm-runner.workspace = true
+clm-unreferenced.workspace = true
+clm-affected.workspace = true
+clm-health.workspace = true
+clm-git.workspace = true
+clm-host.workspace = true
+clm-rename.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+roxmltree = "0.21"
+serde_yaml.workspace = true
+toml.workspace = true

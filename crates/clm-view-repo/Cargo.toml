@@ -1,0 +1,16 @@
+[package]
+name = "clm-view-repo"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-git.workspace = true
+clm-model.workspace = true
+clm-check = { workspace = true, features = ["checkout", "detectors"] }
+clm-orchestrator = { workspace = true, features = ["git"] }
+clm-view.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,40 @@
+[package]
+name = "clm-orchestrator"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["git"]
+# The commands that work on a checkout, `origin` and `gh`; off for wasm builds.
+git = ["clm-check/checkout", "dep:clm-git", "dep:tempfile"]
+
+[[test]]
+name = "claim_unique"
+required-features = ["git"]
+
+[[test]]
+name = "orchestrator"
+required-features = ["git"]
+
+[[test]]
+name = "places"
+required-features = ["git"]
+
+[[test]]
+name = "propose"
+required-features = ["git"]
+
+[dependencies]
+clm-model.workspace = true
+clm-check = { workspace = true, default-features = false }
+clm-git = { workspace = true, optional = true }
+serde.workspace = true
+serde_yaml.workspace = true
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+toml.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true

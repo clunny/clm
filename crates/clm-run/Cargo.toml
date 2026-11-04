@@ -1,0 +1,15 @@
+[package]
+name = "clm-run"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-model.workspace = true
+clm-check = { workspace = true, default-features = false, features = ["checkout"] }
+clm-context.workspace = true
+clm-git.workspace = true
+clm-orchestrator.workspace = true
+clm-config.workspace = true
+tempfile.workspace = true

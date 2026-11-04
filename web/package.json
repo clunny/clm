@@ -1,0 +1,31 @@
+{
+  "name": "clm-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm --prefix site ci --ignore-scripts && SITE_OUT=../dist npm --prefix site run build && tsc --noEmit && vite build",
+    "deploy:check": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "build:worker":"cd ../crates/clm-web && cargo install -q worker-build --version 0.8.7 --locked && worker-build --release",
+    "preview": "vite preview",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "test": "vitest run && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63",
+    "@types/node": "^26.6.5",
+    "jsdom": "^29.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.152.0"
+  },
+  "dependencies": {
+    "diff": "^9.0.0",
+    "dompurify": "^3.4.17",
+    "elkjs": "^0.12.0",
+    "marked": "^18.1.1"
+  }
+}

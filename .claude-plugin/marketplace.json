@@ -1,0 +1,21 @@
+{
+  "name": "clm",
+  "owner": {
+    "name": "Christopher Lunny"
+  },
+  "metadata": {
+    "description": "CLM: spec-driven team development for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "clm",
+      "source": "./plugin",
+      "description": "Spec-driven team development: specs as the source of truth, deterministic checks, parallel implementation through git."
+    },
+    {
+      "name": "clm-panel",
+      "source": "./plugin-panel",
+      "description": "The CLM panel beside the chat (spec, work in flight, blockers) and /clm:view without a model turn. Needs clm."
+    }
+  ]
+}
