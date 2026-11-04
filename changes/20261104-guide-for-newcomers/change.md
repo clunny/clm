@@ -27,4 +27,4 @@ Guide rules today cover links, page order, the glossary and removed skill names,
 ## Constraints
 
 - `guide-links-inside` still holds: How it works is a guide page, so the links resolve.
-- `docs/guide/` counts as code (`light-ci-for-doc-prs`), so a guide edit reruns the test with no `clm:reads` marker.
+- `docs/guide/` counts as code (`guide-in-the-binary`, `doc-readers-marked`), so a guide edit reruns the test with no `clm:reads` marker.
