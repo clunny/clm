@@ -1,5 +1,8 @@
 //! `clm health`, run on this repository and on git repositories made here.
 
+// clm:reads specs/**
+// clm:reads backlog/**
+
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output};

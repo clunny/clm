@@ -1,6 +1,10 @@
 //! `clm init`: setting up a repository's CLM tooling, with a fake `gh` on `PATH` that it
 //! must never call.
 
+// clm:reads ARCHITECTURE.md
+// clm:reads specs/**
+// clm:reads changes/**
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
