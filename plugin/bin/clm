@@ -38,23 +38,15 @@ reason="can't read the version from $root/.claude-plugin/plugin.json"
 [ -n "$version" ] || fail "$@"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/clm/$version"
 # Each target is one `target=<target>` assignment, which the release's prepare step reads
-# (shim-targets). Windows, under Git Bash or MSYS2, runs the x86_64 build, emulated on
-# arm64; Cygwin stays unsupported. Arguments pass unchanged, so Git Bash's conversion of
-# absolute POSIX paths to Windows ones stays on (windows-paths-in-shim-and-panel).
-exe=clm
+# (shim-targets). Any other platform has no prebuilt binary.
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64) target=x86_64-unknown-linux-musl ;;
   Linux-aarch64) target=aarch64-unknown-linux-musl ;;
   Darwin-x86_64) target=x86_64-apple-darwin ;;
   Darwin-arm64) target=aarch64-apple-darwin ;;
-  MINGW*-x86_64 | MINGW*-aarch64 | MSYS*-x86_64 | MSYS*-aarch64 | \
-  UCRT64_NT-*-x86_64 | UCRT64_NT-*-aarch64 | CLANG64_NT-*-x86_64 | CLANG64_NT-*-aarch64 | \
-  CLANGARM64_NT-*-x86_64 | CLANGARM64_NT-*-aarch64)
-    target=x86_64-pc-windows-msvc
-    exe=clm.exe ;;
   *) target= ;;
 esac
-bin="$cache/$exe"
+bin="$cache/clm"
 
 if [ ! -x "$bin" ]; then
   reason="a recent download failed"
@@ -69,18 +61,20 @@ if [ ! -x "$bin" ]; then
   # Download into a temporary directory inside the cache, so the final move is atomic and
   # an interrupted download never leaves a bad binary.
   tmp=$(mktemp -d "$cache/.download.XXXXXX") || fail "$@"
-  reason="can't download $asset for v$version with gh"
-  gh release download "v$version" --repo clunny/clm \
-    --pattern "$asset" --pattern "$asset.sha256" --dir "$tmp" >/dev/null 2>&1 || fail "$@"
+  reason="can't download $asset for v$version with curl"
+  url="https://github.com/clunny/clm/releases/download/v$version"
+  for file in "$asset" "$asset.sha256"; do
+    curl -fsSL -o "$tmp/$file" "$url/$file" >/dev/null 2>&1 || fail "$@"
+  done
   reason="the download of $asset doesn't match its checksum"
   if command -v sha256sum >/dev/null 2>&1; then
     (cd "$tmp" && sha256sum -c "$asset.sha256") >/dev/null 2>&1 || fail "$@"
   else
     (cd "$tmp" && shasum -a 256 -c "$asset.sha256") >/dev/null 2>&1 || fail "$@"
   fi
-  reason="$asset holds no $exe"
-  tar xzf "$tmp/$asset" -C "$tmp" "$exe" >/dev/null 2>&1 && [ -f "$tmp/$exe" ] || fail "$@"
-  chmod +x "$tmp/$exe" && mv -f "$tmp/$exe" "$bin" || fail "$@"
+  reason="$asset holds no clm"
+  tar xzf "$tmp/$asset" -C "$tmp" clm >/dev/null 2>&1 && [ -f "$tmp/clm" ] || fail "$@"
+  chmod +x "$tmp/clm" && mv -f "$tmp/clm" "$bin" || fail "$@"
   rm -rf "$tmp" "$cache/.unavailable"
 fi
 
