@@ -9,7 +9,7 @@ serves: [capability/learn-clm]
 ---
 
 ## Contract
-CLM's public site at `https://clm-app.dev`: the homepage at `/` and the user guide at `/guide/`, built with VitePress from `web/site/` and the pages `clm guide` prints, `docs/guide/*.md` and `docs/spec-format.md` (`public-site`, `guide-in-the-binary`). `web`'s build runs it and puts its output at the root of `web/dist/`, beside the app under `web/dist/app/`; the same Worker serves both, and until launch only to signed-in invited people (`web.worker/site-behind-sign-in`, `invite-only-web`). The site links to the app at `/app/` and reads nothing from the Worker's API.
+CLM's public site at `https://clm-app.dev`: the homepage at `/` and the user guide at `/guide/`, built with VitePress from `web/site/` and the pages `clm guide` prints, `docs/guide/*.md` and `docs/spec-format.md` (`public-site`, `guide-in-the-binary`). `web`'s build runs it and puts its output at the root of `web/dist/`, beside the app under `web/dist/app/`; the same deployment holds both, and its assets serve the site to everyone, with no session and no Worker request (`web/site-served-directly`, `invite-only-web`). The site links to the app at `/app/` and reads nothing from the Worker's API.
 
 ## Design
 **Build.** A package of its own in `web/site/`: its `package.json` with VitePress and its build and test scripts, its committed `package-lock.json`, a `.npmrc` setting `ignore-scripts=true` (`unattended-commands`), its VitePress config and theme under `web/site/.vitepress/`, the homepage as a custom layout, and its tests with their own configs. Its own package keeps VitePress's Vite and Vue apart from the app's Vite 8. `npm run build` there writes the site to the directory `SITE_OUT` names (default `web/site/dist/`); `web`'s build runs `npm ci --ignore-scripts` and that build with `SITE_OUT` at `web/dist/` before the app's (`web/app-at-app-path`), so the site never empties the app's output. `npm test` runs its tests, which `ci-check.sh` runs after `web/`'s suite (`ci/web-checks`).
@@ -24,7 +24,7 @@ CLM's public site at `https://clm-app.dev`: the homepage at `/` and the user gui
 5. *Standing on shoulders*: the Spec Growth Engine paper ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)), [superpowers](https://github.com/obra/superpowers) and Anthropic's [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), each with what CLM took from it, as `docs/guide/why-clm.md` says.
 It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM". The nav holds How it works, Guide, Get started and Sign in (to `/app/`).
 
-**The install repository.** The repository the homepage's install commands name (`/plugin marketplace add <repo>`) is one value in the site's config (overridable by `INSTALL_REPO` for tests), since at launch it is `clunny/clm` made public or a new public repository. Until launch it is `clunny/clm`.
+**The install repository.** The repository the homepage's install commands name (`/plugin marketplace add <repo>`) is one value in the site's config (overridable by `INSTALL_REPO` for tests): `clunny/clm`, which is public, so a visitor adopts CLM on their own (`public-site`).
 
 **Look.** Inter for text, JetBrains Mono for commands; the app's indigo accent with a sky gradient, the mockup's dark palette and a light one. The site follows the system's light or dark setting, with VitePress's own switch kept. At phone widths the ring sits below the first screen's text, the side-by-side panels stack, and nothing scrolls sideways.
 
@@ -73,12 +73,17 @@ The site SHALL have one page under `/guide/` for each page `clm guide` prints, e
 - ci/web-checks
 
 ### Requirement: install-repository
-The homepage's install commands SHALL name the repository set by one value in the site's config, and no other file under `web/site/` SHALL name it.
+The homepage's install commands SHALL name the repository set by one value in the site's config, by default `clunny/clm`, the public repository, and no other file under `web/site/` SHALL name it.
 
 #### Scenario: repository changed
 - GIVEN the site's config value set to `someone/clm-public`
 - WHEN the homepage is built
 - THEN its install commands read `/plugin marketplace add someone/clm-public`, and no other file under `web/site/` contains `clunny/clm`
+
+#### Scenario: the public repository
+- GIVEN no `INSTALL_REPO` in the environment
+- WHEN the homepage is built
+- THEN its install commands read `/plugin marketplace add clunny/clm`
 
 ### Requirement: site-phone-layout
 At a phone's width the homepage and the guide SHALL fit the screen without scrolling sideways, with the homepage's ring below its first screen's text.

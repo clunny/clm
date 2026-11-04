@@ -13,7 +13,7 @@ serves: [capability/follow-from-browser, capability/see-project-state, capabilit
 ## Contract
 A hosted web app at `https://clm-app.dev/app/`, served by one shared Cloudflare Worker (`web.worker`) beside CLM's public site, which `web.site` builds and this component's build puts at the site's root (`public-site`), where invited people signed in with GitHub see the CLM repos they can read: the spec graph, the spec branches proposed for review, implementation progress and the backlog. It approves a spec branch by appending an `approved` record to the signed-in person's web ledger (`per-writer-ledgers`), records that person's choice to be notified about a repo as a `subscribed` or `unsubscribed` record there (`push-subscriptions-in-ledger`), takes a proposal for the backlog as a `proposed` record, which `clm rebase` files as a backlog item on the next build (`web-proposals-as-ledger-records`), records a comment on a spec branch's diff or a request that it change as a `commented` or `changes_requested` record, the latter holding the branch's land until the author pushes a change or the requester approves (`web-review-feedback-as-ledger-records`), records a review decision on a capability or an architectural constraint as a `decided` record (`review-capability-cost`), and writes nothing else to the repository. Open pages show a change within seconds of its push (`web-live-channel`), and the installed app can notify people when something waits on them. What it caches is derived from git and GitHub and can be deleted at any time (`web-derived-cache`). It works on phones and installs as a PWA.
 
-**Invited users** (`invite-only-web`). Only these GitHub logins may sign in. Anyone else gets a "not invited" page, and nothing of the app is public; until launch, nor is the site (`web.worker/site-behind-sign-in`). Adding someone is a change to this list.
+**Invited users** (`invite-only-web`). Only these GitHub logins may sign in. Anyone else gets a "not invited" page, and sees nothing of any repository. The public site is open to everyone (`web/site-served-directly`). Adding someone is a change to this list.
 
 - `clunny`
 
@@ -51,7 +51,7 @@ While the page is visible (`document.visibilityState`), the app refreshes about 
 - `[[kv_namespaces]]` with `binding = "CLM"` and `id = "9fa493aaa0a54d219b2dfebb5f681b9e"` (the namespace titled `clm-cache`);
 - `[[durable_objects.bindings]]` and a `[[migrations]]` entry with `tag = "v1"` for `Live` (`live-binding`, `web.live`), SQLite-backed since the Free plan has only those. A binding to a class the Worker doesn't export fails the deploy, and `web.worker` exports `Live`; a test under `web/` reads them;
 - `[triggers]` with `crons = []`: nothing runs on a schedule, since the `Replica` objects work on their own alarms (`web-repo-replica`), and the empty list is what clears the Cron Trigger earlier deploys created, because `wrangler deploy` leaves the deployed triggers as they are when `crons` is absent (`no-cron-trigger`);
-- the static assets, `web/dist/`, whose `run_worker_first` routes every path outside `/app/` to the Worker except `/sw.js` (`["/*", "!/app/*", "!/sw.js"]`), so the Worker decides who sees the site (`web.worker/site-behind-sign-in`), while the app's own files under `/app/` and the retiring `/sw.js` (`retire-root-service-worker`) are served directly. `not_found_handling` is `"none"`: the app routes by hash, so nothing needs a fallback page, and a missing path is a 404 rather than the homepage.
+- the static assets, `web/dist/`, whose `run_worker_first` routes only `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app` to the Worker (`["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]`), so the assets alone answer the site, the app's own files under `/app/` and the retiring `/sw.js` (`retire-root-service-worker`), to everyone and without spending a Worker request (`site-served-from-assets`). `not_found_handling` is `"404-page"`: a missing path gets the site's `/404.html` with status 404, from the assets and with no Worker request. The app routes by hash, so it needs no fallback page.
 
 **Setup.** Nothing in the build or a deploy waits on it:
 - the GitHub App exists, and its credentials are Worker secrets;
@@ -196,7 +196,6 @@ The app SHALL be installable as a PWA whose manifest's `id`, `start_url` and `sc
 - THEN the manifest's `id`, `start_url` and `scope` are `/app/`, the service worker's scope is `/app/`, and a request for `/guide/` is not answered from its caches
 
 #### Needs
-- web.worker/site-behind-sign-in
 - web.site/homepage-first-screen
 - web.site/guide-pages
 
@@ -719,17 +718,12 @@ Every request the app makes to load data again after the Worker answered one of 
 - THEN the review is requested again with `fresh` set
 
 ### Requirement: app-at-app-path
-`web`'s build SHALL put `web.site`'s build at the root of `web/dist/`, the app, built with Vite's `base` `/app/`, at `web/dist/app/`, and the invited list at `web/dist/_clm/invited.json`, and `web/wrangler.toml` SHALL route every path outside `/app/` but `/sw.js` to the Worker before the assets, with `not_found_handling` `"none"`. The app's end-to-end tests SHALL open it at `/app/`. Moving the app moves the test fixtures of other components that open it at `/` or repeat the routing (`capabilities/web/`'s harness and specs, `crates/clm-web/tests/deploy.rs`): this build makes those fixes and names them in its pull request (`path-ownership`). Among them, the harness's `signIn` SHALL open `/app/` once the callback has set the session, wherever the callback sends the browser, so it holds both before and after `web.worker/sign-in-opens-app` points the callback at `/app/`. This requirement is built first of the move's: `installable` and `retire-root-service-worker` assume the app is served from `/app/`.
+`web`'s build SHALL put `web.site`'s build at the root of `web/dist/`, the app, built with Vite's `base` `/app/`, at `web/dist/app/`, and the invited list at `web/dist/_clm/invited.json`. The app's end-to-end tests SHALL open it at `/app/`. Moving the app moves the test fixtures of other components that open it at `/` (`capabilities/web/`'s harness and specs): this build makes those fixes and names them in its pull request (`path-ownership`). Among them, the harness's `signIn` SHALL open `/app/` once the callback has set the session, wherever the callback sends the browser, so it holds both before and after `web.worker/sign-in-opens-app` points the callback at `/app/`. This requirement is built first of the move's: `installable` and `retire-root-service-worker` assume the app is served from `/app/`.
 
 #### Scenario: built tree
 - GIVEN a build of `web/`
 - WHEN a test reads `web/dist/`
 - THEN `app/index.html` is the app's page and loads its scripts from `/app/`, `index.html` is the site's homepage, `guide/` holds the guide's pages, and `_clm/invited.json` holds the invited list
-
-#### Scenario: worker first outside the app
-- GIVEN the repository
-- WHEN a test reads `web/wrangler.toml`
-- THEN its `run_worker_first` sends `/`, `/app`, `/guide/quickstart` and `/api/repos` to the Worker and not `/app/`, `/app/main.js` or `/sw.js`, and `not_found_handling` is `"none"`
 
 #### Scenario: the app's links
 - GIVEN the app at `/app/`
@@ -737,7 +731,6 @@ Every request the app makes to load data again after the Worker answered one of 
 - THEN it shows `o/a`'s backlog, and its sign-in button leads to `/auth/login`
 
 #### Needs
-- web.worker/site-behind-sign-in
 - web.site/homepage-first-screen
 - web.site/guide-pages
 
@@ -759,7 +752,6 @@ The build SHALL put at `/sw.js` a service worker that, once installed in place o
 - THEN the registration at scope `/` is unregistered and the app's own at `/app/` remains
 
 #### Needs
-- web.worker/site-behind-sign-in
 - web.site/homepage-first-screen
 - web.site/guide-pages
 
@@ -989,3 +981,20 @@ Zooming the graph SHALL keep the point under the pointer where it is on screen: 
 
 #### Serves
 - capability/follow-from-browser
+
+### Requirement: site-served-directly
+`web/wrangler.toml`'s `run_worker_first` SHALL send to the Worker exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so the assets answer every other path, with no session read and no Worker request, and `not_found_handling` SHALL be `"404-page"`. Changing the routing moves the test fixtures that repeat it (`capabilities/web/harness.ts`'s `run_worker_first` and `not_found_handling`, `crates/clm-web/tests/deploy.rs`): this build makes those fixes and names them in its pull request (`path-ownership`).
+
+#### Scenario: who answers what
+- GIVEN the repository
+- WHEN a test reads `web/wrangler.toml`
+- THEN its `run_worker_first` sends `/api/repos`, `/auth/login`, `/webhook`, `/_clm/invited.json` and `/app` to the Worker and not `/`, `/guide/quickstart`, `/404.html`, `/app/`, `/app/main.js` or `/sw.js`, and `not_found_handling` is `"404-page"`
+
+#### Scenario: a missing page
+- GIVEN the built assets under that routing and no session
+- WHEN a browser asks for `/guide/nothing-here`
+- THEN the answer is status 404 with the site's `/404.html`
+
+#### Serves
+- capability/learn-clm
+- architecture/invite-only-web

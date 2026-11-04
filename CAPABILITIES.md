@@ -14,7 +14,7 @@ A newcomer can learn in a browser what CLM is, why it matters for building softw
 People adopt what they understand, and until now CLM explained itself only once installed.
 
 #### Scenario: from homepage to quickstart
-- GIVEN the site, opened by someone who may see it
+- GIVEN the site, opened by anyone, with no session
 - WHEN they read the homepage's first screen and follow Get started
 - THEN they have seen that CLM reconciles the code to the intent they declare, and they are on the guide's quickstart, with the commands that install CLM
 

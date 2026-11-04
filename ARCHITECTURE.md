@@ -641,18 +641,24 @@ Every view of the web app SHALL show that it is loading while it waits, keep wha
 Whether a view feels good to use is a judgement; what is enforced is each detail someone chose to keep.
 
 ### Constraint: invite-only-web
-Only the logins listed in `web`'s Contract SHALL sign in to the web app; nothing in it is public, the public site (`web.site`) included until it is published. Adding a login edits that list, and lands on checks like any change without a burden.
+Only the logins listed in `web`'s Contract SHALL sign in to the web app under `/app/` and reach its API; nothing it shows of a repository is public. The public site (`web.site`) is open to everyone and holds nothing of any repository. Adding a login edits that list, and lands on checks like any change without a burden.
 
 #### Scenario: stranger signs in
 - GIVEN a GitHub login not on the list
 - WHEN it signs in to the web app
 - THEN it is refused and sees nothing
 
+#### Scenario: stranger opens the site
+- GIVEN someone with no session
+- WHEN they open the homepage and the guide, and then ask the API for the repo list
+- THEN they read the site, and the API answers 401
+
 #### Enforced by
 - web/invited-users
+- web/site-served-directly
 - web.worker/sign-in
 - web.worker/repo-access
-- web.worker/site-behind-sign-in
+- web.worker/reserved-paths
 
 ### Constraint: say-guard-is-off
 When the plugin can't get a `clm` binary, its hooks SHALL let calls through, but session start MUST tell the session that CLM's state and the guard are unavailable.
