@@ -23,7 +23,7 @@ Say what a session does with an edit that changes only `docs/` or `CLAUDE.md` an
 ## Outcome
 
 - `CLAUDE.md`'s small-change bullet names the doc-only case: the gate prints `spec`, it lands on checks, and an edit whose gate prints `spec review` or that needs `specs/` or `changes/` starts on a spec branch.
-- `docs/guide/how-it-works.md` states the same for adopters.
+- `docs/guide/how-it-works.md` states the same for adopters, the limit included, since an adopter's `CLAUDE.md` doesn't carry this repository's bullet and an edit to `docs/allowed_signers` gates `spec review` (`method-in-the-plugin`, from the architecture audit).
 - Decision `small-change-no-claim` amended.
 - `backlog/no-stated-route-for-a-guide-only-edit-that-needs-no-change` deleted.
 
