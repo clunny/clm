@@ -376,6 +376,12 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+    /// Contributions from people without write access, through the host adapter the `host`
+    /// setting names: a fork's pull requests and issues.
+    Contribution {
+        #[command(subcommand)]
+        contribution: Contribution,
+    },
     /// Remote branches, through the host adapter the `host` setting names.
     Branch {
         #[command(subcommand)]
@@ -571,6 +577,79 @@ enum Page {
     Body {
         /// The file holding the body.
         file: PathBuf,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum Contribution {
+    /// Print this repository's parent as `<owner>/<name>`, or `none` when it is not a fork.
+    Parent {
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Bring `origin`'s `main` up to its parent's, without force.
+    Sync {
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Open a pull request from this fork's branch to its parent's `main`, or find the open
+    /// one, and print its URL.
+    Open {
+        /// The branch, such as `spec/x`.
+        branch: String,
+        /// The pull request's title.
+        #[arg(long)]
+        title: String,
+        /// The file holding the pull request's body.
+        #[arg(long)]
+        body_file: PathBuf,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Print a pull request or issue: its fields, then its changed files, then its body.
+    Show {
+        /// The pull request's or issue's number.
+        number: u64,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Make a local branch at a pull request's head, without checking it out.
+    Fetch {
+        /// The pull request's number.
+        number: u64,
+        /// The local branch to make; it must not exist.
+        branch: String,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Comment on a pull request or issue, closing it with `--close`.
+    Comment {
+        /// The pull request's or issue's number.
+        number: u64,
+        /// The file holding the comment.
+        #[arg(long)]
+        body_file: PathBuf,
+        /// Close it after commenting.
+        #[arg(long)]
+        close: bool,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Add a label to a pull request or issue.
+    Label {
+        /// The pull request's or issue's number.
+        number: u64,
+        /// The label.
+        label: String,
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -1254,6 +1333,7 @@ fn dispatch() -> ExitCode {
         } => hosted("issue", root, |host, root| {
             host.issue(root, &title, &body_file, &repo).map(Some)
         }),
+        Command::Contribution { contribution } => contribution_command(contribution),
         Command::Branch {
             branch:
                 Branch::Delete {
@@ -1382,6 +1462,103 @@ fn pr(page: Page) -> ExitCode {
             hosted("pr body", root, |host, root| host.page_body(root, &file))
         }
     }
+}
+
+/// `clm contribution`: `host`'s contribution operations (`clm/contribution-command`).
+fn contribution_command(contribution: Contribution) -> ExitCode {
+    match contribution {
+        Contribution::Parent { root } => hosted("contribution parent", root, |host, root| {
+            Ok(Some(
+                host.parent(root)
+                    .map_err(refused)?
+                    .unwrap_or_else(|| "none".into()),
+            ))
+        }),
+        Contribution::Sync { root } => hosted("contribution sync", root, |host, root| {
+            host.sync(root).map(|()| None).map_err(refused)
+        }),
+        Contribution::Open {
+            branch,
+            title,
+            body_file,
+            root,
+        } => hosted("contribution open", root, |host, root| {
+            host.open_on_parent(root, &branch, &title, &body_file)
+                .map(Some)
+                .map_err(refused)
+        }),
+        Contribution::Show { number, root } => hosted("contribution show", root, |host, root| {
+            host.show(root, number)
+                .map(|shown| Some(shown_text(&shown)))
+                .map_err(refused)
+        }),
+        Contribution::Fetch {
+            number,
+            branch,
+            root,
+        } => hosted("contribution fetch", root, |host, root| {
+            host.fetch(root, number, &branch)
+                .map(|()| None)
+                .map_err(refused)
+        }),
+        Contribution::Comment {
+            number,
+            body_file,
+            close,
+            root,
+        } => hosted("contribution comment", root, |host, root| {
+            host.comment(root, number, &body_file, close)
+                .map(|()| None)
+                .map_err(refused)
+        }),
+        Contribution::Label {
+            number,
+            label,
+            root,
+        } => hosted("contribution label", root, |host, root| {
+            host.label(root, number, &label)
+                .map(|()| None)
+                .map_err(refused)
+        }),
+    }
+}
+
+/// A failed `gh` or `git` is a refusal for `clm contribution`: every failure exits 1 with its
+/// reason.
+fn refused(e: clm_host::Error) -> clm_host::Error {
+    match e {
+        clm_host::Error::Git(why) => clm_host::Error::Refused(why),
+        other => other,
+    }
+}
+
+/// What `clm contribution show` prints: a labelled line per field, a line per changed file,
+/// then the body.
+fn shown_text(shown: &clm_host::Shown) -> String {
+    let none = || "none".to_string();
+    let mut lines = vec![
+        format!("author: {}", shown.author),
+        format!("state: {}", shown.state),
+        format!("title: {}", shown.title),
+    ];
+    if shown.pull_request {
+        lines.push(format!(
+            "head repository: {}",
+            shown.head_repo_url.clone().unwrap_or_else(none)
+        ));
+        lines.push(format!(
+            "head branch: {}",
+            shown.head_branch.clone().unwrap_or_else(none)
+        ));
+        lines.push(format!(
+            "maintainers can edit: {}",
+            shown.maintainers_can_edit
+        ));
+        lines.extend(shown.files.iter().map(|f| format!("file: {f}")));
+    }
+    lines.push("body:".into());
+    lines.push(shown.body.clone());
+    lines.join("\n")
 }
 
 /// `clm wrap-up`.
