@@ -284,9 +284,9 @@ fn a_symlink_in_place_of_a_regenerated_file_refused() {
     spec_branch(&f);
     on_spec_branch(&f, |work| {
         let spec = work.join("specs/a/SPEC.md");
-        std::fs::copy(&spec, work.join("copy.md")).unwrap();
+        std::fs::copy(&spec, work.join("specs/copy.md")).unwrap();
         std::fs::remove_file(&spec).unwrap();
-        std::os::unix::fs::symlink("../../copy.md", &spec).unwrap();
+        std::os::unix::fs::symlink("../copy.md", &spec).unwrap();
     });
     refused_naming(&f, "specs/a/SPEC.md");
 }

@@ -55,24 +55,24 @@ fn any() {
     assert_eq!(f.parents(&f.path("origin.git"), "main").len(), 2);
 }
 
-/// A `spec/x` that needs review, authored by `Christopher Lunny` whose head's `clm.toml` holds `head` where
-/// `main`'s holds `base`, self-approved, with the work clone left on `spec/x`.
+/// A `propose/x` that needs review, authored by `Christopher Lunny` whose head's `clm.toml` holds `head` where
+/// `main`'s holds `base`, self-approved, with the work clone left on `propose/x`.
 fn branch_sets(f: &Fixture, base: &str, head: &str) {
     f.write("gate-out", "spec review\n");
     f.write("needs-approval", "");
     let toml = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
     let toml = toml.replacen(base, head, 1);
     f.branch(
-        "spec/x",
+        "propose/x",
         &[("changes/x/change.md", "x\n"), ("clm.toml", &toml)],
     );
-    let fingerprint = f.fingerprint("spec/x");
-    f.git(&f.work(), &["checkout", "-q", "spec/x"]);
+    let fingerprint = f.fingerprint("propose/x");
+    f.git(&f.work(), &["checkout", "-q", "propose/x"]);
     f.append(
         &f.work(),
         Body::Approved {
             fingerprint,
-            branch: "spec/x".into(),
+            branch: "propose/x".into(),
             change: Some("x".into()),
         },
     );
