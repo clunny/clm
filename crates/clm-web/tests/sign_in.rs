@@ -264,6 +264,26 @@ fn not_invited_login_gets_the_page_and_no_session() {
 }
 
 #[test]
+fn not_invited_page_points_to_quickstart_and_early_access() {
+    // req:web.worker/not-invited-page@82a29a2e
+    let fake = Fake::default();
+    let res = sign_in_as(&fake, "someone-else");
+    assert_eq!(res.status, 403);
+    let html = String::from_utf8_lossy(&res.body).to_lowercase();
+    for want in [
+        "href=\"https://github.com/clunny/clm/issues/new?template=early-access.yml\"",
+        "href=\"/guide/quickstart\"",
+        "href=\"/\"",
+        "not invited",
+        "is in early access",
+        "optional",
+    ] {
+        assert!(html.contains(want), "missing {want}: {html}");
+    }
+    assert!(cookie_pair(&res, "__Host-clm").is_none(), "{res:?}");
+}
+
+#[test]
 fn session_of_a_login_no_longer_invited_is_401() {
     // req:web/invited-users@cfd18219
     // Removing a login from the Contract revokes access at the next deploy.
