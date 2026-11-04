@@ -14,7 +14,7 @@ base: { design: "ab64121ff91b4ab4" }
 3. *Not a vibe-coded mess*: every rule has a test, drift can't land, nothing dead.
 4. *Solo or as a team*: git is the only channel.
 5. *Standing on shoulders*: the Spec Growth Engine paper ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)), Kubernetes's [controllers](https://kubernetes.io/docs/concepts/architecture/controller/), [superpowers](https://github.com/obra/superpowers) and Anthropic's [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), each with what CLM took from it, as `docs/guide/why-clm.md` says.
-It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM" with a Privacy link to `/privacy`; the guide's pages, whose default layout has no footer, get a small footer with the same link through a slot of VitePress's layout in the theme. The nav holds How it works, Guide, Get started and Web app (to `/app/`, the invite-only web app), then the GitHub link (below). The mockup predates the GitHub button and the fourth credit; they follow its button and credit styles.
+It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM" with links to the guide, the web app (reading Web app) and `/privacy`; the guide's pages, whose default layout has no footer, get a small footer with the same link through a slot of VitePress's layout in the theme. The nav holds How it works, Guide, Get started and Web app (to `/app/`, the invite-only web app), then the GitHub link (below). The mockup predates the GitHub button and the fourth credit; they follow its button and credit styles.
 
 **The install repository.** The repository the homepage's install commands name (`/plugin marketplace add <repo>`) is one value in the site's config (overridable by `INSTALL_REPO` for tests): `clunny/clm`, which is public, so a visitor adopts CLM on their own (`public-site`).
 
@@ -52,12 +52,12 @@ A guide file added, edited or removed changes them at the next build with no edi
 ## ADDED Requirements
 
 ### Requirement: nav-web-app
-The nav of every page SHALL hold, in order, How it works, Guide, Get started and Web app, Web app linking to `/app/`; no nav link SHALL read Sign in.
+The nav of every page SHALL hold, in order, How it works, Guide, Get started and Web app, Web app linking to `/app/`. Every link on the site to `/app/`, the homepage's footer's included, SHALL read Web app, and no link SHALL read Sign in.
 
 #### Scenario: homepage and a guide page
 - GIVEN the built site
-- WHEN a test reads the nav's links on `/` and on `/guide/quickstart`
-- THEN on both a link reading `Web app` leads to `/app/`, it comes after Get started, and no nav link reads `Sign in`
+- WHEN a test reads the links on `/` and on `/guide/quickstart`
+- THEN on both the nav's link reading `Web app` leads to `/app/` and comes after Get started, every link to `/app/` reads `Web app`, and no link reads `Sign in`
 
 #### Serves
 - capability/learn-clm
