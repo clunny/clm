@@ -807,6 +807,17 @@ fn guard_quotes_the_defect_report_it_asks_about() {
     );
     assert_eq!(code, Some(0), "{reason}");
     assert!(reason.contains("plain words"), "{reason}");
+    // A cargo run's report is quoted, a multi-line body whole, and the body once.
+    let (_, reason) = guard_in(
+        nowhere.path(),
+        "cargo run -q -p clm -- defect --title x <<'EOF'\nThe gate misfired.\nsecond line\nEOF",
+        &[],
+    );
+    assert!(
+        reason.contains("The gate misfired.\nsecond line"),
+        "{reason}"
+    );
+    assert_eq!(reason.matches("The gate misfired.").count(), 1, "{reason}");
     // Each segment's report is quoted, in order.
     let (_, reason) = guard_in(
         nowhere.path(),
