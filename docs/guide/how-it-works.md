@@ -91,7 +91,7 @@ A small code change that needs no spec change, such as a refactor or a clearer m
 - `human-task`: a step only you can do. The requirements it `blocks` wait for it too.
 - `workaround`: a requirement built with a workaround (`clm workaround`), kept until its component is redesigned or the workaround is accepted.
 
-`clm triage` groups the items for `/clm:triage`, and `clm draft` starts the background session that designs each group.
+`clm triage` groups the items for `/clm:triage`, and `clm draft` writes the prompt for the background session that designs each group.
 
 ## Health
 
