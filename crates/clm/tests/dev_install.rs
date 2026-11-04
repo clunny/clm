@@ -504,7 +504,13 @@ fn refuses_before_changing_anything() {
     assert!(!c.hook().exists());
 
     // Valid JSON that isn't an object to edit is refused before anything changes too.
-    for bad in ["[]", r#"{"env": "x"}"#, r#"{"enabledPlugins": []}"#] {
+    for bad in [
+        "[]",
+        "null",
+        r#"{"env": "x"}"#,
+        r#"{"env": false}"#,
+        r#"{"enabledPlugins": []}"#,
+    ] {
         let c = clone();
         write(&c.settings(), bad);
         let out = c.run(&c.main, &[]);

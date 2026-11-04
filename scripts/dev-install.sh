@@ -48,10 +48,9 @@ ours() { [ -f "$1" ] && grep -qxF "$MARK" "$1"; }
 # Whether `$settings` is missing, empty, or one JSON object whose `env`, `enabledPlugins` and
 # `extraKnownMarketplaces`, when present, are objects: what `edit_settings` can edit.
 settings_ok() {
-	[ ! -f "$settings" ] || jq -se 'length <= 1 and ((.[0] // {}) | type == "object"
-		and ((.env // {}) | type == "object")
-		and ((.enabledPlugins // {}) | type == "object")
-		and ((.extraKnownMarketplaces // {}) | type == "object"))' "$settings" >/dev/null 2>&1
+	[ ! -f "$settings" ] || jq -se 'length == 0 or (length == 1 and (.[0] | . as $s | type == "object"
+		and (["env", "enabledPlugins", "extraKnownMarketplaces"]
+			| all(. as $k | ($s | has($k) | not) or ($s[$k] | type == "object")))))' "$settings" >/dev/null 2>&1
 }
 
 # Rewrites `$settings` (`{}` when it's missing or empty) with what jq's filter $1 makes of it,
@@ -76,7 +75,7 @@ edit_settings() {
 }
 
 # The names of the plugins the tracked marketplace lists, one per line.
-plugin_names() { jq -r '.plugins[]?.name' "$tracked_market" 2>/dev/null || true; }
+plugin_names() { jq -r '.plugins[]?.name' "${1:-$tracked_market}" 2>/dev/null || true; }
 
 # The directory $1 with symlinks resolved, or nothing when there is none.
 physical() { (cd "$1" 2>/dev/null && pwd -P) || true; }
@@ -186,7 +185,7 @@ if [ "$mode" = rebuild ]; then
 	lock=$common/clm-install.lock
 	if [ -d "$lock" ]; then
 		pid=$(cat "$lock/pid" 2>/dev/null || true)
-		[ -n "$pid" ] || exit 0
+		[ -f "$lock/pid" ] || exit 0
 		! kill -0 "$pid" 2>/dev/null || exit 0
 		rm -rf "$lock"
 	fi
@@ -229,7 +228,7 @@ if [ "$mode" = remove ]; then
 	done
 	names=$(plugin_names)
 	if [ -d "$dev" ]; then
-		for n in $names; do
+		for n in $(plugin_names "$dev/marketplace/.claude-plugin/marketplace.json"); do
 			claude_in_main plugin uninstall "$n@$DEV_MARKET" --scope local || say "going on"
 		done
 		claude_in_main plugin marketplace remove "$DEV_MARKET" || say "going on"
