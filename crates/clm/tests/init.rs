@@ -430,7 +430,7 @@ const ROOT_PATHS: &str = r#"paths: [".gitignore", "clm.toml", "scripts/clm-check
 
 #[test]
 fn root_owns_what_init_writes_and_leaves_the_code_outside() {
-    // req:init/init-root-ownership@8c7cd82c
+    // req:init/init-root-ownership@82afadf4
     let (_tmp, dir) = repo();
     for file in [
         "src/main.rs",
@@ -441,9 +441,7 @@ fn root_owns_what_init_writes_and_leaves_the_code_outside() {
     ] {
         write(&dir, file, "x\n");
     }
-    // An untracked file isn't the repository's code yet.
     git(&dir, &["add", "src", "scripts", "README.md", "docs"]);
-    write(&dir, "notes.txt", "x\n");
     init(&dir, &[], &fake_hosts());
     assert_eq!(spec_key(&dir, "paths"), ROOT_PATHS);
     assert_eq!(
@@ -453,8 +451,25 @@ fn root_owns_what_init_writes_and_leaves_the_code_outside() {
 }
 
 #[test]
+fn root_outside_counts_the_untracked_files_the_bootstrap_commits() {
+    // req:init/init-root-ownership@82afadf4
+    let (_tmp, dir) = repo();
+    write(&dir, "src/main.rs", "x\n");
+    write(&dir, ".gitignore", "build/\n");
+    git(&dir, &["add", "src", ".gitignore"]);
+    for file in [".claude/settings.json", "build/out.o", ".clm/pr-body.md"] {
+        write(&dir, file, "x\n");
+    }
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(
+        spec_key(&dir, "outside"),
+        r#"outside: [".claude/**", "src/**"]"#
+    );
+}
+
+#[test]
 fn root_outside_in_an_empty_repository() {
-    // req:init/init-root-ownership@8c7cd82c
+    // req:init/init-root-ownership@82afadf4
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(spec_key(&dir, "paths"), ROOT_PATHS);
@@ -463,7 +478,7 @@ fn root_outside_in_an_empty_repository() {
 
 #[test]
 fn root_outside_skips_clm_files_and_escapes() {
-    // req:init/init-root-ownership@8c7cd82c
+    // req:init/init-root-ownership@82afadf4
     // CLM's own files are the root's or spec paths; a name with `"` or `\` is escaped as YAML.
     let (_tmp, dir) = repo();
     for file in [

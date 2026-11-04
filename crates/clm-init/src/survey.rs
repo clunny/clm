@@ -197,13 +197,17 @@ pub(crate) fn tracked(root: &Path) -> Result<Vec<String>, String> {
 /// The *code files* `check/unowned-files` reads: the tracked files under `root`, binary files
 /// and `.github/` included, other than the spec paths.
 pub(crate) fn code_files(root: &Path) -> Result<Vec<String>, String> {
+    Ok(code_only(tracked(root)?))
+}
+
+/// `files` without the spec paths.
+pub(crate) fn code_only(mut files: Vec<String>) -> Vec<String> {
     const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
     const SPEC_FILES: [&str; 3] = ["ARCHITECTURE.md", "CAPABILITIES.md", "CLAUDE.md"];
-    let mut files = tracked(root)?;
     files.retain(|f| {
         !SPEC_DIRS.iter().any(|d| f.starts_with(d)) && !SPEC_FILES.contains(&f.as_str())
     });
-    Ok(files)
+    files
 }
 
 pub(crate) fn lossy(paths: Vec<std::path::PathBuf>) -> Vec<String> {
