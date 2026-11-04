@@ -1,5 +1,5 @@
 //! The community files in `.github/` that tell an outsider how to take part
-//! (ci/security-policy, ci/code-of-conduct, ci/issue-forms, ci/pull-request-template).
+//! (ci/security-policy, ci/code-of-conduct, ci/issue-forms, ci/early-access-form, ci/pull-request-template).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -107,12 +107,9 @@ fn early_access_form_asks_one_question_and_no_email() {
     assert_eq!(form["name"], Value::String("Request early access".into()));
     let labels = form["labels"].as_sequence().expect("labels");
     assert!(labels.contains(&Value::String("early-access".into())));
-    assert!(
-        form["description"]
-            .as_str()
-            .expect("description")
-            .contains("https://clm-app.dev/guide/quickstart")
-    );
+    let description = form["description"].as_str().expect("description");
+    assert!(description.contains("https://clm-app.dev/guide/quickstart"));
+    assert!(description.contains("invite-only") && description.contains("early access"));
     let required = form["body"]
         .as_sequence()
         .expect("body")
