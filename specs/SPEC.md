@@ -413,7 +413,7 @@ A test in `crates/clm/tests/` SHALL hold a list of retired terms, each the old n
 #### Scenario: no plain English word on the list
 - GIVEN the repository
 - WHEN the test reads its own list
-- THEN every term on it holds a space, a hyphen, an underscore or a backtick, or is `specd`, and the test fails naming any other term
+- THEN every term on it holds a space, a hyphen, an underscore or a backtick, or is the old name of the status `unbuilt`, and the test fails naming any other term
 
 #### Serves
 - architecture/plain-terms
