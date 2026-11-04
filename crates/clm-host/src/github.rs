@@ -73,18 +73,12 @@ fn not_a_fork() -> Error {
     Error::Refused("the remote is not a fork".into())
 }
 
-/// The owner of [`REMOTE`]: from `gh repo view`, else from the remote's URL.
-fn owner(root: &Path, view: &Value) -> Result<String, Error> {
-    if let Some(login) = view["owner"]["login"].as_str() {
-        return Ok(login.to_string());
-    }
-    let url = git(root, &["remote", "get-url", REMOTE])?;
-    let path = url.trim_end_matches(".git");
-    let path = path.rsplit_once(':').map_or(path, |(_, p)| p);
-    path.rsplit('/')
-        .nth(1)
+/// The owner of the repository `view` describes.
+fn owner(view: &Value) -> Result<String, Error> {
+    view["owner"]["login"]
+        .as_str()
         .map(String::from)
-        .ok_or_else(|| Error::Git(format!("no owner in the remote `{url}`")))
+        .ok_or_else(|| Error::Git("gh repo view: no owner".into()))
 }
 
 const PR_FIELDS: &str = "author,state,title,body,headRepository,headRepositoryOwner,headRefName,maintainerCanModify,files";
@@ -138,11 +132,27 @@ impl Host for GitHub {
     ) -> Result<String, Error> {
         let view = repo_view(root)?;
         let parent = parent_of(&view).ok_or_else(not_a_fork)?;
-        let head = format!("{}:{branch}", owner(root, &view)?);
+        let head = format!("{}:{branch}", owner(&view)?);
+        // `--head` takes the bare branch name, so the fork's owner is matched on the result.
         let listed = [
-            "pr", "list", "--repo", &parent, "--head", &head, "--state", "open", "--json", "url",
+            "pr",
+            "list",
+            "--repo",
+            &parent,
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--json",
+            "url,headRepositoryOwner",
         ];
-        if let Some(url) = json("gh pr list", &gh(root, &listed)?)?[0]["url"].as_str() {
+        let open = json("gh pr list", &gh(root, &listed)?)?;
+        let fork_owner = owner(&view)?;
+        let mine =
+            open.as_array().into_iter().flatten().find(|pr| {
+                pr["headRepositoryOwner"]["login"].as_str() == Some(fork_owner.as_str())
+            });
+        if let Some(url) = mine.and_then(|pr| pr["url"].as_str()) {
             return Ok(url.to_string());
         }
         let body = body_file.to_string_lossy();
@@ -168,7 +178,7 @@ impl Host for GitHub {
         match gh(root, &["pr", "view", &n, "--json", PR_FIELDS]) {
             Ok(out) => Ok(shown(&json("gh pr view", &out)?, true)),
             // No pull request has that number: it may be an issue.
-            Err(clm_git::Error::Failed { .. }) => {
+            Err(clm_git::Error::Failed { stderr, .. }) if stderr.contains("Could not resolve") => {
                 let fields = "author,state,title,body";
                 let out = gh(root, &["issue", "view", &n, "--json", fields])?;
                 Ok(shown(&json("gh issue view", &out)?, false))

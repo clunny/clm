@@ -27,7 +27,7 @@ fn with_gh<T>(answers: &[(&str, &str)], body: impl FnOnce(&Path, &Path) -> T) ->
         script +=
             &format!("case \"$all\" in *'{needle}'*) cat <<'EOT'\n{out}\nEOT\nexit 0;; esac\n");
     }
-    script += "exit 1\n";
+    script += "echo 'Could not resolve to a PullRequest' >&2\nexit 1\n";
     let gh = dir.path().join("gh");
     fs::write(&gh, script).unwrap();
     fs::set_permissions(&gh, fs::Permissions::from_mode(0o755)).unwrap();
@@ -105,7 +105,13 @@ fn opening_on_the_parent() {
         assert_eq!(url, "https://github.com/clunny/clm/pull/9");
         let log = calls(dir);
         let create = log.lines().find(|l| l.starts_with("pr create")).unwrap();
-        for part in ["--repo clunny/clm", "--base main", "--head dana:spec/x"] {
+        for part in [
+            "--title x",
+            "--body-file",
+            "--repo clunny/clm",
+            "--base main",
+            "--head dana:spec/x",
+        ] {
             assert!(create.contains(part), "{create}");
         }
     });
@@ -114,7 +120,7 @@ fn opening_on_the_parent() {
 #[test]
 fn an_open_pull_request_on_the_parent_is_returned() {
     // req:host/contribution-operations@6134fd80
-    let open = r#"[{"url":"https://github.com/clunny/clm/pull/4"}]"#;
+    let open = r#"[{"url":"https://github.com/other/clm/pull/2","headRepositoryOwner":{"login":"other"}},{"url":"https://github.com/clunny/clm/pull/4","headRepositoryOwner":{"login":"dana"}}]"#;
     with_gh(&[("repo view", FORK), ("pr list", open)], |root, dir| {
         let host = clm_host::adapter(Setting::Github);
         let url = host
@@ -140,6 +146,14 @@ fn a_pull_requests_files() {
         );
         assert_eq!(shown.head_branch.as_deref(), Some("spec/x"));
         assert!(shown.maintainers_can_edit);
+        assert_eq!(
+            (
+                shown.state.as_str(),
+                shown.title.as_str(),
+                shown.body.as_str()
+            ),
+            ("OPEN", "t", "b")
+        );
     });
 }
 
@@ -158,6 +172,10 @@ fn an_issue_is_shown_when_no_pull_request_has_the_number() {
         assert!(!shown.pull_request);
         assert_eq!(shown.author, "sam");
         assert_eq!(shown.title, "idea");
+        assert_eq!(
+            (shown.state.as_str(), shown.body.as_str()),
+            ("OPEN", "do it")
+        );
         assert!(shown.files.is_empty());
     });
 }
@@ -170,10 +188,15 @@ fn closing_with_a_comment_and_labelling() {
         let body = root.join("c.md");
         fs::write(&body, "thanks").unwrap();
         let host = clm_host::adapter(Setting::Github);
+        host.comment(root, 8, &body, false).unwrap();
+        assert!(!calls(dir).contains("close"));
         host.comment(root, 7, &body, true).unwrap();
         host.label(root, 7, "accepted").unwrap();
         let log = calls(dir);
-        assert!(log.contains("comment 7 --body-file"), "{log}");
+        assert!(
+            log.contains(&format!("comment 7 --body-file {}", body.display())),
+            "{log}"
+        );
         assert!(log.contains("close 7"), "{log}");
         assert!(log.contains("edit 7 --add-label accepted"), "{log}");
     });
