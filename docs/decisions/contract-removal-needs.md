@@ -24,3 +24,5 @@ Rejected:
 (Amended 2026-10-31, `20261031-a-build-cannot-delete`: for an `obsolete` requirement the item the build adds is `kind: deferred`, not a question, and says the kept code goes once the other node no longer uses it. The provider's build that removes the code deletes the item with a `Resolves: backlog/<slug>` trailer, with no spec PR (`deferred-work-resolves-in-code`). The item with `blocks` for a requirement left unbuilt stays a question.)
 
 (Amended 2026-11-01, `20261101-a-contract-step-from`: a removal that can't carry its `Needs`, a whole requirement removed or a required node waiting on an optional one, is split into the two changes `expand-contract` describes, and the branch adds a `kind: deferred` item that names the contract change and what it waits on (`contract-step-deferred`).)
+
+(Amended 2026-11-04, `20261104-rename-adds-then-removes`: a rename is an adding requirement, which needs nothing, and a removing one, which needs each user's move, in one change, so the needs form no cycle (`rename-adds-then-removes`).)
