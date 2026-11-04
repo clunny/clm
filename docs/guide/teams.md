@@ -21,6 +21,8 @@ One person often plays every role. A team splits them so intent never waits on b
 
 **Stale work is caught, not merged.** Each test cites the requirement it proves at the version it was built against. When someone's spec change lands and moves a requirement that is already built, its tests still cite the old version, so the requirement is `behind` and its component is pending again; the next build of that component brings it up to date. `clm pending <component>` lists what's left. Requirements the change didn't touch stay current.
 
+**People outside the team.** Someone without write access can't claim or land, so they suggest intent instead: see [Contributions](contributions.md).
+
 ## Reviewing as a team
 
 - Approve in a Claude Code session, where Claude runs `clm approve <branch>` and you confirm the command, or with Approve in the web app. Either way it's an `approved` record in your own ledger branch, naming you.

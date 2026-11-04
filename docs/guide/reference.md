@@ -12,6 +12,7 @@
 | `/clm:propose` | turn an intent into one spec branch, and see it landed |
 | `/clm:build` | build everything ready, in parallel, until the queue is empty |
 | `/clm:triage` | draft the backlog into spec changes unattended, then ask you to approve the ones that need review |
+| `/clm:contribution` | take in a contributor's pull request or issue: judge its files, show it to you, close it or land it on your yes |
 | `/clm:health` | read the health report and propose cuts, for you to take to `/clm:propose` |
 
 ## Commands
@@ -31,6 +32,7 @@
 | `clm next` | the components ready to build |
 | `clm rebase` | rebase onto `main`, regenerate `specs/`, run the checks |
 | `clm pr open` | open a branch's pull request on the host, for reading its diff |
+| `clm contribution` | what `/clm:contribution` and `/clm:propose` use for a fork or outside contribution: `parent`, `sync`, `open`, `show`, `fetch`, `comment`, `label` |
 | `clm approve <branch>` | record your approval of the diff of a branch that needs review; Claude Code asks you to confirm it |
 | `clm land <branch>` | land a branch on `main`: gate it, merge it, run the checks on the result and push `main` |
 | `clm wrap-up` | clean up landed work, and say whether the session can end |
