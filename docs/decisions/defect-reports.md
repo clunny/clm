@@ -8,7 +8,7 @@ A CLM defect is anything that CLM itself (its CLI, CI, gate rules, plugin, skill
 
 Where a report goes is the `defects` setting (`layered-settings`):
 - `backlog`, in CLM's own repository: a `kind: bug` item, deleted as usual when a change resolves it. Once fixed, the lesson lives in the spec, so no permanent log is kept.
-- `ask`, the default elsewhere: an issue on `clunny/clm`. Every issue needs the human's approval, which the guard enforces by answering `clm defect` with Claude Code's `ask` permission decision, so the human sees the full report and can approve, reject or ask for changes. Unattended sessions can't be asked, so they list defects in the PR body for the human to file.
+- `ask`, the default elsewhere: an issue on `clunny/clm`. Every issue needs the human's approval, which the guard enforces by answering `clm defect` with Claude Code's `ask` permission decision, so the human sees the full report and can approve, reject or ask for changes; the ask quotes the report itself, and refuses one it can't show (`defect-ask-shows-report`). Unattended sessions can't be asked, so they list defects in the PR body for the human to file.
 - `off`: nothing.
 
 A report describes only the process: the CLM step or command, what happened, what was expected, the rule or decision involved. It holds nothing of the project (file names, code, spec text, output), because other projects may be private client work. Keeping content out is the session's judgment, and the human's approval is the check (`deterministic-enforcement`: judgment advises, the permission prompt gates).
