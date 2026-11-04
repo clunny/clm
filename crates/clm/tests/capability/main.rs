@@ -7,6 +7,7 @@ mod approve_intent;
 mod build_from_spec;
 mod catch_drift;
 mod configure_clm;
+mod contribute_from_outside;
 mod git_host;
 mod guard_sessions;
 mod install_and_release;
