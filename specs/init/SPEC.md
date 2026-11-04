@@ -599,4 +599,5 @@ For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first
 - capability/adopt-clm
 
 #### Needs
-- clm/check-passes-requires
+- clm/detector-requires-skip
+- check/detector-relative-command

@@ -28,5 +28,5 @@ See `detector-requires-manifest` for the full comparison.
 ## Constraints
 
 - `clm.toml` and `scripts/clm-check.sh` are the project's once written (`init-rerun`): repositories set up earlier keep their files.
-- `requires` is a new field on `clm-config`'s and `clm-check`'s `Detector`, which the root builds by literal (`crates/clm/src/main.rs`, `crates/clm/tests/cli.rs`): `config`'s and `check`'s builds set `requires: None` there to keep the workspace building, the compile-only fixes the field forces, named under `## Fixes in other components`; the root's `check-passes-requires` then passes the real value.
+- `clm-check`'s `Detector` doesn't change: the root drops a detector whose `requires` is missing before it calls `clm-check` (`20261104-detectors-skip-in-the-root`), so no build reaches into another component (`path-ownership`).
 - This repository's `clm.toml` doesn't use `requires`, so no `settings-before-use` ordering is needed.

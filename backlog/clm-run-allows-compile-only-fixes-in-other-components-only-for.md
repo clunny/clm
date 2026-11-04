@@ -11,3 +11,5 @@ What happened: the builder check found that the providing component's build brea
 Expected: the run prompt's compile-only exception should cover fixes any Contract change forces, additions included, where the other component's code only names the changed item and its behaviour doesn't change; or the propose builder check should name the pattern so the change states it.
 
 Rules involved: architecture/path-ownership, contract-removal-needs, removal-breaks-dependant.
+
+The same limit is written in `ARCHITECTURE.md`'s `path-ownership`, whose first exception names only a removal, so the fix is a reviewed edit there as well as to the `clm run` prompt. `20261104-detectors-skip-in-the-root` designed around it for its case.

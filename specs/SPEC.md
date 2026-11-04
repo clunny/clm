@@ -751,17 +751,21 @@ Each test file under `crates/clm/tests/` that reads a file of this repository's 
 #### Needs
 - check.affected/affected-readers
 
-### Requirement: check-passes-requires
-`clm check` SHALL pass each detector's `requires`, as the settings load it (`config/detector-requires-setting`), to `clm-check`'s detectors with the rest of the detector, so a detector whose `requires` is missing is skipped as `check/detector-requires` says.
+### Requirement: detector-requires-skip
+The `clm check` command SHALL leave out of the detectors it passes to `clm-check` each detector whose `requires`, as the settings load it (`config/detector-requires-setting`), names a path that doesn't exist under the repository root, writing `<name> skipped: no <path>` to its stderr and reporting no `check/detectors` violation for it; a detector whose `requires` exists, or that has none, SHALL be passed and run as `check/detectors` says. `clm-check`'s `Detector` doesn't change: the skip is the root's, which owns the call (`architecture/path-ownership`).
 
-#### Scenario: requires reaches the check
+#### Scenario: required file missing
 - GIVEN a clean repository with no `package.json` whose `clm.toml` has a detector `knip` (`["sh", "-c", "touch ran; exit 3"]`, `requires = "package.json"`)
 - WHEN the `clm check` command runs
-- THEN it exits 0, stderr contains `knip skipped: no package.json`, and no file `ran` exists
+- THEN it exits 0, prints no `check/detectors` line, stderr contains `knip skipped: no package.json`, and no file `ran` exists
+
+#### Scenario: required file present
+- GIVEN the same repository holding `package.json`
+- WHEN the `clm check` command runs
+- THEN stdout has the line `clm.toml: check/detectors: knip failed (exit 3)`
 
 #### Serves
-- capability/no-dead-weight
+- capability/adopt-clm
 
 #### Needs
 - config/detector-requires-setting
-- check/detector-requires

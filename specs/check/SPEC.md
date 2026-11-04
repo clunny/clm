@@ -36,7 +36,7 @@ A removal marker's change is classified from the graph (`model`), in this order:
 
 **Before apply** (`removed-names-before-apply`). For each `proposed` or `approved` change, the changes `run` validates, `run` also takes the graph the change would leave from `apply`'s `resulting(graph, change)` (`apply/resulting-graph-call`) and runs the same scan on it. The removed IDs are computed from that change's deltas and the two graphs, not from `removed`, and each is attributed to that change alone: when two pending changes remove the same ID, each one's scan reports its spans, naming itself. Only IDs listed under `## REMOVED Requirements` count, as for `removed`, so a component the change removes whole adds none of its requirements. `validate` builds the same graph again; the cost is one in-memory parse of the components the change writes, so the two aren't shared. So a draft sees a name its removal leaves stale before `clm apply`, and a name the change's own deltas rewrite is never reported. The path is the component's `SPEC.md` path with the line in the text the change leaves, which is the file's own line when the change doesn't write the component. An ID the current graph doesn't hold is the applied scan's, so no span is reported by both. A change whose deltas don't apply has no resulting graph (`resulting` gives none): `stale-deltas` reports it.
 
-**Detectors** are separate from `run`. `detectors(root, list)` takes a plain list of `Detector { name, command, hint, timeout, requires }` and spawns each, so `clm-check` doesn't depend on `clm-config`. The spawning code sits behind the default feature `detectors`, so the crate builds for wasm with default features disabled. The `clm check` command (crate `clm`) loads the settings (`config`) and passes their `detectors` in, each with its `timeout`. It calls `detectors` after `run`, whether or not `run` found violations. If the settings can't be loaded, it reports `<file or variable>: check/detectors: <error>` as a violation, skips the detectors and reports `run`'s violations. `clm rebase`, `clm wrap-up` (on an extracted tree) and the `web` Worker call `run`, which has no project toolchain, so they never run detectors.
+**Detectors** are separate from `run`. `detectors(root, list)` takes a plain list of `Detector { name, command, hint, timeout }` and spawns each, so `clm-check` doesn't depend on `clm-config`. The spawning code sits behind the default feature `detectors`, so the crate builds for wasm with default features disabled. The `clm check` command (crate `clm`) loads the settings (`config`) and passes their `detectors` in, each with its `timeout`. It calls `detectors` after `run`, whether or not `run` found violations. If the settings can't be loaded, it reports `<file or variable>: check/detectors: <error>` as a violation, skips the detectors and reports `run`'s violations. `clm rebase`, `clm wrap-up` (on an extracted tree) and the `web` Worker call `run`, which has no project toolchain, so they never run detectors.
 
 Each detector runs without a shell, from the repository root, one after another in `clm.toml`'s order. Its stdout and stderr are piped and copied, line by line as they arrive, to `clm check`'s stderr, one thread per stream, so stdout keeps one line per violation and a detector that hangs has already shown what it printed (`detector-timeouts`). On Unix the detector starts in a process group of its own; when its `timeout` passes before it exits, the whole group is killed (`SIGKILL`, through `libc::killpg` or an equivalent call, not a spawned `kill`), so a `sh -c` wrapper's children stop with it. Elsewhere the process alone is killed, and a grandchild holding a pipe can keep the copying threads, and `clm check`, waiting past the timeout; CLM is released for no such platform (`no-windows-support`). `clm check` then waits for the copying threads and goes on to the next detector. A detector with no exit code whose timeout didn't pass is reported as `<name> failed (killed by a signal)`.
 
@@ -699,21 +699,11 @@ The messages `clm-check` gives SHALL say component and components, never the old
 #### Serves
 - architecture/plain-terms
 
-### Requirement: detector-requires
-`clm check` SHALL skip a detector whose `requires` names a path that doesn't exist under the repository root, writing `<name> skipped: no <path>` to its stderr and reporting no `check/detectors` violation for it; a detector whose `requires` exists, or that has none, SHALL run as `detectors` says. A detector command whose first word is a relative path holding a `/` SHALL be spawned with the repository root joined onto it, not left to the platform's lookup, so `["node_modules/.bin/knip"]` runs the root's installed tool, and when nothing is there it is reported as `detectors` reports a command that can't be started (`could not run`, with its hint).
-
-#### Scenario: required file missing
-- GIVEN a clean repository with no `package.json` whose `clm.toml` has a detector `knip` (`["sh", "-c", "touch ran; exit 3"]`, `requires = "package.json"`)
-- WHEN `clm check` runs
-- THEN it exits 0, prints no `check/detectors` line, stderr contains `knip skipped: no package.json`, and no file `ran` exists
-
-#### Scenario: required file present
-- GIVEN the same repository holding `package.json`
-- WHEN `clm check` runs
-- THEN stdout has the line `clm.toml: check/detectors: knip failed (exit 3)`
+### Requirement: detector-relative-command
+A detector command whose first word is a relative path holding a `/` SHALL be spawned with the repository root joined onto it, not left to the platform's lookup, so `["node_modules/.bin/knip"]` runs the root's installed tool from wherever `clm check` runs; when nothing is there it SHALL be reported as `detectors` reports a command that can't be started (`could not run`, with its hint).
 
 #### Scenario: relative tool not installed
-- GIVEN a clean repository holding `package.json` and no `node_modules/`, whose `clm.toml` has a detector `knip` (`["node_modules/.bin/knip"]`, `requires = "package.json"`, hint `npm ci`)
+- GIVEN a clean repository with no `node_modules/`, whose `clm.toml` has a detector `knip` (`["node_modules/.bin/knip"]`, hint `npm ci`)
 - WHEN `clm check` runs from a subdirectory
 - THEN it exits 1 with a line starting `clm.toml: check/detectors: knip could not run:` and ending `; install with: npm ci`
 
@@ -725,6 +715,3 @@ The messages `clm-check` gives SHALL say component and components, never the old
 #### Serves
 - capability/no-dead-weight
 - architecture/no-dead-code
-
-#### Needs
-- config/detector-requires-setting
