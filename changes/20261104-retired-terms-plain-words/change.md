@@ -20,7 +20,7 @@ On 2026-11-04 the test failed `main` on a plain-English use of the old name of t
 
 ## Outcome
 
-- `clm/retired-terms`: the list holds only an old command after `clm `, an outcome line, a flag, a key, a `kind:` in backticks, a coined term of several words or a coined non-word (`specd`); a test checks the list itself. The scan no longer reads `changes/`, live or archived.
+- `clm/retired-terms`: the list holds only an old command after `clm `, an outcome line, a flag, a key, a `kind:` in backticks, a coined term of several words or a coined non-word (the old name of the status `unbuilt`); a test checks the list itself. The scan no longer reads `changes/`, live or archived.
 - `clm/node-names-retired`: the bare old word for ancestors leaves the list; the old name of placeholder component stays.
 - With `clm/old-state-and-key-names-retired` (`20261104-found-by-search-and-agents`), no bare English word is left on the list.
 
