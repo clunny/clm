@@ -1164,6 +1164,7 @@ fn scenario_dirty_worktree_kept() {
     let out = finished(&r, "b");
     assert!(wt.join("notes.txt").exists());
     assert!(out.contains("landed impl/b"), "{out}");
+    assert!(out.find("landed impl/b") < out.find("kept"), "{out}");
     assert!(
         out.contains(&format!("kept {}: uncommitted changes", wt.display())),
         "{out}"
@@ -1256,6 +1257,7 @@ fn finish_keeps_a_branch_landed_only_locally() {
     );
     let out = finished(&r, "b");
     assert!(wt.exists(), "{out}");
+    assert!(!out.lines().any(|l| l.starts_with("landed")), "{out}");
 }
 
 #[test]
