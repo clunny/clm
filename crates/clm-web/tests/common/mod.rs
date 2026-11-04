@@ -6,15 +6,57 @@
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
+use clm_replica::Store;
 use clm_web::Replicas;
 use clm_web_platform::http::{Request, Response};
 use clm_web_platform::platform::{
     Assets, Cache, Clock, GhRequest, GhResponse, GitHub, Kv, Live, Log, Secrets,
 };
+use clm_web_replica::{Alarm, Object};
 use serde_json::{Value, json};
 
 pub use clm_web_platform::fake::*;
+
+/// An in-memory store for a real [`Object`].
+#[derive(Clone, Default)]
+pub struct Mem(Rc<RefCell<BTreeMap<String, Vec<u8>>>>);
+
+impl Store for Mem {
+    fn get(&self, key: &str) -> Option<Vec<u8>> {
+        self.0.borrow().get(key).cloned()
+    }
+    fn put(&mut self, key: &str, bytes: Vec<u8>) {
+        self.0.borrow_mut().insert(key.into(), bytes);
+    }
+    fn delete_all(&mut self) {
+        self.0.borrow_mut().clear();
+    }
+}
+
+/// An alarm slot for a real [`Object`].
+#[derive(Clone, Default)]
+pub struct Slot(Rc<Cell<Option<u64>>>);
+
+impl Alarm for Slot {
+    fn get(&self) -> Option<u64> {
+        self.0.get()
+    }
+    fn set(&mut self, at: u64) {
+        self.0.set(Some(at));
+    }
+    fn clear(&mut self) {
+        self.0.set(None);
+    }
+}
+
+/// A real `Replica` object over the fake GitHub, in place of the scripted one.
+pub struct RealObject {
+    name: String,
+    object: Object<Mem, Slot>,
+    slot: Slot,
+}
 
 /// A request the Worker sent to a `Replica` object.
 #[derive(Debug, Clone)]
@@ -33,6 +75,10 @@ pub struct FakeReplicas {
     /// body; a 200's body is the view, which the fake wraps as the object does.
     pub views: RefCell<BTreeMap<(String, String), (u16, Value)>>,
     pub calls: RefCell<Vec<ReplicaCall>>,
+    /// The scripted answer to `POST /write`, when the test scripts the object's writes.
+    pub write: RefCell<Option<(u16, String)>>,
+    /// The real object, once [`Fake::real_object`] made it: it answers what isn't scripted.
+    pub real: RefCell<Option<RealObject>>,
 }
 
 impl FakeReplicas {
@@ -58,6 +104,8 @@ impl Default for Fake {
                 bound: Cell::new(true),
                 views: RefCell::default(),
                 calls: RefCell::default(),
+                write: RefCell::default(),
+                real: RefCell::default(),
             },
         }
     }
@@ -83,6 +131,40 @@ impl Fake {
             .views
             .borrow_mut()
             .insert((repo.into(), name.into()), (200, view));
+    }
+
+    /// Scripts `POST /write` to answer `status` with `body`.
+    pub fn set_write(&self, status: u16, body: Value) {
+        *self.replicas.write.borrow_mut() = Some((status, body.to_string()));
+    }
+
+    /// Replaces the scripted object with a real `Replica` object for `repo`, built from the
+    /// fake GitHub through its first read and its alarms, as Cloudflare runs them.
+    pub fn real_object(&self, repo: &str) {
+        let (mem, slot) = (Mem::default(), Slot::default());
+        let object = Object::load(repo, mem, slot.clone());
+        *self.replicas.real.borrow_mut() = Some(RealObject {
+            name: repo.into(),
+            object,
+            slot,
+        });
+        let first = block_on(self.replica(repo, "GET", "/view/snapshot?fresh=0", None));
+        assert_eq!(
+            first.map(|f| f.0),
+            Some(503),
+            "the first read starts the build"
+        );
+        let mut real = self.replicas.real.borrow_mut();
+        let real = real.as_mut().unwrap();
+        for _ in 0..200 {
+            let Some(at) = real.slot.get() else {
+                self.replicas.calls.borrow_mut().clear();
+                return;
+            };
+            self.inner.now.set(self.inner.now.get().max(at));
+            block_on(real.object.on_alarm(&self.inner));
+        }
+        panic!("the alarm never stopped");
     }
 
     /// Scripts the view `name` of the object `repo` to answer `status` with `body`.
@@ -111,6 +193,34 @@ impl Replicas for Fake {
             path: path.into(),
             body: body.and_then(|b| serde_json::from_str(b).ok()),
         });
+        if path == "/write"
+            && let Some((status, body)) = self.replicas.write.borrow().clone()
+        {
+            return Some((status, body));
+        }
+        // The object is taken out while it answers, so no borrow is held across the await.
+        let taken = self.replicas.real.borrow_mut().take();
+        if let Some(mut real) = taken {
+            if real.name != name {
+                *self.replicas.real.borrow_mut() = Some(real);
+            } else {
+                let sent: Value = body
+                    .and_then(|b| serde_json::from_str(b).ok())
+                    .unwrap_or(Value::Null);
+                let answer = match (method, path.split('?').next().unwrap_or_default()) {
+                    ("POST", "/event") => Some(real.object.event(&self.inner, &sent).await),
+                    ("POST", "/write") => Some(real.object.write(&self.inner, &sent).await),
+                    ("GET", p) if p.starts_with("/view/") => {
+                        let fresh = path.ends_with("fresh=1");
+                        let name = &p["/view/".len()..];
+                        Some(real.object.view(&self.inner, name, fresh).await)
+                    }
+                    _ => None,
+                };
+                *self.replicas.real.borrow_mut() = Some(real);
+                return answer.map(|a| (a.status, a.body));
+            }
+        }
         if path == "/event" {
             return Some((202, String::new()));
         }

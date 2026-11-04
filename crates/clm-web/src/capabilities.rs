@@ -1,18 +1,17 @@
 //! A decision on a capability or an architectural constraint (`web.worker/decide`,
-//! `web.worker/architecture-decide`): a `decided` record appended to the requester's web
-//! ledger as approve appends. The body names the version the person saw, as approve names
-//! the fingerprint, so a decision is never made on an entry reworded since.
+//! `web.worker/architecture-decide`): the body check of a decision, which the object appends
+//! as a `decided` record to the requester's web ledger (`writes-to-object`). The body names
+//! the version the person saw, as approve names the fingerprint, so a decision is never made
+//! on an entry reworded since.
 
-use clm_ledger::{Body, Decision, Rating};
+use clm_ledger::{Decision, Rating};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::replicas::Replicas;
-use crate::views;
+use crate::writes;
 use clm_web_platform::access::Access;
 use clm_web_platform::http::Response;
-use clm_web_platform::platform::Platform;
-use clm_web_platform::{files, ledger};
-use clm_web_review::review;
 
 /// What a decide request names: the version seen, the value and the decision.
 #[derive(Debug, Deserialize)]
@@ -42,19 +41,20 @@ pub enum Layer {
 }
 
 impl Layer {
-    /// The ID prefix and the `clm` command that makes the same decision.
-    fn names(self) -> (&'static str, &'static str) {
+    /// The ID prefix of the entries of this layer.
+    fn prefix(self) -> &'static str {
         match self {
-            Self::Capability => ("capability", "clm capabilities decide"),
-            Self::Architecture => ("architecture", "clm architecture decide"),
+            Self::Capability => "capability",
+            Self::Architecture => "architecture",
         }
     }
 }
 
-/// `POST .../capabilities/<slug>/decide` or `.../architecture/<slug>/decide` for `login`: 422
-/// for a tip whose specs don't load or an entry it doesn't hold, then 422 `signed`, then 409
-/// when its version isn't the one named; none writes (`web.worker/architecture-decide`).
-pub async fn decide<P: Platform + Replicas>(
+/// `POST .../capabilities/<slug>/decide` or `.../architecture/<slug>/decide` for `login`: the
+/// checked body, passed to the object, which refuses a tip whose specs don't load, an entry
+/// it doesn't hold, a signed repository and a stale version, and appends the record
+/// (`web.worker/architecture-decide`).
+pub async fn decide<P: Replicas>(
     p: &P,
     access: &Access,
     login: &str,
@@ -62,52 +62,12 @@ pub async fn decide<P: Platform + Replicas>(
     slug: &str,
     decide: Decide,
 ) -> Response {
-    let (prefix, command) = layer.names();
-    let repo = access.full_name();
-    let Some(tip) = ledger::tip(p, access, access.default_branch()).await else {
-        return Response::empty(502);
-    };
-    // The ledgers as they are now, not the minute-old fold, so the flags settled are those
-    // open when the person decided.
-    let (files, signed, sources) = futures::join!(
-        files::spec_files(p, access.auth(), &repo, &tip, None),
-        review::signed(p, access, &tip),
-        ledger::read(p, access.auth(), &repo),
-    );
-    let (Some(files), Some(signed), Some(sources)) = (files, signed, sources) else {
-        return Response::empty(502);
-    };
-    let (graph, violations) = clm_model::load_files(&files);
-    let id = format!("{prefix}/{slug}");
-    let Some(entry) = graph.entry(&id).filter(|_| violations.is_empty()) else {
-        return Response::empty(422);
-    };
-    if signed {
-        return review::signed_refusal(format!(
-            "{command} {slug} --value {} --decision {}",
-            decide.value.as_str(),
-            decide.decision.as_str()
-        ));
-    }
-    if decide.version != entry.version() {
-        return Response::empty(409);
-    }
-    let settles = clm_effort::unsettled(&graph, &ledger::folded(&sources), &id);
-    let record = ledger::record(
-        p,
-        login,
-        Body::Decided {
-            capability: id,
-            value: decide.value,
-            decision: decide.decision,
-            settles,
-        },
-    );
-    match ledger::append(p, access, &record).await {
-        Some(()) => {
-            views::ledger_moved(p, access, login).await;
-            Response::json(&record)
-        }
-        None => Response::empty(502),
-    }
+    let write = json!({
+        "kind": "decide",
+        "id": format!("{}/{slug}", layer.prefix()),
+        "version": decide.version,
+        "value": decide.value.as_str(),
+        "decision": decide.decision.as_str(),
+    });
+    writes::through_object(p, access, login, write).await
 }

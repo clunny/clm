@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - web-worker-writes-skip-the-replica-object
 ---

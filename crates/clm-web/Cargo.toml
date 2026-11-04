@@ -9,8 +9,6 @@ publish.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-clm-model.workspace = true
-clm-effort = { workspace = true, default-features = false }
 clm-ledger = { workspace = true, default-features = false }
 clm-web-live.workspace = true
 clm-web-platform.workspace = true
@@ -20,7 +18,6 @@ serde_json.workspace = true
 sha2.workspace = true
 aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
 base64.workspace = true
-futures = { version = "0.3", default-features = false, features = ["async-await"] }
 hmac = "0.12"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -32,6 +29,10 @@ clm-web-live = { workspace = true, features = ["durable"] }
 clm-web-replica.workspace = true
 
 [dev-dependencies]
+clm-model.workspace = true
+# The writes' tests drive a real `Replica` object over the fake GitHub (`writes-to-object`).
+clm-web-replica.workspace = true
+clm-replica.workspace = true
 clm-web-platform = { workspace = true, features = ["fake"] }
 clm-check.workspace = true
 clm-context.workspace = true

@@ -8,7 +8,6 @@ use crate::proposals;
 use crate::replicas::Replicas;
 use clm_web_platform::access::Access;
 use clm_web_platform::http::{Request, Response};
-use clm_web_platform::ledger;
 use clm_web_platform::platform::Platform;
 
 /// How long the Worker keeps an object's answer.
@@ -96,35 +95,5 @@ pub(crate) async fn implementation<P: Platform + Replicas>(
     match fetch(p, access, "implementation", fresh).await {
         Ok(view) => Response::json(&proposals::with_mine(view, login)),
         Err(res) => res,
-    }
-}
-
-/// Tells the repo's object that `login`'s web ledger moved after the Worker appended to it,
-/// as GitHub's `push` webhook will a moment later, so the object applies the record and a
-/// read with `fresh` right after the write shows it. A failure is logged and changes
-/// nothing: the webhook brings the object up to date within a batch.
-pub(crate) async fn ledger_moved<P: Platform + Replicas>(p: &P, access: &Access, login: &str) {
-    let repo = access.full_name();
-    let branch = format!("clm/ledger/{login}/web");
-    let Some(tip) = ledger::tip(p, access, &branch).await else {
-        p.log(&format!("replica {repo}: no tip for {branch}"));
-        return;
-    };
-    let event = json!({
-        "event": "push",
-        "body": {
-            "ref": format!("refs/heads/{branch}"),
-            "after": tip,
-            "created": false,
-            "deleted": false,
-            "repository": {"full_name": repo, "default_branch": access.default_branch()},
-            "pusher": {"name": login},
-        },
-    });
-    let sent = p
-        .replica(&repo, "POST", "/event", Some(&event.to_string()))
-        .await;
-    if !matches!(sent, Some((202, _))) {
-        p.log(&format!("replica {repo}: the object answered {sent:?}"));
     }
 }
