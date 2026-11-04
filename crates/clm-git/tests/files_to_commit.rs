@@ -1,7 +1,7 @@
 mod common;
 
 use clm_git::files_to_commit;
-use common::repo;
+use common::{commit, repo, sh};
 use std::path::PathBuf;
 
 fn paths(names: &[&str]) -> Vec<PathBuf> {
@@ -56,5 +56,36 @@ fn a_name_that_is_not_utf8() {
     let name = std::ffi::OsStr::from_bytes(b"\xff.rs");
     std::fs::write(dir.path().join(name), "").unwrap();
     let found = files_to_commit(dir.path()).unwrap();
-    assert!(found.iter().any(|p| p.as_os_str().as_bytes() == b"\xff.rs"));
+    let bytes: Vec<&[u8]> = found.iter().map(|p| p.as_os_str().as_bytes()).collect();
+    assert_eq!(bytes, vec![&b"a.rs"[..], b"\xff.rs"]);
+}
+
+#[test]
+fn info_exclude_and_subdirectory_root() {
+    // req:vcs/files-to-commit@fb39736c
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), &[("top.rs", ""), ("sub/a.rs", "")]);
+    std::fs::write(dir.path().join(".git/info/exclude"), "hidden.txt\n").unwrap();
+    std::fs::write(dir.path().join("sub/hidden.txt"), "").unwrap();
+    std::fs::write(dir.path().join("sub/b.rs"), "").unwrap();
+    let found = files_to_commit(&dir.path().join("sub")).unwrap();
+    assert_eq!(found, paths(&["a.rs", "b.rs"]));
+}
+
+#[test]
+fn a_conflicted_file_once() {
+    // req:vcs/files-to-commit@fb39736c
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), &[("x.rs", "base\n")]);
+    sh(dir.path(), &["switch", "-q", "-c", "other"]);
+    commit(dir.path(), &[("x.rs", "other\n")], "other");
+    sh(dir.path(), &["switch", "-q", "main"]);
+    commit(dir.path(), &[("x.rs", "main\n")], "main");
+    let merge = std::process::Command::new("git")
+        .args(["merge", "-q", "other"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert!(!merge.status.success());
+    assert_eq!(files_to_commit(dir.path()).unwrap(), paths(&["x.rs"]));
 }
