@@ -254,14 +254,19 @@ impl<'a> Repo<'a> {
         Err(Error::Refused(why))
     }
 
-    /// What the branch can break, as `clm affected --base <base>` in `dir` prints it, run
-    /// from `exe` unless `CLM_AFFECTED` names it, in a `land-sel-*` file for `[land] check`'s
-    /// `CLM_SELECTION` (`land/selected-tests`). None, said on stderr, when it fails: the
-    /// check then runs every test.
-    fn selection(&self, exe: &Path, dir: &Path, base: &str) -> Option<Selection> {
-        let selected = || -> Result<Selection, String> {
+    /// What the branch can break, as `clm affected --base <base>` in `dir` prints it, or with
+    /// `readers` (checked code) only the readers of what differs, run from `exe` unless
+    /// `CLM_AFFECTED` names it, in a `land-sel-*` file for `[land] check`'s `CLM_SELECTION`
+    /// (`land/selected-tests`). When it fails it says so on stderr: the check then runs every
+    /// test.
+    fn selection(&self, exe: &Path, dir: &Path, base: &str, readers: bool) -> Selected {
+        let selected = || -> Result<Selected, String> {
+            let mut args = vec!["--base", base];
+            if readers {
+                args.push("--readers");
+            }
             let out = self
-                .command(exe, "CLM_AFFECTED", "affected", &["--base", base], dir)
+                .command(exe, "CLM_AFFECTED", "affected", &args, dir)
                 .stderr(Stdio::piped())
                 .output()
                 .map_err(|e| e.to_string())?;
@@ -270,6 +275,9 @@ impl<'a> Repo<'a> {
                 let first = stderr.lines().map(str::trim).find(|l| !l.is_empty());
                 return Err(first.map_or_else(|| out.status.to_string(), str::to_string));
             }
+            if readers && out.stdout.iter().all(u8::is_ascii_whitespace) {
+                return Ok(Selected::Nothing);
+            }
             let parent = temp_parent(self.env).map_err(|e| e.to_string())?;
             let dir = tempfile::Builder::new()
                 .prefix("land-sel-")
@@ -277,15 +285,12 @@ impl<'a> Repo<'a> {
                 .map_err(|e| e.to_string())?;
             let path = dir.path().join("selection");
             std::fs::write(&path, &out.stdout).map_err(|e| e.to_string())?;
-            Ok(Selection { _dir: dir, path })
+            Ok(Selected::Tests(Selection { _dir: dir, path }))
         };
-        match selected() {
-            Ok(selection) => Some(selection),
-            Err(why) => {
-                eprintln!("clm affected failed: {why}; the check runs every test");
-                None
-            }
-        }
+        selected().unwrap_or_else(|why| {
+            eprintln!("clm affected failed: {why}; the check runs every test");
+            Selected::Failed
+        })
     }
 
     /// The command `var` names, split on whitespace, else `exe`'s `sub`; with `args`, run in
@@ -351,6 +356,15 @@ pub(crate) struct Selection {
     pub(crate) path: PathBuf,
 }
 
+/// What `clm affected` made of a land.
+pub(crate) enum Selected {
+    /// Its readers of checked code were none: no check runs.
+    Nothing,
+    Tests(Selection),
+    /// It failed; the check runs without a selection.
+    Failed,
+}
+
 /// What the gate says a branch is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Verdict {
@@ -373,7 +387,7 @@ mod tests {
         let command = super::check_command("true", Path::new("/w"), Some(target));
         let envs: Vec<_> = command.get_envs().collect();
         assert!(envs.contains(&(OsStr::new("CI"), None)), "{envs:?}");
-        // req:land/selected-tests@64c312ff
+        // req:land/selected-tests@3c8754b6
         let selection = (OsStr::new("CLM_SELECTION"), None);
         assert!(envs.contains(&selection), "{envs:?}");
         assert!(

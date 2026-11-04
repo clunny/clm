@@ -366,7 +366,7 @@ fn check_only_checks_the_working_tree() {
 
 #[test]
 fn selection_fails_says_why() {
-    // req:land/selected-tests@64c312ff
+    // req:land/selected-tests@3c8754b6
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
