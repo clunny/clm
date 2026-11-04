@@ -89,7 +89,7 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
 
 #[test]
 fn session_start_states_the_defect_rule() {
-    // req:plugin.hooks/defect-rule@6840960f
+    // req:plugin.hooks/defect-rule@c40c6863
     let start = |repo: &TempDir| {
         let event = serde_json::json!({ "cwd": repo.path() }).to_string();
         let out = hook("session-start", &event);
@@ -110,7 +110,8 @@ fn session_start_states_the_defect_rule() {
     ] {
         assert!(rule.contains(needle), "{needle} after claims: {text}");
     }
-    // With `ask`, nothing of the fix-first rule.
+    // With `ask`, the report goes in a `<<'EOF'` heredoc, and nothing of the fix-first rule.
+    assert!(rule.contains("<<'EOF'"), "{text}");
     assert!(!text.contains("--fix"), "{text}");
     // backlog: where reports go, and fix-first.
     let text = start(&clm_repo(Some("defects = \"backlog\"\n")));

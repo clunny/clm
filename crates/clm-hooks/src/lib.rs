@@ -35,9 +35,11 @@ pub fn session_start(event: &str) -> String {
         Ok(s) => {
             text.push_str(if text.ends_with('\n') { "\n" } else { "\n\n" });
             text.push_str(DEFECT_RULE);
-            if s.defects.value == clm_config::Defects::Backlog {
-                text.push_str(BACKLOG_RULE);
-            }
+            text.push_str(if s.defects.value == clm_config::Defects::Backlog {
+                BACKLOG_RULE
+            } else {
+                ASK_RULE
+            });
             text.push('\n');
         }
         Err(e) => {
@@ -73,6 +75,11 @@ landed and brought the item to `main`, fix it before the session ends on its own
 `clm claim <component> --fix backlog/<slug>` (`code-fix-resolves-bug`). Leave in the backlog only \
 a defect that is a large amount of work or needs a spec change. An unattended session folds \
 what fits and reports the rest.";
+
+/// What `session-start` adds when `defects` is `ask`: the one form of `clm defect` the guard
+/// shows the human before the report leaves the project (`defect-ask-shows-report`).
+const ASK_RULE: &str = " Send the report as the body of a `<<'EOF'` heredoc on the \
+`clm defect` line, the one form the guard shows the human before the report leaves the project.";
 
 /// `Stop`: pushes a snapshot of the spec work in the CLM repository holding the event's
 /// `cwd` (`autosync-policy`), unless its `autosync` setting is `false` or can't be loaded.
