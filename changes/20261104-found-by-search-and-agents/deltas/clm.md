@@ -22,3 +22,24 @@ component: clm
 
 #### Serves
 - capability/learn-clm
+
+### Requirement: old-state-and-key-names-retired <!-- base: ab16e190ad5e562d -->
+The old name of `clm workaround`, which `check.health/workaround-command` kept as a hidden subcommand, SHALL no longer run: `clm` given it SHALL fail as it fails for any unknown subcommand. `clm/retired-terms`'s list SHALL hold the old name `plain-terms-renames` gives for the requirement state and component status `unbuilt`, as a word of its own; the old name of the backlog kind `workaround` only after `clm` and a space and written as `kind: <old name>` inside backticks, never as a word of its own, since the bare word is plain English for what gets in a person's way and stays free to say so; and the old name of the kind `human-task` written as `kind: <old name>` inside backticks, since the bare word is the triage line `human` and plain English. The list SHALL NOT hold the old name of the key `human_burdens`: the word still names the burdens themselves, as the `effort` report's field and its pages' `Declared burdens:` line, so it can't be retired without retiring them too. No `clm:remove-by 20261102-rename-states-and-keys-contract` marker SHALL be left.
+
+#### Scenario: the old subcommand is refused
+- GIVEN component `a` with requirement `a/x`
+- WHEN `clm` runs with the old name of `clm workaround` and `a/x --title "x"`
+- THEN it exits non-zero naming the unknown subcommand, and writes no file under `backlog/`
+
+#### Scenario: the old names retired
+- GIVEN the repository
+- WHEN the retired-terms test runs
+- THEN its list holds the four forms above, and it finds none of them
+
+#### Scenario: the plain word is free
+- GIVEN a file the retired-terms test reads holding the old name of the kind `workaround` as a word of its own, in plain English, as in "where most <old name> after install lies"
+- WHEN the test runs
+- THEN it reports nothing for that line, and it still reports the old name after `clm` and a space and as `kind: <old name>` in backticks
+
+#### Serves
+- architecture/plain-terms
