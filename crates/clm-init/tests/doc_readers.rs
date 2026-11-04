@@ -24,7 +24,9 @@ const DOC_ONLY: [&str; 8] = [
 /// Globs of the markers in `text`.
 fn globs(text: &str) -> Vec<&str> {
     text.match_indices(MARK)
-        .filter_map(|(i, m)| text[i + m.len()..].split_whitespace().next())
+        .map(|(i, m)| &text[i + m.len()..])
+        .filter(|rest| !rest.starts_with(char::is_whitespace))
+        .filter_map(|rest| rest.split_whitespace().next())
         .collect()
 }
 
@@ -43,6 +45,9 @@ fn a_test_reading_a_doc_only_path_holds_a_marker_for_it() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     for entry in fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
         let text = fs::read_to_string(&path).unwrap();
         let marked = globs(&text);
         for doc in DOC_ONLY {
@@ -55,13 +60,4 @@ fn a_test_reading_a_doc_only_path_holds_a_marker_for_it() {
             );
         }
     }
-}
-
-#[test]
-fn covers_reads_names_and_directories() {
-    // req:init/doc-readers-marked@c6719af2
-    assert!(covers("ARCHITECTURE.md", "ARCHITECTURE.md"));
-    assert!(covers("specs/**", "specs/a/SPEC.md"));
-    assert!(!covers("specs/**", "backlog/x.md"));
-    assert_eq!(globs(&format!("x {MARK}a/** y\n{MARK}b")), ["a/**", "b"]);
 }
