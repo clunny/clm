@@ -33,7 +33,7 @@ Then follow the [quickstart](docs/guide/quickstart.md).
 2. A human reviews the intent when the change needs it, and approves it.
 3. The branch lands on `main` through `clm land`, which runs the checks.
 4. Sessions build each component until every requirement has a passing test citing it.
-5. That code lands the same way, checked and not read by a human.
+5. That code lands the same way: checked by the land checks and reviewed by AI, not read by a human.
 
 ## Status
 
