@@ -34,7 +34,7 @@ Some settings describe the repository rather than the user, and only the reposit
 
 | Key | Values | Default |
 |---|---|---|
-| `detectors` | an array of tables `[[detectors]]`, each with `name` (string), `command` (non-empty array of strings), optional `hint` (string) and optional `timeout` (a whole number of seconds, at least `1`, default `600`: how long `clm check` lets the detector run before it stops it, `detector-timeouts`) | none |
+| `detectors` | an array of tables `[[detectors]]`, each with `name` (string), `command` (non-empty array of strings), optional `hint` (string), optional `requires` (a path relative to the repository root: `clm check` skips the detector while nothing exists there, `detector-requires-manifest`) and optional `timeout` (a whole number of seconds, at least `1`, default `600`: how long `clm check` lets the detector run before it stops it, `detector-timeouts`) | none |
 | `host` | `none`, `git`, `github`: where the repository's remote lives and which host adapter `clm` uses for pull requests, branch deletion and issues (`host-adapters`) | `github` |
 | `approval` | `any`: any writer's approval of a diff counts, the author's included; `other`: only an approval by a person other than the branch's commit authors counts (`approval-policy`) | `any` |
 | `land` | a table with `check`, a non-empty string: the shell command `clm land` runs in the tree it lands, before `clm check` (`land-locally`), and optional `target_cap_gb`, a positive integer: the size in gigabytes (10^9 bytes) above which a land removes the shared target `.clm/land` after its push (`land/land-target-cap`) | none: `clm check` alone; `target_cap_gb = 15` |
@@ -527,3 +527,24 @@ Loading SHALL read the table `component_size` from the repository's `clm.toml` o
 #### Serves
 - capability/know-health
 - architecture/slim-components
+
+### Requirement: detector-requires-setting
+Loading SHALL give each detector an optional `requires`: the path its `[[detectors]]` table sets, relative to the repository root, or none. A `requires` that isn't a non-empty string SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `detectors`.
+
+#### Scenario: requires set
+- GIVEN a repository `clm.toml` with a detector `knip`, command `["node_modules/.bin/knip"]` and `requires = "package.json"`
+- WHEN the settings load
+- THEN `detectors` holds `knip` requiring `package.json`
+
+#### Scenario: requires left out
+- GIVEN a repository `clm.toml` with one detector `machete`, command `["cargo-machete"]`, and no `requires`
+- WHEN the settings load
+- THEN `detectors` holds `machete` requiring nothing
+
+#### Scenario: requires empty
+- GIVEN a `clm.local.toml` with a detector whose `requires` is `""`
+- WHEN the settings load
+- THEN it fails naming `clm.local.toml` and `detectors`
+
+#### Serves
+- capability/no-dead-weight
