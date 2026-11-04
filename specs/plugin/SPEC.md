@@ -283,7 +283,7 @@ The plugin SHALL ship `agents/spec-auditor.md` with a `name` of `spec-auditor` a
 #### Scenario: no Windows target in the shim
 - GIVEN the text of `plugin/bin/clm`
 - WHEN the tests run
-- THEN its `target=` assignments are exactly the four targets above, and the test fails when the text names `windows` or `clm.exe`
+- THEN its `target=` assignments are exactly the four targets above, and the test fails when the text, comments included, names `windows` in any case or `clm.exe`
 
 #### Serves
 - capability/install-and-release
