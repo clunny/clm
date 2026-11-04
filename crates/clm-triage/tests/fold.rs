@@ -81,6 +81,24 @@ fn scenario_builder_check_order_fold_prompt() {
 }
 
 #[test]
+fn scenario_draft_architecture_audit_fold_prompt() {
+    // req:orchestrator.triage/draft-architecture-audit@6d8f59a2
+    let p = fold_prompt(&["20261027-a", "20261027-b"]);
+    let para = p
+        .split("\n\n")
+        .find(|s| s.contains("Then the builder check"))
+        .expect("builder check paragraph");
+    for needle in [
+        "architecture-auditor",
+        "your own model",
+        "## Open questions",
+        "spec-architecture-audit",
+    ] {
+        assert!(para.contains(needle), "{needle} missing from {para}");
+    }
+}
+
+#[test]
 fn fold_prompt_names_the_human_task_kind() {
     // req:orchestrator.triage/fold@8b73785c
     let p = fold_prompt(&["20261027-a", "20261027-b"]);

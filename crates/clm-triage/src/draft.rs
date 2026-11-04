@@ -430,7 +430,11 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          Then the builder check (`blocked-by-backlog`): launch a fresh subagent that reads the \
          change as its builder, without this conversation, and lists its questions, with the \
          Agent tool's `model` set to `sonnet` (`model: \"sonnet\"`), the model builds run on \
-         (`model-per-launch`); never launch a subagent without naming its model. Ask it, for \
+         (`model-per-launch`); never launch a subagent without naming its model. In the same \
+         message, launch the `architecture-auditor` subagent beside it, with the Agent tool's \
+         `model` set to the alias of your own model, in the words `your own model`, since the \
+         audit is a design review (`model-per-launch`), giving it only the change ID and the \
+         path of your checkout. Ask the builder check's subagent, for \
          each requirement the change adds or modifies, which requirements not yet current it \
          relies on, of any component, among the change's own and those `clm pending` lists, \
          answering `none` for a requirement that relies on none \
@@ -447,7 +451,16 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          requirements that wait (`requirement-blocks`); and list the rest under \
          `## Open questions`. A requirement that removes or renames part of a component's Contract \
          that another component's code uses needs the requirements that move each such component off \
-         it (`contract-removal-needs`). When the removal can't carry that `#### Needs` (the \
+         it (`contract-removal-needs`). Write a rename as two requirements of the provider in \
+         the same change (`rename-adds-then-removes`): an adding one that offers the new name \
+         beside the old, needs nothing and leaves every user's code building as it stands (a \
+         second name, never a widened type a user matches exhaustively), and a removing one, \
+         stated as an added or modified requirement, that needs each user's move, each move \
+         needing the adding one, so the needs form no cycle; the adding one's build marks the old \
+         name `clm:remove-by` the change, which stays live until the removal is built \
+         (`expand-contract`). The builder check searches each user's code for exhaustive uses \
+         (a `match`, a `switch` with no default, a map keyed by the type) the adding one must \
+         not break. When the removal can't carry that `#### Needs` (the \
          removing component is required and the component that must move is optional, or the removed \
          text is a whole requirement under `REMOVED Requirements`), put the contract step in \
          a second change on the same branch, left `proposed`, and add a `kind: deferred` \
@@ -460,7 +473,11 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          deltas on `clm hashes <component>` first (a no-op when its bases are current), your own \
          change listing the item in `resolves`. A `human-task` \
          item it adds is a burden: declare one for it in \
-         `human_burdens`. When the builder check changed the change (any edit to \
+         `human_burdens`. Fix in the change each `architecture-auditor` finding you agree \
+         with, and write each one you leave under `## Open questions` in `change.md`, with \
+         why, since the pull request body carries the open questions to the human. The audit \
+         advises and never gates (`spec-architecture-audit`). When the builder check or the audit changed the change \
+         (any edit to \
          `changes/<id>/` or `backlog/`), run `clm check`, commit, and {rebase}, which \
          re-applies the edited deltas, since the change is `applied` by then and \
          `clm apply` refuses it. Then run `clm gate --base origin/main` again, whose first \

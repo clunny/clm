@@ -539,17 +539,36 @@ fn scenario_builder_check_order_draft_prompt() {
 
 #[test]
 fn scenario_draft_contract_step_deferred_prompt() {
-    // req:orchestrator.triage/draft-contract-step-deferred@7021d512
+    // req:orchestrator.triage/draft-contract-step-deferred@f1c08bc6
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     let check = paragraph(&p, "Then the builder check");
     for needle in [
         "contract-removal-needs",
+        "rename-adds-then-removes",
+        "exhaustive",
+        "clm:remove-by",
         "contract-step-deferred",
         "optional",
         "kind: deferred",
         "clm apply",
         "clm hashes <component>",
+    ] {
+        assert!(check.contains(needle), "{needle} missing from {check}");
+    }
+}
+
+#[test]
+fn scenario_draft_architecture_audit_prompt() {
+    // req:orchestrator.triage/draft-architecture-audit@6d8f59a2
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let (_, p) = drafted_prompt(&r, &["a"]);
+    let check = paragraph(&p, "Then the builder check");
+    for needle in [
+        "architecture-auditor",
+        "your own model",
+        "## Open questions",
+        "spec-architecture-audit",
     ] {
         assert!(check.contains(needle), "{needle} missing from {check}");
     }

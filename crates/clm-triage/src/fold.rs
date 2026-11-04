@@ -286,7 +286,11 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          concerns. Then the builder check (`blocked-by-backlog`) on the elements where \
          two changes met: launch a fresh subagent, its `model` `sonnet` as above, that \
          reads them as their builder, without this conversation, and lists its questions. \
-         Ask it, for each requirement on those elements, which requirements not yet current \
+         In the same message, launch the `architecture-auditor` subagent beside it, with the \
+         Agent tool's `model` set to the alias of your own model, in the words \
+         `your own model`, since the audit is a design review (`model-per-launch`), giving it \
+         only the change IDs and the path of your checkout and asking it about the same \
+         elements where two changes met. Ask the builder check's subagent, for each requirement on those elements, which requirements not yet current \
          it relies on, of any component, among the changes' own and those `clm pending` lists, \
          answering `none` for a requirement that relies on none \
          (`builder-check-asks-order`). Settle in the changes what the \
@@ -300,7 +304,13 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a \
          human can supply into `question` or `human-task` backlog items whose `blocks` name the \
          requirements that wait (`requirement-blocks`); and list the rest under \
-         `## Open questions`. When that changed anything, run `clm check`, commit, and \
+         `## Open questions`. Fix in the \
+         changes each `architecture-auditor` finding you agree with, and write each one you leave under \
+         `## Open questions` in the `change.md` of the folded change whose element it \
+         concerns, with why, since the pull request body carries each change's open questions \
+         to the human approving it. The audit advises and never gates \
+         (`spec-architecture-audit`). When the builder check or the audit changed anything, \
+         run `clm check`, commit, and \
          {REBASE}, then run `clm gate --base origin/main` again.\n\n\
          Never push to, rebase or delete a folded change's branch ({branches}).\n\n\
          After each commit, {REBASE}, then push with `git push --force-with-lease`. Read \
