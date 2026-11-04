@@ -6,7 +6,7 @@ use common::*;
 
 #[test]
 fn claims_in_the_same_second_are_distinct_commits() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     // Two sessions with the same identity claiming within one second must not build the
     // same commit: pushing a commit the branch already holds succeeds without the lease
     // check, so both would think they had won.

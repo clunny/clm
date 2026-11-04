@@ -9,7 +9,7 @@ use common::*;
 
 #[test]
 fn a_push_that_lands_but_reports_failure_still_claims() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let which = std::process::Command::new("which")
         .arg("git")
         .output()
