@@ -56,16 +56,10 @@ function exists($: Host, path: string, kind?: 'file'): Promise<boolean> {
   )
 }
 
-/** A path that starts with a drive letter and a separator (`C:\`, `C:/`) is a Windows one. */
-const isWindows = (path: string) => /^[A-Za-z]:[\\/]/.test(path)
+/** A path to look things up by: no trailing separator but the root's. */
+const slashed = (path: string) => path.replace(/\/+$/, '') || '/'
 
-/** A path to look things up by: a Windows one with `/` for each `\`, no trailing separator but its root's. */
-function slashed(path: string): string {
-  const p = (isWindows(path) ? path.replace(/\\/g, '/') : path).replace(/\/+$/, '')
-  return /^[A-Za-z]:$/.test(p) ? `${p}/` : p || '/'
-}
-
-/** The directory holding `dir`; a root (`/`, `C:/`) is its own. */
+/** The directory holding `dir`; the root is its own. */
 const parent = (dir: string) => slashed(dir.replace(/\/[^/]*$/, '') || '/')
 
 const join = (dir: string, rest: string) => (dir.endsWith('/') ? dir + rest : `${dir}/${rest}`)
@@ -73,7 +67,7 @@ const join = (dir: string, rest: string) => (dir.endsWith('/') ? dir + rest : `$
 /**
  * The CLM repository holding `cwd`, as `session-start` finds it: the first of `cwd` and its
  * ancestors with `specs/SPEC.md`, looking no higher than the first that holds `.git`, nor
- * than the root (`/`, or a drive's `C:/`).
+ * than the root (`/`).
  */
 export async function clmRoot($: Host, cwd: string): Promise<string | undefined> {
   for (let dir = slashed(cwd); ; dir = parent(dir)) {
@@ -110,40 +104,6 @@ export async function clmCommand($: Host): Promise<string> {
   return 'clm'
 }
 
-/** What the module found once while loaded: Git Bash, on Windows, or that it has none. */
-export type Found = { bash?: Promise<string | undefined> }
-const loaded: Found = {}
-
-/**
- * Git Bash's `bash.exe`: `bin/bash.exe` three levels above `git --exec-path`'s directory, or
- * undefined when git can't say or the file isn't there.
- */
-async function gitBash($: Host, cwd: string): Promise<string | undefined> {
-  try {
-    const run = await $.process.run(['git', '--exec-path'], { cwd })
-    if (run.exitCode !== 0) return undefined
-    // Three levels up from the directory, keeping a leading `/` (`/c/...` from an MSYS git).
-    const parts = slashed(run.stdout.trim()).split('/')
-    if (parts.filter(p => p !== '').length < 4) return undefined
-    const bash = join(parts.slice(0, -3).join('/') || '/', 'bin/bash.exe')
-    return (await exists($, bash, 'file')) ? bash : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/**
- * The argv that runs `clm`: the shim, through Git Bash when the plugin sits on a Windows
- * drive (never a bare `bash` or `sh`, which may start WSL's), else `clm` on PATH.
- */
-export async function clmArgv($: Host, cwd: string, found: Found = loaded): Promise<string[]> {
-  const clm = await clmCommand($)
-  if (clm === 'clm' || !isWindows($.plugin.root)) return [clm]
-  found.bash ??= gitBash($, cwd)
-  const bash = await found.bash
-  return bash === undefined ? ['clm'] : [bash, clm]
-}
-
 /** A `$` call the engine cut short, such as a draw's run once a newer draw replaced it. */
 const ABORTED = /\baborted$/
 
@@ -152,11 +112,10 @@ const ABORTED = /\baborted$/
  * installed when no shim was found and there is no `clm` on PATH, else why it didn't start. A
  * run the engine aborted rejects, so no cache keeps it as `clm`'s failure.
  */
-export async function runClm($: Host, args: readonly string[], cwd: string, found: Found = loaded): Promise<Run> {
-  const argv = await clmArgv($, cwd, found)
-  const clm = argv.join(' ')
+export async function runClm($: Host, args: readonly string[], cwd: string): Promise<Run> {
+  const clm = await clmCommand($)
   try {
-    const run = await $.process.run([...argv, ...args], { cwd })
+    const run = await $.process.run([clm, ...args], { cwd })
     // A failure always says something: stderr, else stdout, else the exit code.
     if (run.exitCode !== 0 && run.stderr.trim() === '') {
       return { ...run, stderr: run.stdout.trim() || `clm exited ${run.exitCode}` }
@@ -248,7 +207,7 @@ export function unfenced(text: string): string | undefined {
  * What `/clm:view <args>` answers: `{ open }` for the pane, else the text to show; a view is
  * of `origin/main` while that ref exists.
  */
-export async function command($: Host, args: string, cwd: string, found: Found = loaded): Promise<Answer> {
+export async function command($: Host, args: string, cwd: string): Promise<Answer> {
   const name = args.trim()
   if (name !== '' && !(NAMES as readonly string[]).includes(name)) {
     return { text: `/clm:view takes one of: ${NAMES.join(', ')}; with none, it opens the panel.` }
@@ -256,7 +215,7 @@ export async function command($: Host, args: string, cwd: string, found: Found =
   if ((await clmRoot($, cwd)) === undefined) return { text: NOT_A_REPO }
   if (name === '') return { open: true }
   const argv = name === 'status' ? ['status'] : viewOf(name as ViewTab, await hasOriginMain($, cwd))
-  const run = await runClm($, argv, cwd, found)
+  const run = await runClm($, argv, cwd)
   return { text: run.exitCode === 0 ? fenced(run.stdout) : run.stderr }
 }
 

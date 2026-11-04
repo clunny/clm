@@ -10,7 +10,6 @@ import {
   PANE_TITLE,
   REDRAW_MS,
   TABS,
-  type Found,
   type Host,
   type Run,
   ansiLines,
@@ -365,92 +364,10 @@ describe('panel-package', () => {
   test('from a directory marketplace it runs plugin/bin/clm beside it', async () => {
     expect(await clmCommand(fake({ files: [SHIM] }))).toBe(SHIM)
   })
-})
 
-describe('panel-windows', () => {
-  // req:plugin.panel/panel-windows@f6899af3
-  const ROOT = 'C:\\Users\\u\\.claude\\plugins\\cache\\clm\\clm-panel\\0.7.0'
-  const WIN_SHIM = 'C:/Users/u/.claude/plugins/cache/clm/clm/0.7.0/bin/clm'
-  const BASH = 'C:/Program Files/Git/bin/bash.exe'
-  const EXEC_PATH = 'C:/Program Files/Git/mingw64/libexec/git-core'
-  const WIN = { root: ROOT, files: [WIN_SHIM, BASH], dirs: ['C:/Users/u/.claude/plugins/cache/clm/clm/0.7.0'] }
-  const gitAnswers = (git: () => Run) => (argv: readonly string[]) => (argv[0] === 'git' ? git() : ok('chart'))
-  const twice = async ($: Fake) => {
-    const found: Found = {}
-    for (let i = 0; i < 2; i++) await runClm($, ['view', 'flight'], 'C:\\work\\repo', found)
-    return {
-      git: $.calls.filter(c => c.argv[0] === 'git'),
-      runs: $.calls.filter(c => c.argv[0] !== 'git').map(c => c.argv),
-    }
-  }
-
-  test('the shim runs through Git Bash, found once', async () => {
-    const { git, runs } = await twice(fake({ ...WIN, answer: gitAnswers(() => ok(`${EXEC_PATH}\n`)) }))
-    expect(git).toEqual([{ argv: ['git', '--exec-path'], cwd: 'C:\\work\\repo' }])
-    expect(runs).toEqual([
-      [BASH, WIN_SHIM, 'view', 'flight'],
-      [BASH, WIN_SHIM, 'view', 'flight'],
-    ])
-  })
-
-  test("git's answer is trimmed and read with / for \\", async () => {
-    const answer = gitAnswers(() => ok('C:\\Program Files\\Git\\mingw64\\libexec\\git-core\r\n'))
-    const { runs } = await twice(fake({ ...WIN, answer }))
-    expect(runs[0]).toEqual([BASH, WIN_SHIM, 'view', 'flight'])
-  })
-
-  test('no Git Bash: clm from PATH, never a bare bash or sh, and git asked once', async () => {
-    const variants: (() => Run)[] = [
-      () => ({ exitCode: 1, stdout: '', stderr: 'no' }),
-      () => {
-        throw new Error('spawn git ENOENT')
-      },
-      () => ok(EXEC_PATH.replace('Program Files', 'Elsewhere')),
-      () => ok('C:/Git/x'),
-    ]
-    for (const git of variants) {
-      // A path too short to go three levels up finds no `bash.exe`, even where one would be.
-      const files = [...WIN.files, '/bin/bash.exe', 'C:/bin/bash.exe']
-      const result = await twice(fake({ ...WIN, files, answer: gitAnswers(git) }))
-      expect(result.git).toHaveLength(1)
-      expect(result.runs).toEqual([
-        ['clm', 'view', 'flight'],
-        ['clm', 'view', 'flight'],
-      ])
-      expect(result.runs.some(argv => /^(bash|sh)$/.test(argv[0] ?? ''))).toBe(false)
-    }
-  })
-
-  test('a repository on a drive is found, and commands run at the cwd as given', async () => {
-    const $ = fake({ ...WIN, files: [...WIN.files, 'C:/work/repo/specs/SPEC.md'], answer: gitAnswers(() => ok(EXEC_PATH)) })
-    const answer = await command($, 'flight', 'C:\\work\\repo\\crates', {})
-    expect(answer).toEqual({ text: '\n```\nchart\n```' })
-    expect($.calls.at(-1)).toEqual({ argv: [BASH, WIN_SHIM, 'view', 'flight', '--at', 'origin/main'], cwd: 'C:\\work\\repo\\crates' })
-  })
-
-  test("the search stops at the drive's root, which it looks in too", async () => {
-    expect(await clmRoot(fake({ files: ['C:/specs/SPEC.md'] }), 'C:\\a\\b')).toBe('C:/')
-    expect(await clmRoot(fake({ files: ['D:/specs/SPEC.md'] }), 'C:/a/b/')).toBeUndefined()
-    expect(await clmRoot(fake({ files: ['C:/a/specs/SPEC.md'] }), 'C:\\a')).toBe('C:/a')
-  })
-
-  test('an MSYS-style exec path keeps its leading /', async () => {
-    const $ = fake({ ...WIN, files: [WIN_SHIM, '/c/Git/bin/bash.exe'], answer: gitAnswers(() => ok('/c/Git/mingw64/libexec/git-core')) })
-    const { runs } = await twice($)
-    expect(runs[0]).toEqual(['/c/Git/bin/bash.exe', WIN_SHIM, 'view', 'flight'])
-  })
-
-  test('the module keeps what it found until it reloads', async () => {
-    const $ = fake({ ...WIN, answer: gitAnswers(() => ok(EXEC_PATH)) })
-    await runClm($, ['view', 'flight'], 'C:\\work\\repo')
-    await runClm($, ['view', 'spec'], 'C:\\work\\repo')
-    expect($.calls.filter(c => c.argv[0] === 'git')).toHaveLength(1)
-    expect($.calls.at(-1)?.argv[0]).toBe(BASH)
-  })
-
-  test('not on Windows: the shim directly, and git never asked', async () => {
-    const $ = fake({ files: [SHIM], answer: gitAnswers(() => ok(EXEC_PATH)) })
-    await runClm($, ['view', 'flight'], '/work/repo', {})
+  test('the shim runs directly, and git is never asked', async () => {
+    const $ = fake({ files: [SHIM], answer: (argv: readonly string[]) => (argv[0] === 'git' ? ok('/usr/lib/git-core') : ok('chart')) })
+    await runClm($, ['view', 'flight'], '/work/repo')
     expect($.calls).toEqual([{ argv: [SHIM, 'view', 'flight'], cwd: '/work/repo' }])
   })
 })
