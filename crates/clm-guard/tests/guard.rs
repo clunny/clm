@@ -827,7 +827,7 @@ fn blocks_piped_land(command: &str) -> String {
 
 #[test]
 fn check_piped_into_tail() {
-    // req:plugin.hooks.guard/piped-land-guard@043901b3
+    // req:plugin.hooks.guard/piped-land-guard@8b9ca13f
     for (piped, plain) in [
         ("clm land --check-only | tail -5", "clm land --check-only"),
         (
@@ -847,7 +847,7 @@ fn check_piped_into_tail() {
 
 #[test]
 fn land_piped_inside_a_script() {
-    // req:plugin.hooks.guard/piped-land-guard@043901b3
+    // req:plugin.hooks.guard/piped-land-guard@8b9ca13f
     blocks_piped_land("bash -c 'clm land --check-only | tail'");
     blocks_piped_land("cd /tmp && clm land spec/x | tee land.log");
     blocks_piped_land("echo y | clm land spec/x | tail");
@@ -856,7 +856,7 @@ fn land_piped_inside_a_script() {
 
 #[test]
 fn a_plain_land_is_allowed() {
-    // req:plugin.hooks.guard/piped-land-guard@043901b3
+    // req:plugin.hooks.guard/piped-land-guard@8b9ca13f
     for command in [
         "clm land --check-only",
         "clm land spec/x",
@@ -868,8 +868,34 @@ fn a_plain_land_is_allowed() {
 }
 
 #[test]
+fn help_piped_is_allowed() {
+    // req:plugin.hooks.guard/piped-land-guard@8b9ca13f
+    for command in [
+        "clm land --help | head",
+        "clm land -h | head",
+        "clm land impl/x --help |& head",
+        "cargo run -q -p clm -- land --help | head",
+        "cargo run -q -p clm -- land --help land | head",
+    ] {
+        allows(&bash(command));
+    }
+}
+
+#[test]
+fn help_elsewhere_than_the_lands_arguments_is_blocked() {
+    // req:plugin.hooks.guard/piped-land-guard@8b9ca13f
+    for command in [
+        "clm land spec/--help | tail",
+        "echo --help | clm land spec/x | tail",
+        "cargo run --help -- land | tail",
+    ] {
+        blocks_piped_land(command);
+    }
+}
+
+#[test]
 fn other_pipes_are_allowed() {
-    // req:plugin.hooks.guard/piped-land-guard@043901b3
+    // req:plugin.hooks.guard/piped-land-guard@8b9ca13f
     for command in [
         "clm status | head",
         "clm status land | head",

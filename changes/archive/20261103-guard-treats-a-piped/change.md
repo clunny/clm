@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - guard-treats-a-piped-clm-land-help-as-a-land
 ---

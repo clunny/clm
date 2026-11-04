@@ -193,13 +193,18 @@ fn runs_defect(tokens: &[String]) -> bool {
     }
 }
 
-/// Whether a segment with `tokens` runs `clm land`, or is a `cargo run` with a token `land`.
+/// Whether a segment with `tokens` runs `clm land`, or is a `cargo run` with a token `land`,
+/// and asks for no help after it: `--help` or `-h` lands nothing, so a pipe hides no verdict.
 fn runs_land(tokens: &[String]) -> bool {
-    match clm_call(tokens) {
-        Some(ClmCall::Clm(args)) => args.first().is_some_and(|a| a == "land"),
-        Some(ClmCall::CargoRun(tokens)) => tokens.iter().any(|t| t == "land"),
-        None => false,
-    }
+    let after_land = match clm_call(tokens) {
+        Some(ClmCall::Clm(args)) if args.first().is_some_and(|a| a == "land") => &args[1..],
+        Some(ClmCall::CargoRun(tokens)) => match tokens.iter().position(|t| t == "land") {
+            Some(i) => &tokens[i + 1..],
+            None => return false,
+        },
+        _ => return false,
+    };
+    !after_land.iter().any(|t| t == "--help" || t == "-h")
 }
 
 /// Whether the arguments of `clm capabilities` or `clm architecture` run `decide`: its first positional argument, the
