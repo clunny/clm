@@ -9,25 +9,31 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
-/// A fake `gh`, the GitHub release beyond the boundary: `gh release download v<version>
-/// --pattern <asset> --pattern <asset>.sha256 --dir <dir>` writes the release's asset, a
-/// tarball holding a `clm` that says which version it is, and its checksum.
-const FAKE_GH: &str = r##"#!/bin/sh
-echo "$*" >> "$FAKE_GH_LOG"
-dir=
-asset=
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --dir) dir=$2; shift ;;
-    --pattern) case "$2" in *.sha256) ;; *) asset=$2 ;; esac; shift ;;
-  esac
+/// A fake `curl`, the GitHub release beyond the boundary: `curl -fsSL -o <file> <url>` for the
+/// release's asset writes a tarball holding a `clm` that says which version it is, and for
+/// `<asset>.sha256` its checksum.
+const FAKE_CURL: &str = r##"#!/bin/sh
+echo "$*" >> "$FAKE_CURL_LOG"
+out=
+while [ $# -gt 1 ]; do
+  [ "$1" = -o ] && out=$2
   shift
 done
-work=$(mktemp -d)
-printf '#!/bin/sh\necho "clm release %s: $*"\n' "$FAKE_VERSION" > "$work/clm"
-chmod +x "$work/clm"
-tar czf "$dir/$asset" -C "$work" clm
-(cd "$dir" && { sha256sum "$asset" 2>/dev/null || shasum -a 256 "$asset"; } > "$asset.sha256")
+asset=$(basename "$1")
+dir=$(dirname "$out")
+case "$asset" in
+  *.sha256) ;;
+  *)
+    work=$(mktemp -d)
+    printf '#!/bin/sh\necho "clm release %s: $*"\n' "$FAKE_VERSION" > "$work/clm"
+    chmod +x "$work/clm"
+    tar czf "$dir/$asset" -C "$work" clm
+    ;;
+esac
+case "$asset" in
+  *.sha256) a=${asset%.sha256}
+    (cd "$dir" && { sha256sum "$a" 2>/dev/null || shasum -a 256 "$a"; } > "$out") ;;
+esac
 "##;
 
 /// The plugin as a person's Claude Code installs it, copied from the repository's `plugin/`
@@ -54,14 +60,14 @@ fn install() {
     let installed = top.join("installed");
     let version = install_plugin(&installed);
 
-    // A machine with Claude Code and `gh`, and no Rust toolchain: `PATH` holds only the
-    // system's tools and the fake `gh`.
+    // A machine with Claude Code and `curl`, and no Rust toolchain: `PATH` holds only the
+    // system's tools and the fake `curl`.
     let bin = top.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    let gh = bin.join("gh");
-    fs::write(&gh, FAKE_GH).unwrap();
-    fs::set_permissions(&gh, fs::Permissions::from_mode(0o755)).unwrap();
-    let log = top.join("gh.log");
+    let curl = bin.join("curl");
+    fs::write(&curl, FAKE_CURL).unwrap();
+    fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).unwrap();
+    let log = top.join("curl.log");
     let cache = top.join("cache");
     let session = |args: &[&str]| {
         Command::new(installed.join("bin/clm"))
@@ -70,7 +76,7 @@ fn install() {
             .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
             .env("HOME", &top)
             .env("XDG_CACHE_HOME", &cache)
-            .env("FAKE_GH_LOG", &log)
+            .env("FAKE_CURL_LOG", &log)
             .env("FAKE_VERSION", &version)
             .current_dir(&top)
             .output()
@@ -88,7 +94,7 @@ fn install() {
     assert_eq!(stdout.trim(), format!("clm release {version}: status"));
     let downloads = fs::read_to_string(&log).unwrap();
     assert!(
-        downloads.contains(&format!("release download v{version} ")),
+        downloads.contains(&format!("/releases/download/v{version}/clm-")),
         "{downloads}"
     );
 
