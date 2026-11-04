@@ -166,3 +166,21 @@ fn another_setting_changed() {
         ["clm.toml"]
     );
 }
+
+// req:gate/files-outside-spec-paths@9ebb011d
+#[test]
+fn an_unparseable_clm_toml_is_read_from_the_revision() {
+    let dir = base();
+    let d = dir.path();
+    write(d, "clm.toml", "approval = \"other\"\n");
+    commit(d, "policy");
+    git(d, &["checkout", "-q", "-b", "pr"]);
+    write(d, "clm.toml", "approval = [\n");
+    commit(d, "pr");
+    git(d, &["checkout", "-q", "main"]);
+    assert!(
+        files_outside_spec_paths(d, "main", "pr")
+            .unwrap()
+            .is_empty()
+    );
+}
