@@ -26,6 +26,8 @@ The root's `paths` name `crates/clm`'s manifest, build script, sources and top-l
 
 **Which build runs.** `crates/clm/build.rs` reads the commit the source was built from with `git rev-parse HEAD` in the crate's directory and passes its first 12 hex digits to the compiler; `clm --version` appends it. It finds the worktree's git directory and the common one with `git rev-parse --git-dir --git-common-dir` and declares `cargo:rerun-if-changed` on whichever of these exist: the worktree's `HEAD`, the common directory's `packed-refs`, and its `refs/heads/` directory, which cargo scans recursively and whose entries git replaces by rename on every commit. It never declares a path that doesn't exist, since cargo would then rerun the script, and relink `clm`, on every build. So a commit or a pull rebuilds the string without rebuilding anything else, a detached `HEAD` (`clm land`'s scratch tree, the release checkout) is covered by `HEAD` itself, and a source outside a git checkout, or a machine without `git`, builds with no commit and no error. The string's formatting, `version_string(package_version, commit)`, sits in `crates/clm/src/version.rs`, which `build.rs` includes with `#[path]` and which holds its own unit test; `main.rs` only hands clap the string the build script produced. The build script is not the binary, so `git-through-layer`, which is about what `clm` runs, doesn't cover it. Release binaries are built from a checkout of the release commit and so show it too.
 
+**A reader that leaves** (`closed-stdout`). The Rust runtime ignores `SIGPIPE`, so a print to a stdout whose reader has gone fails, and `println!` turns the failure into a panic wherever it stands. `crates/clm/src/closed_stdout.rs` handles that panic in one place: `main` installs a panic hook, then runs the dispatch inside `catch_unwind`. The hook is silent for a message that is std's `failed printing to stdout: ` with an `(os error N)` for which `std::io::Error::from_raw_os_error(N).kind()` is `BrokenPipe`, since that holds on Windows's release too where the text differs, and passes every other panic to the default hook. `main` exits 141 for that panic, the status a shell reports for a tool `SIGPIPE` killed, which no command's own exit codes use, and resumes unwinding for any other. It unwinds, not exits in the hook, so destructors still remove temporary trees and release locks. std's wording is matched because the toolchain is pinned (`pinned-toolchain`) and the rule's test runs the real binary, so a pin move that changes it fails that test. Every print to stdout is on the main thread. Restoring `SIGPIPE`'s default is not an option: it would also kill `clm` silently when a child that `clm-git`'s `run` feeds exits before reading.
+
 **Component map.** One line per component; each component's Contract says the rest. Adding or splitting a component edits this table, and needs no review.
 
 | Component | Responsibility |
@@ -581,3 +583,25 @@ The repository SHALL hold at its root a `LICENSE` file with the MIT licence's te
 
 #### Serves
 - capability/install-and-release
+
+### Requirement: closed-stdout
+When the reader of `clm`'s stdout has gone, a print to it SHALL end the command with a non-zero exit status and no panic text on stderr. A print to stdout that fails for any other reason SHALL stay a panic that names the reason.
+
+#### Scenario: reader gone before the first print
+- GIVEN a CLM repository with component `a`, and a stdout that is a pipe whose reading end is closed
+- WHEN `clm context a` runs
+- THEN it exits 141, and its stderr is empty
+
+#### Scenario: a view
+- GIVEN a CLM repository, and a stdout that is a pipe whose reading end is closed
+- WHEN `clm status` runs
+- THEN it exits non-zero, and its stderr holds no `panicked`
+
+#### Scenario: a full disk still says why
+- GIVEN a CLM repository with component `a`, on Linux, and stdout opened on `/dev/full`
+- WHEN `clm context a` runs
+- THEN it exits 101, and its stderr holds `failed printing to stdout` and `No space left on device`
+
+#### Serves
+- capability/see-project-state
+- capability/build-from-spec
