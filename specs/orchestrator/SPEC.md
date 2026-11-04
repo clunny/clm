@@ -140,7 +140,7 @@ The session's own change is left out, so it never trips over its own work: when 
 - check.coverage/pending-report
 
 ### Requirement: claim
-`clm claim <component>` SHALL push a new commit on `origin/main` to `impl/<component>` atomically, failing if the branch appeared or moved since it was read. It SHALL exit 1 without pushing when the component isn't one `clm next` would print, saying why: the items and requirements that block it, that it is converged, or that it is claimed. It SHALL take over a lapsed claim, and a claim whose tip is an ancestor of `origin/main`. When the push is rejected, it SHALL read the branch's tip on `origin` again. If the tip is the claim commit, it SHALL succeed. If the tip differs from the one it expected (none for a new claim, the released tip for a takeover), it SHALL exit 1 saying someone else claimed the component first. Otherwise it SHALL push the same commit again, at most twice more, waiting 1 second before the first of these and 2 seconds before the second, and judge each rejection the same way, except that a tip still unchanged after the last push SHALL exit 2 with git's reason and a line saying the failure may be transient and to run the same command again, without saying the component was claimed by someone else.
+`clm claim <component>` SHALL push a new commit on `origin/main` to `impl/<component>` atomically, failing if the branch appeared or moved since it was read. It SHALL exit 1 without pushing when the component isn't one `clm next` would print, saying why: the items and requirements that block it, that it is converged, or that it is claimed. When it is converged, it SHALL also say that a small change needing no spec change takes no claim and lands from a branch of its own with `clm land`. It SHALL take over a lapsed claim, and a claim whose tip is an ancestor of `origin/main`. When the push is rejected, it SHALL read the branch's tip on `origin` again. If the tip is the claim commit, it SHALL succeed. If the tip differs from the one it expected (none for a new claim, the released tip for a takeover), it SHALL exit 1 saying someone else claimed the component first. Otherwise it SHALL push the same commit again, at most twice more, waiting 1 second before the first of these and 2 seconds before the second, and judge each rejection the same way, except that a tip still unchanged after the last push SHALL exit 2 with git's reason and a line saying the failure may be transient and to run the same command again, without saying the component was claimed by someone else.
 
 #### Scenario: race
 - GIVEN two sessions that both see component `b` as ready
@@ -175,7 +175,7 @@ The session's own change is left out, so it never trips over its own work: when 
 #### Scenario: why it isn't ready
 - GIVEN component `c` whose only pending requirement `c/x` is in the `blocks` of an existing `backlog/q.md`, and component `d` with every requirement current
 - WHEN `clm claim c` and `clm claim d` run
-- THEN each exits 1, the first naming `backlog/q`, and the second saying `d` is converged
+- THEN each exits 1, the first naming `backlog/q`, and the second saying `d` is converged and naming `clm land` for a change that needs no spec change
 
 #### Scenario: pending dependency
 - GIVEN component `a` with an uncited requirement, depending on component `b` with an uncited requirement

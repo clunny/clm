@@ -59,6 +59,8 @@ Run `/clm:build`. CLM works per component: `clm next` lists the components whose
 
 You don't review code. If a build finds the spec is wrong or incomplete, it stops and raises a spec change, which comes to you as intent.
 
+A small code change that needs no spec change, such as a refactor or a clearer message, takes no claim: it goes on a branch of its own, named outside `impl/`, `spec/`, `propose/` and `autosync/`, and lands through `clm land` like any other. Delete the branch from `origin` afterwards if you pushed it, since `clm land` removes only claim branches. A change fits when every requirement and scenario as written stays true and it adds nothing a requirement would have to state. A `bug` or `deferred` item takes `clm claim <component> --fix backlog/<slug>` instead, and behaviour no requirement states starts with a spec change.
+
 ## The backlog
 
 `backlog/` holds one file per item:
