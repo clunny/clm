@@ -22,7 +22,8 @@ A session following the skill may wait for a dependency to build before launchin
 
 ## Outcome
 
-- `plugin/build-says-what-is-ready`: the build skill's `clm next` step says `clm next` prints the components with a pending requirement, unclaimed, that no `#### Needs` or blocking backlog item holds back, says `depends_on` doesn't order builds, names `needs-alone-order` and `component-reconciliation`, and doesn't say `dependencies are all settled`.
+- `plugin/build-says-what-is-ready`: the build skill's `clm next` step says `clm next` prints the components with a pending requirement, unclaimed, that no `#### Needs` or blocking backlog item holds back, says `depends_on` doesn't order builds, names `needs-alone-order` and `component-reconciliation`, and doesn't say `dependencies are all settled`; nor does step 4 say a landed component `settles the components that depend on it`, the same stale order, which the builder check found.
+- The build keeps the sentences `build-finishes-builds`' test reads (the latest `clm next`, run `clm next` again) whole while it rewords step 1.
 
 ## Constraints
 
