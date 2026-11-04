@@ -296,7 +296,7 @@ Running `clm init` again SHALL change no existing file, except that it SHALL add
 - THEN it returns the pair (`web/src/app.ts`, `web/src/lib/util.ts`)
 
 ### Requirement: init-root-ownership
-The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]`. It SHALL set `outside` to the top-level entries of the repository's other code files: of the files the bootstrap commit will hold, which are the files the index holds under the CLM repository and the untracked files under it that the `.gitignore` doesn't ignore as `clm init` leaves it (`git ls-files --cached --others --exclude-standard`, through `clm-git`, read after `clm init` has written its `.gitignore` lines), other than those under `specs/`, `changes/`, `backlog/` or `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and the three files in `paths`, the first component of each path, written `<component>/**` for a file in a directory and as the file's name for a file at the top, each once, sorted by bytes, each written as a YAML double-quoted string with `\` and `"` escaped; and `outside: []` when there is none, so path ownership is always on in a repository `clm init` sets up. So the committed result of `clm init` in a repository with code passes `clm check`'s path ownership (`check/unowned-files`), even when it commits a file that was untracked when `clm init` ran, such as the `.claude/settings.json` Claude Code writes when the plugins are enabled for the project, and the first spec graph narrows `outside` as its components take the code (`incremental-adoption`). `clm survey` and `clm survey --components` still read the index alone. Its tests assert the frontmatter written; the check itself is `check`'s.
+The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]`. It SHALL set `outside` to the top-level entries of the repository's other code files: of the files the bootstrap commit will hold, which are the files the index holds under the CLM repository and the untracked files under it that the `.gitignore` doesn't ignore as `clm init` leaves it (`clm-git`'s `files_to_commit`, read after `clm init` has written its `.gitignore` lines, so `clm init` writes those lines before it writes `specs/SPEC.md`), other than those under `specs/`, `changes/`, `backlog/` or `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and the three files in `paths`, the first component of each path, written `<component>/**` for a file in a directory and as the file's name for a file at the top, each once, sorted by bytes, each written as a YAML double-quoted string with `\` and `"` escaped; and `outside: []` when there is none, so path ownership is always on in a repository `clm init` sets up. So the committed result of `clm init` in a repository with code passes `clm check`'s path ownership (`check/unowned-files`), even when it commits a file that was untracked when `clm init` ran, such as the `.claude/settings.json` Claude Code writes when the plugins are enabled for the project, and the first spec graph narrows `outside` as its components take the code (`incremental-adoption`). `clm survey` and `clm survey --components` still read the index alone. Its tests assert the frontmatter written; the check itself is `check`'s.
 
 #### Scenario: repository with code
 - GIVEN a git repository with no `specs/` tracking `src/main.rs`, `src/lib/x.rs`, `scripts/build.sh`, `README.md` and `docs/a.md`
@@ -309,14 +309,9 @@ The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".gitignore", "clm
 - THEN `specs/SPEC.md`'s frontmatter has `paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]` and `outside: []`
 
 #### Scenario: untracked files the bootstrap commits
-- GIVEN a git repository with no `specs/` tracking `src/main.rs` and `.gitignore` holding `build/`, with the untracked files `.claude/settings.json`, `build/out.o` and `.clm/pr-body.md`
+- GIVEN a git repository with no `specs/`, no global or system git excludes, tracking `src/main.rs` and a `.gitignore` holding `build/`, with the untracked files `.claude/settings.json`, `build/out.o` and `.clm/pr-body.md`
 - WHEN `clm init` runs
 - THEN `specs/SPEC.md`'s frontmatter has `outside: [".claude/**", "src/**"]`, naming neither `build/**`, which the `.gitignore` ignored before, nor `.clm/**`, which the line `clm init` adds ignores
-
-#### Scenario: bootstrap passes ownership
-- GIVEN a git repository with no `specs/` tracking `src/main.rs`, with the untracked file `.claude/settings.json`
-- WHEN `clm init` runs and then `git add -A` and `git commit` run
-- THEN `clm check` reports no `check/unowned-files` violation
 
 #### Serves
 - capability/adopt-clm
@@ -324,6 +319,7 @@ The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".gitignore", "clm
 
 #### Needs
 - model/outside-globs
+- vcs/files-to-commit
 
 ### Requirement: guide-command
 `clm guide` SHALL print one line per page of the guide, as compiled into the binary, each `<name>  <title>`. The pages SHALL be every `.md` file in `docs/guide/` and `docs/spec-format.md`; `<name>` is the file name without `.md` (`index` for `README.md`) and `<title>` the page's first `# ` heading; `index` SHALL come first, then the pages `README.md`'s numbered list names, in its order, then `spec-format`. `clm guide <name>` SHALL print that page's Markdown exactly as its file is at build time, and exit 0. For a name that isn't a page it SHALL exit 1, printing `no guide page <name>` and the index to stderr. It SHALL read no file at run time.
