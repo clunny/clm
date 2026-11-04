@@ -1402,11 +1402,11 @@ fn scenario_relative_detector_tool_not_installed() {
 #[test]
 fn scenario_relative_detector_tool_installed() {
     // req:check/detector-relative-command@9c07fea0
-    use std::os::unix::fs::PermissionsExt;
     let dir = detector_repo(Some(KNIP_DETECTOR));
-    write(dir.path(), "node_modules/.bin/knip", "#!/bin/sh\nexit 0\n");
-    let tool = dir.path().join("node_modules/.bin/knip");
-    fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).unwrap();
+    // A link to `true` stands for an installed tool, with no freshly written executable to start.
+    let bin = dir.path().join("node_modules/.bin");
+    fs::create_dir_all(&bin).unwrap();
+    std::os::unix::fs::symlink("/bin/true", bin.join("knip")).unwrap();
     let out = check_from_subdirectory(dir.path());
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(!stdout.contains("check/detectors"), "{stdout}");
