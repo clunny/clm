@@ -332,9 +332,9 @@ say "claude plugin list --json"
 loaded=$(cd "$main" && claude plugin list --json) || die "claude plugin list --json failed; run the script again to finish"
 printf '%s' "$loaded" | jq -e 'type == "array"' >/dev/null 2>&1 ||
 	die "claude plugin list --json didn't print a JSON array; run the script again to finish"
-broken=$(printf '%s' "$loaded" | jq -r --arg main "$main" --argjson names "$names_json" '
-	.[] | select(.projectPath == $main and ((.errors // []) | length > 0)
-		and (.id as $id | $names | any(. as $n | $id == $n + "@clm-dev")))
+broken=$(printf '%s' "$loaded" | jq -r --arg main "$main" --arg phys "$(physical "$main")" --arg market "$DEV_MARKET" --argjson names "$names_json" '
+	.[] | select((.projectPath == $main or .projectPath == $phys) and ((.errors // []) | length > 0)
+		and (.id as $id | $names | any(. as $n | $id == $n + "@" + $market)))
 	| "\(.id): \(.errors | join("; "))"')
 if [ -n "$broken" ]; then
 	printf 'dev-install: failed to load: %s\n' "$broken" >&2
