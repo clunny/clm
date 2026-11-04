@@ -569,24 +569,28 @@ impl<S: Store, A: Alarm> Object<S, A> {
         answer
     }
 
-    /// Reads the default branch's ref and applies a push the object hasn't seen.
-    async fn catch_up<P: Host>(&mut self, p: &P, b: &Budget) {
+    /// Reads the default branch's ref and applies a push the object hasn't seen. Answers
+    /// whether the object's tip is now that ref's commit; a tip that moved with files still
+    /// to fetch has moved.
+    async fn catch_up<P: Host>(&mut self, p: &P, b: &Budget) -> bool {
         let Some(auth) = self.auth(p, b).await else {
-            return;
+            return false;
         };
         let branch = match self.meta.default_branch.clone() {
             Some(branch) => branch,
             None => {
                 let Some(branch) = source::default_branch(p, &auth, &self.name, b).await else {
-                    return;
+                    return false;
                 };
                 self.meta.default_branch = Some(branch.clone());
                 branch
             }
         };
-        if let Some(tip) = source::branch_tip(p, &auth, &self.name, &branch, b).await {
-            self.move_tip(p, b, &tip).await;
-        }
+        let Some(tip) = source::branch_tip(p, &auth, &self.name, &branch, b).await else {
+            return false;
+        };
+        self.move_tip(p, b, &tip).await;
+        self.meta.tip.as_deref() == Some(tip.as_str())
     }
 
     /// While the pages are open, the alarm at the next lapse or resync.
@@ -603,11 +607,16 @@ impl<S: Store, A: Alarm> Object<S, A> {
     /// record and, for a decision or a proposal, recomputes before it answers.
     pub async fn write<P: Host>(&mut self, p: &P, req: &Value) -> Answer {
         let now = p.now();
-        if self.meta.tip.is_none() {
+        let done = match self.replica.view("snapshot") {
+            Some(Viewed::Ready { .. }) if self.meta.tip.is_some() => None,
+            Some(Viewed::Preparing { done }) if self.meta.tip.is_some() => Some(json!(done)),
+            _ => Some(json!(0)),
+        };
+        if let Some(done) = done {
             if self.alarm.get().is_none() {
                 self.alarm.set(now);
             }
-            return Answer::json(503, &json!({ "preparing": 0 }));
+            return Answer::json(503, &json!({ "preparing": done }));
         }
         let (Some(login), Some(token)) = (req["login"].as_str(), req["token"].as_str()) else {
             return Answer::empty(422);
@@ -618,7 +627,10 @@ impl<S: Store, A: Alarm> Object<S, A> {
         let Some(access) = access::check_direct(p, token, owner, repo).await else {
             return Answer::empty(404);
         };
-        self.catch_up(p, &Budget::default()).await;
+        if !self.catch_up(p, &Budget::default()).await {
+            self.save();
+            return Answer::empty(502);
+        }
         let answer = match req["kind"].as_str() {
             Some("decide") => self.decide(p, &access, login, req).await,
             Some("propose") => self.propose(p, &access, login, req).await,

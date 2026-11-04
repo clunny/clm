@@ -37,7 +37,7 @@ fn decide(version: &str) -> Value {
 
 #[test]
 fn a_decision_shows_at_once() {
-    // req:web.worker.replica/writes-through-object@da9a39c5
+    // req:web.worker.replica/writes-through-object@b4776943
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -63,7 +63,7 @@ fn a_decision_shows_at_once() {
 
 #[test]
 fn reworded_since_the_page_was_drawn() {
-    // req:web.worker.replica/writes-through-object@da9a39c5
+    // req:web.worker.replica/writes-through-object@b4776943
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -85,7 +85,7 @@ fn reworded_since_the_page_was_drawn() {
 
 #[test]
 fn a_proposal_shows_at_once() {
-    // req:web.worker.replica/writes-through-object@da9a39c5
+    // req:web.worker.replica/writes-through-object@b4776943
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -106,4 +106,51 @@ fn a_proposal_shows_at_once() {
     assert_eq!(block_on(object.write(&fake, &withdraw)).status, 200);
     let other = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "nope"});
     assert_eq!(block_on(object.write(&fake, &other)).status, 404);
+}
+
+#[test]
+fn the_tip_cant_be_read() {
+    // req:web.worker.replica/writes-through-object@b4776943
+    let fake = fake_with("111", repo(CAPABILITIES));
+    fake.gh.grant("tok", "o/a");
+    let (mut object, _mem, _slot) = built(&fake);
+    let version = entry(&fake, &mut object)["version"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    fake.gh
+        .repos
+        .borrow_mut()
+        .get_mut("o/a")
+        .unwrap()
+        .ref_fails
+        .insert("main".into());
+    let propose = json!({"login": "carol", "token": "tok", "kind": "propose",
+        "title": "Export CSV", "body": "Please.", "nodes": []});
+    let withdraw = json!({"login": "carol", "token": "tok", "kind": "withdraw", "id": "x"});
+    for write in [decide(&version), propose, withdraw] {
+        let answer = block_on(object.write(&fake, &write));
+        assert_eq!(answer.status, 502, "{}", answer.body);
+    }
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn still_preparing() {
+    // req:web.worker.replica/writes-through-object@b4776943
+    let fake = fake_with("111", repo(CAPABILITIES));
+    fake.gh.grant("tok", "o/a");
+    let (mut object, _mem, slot) = object();
+    let propose = json!({"login": "carol", "token": "tok", "kind": "propose",
+        "title": "Export CSV", "body": "Please.", "nodes": []});
+    let before = fake.gh.calls.borrow().len();
+    let answer = block_on(object.write(&fake, &propose));
+    assert_eq!(answer.status, 503);
+    assert_eq!(
+        serde_json::from_str::<Value>(&answer.body).unwrap(),
+        json!({"preparing": 0})
+    );
+    assert!(slot.0.get().is_some(), "the alarm is set");
+    assert_eq!(fake.gh.calls.borrow().len(), before, "no ref was read");
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
 }
