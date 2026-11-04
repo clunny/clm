@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 human_burdens:
   - "Check Cloudflare's AI Crawl Control for clm-app.dev blocks no AI crawler and adds nothing to robots.txt (backlog/cloudflare-ai-crawlers)"
   - "Verify clm-app.dev in Google Search Console and Bing Webmaster Tools by DNS, and submit the sitemap (backlog/search-console-and-bing)"
