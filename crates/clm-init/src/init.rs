@@ -34,6 +34,10 @@ struct Lang {
     detector: &'static str,
     command: &'static str,
     hint: &'static str,
+    /// The manifest the detector's `requires` names.
+    manifest: &'static str,
+    /// The shell test the build line runs under (`init-without-manifest`).
+    present: &'static str,
     build: &'static str,
 }
 
@@ -43,13 +47,17 @@ const LANGS: [Lang; 3] = [
         detector: "rust-unused-dependencies",
         command: r#"["cargo-machete"]"#,
         hint: "cargo install --locked cargo-machete",
+        manifest: "Cargo.toml",
+        present: "[ -f Cargo.toml ]",
         build: "cargo test",
     },
     Lang {
         name: "typescript",
         detector: "typescript-dead-code",
-        command: r#"["npx", "--no-install", "knip"]"#,
-        hint: "npm install --save-dev knip",
+        command: r#"["node_modules/.bin/knip"]"#,
+        hint: "npm ci (or npm install --save-dev knip when package.json doesn't list it)",
+        manifest: "package.json",
+        present: "[ -f package.json ]",
         build: "npm ci && npm test",
     },
     Lang {
@@ -57,6 +65,8 @@ const LANGS: [Lang; 3] = [
         detector: "python-dead-code",
         command: r#"["vulture", "."]"#,
         hint: "pip install vulture",
+        manifest: "pyproject.toml",
+        present: "[ -f pyproject.toml ] || [ -f setup.py ]",
         build: "pytest",
     },
 ];
@@ -415,8 +425,8 @@ fn clm_toml(host: Host, langs: &[&Lang]) -> String {
     }
     for lang in langs {
         text.push_str(&format!(
-            "\n[[detectors]]\nname = \"{}\"\ncommand = {}\nhint = \"{}\"\n",
-            lang.detector, lang.command, lang.hint
+            "\n[[detectors]]\nname = \"{}\"\ncommand = {}\nhint = \"{}\"\nrequires = \"{}\"\n",
+            lang.detector, lang.command, lang.hint, lang.manifest
         ));
     }
     text
@@ -427,11 +437,17 @@ fn check_script(langs: &[&Lang]) -> String {
         "#!/usr/bin/env bash\n\
          # Builds and tests this repository. `clm land` runs it before `clm check`; edit it to\n\
          # suit.\n\
-         set -euo pipefail\n",
+         set -euo pipefail\n\
+         # Run from the repository's root, wherever this is run from.\n\
+         cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\"\n",
     );
+    // Each language's line runs once its manifest exists, so a repository with no code yet
+    // passes.
     for lang in langs {
-        text.push_str(lang.build);
-        text.push('\n');
+        text.push_str(&format!(
+            "if {}; then\n    {}\nfi\n",
+            lang.present, lang.build
+        ));
     }
     text
 }
