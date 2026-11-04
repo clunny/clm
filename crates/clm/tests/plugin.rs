@@ -862,8 +862,14 @@ fn skills_point_at_the_guide() {
         .into_iter()
         .find(|s| s.contains("End with a summary"))
         .expect("init: SKILL.md must end with a summary step");
-    assert!(summary.contains("clm guide using-clm"), "{summary}");
-    assert!(summary.contains("clm guide how-it-works"), "{summary}");
+    assert!(
+        summary.contains("clm guide using-clm"),
+        "init: summary must name `clm guide using-clm`: {summary}"
+    );
+    assert!(
+        summary.contains("clm guide how-it-works"),
+        "init: summary must name `clm guide how-it-works`: {summary}"
+    );
 }
 
 #[test]
