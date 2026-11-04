@@ -56,10 +56,7 @@ fn sends_only_the_api_and_its_paths_to_the_worker() {
         .filter_map(Value::as_str)
         .collect();
     // Only the API, sign-in, webhook, invited list and `/app`; the assets answer the rest.
-    assert_eq!(
-        first,
-        ["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]
-    );
+    assert_eq!(first, ["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]);
 }
 
 #[test]
