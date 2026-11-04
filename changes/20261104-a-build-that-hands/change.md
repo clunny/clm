@@ -27,7 +27,9 @@ A build handed back a result ending in `waiting: <command>`, as `orchestrator.ru
 ## Constraints
 
 - The new line is added output: `clm runner` passes `--finish` output through, and nothing else parses it.
-- The skill reads only `clm run --finish`'s output, never a `git` command aimed at `origin` or the build's worktree (`build-reads-origin`).
+- For a build with no closing line the skill reads only `clm run --finish`'s output, never a `git` command of its own aimed at `origin` or the build's worktree. This sits beside `plugin/build-reads-origin`, which has the skill learn a build's progress from `origin/impl/<component>`; the skill's wording keeps the two apart: progress from `origin`, the landed verdict from the finish.
+- `orchestrator.run`'s Contract names the new line, so a `plugin` build's one-hop context carries it (`ancestor-scoped-context`).
+- `run-finish` prints `landed impl/<component>` after the `freed` line and before any worktree line, also when no worktree has the branch checked out.
 
 ## Edge cases and workarounds
 
