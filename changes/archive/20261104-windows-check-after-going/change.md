@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - windows-check-after-going-public
 ---
