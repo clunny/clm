@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [dev-install-scoped-to-the-clone]
 human_burdens:
   - "Once the change is built, run `scripts/dev-install.sh` once in each set-up clone, with no sessions running on it: it deletes the dev build from `~/.cargo/bin` and takes the `clm` marketplace back to GitHub, which drops Claude Code's installed `clm` plugin records, so other projects install the plugin again at their next session."
