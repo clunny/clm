@@ -948,6 +948,10 @@ fn remove_undoes_the_setup() {
     assert!(!c.hook().exists(), "hook left");
     assert!(!c.post_merge().exists(), "post-merge hook left");
     assert!(!c.dev().exists(), "clm-dev left");
+    assert!(
+        !c.main.join(".clm/dev-marketplace.json").exists(),
+        "manifest left"
+    );
     assert_eq!(c.settings_json(), json!({"permissions": {"allow": ["x"]}}));
     let main = c.main.display();
     let after: Vec<String> = c.claude_changes().split_off(4);
