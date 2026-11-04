@@ -5,7 +5,7 @@ component: init
 ## ADDED Requirements
 
 ### Requirement: guide-entry-pages
-The guide's entry pages SHALL stay written for a newcomer (`guide-entry-pages-for-newcomers`). `docs/guide/quickstart.md` SHALL hold `/plugin marketplace add clunny/clm` and `/plugin install clm@clm`, SHALL name `/clm:init`, `/clm:build`, `/clm:propose`, `/clm:triage` and `/clm:health`, and SHALL link `using-clm.md` and `how-it-works.md`. `docs/guide/using-clm.md` SHALL name `/clm:propose`, `/clm:build`, `/clm:triage` and `/clm:health`, and SHALL link `how-it-works.md`. Neither page SHALL hold, outside fenced code blocks, a code span whose text starts with `clm ` (a command of the `clm` CLI); a skill such as `/clm:build` is not one. A test SHALL read both pages from `docs/guide/` and fail naming the page and what it lacks or holds.
+The guide's entry pages SHALL stay written for a newcomer (`guide-entry-pages-for-newcomers`). `docs/guide/quickstart.md` SHALL hold `/plugin marketplace add clunny/clm` and `/plugin install clm@clm`, SHALL name `/clm:init`, `/clm:build`, `/clm:propose`, `/clm:triage` and `/clm:health`, and SHALL link `using-clm.md` and `how-it-works.md`. `docs/guide/using-clm.md` SHALL name `/clm:propose`, `/clm:build`, `/clm:triage` and `/clm:health`, and SHALL link `how-it-works.md`. Neither page SHALL hold, outside fenced code blocks, a code span whose text, as written, starts with `clm ` (a command of the `clm` CLI); a skill such as `/clm:build`, and `clm` alone, are not one. A test SHALL read both pages from `docs/guide/` and fail naming the page and what it lacks or holds.
 
 #### Scenario: this repository's guide
 - GIVEN the pages `docs/guide/quickstart.md` and `docs/guide/using-clm.md` of this repository
