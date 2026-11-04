@@ -19,3 +19,5 @@ Revisit when a build is seen changing another node's code outside the exception 
 Rejected:
 - **A gate rule with a `Forced-by:` trailer per file.** The edge cases above.
 - **Expand-contract for every removal, so no build ever touches another node.** Turns each removal into several builds across nodes; the re-founding's touchpoint 2 chose the named-fix exception instead.
+
+(Amended 2026-11-04, `20261104-clm-run-allows-compile`: the exception covers the fixes an addition forces as well as a removal (`forced-fixes-cover-additions`); the edge cases above are unchanged.)
