@@ -460,7 +460,6 @@ impl Fixture {
         assert!(left.is_empty(), "left in TMPDIR: {left:?}");
     }
 
-    /// The command `[land] check` names.
     /// A `checked` record for the code key of `rev` with the fixture's check command, and
     /// that key.
     pub fn mark_checked(&self, rev: &str) -> String {
@@ -475,6 +474,7 @@ impl Fixture {
         key
     }
 
+    /// The command `[land] check` names.
     pub fn check_command(&self) -> String {
         self.path("bin/check").display().to_string()
     }
