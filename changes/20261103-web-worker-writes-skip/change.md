@@ -28,7 +28,7 @@ Reading the object's side for this also found two gaps its requirement doesn't c
 - **Remove `/write` and rewrite the Design around the Worker's routes** (`no-dead-code`, as the item offers). Rejected: `decide` would keep loading the whole graph on the Worker's request, the kind of work `web-repo-replica` measured at about 350 ms of CPU against a 10 ms limit Cloudflare enforces by killing requests. It would keep working only for as long as overruns are tolerated.
 - **Move only `decide`, the route over budget.** Rejected: a proposal's slug would still be judged against a stale view, and the Contract's one path for the token would become two.
 
-A related choice is how the routes' tests prove the rules. The scenarios of `proposals`, `decide` and `architecture-decide` name what is written and answered, which the object now decides, so a scripted object would prove only the pass-through and every citing test would claim more than it checks. So `clm-web`'s tests drive those routes through a real `clm_web_replica::Object` over the fake GitHub, and only `writes-to-object`'s own scenarios script it. Its cost is one dev-dependency, in the direction imports already run.
+A related choice is how the routes' tests prove the rules. The scenarios of `proposals`, `decide` and `architecture-decide` name what is written and answered, which the object now decides, so a scripted object would prove only the pass-through and every citing test would claim more than it checks. So `clm-web`'s tests drive those routes through a real `clm_web_replica::Object` over the fake GitHub, and only `writes-to-object`'s own scenarios script it. Its cost is two dev-dependencies, `clm-web-replica` and `clm-replica`, in the direction imports already run.
 
 ## Outcome
 
