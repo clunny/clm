@@ -277,6 +277,16 @@ fn scenario_draft_hand_edit_check() {
 }
 
 #[test]
+fn scenario_draft_adds_glossary_terms() {
+    // req:orchestrator.triage/draft-adds-glossary-terms@8b7bcbfe
+    let p = prompt_for(&["a"], &[]);
+    let para = paragraph(&p, "Design the rest as one change");
+    for needle in ["docs/guide/glossary.md", "clm/glossary-covers-terms"] {
+        assert!(para.contains(needle), "{needle} missing from {para}");
+    }
+}
+
+#[test]
 fn scenario_draft_scratch_files() {
     // req:orchestrator.triage/draft-scratch-files@e35b49c4
     let p = prompt_for(&["a"], &[]);

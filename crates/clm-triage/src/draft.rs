@@ -415,7 +415,12 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          (`gate/undeclared-burden`). Once `CAPABILITIES.md` or `ARCHITECTURE.md` holds an entry, \
          give every component you add a `serves` list naming the entries its rules serve, and a \
          rule whose purpose differs from its component's a `#### Serves` block, since `clm check` \
-         fails a rule that serves nothing (`check/untraced`); before then, write neither. Write one `deltas/<component>.md` per component it changes, with bases from \
+         fails a rule that serves nothing (`check/untraced`); before then, write neither. When a \
+         requirement the change adds or modifies introduces a term `clm/glossary-covers-terms` \
+         covers (a top-level `clm` command, a requirement state, a component status, a change \
+         status, a backlog kind or a key of `change.md`'s frontmatter), add the term's entry to \
+         `docs/guide/glossary.md` on `spec/<id>`, since the code branch that builds the term \
+         can't carry a spec path and its land fails without the entry. Write one `deltas/<component>.md` per component it changes, with bases from \
          `clm hashes <component>`, record decisions as `docs/decisions/<name>.md`, and make the \
          backlog edits it needs. Run `clm check` until it passes, then `clm apply <id>`, \
          commit, and {rebase}. Run `clm gate --base origin/main`: its first line says whether \
