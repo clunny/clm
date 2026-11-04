@@ -154,7 +154,7 @@ const cut = headline.indexOf('. ') + 1
     </section>
     <footer class="foot">
       <span>CLM is built with CLM.</span>
-      <span><a href="/guide/">Guide</a> · <a href="/app/">Sign in</a> · <a href="/privacy">Privacy</a></span>
+      <span><a href="/guide/">Guide</a> · <a href="/app/">Web app</a> · <a href="/privacy">Privacy</a></span>
     </footer>
   </div>
 </template>

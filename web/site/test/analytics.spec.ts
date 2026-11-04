@@ -36,7 +36,7 @@ test('a build with no website ID names the service nowhere', () => {
 })
 
 test('Get started reports a click and still goes on', async ({ page }) => {
-  // req:web.site/click-events@dbda97a8
+  // req:web.site/click-events@395eb76a
   await stub(page)
   await page.goto('/')
   await page.locator('.hero a.btn.p').click()
@@ -46,7 +46,7 @@ test('Get started reports a click and still goes on', async ({ page }) => {
 })
 
 test('How it works and a nav link report clicks with their own text', async ({ page }) => {
-  // req:web.site/click-events@dbda97a8
+  // req:web.site/click-events@395eb76a
   await stub(page)
   await page.goto('/')
   await page.locator('.hero a.btn.s').click()
@@ -57,8 +57,17 @@ test('How it works and a nav link report clicks with their own text', async ({ p
   ])
 })
 
+test('the nav Web app reports a click with its own text', async ({ page }) => {
+  // req:web.site/click-events@395eb76a
+  await stub(page)
+  await page.goto('/')
+  await page.evaluate(() => document.addEventListener('click', (e) => e.preventDefault()))
+  await page.locator('.VPNavBarMenu a', { hasText: 'Web app' }).click()
+  expect(await calls(page)).toEqual([['click', { label: 'Web app', path: '/' }]])
+})
+
 test('a link to another host reports an outbound click only', async ({ page }) => {
-  // req:web.site/click-events@dbda97a8
+  // req:web.site/click-events@395eb76a
   await stub(page)
   await page.goto('/')
   // Navigation held: the click is reported, and the page stays to be read.
@@ -70,7 +79,7 @@ test('a link to another host reports an outbound click only', async ({ page }) =
 })
 
 test('clicks work with no analytics service and raise no error', async ({ page }) => {
-  // req:web.site/click-events@dbda97a8
+  // req:web.site/click-events@395eb76a
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
