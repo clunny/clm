@@ -36,7 +36,7 @@ The repository question has already been answered: `clunny/clm` is public (check
 
 - `web/site-served-directly` (new) holds the routing, and `web.worker/reserved-paths` (new) what the Worker keeps: `/app` redirects, and any other path its routes don't answer, `/_clm/*` included, is a bare 404. `web.worker/site-behind-sign-in` and its sign-in page go.
 - `web/app-at-app-path` keeps only the built tree; its routing clause moves to the new rule. It, `web/installable` and `web/retire-root-service-worker` drop their `Needs` on the removed rule.
-- `web.worker.reserved-paths` needs `web/site-served-directly`, so the Worker stops serving the site only once the routing no longer sends it there.
+- `web.worker/reserved-paths` needs `web/site-served-directly`, so the Worker stops serving the site only once the routing no longer sends it there.
 - `web.site/install-repository` states `clunny/clm` as the value, and the code comment saying it is private goes with that rebuild.
 - `web.worker.platform/asset-responses` no longer serves `learn-clm`, and its Design stops naming the removed rule. A Serves-only edit, so nothing is built there.
 - `learn-clm`'s scenario says anyone with no session, so its test drops the sign-in. It waits on `web/site-served-directly` through the queue's serving-rules order.
