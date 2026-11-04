@@ -112,9 +112,14 @@ fn session_start_states_the_defect_rule() {
     }
     // With `ask`, the report goes in a `<<'EOF'` heredoc, and nothing of the fix-first rule.
     assert!(rule.contains("<<'EOF'"), "{text}");
+    assert!(
+        rule.contains("the one form the guard shows the human"),
+        "{text}"
+    );
     assert!(!text.contains("--fix"), "{text}");
     // backlog: where reports go, and fix-first.
     let text = start(&clm_repo(Some("defects = \"backlog\"\n")));
+    assert!(!text.contains("<<'EOF'"), "{text}");
     for needle in [
         "clm defect",
         "backlog/",
