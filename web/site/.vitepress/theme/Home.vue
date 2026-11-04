@@ -15,7 +15,10 @@ const cut = headline.indexOf('. ') + 1
           {{ headline.slice(0, cut) }}<br />
           <em>{{ headline.slice(cut + 1) }}</em>
         </h1>
-        <p>{{ firstLine }}</p>
+        <p>
+          {{ firstLine }} You own what the system is for; CLM reconciles the code to it, change after
+          change.
+        </p>
         <div class="ctas">
           <a class="btn p" href="/guide/quickstart">Get started</a>
           <a class="btn s" href="#how-it-works">How it works ↓</a>
