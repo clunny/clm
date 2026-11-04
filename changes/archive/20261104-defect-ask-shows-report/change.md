@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # The defect ask shows the report it asks about
