@@ -28,8 +28,10 @@ The design isn't wrong: the link is meant to be an icon and a count, and the fix
 
 ## Constraints and edge cases
 
-- The fallback label `GitHub` (no count) gets the same layout; the scenario tests the count case only, since the markup is the same.
-- At phone widths VitePress moves nav links into its menu; the scenario measures at 1280×800 only.
+- The fallback label `GitHub` (no count) gets the same layout, as the requirement says; the scenario measures the count case only, since the markup is the same.
+- At narrow widths VitePress moves nav links into its menu; the requirement doesn't cover the menu, and the scenario measures at 1280×800 only.
+- Centres are bounding-box centres, not glyph ink: the only reading a browser test can measure.
+- The builder check found the requirement relies on no requirement that isn't current.
 
 ## Open questions
 
