@@ -155,7 +155,7 @@ fn empty_repository() {
     );
     let script = read(&dir, "scripts/clm-check.sh");
     assert!(script.starts_with("#!/usr/bin/env bash\n"), "{script}");
-    assert!(script.lines().any(|l| l == "cargo test"), "{script}");
+    assert!(script.contains("cargo test"), "{script}");
     let toml = read(&dir, "clm.toml");
     assert!(toml.contains("command = [\"cargo-machete\"]"), "{toml}");
     assert!(toml.lines().any(|l| l == "host = \"github\""), "{toml}");
@@ -593,7 +593,7 @@ fn existing_codebase() {
     assert_eq!(config(&dir, "detectors"), "");
     // The check script still builds the language.
     let script = read(&dir, "scripts/clm-check.sh");
-    assert!(script.lines().any(|l| l == "cargo test"), "{script}");
+    assert!(script.contains("cargo test"), "{script}");
 }
 
 #[test]
@@ -1305,6 +1305,117 @@ fn upgrade_adds_the_ignore_lines() {
         );
         assert_eq!(read(&dir, ".gitignore"), after);
     }
+}
+
+/// A directory holding executables `names`, each appending its name and arguments as a line
+/// to `log` and exiting `code`.
+fn stubs(names: &[&str], code: i32) -> TempDir {
+    let dir = TempDir::new().unwrap();
+    let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+    for name in names {
+        let script = format!(
+            "#!/bin/sh\nprintf '{name} %s\\n' \"$*\" >> '{log}'\nexit {code}\n",
+            log = dir.path().join("log").display(),
+        );
+        let path = dir.path().join(name);
+        fs::write(&path, script).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    dir
+}
+
+/// Runs `scripts/clm-check.sh` of `dir` from `cwd` with `stubs` first on `PATH`.
+fn run_check_script(dir: &Path, cwd: &Path, stubs: &TempDir) -> Output {
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+    Command::new("bash")
+        .arg(dir.join("scripts/clm-check.sh"))
+        .current_dir(cwd)
+        .env("PATH", path_with(stubs))
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn empty_repository_every_language() {
+    // req:init/init-without-manifest@30800928
+    let (_tmp, dir) = repo();
+    let failing = stubs(&["cargo", "npm", "pytest"], 1);
+    init(
+        &dir,
+        &["--lang", "rust", "--lang", "typescript", "--lang", "python"],
+        &fake_hosts(),
+    );
+    let toml = read(&dir, "clm.toml");
+    assert!(
+        toml.contains("command = [\"node_modules/.bin/knip\"]"),
+        "{toml}"
+    );
+    for manifest in ["Cargo.toml", "package.json", "pyproject.toml"] {
+        assert!(
+            toml.contains(&format!("requires = \"{manifest}\"\n")),
+            "{manifest}: {toml}"
+        );
+    }
+    let check = clm(&dir, &["check"], &path_with(&failing));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+    let err = String::from_utf8_lossy(&check.stderr);
+    for detector in [
+        "rust-unused-dependencies",
+        "typescript-dead-code",
+        "python-dead-code",
+    ] {
+        assert!(err.contains(detector) && err.contains("skipped"), "{err}");
+    }
+    // From the root and from elsewhere, the script finds nothing to run and passes.
+    fs::create_dir(dir.join("sub")).unwrap();
+    for cwd in [&dir, &dir.join("sub")] {
+        let script = run_check_script(&dir, cwd, &failing);
+        assert_eq!(script.status.code(), Some(0), "{script:?}");
+    }
+    assert_eq!(host_calls(&failing), "", "a stub ran");
+}
+
+#[test]
+fn manifest_added_later() {
+    // req:init/init-without-manifest@30800928
+    let (_tmp, dir) = repo();
+    init(
+        &dir,
+        &["--lang", "typescript", "--lang", "python"],
+        &fake_hosts(),
+    );
+    write(&dir, "package.json", "{}\n");
+    let recorder = stubs(&["npm", "pytest"], 0);
+    fs::create_dir(dir.join("sub")).unwrap();
+    let out = run_check_script(&dir, &dir.join("sub"), &recorder);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(host_calls(&recorder), "npm ci\nnpm test\n");
+    // `setup.py` alone counts for Python.
+    write(&dir, "setup.py", "");
+    let out = run_check_script(&dir, &dir, &recorder);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(host_calls(&recorder).ends_with("pytest \n"));
+}
+
+#[test]
+fn dependencies_not_installed() {
+    // req:init/init-without-manifest@30800928
+    let (_tmp, dir) = repo();
+    write(&dir, "package.json", "{}\n");
+    init(&dir, &["--lang", "typescript"], &fake_hosts());
+    let check = clm(&dir, &["check"], &path_with(&fake_hosts()));
+    assert_eq!(check.status.code(), Some(1), "{check:?}");
+    let err = String::from_utf8_lossy(&check.stdout);
+    let line = err
+        .lines()
+        .find(|l| l.starts_with("clm.toml: check/detectors: typescript-dead-code could not run:"))
+        .unwrap_or_else(|| panic!("{err}"));
+    assert!(
+        line.ends_with(
+            "; install with: npm ci (or npm install --save-dev knip when package.json doesn't list it)"
+        ),
+        "{line}"
+    );
 }
 
 /// The offset just past the heading of CLM's own architecture entry `slug`,
