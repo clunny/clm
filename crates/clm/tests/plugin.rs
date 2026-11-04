@@ -863,7 +863,7 @@ fn skills_point_at_the_guide() {
 
 #[test]
 fn skills_run_a_builder_check() {
-    // req:plugin/builder-check@290077ea
+    // req:plugin/builder-check@db60baf8
     // The check is a numbered step of its own, which says all of this itself, so text
     // elsewhere in the skill can't stand in for it.
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
@@ -924,6 +924,29 @@ fn skills_run_a_builder_check() {
     ] {
         assert!(removal.contains(needle), "{needle}: {removal}");
     }
+    // A rename is two requirements of the provider: an adding one beside the old name, and a
+    // removing one that needs each user's move.
+    let rename = steps[check]
+        .lines()
+        .find(|l| l.contains("`rename-adds-then-removes`"))
+        .expect("skills/propose/SKILL.md's builder check must mention `rename-adds-then-removes`");
+    for needle in [
+        "two requirements of the provider",
+        "offers the new name beside the old",
+        "a second name, never a widened type",
+        "needs each user's move",
+        "no cycle",
+        "`clm:remove-by`",
+        "`expand-contract`",
+    ] {
+        assert!(rename.contains(needle), "{needle}: {rename}");
+    }
+    assert!(
+        removal.contains(
+            "exhaustive ones (a `match`, a `switch` with no default, a map keyed by the type) included"
+        ),
+        "{removal}"
+    );
     // A removal that can't carry that `#### Needs` goes in a second, deferred change.
     let deferred = steps[check]
         .lines()
@@ -972,6 +995,7 @@ fn skills_run_a_builder_check() {
     for needle in [
         "contract-removal-needs",
         "contract-step-deferred",
+        "rename-adds-then-removes",
         "builds nothing",
         "builder-check-asks-order",
         "its own component",
@@ -1012,7 +1036,7 @@ fn skills_run_a_builder_check() {
 
 #[test]
 fn builder_check_reapplies_through_rebase() {
-    // req:plugin/builder-check@290077ea
+    // req:plugin/builder-check@db60baf8
     // By the builder check the change is `applied`, and `clm apply` refuses an applied
     // change (`apply/change-status`): a delta edited then reaches `specs/` through
     // `clm rebase`, which regenerates it from the applied deltas.
@@ -1799,7 +1823,7 @@ fn triage_skill_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn triage_launches_drafts() {
-    // req:plugin/triage-skill@c464c44a
+    // req:plugin/triage-skill@d7e0d41f
     let (fm, body) = frontmatter(&plugin().join("skills/triage/SKILL.md"));
     assert!(fm["description"].as_str().is_some_and(|d| !d.is_empty()));
     assert_eq!(triage_skill_gaps(&body), Vec::<String>::new());
@@ -3653,7 +3677,8 @@ const OWN_MODEL: &str = "the session's own model";
 fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
     let must: &[&str] = match skill {
         "build" => &["--review-model", SONNET, OWN_MODEL],
-        "triage" => &[SONNET, OWN_MODEL],
+        "triage" | "propose" => &[SONNET, OWN_MODEL],
+        "contribution" => &[OWN_MODEL],
         _ => &[SONNET],
     };
     text_gaps(skill, body, must, &[])
@@ -3661,12 +3686,25 @@ fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn launch_models() {
-    // req:plugin/launch-models@9889a628
+    // req:plugin/launch-models@f7550b3b
     for skill in ["build", "triage", "propose", "health", "init"] {
         let body = skill_body(skill);
         assert_eq!(launch_model_gaps(skill, &body), Vec::<String>::new());
     }
-    for agent in ["spec-auditor", "spec-slimmer"] {
+    let contribution = skill_body("contribution");
+    assert_eq!(
+        launch_model_gaps("contribution", &contribution),
+        Vec::<String>::new()
+    );
+    let gaps = launch_model_gaps("contribution", &contribution.replace(OWN_MODEL, "elided"));
+    assert_reports(&gaps, "contribution", OWN_MODEL);
+    // Each skill's `architecture-auditor` launch names the session's own model.
+    for skill in ["propose", "contribution"] {
+        let text = skill_body(skill);
+        let launch = sentence_with(&text, "architecture-auditor");
+        assert!(launch.contains(OWN_MODEL), "{skill}: {launch}");
+    }
+    for agent in ["spec-auditor", "architecture-auditor", "spec-slimmer"] {
         let (fm, _) = frontmatter(&plugin().join(format!("agents/{agent}.md")));
         assert_eq!(
             fm["model"], "sonnet",
@@ -4496,4 +4534,152 @@ fn propose_adds_glossary_terms() {
         let gaps = glossary_terms_gaps(&body.replace(word, "elided"));
         assert!(gaps.iter().any(|g| g.contains(word)), "{word}: {gaps:?}");
     }
+}
+
+/// What `architecture-auditor` asks of the agent's frontmatter and prompt, one line per gap.
+fn architecture_auditor_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
+    let tools = agent_tools(fm);
+    let mut gaps: Vec<String> = ["Edit", "Write", "NotebookEdit"]
+        .into_iter()
+        .filter(|tool| tools.iter().any(|t| t == tool))
+        .map(|tool| format!("architecture-auditor: may not have `{tool}`"))
+        .collect();
+    gaps.extend(
+        [
+            "ARCHITECTURE.md",
+            "git diff origin/main...HEAD",
+            "clm context",
+            "docs/decisions/",
+            "untrusted",
+            "no findings",
+            "git switch",
+            "git checkout",
+            "git stash",
+            "git reset",
+            "`cd`",
+            "severity",
+            "Never edit",
+        ]
+        .into_iter()
+        .filter(|needle| !body.contains(needle))
+        .map(|needle| format!("architecture-auditor: must name `{needle}`")),
+    );
+    gaps
+}
+
+#[test]
+fn architecture_auditor() {
+    // req:plugin/architecture-auditor@a35bc748
+    let (fm, body) = frontmatter(&plugin().join("agents/architecture-auditor.md"));
+    assert_eq!(fm["name"], "architecture-auditor");
+    assert!(
+        fm["description"]
+            .as_str()
+            .is_some_and(|d| d.contains("ARCHITECTURE.md"))
+    );
+    assert_eq!(architecture_auditor_gaps(&fm, &body), Vec::<String>::new());
+    // It reads each constraint's text and reports constraints, gaps and decisions with quotes.
+    for needle in [
+        "each constraint's text",
+        "each gap",
+        "each decision",
+        "quoting its sentence",
+        "the element of the change",
+        "`clm:remove-by`",
+        "outside-contributions-are-intent",
+    ] {
+        assert!(body.contains(needle), "{needle}");
+    }
+    // auditor that can edit
+    let mut with_write = fm.clone();
+    with_write["tools"] = "Read, Glob, Grep, Bash, Write".into();
+    let gaps = architecture_auditor_gaps(&with_write, &body);
+    assert_eq!(gaps, ["architecture-auditor: may not have `Write`"]);
+    // auditor that reads only the names
+    let gaps = architecture_auditor_gaps(&fm, &body.replace("docs/decisions/", "elided"));
+    assert_eq!(gaps, ["architecture-auditor: must name `docs/decisions/`"]);
+}
+
+/// What `architecture-audit` asks of a skill's text.
+fn architecture_audit_gaps(skill: &str, body: &str) -> Vec<String> {
+    let must: &[&str] = match skill {
+        "propose" => &[
+            "architecture-auditor",
+            "## Open questions",
+            "spec-architecture-audit",
+        ],
+        _ => &["architecture-auditor"],
+    };
+    text_gaps(skill, body, must, &[])
+}
+
+#[test]
+fn architecture_audit() {
+    // req:plugin/architecture-audit@504aa12b
+    let propose = skill_body("propose");
+    assert_eq!(
+        architecture_audit_gaps("propose", &propose),
+        Vec::<String>::new()
+    );
+    let steps = numbered_steps(&propose);
+    let check = steps
+        .iter()
+        .find(|s| s.contains("Run a builder check"))
+        .expect("builder check step");
+    for needle in [
+        "architecture-auditor",
+        "## Open questions",
+        "spec-architecture-audit",
+        "same message",
+        "only the change ID and the path of this checkout",
+        "advises and never gates",
+    ] {
+        assert!(check.contains(needle), "{needle}");
+    }
+    let launch = sentence_with(check, "`architecture-auditor`");
+    assert!(launch.contains(OWN_MODEL), "{launch}");
+    let contribution = skill_body("contribution");
+    assert_eq!(
+        architecture_audit_gaps("contribution", &contribution),
+        Vec::<String>::new()
+    );
+    let audit = contribution.find("architecture-auditor").unwrap();
+    assert!(audit < contribution.find("Land by the first line").unwrap());
+    let ask = sentence_with(&contribution, "reports findings");
+    assert!(ask.contains("ask before landing"), "{ask}");
+    // a propose skill without the audit
+    let gaps = architecture_audit_gaps(
+        "propose",
+        &propose.replace("architecture-auditor", "elided"),
+    );
+    assert_reports(&gaps, "propose", "architecture-auditor");
+}
+
+#[test]
+fn triage_revises_a_declined_fold() {
+    // req:plugin/triage-revises-declined-fold@94dd9989
+    let body = skill_body("triage");
+    let step = numbered_steps(&body)
+        .into_iter()
+        .find(|s| s.contains("clm approve spec/<batch>"))
+        .expect("approval step");
+    for needle in [
+        "different design",
+        "clm rebase",
+        "--force-with-lease",
+        "triage-revises-declined-fold",
+        "ask again",
+        "the one design",
+        "plain no",
+    ] {
+        assert!(step.contains(needle), "{needle}");
+    }
+    // a skill that only leaves the branch
+    let gaps = text_gaps(
+        "triage",
+        &body.replace("triage-revises-declined-fold", "elided"),
+        &["triage-revises-declined-fold"],
+        &[],
+    );
+    assert_reports(&gaps, "triage", "triage-revises-declined-fold");
 }
