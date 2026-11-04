@@ -239,6 +239,39 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
     })
 }
 
+/// The files `head` changes against `base` from their merge base, as `classify` reads them,
+/// that aren't spec paths, sorted; none when `rename/replay` accepts `head`
+/// (`gate/files-outside-spec-paths`). `head` is read only as a revision, as `evaluate_at` does.
+pub fn files_outside_spec_paths(
+    repo: &Path,
+    base: &str,
+    head: &str,
+) -> Result<Vec<String>, String> {
+    let head = clm_git::git(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            &format!("{head}^{{commit}}"),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
+    let mut files: Vec<String> = changed_files(repo, &format!("{base}...{head}"))?
+        .into_iter()
+        .map(|(_, path)| path)
+        .filter(|path| !is_spec_path(path))
+        .collect();
+    files.sort();
+    if !files.is_empty()
+        && clm_rename::replays(repo, &merge_base, &head).map_err(|e| e.to_string())?
+    {
+        files.clear();
+    }
+    Ok(files)
+}
+
 /// The `change.md` text at `HEAD` of the one change the branch adds, when it is exactly one
 /// and its frontmatter sets a non-empty `renames`: the only branch `rename/replay` can
 /// accept, so no other pays for the replay.
