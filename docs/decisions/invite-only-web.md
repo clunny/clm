@@ -13,3 +13,5 @@ Revisit when CLM opens to other teams: sign-up, or access by App installation al
 (Amended 2026-10-29, `20261029-refounding`: since `yes-no-review`, a spec edit needs review only when its change declares a burden, so adding a login to the list lands on checks. The human accepted that at the re-founding's second touchpoint: the list stays in `web`'s Contract, so the Worker keeps one copy, and adding someone no longer waits for a human.)
 
 (Amended 2026-11-01, `20261101-public-site`: the public site at `clm-app.dev`'s root is part of the web app and stays behind the invited list until the human publishes it (`backlog/publish-the-site`). Then only the site's pages open to everyone, this decision is amended again, and the app stays invite-only.)
+
+(Amended 2026-11-03, `20261103-publish-the-site`: the human published the site. Its pages are open to everyone, served by the assets with no Worker code (`site-served-from-assets`). The list still decides who signs in to the app under `/app/` and reaches its API, and the guide is part of the site, so it is public too.)
