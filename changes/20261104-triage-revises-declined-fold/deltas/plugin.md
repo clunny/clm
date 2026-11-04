@@ -53,10 +53,40 @@ Builds use superpowers as `unattended-superpowers` decides; their prompt is `orc
 **No eval cases** (`cut-evals`). The plugin has no `evals/` directory. The skills' tests read their text, `claude plugin validate plugin` checks that Claude Code loads the plugin (`ci/plugin-validate`), and a skill's behaviour is judged where it is used, in sessions.
 
 
+## MODIFIED Requirements
+
+### Requirement: triage-skill <!-- base: c464c44aac15cb3b -->
+The plugin SHALL ship `skills/triage/SKILL.md` with a `description` in its frontmatter. It SHALL tell Claude to say once, before the first draft, that drafts run under the session's permission mode, and never to refuse a mode; to run `clm triage` and, for each `group` line the human picked (`triage-menu`), `clm draft <slug>...` with its items, passing its stdout, only when it exits 0, to the Agent tool as a background subagent with `isolation: "worktree"`, one per group, in parallel; never to design in its own context, except to revise a fold the human declines with a different design (`triage-revises-declined-fold`); to read each subagent's closing line, `landed <sha>` for a change that needed no review, `proposed <id> review` for one that needs review, or `stopped: <reason>`, and its `left <slug>:` lines; once every draft has returned, to run `clm draft --fold <id>...` with the IDs of the `proposed <id> review` closings, in the order of the `group` lines the drafts came from, and pass its stdout, only when it exits 0, to the Agent tool as one background subagent with `isolation: "worktree"`; to read the fold's closing line, `proposed <batch> review <url>` or `stopped: <reason>`, and its `left <id>:` lines; then to ask the human once whether they approve the intent of every folded change, never an `open` or `main` line's, showing the fold pull request's link, `## Intent`, `## Decisions` and `## Open questions`, and on a yes to run `clm approve spec/<batch>`, through the guard's confirmation, then `clm land spec/<batch>`, and once it has landed `clm draft --finish <id>` for each folded draft and then, when `<batch>` isn't one of their IDs, `clm draft --finish <batch>` from its own checkout, not the fold's worktree, which removes the fold's own worktree and branch; and to end with `clm wrap-up` and a summary naming the fold's branch when it is left open, the changes the fold left, the `human` lines and the items drafts left, sorted by the reason on the `left <slug>:` lines before each draft's closing line: `components corrected to <components>` lists it as a bug moved to those components, which `clm triage` drafts there once the draft's change has landed; and any other reason lists it with that reason as left, its claim released by `clm draft --finish`, so it can be drafted again once what it waited on is settled. The summary SHALL NOT say a moved item needs the human. It SHALL tell Claude never to push `main` by any means but `clm land`, never to run `clm approve` without the human's yes in the conversation and the guard's confirmation, and never to retry a `stopped` draft or fold. It SHALL NOT name `gh pr`, `gh api`, `spec-approved`, `spec-review`, `clm watch` or `clm hash`.
+
+#### Scenario: triage launches subagents
+- GIVEN the plugin's `skills/triage/SKILL.md`
+- WHEN a test reads it
+- THEN it contains `clm triage`, `clm draft`, `clm draft --fold`, `Agent`, `background`, `isolation: "worktree"`, `manual`, `landed <sha>`, `proposed <id> review`, `proposed <batch> review <url>`, `stopped:`, `left <slug>`, `components corrected to`, `left <id>`, `open`, `clm approve spec/<batch>`, `clm land spec/<batch>`, `clm draft --finish <batch>`, `claim released by` and `clm wrap-up`
+
+#### Scenario: triage without the approval rule
+- GIVEN a `triage` `SKILL.md` that doesn't mention `clm approve`
+- WHEN the test's check runs on it
+- THEN it reports the skill and `clm approve`
+
+#### Scenario: triage naming a label
+- GIVEN a `triage` `SKILL.md` that mentions `spec-approved`
+- WHEN the test's check runs on it
+- THEN it reports `spec-approved`
+
+#### Serves
+- capability/triage-unattended
+
+#### Needs
+- clm/renamed-commands
+- orchestrator.triage/draft
+- orchestrator.triage/draft-finish
+- orchestrator.triage/fold
+- orchestrator.triage/draft-corrects-bug-components
+
 ## ADDED Requirements
 
 ### Requirement: triage-revises-declined-fold
-`skills/triage/SKILL.md` SHALL tell Claude, in the step that asks the human to approve a fold's intent, that on a no that comes with a different design (an answer the human gives in the session about what a folded change should do instead) it revises the fold as `skills/propose/SKILL.md`'s step 12 revises a declined change: it discusses what to change, switches into the worktree that holds `spec/<batch>` as `triage-enters-branch-worktree` says, edits the declined change there, re-applies it with `clm rebase` until its last line is `rebase ok`, pushes with `git push --force-with-lease`, asks again, and on a yes approves and lands it as on a first yes. It SHALL say that this is the one design the session does in its own context, since the human is in the conversation and `clm draft` can't take the item again while the fold's branch still proposes it, and that on a plain no, with no different design, it leaves the branch as before.
+`skills/triage/SKILL.md` SHALL tell Claude, in the step that asks the human to approve a fold's intent, that on a no that comes with a different design (an answer the human gives in the session about what a folded change should do instead) it revises the fold as `skills/propose/SKILL.md`'s step 12 revises a declined change: it discusses what to change, switches into the worktree that holds `spec/<batch>` as `triage-enters-branch-worktree` says for work on the branch, edits there each folded change the human's answer concerns, re-applies it with `clm rebase` until its last line is `rebase ok`, pushes with `git push --force-with-lease`, asks again, and on a yes approves and lands it as on a first yes. It SHALL say that this is the one design the session does in its own context, since the human is in the conversation and `clm draft` can't take the item again while the fold's branch still proposes it, and that on a plain no, with no different design, it leaves the branch as before.
 
 #### Scenario: skill revises a declined fold
 - GIVEN the plugin's `skills/triage/SKILL.md`

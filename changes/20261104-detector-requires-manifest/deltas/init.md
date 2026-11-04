@@ -33,10 +33,48 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 
 **Links stay inside the guide** (`guide-links-inside`). A guide page's links must work wherever the page is read: in `clm guide`'s output in an adopter's project and on GitHub. The page's directory is `docs/guide/`, or `docs/` for `spec-format`. CLM's own repository files, its decisions and its `ARCHITECTURE.md`, are named in prose as CLM's repository, never linked, since an adopter's project has neither. The rule is a function over a page's file path and Markdown, with the set of page files, so its own tests feed it failing and passing cases without touching `docs/`. A link whose target is wrapped in `<...>` or followed by a title (`[t](x.md "title")`) is judged by its path alone. Reference-style definitions (`[label]: target`) and autolinks (`<https://...>`) aren't inline links and aren't read. The scanner is hand-written, with no Markdown dependency: it skips fenced blocks (```` ``` ```` or `~~~` fences) and code spans of any backtick count, and doesn't exempt indented blocks, which the guide doesn't use; link text may nest brackets and a target may hold balanced parentheses, as in CommonMark. A scheme is `[A-Za-z][A-Za-z0-9+.-]*:`. A relative path is normalised lexically (`./x.md` is `x.md`, `a/../x.md` is `x.md`), and one that climbs above the repository root, or keeps a `?` query, fails. Two pages with one name, such as a later `docs/guide/spec-format.md`, fail the tests, as they should. The scenarios that run the binary are proved in `crates/clm/tests/guide.rs`, where `init/guide-command`'s binary tests are.
 
+## MODIFIED Requirements
+
+### Requirement: init-files <!-- base: e92fe31e9fabeb33 -->
+`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `clm.toml` SHALL set `host` (from `--host`, else from `origin`'s URL: `github` for a GitHub URL, `git` for any other, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, the rules `clm` enforces. On the result, `clm check` SHALL pass. Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh`.
+
+#### Scenario: empty repository
+- GIVEN an empty git repository whose `origin` is `https://github.com/o/r.git`
+- WHEN `clm init --lang rust` runs
+- THEN all six files exist, `clm-check.sh` is executable and holds `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, `.github/` doesn't exist, and `clm check` exits 0
+
+#### Scenario: human layers
+- GIVEN an empty git repository, and another holding a `CAPABILITIES.md` of its own
+- WHEN `clm init` runs in each
+- THEN in the first `clm hashes architecture` and `clm hashes capability` list nothing, `clm pending` lists nothing, and `ARCHITECTURE.md` names each rule `clm` enforces, and in the second `CAPABILITIES.md` is unchanged and the output says `kept CAPABILITIES.md`
+
+#### Scenario: no remote
+- GIVEN an empty git repository with no remote
+- WHEN `clm init` runs
+- THEN `clm.toml` holds `host = "none"`
+
+#### Scenario: host given
+- GIVEN the GitHub repository above
+- WHEN `clm init --host git` runs
+- THEN `clm.toml` holds `host = "git"`
+
+#### Scenario: project files kept
+- GIVEN a repository with its own `CLAUDE.md` and `clm.toml`
+- WHEN `clm init` runs
+- THEN both are unchanged, and the output lists `kept CLAUDE.md` and `kept clm.toml`
+
+#### Scenario: not a repository
+- GIVEN a directory that isn't in a git repository
+- WHEN `clm init` runs
+- THEN it exits 1 and the directory is unchanged
+
+#### Needs
+- model/human-layers
+
 ## ADDED Requirements
 
 ### Requirement: init-without-manifest
-For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL run the language's line only when, as the script runs, its manifest exists in the CLM root: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
+For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first change to the CLM root (the parent of the script's own directory), wherever it is run from, and then run each language's line only when its manifest exists there: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
 
 #### Scenario: empty repository, every language
 - GIVEN an empty git repository, and on `PATH` a `cargo`, `npm` and `pytest` that each exit 1
@@ -57,4 +95,4 @@ For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL run t
 - capability/adopt-clm
 
 #### Needs
-- check/detector-requires
+- clm/check-passes-requires
