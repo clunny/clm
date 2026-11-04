@@ -12,10 +12,11 @@ const MARK: &str = concat!("clm", ":reads ");
 pub fn reads_in(text: &str) -> Vec<String> {
     text.match_indices(MARK)
         .filter_map(|(at, _)| {
-            let glob = text[at + MARK.len()..].split_whitespace().next()?;
-            // `split_whitespace` skips leading whitespace, so check the glob starts right there.
-            let starts_here = !text[at + MARK.len()..].starts_with(char::is_whitespace);
-            starts_here.then(|| glob.to_string())
+            let rest = &text[at + MARK.len()..];
+            if rest.starts_with(char::is_whitespace) {
+                return None;
+            }
+            rest.split_whitespace().next().map(str::to_string)
         })
         .collect()
 }

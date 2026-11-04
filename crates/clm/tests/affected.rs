@@ -439,7 +439,7 @@ fn readers_alone_print_no_node_or_all_line() {
 
 #[test]
 fn readers_alone_ignore_the_graph_and_the_settings() {
-    // req:check.affected/affected-readers@94edd10f
+    // The Design's rule: the question is only which tests read what changed.
     let dir = readers_repo();
     let root = dir.path();
     write(root, "clm.toml", "[affected]\nall = 3\n");
@@ -451,6 +451,33 @@ fn readers_alone_ignore_the_graph_and_the_settings() {
     assert_eq!(
         stdout(&out),
         "file crates/e/tests/r.rs\nfile crates/e/tests/s.rs\n"
+    );
+}
+
+#[test]
+fn readers_alone_with_owned_code_changed_and_a_reader_in_an_affected_component() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = readers_repo();
+    let root = dir.path();
+    // `a`'s reader sorts before the selected `crates/a/src/lib.rs`, and `a` is affected.
+    write(
+        root,
+        "crates/a/src/aa.rs",
+        &format!("// {READS}ARCHITECTURE.md\n"),
+    );
+    commit_all(root, "reader in a");
+    git(root, &["branch", "-f", "main"]);
+    write(root, "ARCHITECTURE.md", "# B\n");
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    let full = clm_affected(root, "main");
+    assert_eq!(
+        stdout(&full),
+        "node a\nnode b\nnode c\nfile crates/a/src/aa.rs\nfile crates/a/src/lib.rs\nfile crates/b/src/lib.rs\nfile crates/c/src/lib.rs\nfile crates/e/tests/r.rs\n"
+    );
+    let only = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(
+        stdout(&only),
+        "file crates/a/src/aa.rs\nfile crates/e/tests/r.rs\n"
     );
 }
 
