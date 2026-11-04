@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to release, MAJOR.MINOR.PATCH
+        description: Version to release, as MAJOR.MINOR.PATCH with no leading v, such as 0.14.0
         required: true
         type: string
 
