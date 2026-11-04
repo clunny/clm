@@ -25,6 +25,8 @@ import { ago } from './time';
 import type { Architecture, Capabilities, DecisionKind, Implementation, Rating, Repo, Review, Snapshot, SpecBranch } from './types';
 
 const INSTALL = 'https://github.com/apps/clm-spec-review/installations/new';
+/** Where the sign-in page sends a person who wants the web app (the one place the app names it). */
+const EARLY_ACCESS = 'https://github.com/clunny/clm/issues/new?template=early-access.yml';
 /** How often the view on screen is asked for again, matching the Worker's live-state cache. */
 const REFRESH_MS = 60_000;
 
@@ -153,11 +155,22 @@ async function load<T>(path: string): Promise<T> {
 /** The Worker path of the review of `t`. */
 const reviewUrl = (base: string, t: Target) => `${base}/${reviewPath(t)}/review`;
 
+/** The `◆ CLM` logo, a plain link to the site's homepage rather than a route of the app. */
+const logo = () => el('a', { class: 'logo', href: '/' }, el('i', {}, '◆'), 'CLM');
+
 function signIn(): HTMLElement {
   return div(
     'card signin',
-    div('logo', el('i', {}, '◆'), 'CLM'),
+    logo(),
     el('h1', {}, 'Spec review'),
+    el(
+      'p',
+      {},
+      'CLM works fully without the web app: follow the ',
+      el('a', { href: '/guide/quickstart' }, 'quickstart'),
+      '. The web app is an optional extra for convenience, in early access.',
+    ),
+    el('p', {}, el('a', { href: EARLY_ACCESS }, 'Request early access')),
     el('p', {}, 'Sign in with GitHub to see the CLM repos you can read.'),
     el('a', { class: 'btn pri', href: '/auth/login' }, 'Sign in with GitHub'),
     el('p', {}, el('a', { href: INSTALL }, 'Install the GitHub App'), ' on the repos you want here.'),
@@ -201,7 +214,7 @@ function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: Spec
   const sidebar = el(
     'aside',
     { class: 'sidebar' },
-    div('logo', el('i', {}, '◆'), 'CLM'),
+    logo(),
     div(
       '',
       repoPicker(list, route),
@@ -222,7 +235,7 @@ function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: Spec
         ),
       ),
     ),
-    div('', el('a', { class: 'nv', href: INSTALL }, 'Add repos')),
+    div('', el('a', { class: 'nv', href: '/guide/' }, 'Guide'), el('a', { class: 'nv', href: INSTALL }, 'Add repos')),
   );
   const tabbar = el(
     'nav',
@@ -237,7 +250,7 @@ function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: Spec
       ),
     ),
   );
-  const mtop = div('mtop', repoPicker(list, route), notifySwitch());
+  const mtop = div('mtop', el('a', { class: 'home', href: '/', 'aria-label': 'CLM homepage' }, '◆'), repoPicker(list, route), notifySwitch());
   const now = Math.floor(Date.now() / 1000);
   const from = shownFrom();
   const stale = refreshFailing && Date.now() - lastGood >= STALE_MS;

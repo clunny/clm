@@ -37,6 +37,7 @@ button{font:inherit}
 .app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100vh}
 .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:18px 14px;display:flex;flex-direction:column;gap:18px;position:sticky;top:0;height:100vh}
 .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.2px}
+.logo{color:inherit;text-decoration:none}
 .logo i{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#8b9cff,#5cc8ff);display:grid;place-items:center;font-style:normal;color:#0b0e14;font-size:13px}
 .repo{border:1px solid var(--border);background:var(--surface2);border-radius:10px;padding:6px 8px;font-size:13px;width:100%;color:var(--text)}
 .repo-meta{display:block;color:var(--muted);font-size:11px;margin:4px 2px 0}
@@ -306,6 +307,7 @@ table.caps td a{color:var(--text);text-decoration:none}
   .tabbar .bdg{position:absolute;top:-4px;right:6px;background:var(--amber);color:#1a1300;font-size:9px;font-weight:700;border-radius:9px;padding:0 5px}
   .mtop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
   .mtop select{max-width:60vw}
+  .mtop .home{color:var(--accent);text-decoration:none;font-size:18px;padding:4px 6px}
   .head h1{font-size:19px}
   .prhead,.doc,.gwrap,.runs,.full{grid-template-columns:minmax(0,1fr)}
   .stat .v{font-size:20px}

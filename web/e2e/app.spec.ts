@@ -949,3 +949,50 @@ test.describe('latest navigation wins', () => {
     await expect(page.locator('button.approve')).toBeVisible();
   });
 });
+
+// req:web/links-to-site@110ad07e
+test.describe('links to the site', () => {
+  test('desktop sidebar: the logo links to / and Guide sits beside Add repos', async ({ page, context }) => {
+    await mockApi(context);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=a]')).toBeVisible();
+    await expect(page.locator('.sidebar a.logo')).toHaveAttribute('href', '/');
+    const guide = page.locator('.sidebar a', { hasText: /^Guide$/ });
+    await expect(guide).toHaveAttribute('href', '/guide/');
+    const sameFoot = await page.evaluate(() => {
+      const links = [...document.querySelectorAll('.sidebar a')];
+      const g = links.find((a) => a.textContent === 'Guide');
+      const add = links.find((a) => a.textContent === 'Add repos');
+      return g !== undefined && add !== undefined && g.parentElement === add.parentElement;
+    });
+    expect(sameFoot).toBe(true);
+  });
+
+  test('phone top bar: begins with a homepage link before the repo switcher', async ({ page, context }) => {
+    await mockApi(context);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=a]')).toBeVisible();
+    const first = page.locator('.mtop > *').first();
+    await expect(first).toHaveAttribute('href', '/');
+    await expect(first).toHaveAttribute('aria-label', /CLM homepage/);
+    expect(await page.locator('.mtop > *').evaluateAll((els) => els.findIndex((e) => e.tagName === 'SELECT'))).toBe(1);
+  });
+});
+
+// req:web/sign-in-early-access@50c354b1
+test('the sign-in page says CLM works without the web app and links to early access', async ({ page, context }) => {
+  await context.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
+  await page.goto('/app/');
+  const card = page.locator('.signin');
+  await expect(card).toBeVisible();
+  await expect(card.locator('a.logo')).toHaveAttribute('href', '/');
+  await expect(card).toContainText('CLM works fully without the web app');
+  await expect(card).toContainText('optional extra');
+  await expect(card).toContainText('early access');
+  await expect(card.locator('a[href="/guide/quickstart"]')).toBeVisible();
+  await expect(card.locator('a', { hasText: 'Request early access' })).toHaveAttribute('href', 'https://github.com/clunny/clm/issues/new?template=early-access.yml');
+  await expect(card.locator('a', { hasText: 'Sign in with GitHub' })).toHaveAttribute('href', '/auth/login');
+  await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toBeVisible();
+});
