@@ -1,102 +1,80 @@
 # Using CLM
 
-Day to day, you do two things: say what should change, and review it. Claude does the rest.
+Day to day you do two things: say what should change, and say yes to it. Claude does the rest through a handful of workflows.
 
-## Where to look
+## The workflows
 
-- `clm status`: components with requirements proven, changes in flight, the backlog by kind, and live claims. Claude Code shows it at the start of every session.
-- `clm backlog`: ideas, deferred work, questions, human steps and bugs.
-- `clm next`: work ready to be built.
-- The web app at [clm-app.dev/app/](https://clm-app.dev/app/), if you've been invited (the site and this guide, at [clm-app.dev](https://clm-app.dev), are open to everyone): the spec graph, spec branches, implementation progress and the backlog. It also takes a new proposal for the backlog, which the next build's `clm rebase` files as an `idea` item.
+| Run | When |
+|---|---|
+| `/clm:init` | once, to bring a repository under CLM (see the [Quickstart](quickstart.md)) |
+| `/clm:propose` | you want the system to do something new or different |
+| `/clm:build` | there is approved work to build |
+| `/clm:triage` | the backlog has piled up: approvals, questions for you, bugs, ideas |
+| `/clm:health` | you want to know what to tidy, cut or rethink |
 
-## The spec
+A typical loop is: propose a change, approve it, build it. Triage whenever the backlog grows.
 
-`specs/` is a tree of components, one `SPEC.md` each. A component has:
+## Propose a change: `/clm:propose`
 
-- a **Contract**: what other components may rely on;
-- a **Design**: how it works inside, for whoever builds it;
-- **Requirements**, each with an ID such as `billing/refund-window` and at least one scenario (GIVEN, WHEN, THEN);
-- frontmatter: the `paths` of code it owns, and what it `depends_on`.
+Run `/clm:propose` and say what you want, in your own words, or name a backlog item. Claude:
 
-Significant choices are recorded one per file in `docs/decisions/`. The format is in the guide's [spec format](../spec-format.md) page (`clm guide spec-format`).
+1. talks it through with you until it understands what you want and why;
+2. lays out two or three ways to do it, recommends one, and asks you to pick;
+3. writes the design: which parts of the system change, the rules they must now meet, and any choices worth recording;
+4. lands it, at once when it needs no review from you, or once you approve it when it does.
 
-## The human layers
+The design changes; the code doesn't yet. `/clm:build` builds it.
 
-Above the component specs sit two short files at the repository's root, written for people rather than for builds:
+## Approve a change
 
-- **`CAPABILITIES.md`** holds the capabilities: what a person can do with the product, each with a `#### Why` and a scenario. The product manager owns it.
-- **`ARCHITECTURE.md`** holds the architectural constraints: what must always hold, each with SHALL or MUST and a scenario, and the rules that enforce it under `#### Enforced by`, why no program can check it under `#### Untested`, or both. The architect owns it, and every build reads it.
+Some changes need your yes before they land: those that change what a person can do with the product, what must always hold, or that cost you money or time or can't be undone. Everything else lands on its own once the checks pass.
 
-Each entry has an ID, `capability/<slug>` or `architecture/<slug>`, and a version, as a component's requirement does: `clm hashes capability` and `clm hashes architecture` print them. They are proven differently. A capability is proven by a black-box test at the product's public boundary that cites it, `req:capability/<slug>@<version>`, unless an `#### Untested` block says why no program can check it. An architectural constraint is never cited by a test: it names under `#### Enforced by` the component rules that enforce it, which their own components build and prove, and is current when every rule it names is current; it says what no program can check under `#### Untested`. `clm check` fails an architectural constraint with neither block, and a test that cites one. Any edit to either file needs your review before it lands; everything below them, the component specs included, is the AI's to change. A component says which entries its rules serve with `serves` in its frontmatter, and a requirement can override that with a `#### Serves` block. The format is in [spec format](../spec-format.md).
+When Claude asks for your approval it shows you the change's intent, what it asks of you and any open questions. You're judging intent: is this what the system should do? You never review code. Say yes in the conversation and confirm the command Claude Code shows you; that confirmation is your approval. If you say no, say what to change, and Claude reworks it and asks again.
 
-## Proposing a change
+## Build: `/clm:build`
 
-Run `/clm:propose` and say what you want, or name a backlog item. Claude:
+Run `/clm:build` and Claude builds every part of the system whose code is behind its design, each in its own background session, in parallel, writing the tests first. Each part lands on `main` once its checks pass, and the workflow keeps going until nothing is left to build. At the end it tells you what landed and anything waiting on you.
 
-1. talks it through with you, using superpowers' brainstorming, until it understands what you want and why, then lays out two or three ways to build it and asks you to pick;
-2. writes the design into `changes/<id>/change.md` and asks you to approve it;
-3. writes one delta per component it touches, the decisions it needs and any backlog items, and applies them, so the branch shows the spec as it will be;
-4. runs `clm gate`, which says whether the branch needs your review, pushes one spec branch and opens its pull request (on GitHub), for reading the diff;
-5. lands it through `clm land`: at once when it needs no review, and once you approve when it does.
+Builds run under your session's permission mode: in manual mode they pause for your answers, in auto mode they run alone.
 
-Every piece of design goes on that one branch, so a change that needs your review asks for it once.
+If a build finds the design is wrong or incomplete, it doesn't guess: it raises it with you as a question or a proposed change.
 
-## Review
+## Work the backlog: `/clm:triage`
 
-A spec branch either needs your review or lands on checks. It needs your review, and `clm gate`'s first line says `spec review`, when:
+The backlog is where everything not yet done waits: ideas, bugs, questions only you can answer, steps only you can take (such as creating an account), and work deferred until later. Builds and proposals add to it as they go.
 
-- it edits `ARCHITECTURE.md` or `CAPABILITIES.md`, or `docs/allowed_signers`, the keys a signed repository trusts;
-- it changes the `approval` setting in `clm.toml`;
-- a change it adds or edits declares `human_burdens`: what it spends of your money or time, or can't undo, one short line each, such as a paid service or a step only you can take.
+Run `/clm:triage` and Claude shows you a menu of what the backlog holds. Pick what to work on:
 
-Everything else lands through `clm land` on checks, and nothing is reviewed after it lands. The pull request's `## Intent` says what the change does and why, and the change's `human_burdens` say what it asks of you. Approve in the conversation where Claude asks you: on your yes it runs `clm approve <branch>` and Claude Code asks you to confirm the command, so the approval is yours. It's a record in your ledger, pinned to the files the branch changes: a rebase or a merge of `main` that touched only other files keeps it, and any change to the branch's own files drops it, so you review again.
+- **Approvals:** changes already designed and waiting for your yes.
+- **Needs your input:** questions and steps only you can take, each with the answer Claude recommends. Work that depends on them waits until you answer.
+- **Bugs:** Claude designs the fixes in the background, in parallel.
+- **Blockers:** whatever is holding up the most work, first.
+- **Ideas:** Claude brainstorms each one with you, then proposes it, keeps it for later, or drops it.
 
-`clm land` is the only way anything reaches `main`. It gates the branch, merges it with `main`, runs the project's checks and `clm check` on the result on the machine that runs it, and pushes `main`. No hosted CI and no labels are involved.
+Whatever needs your review comes back as one batch, with one approval to give.
 
-## Building
+## Check health: `/clm:health`
 
-Run `/clm:build`. CLM works per component: `clm next` lists the components whose requirements the code hasn't caught up with, leaving out requirements that wait on a backlog item or on another component's requirement they `Needs`, and capabilities whose serving rules haven't been built yet, and each is built in its own session and worktree, test-first, landing its own `impl/<component>` branch through `clm land`. Work whose spec changed under it is built again against the new spec rather than landed stale. A change is complete once every requirement it added or changed is cited by a passing test at its current version and no test cites one it removed; the next build's `clm rebase` then archives it.
+Run `/clm:health` for a report on the project's shape. It changes nothing; it points at what to reconsider:
 
-You don't review code. If a build finds the spec is wrong or incomplete, it stops and raises a spec change, which comes to you as intent.
+- parts of the system that have grown too big;
+- questions left open and claims on work that lapsed;
+- rules the builds keep having to work around, which may be wrong;
+- specs that are bloated or code no test runs.
 
-A small code change that needs no spec change, such as a refactor or a clearer message, takes no claim: it goes on a branch of its own, named outside `impl/`, `spec/`, `propose/` and `autosync/`, and lands through `clm land` like any other. Delete the branch from `origin` afterwards if you pushed it, since `clm land` removes only claim branches. A change fits when every requirement and scenario as written stays true and it adds nothing a requirement would have to state. A `bug` or `deferred` item takes `clm claim <component> --fix backlog/<slug>` instead, and behaviour no requirement states starts with a spec change.
+Claude summarises it and proposes cuts. Act on any of it with `/clm:propose`. [How it works](how-it-works.md#health) says what each signal means.
 
-## The backlog
+## See where things stand
 
-`backlog/` holds one file per item:
+- Every Claude Code session starts with the project's status: what's built, what's in flight, what waits on you.
+- `/clm:view` opens a panel beside the chat with the same picture, kept up to date.
+- The web app at [clm-app.dev/app/](https://clm-app.dev/app/), if you've been invited, shows the design, the work in flight and the backlog, and lets you approve changes and suggest new ones from any browser, a phone included.
 
-- `idea`: future work. `/clm:triage` brainstorms it with you, one at a time, and `/clm:propose` takes it up.
-- `deferred`: future work that waits on a condition its body names, which you judge. `/clm:triage` shows it to you and asks whether to draft it, keep it or drop it.
-- `bug`: something broken, including problems with CLM itself (`clm defect`).
-- `question`: a fact only you can supply. The requirements it `blocks` wait for it.
-- `human-task`: a step only you can do, such as installing a tool or creating an account. The requirements it `blocks` wait for it too.
-- `workaround`: a requirement built with a workaround (`clm workaround`), kept until its component is redesigned or the workaround is accepted.
+## Decide what's worth keeping
 
-Answer questions and confirm human steps in `/clm:triage`: it takes your answers in the conversation and drafts the change that records them, and once that lands the requirements waiting on them can be built.
+Ask Claude what a capability costs, or what an architectural rule costs, and it shows you its page: what it took to build, how much of your attention it needed, and what it would take to drop. Tell Claude whether to keep it, cut it, redesign it, or accept it as it is, and confirm the command. Cuts and redesigns go through `/clm:propose`.
 
-## Health
+## Working with others
 
-`clm health` prints one advisory report of the project's shape, and `/clm:health` reads it for you. It never fails anything: it shows the check violations, what is pending, oversized components, lapsed claims, changes nothing has built, questions left open, decisions nothing names, capabilities and architectural constraints no rule serves, spec text that narrates history, Designs that dwarf their requirements, components far off the median in size per requirement, code no test runs (from an lcov file named under `[health] lcov` in `clm.toml`), and the signals that a requirement is fighting its implementation.
-
-Those signals come from builds. When a build needs a workaround to satisfy a scenario, fakes something the requirement doesn't mention, changes another component's Design to get it built, or stops to raise a spec change, it flags the requirement with `clm workaround`, a `workaround` backlog item, and lists it under `## Workarounds` in its pull request. Flags, rewrites in the archive and oversized scenario or exception counts add up to a score, and when it reaches the `reconsider` threshold the next build's `clm rebase` files `backlog/reconsider-<component>-<slug>.md`, a question for you: drop the requirement, change it, or redesign around it, through `/clm:propose`. The spec change that rewrites or drops the requirement deletes its flags. Thresholds live under `[health]` in `clm.toml`.
-
-## Reviewing what capabilities and architecture cost
-
-Every land records the work its Claude Code sessions spent, read from this machine's transcripts, as `effort` records in the ledger. `clm capabilities` lists each capability with what it cost: an estimate in dollars and work tokens, the commits on its components, the reviews you gave, its unsettled workarounds, and your latest decision on it. A component's cost is split over the capabilities its rules serve, so the numbers are estimates, and the work no branch names shows on an `unattributed` line.
-
-`clm capabilities <slug>` prints one capability's page: why you need it; what it cost and what it took of your attention (approvals, questions answered, flags settled, items that held it up); its size and declared burdens; the workarounds builds flagged on its rules; whether you could live without it (how many of its rules serve only it, and what the rest also serve, computed from the specs); its rules; and your decisions so far.
-
-Decide on a capability in the conversation where Claude shows you its page: on your word it runs `clm capabilities decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`, and Claude Code asks you to confirm the command, so the decision is yours. The decision is a record in your ledger, and it settles the workarounds open on the capability then; a flag filed later is unsettled again. Keep, cut and redesign say what comes next, which you take up through `/clm:propose`; accept says the cost is worth it as it is.
-
-The web app shows the same list and pages under **Capabilities**, on a phone too, and decides with a tap: choose a value, then Keep, Cut, Redesign or Accept as is. It has no git history, so for the commits, questions answered, blocking and size it says to run `clm capabilities <slug>`; in a repository that signs its records, it gives the `clm capabilities decide` command to run in your clone instead.
-
-`clm architecture` gives the same review for the architectural constraints in `ARCHITECTURE.md`, the rules every change pays for. It lists each with whether it is held (how many of the rules that enforce it are built and current, and what it leaves untested) and what it costs: its enforcing rules' share, counted apart from the capabilities', so the two lists never add up to one total. `clm architecture <slug>` prints one constraint's page, and you decide on it as on a capability: on your word Claude runs `clm architecture decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`, and Claude Code asks you to confirm the command. The web app shows the same under **Architecture**.
-
-A build that flags a requirement whose capability already has `workaround_flag` unsettled workarounds (3 unless `[effort]` in `clm.toml` says otherwise) stops working on that requirement and files a question for you: whether to redesign the capability rather than work around it again.
-
-## When something goes wrong
-
-- A branch conflicts with `main`, or the gate says it's out of date: `clm rebase`, push, and `clm land` again.
-- A check fails when landing: Claude reads the failure, fixes it, pushes and lands again.
-- CLM itself got in the way: `clm defect` files it.
-- Before ending a session: `clm wrap-up` reports anything not yet safe on `origin`.
+- Several people and sessions can work on one project at once: see [Teams](teams.md).
+- Suggestions from people outside the project come in through `/clm:contribution`: see [Contributions](contributions.md).

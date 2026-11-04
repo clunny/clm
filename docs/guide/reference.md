@@ -41,7 +41,7 @@ The skills, the commands' settings and where to read more: a page to look things
 | `clm survey` | map a codebase, for drafting its spec graph |
 | `clm init` | set up or upgrade CLM's tooling in a repository |
 | `clm defect` | report a problem with CLM itself |
-| `clm health` | one advisory report of the project's health: checks, pending, sizes, claims, stale questions, spec bloat, unexercised code and the requirements to reconsider ([Using CLM](using-clm.md)) |
+| `clm health` | one advisory report of the project's health: checks, pending, sizes, claims, stale questions, spec bloat, unexercised code and the requirements to reconsider ([How it works](how-it-works.md#health)) |
 | `clm capabilities [<slug>]` | what each capability costs (an estimate from the ledger's `effort` records and git), or one capability's page: its cost, workarounds, overlap, rules and decisions |
 | `clm capabilities decide <slug>` | record your review decision on a capability (`--value`, `--decision`), settling its open workarounds; Claude Code asks you to confirm it |
 | `clm architecture [<slug>]` | what each architectural constraint costs (counted apart from the capabilities') and whether its enforcing rules are built, or one constraint's page |
@@ -69,7 +69,7 @@ The skills, the commands' settings and where to read more: a page to look things
 
 ## How a change flows
 
-[Using CLM](using-clm.md) says each step in full.
+[How it works](how-it-works.md) says each step in full, and [Using CLM](using-clm.md) the workflows that run them.
 
 1. **Propose** (humans and AI): a spec branch adds `changes/<id>/` with deltas. When it needs review, a human approves it with `clm approve`; otherwise it lands on checks.
 2. **Apply:** the deltas are folded into `specs/`. New requirements are `unbuilt`.
