@@ -1,5 +1,6 @@
 //! `clm affected`: the nodes and files a change can break (specs/check/affected/SPEC.md).
 
+mod readers;
 mod select;
 
 use std::collections::BTreeMap;
@@ -8,18 +9,42 @@ use std::path::Path;
 
 use clm_git::{Error, Failure, Options};
 
+pub use readers::{readers, reads_in};
 pub use select::{Changed, Selection, select};
 
 /// The selection for the working tree of `root` against the merge base of `base` and `HEAD`,
 /// with `all` the `[affected] all` globs. Refused when the graph can't be loaded, `base`
 /// doesn't resolve to a commit or has no merge base with `HEAD`; `Git` when git fails
-/// otherwise.
+/// otherwise. The readers (`readers`) join the files.
 pub fn affected(root: &Path, base: &str, all: &[String]) -> Result<Selection, Failure> {
     let (graph, violations) = clm_model::load(root);
     if !violations.is_empty() {
         let lines: Vec<String> = violations.iter().map(clm_check::format).collect();
         return Err(Failure::Refused(lines.join("\n")));
     }
+    let differing = differing(root, base)?;
+    let scan = scanned(root)?;
+    Ok(match select(&graph, &differing, &scan.cited, all) {
+        Selection::Nodes { nodes, mut files } => {
+            files.extend(readers(&differing, &scan.reads));
+            files.sort();
+            files.dedup();
+            Selection::Nodes { nodes, files }
+        }
+        everything => everything,
+    })
+}
+
+/// The readers alone: the files whose reads markers match a path that differs between the
+/// merge base of `base` and `HEAD` and the working tree. It loads neither the graph nor
+/// `[affected] all`.
+pub fn affected_readers(root: &Path, base: &str) -> Result<Vec<String>, Failure> {
+    Ok(readers(&differing(root, base)?, &scanned(root)?.reads))
+}
+
+/// Every path that differs between the merge base of `base` and `HEAD` and the working tree,
+/// untracked files and doc-only paths included, sorted.
+fn differing(root: &Path, base: &str) -> Result<Vec<Changed>, Failure> {
     let commit = format!("{base}^{{commit}}");
     match git(root, &["rev-parse", "--verify", "--quiet", &commit]) {
         // `--quiet` makes a ref that resolves to no commit exit 1, and nothing else does.
@@ -49,21 +74,27 @@ pub fn affected(root: &Path, base: &str, all: &[String]) -> Result<Selection, Fa
     )?));
     paths.sort();
     paths.dedup();
-    let changed: Vec<Changed> = paths
+    Ok(paths
         .into_iter()
         .map(|path| Changed {
             // A submodule or a nested repository is no file a runner can take.
             exists: root.join(&path).is_file(),
             path,
         })
-        .collect();
+        .collect())
+}
 
-    Ok(select(&graph, &changed, &scanned(root)?, all))
+/// What the scan of the files reads.
+struct Scan {
+    /// Each file with the requirement IDs its `req:` markers cite.
+    cited: BTreeMap<String, Vec<String>>,
+    /// Each file holding a reads marker, with its globs.
+    reads: BTreeMap<String, Vec<String>>,
 }
 
 /// The files `check`'s coverage scan reads, tracked or untracked and not ignored, UTF-8 and
-/// not Markdown, each with the requirement IDs its `req:` markers cite.
-fn scanned(root: &Path) -> Result<BTreeMap<String, Vec<String>>, Failure> {
+/// not Markdown.
+fn scanned(root: &Path) -> Result<Scan, Failure> {
     let listed = git(
         root,
         &[
@@ -74,7 +105,8 @@ fn scanned(root: &Path) -> Result<BTreeMap<String, Vec<String>>, Failure> {
             "--exclude-standard",
         ],
     )?;
-    let mut files = BTreeMap::new();
+    let mut cited = BTreeMap::new();
+    let mut reads = BTreeMap::new();
     for path in names(&listed) {
         let rel = Path::new(&path);
         if rel.extension().is_some_and(|e| e == "md") || !root.join(rel).is_file() {
@@ -83,13 +115,17 @@ fn scanned(root: &Path) -> Result<BTreeMap<String, Vec<String>>, Failure> {
         let Ok(text) = fs::read_to_string(root.join(rel)) else {
             continue; // not UTF-8: not a test source
         };
-        let cited = clm_check::markers_in(rel, &text)
+        let ids = clm_check::markers_in(rel, &text)
             .into_iter()
             .map(|m| m.id)
             .collect();
-        files.insert(path, cited);
+        cited.insert(path.clone(), ids);
+        let globs = reads_in(&text);
+        if !globs.is_empty() {
+            reads.insert(path, globs);
+        }
     }
-    Ok(files)
+    Ok(Scan { cited, reads })
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, Error> {

@@ -113,7 +113,7 @@ fn nothing_changed_prints_nothing() {
 
 #[test]
 fn uncommitted_untracked_and_deleted() {
-    // req:check.affected/affected-files@f7c86d73
+    // req:check.affected/affected-files@83ad81e2
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/old.rs", "fn o() {}\n");
@@ -191,7 +191,7 @@ fn settings_that_cant_load_exit_1() {
 
 #[test]
 fn doc_only_changes_print_nothing() {
-    // req:check.affected/doc-only-selects-nothing@4ded8e5f
+    // req:check.affected/doc-only-selects-nothing@d8831f2e
     let dir = repo("");
     let root = dir.path();
     write(root, "docs/decisions/x.md", DECISION);
@@ -209,7 +209,7 @@ fn doc_only_changes_print_nothing() {
 
 #[test]
 fn doc_only_changes_beside_code_print_what_the_code_does() {
-    // req:check.affected/doc-only-selects-nothing@4ded8e5f
+    // req:check.affected/doc-only-selects-nothing@d8831f2e
     let dir = repo("");
     let root = dir.path();
     write(root, "backlog/y.md", BACKLOG_ITEM);
@@ -268,7 +268,7 @@ fn the_base_defaults_to_origin_main() {
 
 #[test]
 fn selects_through_the_markers_of_the_files_the_scan_reads() {
-    // req:check.affected/affected-files@f7c86d73
+    // req:check.affected/affected-files@83ad81e2
     let dir = repo("");
     let root = dir.path();
     // Cites `a`, so selected though `d` owns it.
@@ -353,4 +353,145 @@ fn an_invalid_graph_exits_1_with_the_error() {
         String::from_utf8_lossy(&out.stderr).contains("cycle"),
         "{out:?}"
     );
+}
+
+/// The marker's text, built so this file isn't itself a reader.
+const READS: &str = concat!("clm", ":reads ");
+
+fn clm_affected_with(root: &Path, base: &str, extra: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_clm"))
+        .env(
+            "XDG_CONFIG_HOME",
+            Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config"),
+        )
+        .args(["affected", "--base", base, "--root"])
+        .arg(root)
+        .args(extra)
+        .output()
+        .unwrap()
+}
+
+/// `repo`, plus a component `e` that nothing depends on holding two readers, committed on
+/// `main` and merged into `work`.
+fn readers_repo() -> TempDir {
+    let dir = repo("");
+    let root = dir.path();
+    git(root, &["switch", "-q", "main"]);
+    write(root, "specs/e/SPEC.md", &spec("[\"crates/e/**\"]", "[]"));
+    write(
+        root,
+        "crates/e/tests/r.rs",
+        &format!("// {READS}ARCHITECTURE.md\n"),
+    );
+    write(
+        root,
+        "crates/e/tests/s.rs",
+        &format!("// {READS}specs/**\n"),
+    );
+    write(root, "ARCHITECTURE.md", "# A\n");
+    commit_all(root, "readers");
+    git(root, &["switch", "-q", "work"]);
+    git(root, &["merge", "-q", "main"]);
+    dir
+}
+
+#[test]
+fn a_reader_of_a_doc_only_file_is_printed_alone() {
+    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/doc-only-selects-nothing@d8831f2e
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "ARCHITECTURE.md", "# B\n");
+    commit_all(root, "doc");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "file crates/e/tests/r.rs\n");
+}
+
+#[test]
+fn readers_join_the_lines_of_a_code_change() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "ARCHITECTURE.md", "# B\n");
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "both");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nnode b\nnode c\nfile crates/a/src/lib.rs\nfile crates/b/src/lib.rs\nfile crates/c/src/lib.rs\nfile crates/e/tests/r.rs\n"
+    );
+}
+
+#[test]
+fn readers_alone_print_no_node_or_all_line() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "ARCHITECTURE.md", "# B\n");
+    write(root, "tools/build.sh", "false\n");
+    commit_all(root, "doc and a file no component holds");
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "file crates/e/tests/r.rs\n");
+}
+
+#[test]
+fn readers_alone_ignore_the_graph_and_the_settings() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "clm.toml", "[affected]\nall = 3\n");
+    write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[c]"));
+    write(root, "ARCHITECTURE.md", "# B\n");
+    commit_all(root, "doc, a cycle and bad settings");
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "file crates/e/tests/r.rs\nfile crates/e/tests/s.rs\n"
+    );
+}
+
+#[test]
+fn no_reader_matches() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "backlog/y.md", BACKLOG_ITEM);
+    write(root, "tools/build.sh", "false\n");
+    commit_all(root, "unread");
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn a_marker_in_markdown_reads_nothing() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = repo("");
+    let root = dir.path();
+    write(root, "docs/notes.md", &format!("{READS}ARCHITECTURE.md\n"));
+    write(root, "ARCHITECTURE.md", "# C\n");
+    commit_all(root, "notes");
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn an_untracked_reader_and_an_untracked_doc_count() {
+    // req:check.affected/affected-readers@94edd10f
+    let dir = readers_repo();
+    let root = dir.path();
+    write(
+        root,
+        "crates/e/tests/u.rs",
+        &format!("// {READS}docs/new.txt\n"),
+    );
+    write(root, "docs/new.txt", "x\n");
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "file crates/e/tests/u.rs\n");
 }

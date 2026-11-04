@@ -478,6 +478,9 @@ enum Command {
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
+        /// Print only the `file` lines of the tests that read what changed, doc-only paths included.
+        #[arg(long)]
+        readers: bool,
     },
     /// Print one advisory report of the repository's health; exits 0 whatever it finds.
     Health {
@@ -1383,7 +1386,11 @@ fn dispatch() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Command::Affected { base, root } => affected(&repo_root(root), &base),
+        Command::Affected {
+            base,
+            root,
+            readers,
+        } => affected(&repo_root(root), &base, readers),
         Command::Health { expiry, root } => health(&repo_root(root), expiry),
         Command::Workaround {
             requirement,
@@ -1925,7 +1932,21 @@ fn health(root: &Path, expiry: u64) -> ExitCode {
 }
 
 /// `clm affected`: its lines on stdout, with `config`'s `[affected] all` globs.
-fn affected(root: &Path, base: &str) -> ExitCode {
+fn affected(root: &Path, base: &str, readers: bool) -> ExitCode {
+    if readers {
+        return match clm_affected::affected_readers(root, base) {
+            Ok(files) => {
+                for file in files {
+                    println!("file {file}");
+                }
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("clm affected: {e}");
+                ExitCode::from(e.exit_code())
+            }
+        };
+    }
     let all = match clm_config::load(Some(root), &clm_config::process_env) {
         Ok(settings) => settings.affected.value.map(|a| a.all).unwrap_or_default(),
         Err(e) => {

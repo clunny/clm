@@ -103,7 +103,7 @@ fn nothing_changed_selects_nothing() {
 
 #[test]
 fn cited_owned_and_changed_files() {
-    // req:check.affected/affected-files@f7c86d73
+    // req:check.affected/affected-files@83ad81e2
     let files_scanned = scanned(&[
         ("crates/a/src/lib.rs", &[]),
         ("crates/a/src/util.rs", &[]),
@@ -132,7 +132,7 @@ fn cited_owned_and_changed_files() {
 
 #[test]
 fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
-    // req:check.affected/affected-files@f7c86d73
+    // req:check.affected/affected-files@83ad81e2
     let s = select(
         &graph(),
         &changed(&["crates/b/src/lib.rs"]),
@@ -144,7 +144,7 @@ fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
 
 #[test]
 fn a_deleted_file_affects_its_owner_without_a_file_line() {
-    // req:check.affected/affected-files@f7c86d73
+    // req:check.affected/affected-files@83ad81e2
     let gone = Changed {
         path: "crates/a/src/old.rs".into(),
         exists: false,
@@ -203,7 +203,7 @@ fn a_deleted_file_no_node_holds_selects_everything() {
 
 #[test]
 fn doc_only_paths_select_nothing() {
-    // req:check.affected/doc-only-selects-nothing@4ded8e5f
+    // req:check.affected/doc-only-selects-nothing@d8831f2e
     let s = select(
         &graph(),
         &changed(&["docs/decisions/x.md", "backlog/y.md", "specs/a/SPEC.md"]),
@@ -221,7 +221,7 @@ fn doc_only_paths_select_nothing() {
 
 #[test]
 fn doc_only_paths_beside_code_select_what_the_code_does() {
-    // req:check.affected/doc-only-selects-nothing@4ded8e5f
+    // req:check.affected/doc-only-selects-nothing@d8831f2e
     let s = select(
         &graph(),
         &changed(&["backlog/y.md", "crates/d/src/lib.rs"]),
