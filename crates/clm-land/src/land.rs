@@ -69,6 +69,18 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // The policy committed at the base, read afresh each attempt.
         let policy = repo.approval.policy(&base)?;
         let fold = clm_ledger::fold(&repo.root)?;
+        // A spec branch holds spec paths only, whatever its gate says
+        // (`land/spec-branch-holds-spec-paths`).
+        if branch.starts_with("spec/") {
+            let files = clm_gate::files_outside_spec_paths(&repo.root, &base, &head)
+                .map_err(Error::Refused)?;
+            if !files.is_empty() {
+                return Err(Error::Refused(format!(
+                    "a spec branch holds only spec paths; {branch} changes {}",
+                    files.join(", ")
+                )));
+            }
+        }
         // 2. The fingerprint, and a request for changes that holds it, before the gate, the
         // lock, the merge and the checks (`land/changes-requested-holds`).
         let fingerprint = repo.approval.fingerprint(&base, &head)?;
