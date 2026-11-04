@@ -1,5 +1,5 @@
 //! The community files in `.github/` that tell an outsider how to take part
-//! (ci/security-policy, ci/code-of-conduct, ci/issue-forms, ci/pull-request-template).
+//! (ci/security-policy, ci/code-of-conduct, ci/issue-forms, ci/early-access-form, ci/pull-request-template).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -97,4 +97,25 @@ fn pull_request_template_lists_the_spec_paths() {
             "Which issue",
         ],
     );
+}
+
+#[test]
+fn early_access_form_asks_one_question_and_no_email() {
+    // req:ci/early-access-form@48163552
+    let text = read("ISSUE_TEMPLATE/early-access.yml");
+    let form: Value = serde_yaml::from_str(&text).expect("early-access.yml parses");
+    assert_eq!(form["name"], Value::String("Request early access".into()));
+    let labels = form["labels"].as_sequence().expect("labels");
+    assert!(labels.contains(&Value::String("early-access".into())));
+    let description = form["description"].as_str().expect("description");
+    assert!(description.contains("https://clm-app.dev/guide/quickstart"));
+    assert!(description.contains("invite-only") && description.contains("early access"));
+    let required = form["body"]
+        .as_sequence()
+        .expect("body")
+        .iter()
+        .filter(|field| field["validations"]["required"] == Value::Bool(true))
+        .count();
+    assert_eq!(required, 1, "exactly one required field");
+    assert!(!text.to_lowercase().contains("email"), "asks for no email");
 }

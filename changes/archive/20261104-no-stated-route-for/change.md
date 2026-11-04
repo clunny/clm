@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [no-stated-route-for-a-guide-only-edit-that-needs-no-change]
 ---
 

@@ -1,0 +1,10 @@
+name: Request early access
+description: The web app is invite-only and in early access. CLM works fully without it; follow the quickstart at https://clm-app.dev/guide/quickstart.
+labels: ["early-access"]
+body:
+  - type: textarea
+    id: use
+    attributes:
+      label: What would you like to use the web app for?
+    validations:
+      required: true
