@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - spec-paths-vs-clm-toml-approval
 ---
