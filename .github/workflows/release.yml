@@ -51,18 +51,11 @@ jobs:
         include:
           # Static, so they run on any Linux of their architecture (static-linux-binaries).
           - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            exe: clm
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            exe: clm
           - target: aarch64-apple-darwin
-            os: macos-latest
-            exe: clm
           - target: x86_64-apple-darwin
-            os: macos-latest
-            exe: clm
-    runs-on: ${{ matrix.os }}
+    # Zig cross-builds every target, so no job needs a macOS runner (cross-built-macos-binaries).
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
@@ -72,15 +65,11 @@ jobs:
         run: rustup show
       - name: target
         run: rustup target add ${{ matrix.target }}
-      # Zig is the C compiler and linker for both Linux targets, so nothing comes from apt.
+      # Zig is the C compiler and linker for every target, so nothing comes from apt.
       - name: zig
-        if: endsWith(matrix.target, '-musl')
         run: |
           python3 -m pip install --break-system-packages ziglang==0.17.0
           cargo install --locked --version 0.24.0 cargo-zigbuild
-      - name: build
-        if: "!endsWith(matrix.target, '-musl')"
-        run: cargo build --release --locked -p clm --target ${{ matrix.target }}
       - name: build static
         if: endsWith(matrix.target, '-musl')
         run: |
@@ -92,17 +81,18 @@ jobs:
             *"statically linked"* | *"static-pie linked"*) ;;
             *) echo "::error::$bin isn't statically linked" >&2; exit 1 ;;
           esac
+      # Without the deployment target, Zig 0.17.0 marks the binary as needing macOS 15.0.
+      - name: build macOS
+        if: endsWith(matrix.target, '-apple-darwin')
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
+        run: cargo zigbuild --release --locked -p clm --target ${{ matrix.target }}
       - name: pack
         env:
           ASSET: clm-${{ matrix.target }}.tar.gz
-        # macOS has no `sha256sum`; both write the line `sha256sum -c` reads.
         run: |
-          tar czf "$ASSET" -C target/${{ matrix.target }}/release ${{ matrix.exe }}
-          if command -v sha256sum >/dev/null; then
-            sha256sum "$ASSET" > "$ASSET.sha256"
-          else
-            shasum -a 256 "$ASSET" > "$ASSET.sha256"
-          fi
+          tar czf "$ASSET" -C target/${{ matrix.target }}/release clm
+          sha256sum "$ASSET" > "$ASSET.sha256"
       - uses: actions/upload-artifact@v6
         with:
           name: clm-${{ matrix.target }}
