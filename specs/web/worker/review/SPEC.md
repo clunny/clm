@@ -15,7 +15,7 @@ Crate `clm-web-review`: a spec branch's review and what is written on one, for `
 - `approve::branch`, approve (`POST .../branches/{branch}/approve`);
 - `feedback::comment` and `feedback::request_changes` (`POST .../branches/{branch}/comments` and `.../request-changes`), the first taking the snapshot's requirement lookup from the router;
 - the body parsers the router runs before any request to GitHub: `approve::fingerprint`, `feedback::parse_comment` and `feedback::parse_request`;
-- `review::signed` and `review::signed_refusal`: whether the default branch's tip holds `docs/allowed_signers`, cached a day by tip, and the 422 a signed repository's write gets, which `web.worker`'s capabilities routes use too.
+- `review::signed` and `review::signed_refusal`: whether the default branch's tip holds `docs/allowed_signers`, cached a day by tip, and the 422 a signed repository's write gets.
 
 The routes and response shapes are `web.worker`'s contract. It imports nothing of `clm-web`.
 
