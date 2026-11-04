@@ -50,6 +50,18 @@ fn withdraw(fake: &Fake, cookie: &str, id: &str) -> Response {
     fake.handle(req)
 }
 
+/// Beyond the access check, GitHub was asked nothing since `from` calls.
+fn only_the_access_check(fake: &Fake, from: usize) {
+    let calls = fake.gh.calls.borrow();
+    assert!(
+        calls[from..]
+            .iter()
+            .all(|c| c.url.contains("/collaborators/") || c.url.ends_with("/repos/o/a")),
+        "{:?}",
+        &calls[from..]
+    );
+}
+
 /// The one post the object was asked.
 fn one_post(fake: &Fake) -> Value {
     let asked = fake.replicas.asked("o/a");
@@ -75,15 +87,7 @@ fn a_proposal_passed_on() {
     assert_eq!(post["title"], "Export CSV");
     assert_eq!(post["body"], "");
     assert_eq!(post["nodes"], json!(["a"]));
-    // Beyond the access check, GitHub was asked nothing.
-    let calls = fake.gh.calls.borrow();
-    assert!(
-        calls[before..]
-            .iter()
-            .all(|c| c.url.contains("/collaborators/") || c.url.ends_with("/repos/o/a")),
-        "{:?}",
-        &calls[before..]
-    );
+    only_the_access_check(&fake, before);
     assert!(fake.gh.writes().is_empty());
 }
 
@@ -93,7 +97,9 @@ fn a_decision_passed_on() {
     let (fake, cookie) = setup();
     fake.set_write(200, json!({"id": "d1"}));
     let body = json!({"version": "0123abcd", "value": "low", "decision": "cut"});
+    let before = fake.gh.calls.borrow().len();
     let res = decide(&fake, &cookie, "architecture/my%20e", &body);
+    only_the_access_check(&fake, before);
     assert_eq!(res.status, 200);
     assert_eq!(body_json(&res), json!({"id": "d1"}), "the body as given");
     let post = one_post(&fake);
@@ -121,7 +127,9 @@ fn a_withdrawal_passed_on() {
     // req:web.worker/writes-to-object@0e34d9ff
     let (fake, cookie) = setup();
     *fake.replicas.write.borrow_mut() = Some((404, String::new()));
+    let before = fake.gh.calls.borrow().len();
     let res = withdraw(&fake, &cookie, "p1");
+    only_the_access_check(&fake, before);
     assert_eq!(res.status, 404);
     let post = one_post(&fake);
     assert_eq!(post["kind"], "withdraw");
