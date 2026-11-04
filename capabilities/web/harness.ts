@@ -137,8 +137,8 @@ export async function startApp(fake: FakeGitHub): Promise<App> {
       directory: join(root, 'web', 'dist'),
       binding: 'ASSETS',
       routerConfig: { has_user_worker: true },
-      run_worker_first: ['/*', '!/app/*', '!/sw.js'],
-      assetConfig: { not_found_handling: 'none' },
+      run_worker_first: ['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app'],
+      assetConfig: { not_found_handling: '404-page' },
     },
     bindings: {
       GITHUB_APP_ID: '12345',

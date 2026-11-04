@@ -719,7 +719,7 @@ test('the service worker imports the push handlers and shows a push', async ({ p
   expect(opened).toEqual([`${baseURL}/app/#/o/a/backlog`]);
 });
 
-// req:web/installable@ffe7e4d3
+// req:web/installable@e711892d
 test.describe('PWA', () => {
   test('it has a manifest with icons, which installs it', async ({ page, request }) => {
     await page.goto('/app/');
