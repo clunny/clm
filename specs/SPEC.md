@@ -594,7 +594,7 @@ When the reader of `clm`'s stdout has gone, a print to it SHALL end the command 
 
 #### Scenario: a view
 - GIVEN a CLM repository, and a stdout that is a pipe whose reading end is closed
-- WHEN `clm status` runs
+- WHEN `clm view spec` runs
 - THEN it exits non-zero, and its stderr holds no `panicked`
 
 #### Scenario: a full disk still says why
