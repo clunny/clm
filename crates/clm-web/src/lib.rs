@@ -33,7 +33,7 @@ use clm_web_platform::platform::Platform;
 use clm_web_review::{approve, branches, feedback, review};
 
 /// Handles one request the Worker is routed: `/api/*`, `/auth/*`, `/webhook`, and the
-/// public site's paths, which only a signed-in invited person is served (`site`).
+/// paths no route answers, which get a bare 404 (`site`).
 pub async fn handle<P: Platform + Replicas>(p: &P, req: Request) -> Response {
     let parts: Vec<&str> = req.path.trim_start_matches('/').split('/').collect();
     match (req.method.as_str(), parts.as_slice()) {
@@ -41,7 +41,7 @@ pub async fn handle<P: Platform + Replicas>(p: &P, req: Request) -> Response {
         ("GET", ["auth", "callback"]) => auth::callback(p, &req).await,
         ("POST", ["webhook"]) => webhook::handle(p, &req).await,
         (_, ["api", ..]) => api(p, &req, &parts[1..]).await,
-        _ => site::serve(p, &req).await,
+        _ => site::serve(&req),
     }
 }
 
