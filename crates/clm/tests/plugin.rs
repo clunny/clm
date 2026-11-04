@@ -797,7 +797,7 @@ fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
 
 #[test]
 fn skills_point_at_the_guide() {
-    // req:plugin/method-pointers@0c098706
+    // req:plugin/method-pointers@b131a5c1
     let pages = guide_pages();
     assert!(pages.contains(&"shaping-the-graph".to_owned()), "{pages:?}");
     let mut files: Vec<PathBuf> = fs::read_dir(plugin().join("skills"))
@@ -830,7 +830,11 @@ fn skills_point_at_the_guide() {
     assert!(guide_gaps("x", "Run `clm guide <page>`.", &pages).is_empty());
     // init explains the shape before the node map is drafted, and points at the flow.
     let init = skill_body("init");
-    for needle in ["clm guide shaping-the-graph", "clm guide using-clm"] {
+    for needle in [
+        "clm guide shaping-the-graph",
+        "clm guide using-clm",
+        "clm guide how-it-works",
+    ] {
         assert_reports(
             &text_gaps("init", &init.replace(needle, "elided"), &[needle], &[]),
             "init",
@@ -859,6 +863,7 @@ fn skills_point_at_the_guide() {
         .find(|s| s.contains("End with a summary"))
         .expect("init: SKILL.md must end with a summary step");
     assert!(summary.contains("clm guide using-clm"), "{summary}");
+    assert!(summary.contains("clm guide how-it-works"), "{summary}");
 }
 
 #[test]
