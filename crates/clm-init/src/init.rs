@@ -75,7 +75,6 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         root: &root,
         out: String::new(),
         paths: Vec::new(),
-        wrote: Vec::new(),
     };
 
     let toml = clm_toml(host, if opts.detectors { &langs } else { &[] });
@@ -99,10 +98,8 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     let steps = next_steps(
         &root,
         &files.paths,
-        &files.wrote,
         configured_host(&root, host),
         upgrade_steps(&root, &top, kept_toml, host),
-        cfg!(unix),
     );
     if !steps.is_empty() {
         out.push_str("\nNext steps (yours):\n");
@@ -120,8 +117,6 @@ struct Files<'a> {
     out: String,
     /// Every file's path, written or kept.
     paths: Vec<&'static str>,
-    /// The files written whole, each a subset of `paths`.
-    wrote: Vec<&'static str>,
 }
 
 impl Files<'_> {
@@ -138,7 +133,6 @@ impl Files<'_> {
         }
         fs::write(&path, content).map_err(|e| format!("{rel}: {e}"))?;
         self.out.push_str(&format!("wrote {rel}\n"));
-        self.wrote.push(rel);
         Ok(true)
     }
 
@@ -358,39 +352,18 @@ fn upgrade_steps(root: &Path, top: &Path, kept_toml: bool, host: Host) -> Vec<St
     steps
 }
 
-/// Sets the check script's mode so it runs; where the platform has no Unix file modes, the
-/// next steps say how to commit it executable instead (`windows-build`).
-#[cfg(unix)]
+/// Sets the check script's mode so it runs.
 fn make_executable(path: &Path) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
 }
 
-#[cfg(not(unix))]
-fn make_executable(_path: &Path) -> std::io::Result<()> {
-    Ok(())
-}
-
-/// The steps left for the human: `upgrades` first, then, when the platform has no
-/// `file_modes` and `clm init` wrote the check script, marking it executable in the index,
-/// then the push, skipped once `git` shows it done and nothing else is left to commit.
+/// The steps left for the human: `upgrades` first, then the push, skipped once `git` shows it
+/// done and nothing else is left to commit.
 /// Whether the host protects `main` would take asking it, so that step stays, as a
-/// conditional. `paths` are all of CLM's files, written or kept; `wrote` those written.
-fn next_steps(
-    root: &Path,
-    paths: &[&str],
-    wrote: &[&str],
-    host: Host,
-    upgrades: Vec<String>,
-    file_modes: bool,
-) -> Vec<String> {
+/// conditional. `paths` are all of CLM's files, written or kept.
+fn next_steps(root: &Path, paths: &[&str], host: Host, upgrades: Vec<String>) -> Vec<String> {
     let mut steps = upgrades;
-    if !file_modes && wrote.contains(&CHECK_SCRIPT) {
-        steps.push(format!(
-            "After staging `{CHECK_SCRIPT}`, run `git update-index --chmod=+x {CHECK_SCRIPT}`, \
-             so it is committed executable and `clm land` can run it on Linux and macOS."
-        ));
-    }
     // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or
     // there's no remote to push to.
     let mut status = vec!["status", "--porcelain", "--"];
@@ -498,28 +471,4 @@ fn outside(root: &Path) -> Result<String, String> {
 /// `text` escaped for a YAML double-quoted string.
 fn yaml_string(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const CHMOD: &str = "git update-index --chmod=+x scripts/clm-check.sh";
-
-    #[test]
-    fn chmod_step_only_without_file_modes() {
-        // req:init/windows-build@03cde96d
-        let tmp = tempfile::TempDir::new().unwrap();
-        git(tmp.path(), &["init", "-q"]).unwrap();
-        let wrote = [CHECK_SCRIPT, "clm.toml"];
-        let steps = next_steps(tmp.path(), &wrote, &wrote, Host::None, Vec::new(), false);
-        let chmod: Vec<&String> = steps.iter().filter(|s| s.contains(CHMOD)).collect();
-        assert_eq!(chmod.len(), 1, "{steps:?}");
-        let steps = next_steps(tmp.path(), &wrote, &wrote, Host::None, Vec::new(), true);
-        assert!(!steps.iter().any(|s| s.contains(CHMOD)), "{steps:?}");
-        // A script the project already had keeps the mode it was committed with.
-        let kept = ["clm.toml"];
-        let steps = next_steps(tmp.path(), &wrote, &kept, Host::None, Vec::new(), false);
-        assert!(!steps.iter().any(|s| s.contains(CHMOD)), "{steps:?}");
-    }
 }
