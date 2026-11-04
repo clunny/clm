@@ -110,7 +110,7 @@ fn scenario_capped_by_places() {
 
 #[test]
 fn scenario_no_place_free() {
-    // req:orchestrator/next@1f34c883 req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/next@1f34c883 req:orchestrator/claim@026fab7a
     let r = repo();
     hold(&r.work, "z");
     assert_eq!(next(&r.work, 4, 1).unwrap(), Vec::<String>::new());
@@ -213,7 +213,7 @@ fn scenario_archive_branch_beside_a_claim() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_listed_and_claimed() {
-    // req:orchestrator/next@1f34c883 req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/next@1f34c883 req:orchestrator/claim@026fab7a
     let r = repo();
     write(
         &r.work,
@@ -233,7 +233,7 @@ fn a_node_that_writes_a_protected_path_is_listed_and_claimed() {
 
 #[test]
 fn claim_pushes_a_fresh_commit_on_main() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
     let tip = remote_tip(&r, "impl/b").unwrap();
@@ -247,7 +247,7 @@ fn claim_pushes_a_fresh_commit_on_main() {
 
 #[test]
 fn scenario_already_claimed() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     let sha = push_claim(&r.work, "b", 1);
     assert!(refused(claim(&r.work, "b", 4)).contains("claimed"));
@@ -256,7 +256,7 @@ fn scenario_already_claimed() {
 
 #[test]
 fn scenario_why_it_isnt_ready() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     write(
         &r.work,
@@ -268,7 +268,13 @@ fn scenario_why_it_isnt_ready() {
     push_main(&r.work, "q, d");
     let refs = git(&r.origin, &["for-each-ref"]);
     assert!(refused(claim(&r.work, "c", 4)).contains("backlog/q"));
-    assert!(refused(claim(&r.work, "d", 4)).contains("converged"));
+    let converged = refused(claim(&r.work, "d", 4));
+    assert!(converged.contains("converged"), "{converged}");
+    assert!(converged.contains("`d`"), "{converged}");
+    assert!(converged.contains("no spec change"), "{converged}");
+    assert!(converged.contains("takes no claim"), "{converged}");
+    assert!(converged.contains("branch of its own"), "{converged}");
+    assert!(converged.contains("clm land"), "{converged}");
     assert!(refused(claim(&r.work, "ghost", 4)).contains("no component"));
     assert!(refused(claim(&r.work, "x/b", 4)).contains("isn't a component"));
     assert_eq!(git(&r.origin, &["for-each-ref"]), refs, "nothing pushed");
@@ -276,7 +282,7 @@ fn scenario_why_it_isnt_ready() {
 
 #[test]
 fn scenario_pending_dependency() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     // `a` depends on `b`, and both have uncited requirements.
     assert_eq!(claim(&r.work, "a", 4).unwrap(), "impl/a");
@@ -285,7 +291,7 @@ fn scenario_pending_dependency() {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     // `c/s` needs `b/r`, which nothing cites.
     write(
@@ -302,7 +308,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_takeover() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     let old = push_claim(&r.work, "b", 5);
     assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
@@ -316,7 +322,7 @@ fn scenario_takeover() {
 
 #[test]
 fn scenario_merged_takeover() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     push_claim(&r.work, "b", 1);
     merge_claim(&r.work, "b");
@@ -328,7 +334,7 @@ fn scenario_merged_takeover() {
 
 #[test]
 fn claim_that_lands_though_the_push_is_rejected_succeeds_and_tracks_the_claim() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     // The hook lets the update through and then fails, as a flaky remote would.
     pre_receive(&r, "exit 1\n");
@@ -349,7 +355,7 @@ fn claim_that_lands_though_the_push_is_rejected_succeeds_and_tracks_the_claim() 
 
 #[test]
 fn scenario_rejected_for_another_reason() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     pre_receive(&r, "echo 'declined by test' >&2\nexit 1\n");
     // Each hook run is seen on this process's monotonic clock: a hook's wall clock can jump.
@@ -381,7 +387,7 @@ fn scenario_rejected_for_another_reason() {
 
 #[test]
 fn scenario_rejected_twice() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     pre_receive(
         &r,
@@ -405,7 +411,7 @@ fn scenario_rejected_twice() {
 
 #[test]
 fn claim_rejected_while_the_tip_moved_is_lost_without_retrying() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     // The rejection coincides with another session's claim landing. Hooks may not move refs
     // from git's quarantine, so this one steps outside it.
@@ -420,7 +426,7 @@ fn claim_rejected_while_the_tip_moved_is_lost_without_retrying() {
 
 #[test]
 fn scenario_race() {
-    // req:orchestrator/claim@e1e68bdb
+    // req:orchestrator/claim@026fab7a
     let r = repo();
     let other = r.work.with_file_name("other");
     git(

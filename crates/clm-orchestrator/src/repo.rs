@@ -109,7 +109,10 @@ pub fn refusal(node: &str, state: Option<&State>) -> Option<String> {
     Some(match state {
         None => format!("no component `{node}`"),
         Some(State::Ready { .. }) => return None,
-        Some(State::Converged) => format!("`{node}` is converged: nothing is pending"),
+        Some(State::Converged) => format!(
+            "`{node}` is converged: nothing is pending. A small change that needs no spec change \
+             takes no claim: land it from a branch of its own with `clm land`"
+        ),
         Some(State::Blocked { by }) => format!(
             "`{node}` is blocked by {}",
             quoted(
