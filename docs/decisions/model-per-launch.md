@@ -17,6 +17,7 @@ Serves `capability/right-model-per-task` and applies the re-founding's "the righ
 | a draft | `triage` | the session's own model (design) |
 | the fold | `triage` | `sonnet` |
 | a builder check | `propose`, a draft, the fold | `sonnet`, the model the builder will run on |
+| `architecture-auditor`, a design review (`spec-architecture-audit`) | `propose`, `contribution`, a draft, the fold | the session's own model (`sonnet` in the fold) |
 | `spec-slimmer` | `health` | `sonnet` |
 | per-node spec drafting from code | `init` | `sonnet` |
 
