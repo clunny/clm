@@ -22,19 +22,19 @@ CLM's public site at `https://clm-app.dev`: the homepage at `/` and the user gui
 3. *Not a vibe-coded mess*: every rule has a test, drift can't land, nothing dead.
 4. *Solo or as a team*: git is the only channel.
 5. *Standing on shoulders*: the Spec Growth Engine paper ([arXiv:2606.27045](https://arxiv.org/html/2606.27045v2)), [superpowers](https://github.com/obra/superpowers) and Anthropic's [AI-native SDLC playbook](https://claude.com/blog/the-ai-native-sdlc-playbook), each with what CLM took from it, as `docs/guide/why-clm.md` says.
-It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM" with a Privacy link to `/privacy`, which the guide's footer holds too. The nav holds How it works, Guide, Get started and Sign in (to `/app/`).
+It ends with the install commands and a link to the quickstart, and a footer "CLM is built with CLM" with a Privacy link to `/privacy`; the guide's pages, whose default layout has no footer, get a small footer with the same link through a slot of VitePress's layout in the theme. The nav holds How it works, Guide, Get started and Sign in (to `/app/`).
 
 **The install repository.** The repository the homepage's install commands name (`/plugin marketplace add <repo>`) is one value in the site's config (overridable by `INSTALL_REPO` for tests): `clunny/clm`, which is public, so a visitor adopts CLM on their own (`public-site`).
 
 **Look.** Inter for text, JetBrains Mono for commands; the app's indigo accent with a sky gradient, the mockup's dark palette and a light one. The site follows the system's light or dark setting, with VitePress's own switch kept. At phone widths the ring sits below the first screen's text, the side-by-side panels stack, and nothing scrolls sideways.
 
 **Analytics** (`site-analytics-umami`). When the build's environment sets `UMAMI_WEBSITE_ID`, every page's head holds `<script defer src="https://cloud.umami.is/script.js" data-website-id="<id>" data-do-not-track="true">`; when it is unset or empty, no built file names Umami, so tests, local builds and forks report nothing, and the operator's ID lives only in the repository's Actions variable (`ci/web-deploy`). Umami's script records page views itself, VitePress's in-site navigation included. One module of the theme records the rest by calling `window.umami.track(name, data)`, doing nothing when `window.umami` is missing (blocked, Do Not Track, or a build without an ID), and never delaying a click's navigation:
-- a click on Get started, How it works, Sign in or a nav link: the event `click`, with `label` the element's text and `path` the page's;
-- a click on a link to another host: the event `outbound`, with `url` the link's and `path` the page's;
-- a copied command, by a code block's copy button or by copying a selection inside a command (the homepage's install commands, a guide code block): the event `copy-command`, with `path` the page's and `command` the command's first line, trimmed.
+- a click on a same-host link in the nav or among the homepage's buttons (Get started, How it works, Guide, Sign in): the event `click`, with `label` the element's text and `path` the page's;
+- a click on any link to another host: the event `outbound` only, with `url` the link's and `path` the page's;
+- a copied command, by a code block's copy button or by copying a selection inside a command (the homepage's install commands, a guide code block): the event `copy-command`, with `path` the page's and `command` the command's first line, trimmed. VitePress's copy button writes to the clipboard without a `copy` event, so it is caught by its click, and a selection by the document's `copy` event when the selection lies inside a `pre` or code block. The script tag is added per page in the config's head (`transformHead` or `head`, the builder's choice), so the 404 page carries it too.
 The app under `/app/` is a build of its own and loads no analytics. The site serves no cookie and the theme stores nothing in the browser for analytics. The funnel and the undercount (judged against Cloudflare's own traffic numbers for the zone) are read in the dashboards, not in code.
 
-**Privacy page.** `/privacy`, a page of the site's own under `web/site/`, not part of the guide, says in plain words: the site sets no cookies; it counts page views, clicks and copied commands with Umami Cloud, which stores no IP address and no personal data; Do Not Track is honoured; and the app under `/app/` isn't measured.
+**Privacy page.** `/privacy`, a Markdown page of the site's own under `web/site/`, not part of the guide and listed in neither the nav nor the sidebar, says in plain words: the site sets no cookies; it counts page views, clicks and copied commands with Umami Cloud, which stores no IP address and no personal data; Do Not Track is honoured; and the app under `/app/` isn't measured.
 
 ## Requirements
 
