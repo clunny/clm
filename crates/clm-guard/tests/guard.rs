@@ -878,6 +878,7 @@ fn land_as_another_subcommands_argument_is_allowed() {
         "cargo run -q -p clm -- hashes land | grep x",
         "cargo run -q -p clm -- context land | head",
         "cargo run -p clm -- pending land |& head",
+        "cargo run -p clm -- hashes -- land | head",
         "clm hashes land | grep x",
     ] {
         allows(&bash(command));
