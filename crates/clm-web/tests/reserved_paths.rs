@@ -52,9 +52,17 @@ fn a_path_the_assets_should_have_answered() {
     assets(&fake);
     let cookie = fake.cookie("tok");
     for cookie in [cookie.as_str(), ""] {
-        for path in ["/guide/quickstart", "/", "/sw.js", "/app/x", "/auth/nope"] {
+        for path in [
+            "/guide/quickstart",
+            "/",
+            "/sw.js",
+            "/app/x",
+            "/auth/nope",
+            "/webhook",
+        ] {
             let res = fake.handle(get(path, cookie));
             assert_eq!((res.status, res.body.len()), (404, 0), "{path}");
+            assert!(!res.headers.iter().any(|(k, _)| k == "set-cookie"));
         }
     }
 }
