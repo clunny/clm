@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-spec-branch-s-land-skips-the-code-tests-that-read-spec-text-so
 ---
