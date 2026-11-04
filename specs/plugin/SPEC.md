@@ -29,7 +29,7 @@ The skills carry CLM's method to every adopter (`method-in-the-plugin`): what th
 ## Design
 The plugin is `plugin/` in this repository: `.claude-plugin/plugin.json` (`clm`, versioned with the binary), `bin/clm` (the shim), `hooks/hooks.json`, the skills and agents the Contract lists, and `commands/view.md`. The last makes `/clm:view` exist: with `clm-panel` installed, its hooks module answers the command itself (`plugin.panel`); without it, the file has the model run `clm status` or `clm view <name>` through the Bash tool. The `clm` CLI holds every rule; the plugin only runs it (`plugin-plus-rust-cli`, `hook-logic-in-clm`). The rules behind `clm hook` and `clm defect` are `plugin.hooks`'; the panel is `plugin.panel`.
 
-**The shim** (`binary-from-releases`). `bin/clm` resolves the binary for the plugin's version: `${XDG_CACHE_HOME:-~/.cache}/clm/<version>/clm`, downloading `clm-<target>.tar.gz` from the matching GitHub release and verifying its `.sha256` when it is missing, then runs it with the arguments it was given. `$CLM_BIN` overrides it, for developing against a local build. It is a POSIX `sh` script and uses `gh` and `tar`. The guard fails open (`guard-fails-open`): when the binary `$CLM_BIN` names is missing or can't run, or `clm hook guard` crashes, the hook exits with neither 0 nor 2, which Claude Code doesn't treat as a block, and the shim adds no wrapper that exits 2, since a session whose every `Bash` call is blocked can't rebuild the binary that would unblock it.
+**The shim** (`binary-from-releases`). `bin/clm` resolves the binary for the plugin's version: `${XDG_CACHE_HOME:-~/.cache}/clm/<version>/clm`, downloading `clm-<target>.tar.gz` from the matching GitHub release and verifying its `.sha256` when it is missing, then runs it with the arguments it was given. `$CLM_BIN` overrides it, for developing against a local build. It is a POSIX `sh` script and uses `curl`, `tar` and `sha256sum` or `shasum`: it downloads both files with `curl -fsSL` from `https://github.com/clunny/clm/releases/download/v<version>/`, the public repository's release, so no `gh`, sign-in or token is needed (`binary-from-releases`). A missing `curl` is a failed download. The guard fails open (`guard-fails-open`): when the binary `$CLM_BIN` names is missing or can't run, or `clm hook guard` crashes, the hook exits with neither 0 nor 2, which Claude Code doesn't treat as a block, and the shim adds no wrapper that exits 2, since a session whose every `Bash` call is blocked can't rebuild the binary that would unblock it.
 
 **Hooks** (`hooks-wired`). What each hook does with Claude Code's event is `plugin.hooks`.
 
@@ -89,28 +89,28 @@ The repo SHALL have `.claude-plugin/marketplace.json` listing a plugin `clm` wit
 - capability/install-and-release
 
 ### Requirement: binary-shim
-`plugin/bin/clm` SHALL exec `$CLM_BIN` with its arguments when set. Otherwise it SHALL exec the cached binary for the plugin's version, downloading it first with `gh release download` when absent. It SHALL verify the download against its `.sha256` before caching it. When no binary can be had it SHALL cache nothing, and:
+`plugin/bin/clm` SHALL exec `$CLM_BIN` with its arguments when set. Otherwise it SHALL exec the cached binary for the plugin's version, downloading it first with `curl` from the public repository's GitHub release for that version when absent, with no `gh` and no sign-in. It SHALL verify the download against its `.sha256` before caching it. When no binary can be had it SHALL cache nothing, and:
 - for `hook session-start`, print a line saying the CLM state and the guard on `clm approve` are unavailable, with the `cargo install` command for that version, and exit 0; the line SHALL NOT name `clm review` or `spec-approved`;
 - for any other `hook` command, print nothing and exit 0;
 - otherwise, exit 1 printing the `cargo install` command for that version.
 
 #### Scenario: first use
-- GIVEN an empty cache and a `gh` that serves a release asset and a matching checksum
+- GIVEN an empty cache, no `gh` on the `PATH`, and a `curl` that serves a release asset and a matching checksum
 - WHEN `bin/clm status` runs twice
-- THEN `gh` is called once, and both runs exec the cached binary with `status`
+- THEN `curl` is asked for `https://github.com/clunny/clm/releases/download/v<plugin version>/` and the asset and its `.sha256` once, and both runs exec the cached binary with `status`
 
 #### Scenario: bad checksum
-- GIVEN a `gh` that serves an asset whose checksum doesn't match
+- GIVEN a `curl` that serves an asset whose checksum doesn't match
 - WHEN `bin/clm` runs
 - THEN it exits 1 and the cache holds no binary
 
 #### Scenario: guard without a binary
-- GIVEN an empty cache and a `gh` that fails
+- GIVEN an empty cache and a `curl` that fails
 - WHEN `bin/clm hook guard` runs
 - THEN it prints nothing, exits 0, and the cache holds no binary
 
 #### Scenario: session start without a binary
-- GIVEN an empty cache and a `gh` that fails
+- GIVEN an empty cache and a `curl` that fails
 - WHEN `bin/clm hook session-start` runs
 - THEN it exits 0, and its output says the guard is unavailable, names `clm approve` and `cargo install`, and doesn't name `clm review` or `spec-approved`
 
@@ -266,19 +266,19 @@ The plugin SHALL ship `agents/spec-auditor.md` with a `name` of `spec-auditor` a
 `plugin/bin/clm` SHALL download `clm-x86_64-unknown-linux-musl.tar.gz` on `Linux x86_64`, `clm-aarch64-unknown-linux-musl.tar.gz` on `Linux aarch64`, `clm-x86_64-apple-darwin.tar.gz` on `Darwin x86_64` and `clm-aarch64-apple-darwin.tar.gz` on `Darwin arm64`, and map no other platform. On any other platform, Windows's Git Bash and MSYS2 shells included (`no-windows-support`), it SHALL download nothing and fail as `binary-shim` describes, saying there's no prebuilt `clm` for that platform. Each target it maps SHALL be written as one `target=<target>` assignment, which `ci/release`'s prepare step reads. Its text SHALL name no Windows target and no `clm.exe`.
 
 #### Scenario: Linux arm64
-- GIVEN an empty cache, a `uname` that reports `Linux` and `aarch64`, and a `gh` that serves release assets
+- GIVEN an empty cache, a `uname` that reports `Linux` and `aarch64`, and a `curl` that serves release assets
 - WHEN `bin/clm status` runs
-- THEN `gh` is asked for `clm-aarch64-unknown-linux-musl.tar.gz`
+- THEN `curl` is asked for `clm-aarch64-unknown-linux-musl.tar.gz`
 
 #### Scenario: unsupported platform
 - GIVEN an empty cache and a `uname` that reports `FreeBSD` and `amd64`
 - WHEN `bin/clm status` runs
-- THEN `gh` is not called, and it exits 1 saying there's no prebuilt `clm` for that platform
+- THEN `curl` is not called, and it exits 1 saying there's no prebuilt `clm` for that platform
 
 #### Scenario: Windows unsupported
 - GIVEN an empty cache, and a `uname` that reports `MINGW64_NT-10.0` and `x86_64`, and in a second run `UCRT64_NT-10.0-22631` and `x86_64`
 - WHEN `bin/clm status` runs
-- THEN `gh` is not called either time, and each run exits 1 saying there's no prebuilt `clm` for that platform
+- THEN `curl` is not called either time, and each run exits 1 saying there's no prebuilt `clm` for that platform
 
 #### Scenario: no Windows target in the shim
 - GIVEN the text of `plugin/bin/clm`

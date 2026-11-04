@@ -1,5 +1,7 @@
 # Spec format (v0, provisional)
 
+How a CLM project's specs are written: components and their requirements with scenarios, the changes and deltas that edit them, decisions, the backlog and the two human layers.
+
 This is the contract of the `model` component. It borrows OpenSpec's requirement/scenario and delta conventions, adds the Spec Growth Engine's component metadata, and replaces sequential IDs with slugs so that concurrent authors don't collide.
 
 ## Component spec: `specs/<component-path>/SPEC.md`
@@ -10,7 +12,7 @@ The component ID is the directory path under `specs/`, dot-separated (`specs/che
 ---
 title: Check
 status: unbuilt          # unbuilt | active | deprecated
-owners: ["@clunny"]      # GitHub handles/teams; generates CODEOWNERS
+owners: ["@clunny"]      # who answers for the component (GitHub handles or names)
 depends_on: [model]      # dependency edges (must form a DAG)
 paths: ["crates/clm-check/**"]   # code this component owns (globs, disjoint across components)
 serves: [capability/catch-drift]  # the human-layer entries its rules serve, unless a rule names its own (see The human layers)
@@ -44,7 +46,7 @@ The check SHALL fail when code under a component's `paths` imports code owned by
 - Frontmatter keys other than those above are rejected, unless a live change lists the key in its `change.md`'s `frontmatter_keys`: the change that adds a key's requirement declares it there and sets it in the same spec PR (`declared-frontmatter-keys`).
 - **Needs** (`requirement-needs`). A requirement may hold one `#### Needs` block among its scenarios, each line `- <component>/<slug>` naming a requirement of another component that must be current before this one can be built. The model rejects a need naming no requirement, one on the same component, or a cycle. The queue treats a requirement whose needs aren't current like one a backlog item blocks (`requirement-blocks`): left out of its component's work until they are.
 - **Path ownership** (`incremental-adoption`). Every tracked file outside `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md` and `CLAUDE.md` is code, and, once the root sets `outside` (even to `[]`), `clm check` fails one that no component's `paths` match unless a glob of the root's `outside` does (`check/unowned-files`). `outside` names the code not yet adopted; a file a component's `paths` also match is the component's, and a glob that matches no file outside every component fails the check, so the list shrinks as later changes give that code components.
-- **Children** (`nested-splits`). A component may hold children: `specs/<component>/<part>/SPEC.md` is component `<component>.<part>`, a full component with its own frontmatter, requirements and `paths` (still disjoint from every other component's). A child's builds receive its parent's Contract and Design with their ancestors (`ancestor-scoped-context`), and the views draw it inside its parent. A component is split by nesting, never into new siblings: see `docs/guide/shaping-the-graph.md` and `slim-nodes`.
+- **Children** (`nested-splits`). A component may hold children: `specs/<component>/<part>/SPEC.md` is component `<component>.<part>`, a full component with its own frontmatter, requirements and `paths` (still disjoint from every other component's). A child's builds receive its parent's Contract and Design with their ancestors (`ancestor-scoped-context`), and the views draw it inside its parent. A component is split by nesting, never into new siblings: see `docs/guide/shaping-the-graph.md` and `slim-components`.
 - **Requirement status is derived, never written.** A requirement is *current* if a passing test cites it at its current version, *behind* if tests cite it only at older versions, and *unbuilt* if none cites it (`versioned-markers`). The last two are *pending*.
 - Each element's **content hash** is computed from its normalized text: the requirement block, contract section, design section and frontmatter. These hashes are what deltas and test markers record (`hash-based-staleness`). A requirement's **version** is the first 8 hex digits of its hash, and leaves out its `#### Serves` block: the hash is that version followed by the last 8 hex digits of the whole block's hash, so a Serves-only edit makes deltas on the rule stale but no test `behind` (`serves-in-the-base`).
 
@@ -96,7 +98,7 @@ The marker is always the literal text `req:<id>@<version>`, so `clm check` finds
 - A marker citing a requirement that doesn't exist fails the check (`check/dangling-markers`), unless a change outside the archive removed the requirement: then the marker is *obsolete*, and the component's next build removes the code and tests it marks (`removed-requirements-build-out`). When the change moved the requirement to another component, the obsolete one is blocked until the requirement it moved to is current, since that component's build re-points the markers (`moved-markers-wait`).
 - `clm coverage` lists each requirement as `current` or `behind` (with its citing locations) or `unbuilt`, then each `obsolete` one. `clm pending [<component>]` lists the pending requirements with their versions and what blocks them.
 
-"Passing" means the CI test suite passes. Telling skipped tests apart is an open question (`skipped-tests`).
+"Passing" means the project's test suite passes in the checks `clm land` runs (`land-locally`). A skipped test in a file that holds a marker fails `clm check` (`check/skipped-tests`), so a skipped test never counts as proof.
 
 ## Changes: `changes/<YYYYMMDD-slug>/`
 
@@ -106,7 +108,7 @@ deltas/<component-id>.md   # one file per touched component
 assets/<component-id>/**   # added or modified assets (see Component assets)
 ```
 
-`change.md` frontmatter: `status: proposed|approved|applied|implementing|done|abandoned`. Optional: `human_burdens: [<line>, ...]` (what the change spends of the human's money or time, or can't undo, one short line each; a change that declares any needs review, `gate/needs-review`, and a spec branch that adds a `kind: human-task` backlog item must declare one, `gate/undeclared-burden`), `author`, `from: backlog/<slug>` (the item it was promoted from, deleted in the spec PR), `resolves: [<slug>, ...]` (backlog items it resolves, each deleted by the build that fixes it, or else when the change is archived, `task-deletes-fixed-items`, except a `kind: question` item, which `clm apply` deletes since the applied spec answers it, `apply-deletes-answered-questions`; an item the spec branch finds already fixed stays here too, and the branch deletes it, so `clm proposals` attributes its claim to the change) `priority: P1|P2|P3|P4|P5` (default `P5`; capped slots shared with the backlog, `priority-caps`) and `frontmatter_keys: [<key>, ...]` (component frontmatter keys the change adds, which the model accepts on any component while the change is live, so one spec PR can add a key's requirement and set the key, `declared-frontmatter-keys`). Changes are not ordered against each other: work is built component by component in the order of the component graph (`node-reconciliation`), and `priority` says what to build first. `after` and `prefer_after`, which changes recorded while changes were ordered against each other, are accepted and ignored. `gate`, the review tier changes recorded before review became yes or no (`yes-no-review`), is rejected on a live change and ignored on an archived one. The body is the intent (problem, outcome, constraints, open questions), as in the playbook's `intent.md`. It starts with `## Intent`, a few sentences on what the change does and why, which a reviewer reads first.
+`change.md` frontmatter: `status: proposed|approved|applied|implementing|done|abandoned`. Optional: `human_burdens: [<line>, ...]` (what the change spends of the human's money or time, or can't undo, one short line each; a change that declares any needs review, `gate/needs-review`, and a spec branch that adds a `kind: human-task` backlog item must declare one, `gate/undeclared-burden`), `author`, `from: backlog/<slug>` (the item it was promoted from, deleted in the spec PR), `resolves: [<slug>, ...]` (backlog items it resolves, each deleted by the build that fixes it, or else when the change is archived, `task-deletes-fixed-items`, except a `kind: question` item, which `clm apply` deletes since the applied spec answers it, `apply-deletes-answered-questions`; an item the spec branch finds already fixed stays here too, and the branch deletes it, so `clm proposals` attributes its claim to the change) `priority: P1|P2|P3|P4|P5` (default `P5`; capped slots shared with the backlog, `priority-caps`) and `frontmatter_keys: [<key>, ...]` (component frontmatter keys the change adds, which the model accepts on any component while the change is live, so one spec PR can add a key's requirement and set the key, `declared-frontmatter-keys`). Changes are not ordered against each other: work is built component by component (`component-reconciliation`), `depends_on` orders nothing, a requirement's `#### Needs` and the backlog items that block it hold it back (`needs-alone-order`), and `priority` says what to build first. `after` and `prefer_after`, which changes recorded while changes were ordered against each other, are accepted and ignored. `gate`, the review tier changes recorded before review became yes or no (`yes-no-review`), is rejected on a live change and ignored on an archived one. The body is the intent (problem, outcome, constraints, open questions), as in the playbook's `intent.md`. It starts with `## Intent`, a few sentences on what the change does and why, which a reviewer reads first.
 
 A delta file describes one component's changes using OpenSpec-style sections. Its frontmatter:
 
@@ -168,12 +170,12 @@ A decision is never rewritten. To reverse one, write a new decision and mark the
 
 ## Backlog: `backlog/<slug>.md`
 
-Ideas, deferred work, open questions and bugs. One file per item; the slug is its name.
+Ideas, deferred work, open questions, steps only a human can take, bugs and workarounds. One file per item; the slug is its name.
 
 ```markdown
 ---
 title: "Markers in skipped tests shouldn't count"
-kind: deferred            # idea | deferred | question | bug | human
+kind: deferred            # idea | deferred | question | bug | human-task | workaround
 components: [check]            # components it concerns (must exist)
 origin: 20261021-coverage # optional: the change during which it came up
 priority: P3              # optional: P1..P5, default P5 (capped slots, see below)

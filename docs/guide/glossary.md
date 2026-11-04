@@ -37,7 +37,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Version:** the first 8 hex digits of a requirement's hash; rewording the requirement changes it.
 - **Requirement states:** `current` (a passing test cites it at its current version), `behind` (cited only at an older version), `unbuilt` (specified, but no test cites it yet) and `obsolete` (a test cites it, but a change removed it). **Pending** means any state but `current`: work the code still owes the spec (`clm pending`, `clm coverage`).
 - **Component status:** `unbuilt` (specified, not built yet), `active` (built and kept current) and `deprecated`.
-- **Queue:** the components with pending requirements, in priority order (`clm next`).
+- **Queue:** the components with pending requirements, in priority order (`clm next`). A component in it is `ready` (work no one holds), `claimed` (a build holds it) or `blocked` (its pending requirements wait on a `#### Needs` or a backlog item); one with nothing pending is `converged`.
 - **Claim:** pushing a branch that tells other sessions you're working on a component (`impl/<component>`) or a backlog item (`propose/<slug>`); it lapses when no one pushes to it for a while (`clm claim`). *Usually:* assigning a ticket to yourself.
 - **Run / runner:** `clm run` prepares one component's build for a session; `clm runner` builds everything in the queue unattended, one session per component.
 - **Build place:** one of the clone's slots for a build running at once (`max_builds`).
@@ -47,7 +47,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 
 ## How work reaches `main`
 
-- **Gate:** `clm gate`'s judgement of a branch before it lands: whether it is code or spec, and whether a spec branch needs a human's review (`spec review`) or lands on checks (`spec`). *Usually:* a merge check or quality gate.
+- **Gate:** `clm gate`'s judgement of a branch before it lands: whether it is code, spec or `mixed` (both, which it blocks: split the branch), and whether a spec branch needs a human's review (`spec review`) or lands on checks (`spec`). *Usually:* a merge check or quality gate.
 - **Pull request:** a branch's request on the host to merge into `main` (GitLab: merge request), where a human reads the diff; nothing waits on it, and without a host there is none (`clm pr`).
 - **Approve:** a human's recorded yes to a branch that needs review (`clm approve`). *Usually:* an approving review.
 - **Land:** merging a branch into `main` through `clm land`, which runs the checks on the merged result on your machine and pushes `main`. *Usually:* merge, or land.
@@ -56,6 +56,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Ledger:** the record of approvals, checks and lands, kept on one branch per writer (`clm ledger`). *Usually:* an audit log.
 - **Writer:** the name your ledger records are made under.
 - **Fingerprint:** a hash of a branch's diff, which an approval is tied to (`clm fingerprint`).
+- **Signed repository:** one whose `docs/allowed_signers` lists the keys whose ledger records count; only a signed approval lets a branch that needs review land there.
 - **Host:** where the remote lives, `github`, `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`, `clm contribution` for a fork's pull requests and issues).
 - **Reconnect:** pushing a `main` that was landed with no remote to a newly added `origin` (`clm reconnect`).
 
@@ -80,4 +81,4 @@ Every `clm` command, by what it's for. `clm help <command>` says more.
 - Checking: `clm check`, `clm gate`, `clm affected`, `clm unreferenced`, `clm fingerprint`.
 - Working: `clm claim`, `clm run`, `clm runner`, `clm triage`, `clm draft`, `clm workaround`, `clm defect`, `clm superpowers`.
 - Landing: `clm rebase`, `clm autosync`, `clm pr`, `clm approve`, `clm land`, `clm wrap-up`, `clm reconnect`.
-- Setting up: `clm init`, `clm config`, `clm branch`, `clm issue`, `clm hook` (run by the plugin's hooks).
+- Setting up: `clm init`, `clm config`, `clm branch`, `clm issue`, `clm contribution`, `clm hook` (run by the plugin's hooks).

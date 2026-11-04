@@ -5,7 +5,7 @@ From nothing to your first change built, for a new project or an existing one.
 ## You need
 
 - [Claude Code](https://claude.com/claude-code).
-- The GitHub CLI, `gh`, signed in (`gh auth login`). The plugin downloads CLM's binary with it from the releases of the public repository `clunny/clm`.
+- `git`, and `curl` (macOS and most Linux have it). The plugin downloads CLM's binary with it, on first use, from the releases of the public repository [`clunny/clm`](https://github.com/clunny/clm): no GitHub account or sign-in is needed. CLM runs on Linux and macOS.
 - A git repository for your project, where you can push to `main`. A host (GitHub today) is optional: it holds the remote and shows a pull request per branch, but runs no checks and makes no decisions.
 
 ## 1. Install the plugin
@@ -33,8 +33,9 @@ Then it runs `clm init`, which writes CLM's tooling:
 - `clm.toml`: settings: where the remote lives (`host`), whose approval counts (`approval`), what `clm land` runs (`[land] check`), and the dead-code detectors for your languages.
 - `scripts/clm-check.sh`: builds and tests your project. `clm land` runs it before `clm check`, on your machine, in the tree it is about to land. It's yours to edit.
 - `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md` and `CLAUDE.md`, if you don't have them yet.
+- `.gitignore`: it adds `clm.local.toml`, `.clm/` and `.claude/worktrees/` when they're missing.
 
-It writes nothing under `.github/` and creates no labels, and it never changes a file that already exists, so running it again is safe. It prints `wrote` or `kept` for each file.
+It writes nothing under `.github/` and creates no labels, and apart from those `.gitignore` lines it never changes a file that already exists, so running it again is safe. It prints `wrote` or `kept` for each file.
 
 ## 3. Do the steps only you can do
 

@@ -9,7 +9,7 @@ human_burdens:
 
 ## Intent
 
-The maintainer should be able to see how many people visit `clm-app.dev`, where they come from, and how far they get from the homepage to installing CLM: which pages they read, what they click, whether they copy the install command, and where they leave. The public site gets cookieless analytics from Umami Cloud, loaded only in the released site, honouring Do Not Track, and described in a privacy note in the footer. Usage reporting from the CLI, where most friction after install lies, is a separate backlog idea.
+The maintainer should be able to see how many people visit `clm-app.dev`, where they come from, and how far they get from the homepage to installing CLM: which pages they read, what they click, whether they copy the install command, and where they leave. The public site gets cookieless analytics from Umami Cloud, loaded only in the released site, honouring Do Not Track, and described in a privacy note in the footer. Usage reporting from the CLI, where most of the trouble after install lies, is a separate backlog idea.
 
 ## Problem
 

@@ -1,8 +1,8 @@
 # CLM guide
 
-CLM is a Claude Code plugin and a `clm` CLI for building software with AI, as a team, from a spec. Humans decide what the system should do. AI writes all the code. Programs check that the two agree, and git carries everything between people and sessions.
+CLM is a Claude Code plugin and a `clm` CLI for building software with AI from a spec, solo or as a team. Humans decide what the system should do. AI writes all the code. Programs check that the two agree, and git carries everything between people and sessions.
 
-Read in this order:
+The guide is also at [clm-app.dev/guide/](https://clm-app.dev/guide/), and `clm guide` prints any page of it in your terminal. Read in this order:
 
 1. [Why CLM](why-clm.md): the philosophy, and the opinions you sign up for.
 2. [Quickstart](quickstart.md): install, bring a new or existing project under CLM, and ship the first change.
@@ -13,3 +13,4 @@ Read in this order:
 7. [Shaping the graph](shaping-the-graph.md): how big a component is, when and how to split one, shared layers.
 8. [Reference](reference.md): the spec format, decisions, commands.
 9. [Glossary](glossary.md): every term CLM uses, in plain words.
+10. [FAQ](faq.md): short answers to the questions people ask first, and how CLM compares with other tools.
