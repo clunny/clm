@@ -54,7 +54,7 @@ The skills, the commands' settings and where to read more: a page to look things
 
 | Key | Where | Means |
 |---|---|---|
-| `detectors` | the repository's | dead-code and unused-dependency tools `clm check` runs |
+| `detectors` | the repository's | dead-code and unused-dependency tools `clm check` runs: `[[detectors]]` tables, each with `name`, `command` and optional `hint` (how to install the tool), `timeout` (seconds, default 600) and `requires` (a path from the repository's root: the detector is skipped while nothing is there, such as `package.json` before a TypeScript project exists) |
 | `host` | the repository's | where the remote lives: `github` (the default), `git` or `none`; pull requests, branch deletion and issues go through it |
 | `approval` | the repository's | whose approval lets a branch that needs review land: `any` (the default), anyone's, the author's included; `other`, only someone who wrote none of the branch's commits |
 | `land` | the repository's | `[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check`; optional `target_cap_gb`: the size, in gigabytes, above which a land removes its shared build directory `.clm/land` after its push |
