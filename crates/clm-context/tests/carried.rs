@@ -40,7 +40,7 @@ fn a_project_gets_the_carried_section() {
     assert!(out.contains("clm guide constraints"));
     assert!(out.contains("kept in CLM's repository"));
     let method = at("### Constraint: proven-by-tests (method)");
-    assert!(!out[method..at("### Constraint: no-silent-drift")].contains("Guarantee:"));
+    assert!(!out[method..method + out[method..].find("\n### ").unwrap()].contains("Guarantee:"));
 }
 
 #[test]
@@ -78,4 +78,30 @@ fn bundle_from_matches_the_checkout() {
     let g = graph(PROJECT);
     let on_disk = clm_context::bundle(&g, dir.path(), "a").unwrap();
     assert_eq!(on_disk, bundle(PROJECT));
+}
+
+#[test]
+fn section_precedes_served_capabilities_in_carried_order() {
+    // req:context/bundle-carries-constraints@ff31b1a3
+    let root = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nr\n";
+    let a = "---\ntitle: A\nstatus: active\nowners: []\nserves: [capability/c]\n---\n\n## Contract\nc\n\n## Requirements\n\n### Requirement: p\nIt SHALL p.\n\n#### Scenario: s\n- ok\n";
+    let caps =
+        "## Capabilities\n\n### Capability: c\nC-TEXT\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
+    let mut files = Files::new();
+    files.insert(PathBuf::from("specs/SPEC.md"), root.into());
+    files.insert(PathBuf::from("ARCHITECTURE.md"), PROJECT.into());
+    files.insert(PathBuf::from("CAPABILITIES.md"), caps.into());
+    files.insert(PathBuf::from("specs/a/SPEC.md"), a.into());
+    let (g, violations) = load_files(&files);
+    assert!(violations.is_empty(), "{violations:?}");
+    let out = clm_context::bundle_from(&g, Some(PROJECT), "a").unwrap();
+    let section = out.find("# CLM's constraints").unwrap();
+    assert!(section < out.find("# Capabilities served").unwrap());
+    assert!(out.contains("from the `clm` that runs"));
+    let places: Vec<usize> = clm_model::carried()
+        .into_iter()
+        .filter(|c| c.slug != "expand-contract")
+        .map(|c| out.find(&format!("### Constraint: {} (", c.slug)).unwrap())
+        .collect();
+    assert!(places.windows(2).all(|w| w[0] < w[1]));
 }
