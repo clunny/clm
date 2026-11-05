@@ -53,6 +53,7 @@ Day to day you use four workflows, each described in [Using CLM](using-clm.md):
 | `/clm:propose` | change what the system does |
 | `/clm:build` | build what has been approved |
 | `/clm:triage` | work through the backlog: approvals, questions for you, bugs and ideas |
+| `/clm:help` | ask how CLM works |
 | `/clm:health` | see how healthy the project is |
 
 To understand what happens underneath, read [How it works](how-it-works.md).

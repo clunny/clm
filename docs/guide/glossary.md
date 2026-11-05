@@ -6,6 +6,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 
 - **Capability:** something a person can do with the product, and why, written in `CAPABILITIES.md`. The product manager owns it. *Usually:* a feature, user story or use case.
 - **Architectural constraint:** something that must always hold of the product, whatever is built, written in `ARCHITECTURE.md`. The architect owns it. *Usually:* a non-functional requirement.
+- **Carried constraint:** one of CLM's own architectural constraints that every project built with CLM follows, supplied by the `clm` the project runs and listed by `clm guide constraints`. Its tier says whether a project may change it: `method` (no), `replaceable` (yes, by a constraint that keeps the guarantee CLM relies on) or `default` (yes, it may be dropped).
 - **Component:** one unit of the product with its own `specs/<path>/SPEC.md`: its rules, its Contract, its Design and the files it owns (`paths`). Components form the **spec graph**, a tree under the **root component** (`specs/SPEC.md`), with `depends_on` edges between them. A component's ID is its path with dots (`check.coverage`). A delta names its component with `component:`, a backlog item lists its components under `components:`, and `clm defect` and `clm proposals` take `--component`. *Usually:* a component or module.
 - **Contract:** what the outside can rely on from a component: its commands, files and interfaces. *Usually:* the public interface or API.
 - **Design:** how a component works inside, visible to whoever builds it and to its parent. *Usually:* the design notes or internal design.
@@ -16,6 +17,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Needs:** a requirement's list of other components' requirements that must be built before it can be (`#### Needs`). *Usually:* a dependency between tasks.
 - **Serves:** which capabilities or architectural constraints a rule exists for (`serves`, `#### Serves`). *Usually:* traceability.
 - **Enforced by / Untested:** the blocks of an architectural constraint naming the rules that check it by program (`#### Enforced by`), and what no program can check and why (`#### Untested`).
+- **Carries / Guarantee / Replaces:** blocks of an architectural constraint about CLM's carried constraints. In CLM's own `ARCHITECTURE.md`, `#### Carries` names a carried constraint's tier and `#### Guarantee` states what CLM relies on for a `replaceable` one. In a project's, `#### Replaces` names the carried constraints an entry replaces or drops.
 - **Decision:** a significant choice and its reasons, one file in `docs/decisions/`. *Usually:* an architecture decision record (ADR).
 - **Settings:** `clm.toml` for the project, `clm.local.toml` for one clone, `~/.config/clm/config.toml` for you (`clm config`).
 

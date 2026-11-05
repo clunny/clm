@@ -31,7 +31,7 @@ Crate `clm-init`. Templates are compiled into the binary (`include_str!`), so a 
 **`clm init`.** Fails outside a git repository. It writes in the CLM repository found from the current directory as `root-from-cwd` finds it, and at the top of the git repository when there is none, so rerunning it from a subdirectory, or in a CLM repository that is a subdirectory such as `tool/`, writes that repository's files instead of starting a second one. `clm-init` finds the repository itself, by the same rule as `clm-hooks`' `clm_root`, because it doesn't depend on `clm-hooks`. Then:
 - *`clm.toml`*, when missing: `host`, `approval = "any"` with a comment on `other`, `[land] check = "scripts/clm-check.sh"`, and one `[[detectors]]` table per `--lang` from a built-in table (at least `rust`, `typescript` and `python`; each with its `hint` and a `requires` naming the language's manifest, `Cargo.toml`, `package.json` or `pyproject.toml`, so a repository without it skips the detector until it lands, and `typescript`'s tool run from `node_modules/.bin/`, so one without its dependencies installed is told to install them: `detector-requires-manifest`), or none with `--no-detectors`, which `/clm:init` passes for an existing codebase so it passes `clm check` before its dead code is cleaned up. `host` is `--host` when given; otherwise `github` when `origin`'s URL names `github.com`, `git` for any other remote, and `none` with no remote. It reads the URL from `git remote get-url origin` and calls no host.
 - *`scripts/clm-check.sh`*, when missing: an executable starter that builds and tests for each `--lang` (`cargo test`, `npm ci && npm test`, `pytest`), each line run only once the language's manifest exists, so the bootstrap of a repository with no code yet passes it, for the project to edit. It is what `clm land` runs before `clm check`.
-- *`ARCHITECTURE.md`*, *`CAPABILITIES.md`*, *`specs/SPEC.md`* and *`CLAUDE.md`*, when missing: an `ARCHITECTURE.md` of a short preamble, a `## Enforced by clm` section listing the architectural constraints `clm` enforces in any repository (CLM's own slugs and, where they match, its statements) as prose the model doesn't read, and an empty `## Constraints` section for the project's own entries (`model/human-layers`), so a new repository starts with no entry its own tests would have to prove; a `CAPABILITIES.md` of a short preamble and an empty `## Capabilities` section, for the project's capabilities; a root component titled after the repository with `status: unbuilt` and no requirements; and a `CLAUDE.md` with CLM's working rules for sessions and a pointer to the guide as `clm guide`, never as a URL, so an adopter's sessions read the guide of the `clm` they run, offline (`method-in-the-plugin`). The rules that must hold live in `clm` and the plugin's skills and hooks, so an older `CLAUDE.md` never weakens them. `clm check` passes on the result.
+- *`ARCHITECTURE.md`*, *`CAPABILITIES.md`*, *`specs/SPEC.md`* and *`CLAUDE.md`*, when missing: an `ARCHITECTURE.md` of a short preamble, a pointer to `clm guide constraints` for CLM's carried constraints, which reach the project from the `clm` it runs rather than as a copy in the file (`carried-constraints`), with how a project replaces or drops one by a `#### Replaces` block, and an empty `## Constraints` section for the project's own entries (`model/human-layers`), so a new repository starts with no entry its own tests would have to prove; a `CAPABILITIES.md` of a short preamble and an empty `## Capabilities` section, for the project's capabilities; a root component titled after the repository with `status: unbuilt` and no requirements; and a `CLAUDE.md` with CLM's working rules for sessions and a pointer to the guide as `clm guide`, never as a URL, so an adopter's sessions read the guide of the `clm` they run, offline (`method-in-the-plugin`). The rules that must hold live in `clm` and the plugin's skills and hooks, so an older `CLAUDE.md` never weakens them. `clm check` passes on the result.
 - *`.gitignore`*, in the same directory as `clm.toml`: three lines CLM needs ignored, in this order. `clm.local.toml` is `config`'s settings file for one clone, never committed (`local-settings`); `.clm/` holds a session's scratch files, such as a pull request body, and `clm run`'s and `clm draft`'s plans and prompts; and `.claude/worktrees/` holds the worktrees `plugin`'s skills cut their session branches in and Claude Code puts subagents' worktrees in (`init-ignores-session-files`). Left unignored, `git status` lists them, `git worktree remove` refuses a worktree holding a pull request body, and `git add -A` commits a scratch file or records a worktree as an embedded repository. An entry is *listed* when git already ignores it there: `git check-ignore -q --no-index <path>`, run through `clm-git` in that directory, exits 0 for the path `clm.local.toml`, `.clm/pr-body.md` or `.claude/worktrees/x/f` respectively (`reuse-first`), one call per entry in that order, since `-q` with several paths can't tell them apart. `--no-index` has git read the patterns whatever the index holds: without it git reports a tracked file as not ignored, so a repository that commits `clm.local.toml` would get the line again on every run (`init-rerun`). `clm-git`'s `git` reports exit 1 as a failure carrying its status, which `clm-init` reads as not listed, as `clm-git`'s own `is_ancestor` does, so `vcs` needs nothing new. So git's own rules decide, not a matcher of CLM's (an ignore file elsewhere, such as a parent directory's `.gitignore`, counts too), and the line `clm init` appends goes last, after any negation, so it takes effect. A git failure fails `clm init` before `.gitignore` is touched; files written before it stay written. That includes git refusing a probe path, as when `.clm` is a symbolic link: it fails closed. Because git reads the machine's own configuration, the tests run `clm init` with `GIT_CONFIG_GLOBAL` and `XDG_CONFIG_HOME` pointing into an empty temporary directory and `GIT_CONFIG_NOSYSTEM=1`, so a developer's global ignore can't change the outcome. Git also reads this clone's own excludes (`.git/info/exclude`, `core.excludesFile`), so an entry only they ignore counts as listed and isn't added for other clones: accepted, since that clone's sessions are the ones `clm init` runs for, and adding the line by hand fixes it. The `.gitignore` edits are those of `init-ignores-local-settings`; the added endings are `\r\n` when the file already holds one, so a Windows file stays consistent. In a CLM repository that is a subdirectory such as `tool/`, the lines go in `tool/.gitignore`, where they cover `tool/.clm/` and `tool/.claude/worktrees/`, the directories sessions started in `tool/` use; a session started at the top of the git repository is that repository's own to ignore.
 
 It writes no workflow: checks run and branches land through `clm land` on whoever's machine runs it, and approvals live in the ledger. It then prints, one per line under `Next steps (yours):`, what's left for the human: commit and push the result to `main` themselves, and, when the host protects `main`, let the identity that runs `clm land` push it (a bypass or an allowed pusher). It can't tell whether `main` is protected without calling the host, so it prints the second step as a conditional. A step that is already done isn't printed.
@@ -55,10 +55,12 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 
 **Links stay inside the guide** (`guide-links-inside`). A guide page's links must work wherever the page is read: in `clm guide`'s output in an adopter's project and on GitHub. The page's directory is `docs/guide/`, or `docs/` for `spec-format`. CLM's own repository files, its decisions and its `ARCHITECTURE.md`, are named in prose as CLM's repository, never linked, since an adopter's project has neither. The rule is a function over a page's file path and Markdown, with the set of page files, so its own tests feed it failing and passing cases without touching `docs/`. A link whose target is wrapped in `<...>` or followed by a title (`[t](x.md "title")`) is judged by its path alone. Reference-style definitions (`[label]: target`) and autolinks (`<https://...>`) aren't inline links and aren't read. The scanner is hand-written, with no Markdown dependency: it skips fenced blocks (```` ``` ```` or `~~~` fences) and code spans of any backtick count, and doesn't exempt indented blocks, which the guide doesn't use; link text may nest brackets and a target may hold balanced parentheses, as in CommonMark. A scheme is `[A-Za-z][A-Za-z0-9+.-]*:`. A relative path is normalised lexically (`./x.md` is `x.md`, `a/../x.md` is `x.md`), and one that climbs above the repository root, or keeps a `?` query, fails. Two pages with one name, such as a later `docs/guide/spec-format.md`, fail the tests, as they should. The scenarios that run the binary are proved in `crates/clm/tests/guide.rs`, where `init/guide-command`'s binary tests are.
 
+**The constraints page** (`guide-constraints-page`). `clm guide constraints` is the one guide page not read from a file: `clm-init` builds it at run time from `model`'s compiled copy of CLM's carried entries (`model/carried-constraints`), so it is the set the running `clm` enforces. It has no file under `docs/guide/`, so `guide-table-from-files` and `guide-links-inside` don't read it.
+
 ## Requirements
 
 ### Requirement: init-files
-`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `clm.toml` SHALL set `host` (from `--host`, else from `origin`'s URL: `github` for a GitHub URL, `git` for any other, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, the rules `clm` enforces. On the result, `clm check` SHALL pass. Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh`.
+`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `clm.toml` SHALL set `host` (from `--host`, else from `origin`'s URL: `github` for a GitHub URL, `git` for any other, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, `clm guide constraints`, where CLM's carried constraints are. On the result, `clm check` SHALL pass. Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh`.
 
 #### Scenario: empty repository
 - GIVEN an empty git repository whose `origin` is `https://github.com/o/r.git`
@@ -68,7 +70,7 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 #### Scenario: human layers
 - GIVEN an empty git repository, and another holding a `CAPABILITIES.md` of its own
 - WHEN `clm init` runs in each
-- THEN in the first `clm hashes architecture` and `clm hashes capability` list nothing, `clm pending` lists nothing, and `ARCHITECTURE.md` names each rule `clm` enforces, and in the second `CAPABILITIES.md` is unchanged and the output says `kept CAPABILITIES.md`
+- THEN in the first `clm hashes architecture` and `clm hashes capability` list nothing, `clm pending` lists nothing, and `ARCHITECTURE.md` names `clm guide constraints`, and in the second `CAPABILITIES.md` is unchanged and the output says `kept CAPABILITIES.md`
 
 #### Scenario: no remote
 - GIVEN an empty git repository with no remote
@@ -322,12 +324,12 @@ The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".gitignore", "clm
 - vcs/files-to-commit
 
 ### Requirement: guide-command
-`clm guide` SHALL print one line per page of the guide, as compiled into the binary, each `<name>  <title>`. The pages SHALL be every `.md` file in `docs/guide/` and `docs/spec-format.md`; `<name>` is the file name without `.md` (`index` for `README.md`) and `<title>` the page's first `# ` heading; `index` SHALL come first, then the pages `README.md`'s numbered list names, in its order, then `spec-format`. `clm guide <name>` SHALL print that page's Markdown exactly as its file is at build time, and exit 0. For a name that isn't a page it SHALL exit 1, printing `no guide page <name>` and the index to stderr. It SHALL read no file at run time.
+`clm guide` SHALL print one line per page of the guide, as compiled into the binary, each `<name>  <title>`. The pages SHALL be every `.md` file in `docs/guide/`, `docs/spec-format.md` and the generated page `constraints` (`guide-constraints-page`), whose title is `CLM's constraints`; `<name>` is the file name without `.md` (`index` for `README.md`) and `<title>` the page's first `# ` heading; `index` SHALL come first, then the pages `README.md`'s numbered list names, in its order, then `spec-format`, then `constraints`. `clm guide <name>` SHALL print that page's Markdown exactly as its file is at build time, and exit 0. For a name that isn't a page it SHALL exit 1, printing `no guide page <name>` and the index to stderr. It SHALL read no file at run time.
 
 #### Scenario: index
 - GIVEN the binary built from this repository
 - WHEN `clm guide` runs in a directory that isn't in a repository
-- THEN it exits 0, its first line names `index`, one line is `shaping-the-graph  Shaping the graph`, and its last line is `spec-format  Spec format (v0, provisional)`
+- THEN it exits 0, its first line names `index`, one line is `shaping-the-graph  Shaping the graph`, its second-to-last line is `spec-format  Spec format (v0, provisional)` and its last line is `constraints  CLM's constraints`
 
 #### Scenario: one page
 - GIVEN the binary built from this repository
@@ -437,16 +439,17 @@ The table of pages `clm guide` prints SHALL be generated when `clm-init` builds,
 - architecture/method-in-the-plugin
 
 ### Requirement: architecture-template-proof
-The `ARCHITECTURE.md` that `clm init` writes SHALL say, in its preamble, that each of the project's entries names the rules that enforce it under `#### Enforced by`, or says why no program can check it under `#### Untested`, or both, and that a test never cites an entry (`human-layer-proof`); it SHALL NOT contain `req:architecture/`. Its `## Enforced by clm` list SHALL give `no-silent-drift` the statement CLM's own `ARCHITECTURE.md` gives it.
+The `ARCHITECTURE.md` that `clm init` writes SHALL say, in its preamble, that each of the project's entries names the rules that enforce it under `#### Enforced by`, or says why no program can check it under `#### Untested`, or both, and that a test never cites an entry (`human-layer-proof`); it SHALL NOT contain `req:architecture/`. It SHALL hold no `## Enforced by clm` section and no statement of a carried constraint: it SHALL name `clm guide constraints` and `#### Replaces`, saying that CLM's carried constraints reach the project from the `clm` it runs and that a project replaces a `replaceable` one or drops a `default` one with a `#### Replaces` block, which a human reviews (`carried-constraints`).
 
 #### Scenario: fresh repository
 - GIVEN an empty git repository
 - WHEN `clm init` runs
-- THEN its `ARCHITECTURE.md` names `#### Enforced by` and `#### Untested`, holds no `req:architecture/`, and its `no-silent-drift` line holds `node-reconciliation`'s pending-not-drift sentence from CLM's own entry
+- THEN its `ARCHITECTURE.md` names `#### Enforced by` and `#### Untested`, holds no `req:architecture/` and no `## Enforced by clm`, names `clm guide constraints` and `#### Replaces`, and `clm check` exits 0
 
 #### Serves
 - capability/adopt-clm
 - architecture/method-in-the-plugin
+- architecture/carried-constraints
 
 ### Requirement: template-says-pull-request
 The `ARCHITECTURE.md` `clm init` writes SHALL call a host's pull request a pull request: its `git-is-truth` entry SHALL give a pull request's URL, not a page's, as the example of a host's own data a cache may hold, and no file under `crates/clm-init/templates/` SHALL call a host's pull request a page (the guide's pages, which `clm guide` prints, are pages).
@@ -535,17 +538,12 @@ The root `SPEC.md` `clm init` writes SHALL have `status: unbuilt`, and the `huma
 - model/parse-changes
 
 ### Requirement: says-component
-The text `clm-init` prints and writes SHALL say component, components, ancestors and placeholder component, never the old words, as `component-words` defines them: the messages of `clm survey --components` (`component `<id>` appears twice`, `depends on unknown component`, `<path> is in no component's paths`, `<from> (component `<a>`) imports <to> (component `<b>`)`, `matches no file outside every component`), and every file under `crates/clm-init/templates/` (`<component-id>/<slug>` in the `CLAUDE.md` it writes, `How <name> is split into components.` in the root `SPEC.md`, and the statements of the architectural constraints in the `ARCHITECTURE.md`). The architectural constraints the `ARCHITECTURE.md` lists under `## Enforced by clm` are CLM's own, and each SHALL be named as CLM's own `ARCHITECTURE.md` names it now: the one on what a build's context holds is `ancestor-scoped-context`. A name CLM hasn't renamed keeps its spelling, and so does a decision a statement cites (`node-reconciliation`). A message that names the map's old key to say it is old keeps it. A test reads the string literals in `crates/clm-init/src/` and every file under `crates/clm-init/templates/`, and fails naming the file, the line and the word for each old word `component-words` doesn't keep.
+The text `clm-init` prints and writes SHALL say component, components, ancestors and placeholder component, never the old words, as `component-words` defines them: the messages of `clm survey --components` (`component `<id>` appears twice`, `depends on unknown component`, `<path> is in no component's paths`, `<from> (component `<a>`) imports <to> (component `<b>`)`, `matches no file outside every component`), and every file under `crates/clm-init/templates/` (`<component-id>/<slug>` in the `CLAUDE.md` it writes, `How <name> is split into components.` in the root `SPEC.md`, and the preamble of the `ARCHITECTURE.md`). A name CLM hasn't renamed keeps its spelling, and so does a decision a file cites. A message that names the map's old key to say it is old keeps it. A test reads the string literals in `crates/clm-init/src/` and every file under `crates/clm-init/templates/`, and fails naming the file, the line and the word for each old word `component-words` doesn't keep.
 
 #### Scenario: a new repository
 - GIVEN an empty repository
 - WHEN `clm init` runs
 - THEN its `CLAUDE.md` holds `<component-id>/<slug>`, its `specs/SPEC.md`'s Design reads `How <name> is split into components.`, and none of the files it writes holds an old word but in a constraint's or a decision's name
-
-#### Scenario: a renamed constraint
-- GIVEN an empty repository
-- WHEN `clm init` runs
-- THEN the `## Enforced by clm` list of its `ARCHITECTURE.md` names `ancestor-scoped-context` and not the name the term swap `20261102-rename-node-to-component-4` replaced, and every name the list gives is an entry heading of CLM's own `ARCHITECTURE.md`
 
 #### Scenario: a duplicate in the map
 - GIVEN a component map listing component `a` twice
@@ -556,15 +554,16 @@ The text `clm-init` prints and writes SHALL say component, components, ancestors
 - architecture/plain-terms
 
 ### Requirement: claude-md-names-the-skills
-The `CLAUDE.md` that `clm init` writes SHALL name `/clm:propose` and `/clm:build`, and SHALL NOT name `/clm:implement`.
+The `CLAUDE.md` that `clm init` writes SHALL name `/clm:propose`, `/clm:build` and `/clm:help`, and SHALL NOT name `/clm:implement`.
 
 #### Scenario: a new repository
 - GIVEN a repository with no `CLAUDE.md`
 - WHEN `clm init` runs
-- THEN its `CLAUDE.md` holds `/clm:propose` and `/clm:build`, and not `/clm:implement`
+- THEN its `CLAUDE.md` holds `/clm:propose`, `/clm:build` and `/clm:help`, and not `/clm:implement`
 
 #### Needs
 - plugin/skill-named-build
+- plugin/help-skill
 
 ### Requirement: doc-readers-marked
 Each test file under `crates/clm-init/tests/` that reads a file of this repository's own tree (not a fixture's) at a path `ledger`'s `doc_only` names, such as `ARCHITECTURE.md`, SHALL hold a `clm:reads` marker (`check.affected/affected-readers`) whose glob matches every such path it reads, so a land that changes one of them runs it even when its code was already checked (`land/selected-tests`).
@@ -624,3 +623,18 @@ The guide's entry pages SHALL stay written for a newcomer (`guide-entry-pages-fo
 - GIVEN a `quickstart` page that meets the rule and holds a fenced block with `clm status` in it
 - WHEN the rule runs on it
 - THEN it reports nothing
+
+### Requirement: guide-constraints-page
+`clm guide constraints` SHALL print a page titled `# CLM's constraints`, built from `model`'s compiled copy of CLM's carried entries (`model/carried-constraints`), never from the repository it runs in: a short preamble saying these are the architectural constraints every project built with CLM follows, from the `clm` it runs, what each tier means (`method`: CLM relies on it and a project can't replace it; `replaceable`: a project may replace it with its own constraint that keeps the stated guarantee; `default`: a project may drop it), and that a project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, which a human reviews; Names in backticks that the page doesn't list are CLM's own decisions and constraints, kept in CLM's repository: they say why, and the rule is the text the page gives; then, for each carried entry in CLM's order, `## <slug>`, a line `Tier: <tier>`, its statement and, for a `replaceable` entry, a line `Guarantee: <text>`. It SHALL exit 0 and read no file at run time. Its tests hold a `clm:reads` marker naming `ARCHITECTURE.md` (`doc-readers-marked`).
+
+#### Scenario: the page
+- GIVEN the binary built from this repository
+- WHEN `clm guide constraints` runs in a directory that isn't in a repository
+- THEN it exits 0, its first line is `# CLM's constraints`, it holds `## proven-by-tests` followed by `Tier: method`, `## expand-contract` with `Tier: replaceable` and a `Guarantee:` line, and `## yagni` with `Tier: default`, and it holds no `## web-optional`
+
+#### Needs
+- model/carried-constraints
+
+#### Serves
+- architecture/carried-constraints
+- architecture/method-in-the-plugin
