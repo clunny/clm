@@ -11,7 +11,7 @@ serves: [capability/follow-from-browser, capability/see-project-state, capabilit
 ---
 
 ## Contract
-A hosted web app at `https://clm-app.dev/app/`, served by one shared Cloudflare Worker (`web.worker`) beside CLM's public site, which `web.site` builds and this component's build puts at the site's root (`public-site`), where invited people signed in with GitHub see the CLM repos they can read: the spec graph, the spec branches proposed for review, implementation progress and the backlog. It approves a spec branch by appending an `approved` record to the signed-in person's web ledger (`per-writer-ledgers`), records that person's choice to be notified about a repo as a `subscribed` or `unsubscribed` record there (`push-subscriptions-in-ledger`), takes a proposal for the backlog as a `proposed` record, which `clm rebase` files as a backlog item on the next build (`web-proposals-as-ledger-records`), records a comment on a spec branch's diff or a request that it change as a `commented` or `changes_requested` record, the latter holding the branch's land until the author pushes a change or the requester approves (`web-review-feedback-as-ledger-records`), records a review decision on a capability or an architectural constraint as a `decided` record (`review-capability-cost`), and writes nothing else to the repository. Open pages show a change within seconds of its push (`web-live-channel`), and the installed app can notify people when something waits on them. What it caches is derived from git and GitHub and can be deleted at any time (`web-derived-cache`). It works on phones and installs as a PWA.
+A hosted web app at `https://clm-app.dev/app/`, served by a Cloudflare Worker (`web.worker`) that claims the app's paths on `clm-app.dev`, beside CLM's public site at the root, which `web.site` builds and deploys as a Worker of its own (`public-site`, `site-worker-of-its-own`), where invited people signed in with GitHub see the CLM repos they can read: the spec graph, the spec branches proposed for review, implementation progress and the backlog. It approves a spec branch by appending an `approved` record to the signed-in person's web ledger (`per-writer-ledgers`), records that person's choice to be notified about a repo as a `subscribed` or `unsubscribed` record there (`push-subscriptions-in-ledger`), takes a proposal for the backlog as a `proposed` record, which `clm rebase` files as a backlog item on the next build (`web-proposals-as-ledger-records`), records a comment on a spec branch's diff or a request that it change as a `commented` or `changes_requested` record, the latter holding the branch's land until the author pushes a change or the requester approves (`web-review-feedback-as-ledger-records`), records a review decision on a capability or an architectural constraint as a `decided` record (`review-capability-cost`), and writes nothing else to the repository. Open pages show a change within seconds of its push (`web-live-channel`), and the installed app can notify people when something waits on them. What it caches is derived from git and GitHub and can be deleted at any time (`web-derived-cache`). It works on phones and installs as a PWA.
 
 **Invited users** (`invite-only-web`). Only these GitHub logins may sign in. Anyone else gets a "not invited" page, and sees nothing of any repository. The public site is open to everyone (`web/site-served-directly`). Adding someone is a change to this list.
 
@@ -45,18 +45,20 @@ While the page is visible (`document.visibilityState`), the app refreshes about 
 
 **Size** (`slim-components`). This component's code budget is 105,000 tokens, above the default, because this component is one browser app with one shell: `web/src/main.ts` routes every view, holds what they were drawn from and runs the one refresh they share, `web/src/styles.css` styles them all, and the end-to-end tests drive them through that shell. Splitting a view out would leave its child reaching into the shell's state and styles, a cycle `depends_on` can't hold, so the parts that stand alone, the Worker and the live socket, Notify me switch and push handlers, are the children, and the rest stays here. The spec's budget is 16,000 for the same reason: every view's rules are rules of the one app.
 
-**Deploy.** The app is served at `https://clm-app.dev/app/` and the site at the root, a Workers Custom Domain on the `clm-app.dev` zone, which the operator registered through Cloudflare Registrar on their Cloudflare account. `web/wrangler.toml` declares:
+**Deploy.** The app is served at `https://clm-app.dev/app/` and the site at the root (`site-worker-of-its-own`). The `clm-app.dev` Custom Domain, on the zone the operator registered through Cloudflare Registrar on their Cloudflare account, belongs to the site's Worker (`web.site/site-worker`); this Worker claims the app's paths on the same hostname as routes, which Cloudflare runs before the Custom Domain's Worker. `web/wrangler.toml` declares:
 - `name = "clm"`, the Worker;
-- `routes = [{ pattern = "clm-app.dev", custom_domain = true }]`, so Cloudflare creates the DNS record and certificate on deploy;
+- `routes` with `zone_name = "clm-app.dev"` and exactly the patterns `clm-app.dev/app`, `clm-app.dev/app/*`, `clm-app.dev/api/*`, `clm-app.dev/auth/*`, `clm-app.dev/webhook`, `clm-app.dev/_clm/*` and `clm-app.dev/sw.js`, and no Custom Domain;
 - `[[kv_namespaces]]` with `binding = "CLM"` and `id = "9fa493aaa0a54d219b2dfebb5f681b9e"` (the namespace titled `clm-cache`);
 - `[[durable_objects.bindings]]` and a `[[migrations]]` entry with `tag = "v1"` for `Live` (`live-binding`, `web.live`), SQLite-backed since the Free plan has only those. A binding to a class the Worker doesn't export fails the deploy, and `web.worker` exports `Live`; a test under `web/` reads them;
 - `[triggers]` with `crons = []`: nothing runs on a schedule, since the `Replica` objects work on their own alarms (`web-repo-replica`), and the empty list is what clears the Cron Trigger earlier deploys created, because `wrangler deploy` leaves the deployed triggers as they are when `crons` is absent (`no-cron-trigger`);
-- the static assets, `web/dist/`, whose `run_worker_first` routes only `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app` to the Worker (`["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]`), so the assets alone answer the site, the app's own files under `/app/` and the retiring `/sw.js` (`retire-root-service-worker`), to everyone and without spending a Worker request (`site-served-from-assets`). `not_found_handling` is `"404-page"`: a missing path gets the site's `/404.html` with status 404, from the assets and with no Worker request. The app routes by hash, so it needs no fallback page.
+- the static assets, `web/dist/`, holding the app under `app/`, `_clm/invited.json` and the retiring `/sw.js` (`retire-root-service-worker`), whose `run_worker_first` routes only `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app` to the Worker's script, so the app's own files under `/app/` and `/sw.js` are answered from the assets without a script run. `not_found_handling` is `"none"`: a missing path under `/app/` gets a plain 404. The app routes by hash, so it needs no fallback page.
+
+The move from one Worker to two happens once on the live zone, in an order that never leaves the app's paths unanswered: this Worker's routes are deployed before the site's Worker takes the Custom Domain from it. The build that makes the move says the order in its pull request, and the human runs it.
 
 **Setup.** Nothing in the build or a deploy waits on it:
 - the GitHub App exists, and its credentials are Worker secrets;
 - the KV namespace `clm-cache` exists;
-- the repo's Actions secrets hold `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, a token from the "Edit Cloudflare Workers" template limited to the operator's account and the `clm-app.dev` zone.
+- the repo's Actions secrets hold `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, a token from the "Edit Cloudflare Workers" template limited to the operator's account and the `clm-app.dev` zone, with the zone's Workers Routes permission, which both Workers' deploys use.
 
 To rotate a credential, generate a new private key or client secret in the App's settings and `wrangler secret put` it. `web/README.md` gives these commands. `web/README.md` also carries the App's manifest, which must be the one in `web.worker`'s Design; a test under `web/` holds a copy of that manifest and checks the README against it, since no test reads `specs/`. Both list `push` and `pull_request` under `default_events`.
 
@@ -718,12 +720,12 @@ Every request the app makes to load data again after the Worker answered one of 
 - THEN the review is requested again with `fresh` set
 
 ### Requirement: app-at-app-path
-`web`'s build SHALL put `web.site`'s build at the root of `web/dist/`, the app, built with Vite's `base` `/app/`, at `web/dist/app/`, and the invited list at `web/dist/_clm/invited.json`. The app's end-to-end tests SHALL open it at `/app/`. Moving the app moves the test fixtures of other components that open it at `/` (`capabilities/web/`'s harness and specs): this build makes those fixes and names them in its pull request (`path-ownership`). Among them, the harness's `signIn` SHALL open `/app/` once the callback has set the session, wherever the callback sends the browser, so it holds both before and after `web.worker/sign-in-opens-app` points the callback at `/app/`. This requirement is built first of the move's: `installable` and `retire-root-service-worker` assume the app is served from `/app/`.
+`web`'s build SHALL put the app, built with Vite's `base` `/app/`, at `web/dist/app/`, the invited list at `web/dist/_clm/invited.json` and the retiring service worker at `web/dist/sw.js`, and SHALL NOT build `web.site`, which deploys on its own (`site-worker-of-its-own`). The capability harness built the site through this build, so this build moves it off: `capabilities/web/`'s `globalSetup` builds `web/site/` itself and its harness serves that output at `/` beside the app and the Worker, as the two Workers answer on the zone, a fix this build makes and names in its pull request (`path-ownership`). The app's end-to-end tests SHALL open it at `/app/`. Moving the app moves the test fixtures of other components that open it at `/` (`capabilities/web/`'s harness and specs): this build makes those fixes and names them in its pull request (`path-ownership`). Among them, the harness's `signIn` SHALL open `/app/` once the callback has set the session, wherever the callback sends the browser, so it holds both before and after `web.worker/sign-in-opens-app` points the callback at `/app/`. This requirement is built first of the move's: `installable` and `retire-root-service-worker` assume the app is served from `/app/`.
 
 #### Scenario: built tree
 - GIVEN a build of `web/`
 - WHEN a test reads `web/dist/`
-- THEN `app/index.html` is the app's page and loads its scripts from `/app/`, `index.html` is the site's homepage, `guide/` holds the guide's pages, and `_clm/invited.json` holds the invited list
+- THEN `app/index.html` is the app's page and loads its scripts from `/app/`, `_clm/invited.json` holds the invited list, `sw.js` is the retiring service worker, and there is no `index.html` or `guide/` at its root
 
 #### Scenario: the app's links
 - GIVEN the app at `/app/`
@@ -731,8 +733,8 @@ Every request the app makes to load data again after the Worker answered one of 
 - THEN it shows `o/a`'s backlog, and its sign-in button leads to `/auth/login`
 
 #### Needs
-- web.site/homepage-first-screen
-- web.site/guide-pages
+- web.site/site-worker
+- ci/site-deploy
 
 #### Serves
 - capability/learn-clm
@@ -983,17 +985,17 @@ Zooming the graph SHALL keep the point under the pointer where it is on screen: 
 - capability/follow-from-browser
 
 ### Requirement: site-served-directly
-`web/wrangler.toml`'s `run_worker_first` SHALL send to the Worker exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so the assets answer every other path, with no session read and no Worker request, and `not_found_handling` SHALL be `"404-page"`. Changing the routing moves the test fixtures that repeat it (`capabilities/web/harness.ts`'s `run_worker_first` and `not_found_handling`, `crates/clm-web/tests/deploy.rs`): this build makes those fixes and names them in its pull request (`path-ownership`).
+`web/wrangler.toml` SHALL route to this Worker, on `clm-app.dev`, exactly the app's paths, `/app`, `/app/*`, `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/sw.js`, with no Custom Domain, so every other path reaches the site's Worker (`web.site/site-worker`); its `run_worker_first` SHALL send to the script exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so its assets answer the app's files and `/sw.js` with no script run, and `not_found_handling` SHALL be `"none"`. Changing the routing moves the test fixtures that repeat it (`capabilities/web/harness.ts`'s `run_worker_first` and `not_found_handling`, `crates/clm-web/tests/deploy.rs`): this build makes those fixes and names them in its pull request (`path-ownership`).
 
 #### Scenario: who answers what
 - GIVEN the repository
 - WHEN a test reads `web/wrangler.toml`
-- THEN its `run_worker_first` sends `/api/repos`, `/auth/login`, `/webhook`, `/_clm/invited.json` and `/app` to the Worker and not `/`, `/guide/quickstart`, `/404.html`, `/app/`, `/app/main.js` or `/sw.js`, and `not_found_handling` is `"404-page"`
+- THEN its routes are exactly those seven patterns on `clm-app.dev`, none is a Custom Domain, its `run_worker_first` sends `/api/repos`, `/auth/login`, `/webhook`, `/_clm/invited.json` and `/app` to the script and not `/app/`, `/app/main.js` or `/sw.js`, and `not_found_handling` is `"none"`
 
-#### Scenario: a missing page
-- GIVEN the built assets under that routing and no session
-- WHEN a browser asks for `/guide/nothing-here`
-- THEN the answer is status 404 with the site's `/404.html`
+#### Scenario: the site isn't the app's
+- GIVEN the routes of `web/wrangler.toml`
+- WHEN a test matches `/`, `/guide/quickstart`, `/blog/`, `/blog/feed.xml`, `/privacy` and `/404.html` against them
+- THEN none matches, and `/app/`, `/api/repos`, `/auth/login`, `/webhook`, `/_clm/invited.json` and `/sw.js` each match one
 
 #### Serves
 - capability/learn-clm

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLM blog mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;padding:24px 16px 80px;background:#05070f;font-family:Inter,system-ui,sans-serif;color:#e6e8f2}
+  .q{max-width:1040px;margin:0 auto 18px}
+  .q h1{font-size:22px;margin:0 0 6px;color:#fff}
+  .q p{color:#9aa0b8;margin:0;font-size:14px;line-height:1.5}
+  .lbl{max-width:1040px;margin:40px auto 10px;display:flex;align-items:center;gap:10px;font-size:13px;color:#9aa0b8}
+  .lbl b{background:#6b73ff;color:#fff;border-radius:6px;padding:3px 9px;font-size:12px}
+  .pick{margin-left:auto;border:1px solid #3a3f5c;border-radius:6px;padding:4px 10px;cursor:pointer;color:#c9cde0}
+  .pick.selected{background:#6b73ff;border-color:#6b73ff;color:#fff}
+  .pg{background:#0b0e1a;border-radius:12px;overflow:hidden;line-height:1.5;max-width:1040px;margin:0 auto;border:1px solid #1b1f38}
+  .nav{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#9aa0b8;padding:18px 36px;border-bottom:1px solid #1b1f38}
+  .nav b{color:#fff;font-size:16px;letter-spacing:.05em}
+  .nav .on{color:#fff;border-bottom:2px solid #8b93ff;padding-bottom:3px}
+  .nav .gh{border:1px solid #3a3f5c;padding:4px 9px;border-radius:6px;color:#c9cde0}
+  .head{padding:44px 36px 30px;background:radial-gradient(ellipse at 80% 0%,#1d2150 0%,#0b0e1a 65%)}
+  .k{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8b93ff;margin-bottom:8px}
+  .head h2{font-size:34px;margin:0 0 10px;color:#fff;font-weight:800;letter-spacing:-.02em}
+  .head p{color:#b7bcd3;font-size:16px;max-width:640px;margin:0}
+  .head .rss{display:inline-block;margin-top:16px;font-size:13px;color:#9ad1ff}
+  /* A: grid */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:8px 36px 40px}
+  .card{background:#121630;border:1px solid #232849;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,transform .15s}
+  .card:hover{border-color:#4a52a8;transform:translateY(-2px)}
+  .meta{font-size:12px;color:#8a90a8;display:flex;gap:8px;align-items:center}
+  .part{font-family:'JetBrains Mono',monospace;font-size:11px;color:#9ad1ff;background:#0f1730;border:1px solid #24345e;border-radius:5px;padding:2px 7px}
+  .card h3{margin:0;font-size:17px;line-height:1.3;color:#fff;font-weight:700}
+  .card p{margin:0;font-size:13.5px;color:#a9aec6;flex:1}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:11px;color:#b7bcd3;background:#181d3d;border-radius:999px;padding:2px 9px}
+  .soon{border-style:dashed;opacity:.55}
+  .soon h3{color:#c9cde0}
+  /* B: featured + list */
+  .feat{margin:8px 36px 26px;display:grid;grid-template-columns:1.1fr .9fr;gap:24px;background:#121630;border:1px solid #2f3566;border-radius:14px;padding:26px;align-items:center}
+  .feat h3{font-size:26px;line-height:1.2;margin:8px 0 10px;color:#fff;font-weight:800;letter-spacing:-.01em}
+  .feat p{color:#b7bcd3;margin:0 0 14px}
+  .btn{display:inline-block;padding:9px 15px;border-radius:8px;font-size:14px;font-weight:600;background:#6b73ff;color:#fff}
+  .art{height:190px;border-radius:10px;background:radial-gradient(circle at 30% 30%,#2b3290,#121630 70%);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;color:#9ad1ff;font-size:14px;border:1px solid #2f3566}
+  .list{padding:0 36px 40px}
+  .row{display:grid;grid-template-columns:70px 1fr 120px;gap:18px;padding:16px 0;border-top:1px solid #1b1f38;align-items:baseline}
+  .row .n{font-family:'JetBrains Mono',monospace;color:#5ec8ff;font-size:13px}
+  .row h4{margin:0 0 4px;font-size:16px;color:#fff}
+  .row p{margin:0;font-size:13.5px;color:#a9aec6}
+  .row .d{font-size:12px;color:#8a90a8;text-align:right}
+  /* post */
+  .post{display:grid;grid-template-columns:1fr 220px;gap:40px;padding:40px 36px 50px}
+  .post .crumb{font-size:13px;color:#8a90a8;margin-bottom:14px}
+  .post .crumb a{color:#9ad1ff;text-decoration:none}
+  .post h2{font-size:36px;line-height:1.12;margin:6px 0 12px;color:#fff;font-weight:800;letter-spacing:-.02em}
+  .post .lede{font-size:17px;color:#b7bcd3;margin:0 0 16px}
+  .byline{display:flex;gap:10px;font-size:13px;color:#8a90a8;padding-bottom:22px;border-bottom:1px solid #1b1f38;margin-bottom:22px}
+  .post .body p{color:#c9cde0;font-size:16px;line-height:1.7;margin:0 0 16px;max-width:680px}
+  .post .body h3{color:#fff;font-size:21px;margin:26px 0 10px}
+  .post blockquote{margin:0 0 16px;border-left:3px solid #8b93ff;padding:4px 0 4px 16px;color:#c9d6f5;font-size:15px}
+  .post pre{background:#0f1224;border:1px solid #2a2f52;border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:13px;color:#9ad1ff;max-width:650px}
+  .side{font-size:13px;color:#9aa0b8}
+  .side .box{background:#121630;border:1px solid #232849;border-radius:10px;padding:14px;margin-bottom:14px;position:sticky;top:12px}
+  .side b{color:#fff;display:block;margin-bottom:8px}
+  .side ol{margin:0;padding-left:18px;line-height:1.9}
+  .side .cur{color:#fff;font-weight:600}
+  .side .dim{color:#5c6280}
+  .pn{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:0 36px 40px}
+  .pn div{background:#121630;border:1px solid #232849;border-radius:10px;padding:14px 16px;font-size:13px;color:#8a90a8}
+  .pn b{display:block;color:#fff;font-size:15px;margin-top:4px}
+  .pn .r{text-align:right}
+  .foot{padding:16px 36px;font-size:12px;color:#6f7590;border-top:1px solid #1b1f38;display:flex;justify-content:space-between}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}.feat,.post{grid-template-columns:1fr}.row{grid-template-columns:50px 1fr}.row .d{display:none}}
+</style></head><body>
+
+<div class="q">
+  <h1>CLM blog: three screens</h1>
+  <p>Two ways to lay out the blog's main page (A and B), then a post page. Copy and posts are real; the mock assumes parts 1–3 are published and the rest are still drafts. The human chose A on 2026-11-05.</p>
+</div>
+
+<!-- ============ A ============ -->
+<div class="lbl"><b>A</b> Main page: a grid of cards, newest first</div>
+<div class="pg">
+  <div class="nav"><b>CLM</b><span>How it works &nbsp;·&nbsp; Guide &nbsp;·&nbsp; <span class="on">Blog</span> &nbsp;·&nbsp; Get started &nbsp;·&nbsp; Web app &nbsp;&nbsp;<span class="gh">★ 1.2k</span></span></div>
+  <div class="head">
+    <div class="k">Blog</div>
+    <h2>Building software when AI writes every line</h2>
+    <p>What we've learned building CLM with CLM: the ideas, the mechanisms, and the things that didn't work. One post at a time.</p>
+    <span class="rss">RSS feed →</span>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="meta"><span class="part">Part 3</span>12 Nov 2026 · 7 min read</div>
+      <h3>Give the AI less context, not more</h3>
+      <p>CLM gives an AI build session one component's ancestors and its dependencies' contracts, not your whole repo, and keeps each component small enough for that to be enough.</p>
+      <div class="tags"><span class="tag">context engineering</span><span class="tag">architecture</span></div>
+    </div>
+    <div class="card">
+      <div class="meta"><span class="part">Part 2</span>8 Nov 2026 · 7 min read</div>
+      <h3>Every requirement has a test that names it, at its version</h3>
+      <p>A requirement counts as built only when a passing test cites it by ID and content-hash version, so rewording the spec marks its tests out of date without anyone having to remember.</p>
+      <div class="tags"><span class="tag">testing</span><span class="tag">traceability</span></div>
+    </div>
+    <div class="card">
+      <div class="meta"><span class="part">Part 1</span>5 Nov 2026 · 6 min read</div>
+      <h3>Stop reviewing AI's code. Review its intent.</h3>
+      <p>AI can write the code, but it can't decide what the system is for: CLM gives humans the spec, gives AI all of the code, and lets programs keep the two in sync.</p>
+      <div class="tags"><span class="tag">code review</span><span class="tag">spec-driven</span></div>
+    </div>
+  </div>
+  <div class="foot"><span>CLM is built with CLM.</span><span>Guide · Blog · GitHub · Privacy</span></div>
+</div>
+
+<!-- ============ B ============ -->
+<div class="lbl"><b>B</b> Main page: the latest post featured, the series listed below</div>
+<div class="pg">
+  <div class="nav"><b>CLM</b><span>How it works &nbsp;·&nbsp; Guide &nbsp;·&nbsp; <span class="on">Blog</span> &nbsp;·&nbsp; Get started &nbsp;·&nbsp; Web app &nbsp;&nbsp;<span class="gh">★ 1.2k</span></span></div>
+  <div class="head">
+    <div class="k">Blog</div>
+    <h2>Building software when AI writes every line</h2>
+    <p>What we've learned building CLM with CLM, one post at a time.</p>
+  </div>
+  <div class="feat">
+    <div>
+      <div class="meta"><span class="part">Latest · Part 3</span>12 Nov 2026 · 7 min read</div>
+      <h3>Give the AI less context, not more</h3>
+      <p>CLM gives an AI build session one component's ancestors and its dependencies' contracts, not your whole repo, and keeps each component small enough for that to be enough.</p>
+      <span class="btn">Read it</span>
+    </div>
+    <div class="art">clm context &lt;component&gt;</div>
+  </div>
+  <div class="list">
+    <div class="k" style="margin:6px 0 4px">The series so far</div>
+    <div class="row"><span class="n">02</span><div><h4>Every requirement has a test that names it, at its version</h4><p>Rewording the spec marks its tests out of date without anyone having to remember.</p></div><span class="d">8 Nov · 7 min</span></div>
+    <div class="row"><span class="n">01</span><div><h4>Stop reviewing AI's code. Review its intent.</h4><p>Humans own the spec, AI owns all of the code, programs keep the two in sync.</p></div><span class="d">5 Nov · 6 min</span></div>
+  </div>
+  <div class="foot"><span>CLM is built with CLM.</span><span>Guide · Blog · GitHub · Privacy</span></div>
+</div>
+
+<!-- ============ Post ============ -->
+<div class="lbl"><b>Post</b> A post page (part 2), with the series alongside</div>
+<div class="pg">
+  <div class="nav"><b>CLM</b><span>How it works &nbsp;·&nbsp; Guide &nbsp;·&nbsp; <span class="on">Blog</span> &nbsp;·&nbsp; Get started &nbsp;·&nbsp; Web app &nbsp;&nbsp;<span class="gh">★ 1.2k</span></span></div>
+  <div class="post">
+    <div>
+      <div class="crumb"><a>Blog</a> / Part 2 of the CLM series</div>
+      <h2>Every requirement has a test that names it, at its version</h2>
+      <p class="lede">A requirement counts as built only when a passing test cites it by ID and content-hash version, so rewording the spec marks its tests out of date without anyone having to remember.</p>
+      <div class="byline"><span>8 Nov 2026</span>·<span>7 min read</span>·<span>testing, traceability</span></div>
+      <div class="body">
+        <p>Your spec says one thing, your code does another, and nobody can tell you when they parted. With an AI agent writing the code it gets worse: the agent says "done", the tests are green, and you have no way to see which sentence of the spec those tests were written to prove.</p>
+        <h3>The rule</h3>
+        <p>CLM's <code>ARCHITECTURE.md</code> holds the constraint <code>proven-by-tests</code>:</p>
+        <blockquote>A requirement SHALL count as implemented only when a passing test cites its ID at its current version.</blockquote>
+        <pre>req:&lt;component&gt;/&lt;slug&gt;@&lt;version&gt;</pre>
+        <p>…</p>
+      </div>
+    </div>
+    <div class="side">
+      <div class="box">
+        <b>The CLM series</b>
+        <ol>
+          <li>Stop reviewing AI's code…</li>
+          <li class="cur">Every requirement has a test…</li>
+          <li>Give the AI less context…</li>
+          <li class="dim">Coming soon</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <div class="pn">
+    <div>← Previous<b>Stop reviewing AI's code. Review its intent.</b></div>
+    <div class="r">Next →<b>Give the AI less context, not more</b></div>
+  </div>
+  <div class="foot"><span>CLM is built with CLM.</span><span>Guide · Blog · GitHub · Privacy</span></div>
+</div>
+
+</body></html>

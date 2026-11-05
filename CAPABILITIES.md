@@ -29,6 +29,18 @@ Without it nobody can tell whether the site does what `learn-clm` asks, or where
 - WHEN a visitor opens the homepage, clicks Get started and copies the install command on the quickstart
 - THEN the service has loaded on both pages with that website ID and Do Not Track honoured, and received a `click` labelled Get started and a `copy-command` naming the quickstart and the command
 
+### Capability: publish-posts
+The maintainer can keep blog posts about CLM in the repository as drafts and publish them on the public site one at a time, as a series, without cutting a CLM release; a draft is never visible, listed or searchable, and a published post is found by search engines and AI assistants as the guide is.
+
+#### Why
+Posts bring people to CLM over time, released one by one; tying each to a plugin release would ship CLM to publish a page, and a post that leaked early would spoil the series.
+
+#### Scenario: publishing one post of a series
+- GIVEN the site's source with three posts of one series, parts 1 and 2 published and part 3 a draft
+- WHEN the site is built as the site workflow builds it, and a visitor opens `/blog/` and part 2, and a crawler reads the sitemap, `llms.txt` and the feed
+- THEN parts 1 and 2 are listed, linked and found everywhere, part 2 links back to part 1 and on to nothing, and part 3's title appears nowhere
+- AND after part 3's `draft` is set to `false` and the site is built again, part 3 is listed, linked from part 2 and found everywhere
+
 ### Capability: adopt-clm
 A person can bring a new or existing repository under CLM: set up its tooling and get a first spec, drafted from a conversation or recovered from the code.
 

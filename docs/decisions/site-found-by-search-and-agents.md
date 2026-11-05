@@ -19,3 +19,5 @@ Rejected:
 - **Committed `llms.txt` / `llms-full.txt`.** A copy that a check must keep equal, when the build can make it.
 - **A live star badge (shields.io or a client-side API call).** A third-party request on every visit, invisible to crawlers that don't run script.
 - **Blocking AI training crawlers while allowing AI search.** Training is how assistants come to know CLM without a search; there is nothing on the site to protect.
+
+(Amended 2026-11-05, `20261105-site-blog`: the site is now a Worker of its own, built and deployed by the site workflow a human dispatches, `.github/workflows/site.yml` (`site-worker-of-its-own`, `ci/site-deploy`). The star count is read when that workflow builds the site, so it is as old as the last site deploy, and a failed read never fails a deploy.)

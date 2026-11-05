@@ -15,3 +15,5 @@ The public site (`web.site`) measures how newcomers use it (`see-site-use`): pag
 **Blocked visitors are not chased.** Developers block trackers often, so Umami undercounts. Serving its script through our own domain to get past blockers was rejected: a visitor who blocks trackers has chosen not to be tracked. Do Not Track is honoured for the same reason. The undercount is judged against Cloudflare's own traffic numbers for the zone, counted at the edge with no script, read in its dashboard.
 
 **Only the site.** The app under `/app/` is used by invited people only and isn't measured. How CLM is used after install, in people's own repositories, is a separate question (`backlog/cli-usage-reporting`).
+
+(Amended 2026-11-05, `20261105-site-blog`: the site is now a Worker of its own, built and deployed by the site workflow a human dispatches, `.github/workflows/site.yml` (`site-worker-of-its-own`, `ci/site-deploy`). That workflow, not the release's `web` job, sets `UMAMI_WEBSITE_ID` from the Actions variable, so the deployed site, and no other build, reports.)
