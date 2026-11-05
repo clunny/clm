@@ -1545,6 +1545,7 @@ fn shown_text(shown: &clm_host::Shown) -> String {
     let none = || "none".to_string();
     let mut lines = vec![
         format!("author: {}", shown.author),
+        format!("author id: {}", shown.author_id),
         format!("state: {}", shown.state),
         format!("title: {}", shown.title),
     ];
