@@ -26,9 +26,9 @@ CLM's own architectural constraints that govern how any project is built with it
 
 Each carried constraint in CLM's `ARCHITECTURE.md` holds a `#### Carries` block with one line, its tier:
 
-- **`method`**: CLM's machinery relies on it; a project can't replace it. `ai-writes-code`, `humans-review-intent`, `deterministic-enforcement`, `proven-by-tests`, `no-silent-drift`, `git-is-truth`, `hash-based-staleness`, `regenerate-dont-merge`, `ancestor-scoped-context`, `spec-is-current`, `traced-rules`, `path-ownership`, `approval-policy`, `land-locally`, `incremental-adoption`.
+- **`method`**: CLM's machinery relies on it; a project can't replace it. `ai-writes-code`, `humans-review-intent`, `deterministic-enforcement`, `proven-by-tests`, `no-silent-drift`, `git-is-truth`, `hash-based-staleness`, `regenerate-dont-merge`, `ancestor-scoped-context`, `spec-is-current`, `traced-rules`, `path-ownership`, `approval-policy`, `land-locally`, `incremental-adoption`, `redesign-before-workaround` (CLM's workaround flags and the build's exit enforce it).
 - **`replaceable`**: CLM relies on a guarantee, which the entry states in a `#### Guarantee` block, and the entry's technique is one way to give it. A project may replace the entry with its own constraint that keeps the guarantee. `expand-contract` (every land leaves `main` green while the components that use a contract haven't moved yet), `no-dead-code` (all code serves a current requirement, and a program the project names finds what doesn't), `slim-components` (one build session can hold a component's spec and code), `fold-small-defer-large` (work found during a change is either in it or recorded in the backlog, never lost).
-- **`default`**: an opinion CLM's machinery doesn't rely on; a project may drop it. `yagni`, `reuse-first`, `right-over-convenient`, `redesign-before-workaround`, `ask-the-architect`.
+- **`default`**: an opinion CLM's machinery doesn't rely on; a project may drop it. `yagni`, `reuse-first`, `right-over-convenient`, `ask-the-architect`.
 
 Every other constraint is about CLM's own code (its guard, ledgers, web app, claims) and isn't carried. Carried entries that say "CLM SHALL" of what any project does are reworded to say "the project", so they read right in either repository.
 

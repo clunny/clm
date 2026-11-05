@@ -17,6 +17,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Needs:** a requirement's list of other components' requirements that must be built before it can be (`#### Needs`). *Usually:* a dependency between tasks.
 - **Serves:** which capabilities or architectural constraints a rule exists for (`serves`, `#### Serves`). *Usually:* traceability.
 - **Enforced by / Untested:** the blocks of an architectural constraint naming the rules that check it by program (`#### Enforced by`), and what no program can check and why (`#### Untested`).
+- **Carries / Guarantee / Replaces:** blocks of an architectural constraint about CLM's carried constraints. In CLM's own `ARCHITECTURE.md`, `#### Carries` names a carried constraint's tier and `#### Guarantee` states what CLM relies on for a `replaceable` one. In a project's, `#### Replaces` names the carried constraints an entry replaces or drops.
 - **Decision:** a significant choice and its reasons, one file in `docs/decisions/`. *Usually:* an architecture decision record (ADR).
 - **Settings:** `clm.toml` for the project, `clm.local.toml` for one clone, `~/.config/clm/config.toml` for you (`clm config`).
 

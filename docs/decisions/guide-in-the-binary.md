@@ -15,4 +15,6 @@ Rejected:
 - **Link to the hosted guide (GitHub or the web app).** Needs the network and a host (`host-adapters`), reads `main` rather than the version that runs, and makes the web app or GitHub a dependency of learning the method (`web-optional`).
 - **Copy the pages into the plugin at release.** Two copies to keep equal, which `regenerate-dont-merge` would need a check for; the binary already ships with every plugin version.
 
+**Amended 2026-11-04** (`20261104-help-and-carried-constraints`). One page, `constraints`, is generated from the carried entries of CLM's `ARCHITECTURE.md` rather than read from `docs/guide/` (`carried-constraints`).
+
 **Amended 2026-10-29** (`20261029-refounding`). `web` no longer bundles the guide (`guide-from-docs`, amended); `clm guide` is the one way the pages are served, and `ledger` counts `docs/guide/` as code because the binary compiles it in.

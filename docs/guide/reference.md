@@ -4,7 +4,7 @@ The skills, the commands' settings and where to read more: a page to look things
 
 - [Spec format](../spec-format.md) (`clm guide spec-format`): components, requirements and scenarios, deltas, building by component, decisions and the backlog.
 - Why CLM works the way it does: CLM's own repository records each significant choice in CLM as a file in its `docs/decisions/`, with its reasons and what was rejected. Your project records its own choices the same way, in its `docs/decisions/`.
-- CLM's own architectural constraints are in its repository's `ARCHITECTURE.md`, and its component map in the Design of its root component, `specs/SPEC.md`. The architectural constraints that `clm init` puts in your project's `ARCHITECTURE.md` come from there.
+- CLM's own architectural constraints are in its repository's `ARCHITECTURE.md`, and its component map in the Design of its root component, `specs/SPEC.md`. The architectural constraints CLM carries into every project come from there: `clm guide constraints` prints them from the `clm` you run.
 
 ## Skills
 
@@ -15,6 +15,7 @@ The skills, the commands' settings and where to read more: a page to look things
 | `/clm:build` | build everything ready, in parallel, until the queue is empty |
 | `/clm:triage` | work the backlog down from a menu: approve designed changes, answer questions, brainstorm ideas, draft bugs in the background, and approve the drafts that need review in one go |
 | `/clm:contribution` | take in a contributor's pull request or issue: judge its files, show it to you, close it or land it on your yes |
+| `/clm:help` | ask how CLM works or how to do something; it answers from the guide and changes nothing |
 | `/clm:health` | read the health report and propose cuts, for you to take to `/clm:propose` |
 
 ## Commands

@@ -284,7 +284,7 @@ One build session can hold a component's spec and its code: a build sees only it
 Splitting along seams rather than to satisfy a number is a judgement.
 
 ### Constraint: method-in-the-plugin
-Whatever a person or session must know to run a project with CLM SHALL be said by the plugin's skills or by a page of the guide, `docs/guide/`, which the `clm` binary carries and prints with `clm guide <page>`. This repository's decisions and specs may say why, but are never the only place a working rule is written (`guide-in-the-binary`).
+Whatever a person or session must know to run a project with CLM SHALL be said by the plugin's skills or by a page of the guide, which the `clm` binary carries and prints with `clm guide <page>`: the pages of `docs/guide/`, and `constraints`, generated from the carried entries of this file (`carried-constraints`). This repository's decisions and specs may say why, but are never the only place a working rule is written (`guide-in-the-binary`).
 
 #### Scenario: offline adopter
 - GIVEN an adopter with the plugin installed and no network
@@ -296,6 +296,7 @@ Whatever a person or session must know to run a project with CLM SHALL be said b
 - init/guide-table-from-files
 - init/guide-links-inside
 - init/claude-md-points-at-guide
+- init/guide-constraints-page
 
 #### Untested
 That no working rule is written only in this repository is a judgement about prose.
@@ -356,7 +357,7 @@ When something gets in the way, the first question SHALL be whether the design i
 - THEN it stops and asks the architect
 
 #### Carries
-- default
+- method
 
 #### Enforced by
 - orchestrator.run/prompt-workaround
