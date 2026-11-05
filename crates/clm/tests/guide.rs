@@ -156,5 +156,5 @@ fn constraints_page() {
     );
     let at = |h: &str| lines.iter().position(|l| *l == h).unwrap();
     assert!(at("## proven-by-tests") < at("## expand-contract"));
-    assert!(at("## expand-contract") < at("## yagni"));
+    assert!(at("## yagni") < at("## expand-contract"));
 }
