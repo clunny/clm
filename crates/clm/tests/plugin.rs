@@ -763,6 +763,9 @@ fn guide_pages() -> Vec<String> {
         .collect();
     // `docs/spec-format.md` is a page too (`spec-format-in-the-guide`).
     pages.push("spec-format".to_owned());
+    // `constraints` is generated from the carried entries of `ARCHITECTURE.md`
+    // (`init/guide-constraints-page`).
+    pages.push("constraints".to_owned());
     pages.sort();
     pages
 }
@@ -4815,6 +4818,12 @@ fn architecture_auditor_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> 
             "`cd`",
             "severity",
             "Never edit",
+            "clm guide constraints",
+            "#### Replaces",
+            "#### Carries",
+            "Guarantee",
+            "`replaceable`",
+            "`default`",
         ]
         .into_iter()
         .filter(|needle| !body.contains(needle))
@@ -4825,7 +4834,7 @@ fn architecture_auditor_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> 
 
 #[test]
 fn architecture_auditor() {
-    // req:plugin/architecture-auditor@a35bc748
+    // req:plugin/architecture-auditor@e2b0c516
     let (fm, body) = frontmatter(&plugin().join("agents/architecture-auditor.md"));
     assert_eq!(fm["name"], "architecture-auditor");
     assert!(
@@ -4854,6 +4863,129 @@ fn architecture_auditor() {
     // auditor that reads only the names
     let gaps = architecture_auditor_gaps(&fm, &body.replace("docs/decisions/", "elided"));
     assert_eq!(gaps, ["architecture-auditor: must name `docs/decisions/`"]);
+    // auditor that ignores replacements
+    let gaps = architecture_auditor_gaps(&fm, &body.replace("#### Replaces", "elided"));
+    assert_eq!(gaps, ["architecture-auditor: must name `#### Replaces`"]);
+    // It reads the carried constraints unless the file's entries carry them, judges each
+    // replacement against the guarantee, and reports a first `#### Carries` block.
+    for needle in [
+        "CLM's carried constraints",
+        "`carried-constraints`",
+        "where they are already in it",
+        "quoted",
+        "each `default` constraint it drops",
+        "whose entries held none",
+    ] {
+        assert!(body.contains(needle), "{needle}");
+    }
+}
+
+/// What `help-skill` asks of the `help` skill: it answers from what the installed `clm`
+/// carries and changes nothing.
+fn help_skill_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "help",
+        body,
+        &[
+            "clm guide constraints",
+            "clm guide quickstart",
+            "clm status",
+            "clm backlog",
+            "/clm:init",
+            "/clm:propose",
+            "/clm:build",
+            "/clm:triage",
+            "/clm:health",
+            "/clm:contribution",
+            "/clm:view",
+            "`replaceable`",
+            "`default`",
+            "`method`",
+            "say its tier and what CLM relies on",
+            "never from this repository's files or a URL",
+            "rather than guess",
+            "clm guide <page>",
+            "Help changes no file.",
+        ],
+        &["docs/guide/"],
+    )
+}
+
+#[test]
+fn help_skill() {
+    // req:plugin/help-skill@67498eaa
+    let (fm, body) = frontmatter(&plugin().join("skills/help/SKILL.md"));
+    assert!(
+        fm["description"]
+            .as_str()
+            .is_some_and(|d| d.contains("questions about CLM") && d.contains("new user"))
+    );
+    assert_eq!(help_skill_gaps(&body), Vec::<String>::new());
+    // help without the guide
+    let gaps = help_skill_gaps(&body.replace("clm guide constraints", "elided"));
+    assert_reports(&gaps, "help", "clm guide constraints");
+    // help that writes
+    let gaps = help_skill_gaps(&body.replace("Help changes no file.", "elided"));
+    assert_reports(&gaps, "help", "Help changes no file.");
+    // It names the commands that write only to say it runs none of them.
+    for command in [
+        "clm claim",
+        "clm apply",
+        "clm land",
+        "clm approve",
+        "git commit",
+    ] {
+        assert!(body.contains(command), "{command}");
+    }
+}
+
+/// What `propose-replacing-constraints` asks of the `propose` skill.
+fn replacing_constraints_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "propose",
+        body,
+        &[
+            "#### Replaces",
+            "clm guide constraints",
+            "`carried-constraints`",
+            "`method`",
+            "architecture-auditor",
+            "## Open questions",
+            "`deterministic-enforcement`",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn propose_replacing_constraints() {
+    // req:plugin/propose-replacing-constraints@44f3128f
+    let body = skill_body("propose");
+    assert_eq!(replacing_constraints_gaps(&body), Vec::<String>::new());
+    // propose without replacements
+    let gaps = replacing_constraints_gaps(&body.replace("#### Replaces", "elided"));
+    assert_reports(&gaps, "propose", "#### Replaces");
+    // The paragraph tells the tier, what CLM relies on, the guarantee and what is given up,
+    // refuses a `method` constraint, and leaves the decision to the human.
+    let paragraph = body
+        .split("\n\n")
+        .find(|p| p.contains("#### Replaces"))
+        .expect("a paragraph on replacing constraints");
+    for needle in [
+        "its tier",
+        "what CLM relies on",
+        "what a replacement must guarantee",
+        "what the project gives up",
+        "Refuse to replace a `method` constraint",
+        "`replaceable`",
+        "`#### Enforced by` or `#### Untested`",
+        "the human's approval, not the audit, decides",
+        "under `## Open questions`",
+        "The `architecture-auditor` judges",
+        "`deterministic-enforcement`",
+    ] {
+        assert!(paragraph.contains(needle), "{needle}");
+    }
 }
 
 /// What `architecture-audit` asks of a skill's text.
