@@ -5,7 +5,7 @@ use std::path::Path;
 use clm_git::{REMOTE, current_branch, gh, git};
 use serde_json::Value;
 
-use crate::{Error, Host, Shown};
+use crate::{Error, Host, Listed, Shown};
 
 pub(crate) struct GitHub;
 
@@ -95,6 +95,7 @@ fn shown(v: &Value, pull_request: bool) -> Shown {
     Shown {
         pull_request,
         author: text(&v["author"]["login"]),
+        author_id: 0,
         state: text(&v["state"]),
         title: text(&v["title"]),
         body: text(&v["body"]),
@@ -110,7 +111,49 @@ fn shown(v: &Value, pull_request: bool) -> Shown {
     }
 }
 
+/// `shown` with its author's numeric account ID, from `gh api users/<login>`.
+fn with_author_id(root: &Path, mut shown: Shown) -> Result<Shown, Error> {
+    let user = gh(root, &["api", &format!("users/{}", shown.author)])?;
+    shown.author_id = json("gh api users", &user)?["id"]
+        .as_u64()
+        .ok_or_else(|| Error::Git("gh api users: no id".into()))?;
+    Ok(shown)
+}
+
+/// The open items `kind` (`issue` or `pr`) lists, each with its number and author's login.
+fn listed(root: &Path, kind: &str) -> Result<Vec<Listed>, Error> {
+    let args = [
+        kind,
+        "list",
+        "--state",
+        "open",
+        "--json",
+        "number,author",
+        "--limit",
+        "1000",
+    ];
+    let items = json(&format!("gh {kind} list"), &gh(root, &args)?)?;
+    Ok(items
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            Some(Listed {
+                number: item["number"].as_u64()?,
+                pull_request: kind == "pr",
+                author: text(&item["author"]["login"]),
+            })
+        })
+        .collect())
+}
+
 impl Host for GitHub {
+    fn list(&self, root: &Path) -> Result<Vec<Listed>, Error> {
+        let mut all = listed(root, "issue")?;
+        all.extend(listed(root, "pr")?);
+        Ok(all)
+    }
+
     fn parent(&self, root: &Path) -> Result<Option<String>, Error> {
         Ok(parent_of(&repo_view(root)?))
     }
@@ -176,12 +219,12 @@ impl Host for GitHub {
     fn show(&self, root: &Path, number: u64) -> Result<Shown, Error> {
         let n = number.to_string();
         match gh(root, &["pr", "view", &n, "--json", PR_FIELDS]) {
-            Ok(out) => Ok(shown(&json("gh pr view", &out)?, true)),
+            Ok(out) => with_author_id(root, shown(&json("gh pr view", &out)?, true)),
             // No pull request has that number: it may be an issue.
             Err(clm_git::Error::Failed { stderr, .. }) if stderr.contains("Could not resolve") => {
                 let fields = "author,state,title,body";
                 let out = gh(root, &["issue", "view", &n, "--json", fields])?;
-                Ok(shown(&json("gh issue view", &out)?, false))
+                with_author_id(root, shown(&json("gh issue view", &out)?, false))
             }
             Err(e) => Err(e.into()),
         }
