@@ -310,7 +310,7 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `backlog/<slug>.md` on `spec/<id>` and say in `## Intent` that the human dropped it \
          and why, taking the backlog-only route below. An item the answers only edit, \
          leaving it open and still waiting on the human (such as a `human-task` item whose \
-         done steps the human has trimmed out), is left out of `resolves`, since a change \
+         done steps the human has trimmed out), is left out of `resolves` (take it out of the list you first wrote), since a change \
          deletes the items it resolves when it is archived: edit its `backlog/<slug>.md` \
          on `spec/<id>` to what the answers leave of it, say in `## Intent` what you \
          changed and that the item stays open, and take the backlog-only route \
