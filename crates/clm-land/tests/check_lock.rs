@@ -19,7 +19,10 @@ fn logging_check(f: &Fixture) {
 /// Every `start` is followed by the `end` of the same directory before any other `start`.
 fn assert_serial(f: &Fixture, runs: usize) {
     let lines = f.lines("overlap.log");
-    assert!(lines.len() >= runs * 2 && lines.len() % 2 == 0, "{lines:?}");
+    assert!(
+        lines.len() >= runs * 2 && lines.len().is_multiple_of(2),
+        "{lines:?}"
+    );
     for pair in lines.chunks(2) {
         let dir = pair[0].strip_prefix("start ").expect("start");
         assert_eq!(pair[1], format!("end {dir}"), "{lines:?}");
