@@ -485,7 +485,7 @@ fn site_workflow_is_dispatched_only_and_deploys_with_wrangler() {
     let job = wf["jobs"].as_mapping().unwrap();
     assert_eq!(job.len(), 1);
     let steps = wf["jobs"]["deploy"]["steps"].as_sequence().unwrap();
-    // It builds `main`: the checkout names no other ref.
+    // It builds `main`, whichever branch dispatched it.
     let checkout = steps
         .iter()
         .find(|s| {
@@ -495,7 +495,7 @@ fn site_workflow_is_dispatched_only_and_deploys_with_wrangler() {
         })
         .expect("checkout step");
     assert!(
-        checkout["with"]["ref"].is_null() || checkout["with"]["ref"].as_str() == Some("main"),
+        checkout["with"]["ref"].as_str() == Some("main"),
         "{checkout:?}"
     );
     let deploy = steps
