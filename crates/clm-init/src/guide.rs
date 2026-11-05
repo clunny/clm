@@ -4,9 +4,12 @@
 
 // `const PAGES: [(&str, &str); N]`, each page as `(name, markdown)`: `README.md` first as
 // `index`, then the pages in the order it links them, then those it doesn't by name, then
-// `docs/spec-format.md` as `spec-format`. `build.rs` generates it from the files
+// `docs/spec-format.md` as `spec-format`; the generated `constraints` page follows it in the index. `build.rs` generates it from the files
 // (`guide-table-from-files`).
 include!(concat!(env!("OUT_DIR"), "/guide_pages.rs"));
+
+/// The generated page `constraints`, listed last in the index.
+const CONSTRAINTS_TITLE: &str = "CLM's constraints";
 
 /// With no page, the index: one `<name>  <title>` line per page. With one, that page's
 /// Markdown unchanged. An unknown name is an error holding `no guide page <name>` and the
@@ -28,8 +31,8 @@ pub fn guide(page: Option<&str>) -> Result<String, String> {
 /// entries, so it is the set the running `clm` enforces (`guide-constraints-page`).
 fn constraints() -> String {
     use clm_model::Tier;
-    let mut out = String::from(
-        "# CLM's constraints\n\n\
+    let mut out = format!(
+        "# {CONSTRAINTS_TITLE}\n\n\
 These are the architectural constraints every project built with CLM follows, from the `clm` it runs. \
 Each has a tier. `method`: CLM relies on it and a project can't replace it. \
 `replaceable`: a project may replace it with its own constraint that keeps the stated guarantee. \
@@ -59,7 +62,7 @@ fn index() -> String {
         .iter()
         .map(|(name, markdown)| format!("{name}  {}\n", title(markdown)))
         .collect();
-    out.push_str(&format!("constraints  {}\n", title(&constraints())));
+    out.push_str(&format!("constraints  {CONSTRAINTS_TITLE}\n"));
     out
 }
 
