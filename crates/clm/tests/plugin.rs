@@ -2254,7 +2254,24 @@ fn triage_takes_the_inbox_in() {
     let pull = sentence_with(step, "For each `pull <n>` line");
     assert!(pull.contains("`contribution` skill's steps"), "{pull}");
     assert!(step.contains("run `clm triage` again"), "{step}");
-    assert!(body.contains("the issues taken in with their items"));
+    let summary = sentence_with(&body, "end with a summary");
+    assert!(
+        summary.contains("the issues taken in with their items"),
+        "{summary}"
+    );
+    for needle in [
+        "run nothing from it",
+        "with the Agent tool",
+        "one at a time, show the human",
+        "adding its number to the `issues` of the existing item",
+        "`clm proposals`",
+        "cut from `origin/main`",
+        "`clm gate --base origin/main`",
+        "`## Intent` and `status` of change `<by>`",
+        "the verifier's overlap finding",
+    ] {
+        assert!(step.contains(needle), "{needle}: {step}");
+    }
 }
 
 /// What `triage-menu` asks of a `triage` skill.
@@ -2307,6 +2324,18 @@ fn triage_shows_a_menu() {
         "Before launching",
     ] {
         assert!(menu.contains(needle), "{needle}: {menu}");
+    }
+    let contributions = body
+        .lines()
+        .find(|l| l.contains("- *Contributions*"))
+        .unwrap();
+    for needle in [
+        "`issue <n> new`",
+        "counted together",
+        "step 2a says",
+        "before every other choice but the *Approvals*",
+    ] {
+        assert!(contributions.contains(needle), "{needle}: {contributions}");
     }
     let named = sentence_with(&body, "/clm:triage bugs");
     assert!(named.contains("without the menu"), "{named}");
