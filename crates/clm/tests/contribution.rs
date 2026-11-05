@@ -80,13 +80,14 @@ fn checkout(host: &str) -> Repo {
 
 #[test]
 fn scenario_show() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &["contribution", "show", "7"]);
     assert_eq!(code, Some(0), "{err}");
     let lines: Vec<&str> = out.lines().collect();
     for want in [
         "author: dana",
+        "author id: 4242",
         "state: OPEN",
         "title: Add an idea",
         "head repository: https://github.com/dana/clm",
@@ -111,7 +112,7 @@ fn body_line(out: &str) -> usize {
 
 #[test]
 fn scenario_no_parent() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("none"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &["contribution", "parent"]);
     assert_eq!(code, Some(0), "{err}");
@@ -121,7 +122,7 @@ fn scenario_no_parent() {
 
 #[test]
 fn parent_of_a_fork_is_printed() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &["contribution", "parent"]);
     assert_eq!(code, Some(0), "{err}");
@@ -130,7 +131,7 @@ fn parent_of_a_fork_is_printed() {
 
 #[test]
 fn scenario_no_host() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("none"), fake_gh());
     let (code, _, err) = clm(
         &r.work,
@@ -144,7 +145,7 @@ fn scenario_no_host() {
 
 #[test]
 fn every_other_operation_reports_no_host() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let cases: [&[&str]; 5] = [
         &["sync"],
         &["open", "spec/x", "--title", "t", "--body-file", "c.md"],
@@ -166,7 +167,7 @@ fn every_other_operation_reports_no_host() {
 
 #[test]
 fn comment_close_and_label_reach_the_host() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(
         &r.work,
@@ -194,7 +195,7 @@ fn comment_close_and_label_reach_the_host() {
 
 #[test]
 fn open_prints_the_parents_pull_request() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(
         &r.work,
@@ -215,7 +216,7 @@ fn open_prints_the_parents_pull_request() {
 
 #[test]
 fn a_failing_operation_exits_1_with_its_reason() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     write_exec(
         &gh.dir.path().join("bin/gh"),
@@ -234,7 +235,7 @@ fn a_failing_operation_exits_1_with_its_reason() {
 
 #[test]
 fn comment_without_close_leaves_it_open() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(
         &r.work,
@@ -247,7 +248,7 @@ fn comment_without_close_leaves_it_open() {
 
 #[test]
 fn sync_reaches_the_host() {
-    // req:clm/contribution-command@84f0a2d6
+    // req:clm/contribution-command@86ae826f
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &["contribution", "sync"]);
     assert_eq!(code, Some(0), "{err}");
