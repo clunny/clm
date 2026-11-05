@@ -67,6 +67,10 @@ case $status in
 esac
 
 if ((cmp == 0)); then
+  # A release without a bump records no corpus entry, so the version's must already be there
+  # (release-records-upgrade-corpus).
+  corpus=crates/clm-upgrade/corpus/v$version.tar.gz
+  [ -f "$corpus" ] || fail "no upgrade corpus entry $corpus for the unbumped version $version"
   echo "sha=$GITHUB_SHA" >>"$GITHUB_OUTPUT"
   echo "bumped=false" >>"$GITHUB_OUTPUT"
   exit 0
