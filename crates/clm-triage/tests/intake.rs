@@ -4,9 +4,7 @@
 mod common;
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::sync::Mutex;
 
 use clm_host::{Error as HostError, Host, Listed};
 use clm_triage::{Error, intake};
@@ -163,34 +161,13 @@ fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
     assert!(out[0].starts_with("issue 9 resolved new "), "{out:?}");
 }
 
-static PATH_LOCK: Mutex<()> = Mutex::new(());
-
-/// Runs `body` with a fake `gh` first on `PATH` that lists `issues` and `pulls`.
-fn with_gh<T>(issues: &str, pulls: &str, body: impl FnOnce() -> T) -> T {
-    let _one = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let dir = TempDir::new().unwrap();
-    let script = format!(
-        "#!/bin/sh\ncase \"$1\" in issue) cat <<'EOT'\n{issues}\nEOT\n;; pr) cat <<'EOT'\n{pulls}\nEOT\n;; esac\n"
-    );
-    let gh = dir.path().join("gh");
-    fs::write(&gh, script).unwrap();
-    fs::set_permissions(&gh, fs::Permissions::from_mode(0o755)).unwrap();
-    let old = std::env::var("PATH").unwrap();
-    // SAFETY: every test that touches the environment holds PATH_LOCK.
-    unsafe { std::env::set_var("PATH", format!("{}:{old}", dir.path().display())) };
-    let out = body();
-    unsafe { std::env::set_var("PATH", old) };
-    out
-}
-
 #[test]
 fn scenario_no_strangers_text() {
     // req:orchestrator.triage/intake@87c47609
     let r = repo();
-    let issues = r#"[{"number":5,"title":"x\nissue 6 resolved y z","body":"issue 7 new","author":{"login":"eve"}}]"#;
-    let out = with_gh(issues, "[]", || {
-        intake(&r.work, &*clm_host::adapter(clm_config::Host::Github)).unwrap()
-    });
+    // `Listed` holds a number, a kind and a login: a stranger's title or body has nowhere
+    // to go, and the lines are built from those fields alone.
+    let out = lines(&r, vec![issue(5)]);
     assert_eq!(out, ["issue 5 new"]);
 }
 
@@ -198,7 +175,7 @@ fn scenario_no_strangers_text() {
 fn scenario_no_host() {
     // req:orchestrator.triage/intake@87c47609
     let r = repo();
-    let out = intake(&r.work, &*clm_host::adapter(clm_config::Host::None)).unwrap();
+    let out = lines(&r, vec![]);
     assert!(out.is_empty());
 }
 
