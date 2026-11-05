@@ -1609,12 +1609,12 @@ fn upgrade_keys_are_set_in_their_own_layer() {
         None,
         Some("upgraded = \"20261105-clm-upgrade\"\ndeclined_migrations = [\"n\", \"m\"]\n"),
     )
-    .local("skip_migrations = [\"x\"]\n");
+    .local("skip_migrations = [\"x\", \"y\"]\n");
     let s = f.load(&[]).unwrap();
     for (key, want, file) in [
         ("upgraded", "20261105-clm-upgrade", f.repo_file()),
         ("declined_migrations", "n,m", f.repo_file()),
-        ("skip_migrations", "x", f.local_file()),
+        ("skip_migrations", "x,y", f.local_file()),
     ] {
         let (value, layer) = s.get(key).unwrap();
         assert_eq!(value, want, "{key}");
