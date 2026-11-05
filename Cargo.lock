@@ -614,6 +614,7 @@ version = "0.17.0"
 dependencies = [
  "clm-check",
  "clm-git",
+ "clm-host",
  "clm-model",
  "clm-orchestrator",
  "serde_yaml",

@@ -261,6 +261,13 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+    /// Match the host's open issues and pull requests to the backlog: for each issue, whether
+    /// an item takes it in, a landed change or fix resolved it, or it is new.
+    Intake {
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
     /// Claim backlog items and write the prompt for a session that designs one change from
     /// them unattended, printing a launcher that names it, holding one of the clone's build
     /// places.
@@ -1054,6 +1061,20 @@ fn dispatch() -> ExitCode {
                 t.lines.join("\n")
             }),
         ),
+        Command::Intake { root } => {
+            let root = repo_root(root);
+            match clm_config::load(Some(&root), &clm_config::process_env) {
+                Ok(settings) => orchestrated(
+                    "intake",
+                    clm_triage::intake(&root, &*clm_host::adapter(settings.host.value))
+                        .map(|lines| lines.join("\n")),
+                ),
+                Err(e) => {
+                    eprintln!("clm intake: {e}");
+                    ExitCode::from(2)
+                }
+            }
+        }
         Command::Draft {
             finish: Some(change),
             expiry,
