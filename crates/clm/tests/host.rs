@@ -187,6 +187,23 @@ fn scenario_branch_another_sessions() {
 }
 
 #[test]
+fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
+    // req:host/branch-delete@18b4bda5
+    let (r, gh) = (checkout("github"), fake_gh());
+    let old = push_impl_a(&r, "a.txt");
+    let new = push_impl_a(&r, "b.txt");
+    let (code, _, err) = clm(
+        &r.work,
+        &gh,
+        &["branch", "delete", "impl/a", "--lease", &old],
+        &[],
+    );
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("didn't push"), "{err}");
+    assert_eq!(on_origin(&r, "impl/a"), new);
+}
+
+#[test]
 fn scenario_branch_never_fetched() {
     // req:host/branch-delete@18b4bda5
     let (r, gh) = (checkout("github"), fake_gh());
