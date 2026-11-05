@@ -4,9 +4,12 @@
 
 // `const PAGES: [(&str, &str); N]`, each page as `(name, markdown)`: `README.md` first as
 // `index`, then the pages in the order it links them, then those it doesn't by name, then
-// `docs/spec-format.md` as `spec-format`. `build.rs` generates it from the files
+// `docs/spec-format.md` as `spec-format`; the generated `constraints` page follows it in the index. `build.rs` generates it from the files
 // (`guide-table-from-files`).
 include!(concat!(env!("OUT_DIR"), "/guide_pages.rs"));
+
+/// The generated page `constraints`, listed last in the index.
+const CONSTRAINTS_TITLE: &str = "CLM's constraints";
 
 /// With no page, the index: one `<name>  <title>` line per page. With one, that page's
 /// Markdown unchanged. An unknown name is an error holding `no guide page <name>` and the
@@ -28,8 +31,8 @@ pub fn guide(page: Option<&str>) -> Result<String, String> {
 /// entries, so it is the set the running `clm` enforces (`guide-constraints-page`).
 fn constraints() -> String {
     use clm_model::Tier;
-    let mut out = String::from(
-        "# CLM's constraints\n\n\
+    let mut out = format!(
+        "# {CONSTRAINTS_TITLE}\n\n\
 These are the architectural constraints every project built with CLM follows, from the `clm` it runs. \
 Each has a tier. `method`: CLM relies on it and a project can't replace it. \
 `replaceable`: a project may replace it with its own constraint that keeps the stated guarantee. \
@@ -53,11 +56,14 @@ Names in backticks that this page doesn't list are CLM's own decisions and const
     out
 }
 
+/// One line per file page, then the generated `constraints` page last.
 fn index() -> String {
-    PAGES
+    let mut out: String = PAGES
         .iter()
         .map(|(name, markdown)| format!("{name}  {}\n", title(markdown)))
-        .collect()
+        .collect();
+    out.push_str(&format!("constraints  {CONSTRAINTS_TITLE}\n"));
+    out
 }
 
 /// The page's first `# ` heading.
@@ -113,7 +119,7 @@ mod tests {
 
     #[test]
     fn every_page_is_compiled_in() {
-        // req:init/guide-command@32520cc6
+        // req:init/guide-command@088ebe45
         // req:init/guide-table-from-files@5c6bd405
         let mut missing = Vec::new();
         for entry in std::fs::read_dir(guide_dir()).unwrap() {
@@ -155,7 +161,7 @@ mod tests {
 
     #[test]
     fn pages_in_the_index_order() {
-        // req:init/guide-command@32520cc6
+        // req:init/guide-command@088ebe45
         // req:init/guide-table-from-files@5c6bd405
         // `README.md`'s numbered list: lines `<n>. [Title](file.md)...`.
         let readme = std::fs::read_to_string(guide_dir().join("README.md")).unwrap();
@@ -185,7 +191,7 @@ mod tests {
 
     #[test]
     fn pages_as_written() {
-        // req:init/guide-command@32520cc6
+        // req:init/guide-command@088ebe45
         for (name, markdown) in PAGES {
             let text = file_text(name);
             assert_eq!(guide(Some(name)).unwrap(), text, "{name}");
@@ -219,7 +225,7 @@ mod tests {
 
     #[test]
     fn index_lines() {
-        // req:init/guide-command@32520cc6
+        // req:init/guide-command@088ebe45
         let index = guide(None).unwrap();
         assert!(index.starts_with("index  CLM guide\n"), "{index}");
         assert!(
@@ -229,10 +235,12 @@ mod tests {
             "{index}"
         );
         assert!(
-            index.ends_with("\nspec-format  Spec format (v0, provisional)\n"),
+            index.ends_with(
+                "\nspec-format  Spec format (v0, provisional)\nconstraints  CLM's constraints\n"
+            ),
             "{index}"
         );
-        assert_eq!(index.lines().count(), PAGES.len());
+        assert_eq!(index.lines().count(), PAGES.len() + 1);
         let err = guide(Some("no-such-page")).unwrap_err();
         assert_eq!(err, format!("no guide page no-such-page\n{index}"));
     }

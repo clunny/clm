@@ -20,7 +20,7 @@ fn guide(args: &[&str]) -> Output {
 
 #[test]
 fn index() {
-    // req:init/guide-command@32520cc6
+    // req:init/guide-command@088ebe45
     let out = guide(&[]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
@@ -33,9 +33,15 @@ fn index() {
             .any(|l| l == "shaping-the-graph  Shaping the graph"),
         "{text}"
     );
+    let lines: Vec<&str> = text.lines().collect();
     assert_eq!(
-        text.lines().last(),
-        Some("spec-format  Spec format (v0, provisional)"),
+        lines[lines.len() - 2],
+        "spec-format  Spec format (v0, provisional)",
+        "{text}"
+    );
+    assert_eq!(
+        lines[lines.len() - 1],
+        "constraints  CLM's constraints",
         "{text}"
     );
 }
@@ -43,6 +49,7 @@ fn index() {
 #[test]
 fn index_in_the_guide_order() {
     // req:init/guide-table-from-files@5c6bd405
+    // req:init/guide-command@088ebe45
     let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
     let title = |file: &Path| {
         let text = std::fs::read_to_string(file).unwrap();
@@ -80,12 +87,17 @@ fn index_in_the_guide_order() {
     // Pages the list doesn't name may follow it, before `spec-format`.
     assert_eq!(lines[..expected.len()], expected[..], "{text}");
     let spec_format = format!("spec-format  {}", title(&docs.join("spec-format.md")));
-    assert_eq!(lines.last(), Some(&spec_format.as_str()), "{text}");
+    assert_eq!(lines[lines.len() - 2], spec_format, "{text}");
+    assert_eq!(
+        lines.last(),
+        Some(&"constraints  CLM's constraints"),
+        "{text}"
+    );
 }
 
 #[test]
 fn one_page() {
-    // req:init/guide-command@32520cc6
+    // req:init/guide-command@088ebe45
     let out = guide(&["shaping-the-graph"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let page = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/guide/shaping-the-graph.md");
@@ -94,7 +106,7 @@ fn one_page() {
 
 #[test]
 fn the_spec_format() {
-    // req:init/guide-command@32520cc6
+    // req:init/guide-command@088ebe45
     let out = guide(&["spec-format"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let page = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/spec-format.md");
@@ -103,7 +115,7 @@ fn the_spec_format() {
 
 #[test]
 fn unknown_page() {
-    // req:init/guide-command@32520cc6
+    // req:init/guide-command@088ebe45
     let out = guide(&["no-such-page"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let err = String::from_utf8(out.stderr).unwrap();
