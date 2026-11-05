@@ -15,10 +15,42 @@ pub fn guide(page: Option<&str>) -> Result<String, String> {
     let Some(name) = page else {
         return Ok(index());
     };
+    if name == "constraints" {
+        return Ok(constraints());
+    }
     match PAGES.iter().find(|(n, _)| *n == name) {
         Some((_, markdown)) => Ok((*markdown).to_owned()),
         None => Err(format!("no guide page {name}\n{}", index())),
     }
+}
+
+/// The generated page `constraints`, built from `model`'s compiled copy of CLM's carried
+/// entries, so it is the set the running `clm` enforces (`guide-constraints-page`).
+fn constraints() -> String {
+    use clm_model::Tier;
+    let mut out = String::from(
+        "# CLM's constraints\n\n\
+These are the architectural constraints every project built with CLM follows, from the `clm` it runs. \
+Each has a tier. `method`: CLM relies on it and a project can't replace it. \
+`replaceable`: a project may replace it with its own constraint that keeps the stated guarantee. \
+`default`: a project may drop it. A project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, which a human reviews. \
+Names in backticks that this page doesn't list are CLM's own decisions and constraints, kept in CLM's repository: they say why, and the rule is the text this page gives.\n",
+    );
+    for e in clm_model::carried() {
+        let tier = match e.tier {
+            Tier::Method => "method",
+            Tier::Replaceable => "replaceable",
+            Tier::Default => "default",
+        };
+        out.push_str(&format!(
+            "\n## {}\n\nTier: {tier}\n\n{}\n",
+            e.slug, e.statement
+        ));
+        if let (Tier::Replaceable, Some(g)) = (e.tier, &e.guarantee) {
+            out.push_str(&format!("\nGuarantee: {g}\n"));
+        }
+    }
+    out
 }
 
 fn index() -> String {
