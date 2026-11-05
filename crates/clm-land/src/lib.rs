@@ -229,6 +229,9 @@ impl<'a> Repo<'a> {
         fails: &str,
         log: Option<&Path>,
     ) -> Result<(), Error> {
+        // One check at a time on the clone, whatever the target, held until the command ends
+        // (`land/check-lock`).
+        let _check_lock = lock::check(&self.places()?)?;
         let mut command = check_command(check, dir, target);
         command.envs(vars.iter().copied()).stdin(Stdio::null());
         let Some(log) = log else {

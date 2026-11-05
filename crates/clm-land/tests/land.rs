@@ -753,7 +753,7 @@ fn a_land_that_compiles_nothing_uses_a_temporary_worktree() {
 
 #[test]
 fn one_tree_for_every_land() {
-    // req:land/land-tree@e1ccc61b
+    // req:land/land-tree@9bb49b16
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -774,7 +774,7 @@ fn one_tree_for_every_land() {
 
 #[test]
 fn leftovers_cleaned() {
-    // req:land/land-tree@e1ccc61b
+    // req:land/land-tree@9bb49b16
     let f = Fixture::new("");
     // Fails when an earlier check's file is still there, ignored or not.
     f.write(
@@ -796,7 +796,7 @@ fn leftovers_cleaned() {
 
 #[test]
 fn tree_repaired_after_clm_directory_removed() {
-    // req:land/land-tree@e1ccc61b
+    // req:land/land-tree@9bb49b16
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -810,7 +810,7 @@ fn tree_repaired_after_clm_directory_removed() {
 
 #[test]
 fn stale_directory_replaced() {
-    // req:land/land-tree@e1ccc61b
+    // req:land/land-tree@9bb49b16
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let stale = f.work().join(".clm/land-tree");
@@ -827,7 +827,7 @@ fn stale_directory_replaced() {
 
 #[test]
 fn nothing_untracked_in_a_project_that_doesnt_ignore_target() {
-    // req:land/land-tree@e1ccc61b
+    // req:land/land-tree@9bb49b16
     // The fixture's `.gitignore` holds only `clm init`'s lines.
     let f = Fixture::new("");
     let work = f.work();
@@ -849,7 +849,7 @@ fn nothing_untracked_in_a_project_that_doesnt_ignore_target() {
 
 #[test]
 fn broken_tree_repaired_without_touching_the_main_worktree() {
-    // req:land/land-tree@e1ccc61b
+    // req:land/land-tree@9bb49b16
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
