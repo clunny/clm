@@ -287,7 +287,7 @@ fn templates_say_new_words() {
         for line in fs::read_to_string(&path).unwrap().lines() {
             assert!(
                 !line.contains("specd")
-                    && !line.contains("kind: human\n")
+                    && line.trim() != "kind: human"
                     && !line.contains("kind: friction")
                     && !line
                         .split(|c: char| !c.is_alphanumeric() && c != '_')

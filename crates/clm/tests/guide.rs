@@ -49,6 +49,7 @@ fn index() {
 #[test]
 fn index_in_the_guide_order() {
     // req:init/guide-table-from-files@5c6bd405
+    // req:init/guide-command@088ebe45
     let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs");
     let title = |file: &Path| {
         let text = std::fs::read_to_string(file).unwrap();
