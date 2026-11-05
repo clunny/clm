@@ -572,6 +572,15 @@ fn a_deleted_items_components_are_gone() {
 }
 
 #[test]
+fn parse_item_reads_the_old_key_and_defaults_issues() {
+    // req:model/parse-backlog-item@ac29a1d0
+    let item = clm_model::parse_backlog_item("x", "---\ntitle: T\nkind: bug\nnodes: [old]\n---\n")
+        .unwrap();
+    assert_eq!(item.frontmatter.nodes, vec!["old".to_string()]);
+    assert!(item.frontmatter.issues.is_empty());
+}
+
+#[test]
 fn parse_item_unknown_key() {
     // req:model/parse-backlog-item@ac29a1d0
     let violations =
