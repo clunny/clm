@@ -15,7 +15,40 @@ const CLAUDE: &str = include_str!("../templates/claude.md");
 const CHECK_SCRIPT: &str = "scripts/clm-check.sh";
 
 /// The code files `clm init` writes, which the root node it writes owns (its `paths`).
-const ROOT_PATHS: [&str; 3] = [".gitignore", "clm.toml", CHECK_SCRIPT];
+const ROOT_PATHS: [&str; 4] = [SETTINGS, ".gitignore", "clm.toml", CHECK_SCRIPT];
+
+/// Claude Code's project settings, where the allow rules for unattended sessions go
+/// (`init-seeds-permissions`).
+const SETTINGS: &str = ".claude/settings.json";
+
+/// The same, as one clone keeps it, which Claude Code merges with [`SETTINGS`].
+const LOCAL_SETTINGS: &str = ".claude/settings.local.json";
+
+/// The allow rules for the `clm` commands unattended sessions run that write to the branch,
+/// `origin` or the backlog: for each of ten subcommands, the bare form then the one with
+/// arguments. `clm approve` is never among them, and neither is any `git` command.
+pub const UNATTENDED_RULES: [&str; 20] = [
+    "Bash(clm apply)",
+    "Bash(clm apply *)",
+    "Bash(clm branch)",
+    "Bash(clm branch *)",
+    "Bash(clm check)",
+    "Bash(clm check *)",
+    "Bash(clm claim)",
+    "Bash(clm claim *)",
+    "Bash(clm defect)",
+    "Bash(clm defect *)",
+    "Bash(clm gate)",
+    "Bash(clm gate *)",
+    "Bash(clm land)",
+    "Bash(clm land *)",
+    "Bash(clm pr)",
+    "Bash(clm pr *)",
+    "Bash(clm rebase)",
+    "Bash(clm rebase *)",
+    "Bash(clm workaround)",
+    "Bash(clm workaround *)",
+];
 
 /// What `clm init` was asked for.
 #[derive(Debug, Clone, Default)]
@@ -81,6 +114,8 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     let cwd = fs::canonicalize(cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
     let root = clm_root(&cwd, &top).unwrap_or(&top).to_path_buf();
     let host = opts.host.unwrap_or_else(|| host_of(&root));
+    // Rules are seeded on the first run only: a rerun leaves the settings as they are.
+    let first_run = !root.join("specs/SPEC.md").exists();
     let mut files = Files {
         root: &root,
         out: String::new(),
@@ -88,7 +123,7 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     };
 
     let toml = clm_toml(host, if opts.detectors { &langs } else { &[] });
-    let kept_toml = !files.write("clm.toml", &toml)?;
+    files.write("clm.toml", &toml)?;
     if files.write(CHECK_SCRIPT, &check_script(&langs))? {
         make_executable(&root.join(CHECK_SCRIPT)).map_err(|e| format!("{CHECK_SCRIPT}: {e}"))?;
     }
@@ -97,11 +132,14 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     // The root spec's `outside` reads the files the bootstrap commit will hold, which depend
     // on the `.gitignore` as `clm init` leaves it (`init-root-ownership`).
     files.ignore_session_files()?;
+    if first_run {
+        files.seed_permissions()?;
+    }
     // The root spec lists the index, so only when it will be written.
-    let spec = if root.join("specs/SPEC.md").exists() {
-        String::new()
-    } else {
+    let spec = if first_run {
         root_spec(&root)?
+    } else {
+        String::new()
     };
     files.write("specs/SPEC.md", &spec)?;
     files.write("CLAUDE.md", CLAUDE)?;
@@ -111,7 +149,7 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         &root,
         &files.paths,
         configured_host(&root, host),
-        upgrade_steps(&root, &top, kept_toml, host),
+        permission_step(&root),
     );
     if !steps.is_empty() {
         out.push_str("\nNext steps (yours):\n");
@@ -146,6 +184,67 @@ impl Files<'_> {
         fs::write(&path, content).map_err(|e| format!("{rel}: {e}"))?;
         self.out.push_str(&format!("wrote {rel}\n"));
         Ok(true)
+    }
+
+    /// Adds the [`UNATTENDED_RULES`] the settings lack (`init-seeds-permissions`), creating
+    /// the file, `permissions` and `allow` when missing. Every other key and rule is kept,
+    /// in order. A file that isn't a JSON object, or whose `permissions` or `allow` has
+    /// another type, is left as it is: the next steps name the rules then.
+    fn seed_permissions(&mut self) -> Result<(), String> {
+        let path = self.root.join(SETTINGS);
+        let existing = match fs::read(&path) {
+            Ok(bytes) => Some(bytes),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(format!("{SETTINGS}: {e}")),
+        };
+        let mut doc = match &existing {
+            Some(bytes) if !bytes.iter().all(u8::is_ascii_whitespace) => {
+                match serde_json::from_slice::<serde_json::Value>(bytes) {
+                    Ok(doc) => doc,
+                    Err(_) => return Ok(()),
+                }
+            }
+            _ => serde_json::json!({}),
+        };
+        let Some(top) = doc.as_object_mut() else {
+            return Ok(());
+        };
+        let permissions = top
+            .entry("permissions")
+            .or_insert_with(|| serde_json::json!({}));
+        let Some(permissions) = permissions.as_object_mut() else {
+            return Ok(());
+        };
+        let allow = permissions
+            .entry("allow")
+            .or_insert_with(|| serde_json::json!([]));
+        let Some(allow) = allow.as_array_mut() else {
+            return Ok(());
+        };
+        let before = allow.len();
+        for rule in UNATTENDED_RULES {
+            if !allow.iter().any(|r| r.as_str() == Some(rule)) {
+                allow.push(rule.into());
+            }
+        }
+        self.paths.push(SETTINGS);
+        if existing.is_some() && allow.len() == before {
+            self.out.push_str(&format!("kept {SETTINGS}\n"));
+            return Ok(());
+        }
+        let mut text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
+        text.push('\n');
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        }
+        fs::write(&path, text).map_err(|e| format!("{SETTINGS}: {e}"))?;
+        let verb = if existing.is_some() {
+            "added rules to"
+        } else {
+            "wrote"
+        };
+        self.out.push_str(&format!("{verb} {SETTINGS}\n"));
+        Ok(())
     }
 
     /// Makes `.gitignore` list each of [`IGNORED`] (`init-ignores-session-files`): writes it
@@ -287,81 +386,61 @@ fn configured_host(root: &Path, written: Host) -> Host {
     }
 }
 
-/// The steps a repository `clm init` set up before `20261025-forge-adapters` still needs,
-/// each naming the file and the exact text to add or delete; it changes none of them. A kept
-/// `clm.toml` is read as plain TOML, not through `config`'s loader, which rejects `merge`;
-/// one that isn't TOML gets no step, since every command that loads it reports its error.
-/// The old workflow and build script are looked for under `root` and at the git
-/// repository's `top`, where the old `clm init` may have written them, and named by their
-/// path from `top`. `host` is the one `clm init` would have written.
-fn upgrade_steps(root: &Path, top: &Path, kept_toml: bool, host: Host) -> Vec<String> {
-    const WORKFLOW: &str = ".github/workflows/clm.yml";
-    const BUILD: &str = ".github/scripts/clm-build.sh";
-    let mut dirs = vec![root];
-    if top != root {
-        dirs.push(top);
-    }
-    // `rel` in `dir`, by its path from `top`.
-    let named = |dir: &Path, rel: &str| match dir.strip_prefix(top) {
-        Ok(sub) if !sub.as_os_str().is_empty() => {
-            format!("{}/{rel}", sub.to_string_lossy().replace('\\', "/"))
-        }
-        _ => rel.to_owned(),
-    };
-    let mut steps = Vec::new();
-    let settings = kept_toml
-        .then(|| fs::read_to_string(root.join("clm.toml")).ok())
-        .flatten()
-        .and_then(|text| text.parse::<toml::Table>().ok());
-    if let Some(settings) = settings {
-        if !settings.contains_key("host") {
-            steps.push(format!(
-                "Add `host = \"{host}\"` to `clm.toml`, where the remote lives; without it \
-                 `clm` takes `github`."
-            ));
-        }
-        if settings.contains_key("merge") {
-            steps.push(
-                "Delete `merge` from `clm.toml`: it is no longer a setting, and every `clm` \
-                 command that loads the settings stops on it."
-                    .into(),
-            );
-        }
-        let check_set = match settings.get("land") {
-            None => false,
-            Some(toml::Value::Table(land)) => land.contains_key("check"),
-            // A `land` that isn't a table is `config`'s to report.
-            Some(_) => true,
+/// The [`UNATTENDED_RULES`] neither settings file allows, compared as exact strings, as the
+/// union of both files' `permissions.allow` (Claude Code merges them). A file that can't be
+/// read as that shape allows nothing.
+fn missing_rules(root: &Path) -> Vec<&'static str> {
+    let mut allowed = Vec::new();
+    for rel in [SETTINGS, LOCAL_SETTINGS] {
+        let Ok(bytes) = fs::read(root.join(rel)) else {
+            continue;
         };
-        if !check_set {
-            let mut step = format!(
-                "Add `[land]` with `check = \"{CHECK_SCRIPT}\"` to `clm.toml`: `clm land` runs \
-                 it before `clm check`."
-            );
-            if let Some(dir) = dirs.iter().find(|d| d.join(BUILD).is_file()) {
-                let build = named(dir, BUILD);
-                step.push_str(&format!(
-                    " Move the project's edits from `{build}` into `{CHECK_SCRIPT}`, then \
-                     delete `{build}`."
-                ));
-            }
-            steps.push(step);
+        let Ok(doc) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            continue;
+        };
+        if let Some(rules) = doc["permissions"]["allow"].as_array() {
+            allowed.extend(rules.iter().filter_map(|r| r.as_str().map(str::to_owned)));
         }
     }
-    for dir in &dirs {
-        let generated = fs::read_to_string(dir.join(WORKFLOW)).is_ok_and(|text| {
-            text.trim_start_matches('\u{feff}')
-                .starts_with("# Generated by clm init")
-        });
-        if generated {
-            steps.push(format!(
-                "Delete `{}`: it calls `clm ci`, which no longer exists, and branches land \
-                 through `clm land`.",
-                named(dir, WORKFLOW)
-            ));
-        }
+    UNATTENDED_RULES
+        .into_iter()
+        .filter(|rule| !allowed.iter().any(|a| a == rule))
+        .collect()
+}
+
+/// The step naming the allow rules still missing, if any.
+fn permission_step(root: &Path) -> Option<String> {
+    let missing = missing_rules(root);
+    (!missing.is_empty()).then(|| {
+        format!(
+            "Add these allow rules to `permissions.allow` in `{SETTINGS}`, so unattended \
+             sessions can run `clm`: {}.",
+            missing
+                .iter()
+                .map(|r| format!("`{r}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })
+}
+
+/// `clm init --check-permissions`: writes nothing. Returns what to print, empty when every
+/// rule is allowed; a non-empty text is the heading and each missing rule, one a line
+/// (`init-check-permissions`).
+pub fn check_permissions(cwd: &Path) -> Result<String, String> {
+    let top = top_level(cwd)?;
+    let cwd = fs::canonicalize(cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
+    let root = clm_root(&cwd, &top).unwrap_or(&top);
+    let missing = missing_rules(root);
+    if missing.is_empty() {
+        return Ok(String::new());
     }
-    steps
+    let mut text = format!("missing allow rules in {SETTINGS}:\n");
+    for rule in missing {
+        text.push_str(rule);
+        text.push('\n');
+    }
+    Ok(text)
 }
 
 /// Sets the check script's mode so it runs.
@@ -370,12 +449,12 @@ fn make_executable(path: &Path) -> std::io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
 }
 
-/// The steps left for the human: `upgrades` first, then the push, skipped once `git` shows it
-/// done and nothing else is left to commit.
+/// The steps left for the human: the `permissions` step, then the push, skipped once `git`
+/// shows it done and nothing else is left to commit.
 /// Whether the host protects `main` would take asking it, so that step stays, as a
 /// conditional. `paths` are all of CLM's files, written or kept.
-fn next_steps(root: &Path, paths: &[&str], host: Host, upgrades: Vec<String>) -> Vec<String> {
-    let mut steps = upgrades;
+fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<String>) -> Vec<String> {
+    let mut steps: Vec<String> = permissions.into_iter().collect();
     // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or
     // there's no remote to push to.
     let mut status = vec!["status", "--porcelain", "--"];

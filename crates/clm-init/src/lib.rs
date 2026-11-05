@@ -7,6 +7,6 @@ mod nodes;
 mod survey;
 
 pub use guide::guide;
-pub use init::{Options, init};
+pub use init::{Options, UNATTENDED_RULES, check_permissions, init};
 pub use nodes::check_nodes;
 pub use survey::{import_edges, survey};
