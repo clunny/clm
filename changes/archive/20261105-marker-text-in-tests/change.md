@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [marker-text-in-tests-has-no-escape]
 ---
 
