@@ -19,7 +19,7 @@ pub use layers::Layer;
 pub use priority::Priority;
 pub use records::{
     BACKLOG_KIND_TERMS, BacklogFrontmatter, BacklogItem, BacklogKind, Decision,
-    DecisionFrontmatter, DecisionStatus, RequirementAt,
+    DecisionFrontmatter, DecisionStatus, RequirementAt, parse_backlog_item,
 };
 pub use renames::{Rename, RenameKind};
 

@@ -103,6 +103,9 @@ pub struct BacklogFrontmatter {
     /// The requirement a `workaround` item flags, at the version the build built; set on
     /// a `workaround` item only (`workaround-flags`).
     pub requirement: Option<RequirementAt>,
+    /// The host's issues the item was taken in from, positive whole numbers
+    /// (`issues-enter-through-the-backlog`).
+    pub issues: Vec<u64>,
 }
 
 /// A backlog item's frontmatter as written, before `components` and its old key
@@ -124,6 +127,8 @@ struct RawBacklogFrontmatter {
     blocks: Vec<String>,
     #[serde(default)]
     requirement: Option<RequirementAt>,
+    #[serde(default)]
+    issues: Vec<u64>,
 }
 
 /// A key's value when the key is written at all, a null included.
@@ -146,6 +151,9 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
             (Some(list), None) | (None, Some(list)) => list.unwrap_or_default(),
             (None, None) => Vec::new(),
         };
+        if raw.issues.contains(&0) {
+            return Err("`issues` entries must be positive whole numbers, not 0".into());
+        }
         Ok(BacklogFrontmatter {
             title: raw.title,
             kind: raw.kind,
@@ -154,6 +162,7 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
             priority: raw.priority,
             blocks: raw.blocks,
             requirement: raw.requirement,
+            issues: raw.issues,
         })
     }
 }
@@ -234,47 +243,81 @@ fn load_dir<T: for<'de> Deserialize<'de>>(
     out
 }
 
+/// Parses one backlog file's text by `parse-backlog`'s rules for its frontmatter keys and
+/// values alone, checking nothing against a graph: not that its components, origin,
+/// `blocks` or `requirement` exist. `clm intake` reads items deleted at older commits
+/// with it, whose components may since have gone, so the old key `nodes` loads here;
+/// loading `backlog/` reports it (`component-keys`).
+pub fn parse_backlog_item(slug: &str, text: &str) -> Result<BacklogItem, Vec<Violation>> {
+    let (item, violations) = parse_item(slug, text);
+    match item {
+        Some(item) if violations.is_empty() => Ok(item),
+        _ => Err(violations),
+    }
+}
+
+/// The item, when its frontmatter parses, and what its keys and values break. An item
+/// with a bad `requirement` stays loaded, so its `blocks` hold.
+fn parse_item(slug: &str, text: &str) -> (Option<BacklogItem>, Vec<Violation>) {
+    let path = PathBuf::from(format!("backlog/{slug}.md"));
+    let text = text.replace("\r\n", "\n");
+    let Some((fm, _)) = split_frontmatter(&text) else {
+        let problem = "missing `---` frontmatter block".to_string();
+        return (None, vec![v(&path, BACKLOG, problem)]);
+    };
+    let frontmatter = match serde_yaml::from_str::<BacklogFrontmatter>(fm) {
+        Ok(parsed) => parsed,
+        Err(e) => return (None, vec![v(&path, BACKLOG, e.to_string())]),
+    };
+    let mut violations = Vec::new();
+    // A `workaround` item names its requirement, and no other kind does.
+    let workaround = frontmatter.kind == BacklogKind::Friction;
+    if workaround != frontmatter.requirement.is_some() {
+        let problem = if workaround {
+            "a `workaround` item needs a `requirement`, `<component>/<slug>@<version>`"
+        } else {
+            "only a `workaround` item sets `requirement`"
+        };
+        violations.push(v(&path, BACKLOG, problem.into()));
+    }
+    let item = BacklogItem {
+        slug: slug.into(),
+        path,
+        frontmatter,
+    };
+    (Some(item), violations)
+}
+
 /// Loads `backlog/`, parsing each item; `check_backlog` checks its references.
 pub(crate) fn load_backlog(
     files: &Files,
     violations: &mut Vec<Violation>,
 ) -> BTreeMap<String, BacklogItem> {
-    load_dir::<BacklogFrontmatter>(files, "backlog", BACKLOG, violations)
-        .into_iter()
-        .map(|(slug, path, frontmatter)| {
-            // The old key still deserialises, for history reads, but `backlog/` may not
-            // hold it. Reported, and the item stays loaded (`component-keys`).
-            let old_key = text(files, &path).and_then(Result::ok).and_then(|t| {
-                split_frontmatter(&t.replace("\r\n", "\n")).map(|(fm, _)| has_key(fm, "nodes"))
-            });
-            if old_key == Some(true) {
-                violations.push(v(
-                    &path,
-                    BACKLOG,
-                    "sets `nodes`, its old key: use `components`".into(),
-                ));
-            }
-            // A `workaround` item names its requirement, and no other kind does. Reported,
-            // and kept loaded like an item with a bad reference, so its `blocks` hold.
-            let workaround = frontmatter.kind == BacklogKind::Friction;
-            if workaround != frontmatter.requirement.is_some() {
-                let problem = if workaround {
-                    "a `workaround` item needs a `requirement`, `<component>/<slug>@<version>`"
-                } else {
-                    "only a `workaround` item sets `requirement`"
-                };
-                violations.push(v(&path, BACKLOG, problem.into()));
-            }
-            (
-                slug.clone(),
-                BacklogItem {
-                    slug,
-                    path,
-                    frontmatter,
-                },
-            )
-        })
-        .collect()
+    let mut items = BTreeMap::new();
+    for rel in children(files, Path::new("backlog")) {
+        if rel.extension().is_none_or(|x| x != "md") {
+            continue;
+        }
+        let slug = rel.file_stem().unwrap().to_string_lossy().into_owned();
+        let text = text(files, &rel)
+            .and_then(Result::ok)
+            .unwrap_or_default()
+            .replace("\r\n", "\n");
+        let (item, found) = parse_item(&slug, &text);
+        violations.extend(found);
+        let Some(item) = item else { continue };
+        // The old key still deserialises, for history reads, but `backlog/` may not
+        // hold it. Reported, and the item stays loaded (`component-keys`).
+        if split_frontmatter(&text).is_some_and(|(fm, _)| has_key(fm, "nodes")) {
+            violations.push(v(
+                &rel,
+                BACKLOG,
+                "sets `nodes`, its old key: use `components`".into(),
+            ));
+        }
+        items.insert(slug, BacklogItem { path: rel, ..item });
+    }
+    items
 }
 
 const BACKLOG: &str = "model/parse-backlog";
