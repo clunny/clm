@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [two-init-requirements-name-entries-clm-init-no-longer-writes, workaround-init-template-says-pull-request-1, workaround-init-templates-say-new-words-1]
 ---
 
