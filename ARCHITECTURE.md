@@ -4,6 +4,7 @@ The architectural constraints: what must always hold of CLM, whatever is built. 
 An edit to it needs a human's review before it lands (`humans-review-intent`).
 It is prepended to every context bundle, so keep each entry short; the mechanism lives in the decision or node spec it names.
 Each entry names the rules that enforce it under `#### Enforced by`, and says under `#### Untested` what no program can check and why; it is current when every rule it names is current (`human-layer-proof`). The format is in `clm guide spec-format`.
+An entry holding a `#### Carries` block reaches every project built with CLM, at its tier, from the `clm` that project runs (`carried-constraints`); the others are CLM's own.
 
 ## Constraints
 
@@ -14,6 +15,9 @@ AI SHALL write all code. Humans do not author or review code, and code changes o
 - GIVEN a change to a component's code
 - WHEN it lands on `main`
 - THEN it was written by a build session, and no human was asked to review the diff
+
+#### Carries
+- method
 
 #### Untested
 Who wrote a diff isn't visible to a program; the build flow it relies on is enforced through `land-locally` and `humans-review-intent`.
@@ -36,6 +40,9 @@ Humans SHALL review intent, not code. A spec branch needs a human's approval, gi
 - WHEN `clm gate` judges it
 - THEN its first line is `spec`, and it lands on checks
 
+#### Carries
+- method
+
 #### Enforced by
 - gate/classify
 - gate/needs-review
@@ -57,6 +64,9 @@ Every rule that must hold SHALL be checked by a program (the CLI, a hook or the 
 - WHEN `clm land` runs
 - THEN the review's findings do not decide whether it lands
 
+#### Carries
+- method
+
 #### Untested
 A principle for how every rule is built, applied in design and review; this file's `#### Enforced by` blocks are its record.
 
@@ -67,6 +77,9 @@ A requirement SHALL count as implemented only when a passing test cites its ID a
 - GIVEN a requirement no test cites
 - WHEN `clm pending` runs
 - THEN it lists the requirement as pending
+
+#### Carries
+- method
 
 #### Enforced by
 - check.coverage/coverage-report
@@ -83,6 +96,9 @@ A divergence between spec and code that CLM can detect SHALL block: `clm check` 
 - WHEN `clm check` runs
 - THEN it fails, naming the marker
 
+#### Carries
+- method
+
 #### Enforced by
 - check/report-and-exit
 - check/dangling-markers
@@ -97,6 +113,9 @@ Git SHALL be the source of truth and the only channel. All shared state (specs, 
 - GIVEN the web app's cache is deleted
 - WHEN a person opens a change's page
 - THEN it is rebuilt from git and shows the same state
+
+#### Carries
+- method
 
 #### Enforced by
 - web.worker/cache-is-disposable
@@ -117,6 +136,9 @@ Anything derived from the spec SHALL record the content hashes of the elements i
 - WHEN `clm pending` runs
 - THEN it lists the requirement as `behind`
 
+#### Carries
+- method
+
 #### Enforced by
 - model/content-hash
 - apply/stale-base
@@ -133,6 +155,9 @@ Derived files SHALL be regenerated, never merged. Indexes, registries and the ap
 - WHEN the second is brought up to `main`
 - THEN the file is regenerated from the merged sources, not merged by hand
 
+#### Carries
+- method
+
 #### Enforced by
 - sync/reapply
 - land/derived-specs
@@ -140,24 +165,30 @@ Derived files SHALL be regenerated, never merged. Indexes, registries and the ap
 - sync/regenerate-renames
 
 ### Constraint: ancestor-scoped-context
-An agent working on a component SHALL receive this file, the ancestors (root to component), the one-hop contracts of what it needs and the capabilities its rules serve, and nothing else.
+An agent working on a component SHALL receive `ARCHITECTURE.md`, CLM's carried constraints in force in the project (`carried-constraints`), the ancestors (root to component), the one-hop contracts of what it needs and the capabilities its rules serve, and nothing else.
 
 #### Scenario: unrelated node
 - GIVEN components `a` and `b`, neither needing the other
 - WHEN `clm context a` runs
 - THEN its bundle holds nothing of `b`'s spec
 
+#### Carries
+- method
+
 #### Enforced by
 - context/bundle-contents
 - context/bundle-hash
 
 ### Constraint: reuse-first
-CLM SHALL reuse existing tools (git, Claude Code primitives, superpowers, standard libraries and conventions) over reinventing them, and keep its own code to glue and checks. Writing our own needs a reason; adding a library or tool is the preferred way to get something done.
+The project SHALL reuse existing tools (standard libraries, the platform's primitives and conventions; for CLM, git, Claude Code primitives and superpowers, its own code kept to glue and checks) over reinventing them. Writing our own needs a reason; adding a library or tool is the preferred way to get something done.
 
 #### Scenario: a standard tool exists
 - GIVEN a proposal that needs something a widely used tool already does
 - WHEN it is designed
 - THEN it uses the tool, or its design says why not
+
+#### Carries
+- default
 
 #### Untested
 A judgement made in design and review.
@@ -170,6 +201,9 @@ A judgement made in design and review.
 - WHEN it is applied
 - THEN the requirement's text is gone from `specs/`, and only the archived change records it
 
+#### Carries
+- method
+
 #### Untested
 A writing discipline: `clm apply` deletes removed requirements, and `clm health`'s `history-words` flags prose that narrates history, advising without gating (`health-advises`).
 
@@ -180,6 +214,12 @@ Small work discovered during a change SHALL be folded into it: anything that nee
 - GIVEN a build of component `a` that finds a bug in component `b`'s code
 - WHEN it finishes
 - THEN the bug is a backlog item on `b`, not a fix in `a`'s branch
+
+#### Carries
+- replaceable
+
+#### Guarantee
+Work found during a change is either done in it or recorded as a `backlog/` item, never lost, and a change never grows beyond its components unseen.
 
 #### Untested
 Small and significant are judgements made during a change.
@@ -208,6 +248,12 @@ Code SHALL exist only to serve a current requirement. A change that removes or r
 - WHEN `clm check` runs
 - THEN its detector reports the dependency and the check fails
 
+#### Carries
+- replaceable
+
+#### Guarantee
+All code serves a current requirement, and a program the project names in `clm.toml` finds code that doesn't: code no requirement asks for is never kept by accident.
+
 #### Enforced by
 - check/detectors
 - check/remove-by-markers
@@ -222,6 +268,12 @@ A component SHALL stay small enough for one build session to hold its spec and i
 - GIVEN a component over its size budget
 - WHEN `clm status` runs
 - THEN it shows the component as oversized, and its builds still run
+
+#### Carries
+- replaceable
+
+#### Guarantee
+One build session can hold a component's spec and its code: a build sees only its component's bundle and the code it owns.
 
 #### Enforced by
 - check/node-size
@@ -248,6 +300,28 @@ Whatever a person or session must know to run a project with CLM SHALL be said b
 #### Untested
 That no working rule is written only in this repository is a judgement about prose.
 
+### Constraint: carried-constraints
+CLM's constraints that govern how any project is built with it SHALL reach every project from the `clm` it runs, never as a copy that can fall behind. Each such entry of CLM's `ARCHITECTURE.md` holds a `#### Carries` block naming its tier: `method`, which a project can't replace; `replaceable`, whose `#### Guarantee` block states what CLM relies on, which a project may replace with its own constraint keeping that guarantee; or `default`, an opinion a project may drop. A project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, an edit a human reviews; the `architecture-auditor` advises whether a replacement keeps the guarantee (`deterministic-enforcement`).
+
+#### Scenario: replacing a method constraint
+- GIVEN a project whose `ARCHITECTURE.md` holds an entry with `#### Replaces` naming `proven-by-tests`
+- WHEN `clm check` runs
+- THEN it fails, naming the entry and `proven-by-tests`
+
+#### Scenario: a constraint CLM adds
+- GIVEN a project set up by an older `clm`, and a newer `clm` whose `ARCHITECTURE.md` carries a new `method` entry
+- WHEN `clm context <component>` runs with the newer `clm`
+- THEN the bundle holds the new entry, with no edit to the project's files
+
+#### Enforced by
+- model/carried-constraints
+- context/bundle-carries-constraints
+- init/guide-constraints-page
+- init/architecture-template-proof
+
+#### Untested
+Whether a replacement keeps the guarantee it replaces is a judgement, which the auditor advises on and the human's approval decides.
+
 ### Constraint: platform
 CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A git host (GitHub, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Moving to another agent is a change that needs review.
 
@@ -260,12 +334,15 @@ CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A g
 A choice of foundation, not a behaviour; moving off it is an edit to this file, which needs review.
 
 ### Constraint: yagni
-CLM SHALL build what a capability needs now, not what it might need later: no speculative options, adapters, settings or extension points without a capability asking for them. Adding complexity needs a reason.
+The project SHALL build what a capability needs now, not what it might need later: no speculative options, adapters, settings or extension points without a capability asking for them. Adding complexity needs a reason.
 
 #### Scenario: speculative setting
 - GIVEN a proposal adding a setting no capability uses
 - WHEN it is drafted
 - THEN the setting is left out
+
+#### Carries
+- default
 
 #### Untested
 A judgement made in design and review.
@@ -277,6 +354,9 @@ When something gets in the way, the first question SHALL be whether the design i
 - GIVEN a build that has already made two workarounds on one requirement
 - WHEN it needs a third
 - THEN it stops and asks the architect
+
+#### Carries
+- default
 
 #### Enforced by
 - orchestrator.run/prompt-workaround
@@ -293,6 +373,9 @@ When there is no clear standard answer, or reuse and minimalism pull different w
 - WHEN it reaches the requirement
 - THEN it files a `question` item blocking it, and builds the others
 
+#### Carries
+- default
+
 #### Untested
 Whether a standard answer is clear is a judgement; the blocking an unattended session relies on is `blocked-by-backlog`'s.
 
@@ -303,6 +386,9 @@ When an AI session, attended or not, recommends or chooses a design (an answer t
 - GIVEN a backlog item whose text proposes a fix
 - WHEN a session recommends an answer for it
 - THEN it has read the code and specs the item names, and its recommendation says why the chosen design beats the item's fix, or why that fix is also the right one
+
+#### Carries
+- default
 
 #### Untested
 Which design is correct and maintainable is a judgement made in design and review. It reaches every session through the context bundle, and the skill steps that recommend a design (triage's answers and workaround fixes, propose's design step) apply it.
@@ -334,6 +420,9 @@ Every implementation rule SHALL name what it serves: a capability or an architec
 - WHEN `clm check` runs
 - THEN it fails, naming the requirement
 
+#### Carries
+- method
+
 #### Enforced by
 - check/untraced
 - model/serves
@@ -356,6 +445,9 @@ A component's build SHALL change only its own `paths`. Two exceptions: a build t
 - WHEN it builds
 - THEN it re-cites that test at `a/x`'s current version, fixing the test first where it no longer proves the current text
 
+#### Carries
+- method
+
 #### Enforced by
 - orchestrator.run/removal-breaks-dependant
 - orchestrator.run/pending-prompt
@@ -370,6 +462,9 @@ Only a human SHALL approve a change that needs review, through the command the g
 - GIVEN a session that runs `clm approve` on a branch
 - WHEN the guard sees it
 - THEN it asks the human to confirm, and nothing is approved without that
+
+#### Carries
+- method
 
 #### Enforced by
 - land.approval/approval-policy
@@ -389,6 +484,9 @@ A branch SHALL land on `main` only through `clm land`, which runs the checks on 
 - GIVEN a session that tries to push a branch straight to `main`
 - WHEN it runs
 - THEN the push is blocked (`guard-blocks-push-to-main`)
+
+#### Carries
+- method
 
 #### Enforced by
 - land/land
@@ -545,6 +643,12 @@ A breaking contract change SHALL land in two steps, expand then contract, so tha
 - WHEN it lands
 - THEN the old name still works, marked for removal by a named change
 
+#### Carries
+- replaceable
+
+#### Guarantee
+Every land leaves `main` green while the components that use a contract haven't moved off it yet: CLM builds one component at a time and never stacks branches, so no change lands everywhere at once.
+
 #### Enforced by
 - check/remove-by-markers
 
@@ -599,6 +703,9 @@ Once the root spec sets `outside`, every tracked code file SHALL be owned by a c
 - GIVEN a root spec that sets `outside`, and a new code file no component's `paths` cover and `outside` doesn't list
 - WHEN `clm check` runs
 - THEN it fails, naming the file
+
+#### Carries
+- method
 
 #### Enforced by
 - check/unowned-files

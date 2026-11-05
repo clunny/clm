@@ -24,6 +24,8 @@ CLM makes a lot of choices for you, and holds you to them. If they don't suit yo
 - **Small discoveries are folded in; large ones are deferred.** A session fixes a small bug in the code it's changing, and writes a backlog item for anything bigger.
 - **Git and Claude Code.** CLM runs on git and Claude Code (plugins, hooks, skills). A git host (GitHub, a bare server, or none) only holds the remote and a pull request per branch for reading its diff; it runs no checks and decides nothing. Moving to another agent is a change to CLM itself.
 
+Not every opinion is equally fixed. `clm guide constraints` lists the architectural constraints CLM carries into your project, each with its tier: a `method` constraint is what CLM's machinery relies on, and can't be switched off; a `replaceable` one names the guarantee CLM needs, so you may swap its technique for your own (feature flags rather than expand-then-contract, say) as long as the guarantee holds; a `default` one, such as building nothing speculative, is an opinion you may drop. Replacing or dropping one is an edit to your `ARCHITECTURE.md` that a human reviews, and `/clm:propose` explains what you give up first.
+
 CLM is a poor fit when you want to write code by hand, when the work is a quick script that will never change, or when no one on the team wants to own a spec.
 
 ## Where it comes from
