@@ -1,3 +1,4 @@
+// clm:reads ARCHITECTURE.md
 //! The human layers: the entries of `ARCHITECTURE.md` and `CAPABILITIES.md`, and the
 //! component IDs they reserve.
 
@@ -9,7 +10,7 @@ use tempfile::TempDir;
 
 const ROOT: &str = "---\ntitle: T\nstatus: active\nowners: []\n---\n\n## Contract\nc\n";
 
-const GIT_IS_TRUTH: &str = "### Constraint: git-is-truth\nGit SHALL be the source of truth.\n\n#### Scenario: no server state\n- GIVEN a repo\n- THEN git holds it\n";
+const GIT_IS_TRUTH: &str = "### Constraint: single-source\nGit SHALL be the source of truth.\n\n#### Scenario: no server state\n- GIVEN a repo\n- THEN git holds it\n";
 
 const APPROVE: &str = "### Capability: approve\nA reviewer can approve a change.\n\n#### Why\nOnly a human decides.\n\n#### Scenario: approve\n- GIVEN a change\n- THEN it lands\n";
 
@@ -67,10 +68,10 @@ fn entries_load_with_ids_and_versions() {
     ]);
     assert_eq!(
         ids(&graph, Layer::Architecture),
-        ["architecture/git-is-truth"]
+        ["architecture/single-source"]
     );
     assert_eq!(ids(&graph, Layer::Capability), ["capability/approve"]);
-    let arch = graph.requirement("architecture/git-is-truth").unwrap();
+    let arch = graph.requirement("architecture/single-source").unwrap();
     assert_eq!(arch.hash, content_hash(GIT_IS_TRUTH));
     assert_eq!(arch.version(), &content_hash(GIT_IS_TRUTH)[..8]);
     assert_eq!(arch.scenarios, 1);
@@ -96,7 +97,7 @@ fn entries_end_at_the_section_and_skip_fences() {
 #[test]
 fn free_form_architecture_has_no_entries() {
     // req:model/human-layers@c4f90bbc
-    let old = "# Architecture\n\n## Layer 1 invariants\n\n- **`git-is-truth`**: git holds it.\n- **`no-dead-code`**: remove it.\n\n## Glossary\n\n### Requirement\nA rule.\n";
+    let old = "# Architecture\n\n## Layer 1 invariants\n\n- **`single-source`**: git holds it.\n- **`no-dead-code`**: remove it.\n\n## Glossary\n\n### Requirement\nA rule.\n";
     let graph = clean(&[("ARCHITECTURE.md", old)]);
     assert!(ids(&graph, Layer::Architecture).is_empty());
 }
@@ -236,7 +237,7 @@ fn enforcement_blocks_load() {
     let c = graph.requirement("capability/c").unwrap();
     assert_eq!(c.untested_text.as_deref(), Some("No program sees it."));
     assert!(graph.requirement("capability/c").unwrap().untested);
-    let plain = graph.requirement("architecture/git-is-truth").unwrap();
+    let plain = graph.requirement("architecture/single-source").unwrap();
     assert!(plain.enforced_by.is_empty() && !plain.untested && plain.untested_text.is_none());
     assert!(!graph.requirement("capability/approve").unwrap().untested);
     assert!(!graph.requirement("a/y").unwrap().untested);
@@ -297,7 +298,7 @@ fn enforcement_block_rules() {
         format!("{base}\n#### Enforced by\n\n#### Untested\nWhy.\n"),
         format!("{base}\n#### Untested\n\n"),
         format!("{base}\n#### Enforced by\na/y\n"),
-        format!("{base}\n#### Enforced by\n- architecture/git-is-truth\n"),
+        format!("{base}\n#### Enforced by\n- architecture/single-source\n"),
         format!("{base}\n#### Enforced by\n- capability/approve\n"),
     ];
     for text in arch_cases {
@@ -434,7 +435,7 @@ fn requirement_in_capability_node() {
 fn need_on_entry_rejected() {
     // req:model/requirement-needs@0d58e0b7
     let a = format!(
-        "{ROOT}\n## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Needs\n- architecture/git-is-truth\n\n#### Scenario: s\n- ok\n"
+        "{ROOT}\n## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Needs\n- architecture/single-source\n\n#### Scenario: s\n- ok\n"
     );
     one_violation(
         &[
@@ -443,14 +444,14 @@ fn need_on_entry_rejected() {
         ],
         "model/requirement-needs",
         "specs/a/SPEC.md",
-        &["`a/x`", "`architecture/git-is-truth`", "human-layer entry"],
+        &["`a/x`", "`architecture/single-source`", "human-layer entry"],
     );
 }
 
 #[test]
 fn blocks_may_name_an_entry() {
     // req:model/parse-backlog@549e59a5
-    let item = "---\ntitle: T\nkind: question\nblocks: [capability/approve, architecture/git-is-truth]\n---\n";
+    let item = "---\ntitle: T\nkind: question\nblocks: [capability/approve, architecture/single-source]\n---\n";
     clean(&[
         ("ARCHITECTURE.md", &architecture(GIT_IS_TRUTH)),
         ("CAPABILITIES.md", &capabilities(APPROVE)),
@@ -490,7 +491,7 @@ fn requirements_lists_entries_last() {
         all,
         [
             "a/x",
-            "architecture/git-is-truth",
+            "architecture/single-source",
             "capability/zeta",
             "capability/approve"
         ]

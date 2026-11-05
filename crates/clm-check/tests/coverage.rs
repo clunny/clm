@@ -441,7 +441,7 @@ fn marker_on_architecture_or_untested_entry_reported() {
     write(
         d,
         "ARCHITECTURE.md",
-        "## Constraints\n\n### Constraint: git-is-truth\nGit SHALL be the truth.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n\n### Constraint: both\nIt SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Untested\nA judgement.\n",
+        "## Constraints\n\n### Constraint: single-source\nGit SHALL be the truth.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n\n### Constraint: both\nIt SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Untested\nA judgement.\n",
     );
     write(
         d,
@@ -458,7 +458,7 @@ fn marker_on_architecture_or_untested_entry_reported() {
         d,
         "tests/t.rs",
         &format!(
-            "// {REQ}architecture/git-is-truth@01234567\n\n// {REQ}capability/watch\n// {REQ}architecture/both\n"
+            "// {REQ}architecture/single-source@01234567\n\n// {REQ}capability/watch\n// {REQ}architecture/both\n"
         ),
     );
     let arch =

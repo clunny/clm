@@ -1,6 +1,7 @@
 //! The spec graph: node specs under `specs/` and changes under `changes/`, parsed and
 //! validated (see docs/spec-format.md).
 
+mod carried;
 mod change;
 mod files;
 mod layers;
@@ -9,6 +10,7 @@ mod priority;
 mod records;
 mod renames;
 
+pub use carried::{Carried, CarriedEntry, Tier, carried};
 pub use change::{
     ARCHIVE_DIR, Bases, CHANGE_KEYS, CHANGE_STATUS_TERMS, Change, ChangeFrontmatter, ChangeStatus,
     Delta, DeltaRequirement, parse_change_frontmatter,
@@ -162,6 +164,8 @@ pub struct Graph {
     pub decisions: BTreeMap<String, Decision>,
     /// The human layers' entries, each layer's in file order (`human-layers`).
     pub layers: BTreeMap<Layer, Vec<Requirement>>,
+    /// CLM's carried constraints for this repository (`carried-constraints`).
+    pub carried: Carried,
 }
 
 impl Graph {
@@ -425,6 +429,7 @@ pub fn load_files(files: &Files) -> (Graph, Vec<Violation>) {
     }
     graph.backlog = records::load_backlog(files, &mut violations);
     graph.layers = layers::load_layers(files, &mut violations);
+    graph.carried = carried::load(files, &mut violations);
     violations.extend(check_graph(&graph));
     graph.decisions = records::load_decisions(files, &mut violations);
 

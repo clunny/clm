@@ -357,6 +357,7 @@ pub fn resulting(graph: &Graph, change: &Change) -> Option<Graph> {
         backlog: graph.backlog.clone(),
         decisions: graph.decisions.clone(),
         layers: graph.layers.clone(),
+        carried: graph.carried.clone(),
     };
     for (id, spec) in specs {
         after.nodes.remove(&id);

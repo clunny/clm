@@ -1,3 +1,4 @@
+// clm:reads ARCHITECTURE.md
 //! `ARCHITECTURE.md`: a `## Constraints` section of `### Constraint:` entries
 //! (`human-layers`).
 
@@ -47,13 +48,13 @@ fn constraints_load() {
     // req:model/human-layers@c4f90bbc
     let text = format!(
         "# Architecture\n\n## Constraints\n\n{}",
-        body("### Constraint:", "git-is-truth")
+        body("### Constraint:", "single-source")
     );
     let (graph, violations) = load(Some(&text));
     assert!(violations.is_empty(), "{violations:?}");
-    assert_eq!(ids(&graph), ["architecture/git-is-truth"]);
-    let entry = graph.requirement("architecture/git-is-truth").unwrap();
-    let block = body("### Constraint:", "git-is-truth");
+    assert_eq!(ids(&graph), ["architecture/single-source"]);
+    let entry = graph.requirement("architecture/single-source").unwrap();
+    let block = body("### Constraint:", "single-source");
     assert_eq!(entry.hash, clm_model::content_hash(&block));
     assert_eq!(entry.version(), &clm_model::content_hash(&block)[..8]);
     assert_eq!(graph.heading(Layer::Architecture), "### Constraint:");
@@ -118,7 +119,7 @@ fn a_constraint_outside_its_section_is_reported() {
 #[test]
 fn free_form_architecture_has_no_entries() {
     // req:model/human-layers@c4f90bbc
-    let text = "# Architecture\n\n## Layer 1 invariants\n\n- **`git-is-truth`**: git holds it.\n";
+    let text = "# Architecture\n\n## Layer 1 invariants\n\n- **`single-source`**: git holds it.\n";
     let (graph, violations) = load(Some(text));
     assert!(violations.is_empty(), "{violations:?}");
     assert!(ids(&graph).is_empty());
