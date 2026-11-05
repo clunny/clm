@@ -9,8 +9,10 @@ publish.workspace = true
 clm-model.workspace = true
 clm-git.workspace = true
 clm-orchestrator.workspace = true
+clm-host.workspace = true
 serde_yaml.workspace = true
 
 [dev-dependencies]
 clm-check.workspace = true
+clm-config.workspace = true
 tempfile.workspace = true

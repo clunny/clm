@@ -11,6 +11,7 @@
 mod draft;
 mod finish;
 mod fold;
+mod intake;
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
@@ -26,6 +27,7 @@ use clm_orchestrator::{Holding, REMOTE, taken_items};
 pub use draft::{Clock, Draft, DraftError, Drafted, draft};
 pub use finish::finish;
 pub use fold::{Fold, fold};
+pub use intake::intake;
 
 /// The most items one draft takes; a larger group is cut into groups of at most this.
 pub const BUDGET: usize = 6;
