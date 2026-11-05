@@ -18,6 +18,10 @@ In Claude Code, run `/plugin marketplace add clunny/clm` and then `/plugin insta
 
 Claude Code, git and `curl`, on Linux or macOS. The plugin downloads the `clm` binary from the project's public GitHub releases on first use; no GitHub account is needed. A git host such as GitHub is optional: it holds the remote and shows a pull request per branch, but runs no checks.
 
+## Do I need superpowers installed?
+
+No. CLM uses skills from [superpowers](https://github.com/obra/superpowers), but it fetches its own copy at a pinned version the first time a skill is needed and reads the skills from there. Keep the superpowers plugin turned off in projects that use CLM: its hooks tell every session to brainstorm before any task, while CLM brainstorms only when you propose a change, and builds would follow the plugin's version instead of the pinned one.
+
 ## What does it cost?
 
 CLM itself is free. You pay for your own Claude usage, as you would for any Claude Code session. CLM runs no server and needs no paid service: it works on git alone.
