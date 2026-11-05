@@ -528,7 +528,7 @@ The root `SPEC.md` `clm init` writes SHALL have `status: unbuilt`; no file under
 #### Scenario: a new repository
 - GIVEN an empty repository
 - WHEN `clm init` runs
-- THEN its `specs/SPEC.md` has `status: unbuilt`, no file under `crates/clm-init/templates/` holds `specd`, `kind: friction` or the word `burdens`, and the model loads the tree with no violation
+- THEN its `specs/SPEC.md` has `status: unbuilt`, no file under `crates/clm-init/templates/` holds a word `plain-terms-renames` replaced, and the model loads the tree with no violation
 
 #### Serves
 - architecture/plain-terms
