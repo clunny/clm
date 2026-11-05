@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [guide-command-needs-the-constraints-page]
 ---
 
