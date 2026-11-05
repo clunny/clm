@@ -9,7 +9,7 @@ serves: [capability/land-safely, architecture/land-locally]
 ---
 
 ## Contract
-What this repository runs on GitHub Actions, and the check command `clm land` runs here (`land-locally`, `host-ci-for-releases`): a release workflow a human dispatches (bump the version, build prebuilt `clm` binaries, publish them as a GitHub Release and deploy the `web` app), and `.github/scripts/ci-check.sh`, the one command that runs every check of this repository, named in `clm.toml` as `[land] check`. Beside it, `.github/scripts/coverage.sh` produces `target/lcov.info`, the lcov file `clm health`'s `unexercised` signal reads (`lcov-coverage-signal`, `coverage-by-script`): a person or a session runs it by hand when they want that signal fresh; no land, check or workflow runs it. No workflow runs on pull requests or pushes: checks run and branches land through `clm land`, on the machine that runs it.
+What this repository runs on GitHub Actions, and the check command `clm land` runs here (`land-locally`, `host-ci-for-releases`): a release workflow a human dispatches (bump the version, build prebuilt `clm` binaries, publish them as a GitHub Release and deploy the `web` app), a site workflow a human dispatches (build and deploy the public site, `site-worker-of-its-own`), and `.github/scripts/ci-check.sh`, the one command that runs every check of this repository, named in `clm.toml` as `[land] check`. Beside it, `.github/scripts/coverage.sh` produces `target/lcov.info`, the lcov file `clm health`'s `unexercised` signal reads (`lcov-coverage-signal`, `coverage-by-script`): a person or a session runs it by hand when they want that signal fresh; no land, check or workflow runs it. No workflow runs on pull requests or pushes: checks run and branches land through `clm land`, on the machine that runs it.
 
 ## Design
 **The check script.** `.github/scripts/ci-check.sh` runs fmt, clippy, tests, then the `web` checks: the wasm builds and the `web/` and `plugin-panel/` suites (`web-checks`). The panel's `npm test` type-checks `plugin-panel/` with `tsc` first, against the panel's own declarations of the plugin API (`plugin.panel/type-check`, `panel-types-hand-written`), so a type error in the panel fails the check as a failing test does; `tsc` and `claude plugin validate` catch different faults, and neither replaces the other. After the panel's tests it runs `claude plugin validate plugin-panel`, which reads the panel's manifest, hooks module and type contract as Claude Code loads them, so a module Claude Code would refuse to load fails the check instead of landing (`panel-validate`). It runs with neither `--strict` nor `--profile`: only what the engine would refuse fails it, not warnings or the plugin directory's listing checks (a LICENSE, an icon); the panel's own tests strip types and never load the module as the engine does. Without `claude` on `PATH`, as for a person without Claude Code, the validation is skipped (`panel-validate-skips-without-claude`). The `clm` plugin, `plugin/`, is validated the same way, `claude plugin validate plugin` with the same flags and the same skip, whenever every test is selected or the selection names a file under `plugin/` (`plugin-validate`, `plugin-validate-at-land`): its manifest, hooks, skills, agents and command are read by the same loader, and a frontmatter or hook Claude Code refuses would otherwise land on its tests' word lists alone. The validator is whatever `claude` the landing machine has, unpinned: that is the Claude Code that loads the plugin there, so its verdict is the one that matters, and a refusal after an auto-update is a real finding about the plugin, fixed as code; a land that touches nothing under `plugin/` or `plugin-panel/` never runs either validation, so an update can't fail a land of unrelated code. It doesn't run `clm check`: `clm land` runs that itself after the command, and a session runs it on its own. It first runs `.github/scripts/detector-tools.sh`, which installs the tools behind `clm.toml`'s detectors (only `cargo-machete`, with `cargo install --locked --version <x.y.z> cargo-machete`, the newest release at build time), because `this_repository_is_clean` runs `clm check`, which runs the detectors; `~/.cargo/bin` keeps the install from repeating. The step that runs `web/`'s browser tests first installs Playwright's Chromium, in `web/` (`browser-install`). The install is idempotent: it fetches only the Chromium revision `web/`'s `@playwright/test` pins, into Playwright's per-machine cache, and does nothing when that revision is already there, so a land pays for a download only when the pin moves. Without `--with-deps` it needs no `sudo`, so `clm land` and an unattended session run it; Chromium's system libraries are a once-per-machine step a human takes (`npx playwright install-deps chromium`), and only `--with-deps`, which a hosted runner that sets `CI` would need, reaches `sudo`. No workflow runs the script and `clm land` unsets `CI`, so only a human who sets it, or a hosted runner, reaches that path. Installing on every run keeps a cached browser one revision behind the pin from failing every `web` e2e test with `Executable doesn't exist` and no hint of the fix. npm runs no dependency's install script (`unattended-commands`). `.claude/settings.json` allows the script by this path (`clm/session-commands`).
@@ -49,9 +49,11 @@ It runs one `cargo test -p <package> <targets>` per package, in package order, s
 
    `clm survey`'s tree-sitter grammars are C, which the `cc` crate compiles at build time (`tree-sitter-analysis`), so every target needs a C compiler for it: Zig, for each. The binaries are self-contained, so no one who installs `clm` needs a compiler. Each target packs `clm-<target>.tar.gz`, containing just `clm`, and `clm-<target>.tar.gz.sha256`, written by `sha256sum`, and passes them on as a workflow artifact.
 3. `publish` runs `gh release create v<version> --target <sha> --generate-notes` with every asset, so the release is published with all its binaries at once. Then, when there was a bump, it merges `release/v<version>` into `main` and pushes `main`, then deletes the branch. The push is a fast-forward when `main` hasn't moved and a merge commit otherwise, and it retries if the push races. Only the release workflow changes the version, so the merge can't conflict. If the push still fails, the release is out but `main` names the old version. The job then fails, printing the `git` commands that merge `release/v<version>` into `main`, for a human to run. This push is the one push to `main` that isn't a `clm land`; `clm ledger verify` knows a release merge by its `Release v` message and doesn't report it, so `main` still audits clean.
-4. `web` (`web-deploy`) builds `web/` and deploys the Worker and its assets with `wrangler deploy`, using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. It runs after `publish`, so a failed deploy doesn't undo the release. It can be rerun on its own.
+4. `web` (`web-deploy`) builds `web/` and deploys the app's Worker and its assets with `wrangler deploy`, using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. It runs after `publish`, so a failed deploy doesn't undo the release. It can be rerun on its own. It doesn't build or deploy the site.
 
-A run that fails before `publish` publishes nothing and leaves `main` as it was, so it can be dispatched again. Events made with the workflow token start no workflows. That's why one dispatched workflow does every step. Deploying `web` on release, not on merge, matches how the plugin ships. With every target built on Linux, the release could run on this machine instead of Actions; it stays on Actions until `host-ci-for-releases` is revisited.
+A run that fails before `publish` publishes nothing and leaves `main` as it was, so it can be dispatched again. Events made with the workflow token start no workflows. That's why one dispatched workflow does every step. Deploying `web` on release, not on merge, matches how the plugin ships.
+
+**The site workflow** (`site-deploy`, `site-worker-of-its-own`). `.github/workflows/site.yml` runs only on `workflow_dispatch`, with no inputs, from `main`. It has `permissions: contents: read` and `concurrency: { group: site, cancel-in-progress: false }`. One job checks out `main`, runs `npm ci --ignore-scripts` and `npm run build` in `web/site/` with `UMAMI_WEBSITE_ID` from the Actions variable and `GITHUB_TOKEN` the workflow's own, then `wrangler deploy --config web/site/wrangler.toml` with the same two Cloudflare secrets. Publishing a post is setting its `draft` to `false` on a branch, landing it, and dispatching this workflow; a CLM release never publishes the site, and this workflow never touches the app. With every target built on Linux, the release could run on this machine instead of Actions; it stays on Actions until `host-ci-for-releases` is revisited.
 
 The Linux binaries are static `-musl` builds, so they run on any Linux of their architecture, whatever its glibc. There is no `-gnu` asset: a plugin version's shim downloads only its own version's release, so no shim that names a `-gnu` asset ever reads a release built after this. There is no Windows asset (`no-windows-support`): the shim maps no Windows platform, so no shim of this version or a later one asks for one, and a plugin version that still maps one reads only its own version's release.
 
@@ -130,27 +132,15 @@ It SHALL be the only workflow in `.github/workflows/`.
 - THEN the land fails
 
 ### Requirement: web-deploy
-When a release is published, the release workflow SHALL deploy the `web` Worker and its assets with `wrangler deploy`, using only the Cloudflare credentials held in repository secrets, with `UMAMI_WEBSITE_ID` in the deploy step's environment set from the repository's Actions variable of that name, so the released site, and no other build, reports to the operator's analytics (`site-analytics-umami`), and with `GITHUB_TOKEN` set to the workflow's own token, so the site's build reads the repository's star count without GitHub's anonymous rate limit (`web.site/github-link`).
+When a release is published, the release workflow SHALL deploy the `web` app's Worker and its assets with `wrangler deploy`, using only the Cloudflare credentials held in repository secrets, and SHALL NOT build or deploy the public site (`site-worker-of-its-own`).
 
 #### Scenario: release
 - GIVEN a published release `v<workspace version>`
 - WHEN the release workflow runs
-- THEN its `web` job runs `wrangler deploy` with `CLOUDFLARE_API_TOKEN` from secrets
-
-#### Scenario: website ID from a variable
-- GIVEN the release workflow
-- WHEN a test reads its `web` job's deploy step
-- THEN its environment sets `UMAMI_WEBSITE_ID` to `${{ vars.UMAMI_WEBSITE_ID }}`, and no file under `.github/` holds a literal website ID
-
-#### Scenario: token for the star count
-- GIVEN the release workflow
-- WHEN a test reads its `web` job's deploy step
-- THEN its environment sets `GITHUB_TOKEN` to `${{ github.token }}`, and the job's `permissions` grant no more than `contents: read`
+- THEN its `web` job runs `wrangler deploy` with `CLOUDFLARE_API_TOKEN` from secrets, and no step of it names `web/site`
 
 #### Serves
 - capability/follow-from-browser
-- capability/see-site-use
-- capability/learn-clm
 - architecture/web-optional
 
 ### Requirement: detector-tools
@@ -425,3 +415,21 @@ Every workflow under `.github/workflows/` SHALL push nothing to `main` but the r
 
 #### Serves
 - architecture/invite-only-web
+
+### Requirement: site-deploy
+`.github/workflows/site.yml` SHALL run only on `workflow_dispatch`, build `web/site/` from `main` with `UMAMI_WEBSITE_ID` set from the repository's Actions variable of that name and `GITHUB_TOKEN` the workflow's own (`web.site/github-link`), and deploy it with `wrangler deploy --config web/site/wrangler.toml`, using only the Cloudflare credentials held in repository secrets, with `permissions` granting no more than `contents: read`, so the released site, and no other build, reports to the operator's analytics (`site-analytics-umami`).
+
+#### Scenario: dispatched only
+- GIVEN the repository
+- WHEN a test reads `.github/workflows/site.yml`
+- THEN its only trigger is `workflow_dispatch`, it checks out `main`, and its deploy step runs `wrangler deploy --config web/site/wrangler.toml` with `CLOUDFLARE_API_TOKEN` from secrets
+
+#### Scenario: website ID and token
+- GIVEN the site workflow
+- WHEN a test reads its build step
+- THEN its environment sets `UMAMI_WEBSITE_ID` to `${{ vars.UMAMI_WEBSITE_ID }}` and `GITHUB_TOKEN` to `${{ github.token }}`, the job's `permissions` grant no more than `contents: read`, and no file under `.github/` holds a literal website ID
+
+#### Serves
+- capability/publish-posts
+- capability/see-site-use
+- capability/learn-clm

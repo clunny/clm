@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 human_burdens:
   - "Moves the clm-app.dev Custom Domain from the app's Worker to a new site Worker: a one-time production change to the live zone, with a possible brief outage while it moves."
   - "The Cloudflare API token in the repository's secrets may need the zone's Workers Routes permission (backlog/cloudflare-token-workers-routes)."
