@@ -1389,12 +1389,32 @@ fn verifier_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
             "quoting",
             "copying no sentence",
             "overlaps",
-            "severity",
-            "never edit",
+            "Assign no severity",
+            "never edit files",
+            "nothing else",
+            "together",
+            "backlog kind",
+            "clm contribution show",
+            "`contribution` skill",
         ]
         .into_iter()
         .filter(|needle| !body.contains(needle))
         .map(|needle| format!("issue-verifier: must name `{needle}`")),
+    );
+    let description = fm["description"].as_str().unwrap_or_default();
+    gaps.extend(
+        [
+            "issues",
+            "pull requests",
+            "backlog",
+            "specs",
+            "code",
+            "ARCHITECTURE.md",
+            "read-only",
+        ]
+        .into_iter()
+        .filter(|needle| !description.contains(needle))
+        .map(|needle| format!("issue-verifier: description must name `{needle}`")),
     );
     gaps
 }
