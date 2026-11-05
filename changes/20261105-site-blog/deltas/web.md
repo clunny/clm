@@ -58,7 +58,7 @@ To rotate a credential, generate a new private key or client secret in the App's
 ## MODIFIED Requirements
 
 ### Requirement: app-at-app-path <!-- base: 73ca0e1f98a08a6e -->
-`web`'s build SHALL put the app, built with Vite's `base` `/app/`, at `web/dist/app/`, the invited list at `web/dist/_clm/invited.json` and the retiring service worker at `web/dist/sw.js`, and SHALL NOT build `web.site`, which deploys on its own (`site-worker-of-its-own`). The app's end-to-end tests SHALL open it at `/app/`. Moving the app moves the test fixtures of other components that open it at `/` (`capabilities/web/`'s harness and specs): this build makes those fixes and names them in its pull request (`path-ownership`). Among them, the harness's `signIn` SHALL open `/app/` once the callback has set the session, wherever the callback sends the browser, so it holds both before and after `web.worker/sign-in-opens-app` points the callback at `/app/`. This requirement is built first of the move's: `installable` and `retire-root-service-worker` assume the app is served from `/app/`.
+`web`'s build SHALL put the app, built with Vite's `base` `/app/`, at `web/dist/app/`, the invited list at `web/dist/_clm/invited.json` and the retiring service worker at `web/dist/sw.js`, and SHALL NOT build `web.site`, which deploys on its own (`site-worker-of-its-own`). The capability harness built the site through this build, so this build moves it off: `capabilities/web/`'s `globalSetup` builds `web/site/` itself and its harness serves that output at `/` beside the app and the Worker, as the two Workers answer on the zone, a fix this build makes and names in its pull request (`path-ownership`). The app's end-to-end tests SHALL open it at `/app/`. Moving the app moves the test fixtures of other components that open it at `/` (`capabilities/web/`'s harness and specs): this build makes those fixes and names them in its pull request (`path-ownership`). Among them, the harness's `signIn` SHALL open `/app/` once the callback has set the session, wherever the callback sends the browser, so it holds both before and after `web.worker/sign-in-opens-app` points the callback at `/app/`. This requirement is built first of the move's: `installable` and `retire-root-service-worker` assume the app is served from `/app/`.
 
 #### Scenario: built tree
 - GIVEN a build of `web/`
@@ -69,6 +69,10 @@ To rotate a credential, generate a new private key or client secret in the App's
 - GIVEN the app at `/app/`
 - WHEN it is opened at `/app/#/o/a/backlog`
 - THEN it shows `o/a`'s backlog, and its sign-in button leads to `/auth/login`
+
+#### Needs
+- web.site/site-worker
+- ci/site-deploy
 
 #### Serves
 - capability/learn-clm

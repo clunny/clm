@@ -43,5 +43,6 @@ For the blog's main page the human chose a grid of cards, newest first (mockup A
 ## Constraints
 
 - `invite-only-web` holds: the site's Worker serves only public files, and every path that reaches a repository's data is still the app Worker's.
+- Expand, then contract (`expand-contract`): `web`'s build stops building the site only once the site's Worker and workflow exist (`web/app-at-app-path` needs `web.site/site-worker` and `ci/site-deploy`), so no release ships the zone without a site.
 - The order of the move matters on the live zone: the app Worker's routes must exist before the site Worker takes the Custom Domain, or `/app/` and the API answer with the site's 404 in between. The builder states the order in the pull request; the human runs the first site deploy.
 - The site's build stays readable without script, and its pages keep every head tag `page-metadata` lists.

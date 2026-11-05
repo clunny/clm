@@ -87,14 +87,14 @@ In the scenarios below, a fake `gh` for `o/r` answers `repo view --json url` wit
 - WHEN `clm hook guard` runs on `gh run rerun 42` and on `gh run rerun --job 900` with each
 - THEN each exits 2, the last two within 35 seconds; and the last two, each of which writes its process ID to a file and then `exec`s its sleep, have no process left with that ID once the guard has exited
 
+#### Scenario: dispatching the site
+- GIVEN the commands `gh workflow run site.yml`, `gh workflow run .github/workflows/Site.YAML` and `gh workflow run SITE`
+- WHEN `clm hook guard` runs on each
+- THEN each exits 2 naming `humans-cut-releases`
+
 #### Serves
 - capability/guard-sessions
 
 #### Needs
 - vcs/bounded-runs
 - host/git-through-layer
-
-#### Scenario: dispatching the site
-- GIVEN the commands `gh workflow run site.yml`, `gh workflow run .github/workflows/Site.YAML` and `gh workflow run SITE`
-- WHEN `clm hook guard` runs on each
-- THEN each exits 2 naming `humans-cut-releases`
