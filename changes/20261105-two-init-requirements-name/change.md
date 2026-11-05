@@ -1,13 +1,13 @@
 ---
 status: applied
-resolves: [two-init-requirements-name-entries-clm-init-no-longer-writes]
+resolves: [two-init-requirements-name-entries-clm-init-no-longer-writes, workaround-init-template-says-pull-request-1, workaround-init-templates-say-new-words-1]
 ---
 
 # Two init requirements stop naming entries clm init no longer writes
 
 ## Intent
 
-Since `architecture-template-proof` dropped the `## Enforced by clm` list (`carried-constraints`), the `ARCHITECTURE.md` that `clm init` writes holds no entry of CLM's own. Two `init` requirements still name lines of that list: `template-says-pull-request` asks for a `git-is-truth` line holding `a pull request's URL`, and `templates-say-new-words` asks for a `humans-review-intent` line naming `human_burdens`. No build can make either true. This change drops those parts and keeps what still holds: no template calls a pull request a page, the root `SPEC.md` is written `status: unbuilt`, and no template holds a word `plain-terms-renames` replaced.
+Since `architecture-template-proof` dropped the `## Enforced by clm` list (`carried-constraints`), the `ARCHITECTURE.md` that `clm init` writes holds no entry of CLM's own. Two `init` requirements still name lines of that list: `template-says-pull-request` asks for a `git-is-truth` line holding `a pull request's URL`, and `templates-say-new-words` asks for a `humans-review-intent` line naming `human_burdens`. No build can make either true. This change drops those parts and keeps what still holds: no template calls a pull request a page, the root `SPEC.md` is written `status: unbuilt`, and no template holds a word `plain-terms-renames` replaced. The rewording settles the two `workaround` flags a build raised against these requirements, which this change deletes.
 
 ## Problem
 
