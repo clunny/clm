@@ -579,3 +579,11 @@ fn parse_item_unknown_key() {
             .unwrap_err();
     assert!(violations.iter().any(|v| v.message.contains("colour")));
 }
+
+#[test]
+fn parse_item_reports_a_workaround_without_requirement() {
+    // req:model/parse-backlog-item@ac29a1d0
+    let violations =
+        clm_model::parse_backlog_item("x", "---\ntitle: T\nkind: workaround\n---\n").unwrap_err();
+    assert!(violations.iter().any(|v| v.message.contains("requirement")));
+}
