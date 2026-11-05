@@ -11,7 +11,7 @@ mod policy;
 pub use clm_fingerprint::{
     Entry, added_changes, adds_change, fingerprint, fingerprint_of, parse_ls_tree,
 };
-pub use policy::{approval_changed, needs_review_of};
+pub use policy::{approval_changed, needs_review_of, upgrade_stamp_only};
 use policy::{change_needs_review, path_needs_review};
 
 const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
@@ -115,7 +115,12 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
                 .is_some_and(|slug| resolved.contains(slug))
     };
 
+    let policy = match entries.iter().find(|(_, f)| *f == POLICY) {
+        Some(&(status, _)) => Some(policy_change(&at, status)?),
+        None => None,
+    };
     let (mut spec, mut code) = (Vec::new(), Vec::new());
+    let mut stamp_only = None;
     // IDs of changes archived in their own spec PR (`archive-in-spec-pr`): their
     // `change.md` is added under `changes/archive/<id>/` other than by an archive move.
     let mut new_archived = BTreeSet::new();
@@ -146,9 +151,12 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
             // a build recorded that a requirement waits on an existing item (`requirement-blocks`)
         } else if resolved_delete(status, file) {
             // listed in `resolves` by a change that a spec PR merged
-        } else if file == POLICY && policy_changed(&at, status)? {
+        } else if file == POLICY && policy == Some(PolicyChange::Approval) {
             // whose approval counts changes only with an approval (`approval-setting-is-spec`)
             spec.push((status, file));
+        } else if file == POLICY && policy == Some(PolicyChange::Stamp) {
+            // left out of the classification (`upgrade-stamp-left-out`)
+            stamp_only = Some((status, file));
         } else if !is_spec_path(file) {
             code.push(file);
         } else if path_needs_review(file)
@@ -184,6 +192,15 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
         spec.extend(code.drain(..).map(|f| ('M', f)));
     }
 
+    // Alone, the upgrade notes are a spec branch that needs no review.
+    let setting_changed = policy == Some(PolicyChange::Approval);
+    if let Some(entry) = stamp_only
+        && spec.is_empty()
+        && code.is_empty()
+    {
+        spec.push(entry);
+    }
+
     let kind = match (spec.is_empty(), code.is_empty()) {
         (false, false) => Kind::Mixed,
         (false, true) => Kind::Spec,
@@ -196,7 +213,6 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
         // modifies, a status-only edit included, as the Worker passes them.
         let changes = change_frontmatters(&at, &entries, &new_archived)?;
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
-        let setting_changed = spec.iter().any(|&(_, f)| f == POLICY);
         review = match &replayed {
             // Its replayed edits to the human layers change no intent (`needs-review`).
             Some(text) => {
@@ -269,7 +285,7 @@ pub fn files_outside_spec_paths(
                 merge_base: &merge_base,
                 head: &head,
             };
-            if policy_changed(&at, status)? {
+            if policy_change(&at, status)? != PolicyChange::Other {
                 continue;
             }
         }
@@ -751,10 +767,21 @@ fn unnamed_resolves(at: &At, before: &str, file: &str, id: &str) -> Result<Vec<V
     Ok(violations)
 }
 
-/// Whether the branch, whose diff lists `clm.toml` with `status`, changes its top-level
-/// `approval` (`gate/approval-setting`), as `approval_changed` decides from the file's bytes
-/// at the merge base and at the head.
-fn policy_changed(at: &At, status: char) -> Result<bool, String> {
+/// How a branch, whose diff lists `clm.toml`, changes it.
+#[derive(PartialEq)]
+enum PolicyChange {
+    /// Its top-level `approval` changes, or a side can't be read (`gate/approval-setting`).
+    Approval,
+    /// Only the upgrade notes change (`gate/upgrade-stamp-left-out`).
+    Stamp,
+    /// Anything else.
+    Other,
+}
+
+/// How the branch, whose diff lists `clm.toml` with `status`, changes it, decided by
+/// `approval_changed` and `upgrade_stamp_only` from the file's bytes at the merge base and
+/// at the head.
+fn policy_change(at: &At, status: char) -> Result<PolicyChange, String> {
     let side = |exists: bool, rev: &str| -> Result<Option<Vec<u8>>, String> {
         exists
             .then(|| show_bytes(at.repo, &format!("{rev}:{POLICY}")))
@@ -762,7 +789,14 @@ fn policy_changed(at: &At, status: char) -> Result<bool, String> {
     };
     let before = side(status != 'A', at.merge_base)?;
     let after = side(status != 'D', at.head)?;
-    Ok(approval_changed(before.as_deref(), after.as_deref()))
+    let (before, after) = (before.as_deref(), after.as_deref());
+    Ok(if approval_changed(before, after) {
+        PolicyChange::Approval
+    } else if upgrade_stamp_only(before, after) {
+        PolicyChange::Stamp
+    } else {
+        PolicyChange::Other
+    })
 }
 
 /// A top-level `backlog/<slug>.md`.

@@ -42,6 +42,31 @@ pub(crate) fn path_needs_review(path: &str) -> bool {
     })
 }
 
+/// The top-level keys of `clm.toml` that record what an upgrade took and declined
+/// (`upgrade-stamp-left-out`).
+const UPGRADE_NOTES: [&str; 2] = ["upgraded", "declined_migrations"];
+
+/// Whether `clm.toml`, given its bytes on each side of a diff (`None` where the file doesn't
+/// exist), differs only in `upgraded` and `declined_migrations`, compared as parsed TOML with
+/// a missing file or key counting as unset; false when either side isn't UTF-8 or doesn't
+/// parse (`upgrade-stamp-left-out`).
+pub fn upgrade_stamp_only(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
+    let rest = |bytes: Option<&[u8]>| -> Option<toml::Table> {
+        let Some(bytes) = bytes else {
+            return Some(toml::Table::new());
+        };
+        let mut table = std::str::from_utf8(bytes)
+            .ok()?
+            .parse::<toml::Table>()
+            .ok()?;
+        for key in UPGRADE_NOTES {
+            table.remove(key);
+        }
+        Some(table)
+    };
+    matches!((rest(before), rest(after)), (Some(b), Some(a)) if b == a)
+}
+
 /// Whether `approval-setting` counts `clm.toml` as a spec change, given its bytes on each
 /// side of a diff (`None` where the file doesn't exist): the top-level `approval` values,
 /// compared as parsed TOML with a missing file or key counting as unset, differ, or either

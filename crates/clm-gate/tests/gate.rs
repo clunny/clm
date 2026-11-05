@@ -2140,3 +2140,71 @@ fn scenario_the_old_words() {
     assert_eq!((out.kind, out.review), (Kind::Spec, true));
     assert!(rules(&out).is_empty(), "{:?}", out.violations);
 }
+
+const STAMPED: &str = "approval = \"other\"\nupgraded = \"0.17.0\"\n[land]\ncheck = \"a\"\n";
+
+#[test]
+fn scenario_notes_taken() {
+    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    let dir = tier_repo(&[("CLAUDE.md", "old\n"), ("clm.toml", STAMPED)]);
+    let stamped = "approval = \"other\"\nupgraded = \"0.18.0\"\ndeclined_migrations = [\"m\"]\n[land]\ncheck = \"a\"\n";
+    let out = tier_after(
+        &dir,
+        &[("CLAUDE.md", Some("new\n")), ("clm.toml", Some(stamped))],
+        false,
+    );
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn the_stamp_alone_classifies_as_spec_without_review() {
+    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    let dir = tier_repo(&[("clm.toml", STAMPED)]);
+    let stamped = STAMPED.replace("0.17.0", "0.18.0");
+    let out = tier_after(&dir, &[("clm.toml", Some(&stamped))], false);
+    assert_eq!(
+        verdict(&out),
+        (Kind::Spec, false, true),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn scenario_mechanical_migrations_taken() {
+    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    let dir = tier_repo(&[(".gitignore", "a\n"), ("clm.toml", STAMPED)]);
+    let stamped = STAMPED.replace("0.17.0", "0.18.0");
+    let out = tier_after(
+        &dir,
+        &[(".gitignore", Some("a\nb\n")), ("clm.toml", Some(&stamped))],
+        false,
+    );
+    assert_eq!(
+        verdict(&out),
+        (Kind::Code, false, true),
+        "{:?}",
+        out.violations
+    );
+}
+
+#[test]
+fn scenario_the_stamp_and_another_key() {
+    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    let dir = tier_repo(&[("CLAUDE.md", "old\n"), ("clm.toml", STAMPED)]);
+    let edited = STAMPED
+        .replace("0.17.0", "0.18.0")
+        .replace("check = \"a\"", "check = \"b\"");
+    let out = tier_after(
+        &dir,
+        &[("CLAUDE.md", Some("new\n")), ("clm.toml", Some(&edited))],
+        false,
+    );
+    assert_eq!(out.kind, Kind::Mixed);
+    assert!(rules(&out).contains(&"gate/classify"));
+}
