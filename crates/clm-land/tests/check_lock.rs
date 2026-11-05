@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 fn logging_check(f: &Fixture) {
     let log = f.path("overlap.log");
     let script = format!(
-        "#!/bin/sh\necho \"start $(pwd -P)\" >> '{log}'\nsleep 1\necho \"end $(pwd -P)\" >> '{log}'\n",
+        "#!/bin/sh\necho \"start $(pwd -P)\" >> '{log}'\nsleep 2\necho \"end $(pwd -P)\" >> '{log}'\n",
         log = log.display()
     );
     common::write_exec(&f.path("bin/check"), &script);

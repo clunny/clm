@@ -397,7 +397,7 @@ fn clm_in_a_subdirectory_builds_under_its_own_clm_directory() {
         f.lines("check-env.log"),
         [format!("CI=unset CARGO_TARGET_DIR={}", target.display())]
     );
-    // The land tree and the lock are under that `.clm/` too (land/land-tree@e1ccc61b), and
+    // The land tree and the lock are under that `.clm/` too (land/land-tree@9bb49b16), and
     // nothing of the land shows in `git status`.
     let tree = f.land_tree().join("proj").display().to_string();
     assert_eq!(f.lines("check-pwd.log"), [tree]);
@@ -421,7 +421,7 @@ fn land_from_a_linked_worktree() {
     clm_land::land(&linked, None, &f.env(&[])).unwrap();
     assert_eq!(f.lines("check-env.log"), std::slice::from_ref(&expected));
     // In the main worktree's land tree, not one under the linked worktree
-    // (land/land-tree@e1ccc61b).
+    // (land/land-tree@9bb49b16).
     assert_eq!(
         f.lines("check-pwd.log"),
         [f.land_tree().display().to_string()]
