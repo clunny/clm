@@ -452,12 +452,12 @@ The `ARCHITECTURE.md` that `clm init` writes SHALL say, in its preamble, that ea
 - architecture/carried-constraints
 
 ### Requirement: template-says-pull-request
-The `ARCHITECTURE.md` `clm init` writes SHALL call a host's pull request a pull request: its `git-is-truth` entry SHALL give a pull request's URL, not a page's, as the example of a host's own data a cache may hold, and no file under `crates/clm-init/templates/` SHALL call a host's pull request a page (the guide's pages, which `clm guide` prints, are pages).
+No file under `crates/clm-init/templates/` SHALL call a host's pull request a page: none SHALL hold `page's` (only the guide, which `clm guide` prints, has pages).
 
 #### Scenario: the written architecture
 - GIVEN an empty repository
 - WHEN `clm init` runs
-- THEN its `ARCHITECTURE.md`'s `git-is-truth` line holds `a pull request's URL` and no `pull request's URL`
+- THEN its `ARCHITECTURE.md` holds no `page's URL`, and no line of a file under `crates/clm-init/templates/` holds `page's`
 
 #### Serves
 - architecture/plain-terms
@@ -523,12 +523,12 @@ The files `clm init` writes SHALL call an entry of `ARCHITECTURE.md` an architec
 - model/human-layers
 
 ### Requirement: templates-say-new-words
-The root `SPEC.md` `clm init` writes SHALL have `status: unbuilt`, and the `humans-review-intent` entry of the `ARCHITECTURE.md` it writes SHALL name the `change.md` key `human_burdens`; no file under `crates/clm-init/templates/` SHALL hold a word `plain-terms-renames` replaced for a component status, a backlog kind or a `change.md` key.
+The root `SPEC.md` `clm init` writes SHALL have `status: unbuilt`; no file under `crates/clm-init/templates/` SHALL hold a word `plain-terms-renames` replaced for a component status, a backlog kind or a `change.md` key.
 
 #### Scenario: a new repository
 - GIVEN an empty repository
 - WHEN `clm init` runs
-- THEN its `specs/SPEC.md` has `status: unbuilt`, its `ARCHITECTURE.md`'s `humans-review-intent` line names `human_burdens`, and the model loads the tree with no violation
+- THEN its `specs/SPEC.md` has `status: unbuilt`, no file under `crates/clm-init/templates/` holds `specd`, `kind: friction` or the word `burdens`, and the model loads the tree with no violation
 
 #### Serves
 - architecture/plain-terms
