@@ -22,7 +22,7 @@ resolves: [guide-command-needs-the-constraints-page]
 
 ## Outcome
 
-`guide-command`: `clm guide <name>` prints a page read from a file (every page but `constraints`) exactly as its file is at build time; `clm guide constraints` prints the page `guide-constraints-page` states. Everything else, the index lines and their order, the unknown-page error and reading no file at run time, is unchanged. The build moves `guide-command`'s test markers to the new version and makes the index end with `constraints  CLM's constraints`.
+`guide-command`: `clm guide <name>` prints a page read from a file (every page but `constraints`) exactly as its file is at build time; `clm guide constraints` prints the page `guide-constraints-page` states. Everything else, the index lines and their order, the unknown-page error and reading no file at run time, is unchanged. `init`'s Contract bullet for `clm guide` also names the generated `constraints` page beside the pages of `docs/guide/` and the spec format, which the architecture audit found missing (it predates this change). The build moves `guide-command`'s test markers to the new version and makes the index end with `constraints  CLM's constraints`.
 
 Edge cases and workarounds known: none.
 
