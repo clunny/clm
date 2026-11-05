@@ -77,3 +77,8 @@ The decision `upgrade-migrations` records the choices and their reasons; the del
 - `deterministic-enforcement`: what blocks is decided by the stamp, the list and each migration's `done`, never by a model.
 - `init-cli-and-skill`: code rewrites only what CLM can rewrite exactly or a file still equal to a template; the rest goes through the skill with the human's yes.
 - `settings-before-use`: `upgraded`'s reader lands and is installed before this repository's `clm.toml` sets it; `clm upgrade --apply`, run once the build is installed, sets it here.
+
+## Open questions
+
+- `git-is-truth` (left from the architecture audit): `require_current` reads the untracked `clm.local.toml`'s `skip_migrations` to decide whether `clm check` and `clm land` run. Left as is: `local-settings` already lets that file set repository keys such as `land`, a skip only lifts the block for one clone without changing what any check decides, and the alternative, a committed skip, would amend `humans-review-intent`.
+- Seeding the corpus needs each published release's binary. An unattended build that can't download them files a `human-task` item blocking `upgrade/corpus-seeded`, and builds the rest.
