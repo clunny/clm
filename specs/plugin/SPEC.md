@@ -1531,3 +1531,37 @@ The plugin SHALL ship `skills/upgrade/SKILL.md`, with a `description` in its fro
 
 #### Serves
 - architecture/upgrades-carry-migrations
+
+### Requirement: builder-check-capability-tests
+`skills/propose/SKILL.md` SHALL tell Claude, among the builder check's points, to ask the builder-check subagent which capability tests each requirement the change adds or modifies changes what they observe at the product's boundary, and that such work is neither a requirement of `capability`, which holds none of its own, nor a `#### Needs`, nor a backlog item: the requirement's own build updates those tests (`capability-tests-follow-rules`), so Claude names them in that requirement's text; and that a requirement under which a `CAPABILITIES.md` entry as written no longer holds edits that entry in the change instead.
+
+#### Scenario: skill without the capability tests
+- GIVEN a `skills/propose/SKILL.md` that doesn't mention `capability-tests-follow-rules`
+- WHEN the tests run
+- THEN a test fails naming the skill and `capability-tests-follow-rules`
+
+#### Serves
+- capability/propose-intent
+- architecture/path-ownership
+
+### Requirement: unattended-permissions-check
+`skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, once, before the first build or draft it launches, to run `clm init --check-permissions` and, when it exits 1, to tell the human that in auto mode Claude Code may deny the unattended steps those rules allow, show the rules it printed, say that they belong in `permissions.allow` in `.claude/settings.json` (or `.claude/settings.local.json` for this clone alone), and go on launching, never refusing to; when it exits with any other code, as a `clm` without the option does, to tell the human the check couldn't run and go on launching; and never to write either file itself. `skills/build/SKILL.md` SHALL tell Claude to push a branch it rebased with `clm branch push` and to release a claim it took with `clm branch delete`, and SHALL NOT contain `git push --force-with-lease`.
+
+#### Scenario: skills check the rules
+- GIVEN the plugin's `skills/build/SKILL.md` and `skills/triage/SKILL.md`
+- WHEN a test reads them
+- THEN each contains `clm init --check-permissions`, `auto mode` and `.claude/settings.json`, and the build skill contains `clm branch push` and `clm branch delete` and doesn't contain `git push --force-with-lease`
+
+#### Scenario: skill without the check
+- GIVEN a `triage` `SKILL.md` that doesn't mention `clm init --check-permissions`
+- WHEN the test's check runs on it
+- THEN it reports the skill and `clm init --check-permissions`
+
+#### Serves
+- capability/build-from-spec
+- capability/triage-unattended
+
+#### Needs
+- init/init-check-permissions
+- host/branch-push
+- host/branch-delete
