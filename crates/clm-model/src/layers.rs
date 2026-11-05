@@ -49,7 +49,7 @@ impl Layer {
 
     /// The section its file holds its entries in, and the heading that starts an entry
     /// (`human-layers`).
-    fn form(self) -> Form {
+    pub(crate) fn form(self) -> Form {
         match self {
             Layer::Capability => Form {
                 section: "Capabilities",
@@ -70,11 +70,11 @@ impl Layer {
 
 /// The section and entry heading a layer's file is read in (`human-layers`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Form {
+pub(crate) struct Form {
     /// The `##` section that holds the entries.
-    section: &'static str,
+    pub(crate) section: &'static str,
     /// The heading that starts an entry, before its slug.
-    heading: &'static str,
+    pub(crate) heading: &'static str,
 }
 
 const RULE: &str = "model/human-layers";

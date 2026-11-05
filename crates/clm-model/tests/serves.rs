@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Files, Graph, Violation, content_hash, load_files};
 
-const ARCHITECTURE: &str = "## Constraints\n\n### Constraint: git-is-truth\nGit SHALL hold it.\n\n#### Scenario: s\n- ok\n";
+const ARCHITECTURE: &str = "## Constraints\n\n### Constraint: single-source\nGit SHALL hold it.\n\n#### Scenario: s\n- ok\n";
 
 const CAPABILITIES: &str = "## Capabilities\n\n### Capability: approve\nA reviewer can approve.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
 
@@ -47,16 +47,16 @@ fn serves_violations(a: &str, names: &[&str]) {
 #[test]
 fn serves_block_overrides() {
     // req:model/serves@3537f5b4
-    let x = req("x", "\n#### Serves\n- architecture/git-is-truth\n");
+    let x = req("x", "\n#### Serves\n- architecture/single-source\n");
     let a = spec("\nserves: [capability/approve]", &[&x, &req("y", "")]);
     let (graph, violations) = load(&a);
     assert!(violations.is_empty(), "{violations:?}");
     assert_eq!(graph.nodes["a"].frontmatter.serves, ["capability/approve"]);
     assert_eq!(
         graph.requirement("a/x").unwrap().serves,
-        ["architecture/git-is-truth"]
+        ["architecture/single-source"]
     );
-    assert_eq!(graph.effective_serves("a/x"), ["architecture/git-is-truth"]);
+    assert_eq!(graph.effective_serves("a/x"), ["architecture/single-source"]);
     assert_eq!(graph.effective_serves("a/y"), ["capability/approve"]);
     assert!(graph.effective_serves("capability/approve").is_empty());
     assert!(graph.effective_serves("a/none").is_empty());
@@ -200,7 +200,7 @@ fn serves_only_edit_moves_hash_not_version() {
     // req:model/content-hash@92d37469
     // req:model/serves@3537f5b4
     let one = req("x", "\n#### Serves\n- capability/approve\n");
-    let two = req("x", "\n#### Serves\n- architecture/git-is-truth\n");
+    let two = req("x", "\n#### Serves\n- architecture/single-source\n");
     let (one, two) = (load(&spec("", &[&one])).0, load(&spec("", &[&two])).0);
     let (one, two) = (
         one.requirement("a/x").unwrap(),
