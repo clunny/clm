@@ -515,7 +515,7 @@ In a repository with a remote, `main` SHALL have one copy, the remote's: `clm la
 - land/offline-land
 
 ### Constraint: guard-blocks-push-to-main
-The plugin's guard SHALL block every `git push` from a session whose destination is `main`, by refspec, `--all`, `--mirror` or implicitly from a checkout on `main`, and every unattended build SHALL load the guard.
+The plugin's guard SHALL block every `git push` from a session whose destination is `main`, by refspec, `--all`, `--mirror` or implicitly from a checkout on `main`, and every unattended build SHALL load the guard. A `clm` command that pushes or deletes a branch for a session, whose own `git push` the guard never sees, SHALL refuse `main` itself.
 
 #### Scenario: implicit push
 - GIVEN a session on `main`
@@ -533,6 +533,8 @@ The plugin's guard SHALL block every `git push` from a session whose destination
 - plugin.hooks.guard.shell/guard-checkout
 - plugin/hooks-wired
 - orchestrator.runner/runner-needs-guard
+- host/branch-push
+- host/branch-delete
 
 ### Constraint: per-writer-ledgers
 Approvals, checks and lands SHALL be records in per-writer ledger branches that only their writer appends to, so appends never race, rebase or force-push.

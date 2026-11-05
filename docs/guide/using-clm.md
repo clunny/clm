@@ -36,7 +36,7 @@ When Claude asks for your approval it shows you the change's intent, what it ask
 
 Run `/clm:build` and Claude builds every part of the system whose code is behind its design, each in its own background session, in parallel, writing the tests first. Each part lands on `main` once its checks pass, and the workflow keeps going until nothing is left to build. At the end it tells you what landed and anything waiting on you.
 
-Builds run under your session's permission mode: in manual mode they pause for your answers, in auto mode they run alone.
+Builds run under your session's permission mode: in manual mode they pause for your answers, in auto mode they run alone. Auto mode lets them push and land only through the allow rules that setting up CLM puts in `.claude/settings.json`; if your repository was set up before those rules existed, Claude tells you which to add before the first build.
 
 If a build finds the design is wrong or incomplete, it doesn't guess: it raises it with you as a question or a proposed change.
 
