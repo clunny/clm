@@ -43,6 +43,8 @@ Some settings describe the repository rather than the user, and only the reposit
 | `health` | a table with `reconsider`, `scenarios`, `exceptions` and `stale_days`, each a positive integer, and `lcov`, a path relative to the repository root, at least one ordinary name with no root, prefix or `..` component and neither `,`, `=` nor a control character in it, optional: the score at which `clm rebase` files a reconsider item for a requirement, the scenario and exception-clause counts above which `clm health` flags one, the days after which an open `question` or `human` item is reported, and the lcov file `clm health` reads (`health-advises`, `lcov-coverage-signal`) | `reconsider = 3`, `scenarios = 6`, `exceptions = 4`, `stale_days = 30`, no `lcov` |
 | `effort` | a table with `workaround_flag`, a positive integer: the count of unsettled workaround flags on one capability at which `clm workaround` warns and exits 3, telling the session to stop and ask whether to redesign it (`redesign-before-workaround`, `check.health`) | `workaround_flag = 3` |
 
+Two settings belong to `upgrade` (`upgrade-migrations`), and each has one layer only, with no variable and no default. `upgraded`, a string, the ID of the last migration the repository took, records the repository's state rather than a choice, so only the repository's `clm.toml` may set it; `clm.local.toml` or the user's file setting it is an error. `skip_migrations`, an array of migration IDs, lets one clone run while a required migration is broken, so only the clone's `clm.local.toml` may set it; `clm.toml` or the user's file setting it is an error, so a skip never reaches another clone. `config` checks their shape and their layer; `upgrade` reads them itself, as plain TOML, so a project whose other settings `config` rejects can still be told which migration fixes them.
+
 A table (`[component_size]`, `[health]`, `[effort]`, `[land]`, `[affected]`, `[[detectors]]`) is one key: the first layer that sets the table supplies all of it, and layers never merge within a table, so a `clm.local.toml` with `[component_size] code_tokens = 60000` gives `spec_tokens` its default, not `clm.toml`'s value.
 
 Loading the settings for a repository root (or none) gives each key's value and the layer it came from, or an error naming the file or variable and the key; an error in a file names the file that set the value, `clm.local.toml` or `clm.toml`. `clm config get <key>` prints them, naming the file the value came from.
@@ -548,3 +550,19 @@ Loading SHALL give each detector an optional `requires`: the path its `[[detecto
 
 #### Serves
 - capability/adopt-clm
+
+### Requirement: upgrade-settings
+Loading the settings SHALL accept `upgraded`, a string, only from the repository's `clm.toml`, and `skip_migrations`, an array of strings, only from the clone's `clm.local.toml`, with no variable and no default for either. Either key set in another layer, or set to a value of another type, SHALL be an error naming the file and the key.
+
+#### Scenario: where each may be set
+- GIVEN `clm.toml` with `upgraded = "20261105-clm-upgrade"` and `clm.local.toml` with `skip_migrations = ["x"]`
+- WHEN `clm config get upgraded` and `clm config get skip_migrations` run
+- THEN they print the values and name `clm.toml` and `clm.local.toml`
+
+#### Scenario: the wrong layer
+- GIVEN `clm.toml` with `skip_migrations = ["x"]`, and separately `clm.local.toml` with `upgraded = "y"`
+- WHEN the settings load
+- THEN each fails, naming the file and the key
+
+#### Serves
+- capability/upgrade-clm
