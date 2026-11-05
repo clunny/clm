@@ -197,6 +197,10 @@ impl Files<'_> {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => return Err(format!("{SETTINGS}: {e}")),
         };
+        // A file left as it is still counts among CLM's files for the next steps.
+        if existing.is_some() {
+            self.paths.push(SETTINGS);
+        }
         let mut doc = match &existing {
             Some(bytes) if !bytes.iter().all(u8::is_ascii_whitespace) => {
                 match serde_json::from_slice::<serde_json::Value>(bytes) {
@@ -227,7 +231,6 @@ impl Files<'_> {
                 allow.push(rule.into());
             }
         }
-        self.paths.push(SETTINGS);
         if existing.is_some() && allow.len() == before {
             self.out.push_str(&format!("kept {SETTINGS}\n"));
             return Ok(());
@@ -238,6 +241,9 @@ impl Files<'_> {
             fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
         fs::write(&path, text).map_err(|e| format!("{SETTINGS}: {e}"))?;
+        if existing.is_none() {
+            self.paths.push(SETTINGS);
+        }
         let verb = if existing.is_some() {
             "added rules to"
         } else {

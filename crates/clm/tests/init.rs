@@ -795,7 +795,7 @@ fn init_keeps_the_settings_it_finds() {
     write(
         &dir,
         ".claude/settings.json",
-        r#"{"enabledPlugins":{"clm@clm":true},"permissions":{"allow":["Bash(make *)","Bash(clm land *)"],"deny":["x"]}}"#,
+        r#"{"permissions":{"deny":["x"],"allow":["Bash(make *)","Bash(clm land *)"]},"enabledPlugins":{"clm@clm":true}}"#,
     );
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -809,9 +809,23 @@ fn init_keeps_the_settings_it_finds() {
         assert_eq!(allow.iter().filter(|r| **r == rule).count(), 1, "{rule}");
     }
     let keys: Vec<&String> = json.as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["enabledPlugins", "permissions"]);
+    assert_eq!(keys, ["permissions", "enabledPlugins"]);
     let check = clm(&dir, &["check"], &path_with(&hosts));
     assert_eq!(check.status.code(), Some(0), "{check:?}");
+}
+
+#[test]
+fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
+    // req:init/init-seeds-permissions@cd8215b5
+    let (_tmp, dir) = repo();
+    write(&dir, ".claude/settings.json", "  \n");
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(allowed(&dir), rules());
+    let (_tmp, dir) = repo();
+    let compact = serde_json::json!({"permissions": {"allow": rules()}}).to_string();
+    write(&dir, ".claude/settings.json", &compact);
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(read(&dir, ".claude/settings.json"), compact);
 }
 
 #[test]
