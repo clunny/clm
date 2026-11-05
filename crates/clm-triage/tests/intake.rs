@@ -124,6 +124,29 @@ fn scenario_resolved_by_a_change() {
 }
 
 #[test]
+fn resolved_by_a_live_change_naming_it_in_resolves_only() {
+    // req:orchestrator.triage/intake@87c47609
+    let r = repo();
+    write(
+        &r.work,
+        "backlog/fold-declined.md",
+        "---\ntitle: T\nkind: bug\nissues: [67]\n---\n",
+    );
+    push_main(&r.work, "add");
+    fs::remove_file(r.work.join("backlog/fold-declined.md")).unwrap();
+    write(
+        &r.work,
+        "changes/20260101-c/change.md",
+        &change_md("applied", "resolves: [fold-declined]\n"),
+    );
+    push_main(&r.work, "delete");
+    assert_eq!(
+        lines(&r, vec![issue(67)]),
+        ["issue 67 resolved fold-declined 20260101-c"]
+    );
+}
+
+#[test]
 fn scenario_resolved_by_a_code_fix() {
     // req:orchestrator.triage/intake@87c47609
     let r = repo();
