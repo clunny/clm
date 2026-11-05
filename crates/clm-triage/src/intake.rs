@@ -40,6 +40,11 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
     } else {
         deleted_items(root, &unmatched)?
     };
+    let changes = if resolved.is_empty() {
+        BTreeMap::new()
+    } else {
+        resolving_changes(root)?
+    };
     let mut lines = Vec::new();
     for o in &open {
         if o.pull_request {
@@ -47,8 +52,8 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
         } else if let Some(slugs) = imported.get(&o.number) {
             lines.push(format!("issue {} imported {}", o.number, slugs.join(" ")));
         } else if let Some((slug, commit)) = resolved.get(&o.number) {
-            let by = match resolving_change(root, slug)? {
-                Some(id) => id,
+            let by = match changes.get(slug.as_str()) {
+                Some(id) => id.clone(),
                 None => git(root, &["rev-parse", "--short", commit])?,
             };
             lines.push(format!("issue {} resolved {slug} {by}", o.number));
@@ -71,6 +76,8 @@ fn deleted_items(
     let log = git(
         root,
         &[
+            "-c",
+            "core.quotePath=false",
             "log",
             "--diff-filter=D",
             "--no-renames",
@@ -118,20 +125,30 @@ fn deleted_items(
     Ok(found)
 }
 
-/// The greatest ID among the changes on `origin/main`, live or archived, whose `resolves`
-/// or `from` names `slug`.
-fn resolving_change(root: &Path, slug: &str) -> Result<Option<String>, Error> {
+/// For each slug the changes on `origin/main`, live or archived, name in `resolves` or
+/// `from`, the greatest such change ID. The change files are read once.
+fn resolving_changes(root: &Path) -> Result<BTreeMap<String, String>, Error> {
     let is_change =
         |p: &str| p.starts_with("changes/") && p.ends_with("/change.md") && !p.contains("/deltas/");
     let blobs = tree_blobs(root, &format!("{REMOTE}/main"), &is_change)?;
-    let from = format!("backlog/{slug}");
-    Ok(blobs
-        .into_iter()
-        .filter_map(|(path, bytes)| {
-            let fm = parse_change_frontmatter(&String::from_utf8_lossy(&bytes))?;
-            let named = fm.resolves.iter().any(|r| r == slug) || fm.from.as_deref() == Some(&from);
-            let id = path.strip_suffix("/change.md")?.rsplit('/').next()?;
-            named.then(|| id.to_string())
-        })
-        .max())
+    let mut by: BTreeMap<String, String> = BTreeMap::new();
+    for (path, bytes) in blobs {
+        let Some(fm) = parse_change_frontmatter(&String::from_utf8_lossy(&bytes)) else {
+            continue;
+        };
+        let Some(id) = path
+            .strip_suffix("/change.md")
+            .and_then(|p| p.rsplit('/').next())
+        else {
+            continue;
+        };
+        let from = fm.from.as_deref().and_then(|f| f.strip_prefix("backlog/"));
+        for slug in fm.resolves.iter().map(String::as_str).chain(from) {
+            let greatest = by.entry(slug.to_string()).or_default();
+            if id > greatest.as_str() {
+                *greatest = id.to_string();
+            }
+        }
+    }
+    Ok(by)
 }
