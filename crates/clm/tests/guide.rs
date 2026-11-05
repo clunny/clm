@@ -1,4 +1,5 @@
 //! `clm guide`: the guide compiled into the binary, readable outside any repository.
+// clm:reads ARCHITECTURE.md
 
 use std::path::Path;
 use std::process::{Command, Output};
@@ -112,4 +113,48 @@ fn unknown_page() {
             .any(|l| l == "shaping-the-graph  Shaping the graph"),
         "{err}"
     );
+}
+
+#[test]
+fn constraints_page() {
+    // req:init/guide-constraints-page@0587eab7
+    let out = guide(&["constraints"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[0], "# CLM's constraints");
+    let after = |heading: &str| -> Vec<&str> {
+        let at = lines.iter().position(|l| *l == heading).expect(heading);
+        let end = lines[at + 1..]
+            .iter()
+            .position(|l| l.starts_with("## "))
+            .map_or(lines.len(), |i| at + 1 + i);
+        lines[at + 1..end].to_vec()
+    };
+    assert!(after("## proven-by-tests").contains(&"Tier: method"));
+    let replaceable = after("## expand-contract");
+    assert!(replaceable.contains(&"Tier: replaceable"));
+    assert!(replaceable.iter().any(|l| l.starts_with("Guarantee: ")));
+    assert!(after("## yagni").contains(&"Tier: default"));
+    assert!(!lines.contains(&"## web-optional"), "{text}");
+    for tier in ["method", "replaceable", "default"] {
+        assert!(
+            lines[1..]
+                .iter()
+                .take_while(|l| !l.starts_with("## "))
+                .any(|l| l.contains(&format!("`{tier}`"))),
+            "{tier}"
+        );
+    }
+    assert!(text.contains("#### Replaces") && text.contains("CLM's repository"));
+    // Each entry's statement is printed, in the order of CLM's `ARCHITECTURE.md`.
+    assert!(
+        after("## proven-by-tests")
+            .iter()
+            .any(|l| l.starts_with("A requirement SHALL count as implemented only when")),
+        "{text}"
+    );
+    let at = |h: &str| lines.iter().position(|l| *l == h).unwrap();
+    assert!(at("## proven-by-tests") < at("## expand-contract"));
+    assert!(at("## yagni") < at("## expand-contract"));
 }
