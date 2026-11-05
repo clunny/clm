@@ -625,12 +625,15 @@ The guide's entry pages SHALL stay written for a newcomer (`guide-entry-pages-fo
 - THEN it reports nothing
 
 ### Requirement: guide-constraints-page
-`clm guide constraints` SHALL print a page titled `# CLM's constraints`, built from `model`'s compiled copy of CLM's carried entries (`model/carried-constraints`), never from the repository it runs in: a short preamble saying these are the architectural constraints every project built with CLM follows, from the `clm` it runs, what each tier means (`method`: CLM relies on it and a project can't replace it; `replaceable`: a project may replace it with its own constraint that keeps the stated guarantee; `default`: a project may drop it), and that a project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, which a human reviews; then, for each carried entry in CLM's order, `## <slug>`, a line `Tier: <tier>`, its statement and, for a `replaceable` entry, a line `Guarantee: <text>`. It SHALL exit 0 and read no file at run time.
+`clm guide constraints` SHALL print a page titled `# CLM's constraints`, built from `model`'s compiled copy of CLM's carried entries (`model/carried-constraints`), never from the repository it runs in: a short preamble saying these are the architectural constraints every project built with CLM follows, from the `clm` it runs, what each tier means (`method`: CLM relies on it and a project can't replace it; `replaceable`: a project may replace it with its own constraint that keeps the stated guarantee; `default`: a project may drop it), and that a project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, which a human reviews; Names in backticks that the page doesn't list are CLM's own decisions and constraints, kept in CLM's repository: they say why, and the rule is the text the page gives; then, for each carried entry in CLM's order, `## <slug>`, a line `Tier: <tier>`, its statement and, for a `replaceable` entry, a line `Guarantee: <text>`. It SHALL exit 0 and read no file at run time. Its tests hold a `clm:reads` marker naming `ARCHITECTURE.md` (`doc-readers-marked`).
 
 #### Scenario: the page
 - GIVEN the binary built from this repository
 - WHEN `clm guide constraints` runs in a directory that isn't in a repository
 - THEN it exits 0, its first line is `# CLM's constraints`, it holds `## proven-by-tests` followed by `Tier: method`, `## expand-contract` with `Tier: replaceable` and a `Guarantee:` line, and `## yagni` with `Tier: default`, and it holds no `## web-optional`
+
+#### Needs
+- model/carried-constraints
 
 #### Serves
 - architecture/carried-constraints
