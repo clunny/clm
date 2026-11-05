@@ -2,7 +2,7 @@
 status: applied
 resolves: [unattended-steps-denied-in-auto-mode]
 human_burdens:
-  - "A one-time experiment in auto mode, on a throwaway branch, to confirm a worktree-isolated background subagent honours a project allow rule (backlog/check-subagent-honours-allow-rule); the rule seeding waits on it."
+  - "Once the change is built, one check in notespeed in auto mode, from a worktree session, that a rebased build pushes with `clm branch push` and lands, and a no-review draft lands (backlog/check-subagent-honours-allow-rule); nothing waits on it."
   - "Each repository set up before this change needs its `.claude/settings.json` allow rules added by hand once (`clm init --check-permissions` names them); this repository's own are added by its root build, which Claude Code asks you to confirm as a protected write."
 ---
 
@@ -51,9 +51,17 @@ Where the push lives was weighed: `clm rebase` is also run by hand where no push
 - A CLM repository in a subdirectory gets its `.claude/settings.json` in that subdirectory, beside `clm.toml`; a session started at the git repository's top reads the top's settings instead (see Open questions).
 - A `.claude/settings.json` that isn't JSON of the expected shape is left alone, and the next steps name the rules.
 
+## The human's answers
+
+- "can we do that one-time experiment now in a subagent before we file and approve this?"
+- "interestingly I've never hit this issue while developing CLM in this project, but it occurs in the notespeed project (../notespeed)"
+- "but we create worktree sessions on the fly ad hoc a lot so that wouldn't be good UX. Doesn't the worktree inherit the main claude settings? What if we put it in claude.settings.local or something in the main worktree?"
+- "it still failed, even though the permission was listed"
+- Asked whether to revise on these lines: (1) the decision records that a Bash allow rule doesn't cover the classifier's review of a subagent's task, so unattended prompts name only `clm` commands; (2) the experiment item becomes a non-blocking check after the build, in notespeed from a worktree session; (3) the four rule-seeding requirements are unblocked. Answer: "Revise as described".
+
 ## Open questions
 
-- **Unverified premise.** That a worktree-isolated background subagent honours the project's allow rule is implied by Claude Code's docs, not stated. `backlog/check-subagent-honours-allow-rule` is a `human-task` that blocks the rule seeding, the check, the skills' check and this repository's own rules until a human confirms it; the `clm branch` commands and the prompts' move to them are useful without it and are not blocked.
+- **The premise, and what a test showed.** That a worktree-isolated background subagent's Bash calls are covered by the project's allow rule rests on Claude Code's docs. A test on 2026-11-05 found something the design must hold to: a Bash allow rule does not cover the classifier's review of a subagent's *task*, which refused a launch whose task spelled out a force-push, with the rule loaded. So unattended prompts and their launchers name only `clm` commands, never a raw destructive git step (see the decision). The rule-covers-the-call half can't be tested before this change is built, so `backlog/check-subagent-honours-allow-rule` is a check the human runs after the build, blocking nothing.
 - **Subdirectory CLM repositories.** The rules go beside `clm.toml`. Claude Code reads project settings from where the session starts; a project that starts sessions at its git top while CLM lives in `tool/` would need the rules at the top. Left as is, since `clm init` writes every file of its own in the CLM repository.
 - **Pushes inside `clm`.** `clm claim`, `clm run`, `clm draft --finish` and `clm wrap-up` run their own leased `git push` as subprocesses, which the classifier never sees, so they stay as they are.
 - **How the rules match.** They match a command that starts with the bare name `clm`, as every prompt and skill writes it. A session that runs `clm` by another path (this repository's `CLM_BIN` setup puts `clm` on `PATH` the same way) matches only if it calls it `clm`.
