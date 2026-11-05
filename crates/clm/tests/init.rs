@@ -1,17 +1,12 @@
 //! `clm init`: setting up a repository's CLM tooling, with a fake `gh` on `PATH` that it
 //! must never call.
 
-// clm:reads ARCHITECTURE.md
-// clm:reads specs/**
-// clm:reads changes/**
-
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Output};
 use std::sync::{PoisonError, RwLock};
 
-use clm_model::RenameKind;
 use tempfile::TempDir;
 
 /// A process forked while another thread holds a just-written executable open for writing
@@ -138,7 +133,7 @@ fn host_line(dir: &Path) -> String {
 
 #[test]
 fn empty_repository() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let hosts = fake_hosts();
@@ -187,26 +182,9 @@ fn layer_entries(dir: &Path, layer: &str, hosts: &TempDir) -> Vec<String> {
         .collect()
 }
 
-/// The architectural constraints `clm` enforces in any repository, as CLM's own
-/// `ARCHITECTURE.md` names them.
-const ENFORCED: [&str; 12] = [
-    "ai-writes-code",
-    "humans-review-intent",
-    "deterministic-enforcement",
-    "proven-by-tests",
-    "no-silent-drift",
-    "git-is-truth",
-    "hash-based-staleness",
-    "regenerate-dont-merge",
-    "ancestor-scoped-context",
-    "spec-is-current",
-    "fold-small-defer-large",
-    "no-dead-code",
-];
-
 #[test]
 fn init_writes_capabilities() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     let out = init(&dir, &["--lang", "rust"], &hosts);
@@ -219,38 +197,10 @@ fn init_writes_capabilities() {
     }
     let pending = clm(&dir, &["pending"], &path_with(&hosts));
     assert_eq!(String::from_utf8_lossy(&pending.stdout), "", "{pending:?}");
-    // The rules `clm` enforces are named, outside `## Constraints`.
+    // CLM's carried constraints are named by where they are, outside `## Constraints`.
     let arch = read(&dir, "ARCHITECTURE.md");
-    let enforced = &arch[arch.find("\n## Enforced by clm\n").expect(&arch)..];
-    let enforced = &enforced[..enforced.find("\n## Constraints\n").expect(&arch)];
-    for slug in ENFORCED {
-        assert!(
-            enforced.contains(&format!("**`{slug}`**")),
-            "{slug}: {arch}"
-        );
-    }
-    // ... and each is one of CLM's own architecture requirements.
-    let own =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"))
-            .unwrap();
-    let (graph, _) = clm_model::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."));
-    for slug in ENFORCED {
-        // A slug a change has since renamed counts under its new name.
-        let renamed = graph
-            .changes
-            .values()
-            .flat_map(|c| &c.renames)
-            .filter(|r| {
-                r.kind == RenameKind::Requirement && r.name == format!("architecture/{slug}")
-            })
-            .map(|r| r.to.rsplit('/').next().unwrap_or(&r.to));
-        assert!(
-            std::iter::once(slug)
-                .chain(renamed)
-                .any(|s| entry_heading(&own, s).is_some()),
-            "{slug}"
-        );
-    }
+    let before = &arch[..arch.find("\n## Constraints\n").expect(&arch)];
+    assert!(before.contains("`clm guide constraints`"), "{arch}");
     let check = clm(&dir, &["check"], &path_with(&hosts));
     assert_eq!(check.status.code(), Some(0), "{check:?}");
 
@@ -267,14 +217,10 @@ fn template_says_pull_request() {
     // req:init/template-says-pull-request@f22d765f
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
+    // The written file holds no entry of CLM's to word (`carried-constraints`); no template
+    // calls a host's pull request a page, as only the guide has pages.
     let arch = read(&dir, "ARCHITECTURE.md");
-    let line = arch
-        .lines()
-        .find(|l| l.starts_with("- **`git-is-truth`**"))
-        .expect(&arch);
-    assert!(line.contains("a pull request's URL"), "{line}");
-    assert!(!line.contains("page's URL"), "{line}");
-    // No template calls a host's pull request a page; only the guide has pages.
+    assert!(!arch.contains("page's URL"), "{arch}");
     let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-init/templates");
     for entry in fs::read_dir(templates).unwrap() {
         let path = entry.unwrap().path();
@@ -334,13 +280,6 @@ fn templates_say_new_words() {
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
     assert!(read(&dir, "specs/SPEC.md").contains("\nstatus: unbuilt\n"));
-    let arch = read(&dir, "ARCHITECTURE.md");
-    let line = arch
-        .lines()
-        .find(|l| l.starts_with("- **`humans-review-intent`**"))
-        .expect(&arch);
-    assert!(line.contains("`human_burdens`"), "{line}");
-    assert!(!line.contains("`burdens`"), "{line}");
     // No template holds a word `plain-terms-renames` replaced.
     let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-init/templates");
     for entry in fs::read_dir(templates).unwrap() {
@@ -365,32 +304,27 @@ fn templates_say_new_words() {
 
 #[test]
 fn architecture_template_proof() {
-    // req:init/architecture-template-proof@4b06a668
+    // req:init/architecture-template-proof@54ed99e1
     let (_tmp, dir) = repo();
-    init(&dir, &[], &fake_hosts());
+    let hosts = fake_hosts();
+    init(&dir, &[], &hosts);
     let arch = read(&dir, "ARCHITECTURE.md");
     // The preamble says how an entry is proved, and that no test cites one.
-    let preamble = &arch[..arch.find("\n## Enforced by clm\n").expect(&arch)];
+    let preamble = &arch[..arch.find("\n## Constraints\n").expect(&arch)];
     for needle in [
         "under `#### Enforced by`",
         "under `#### Untested`, or both",
         "A test never cites an entry",
+        "`clm guide constraints`",
+        "`#### Replaces`",
     ] {
         assert!(preamble.contains(needle), "{needle}: {preamble}");
     }
     assert!(!arch.contains(concat!("req", ":architecture/")), "{arch}");
-    // `no-silent-drift` is stated as CLM's own entry states it.
-    let own =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"))
-            .unwrap();
-    let start = entry_heading(&own, "no-silent-drift").expect("no-silent-drift");
-    let statement = own[start..].lines().next().unwrap();
-    assert!(statement.contains("pending, not drift"), "{statement}");
-    let line = arch
-        .lines()
-        .find(|l| l.starts_with("- **`no-silent-drift`**"))
-        .expect(&arch);
-    assert_eq!(line, format!("- **`no-silent-drift`**: {statement}"));
+    // No carried constraint is stated in the file: they come from the `clm` that runs.
+    assert!(!arch.contains("## Enforced by clm"), "{arch}");
+    let check = clm(&dir, &["check"], &path_with(&hosts));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
 }
 
 #[test]
@@ -506,7 +440,7 @@ fn root_outside_skips_clm_files_and_escapes() {
 
 #[test]
 fn no_remote() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(host_line(&dir), "host = \"none\"");
@@ -514,7 +448,7 @@ fn no_remote() {
 
 #[test]
 fn host_given() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     init(&dir, &["--host", "git"], &fake_hosts());
@@ -535,7 +469,7 @@ fn host_given() {
 
 #[test]
 fn host_from_origin() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     for (url, host) in [
         ("git@github.com:o/r.git", "github"),
         ("https://GitHub.com/o/r", "github"),
@@ -551,7 +485,7 @@ fn host_from_origin() {
 
 #[test]
 fn project_files_kept() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Our rules\n");
     write(&dir, "clm.toml", "defects = \"off\"\n");
@@ -1025,7 +959,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
 
 #[test]
 fn not_a_repository() {
-    // req:init/init-files@8acd552f
+    // req:init/init-files@1f4fb754
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join("plain");
     fs::create_dir(&dir).unwrap();
@@ -1437,13 +1371,4 @@ fn dependencies_not_installed() {
         ),
         "{line}"
     );
-}
-
-/// The offset just past the heading of CLM's own architecture entry `slug`,
-/// under either heading form (`### Requirement:` or `### Constraint:`).
-fn entry_heading(own: &str, slug: &str) -> Option<usize> {
-    ["Requirement", "Constraint"].iter().find_map(|kind| {
-        let heading = format!("\n### {kind}: {slug}\n");
-        own.find(&heading).map(|i| i + heading.len())
-    })
 }

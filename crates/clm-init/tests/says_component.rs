@@ -227,7 +227,7 @@ fn repo() -> TempDir {
 
 #[test]
 fn init_text_says_component() {
-    // req:init/says-component@9a4c6628
+    // req:init/says-component@b5561cf9
     let sources = read("src", "rs");
     let templates = read("templates", "md");
     assert!(!sources.is_empty() && !templates.is_empty());
@@ -254,7 +254,7 @@ fn init_text_says_component() {
 
 #[test]
 fn a_new_repository_says_component() {
-    // req:init/says-component@9a4c6628
+    // req:init/says-component@b5561cf9
     let dir = repo();
     init(dir.path(), &Options::default()).unwrap();
     let claude = fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
@@ -280,7 +280,7 @@ fn a_new_repository_says_component() {
 
 #[test]
 fn a_duplicate_in_the_map() {
-    // req:init/says-component@9a4c6628
+    // req:init/says-component@b5561cf9
     let dir = repo();
     let map = "components:\n  - { id: a, paths: [] }\n  - { id: a, paths: [] }\n";
     let found = check_nodes(dir.path(), Path::new("map.yaml"), map).unwrap();
@@ -291,33 +291,4 @@ fn a_duplicate_in_the_map() {
     let err = check_nodes(dir.path(), Path::new("map.yaml"), unknown).unwrap_err();
     assert!(err.contains("unknown component `z`"), "{err}");
     assert!(old_words(&err).is_empty(), "{err}");
-}
-
-#[test]
-fn a_renamed_constraint() {
-    // req:init/says-component@9a4c6628
-    let dir = repo();
-    init(dir.path(), &Options::default()).unwrap();
-    let text = fs::read_to_string(dir.path().join("ARCHITECTURE.md")).unwrap();
-    let list = text
-        .split("## Enforced by clm")
-        .nth(1)
-        .and_then(|s| s.split("\n## ").next())
-        .unwrap();
-    let names: Vec<&str> = list
-        .lines()
-        .filter_map(|l| l.strip_prefix("- **`"))
-        .filter_map(|l| l.split("`**").next())
-        .collect();
-    assert!(names.contains(&"ancestor-scoped-context"), "{names:?}");
-    assert!(!list.contains(concat!("spine", "-scoped-context")));
-    let own =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"))
-            .unwrap();
-    for name in names {
-        assert!(
-            own.contains(&format!("### Constraint: {name}\n")),
-            "{name} is no entry of CLM's own ARCHITECTURE.md"
-        );
-    }
 }
