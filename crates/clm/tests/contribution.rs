@@ -29,6 +29,7 @@ fn fake_gh() -> Gh {
          case \"$1 $2\" in\n\
          'pr view') printf '%s\\n' \"$FAKE_PR\";;\n\
          'repo view') printf '%s\\n' \"$FAKE_REPO\";;\n\
+         'api users/dana') echo '{\"id\":4242}';;\n\
          'pr list') echo '[]';;\n\
          'pr create') echo https://github.com/clunny/clm/pull/9;;\nesac\n",
     );

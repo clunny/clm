@@ -60,11 +60,14 @@ fn calls(dir: &Path) -> String {
     fs::read_to_string(dir.join("args")).unwrap_or_default()
 }
 
+const USER: &str = r#"{"login":"dana","id":4242}"#;
+const SAM: &str = r#"{"login":"sam","id":77}"#;
+
 const FORK: &str = r#"{"isFork":true,"parent":{"owner":{"login":"clunny"},"name":"clm"},"owner":{"login":"dana"},"name":"clm"}"#;
 
 #[test]
 fn a_forks_parent() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     with_gh(&[("repo view", FORK)], |root, _| {
         let host = clm_host::adapter(Setting::Github);
         assert_eq!(host.parent(root).unwrap().as_deref(), Some("clunny/clm"));
@@ -80,7 +83,7 @@ fn a_forks_parent() {
 
 #[test]
 fn sync_brings_the_fork_up_without_force() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     with_gh(&[("repo view", FORK), ("repo sync", "")], |root, dir| {
         clm_host::adapter(Setting::Github).sync(root).unwrap();
         let log = calls(dir);
@@ -91,7 +94,7 @@ fn sync_brings_the_fork_up_without_force() {
 
 #[test]
 fn opening_on_the_parent() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     let answers = [
         ("repo view", FORK),
         ("pr list", "[]"),
@@ -119,7 +122,7 @@ fn opening_on_the_parent() {
 
 #[test]
 fn an_open_pull_request_on_the_parent_is_returned() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     let open = r#"[{"url":"https://github.com/other/clm/pull/2","headRepositoryOwner":{"login":"other"}},{"url":"https://github.com/clunny/clm/pull/4","headRepositoryOwner":{"login":"dana"}}]"#;
     with_gh(&[("repo view", FORK), ("pr list", open)], |root, dir| {
         let host = clm_host::adapter(Setting::Github);
@@ -133,12 +136,13 @@ fn an_open_pull_request_on_the_parent_is_returned() {
 
 #[test]
 fn a_pull_requests_files() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     let pr = r#"{"author":{"login":"dana"},"state":"OPEN","title":"t","body":"b","headRepository":{"name":"clm"},"headRepositoryOwner":{"login":"dana"},"headRefName":"spec/x","maintainerCanModify":true,"files":[{"path":"backlog/x.md"},{"path":"crates/a/src/lib.rs"}]}"#;
-    with_gh(&[("pr view 7", pr)], |root, _| {
+    with_gh(&[("pr view 7", pr), ("api users/dana", USER)], |root, _| {
         let shown = shown(root, 7);
         assert!(shown.pull_request);
         assert_eq!(shown.author, "dana");
+        assert_eq!(shown.author_id, 4242);
         assert_eq!(shown.files, ["backlog/x.md", "crates/a/src/lib.rs"]);
         assert_eq!(
             shown.head_repo_url.as_deref(),
@@ -165,24 +169,29 @@ fn shown(root: &Path, number: u64) -> clm_host::Shown {
 
 #[test]
 fn an_issue_is_shown_when_no_pull_request_has_the_number() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     let issue = r#"{"author":{"login":"sam"},"state":"OPEN","title":"idea","body":"do it"}"#;
-    with_gh(&[("issue view 3", issue)], |root, _| {
-        let shown = shown(root, 3);
-        assert!(!shown.pull_request);
-        assert_eq!(shown.author, "sam");
-        assert_eq!(shown.title, "idea");
-        assert_eq!(
-            (shown.state.as_str(), shown.body.as_str()),
-            ("OPEN", "do it")
-        );
-        assert!(shown.files.is_empty());
-    });
+    with_gh(
+        &[("issue view 3", issue), ("api users/sam", SAM)],
+        |root, dir| {
+            let shown = shown(root, 3);
+            assert!(!shown.pull_request);
+            assert_eq!(shown.author, "sam");
+            assert_eq!(shown.author_id, 77);
+            assert!(calls(dir).contains("api users/sam"));
+            assert_eq!(shown.title, "idea");
+            assert_eq!(
+                (shown.state.as_str(), shown.body.as_str()),
+                ("OPEN", "do it")
+            );
+            assert!(shown.files.is_empty());
+        },
+    );
 }
 
 #[test]
 fn closing_with_a_comment_and_labelling() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     let answers = [("comment", ""), ("close", ""), ("edit", "")];
     with_gh(&answers, |root, dir| {
         let body = root.join("c.md");
@@ -204,7 +213,7 @@ fn closing_with_a_comment_and_labelling() {
 
 #[test]
 fn fetch_makes_a_branch_and_refuses_an_existing_one() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     with_gh(&[], |root, _| {
         let commit = [
             "-c",
@@ -237,7 +246,7 @@ fn fetch_makes_a_branch_and_refuses_an_existing_one() {
 
 #[test]
 fn no_host_runs_no_gh() {
-    // req:host/contribution-operations@6134fd80
+    // req:host/contribution-operations@7cc3153f
     for setting in [Setting::None, Setting::Git] {
         with_gh(&[("", "{}")], |root, dir| {
             let host = clm_host::adapter(setting);
@@ -249,6 +258,49 @@ fn no_host_runs_no_gh() {
             assert!(host.fetch(root, 7, "b").is_err());
             assert!(host.comment(root, 7, file, true).is_err());
             assert!(host.label(root, 7, "l").is_err());
+            assert_eq!(calls(dir), "");
+        });
+    }
+}
+
+#[test]
+fn listing_open_issues_and_pull_requests() {
+    // req:host/list-contributions@80662182
+    let issues = r#"[{"number":73,"author":{"login":"clunny"},"title":"secret words"}]"#;
+    let prs =
+        r#"[{"number":80,"author":{"login":"dana"}},{"number":81,"author":{"login":"ghost"}}]"#;
+    with_gh(&[("issue list", issues), ("pr list", prs)], |root, dir| {
+        let listed = clm_host::adapter(Setting::Github).list(root).unwrap();
+        let want = |number, pull_request, author: &str| clm_host::Listed {
+            number,
+            pull_request,
+            author: author.into(),
+        };
+        assert_eq!(
+            listed,
+            [
+                want(73, false, "clunny"),
+                want(80, true, "dana"),
+                want(81, true, "ghost")
+            ]
+        );
+        let log = calls(dir);
+        for kind in ["issue list", "pr list"] {
+            let line = log.lines().find(|l| l.starts_with(kind)).unwrap();
+            for part in ["--state open", "--json", "--limit 1000"] {
+                assert!(line.contains(part), "{line}");
+            }
+            assert!(!line.contains("title") && !line.contains("body"), "{line}");
+        }
+    });
+}
+
+#[test]
+fn listing_without_a_host_runs_no_gh() {
+    // req:host/list-contributions@80662182
+    for setting in [Setting::None, Setting::Git] {
+        with_gh(&[("", "[]")], |root, dir| {
+            assert!(clm_host::adapter(setting).list(root).unwrap().is_empty());
             assert_eq!(calls(dir), "");
         });
     }

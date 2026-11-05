@@ -29,6 +29,8 @@ impl From<clm_git::Error> for Error {
 pub struct Shown {
     pub pull_request: bool,
     pub author: String,
+    /// The author's numeric account ID, which a `Co-authored-by` noreply address needs.
+    pub author_id: u64,
     pub state: String,
     pub title: String,
     pub body: String,
@@ -37,6 +39,14 @@ pub struct Shown {
     pub head_branch: Option<String>,
     pub maintainers_can_edit: bool,
     pub files: Vec<String>,
+}
+
+/// An open issue or pull request, as `list` reports it: no text its author wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Listed {
+    pub number: u64,
+    pub pull_request: bool,
+    pub author: String,
 }
 
 fn no_host<T>() -> Result<T, Error> {
@@ -117,6 +127,11 @@ pub trait Host {
     /// Adds `label` to `number`.
     fn label(&self, _root: &Path, _number: u64, _label: &str) -> Result<(), Error> {
         no_host()
+    }
+
+    /// The open issues and pull requests; empty without a host.
+    fn list(&self, _root: &Path) -> Result<Vec<Listed>, Error> {
+        Ok(Vec::new())
     }
 
     /// Deletes [`REMOTE`]'s `branch` when its tip is still `lease`: plain git on every host,
