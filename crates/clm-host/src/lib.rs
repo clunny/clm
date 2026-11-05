@@ -5,7 +5,7 @@ mod github;
 
 use std::path::Path;
 
-use clm_git::{REMOTE, git};
+use clm_git::{REMOTE, current_branch, git};
 use github::GitHub;
 
 #[derive(Debug)]
@@ -197,4 +197,104 @@ pub fn adapter(host: clm_config::Host) -> Box<dyn Host> {
         clm_config::Host::Github => Box::new(GitHub),
         clm_config::Host::Git | clm_config::Host::None => Box::new(NoHost),
     }
+}
+
+/// Why a branch is never pushed or deleted by `clm branch`: `main` moves only through
+/// `clm land`, and the `clm/` branches are the ledgers' (`guard-blocks-push-to-main`).
+fn refuse_protected(branch: &str) -> Result<(), Error> {
+    if branch == "main" {
+        return Err(Error::Refused(
+            "`main` moves only through `clm land`".into(),
+        ));
+    }
+    if branch.starts_with("clm/") {
+        return Err(Error::Refused(format!(
+            "`{branch}` is a ledger branch; only `clm` itself writes it"
+        )));
+    }
+    Ok(())
+}
+
+fn has_remote(root: &Path) -> Result<bool, Error> {
+    Ok(git(root, &["remote"])?.lines().any(|r| r == REMOTE))
+}
+
+/// `clm branch delete` (`branch-delete`): deletes [`REMOTE`]'s `branch` through `host` when
+/// its tip is `lease` (default: the tip last fetched), and only a tip this clone pushed.
+/// Nothing to do, and success, without that remote or when it has no such branch.
+pub fn delete_pushed_branch(
+    host: &dyn Host,
+    root: &Path,
+    branch: &str,
+    lease: Option<&str>,
+) -> Result<(), Error> {
+    if !has_remote(root)? {
+        return Ok(());
+    }
+    let refname = format!("refs/heads/{branch}");
+    if git(root, &["ls-remote", REMOTE, &refname])?.is_empty() {
+        return Ok(());
+    }
+    refuse_protected(branch)?;
+    let tracking = format!("refs/remotes/{REMOTE}/{branch}");
+    let tip = git(root, &["rev-parse", "--verify", "-q", &tracking]).unwrap_or_default();
+    let lease = match lease {
+        Some(lease) => lease.to_string(),
+        None if tip.is_empty() => {
+            return Err(Error::Refused(format!(
+                "no {REMOTE}/{branch} here to take the tip from; fetch, or pass --lease"
+            )));
+        }
+        None => tip,
+    };
+    // Git writes `update by push` when a push from this clone moves the branch, and another
+    // entry when a fetch brings someone else's tip; no reflog fails closed.
+    let newest = git(
+        root,
+        &["reflog", "show", "-n", "1", "--format=%H %gs", &tracking],
+    )
+    .unwrap_or_default();
+    let pushed_here = newest
+        .split_once(' ')
+        .is_some_and(|(sha, why)| sha == lease && why.starts_with("update by push"));
+    if !pushed_here {
+        return Err(Error::Refused(format!(
+            "this clone didn't push {REMOTE}/{branch} at {lease}; left it"
+        )));
+    }
+    host.branch_delete(root, branch, &lease)
+}
+
+/// `clm branch push` (`branch-push`): pushes the checked-out branch to [`REMOTE`] as a
+/// compare-and-swap on what this clone last saw, and returns `pushed <branch> <sha>`.
+pub fn push_branch(root: &Path) -> Result<String, Error> {
+    let branch = current_branch(root)?
+        .ok_or_else(|| Error::Refused("`HEAD` is detached; check out a branch".into()))?;
+    refuse_protected(&branch)?;
+    if !has_remote(root)? {
+        return Err(Error::Refused(format!("there is no `{REMOTE}` remote")));
+    }
+    let refname = format!("refs/heads/{branch}");
+    let tracking = format!("refs/remotes/{REMOTE}/{branch}");
+    let seen = git(root, &["rev-parse", "--verify", "-q", &tracking]).is_ok();
+    let lease = if seen {
+        format!("--force-with-lease={refname}")
+    } else {
+        format!("--force-with-lease={refname}:")
+    };
+    let mut args = vec!["push", "--set-upstream", &lease];
+    if seen {
+        args.push("--force-if-includes");
+    }
+    let target = format!("HEAD:{refname}");
+    args.extend([REMOTE, &target]);
+    match git(root, &args) {
+        Ok(_) => {}
+        Err(clm_git::Error::Failed { stderr, .. }) => return Err(Error::Refused(stderr)),
+        Err(e) => return Err(e.into()),
+    }
+    Ok(format!(
+        "pushed {branch} {}",
+        git(root, &["rev-parse", "HEAD"])?
+    ))
 }
