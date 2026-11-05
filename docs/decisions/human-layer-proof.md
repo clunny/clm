@@ -34,3 +34,5 @@ Rejected:
 - **A list of exempt entries in `clm.toml` or the root spec**: separates the reason from what it excuses, and lands without review.
 - **Live model calls or the network in capability tests**, banned or allowed per project: a ban would push real end-to-end tests out of coverage; allowing them at every land makes the land slow and flaky.
 - **A separate integration checkpoint before release** in place of selection at land.
+
+(Amended 2026-11-05, `20261105-capability-harness-move-has`: another component's build may update a capability test whose observations its requirement changes, under `path-ownership`'s third exception (`capability-tests-follow-rules`); the `capability` component's own build still crosses no other component's `paths`.)
