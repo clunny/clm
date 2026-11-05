@@ -11,12 +11,13 @@ serves: [capability/adopt-clm]
 ## Contract
 Bringing a repository under CLM (`init-cli-and-skill`). The deterministic half; the conversation and the drafting are `plugin`'s `/clm:init` skill.
 
-- `clm init [--lang <language>]... [--no-detectors] [--host none|git|github]` sets up CLM's tooling in the CLM repository found from the current directory, or at the top of the git repository when there is none (`init-root`), and prints the steps only a human can do. Run again, even after upgrading `clm`, it regenerates nothing: every file it writes belongs to the project once written, since no workflow is generated (`land-locally`). The one file it edits rather than writes whole is `.gitignore`, to which it adds each of `clm.local.toml`, `.clm/` and `.claude/worktrees/` that git doesn't already ignore there, or all three when it has no `.gitignore` (`local-settings`, `init-ignores-session-files`). The root component it writes owns the files `clm init` writes, and sets `outside`, which turns on `clm check`'s path ownership, to the repository's existing code, so the bootstrap commit passes it before the first spec graph lands (`incremental-adoption`).
+- `clm init [--lang <language>]... [--no-detectors] [--host none|git|github]` sets up CLM's tooling in the CLM repository found from the current directory, or at the top of the git repository when there is none (`init-root`), and prints the steps only a human can do. Run again, even after upgrading `clm`, it regenerates nothing: every file it writes belongs to the project once written, since no workflow is generated (`land-locally`). The one file it edits rather than writes whole is `.gitignore`, to which it adds each of `clm.local.toml`, `.clm/` and `.claude/worktrees/` that git doesn't already ignore there, or all three when it has no `.gitignore` (`local-settings`, `init-ignores-session-files`). On its first run, before the repository has a `specs/SPEC.md`, it also adds the narrow allow rules for the `clm` commands unattended sessions run to `.claude/settings.json` (`init-seeds-permissions`, `unattended-steps-run-clm`). The root component it writes owns the files `clm init` writes, and sets `outside`, which turns on `clm check`'s path ownership, to the repository's existing code, so the bootstrap commit passes it before the first spec graph lands (`incremental-adoption`).
+- `clm init --check-permissions` writes nothing: it prints each of those rules that the repository's Claude Code project settings lack and exits 1 when one is missing, so the `build` and `triage` skills can tell the human, before the first unattended session, what to add (`init-check-permissions`).
 - `clm survey` prints a compact map of the CLM repository found from the current directory, or of the whole git repository when there is none (`root-from-cwd`), for drafting its spec graph (`brownfield-survey`). `clm survey --components <file>` checks a proposed component map against the code and exits 1 with what's wrong. The map may leave part of the code for later, as `outside` globs, as the root's `outside` does (`incremental-adoption`); it checks coverage over the same code files `clm check`'s path ownership reads, so a map it accepts passes that rule once written as the spec graph.
 - `import_edges(root)`, a library call, returns the file-to-file import edges `clm survey` finds in the repository at `root`, for `check`'s `undeclared-imports` rule, which `clm check` runs on the spec graph's own components (`undeclared-imports`).
 - `clm guide [<page>]` prints CLM's guide, the pages of `docs/guide/` and the spec format, `docs/spec-format.md`, compiled into the binary, and the page `constraints`, generated from CLM's carried constraints: with no page, the index of page names and titles; with one, that page's Markdown (`method-in-the-plugin`, `guide-in-the-binary`, `spec-format-in-the-guide`). It reads no file at run time, so it works offline, in any repository or none, and prints the guide of the version that runs. No link in the guide leads outside it, so every link works in an adopter's project and in `clm guide`'s output.
 
-Files `clm init` writes, each only when missing, and the one it adds lines to:
+Files `clm init` writes, each only when missing, and the ones it adds to:
 
 | File | Owner |
 |---|---|
@@ -24,6 +25,7 @@ Files `clm init` writes, each only when missing, and the one it adds lines to:
 | `scripts/clm-check.sh` | project |
 | `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md`, `CLAUDE.md` | project |
 | `.gitignore`: the lines `clm.local.toml`, `.clm/` and `.claude/worktrees/`, each added when missing | project |
+| `.claude/settings.json`: the allow rules for unattended `clm` commands, each added when missing, on the first run only | project |
 
 ## Design
 Crate `clm-init`. Templates are compiled into the binary (`include_str!`), so a given `clm` version always writes the same bytes for the same inputs, and tests compare output to fixtures.
@@ -56,6 +58,14 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 **Links stay inside the guide** (`guide-links-inside`). A guide page's links must work wherever the page is read: in `clm guide`'s output in an adopter's project and on GitHub. The page's directory is `docs/guide/`, or `docs/` for `spec-format`. CLM's own repository files, its decisions and its `ARCHITECTURE.md`, are named in prose as CLM's repository, never linked, since an adopter's project has neither. The rule is a function over a page's file path and Markdown, with the set of page files, so its own tests feed it failing and passing cases without touching `docs/`. A link whose target is wrapped in `<...>` or followed by a title (`[t](x.md "title")`) is judged by its path alone. Reference-style definitions (`[label]: target`) and autolinks (`<https://...>`) aren't inline links and aren't read. The scanner is hand-written, with no Markdown dependency: it skips fenced blocks (```` ``` ```` or `~~~` fences) and code spans of any backtick count, and doesn't exempt indented blocks, which the guide doesn't use; link text may nest brackets and a target may hold balanced parentheses, as in CommonMark. A scheme is `[A-Za-z][A-Za-z0-9+.-]*:`. A relative path is normalised lexically (`./x.md` is `x.md`, `a/../x.md` is `x.md`), and one that climbs above the repository root, or keeps a `?` query, fails. Two pages with one name, such as a later `docs/guide/spec-format.md`, fail the tests, as they should. The scenarios that run the binary are proved in `crates/clm/tests/guide.rs`, where `init/guide-command`'s binary tests are.
 
 **The constraints page** (`guide-constraints-page`). `clm guide constraints` is the one guide page not read from a file: `clm-init` builds it at run time from `model`'s compiled copy of CLM's carried entries (`model/carried-constraints`), so it is the set the running `clm` enforces. It has no file under `docs/guide/`, so `guide-table-from-files` and `guide-links-inside` don't read it.
+
+**Allow rules for unattended sessions** (`init-seeds-permissions`, `init-check-permissions`, `unattended-steps-run-clm`). Builds and drafts run as subagents under the human's permission mode (`builds-in-subagents`). In Claude Code's auto mode a classifier judges each command that no rule allows, and it denies a build's force-push of its rebased branch and a draft's `clm land` of its own change. A project's allow rule resolves before the classifier, and auto mode drops only broad rules such as `Bash(*)`, so `clm-init` holds one public constant list, `UNATTENDED_RULES`, which the root's test of this repository's settings reads too (`clm/session-commands`): for each of the `clm` subcommands `apply`, `branch`, `check`, `claim`, `defect`, `gate`, `land`, `pr`, `rebase` and `workaround`, in that order, the two rules `Bash(clm <subcommand>)` and `Bash(clm <subcommand> *)`, the bare form first, as this repository writes its own script rules (`clm/session-commands`). They are the `clm` commands the build and draft prompts run that write: to the branch, to `origin` or to the backlog. `clm approve` is never among them, and an allow rule never outranks the guard's `ask` for it (`approval-policy`). No `git push` rule is: `clm branch push` and `clm branch delete` are the pushes an unattended session makes (`host`).
+
+*Seeding.* The settings file is `.claude/settings.json` in the directory holding `clm.toml`, the CLM repository's root. `clm init` adds the rules only when `specs/SPEC.md` was missing when it started, so a rerun leaves the file as it is (`init-rerun`), and the root component it writes names the file in its `paths`, so the bootstrap commit passes path ownership whether `clm init` created the file or found it (`init-root-ownership`). A missing file, or one holding only whitespace, is written as `{"permissions":{"allow":[...]}}`, pretty-printed with two-space indents and a final newline. An existing file is parsed as JSON (`clm-init` enables `serde_json`'s `preserve_order` feature, so its keys keep their order; the feature unifies across the workspace, which only changes the order other crates' maps print in, never what they parse), JSON with comments or trailing commas counting as not JSON; the rules it lacks from `permissions.allow` are appended in the list's order, creating `permissions` and `allow` when missing, and it is written back pretty-printed in the same way, only when a rule was added. A file that isn't a JSON object, or whose `permissions` isn't an object or whose `permissions.allow` isn't an array, is left as it is, and the next steps name the rules to add by hand. Rules elsewhere in the file, the project's own, are kept.
+
+*Checking.* `clm init --check-permissions` reads `.claude/settings.json` and `.claude/settings.local.json` there, each when present, and takes the union of their `permissions.allow` arrays, since Claude Code merges both; a file it can't read as that shape counts as allowing nothing. It compares rules as exact strings, so a rule in the older `Bash(clm land:*)` form counts as missing: the check names exactly what to add. It prints each missing rule on its own line, in the list's order, after a line `missing allow rules in .claude/settings.json:`, and exits 1; with none missing it prints nothing and exits 0. It writes nothing and needs no `specs/`. It finds the CLM repository as `clm init` does (`init-root`), and outside a git repository it exits 1 saying so, as `clm init` does. The rules it names, and the first-run seeding, are one list, so a rule added to the list is checked for in every repository at once, including those set up before it existed.
+
+*Next steps.* On a rerun, when the check would report a rule missing, the next steps name `.claude/settings.json` and each missing rule, as the last upgrade step, right before the push step (`init-next-steps`). On a first run they name them only when the file couldn't be edited.
 
 ## Requirements
 
@@ -273,30 +283,28 @@ Running `clm init` again SHALL change no existing file, except that it SHALL add
 - THEN it returns the pair (`web/src/app.ts`, `web/src/lib/util.ts`)
 
 ### Requirement: init-root-ownership
-The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]`. It SHALL set `outside` to the top-level entries of the repository's other code files: of the files the bootstrap commit will hold, which are the files the index holds under the CLM repository and the untracked files under it that the `.gitignore` doesn't ignore as `clm init` leaves it (`clm-git`'s `files_to_commit`, read after `clm init` has written its `.gitignore` lines, so `clm init` writes those lines before it writes `specs/SPEC.md`), other than those under `specs/`, `changes/`, `backlog/` or `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and the three files in `paths`, the first component of each path, written `<component>/**` for a file in a directory and as the file's name for a file at the top, each once, sorted by bytes, each written as a YAML double-quoted string with `\` and `"` escaped; and `outside: []` when there is none, so path ownership is always on in a repository `clm init` sets up. So the committed result of `clm init` in a repository with code passes `clm check`'s path ownership (`check/unowned-files`), even when it commits a file that was untracked when `clm init` ran, such as the `.claude/settings.json` Claude Code writes when the plugins are enabled for the project, and the first spec graph narrows `outside` as its components take the code (`incremental-adoption`). `clm survey` and `clm survey --components` still read the index alone. Its tests assert the frontmatter written; the check itself is `check`'s.
+The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".claude/settings.json", ".gitignore", "clm.toml", "scripts/clm-check.sh"]`. It SHALL set `outside` to the top-level entries of the repository's other code files: of the files the bootstrap commit will hold, which are the files the index holds under the CLM repository and the untracked files under it that the `.gitignore` doesn't ignore as `clm init` leaves it (`clm-git`'s `files_to_commit`, read after `clm init` has written its `.gitignore` lines, so `clm init` writes those lines before it writes `specs/SPEC.md`), other than those under `specs/`, `changes/`, `backlog/` or `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and the four files in `paths`, the first component of each path, written `<component>/**` for a file in a directory and as the file's name for a file at the top, each once, sorted by bytes, each written as a YAML double-quoted string with `\` and `"` escaped; and `outside: []` when there is none, so path ownership is always on in a repository `clm init` sets up. So the committed result of `clm init` in a repository with code passes `clm check`'s path ownership (`check/unowned-files`), even when it commits a file that was untracked when `clm init` ran, such as an `.mcp.json`; the `.claude/settings.json` that Claude Code writes when the plugins are enabled for the project, and that `clm init` adds its allow rules to (`init-seeds-permissions`), is among the files in `paths`, and the first spec graph narrows `outside` as its components take the code (`incremental-adoption`). `clm survey` and `clm survey --components` still read the index alone. Its tests assert the frontmatter written; the check itself is `check`'s.
 
 #### Scenario: repository with code
 - GIVEN a git repository with no `specs/` tracking `src/main.rs`, `src/lib/x.rs`, `scripts/build.sh`, `README.md` and `docs/a.md`
 - WHEN `clm init` runs
-- THEN `specs/SPEC.md`'s frontmatter has `paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]` and `outside: ["README.md", "scripts/**", "src/**"]`
+- THEN `specs/SPEC.md`'s frontmatter has `paths: [".claude/settings.json", ".gitignore", "clm.toml", "scripts/clm-check.sh"]` and `outside: ["README.md", "scripts/**", "src/**"]`
 
 #### Scenario: empty repository
 - GIVEN an empty git repository
 - WHEN `clm init` runs
-- THEN `specs/SPEC.md`'s frontmatter has `paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]` and `outside: []`
+- THEN `specs/SPEC.md`'s frontmatter has `paths: [".claude/settings.json", ".gitignore", "clm.toml", "scripts/clm-check.sh"]` and `outside: []`
 
 #### Scenario: untracked files the bootstrap commits
-- GIVEN a git repository with no `specs/`, no global or system git excludes, tracking `src/main.rs` and a `.gitignore` holding `build/`, with the untracked files `.claude/settings.json`, `build/out.o` and `.clm/pr-body.md`
+- GIVEN a git repository with no `specs/`, no global or system git excludes, tracking `src/main.rs` and a `.gitignore` holding `build/`, with the untracked files `.claude/settings.json`, `.mcp.json`, `build/out.o` and `.clm/pr-body.md`
 - WHEN `clm init` runs
-- THEN `specs/SPEC.md`'s frontmatter has `outside: [".claude/**", "src/**"]`, naming neither `build/**`, which the `.gitignore` ignored before, nor `.clm/**`, which the line `clm init` adds ignores
+- THEN `specs/SPEC.md`'s frontmatter has `outside: [".mcp.json", "src/**"]`, naming neither `.claude/**`, whose one file `paths` names, `build/**`, which the `.gitignore` ignored before, nor `.clm/**`, which the line `clm init` adds ignores
 
 #### Serves
 - capability/adopt-clm
 - architecture/incremental-adoption
 
 #### Needs
-- model/outside-globs
-- vcs/files-to-commit
 
 ### Requirement: guide-command
 `clm guide` SHALL print one line per page of the guide, as compiled into the binary, each `<name>  <title>`. The pages SHALL be every `.md` file in `docs/guide/`, `docs/spec-format.md` and the generated page `constraints` (`guide-constraints-page`), whose title is `CLM's constraints`; `<name>` is the file name without `.md` (`index` for `README.md`) and `<title>` the page's first `# ` heading; `index` SHALL come first, then the pages `README.md`'s numbered list names, in its order, then `spec-format`, then `constraints`. For a page read from a file, every page but `constraints`, `clm guide <name>` SHALL print its Markdown exactly as its file is at build time, and exit 0; `clm guide constraints` prints the page `guide-constraints-page` states. For a name that isn't a page it SHALL exit 1, printing `no guide page <name>` and the index to stderr. It SHALL read no file at run time.
@@ -633,3 +641,63 @@ The `clm.toml` `clm init` writes SHALL set `upgraded` to `upgrade`'s `latest()`,
 
 #### Serves
 - capability/upgrade-clm
+
+### Requirement: init-seeds-permissions
+When the CLM repository has no `specs/SPEC.md` as it starts, `clm init` SHALL add to `permissions.allow` in `.claude/settings.json` at the CLM repository's root each of its unattended allow rules the array lacks, creating the file, `permissions` and `allow` when missing: for each of the `clm` subcommands `apply`, `branch`, `check`, `claim`, `defect`, `gate`, `land`, `pr`, `rebase` and `workaround`, the rules `Bash(clm <subcommand>)` and `Bash(clm <subcommand> *)`. It SHALL keep every other key and rule of an existing file, SHALL add no rule naming `clm approve` or `git`. When the file isn't a JSON object, or its `permissions` or `permissions.allow` has another type, it SHALL leave the file unchanged and name `.claude/settings.json` and the rules in its next steps. When the CLM repository already has `specs/SPEC.md`, it SHALL leave `.claude/settings.json` unchanged, and when the file lacks one of the rules, its next steps SHALL name `.claude/settings.json` and each missing rule, as the last step before the push step.
+
+#### Scenario: empty repository
+- GIVEN an empty git repository
+- WHEN `clm init` runs
+- THEN `.claude/settings.json` holds `permissions.allow` with exactly the twenty rules, `Bash(clm land)` and `Bash(clm land *)` among them, none naming `approve` or `git`, and `clm check` exits 0
+
+#### Scenario: plugins already enabled
+- GIVEN a git repository with no `specs/`, holding an untracked `.claude/settings.json` that sets `enabledPlugins` and `permissions.allow` `["Bash(make *)", "Bash(clm land *)"]`
+- WHEN `clm init` runs
+- THEN `.claude/settings.json` still sets `enabledPlugins`, its `permissions.allow` starts with `Bash(make *)` and `Bash(clm land *)`, holds each rule once, and `clm check` exits 0
+
+#### Scenario: settings that aren't JSON
+- GIVEN a git repository with no `specs/` and a `.claude/settings.json` holding `{`
+- WHEN `clm init` runs
+- THEN it exits 0, `.claude/settings.json` is unchanged, and a next step names `.claude/settings.json` and `Bash(clm land *)`
+
+#### Scenario: rerun leaves the settings alone
+- GIVEN a repository initialised by an earlier `clm` with no `.claude/settings.json`, committed
+- WHEN `clm init` runs
+- THEN `git status` shows no change, and a next step, before the push step, names `.claude/settings.json`, `Bash(clm land *)` and `Bash(clm branch *)`
+
+#### Scenario: rerun with the rules
+- GIVEN a repository just initialised by `clm init`, committed
+- WHEN `clm init` runs again
+- THEN `git status` shows no change and no next step names `.claude/settings.json`
+
+#### Serves
+- capability/adopt-clm
+- capability/build-from-spec
+- capability/triage-unattended
+
+### Requirement: init-check-permissions
+`clm init --check-permissions` SHALL read `permissions.allow` from `.claude/settings.json` and `.claude/settings.local.json` at the CLM repository's root, each when present, and, comparing rules as exact strings, print `missing allow rules in .claude/settings.json:` and then each of `init-seeds-permissions`' rules that neither file allows, one per line in that requirement's order, and exit 1 when one is missing; otherwise it SHALL print nothing and exit 0. A file that isn't JSON of that shape SHALL count as allowing nothing. It SHALL write nothing, and SHALL conflict with every other option of `clm init`.
+
+#### Scenario: all allowed
+- GIVEN a repository just initialised by `clm init`
+- WHEN `clm init --check-permissions` runs
+- THEN it prints nothing, exits 0, and `git status` shows no change
+
+#### Scenario: split across the two files
+- GIVEN a repository whose `.claude/settings.json` allows every rule but `Bash(clm land)` and `Bash(clm land *)`, and whose `.claude/settings.local.json` allows `Bash(clm land *)`
+- WHEN `clm init --check-permissions` runs
+- THEN it prints the heading line and `Bash(clm land)` alone, and exits 1
+
+#### Scenario: no settings
+- GIVEN a repository with `specs/SPEC.md` and no `.claude/`
+- WHEN `clm init --check-permissions` runs
+- THEN it prints the heading and all twenty rules, exits 1, and `.claude/` still doesn't exist
+
+#### Scenario: the older rule form
+- GIVEN a repository whose `.claude/settings.json` allows `Bash(clm land:*)` and every rule but the two `clm land` ones
+- WHEN `clm init --check-permissions` runs
+- THEN it prints `Bash(clm land)` and `Bash(clm land *)`, and exits 1
+
+#### Serves
+- capability/build-from-spec
+- capability/triage-unattended

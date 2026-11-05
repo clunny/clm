@@ -16,3 +16,5 @@ Rejected:
 - **Design-only changes making a node pending.** `node-reconciliation`'s reasons hold: a node's pending state would no longer be read from markers alone, and nothing would say when a Design edit is built.
 - **A check that flags a requirement naming data no dependency's requirement provides.** It needs to know which words in a requirement are data and which requirement provides them; that is the heuristic `requirement-needs` rejected for paths. The builder check reads the change as its builder would, which is where the gap shows.
 - **Leaving it to the build's `question` item.** That is today's behaviour: it works, but costs a dead-end build and a second spec PR for each case.
+
+(Amended 2026-11-05, `20261105-capability-harness-move-has`: work in the `capability` component that a rule makes necessary, by changing what a capability test observes, is not a requirement, since that component holds none of its own: the rule's own build updates those tests (`capability-tests-follow-rules`), and the change names them in the rule's text.)
