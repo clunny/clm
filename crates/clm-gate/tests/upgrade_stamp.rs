@@ -25,6 +25,15 @@ fn any_other_key_differing_is_not_the_stamp() {
 }
 
 #[test]
+fn a_comment_only_edit_is_not_the_stamp() {
+    // req:gate/upgrade-stamp-left-out@5b8d7f0d
+    let after =
+        b"# who approves\napproval = \"other\"\nupgraded = \"0.17.0\"\n[land]\ncheck = \"a\"\n";
+    assert!(!upgrade_stamp_only(Some(BEFORE), Some(after)));
+    assert!(!upgrade_stamp_only(None, None));
+}
+
+#[test]
 fn a_side_that_doesnt_parse_is_not_the_stamp() {
     // req:gate/upgrade-stamp-left-out@5b8d7f0d
     assert!(!upgrade_stamp_only(Some(BEFORE), Some(b"upgraded = [\n")));

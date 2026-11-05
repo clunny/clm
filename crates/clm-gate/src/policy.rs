@@ -49,22 +49,25 @@ const UPGRADE_NOTES: [&str; 2] = ["upgraded", "declined_migrations"];
 /// Whether `clm.toml`, given its bytes on each side of a diff (`None` where the file doesn't
 /// exist), differs only in `upgraded` and `declined_migrations`, compared as parsed TOML with
 /// a missing file or key counting as unset; false when either side isn't UTF-8 or doesn't
-/// parse (`upgrade-stamp-left-out`).
+/// parse, and false when no note differs, so a comment-only edit is some other change
+/// (`upgrade-stamp-left-out`).
 pub fn upgrade_stamp_only(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
-    let rest = |bytes: Option<&[u8]>| -> Option<toml::Table> {
+    let parse = |bytes: Option<&[u8]>| -> Option<toml::Table> {
         let Some(bytes) = bytes else {
             return Some(toml::Table::new());
         };
-        let mut table = std::str::from_utf8(bytes)
-            .ok()?
-            .parse::<toml::Table>()
-            .ok()?;
+        std::str::from_utf8(bytes).ok()?.parse::<toml::Table>().ok()
+    };
+    let rest = |mut table: toml::Table| {
         for key in UPGRADE_NOTES {
             table.remove(key);
         }
-        Some(table)
+        table
     };
-    matches!((rest(before), rest(after)), (Some(b), Some(a)) if b == a)
+    let (Some(before), Some(after)) = (parse(before), parse(after)) else {
+        return false;
+    };
+    before != after && rest(before) == rest(after)
 }
 
 /// Whether `approval-setting` counts `clm.toml` as a spec change, given its bytes on each
