@@ -242,7 +242,7 @@ pub fn delete_pushed_branch(
         Some(lease) => lease.to_string(),
         None if tip.is_empty() => {
             return Err(Error::Refused(format!(
-                "no {REMOTE}/{branch} here to take the tip from; fetch, or pass --lease"
+                "this clone didn't push {REMOTE}/{branch}: it has no such ref; left it"
             )));
         }
         None => tip,
@@ -286,6 +286,7 @@ pub fn push_branch(root: &Path) -> Result<String, Error> {
     if seen {
         args.push("--force-if-includes");
     }
+    let sha = git(root, &["rev-parse", "HEAD"])?;
     let target = format!("HEAD:{refname}");
     args.extend([REMOTE, &target]);
     match git(root, &args) {
@@ -293,8 +294,5 @@ pub fn push_branch(root: &Path) -> Result<String, Error> {
         Err(clm_git::Error::Failed { stderr, .. }) => return Err(Error::Refused(stderr)),
         Err(e) => return Err(e.into()),
     }
-    Ok(format!(
-        "pushed {branch} {}",
-        git(root, &["rev-parse", "HEAD"])?
-    ))
+    Ok(format!("pushed {branch} {sha}"))
 }

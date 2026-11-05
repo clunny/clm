@@ -211,6 +211,7 @@ fn scenario_branch_never_fetched() {
     let (code, _, err) = clm(&r.work, &gh, &["branch", "delete", "spec/z"], &[]);
     assert_eq!(code, Some(1), "{err}");
     assert!(err.contains("origin/spec/z"), "{err}");
+    assert!(err.contains("didn't push"), "{err}");
     assert_eq!(on_origin(&r, "spec/z"), z);
 }
 
@@ -411,6 +412,26 @@ fn scenario_push_main_refused() {
 }
 
 #[test]
+fn push_prints_the_remotes_lines_and_succeeds_when_origin_has_the_commit() {
+    // req:host/branch-push@2c314eee
+    let (r, gh) = (checkout("github"), fake_gh());
+    // origin already holds the commit, and this clone has no tracking ref for it.
+    git(&r.work, &["push", "-q", "origin", "spec/x"]);
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/spec/x"]);
+    let (code, _, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    // A remote that refuses: its lines are printed.
+    pre_receive(&r, "echo 'remote says no' >&2; exit 1\n");
+    commit_file(&r, "n.txt");
+    let (code, out, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(
+        format!("{out}{err}").contains("remote says no"),
+        "{out}{err}"
+    );
+}
+
+#[test]
 fn push_without_origin_exits_1() {
     // req:host/branch-push@2c314eee
     let (r, gh) = (checkout("none"), fake_gh());
@@ -572,7 +593,6 @@ fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
 
 #[test]
 fn unloadable_settings_exit_2() {
-    // req:host/branch-delete@18b4bda5
     let (r, gh) = (checkout("github"), fake_gh());
     write(&r.work, "clm.toml", "host = \"nowhere\"\n");
     let (code, _, err) = clm(
