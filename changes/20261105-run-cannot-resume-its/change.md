@@ -38,4 +38,7 @@ resolves: [run-cannot-resume-its-own-pushed-claim]
 
 ## Open questions
 
+- The architecture audit noted that `lease-claims`'s `#### Enforced by` lists `orchestrator/claim`, `backlog-claim` and `claim-fix` but not the new `orchestrator/claim-local`. Left out: `claim_local` shares `claim`'s compare-and-swap push, which `orchestrator/claim` already enforces, and editing `ARCHITECTURE.md` would put the branch under review for a cross-reference. Add it if the human wants every claim path listed.
+- Building `run` makes one existing `clm-run` test, `resume_refuses_once_the_claim_is_lost`, meet the new rule: its local branch is a bare claim another clone's claim replaced, which is now removed as an unpushed claim before the claim is refused. The build adjusts the test's assertions; the outcome (refused while the other claim lives) is unchanged.
+
 - `clm claim <component> --fix` still sets its local branch after the push, so a fix claim interrupted there has the same window. The item scoped the fix to `clm run`; moving `--fix` onto `claim_local` is left until the window is seen to bite (`yagni`).
