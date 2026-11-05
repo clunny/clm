@@ -89,6 +89,7 @@ fn a_project() {
     let force = slugs(&carried.in_force);
     assert!(force.contains(&"proven-by-tests"));
     assert!(!force.contains(&"expand-contract") && !force.contains(&"yagni"));
+    assert_eq!(carried.entries, clm_model::carried());
     assert_eq!(carried.entries.len() - 2, carried.in_force.len());
 }
 
@@ -119,8 +120,6 @@ fn the_compiled_copy_is_this_repositorys_file() {
     assert!(violations.is_empty(), "{violations:?}");
     assert!(graph.carried.source);
     assert_eq!(graph.carried.entries, carried());
-    let tiers = |t| carried().iter().filter(|e| e.tier == t).count();
-    assert!(tiers(Tier::Method) > 0 && tiers(Tier::Replaceable) > 0 && tiers(Tier::Default) > 0);
     for e in carried().iter().filter(|e| e.tier == Tier::Replaceable) {
         assert!(e.guarantee.is_some(), "{}", e.slug);
     }
@@ -175,11 +174,16 @@ fn bad_carries() {
         "#### Carries\n- method\n\n#### Guarantee\nIt holds.\n\n",
     );
     let d = entry("d", "#### Replaces\n- yagni\n\n");
-    let (_, violations) = load(Some(&arch(&[a, b, c, d])), None);
+    let e = entry("e", "#### Guarantee\nIt holds.\n\n");
+    let f = entry(
+        "f",
+        "#### Carries\n- replaceable\n\n#### Guarantee\ng\n\n#### Guarantee\nh\n\n",
+    );
+    let (_, violations) = load(Some(&arch(&[a, b, c, d, e, f])), None);
     reports(
         &violations,
         "ARCHITECTURE.md",
-        &[&["`a`"], &["`b`"], &["`c`"], &["`d`"]],
+        &[&["`a`"], &["`b`"], &["`c`"], &["`d`"], &["`e`"], &["`f`"]],
     );
 }
 

@@ -1,3 +1,4 @@
+// clm:reads ARCHITECTURE.md
 //! What each rule serves: a node's `serves` and a requirement's `#### Serves` block.
 
 use std::path::{Path, PathBuf};
@@ -56,7 +57,10 @@ fn serves_block_overrides() {
         graph.requirement("a/x").unwrap().serves,
         ["architecture/single-source"]
     );
-    assert_eq!(graph.effective_serves("a/x"), ["architecture/single-source"]);
+    assert_eq!(
+        graph.effective_serves("a/x"),
+        ["architecture/single-source"]
+    );
     assert_eq!(graph.effective_serves("a/y"), ["capability/approve"]);
     assert!(graph.effective_serves("capability/approve").is_empty());
     assert!(graph.effective_serves("a/none").is_empty());

@@ -239,9 +239,8 @@ pub(crate) fn load(files: &Files, violations: &mut Vec<Violation>) -> Carried {
                 Some(c) if c.tier == Tier::Method => say(format!(
                     "replaces `{slug}`, a `method` entry, which a project can't replace"
                 )),
-                Some(_) => {}
+                Some(_) => named.push(slug.to_string()),
             }
-            named.push(slug.to_string());
         }
     }
     outside(compiled, &named)

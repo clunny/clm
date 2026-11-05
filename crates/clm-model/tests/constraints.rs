@@ -1,3 +1,4 @@
+// clm:reads ARCHITECTURE.md
 //! `ARCHITECTURE.md`: a `## Constraints` section of `### Constraint:` entries
 //! (`human-layers`).
 

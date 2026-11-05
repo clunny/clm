@@ -1,3 +1,4 @@
+// clm:reads ARCHITECTURE.md
 //! The human layers: the entries of `ARCHITECTURE.md` and `CAPABILITIES.md`, and the
 //! component IDs they reserve.
 
