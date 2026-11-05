@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [create-early-access-label]
 ---
 
