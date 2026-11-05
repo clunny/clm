@@ -214,7 +214,7 @@ fn init_writes_capabilities() {
 
 #[test]
 fn template_says_pull_request() {
-    // req:init/template-says-pull-request@f22d765f
+    // req:init/template-says-pull-request@603d3610
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     // The written file holds no entry of CLM's to word (`carried-constraints`); no template
@@ -275,7 +275,7 @@ fn template_says_architectural_constraint() {
 
 #[test]
 fn templates_say_new_words() {
-    // req:init/templates-say-new-words@46b3713f
+    // req:init/templates-say-new-words@4e249586
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
