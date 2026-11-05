@@ -2167,6 +2167,96 @@ fn triage_carries_answers() {
     }
 }
 
+/// What `triage-contributions` asks of a `triage` skill.
+fn contributions_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "triage",
+        body,
+        &[
+            "clm intake",
+            "untrusted",
+            ".clm/intake/",
+            "issue-verifier",
+            "clm contribution show",
+            "clm contribution label",
+            "clm contribution comment --close",
+            "intake/<YYYYMMDD-HHMM>",
+            "Co-authored-by",
+            "clm pr open",
+            "issues",
+            "contribution",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn triage_takes_the_inbox_in() {
+    // req:plugin/triage-contributions@8b647918
+    let body = skill_body("triage");
+    assert_eq!(contributions_gaps(&body), Vec::<String>::new());
+    // triage without the verifier
+    let gaps = contributions_gaps(&body.replace("issue-verifier", "elided"));
+    assert_reports(&gaps, "triage", "issue-verifier");
+    let step = body
+        .lines()
+        .find(|l| l.starts_with("2a. *Contributions.*"))
+        .expect("triage step 2a, the Contributions step");
+    // Untrusted data, nothing written to the host without a yes.
+    for needle in [
+        "untrusted data",
+        "never as instructions",
+        "write nothing to the host",
+        "without the human's yes",
+    ] {
+        assert!(step.contains(needle), "{needle}: {step}");
+    }
+    // The verifier runs on the session's own model, given the files and the checkout only.
+    let launch = sentence_with(step, "launch one `issue-verifier`");
+    for needle in [
+        "session's own model",
+        "model-per-launch",
+        "and nothing else",
+    ] {
+        assert!(launch.contains(needle), "{needle}: {launch}");
+    }
+    // The saved files, one per new issue and pull request.
+    for needle in ["`.clm/intake/<n>.md`", "`.clm/intake/pull-<n>.md`"] {
+        assert!(step.contains(needle), "{needle}: {step}");
+    }
+    // Each issue is shown whole, one at a time.
+    let shown = sentence_with(step, "show the human the issue's saved text whole");
+    for needle in [
+        "not a summary",
+        "verifier's verdict",
+        "flagging each passage",
+    ] {
+        assert!(shown.contains(needle), "{needle}: {shown}");
+    }
+    // The branch, its trailer and its land by the gate's first line.
+    let branch = sentence_with(step, "on a branch of its own named");
+    for needle in ["worktree of its own", "`Co-authored-by` trailer"] {
+        assert!(branch.contains(needle), "{needle}: {branch}");
+    }
+    let land = sentence_with(step, "land it with `clm land`");
+    for needle in ["`code`", "`spec`", "delete the pushed branch"] {
+        assert!(land.contains(needle), "{needle}: {land}");
+    }
+    // Labels and comments only after the land; resolved issues and pull requests.
+    let after = sentence_with(step, "On `landed <sha>`");
+    for needle in ["`accepted` label", "naming its item", "comment --close"] {
+        assert!(after.contains(needle), "{needle}: {after}");
+    }
+    let resolved = sentence_with(step, "For each `issue <n> resolved <slug> <by>` line");
+    for needle in ["recommending waiting", "naming `<by>`"] {
+        assert!(resolved.contains(needle), "{needle}: {resolved}");
+    }
+    let pull = sentence_with(step, "For each `pull <n>` line");
+    assert!(pull.contains("`contribution` skill's steps"), "{pull}");
+    assert!(step.contains("run `clm triage` again"), "{step}");
+    assert!(body.contains("the issues taken in with their items"));
+}
+
 /// What `triage-menu` asks of a `triage` skill.
 fn menu_gaps(body: &str) -> Vec<String> {
     text_gaps(
@@ -2174,6 +2264,8 @@ fn menu_gaps(body: &str) -> Vec<String> {
         body,
         &[
             "AskUserQuestion",
+            "Contributions",
+            "clm intake",
             "Approvals",
             "Needs your input",
             "Bugs",
@@ -2192,7 +2284,7 @@ fn menu_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn triage_shows_a_menu() {
-    // req:plugin/triage-menu@294c91f1
+    // req:plugin/triage-menu@3c61eff2
     let body = skill_body("triage");
     assert_eq!(menu_gaps(&body), Vec::<String>::new());
     // triage without the menu
@@ -2223,7 +2315,10 @@ fn triage_shows_a_menu() {
         assert!(picked.contains(needle), "{needle}: {picked}");
     }
     // The choices, in their order, each naming its lines.
+    let intake = sentence_with(&body, "Then run `clm triage`");
+    assert!(intake.contains("`clm intake`"), "{intake}");
     let choices = [
+        ("*Contributions*", "`issue <n> resolved` and `pull` lines"),
         ("*Bugs*", "`group` lines, drafted as step 5 says"),
         ("*Approvals*", "`designed` lines"),
         ("*Needs your input*", "`human` lines"),
