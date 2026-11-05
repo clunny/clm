@@ -876,7 +876,7 @@ fn clm_triage_prints_the_lines_and_exits_0() {
 
 #[test]
 fn clm_draft_reads_relative_answers_from_where_it_runs() {
-    // req:orchestrator.triage/draft-answers@ebde7319
+    // req:orchestrator.triage/draft-answers@aad51008
     let r = with_items();
     write(&r.work, ".clm/answers.md", "b: keep it small\n");
     let ran = clm_draft(&r, &fake(), &["--answers", ".clm/answers.md", "b"]);
@@ -895,7 +895,7 @@ fn clm_draft_reads_relative_answers_from_where_it_runs() {
 
 #[test]
 fn clm_draft_reads_answers_from_a_subdirectory_it_runs_in() {
-    // req:orchestrator.triage/draft-answers@ebde7319
+    // req:orchestrator.triage/draft-answers@aad51008
     // With no `--root`, `clm` finds the repository above the subdirectory; a relative
     // path is still read against the subdirectory.
     let r = with_items();
@@ -920,7 +920,7 @@ fn clm_draft_reads_answers_from_a_subdirectory_it_runs_in() {
 
 #[test]
 fn clm_draft_answers_conflict_with_finish_and_fold() {
-    // req:orchestrator.triage/draft-answers@ebde7319
+    // req:orchestrator.triage/draft-answers@aad51008
     let r = with_items();
     write(&r.work, "answers.md", "x\n");
     for args in [
