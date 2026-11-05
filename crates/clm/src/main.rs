@@ -510,8 +510,8 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-    /// List the `pub` items of the workspace's Rust libraries that nothing outside their own
-    /// library uses; exit 1 when it lists any.
+    /// List the public items of the workspace's Rust libraries and TypeScript and Python
+    /// packages that nothing outside their own library or package uses; exit 1 when it lists any.
     Unreferenced {
         /// Skip a library (`<crate>`) or an item (`<crate>::<name>`); an entry that skips
         /// nothing is reported. Repeatable.
