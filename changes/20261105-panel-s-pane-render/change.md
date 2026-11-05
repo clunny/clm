@@ -31,6 +31,18 @@ The CLM panel's pane draw ends quietly when a newer draw replaces it. Opening th
 - An aborted call outside `clm view` (the `git rev-parse` of `hasOriginMain`, the JSON model runs started beside the chart) is caught the same way, since they share the hook's body.
 - A rejection that isn't an abort (a hook bug) still throws, so a real failure stays visible.
 
+## Build notes
+
+Settled from the builder check:
+
+- **What "draws nothing" returns.** The pane hook is declared `Promise<RenderNode>`, and `RenderNode` is `RenderElement | string`, so a superseded draw returns `''`. The hand-written declaration stays as it is. The engine already ignores a superseded draw's result in favour of the newer draw. The hook throwing is the only symptom seen.
+- **The pure function.** `plugin-panel/src/panel.ts` exports `isAborted(e: unknown): boolean`, which tests `ABORTED` against the error's message. `runClm`, `hasOriginMain` and `fetchIfDue` reuse it in place of their copies of that test (`reuse-first`). It also exports a wrapper such as `drawOrNothing<T>(draw: () => Promise<T>): Promise<T | undefined>`, which resolves to `undefined` for an aborted rejection and rethrows any other. `register.tsx` wraps the whole pane hook body in it and maps `undefined` to `''`. The names are the builder's to choose.
+- **Scope.** Only the Pane `ui.render` hook changes. `redraw`'s `fetchIfDue` already maps an abort to nothing. The `command.run` and `session.start` hooks are untouched.
+- **Tests.** `register.tsx` isn't unit-tested, so the tests cover the pure function:
+  - An aborted rejection resolves to nothing.
+  - Any other rejection rethrows.
+  - The existing tests that `runClm` and `hasOriginMain` rethrow an abort, and that `cachedRun` forgets a rejected run, cover the newer draw running `clm view` again. They cite the new requirement too.
+
 ## Open questions
 
 None.
