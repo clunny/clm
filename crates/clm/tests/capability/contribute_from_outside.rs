@@ -1,5 +1,6 @@
 //! `contribute-from-outside`: a suggestion from outside lands under its author's name, and
-//! code from outside is refused before any of it runs.
+//! code from outside is refused before any of it runs, and an issue the backlog took in and a
+//! landed change fixed shows as resolved.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
