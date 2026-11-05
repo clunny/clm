@@ -28,7 +28,7 @@ fn nested_component_has_ancestors_section() {
         out.find(s)
             .unwrap_or_else(|| panic!("{s} missing in {out}"))
     };
-    assert!(out.starts_with("# Ancestors\n"), "{out}");
+    assert!(out.contains("\n# Ancestors\n"), "{out}");
     assert!(
         at("## clm: CLM") < at("## a: A") && at("## a: A") < at("## a.b: B"),
         "{out}"

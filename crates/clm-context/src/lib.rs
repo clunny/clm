@@ -3,7 +3,10 @@
 use std::fs;
 use std::path::Path;
 
-use clm_model::{Graph, Layer, Node, Requirement};
+use clm_model::{Graph, Layer, Node, Requirement, Tier};
+
+/// The first line of the carried section.
+const CARRIED_INTRO: &str = "These are the constraints CLM carries to every project, from the `clm` that runs; `clm guide constraints` explains their tiers. Names in backticks that this section doesn't list are CLM's own decisions and constraints, kept in CLM's repository.";
 
 /// The bundle for node `id` in the checkout at `root`, or `None` if no such node exists.
 pub fn bundle(graph: &Graph, root: &Path, id: &str) -> Option<String> {
@@ -21,6 +24,23 @@ pub fn bundle_from(graph: &Graph, architecture: Option<&str>, id: &str) -> Optio
     if let Some(architecture) = architecture {
         parts.push("# ARCHITECTURE.md".into());
         parts.push(architecture.into());
+    }
+
+    if !graph.carried.source {
+        parts.push("# CLM's constraints".into());
+        parts.push(CARRIED_INTRO.into());
+        for entry in &graph.carried.in_force {
+            let tier = match entry.tier {
+                Tier::Method => "method",
+                Tier::Replaceable => "replaceable",
+                Tier::Default => "default",
+            };
+            parts.push(format!("### Constraint: {} ({tier})", entry.slug));
+            parts.push(entry.statement.clone());
+            if let Some(guarantee) = &entry.guarantee {
+                parts.push(format!("Guarantee: {guarantee}"));
+            }
+        }
     }
 
     let served = served_capabilities(graph, target);
