@@ -147,4 +147,14 @@ fn constraints_page() {
         );
     }
     assert!(text.contains("#### Replaces") && text.contains("CLM's repository"));
+    // Each entry's statement is printed, in the order of CLM's `ARCHITECTURE.md`.
+    assert!(
+        after("## proven-by-tests")
+            .iter()
+            .any(|l| l.starts_with("A requirement SHALL count as implemented only when")),
+        "{text}"
+    );
+    let at = |h: &str| lines.iter().position(|l| *l == h).unwrap();
+    assert!(at("## proven-by-tests") < at("## expand-contract"));
+    assert!(at("## expand-contract") < at("## yagni"));
 }
