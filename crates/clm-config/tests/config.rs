@@ -1741,3 +1741,14 @@ fn local_settings_path_of_a_bare_common_dir_is_none() {
     fs::write(root.join(".git"), format!("gitdir: {}\n", wt.display())).unwrap();
     assert_eq!(clm_config::local_settings_path(&root), None);
 }
+
+#[test]
+fn local_file_takes_skip_migrations_but_not_the_repository_state_keys() {
+    // req:config/local-settings@6ef008e6
+    let f = Fixture::new(None, None).local("skip_migrations = [\"x\"]\n");
+    assert_eq!(f.load(&[]).unwrap().get("skip_migrations").unwrap().0, "x");
+    for key in ["upgraded = \"y\"\n", "declined_migrations = [\"y\"]\n"] {
+        let e = Fixture::new(None, None).local(key).load(&[]).unwrap_err();
+        assert!(e.to_string().contains("clm.local.toml"), "{e}");
+    }
+}
