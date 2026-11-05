@@ -548,6 +548,15 @@ fn site_workflow_builds_with_the_website_id_and_token_and_reads_only() {
     let permissions = wf["permissions"].as_mapping().unwrap();
     assert_eq!(permissions.len(), 1);
     assert_eq!(permissions["contents"].as_str(), Some("read"));
+    // The job grants no more either.
+    let job_permissions = &wf["jobs"]["deploy"]["permissions"];
+    assert!(
+        job_permissions.is_null()
+            || job_permissions
+                .as_mapping()
+                .is_some_and(|m| m.len() == 1 && m["contents"].as_str() == Some("read")),
+        "{job_permissions:?}"
+    );
     // No file under `.github/` sets the website ID to anything but the variable.
     let mut files = vec![repo().join(".github")];
     while let Some(path) = files.pop() {
