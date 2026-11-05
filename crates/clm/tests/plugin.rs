@@ -1356,6 +1356,68 @@ fn spec_slimmer() {
     assert_eq!(gaps, ["spec-slimmer: must name `clm context <component>`"]);
 }
 
+/// What `issue-verifier` asks of the verifier's frontmatter and prompt.
+fn verifier_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
+    let tools = agent_tools(fm);
+    let mut gaps: Vec<String> = tools
+        .iter()
+        .filter(|tool| !["Read", "Glob", "Grep"].contains(&tool.as_str()))
+        .map(|tool| format!("issue-verifier: may not have `{tool}`"))
+        .collect();
+    gaps.extend(
+        ["Read", "Glob", "Grep"]
+            .into_iter()
+            .filter(|tool| !tools.iter().any(|t| t == tool))
+            .map(|tool| format!("issue-verifier: must have `{tool}`")),
+    );
+    gaps.extend(
+        [
+            ".clm/intake/",
+            "untrusted",
+            "ARCHITECTURE.md",
+            "CAPABILITIES.md",
+            "backlog/",
+            "specs/",
+            "changes/",
+            "docs/decisions/",
+            "`paths`",
+            "`real`",
+            "`fixed`",
+            "`duplicate`",
+            "`out of scope`",
+            "`issues`",
+            "quoting",
+            "copying no sentence",
+            "overlaps",
+            "severity",
+            "never edit",
+        ]
+        .into_iter()
+        .filter(|needle| !body.contains(needle))
+        .map(|needle| format!("issue-verifier: must name `{needle}`")),
+    );
+    gaps
+}
+
+#[test]
+fn issue_verifier() {
+    // req:plugin/issue-verifier@28b4ce10
+    let (fm, body) = frontmatter(&plugin().join("agents/issue-verifier.md"));
+    assert_eq!(fm["name"], "issue-verifier");
+    assert!(fm["description"].as_str().is_some_and(|d| !d.is_empty()));
+    assert_eq!(verifier_gaps(&fm, &body), Vec::<String>::new());
+    // verifier that could run commands
+    let mut running = fm.clone();
+    running["tools"] = format!("{}, Bash", fm["tools"].as_str().unwrap()).into();
+    assert_eq!(
+        verifier_gaps(&running, &body),
+        ["issue-verifier: may not have `Bash`"]
+    );
+    // prompt that drops the untrusted-data rule
+    let gaps = verifier_gaps(&fm, &body.replace("untrusted", "elided"));
+    assert_eq!(gaps, ["issue-verifier: must name `untrusted`"]);
+}
+
 /// What `build-subagents` asks of a `build` skill. Empty when it says it all.
 fn subagent_gaps(body: &str) -> Vec<String> {
     let mut gaps: Vec<String> = [
