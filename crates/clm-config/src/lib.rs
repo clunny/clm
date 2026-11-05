@@ -267,6 +267,13 @@ pub struct Settings {
     pub health: Setting<Health>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone.
     pub effort: Setting<Effort>,
+    /// Repository-only, `clm.toml` alone (`upgrade-settings`): the last migration taken. None:
+    /// unset.
+    pub upgraded: Setting<Option<String>>,
+    /// `clm.toml` alone: the advised migrations the repository declined. None: unset.
+    pub declined_migrations: Setting<Option<Vec<String>>>,
+    /// `clm.local.toml` alone: required migrations this clone runs past. None: unset.
+    pub skip_migrations: Setting<Option<Vec<String>>>,
 }
 
 impl Settings {
@@ -307,6 +314,18 @@ impl Settings {
             }
             "health" => Ok((self.health.value.to_string(), &self.health.layer)),
             "effort" => Ok((self.effort.value.to_string(), &self.effort.layer)),
+            "upgraded" => {
+                let value = self.upgraded.value.clone().unwrap_or_default();
+                Ok((value, &self.upgraded.layer))
+            }
+            "declined_migrations" => {
+                let value = self.declined_migrations.value.clone().unwrap_or_default();
+                Ok((value.join(","), &self.declined_migrations.layer))
+            }
+            "skip_migrations" => {
+                let value = self.skip_migrations.value.clone().unwrap_or_default();
+                Ok((value.join(","), &self.skip_migrations.layer))
+            }
             _ => Err(Error::new(None, format!("unknown key `{key}`"))),
         }
     }
@@ -371,6 +390,10 @@ struct RepoFile {
     affected: Option<toml::Value>,
     health: Option<toml::Value>,
     effort: Option<toml::Value>,
+    /// Read raw so an invalid value's error names the key.
+    upgraded: Option<toml::Value>,
+    /// Read raw, as `upgraded` is.
+    declined_migrations: Option<toml::Value>,
 }
 
 /// The clone's `clm.local.toml`, which may set every key; the other files are read into it.
@@ -397,6 +420,14 @@ struct LocalFile {
     health: Option<toml::Value>,
     /// Read raw, as `component_size` is.
     effort: Option<toml::Value>,
+    /// The repository's keys, filled from `clm.toml` only: skipped here, so `clm.local.toml`
+    /// setting one is an unknown key (`upgrade-settings`).
+    #[serde(skip)]
+    upgraded: Option<toml::Value>,
+    #[serde(skip)]
+    declined_migrations: Option<toml::Value>,
+    /// Read raw, as `component_size` is; from `clm.local.toml` alone, so `RepoFile` has none.
+    skip_migrations: Option<toml::Value>,
 }
 
 impl From<UserFile> for LocalFile {
@@ -427,6 +458,9 @@ impl From<RepoFile> for LocalFile {
             affected: f.affected,
             health: f.health,
             effort: f.effort,
+            upgraded: f.upgraded,
+            declined_migrations: f.declined_migrations,
+            skip_migrations: None,
         }
     }
 }
@@ -469,6 +503,9 @@ fn defaults() -> Settings {
         affected: default(None),
         health: default(Health::default()),
         effort: default(Effort::default()),
+        upgraded: default(None),
+        declined_migrations: default(None),
+        skip_migrations: default(None),
     }
 }
 
@@ -580,6 +617,15 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     let health = file.health.map(|v| health(v, path)).transpose()?;
     let effort = file.effort.map(|v| effort(v, path)).transpose()?;
     let detectors = file.detectors.map(|d| detectors(d, path)).transpose()?;
+    let upgraded = file.upgraded.map(|v| upgraded(v, path)).transpose()?;
+    let declined = file
+        .declined_migrations
+        .map(|v| migrations("declined_migrations", v, path))
+        .transpose()?;
+    let skipped = file
+        .skip_migrations
+        .map(|v| migrations("skip_migrations", v, path))
+        .transpose()?;
     set(&mut settings.autosync, file.autosync, layer());
     set(&mut settings.defects, file.defects, layer());
     set(&mut settings.max_builds, max_builds, layer());
@@ -592,7 +638,21 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     set(&mut settings.affected, affected.map(Some), layer());
     set(&mut settings.health, health, layer());
     set(&mut settings.effort, effort, layer());
+    set(&mut settings.upgraded, upgraded.map(Some), layer());
+    set(
+        &mut settings.declined_migrations,
+        declined.map(Some),
+        layer(),
+    );
+    set(&mut settings.skip_migrations, skipped.map(Some), layer());
     Ok(())
+}
+
+/// The path of the clone's `clm.local.toml` that loading the settings for `root` reads, whether
+/// or not the file exists (`local-settings-path`). None when the clone has no main worktree, as
+/// a bare repository's has none.
+pub fn local_settings_path(root: &Path) -> Option<PathBuf> {
+    local_file(root)
 }
 
 /// The clone's `clm.local.toml` for the repository at `root`: in the repository's directory in
@@ -677,6 +737,33 @@ fn detectors(raw: Vec<RawDetector>, path: &Path) -> Result<Vec<Detector>, Error>
         });
     }
     Ok(detectors)
+}
+
+/// Reads `upgraded`: a string.
+fn upgraded(value: toml::Value, path: &Path) -> Result<String, Error> {
+    match value {
+        toml::Value::String(s) => Ok(s),
+        other => Err(Error::file(
+            path,
+            format!("`upgraded` must be a string, not {other}"),
+        )),
+    }
+}
+
+/// Reads a migration list, `declined_migrations` or `skip_migrations`: an array of strings.
+fn migrations(key: &str, value: toml::Value, path: &Path) -> Result<Vec<String>, Error> {
+    let list = value.as_array().and_then(|items| {
+        items
+            .iter()
+            .map(|i| i.as_str().map(str::to_owned))
+            .collect::<Option<Vec<_>>>()
+    });
+    list.ok_or_else(|| {
+        Error::file(
+            path,
+            format!("`{key}` must be an array of strings, not {value}"),
+        )
+    })
 }
 
 const MAX_BUILDS_EXPECTED: &str = "`max_builds` expects a whole number of at least 1";

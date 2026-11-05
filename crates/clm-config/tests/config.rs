@@ -778,7 +778,7 @@ fn tables_dont_merge() {
 
 #[test]
 fn local_file_takes_every_key() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let f = Fixture::new(None, Some("[land]\ncheck = \"scripts/clm-check.sh\"\n")).local(
         "autosync = false\nmax_builds = 9\ndefects = \"off\"\nwriter = \"bob\"\nhost = \"git\"\n\
          approval = \"other\"\n[land]\ncheck = \"scripts/quick.sh\"\n\
@@ -805,7 +805,7 @@ fn local_file_takes_every_key() {
 
 #[test]
 fn invalid_local_file_names_it() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     for (text, key) in [
         ("defect = \"off\"\n", "defect"),
         ("defects = \"always\"\n", "defects"),
@@ -826,7 +826,7 @@ fn invalid_local_file_names_it() {
 
 #[test]
 fn no_local_file_adds_no_layer() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let f = Fixture::new(None, Some("defects = \"backlog\"\n"));
     let s = f.load(&[]).unwrap();
     assert_eq!(s.defects.value, Defects::Backlog);
@@ -916,7 +916,7 @@ fn no_user_load(root: &Path) -> Settings {
 
 #[test]
 fn local_file_read_from_a_linked_worktree() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let (_dir, main, linked) = worktrees();
     fs::write(main.join("clm.local.toml"), "defects = \"off\"\n").unwrap();
     // A file the linked worktree's own directory holds is never read.
@@ -931,7 +931,7 @@ fn local_file_read_from_a_linked_worktree() {
 
 #[test]
 fn local_file_in_a_subdirectory_repository() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let (_dir, main, linked) = worktrees();
     fs::write(main.join("tool/clm.local.toml"), "defects = \"off\"\n").unwrap();
     fs::write(main.join("clm.local.toml"), "defects = \"ask\"\n").unwrap();
@@ -945,7 +945,7 @@ fn local_file_in_a_subdirectory_repository() {
 
 #[test]
 fn unreadable_gitdir_reads_beside_the_root() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let dir = TempDir::new().unwrap();
     let root = dir.path().join("r");
     fs::create_dir_all(&root).unwrap();
@@ -960,7 +960,7 @@ fn unreadable_gitdir_reads_beside_the_root() {
 
 #[test]
 fn bare_common_dir_has_no_local_layer() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let dir = TempDir::new().unwrap();
     let base = dir.path().canonicalize().unwrap();
     let wt = base.join("repo.git/worktrees/w");
@@ -1063,7 +1063,7 @@ fn this_repository_ignores_local_and_session_files() {
 
 #[test]
 fn relative_gitdir_finds_the_main_worktree() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     let (_dir, main, linked) = worktrees();
     let gitdir = fs::read_to_string(linked.join(".git")).unwrap();
     let abs = Path::new(gitdir.trim().strip_prefix("gitdir: ").unwrap());
@@ -1600,4 +1600,144 @@ fn component_size_old_name_in_the_user_file_fails() {
     );
     assert!(e.contains("config.toml"), "{e}");
     assert!(e.contains("unknown field `node_size`"), "{e}");
+}
+
+#[test]
+fn upgrade_keys_are_set_in_their_own_layer() {
+    // req:config/upgrade-settings@ec4b2181
+    let f = Fixture::new(
+        None,
+        Some("upgraded = \"20261105-clm-upgrade\"\ndeclined_migrations = [\"n\", \"m\"]\n"),
+    )
+    .local("skip_migrations = [\"x\"]\n");
+    let s = f.load(&[]).unwrap();
+    for (key, want, file) in [
+        ("upgraded", "20261105-clm-upgrade", f.repo_file()),
+        ("declined_migrations", "n,m", f.repo_file()),
+        ("skip_migrations", "x", f.local_file()),
+    ] {
+        let (value, layer) = s.get(key).unwrap();
+        assert_eq!(value, want, "{key}");
+        assert_eq!(*layer, Layer::File(file), "{key}");
+    }
+}
+
+#[test]
+fn unset_upgrade_keys_print_as_keys_with_no_default() {
+    // req:config/upgrade-settings@ec4b2181
+    let s = Fixture::new(None, None).load(&[]).unwrap();
+    for key in ["upgraded", "declined_migrations", "skip_migrations"] {
+        let (value, layer) = s.get(key).unwrap();
+        assert_eq!(value, "", "{key}");
+        assert_eq!(*layer, Layer::Default, "{key}");
+    }
+}
+
+#[test]
+fn upgrade_keys_in_the_wrong_layer_or_type_fail_naming_file_and_key() {
+    // req:config/upgrade-settings@ec4b2181
+    // (user file, repository file, local file, file that fails, key)
+    type Case = (
+        Option<&'static str>,
+        Option<&'static str>,
+        Option<&'static str>,
+        &'static str,
+        &'static str,
+    );
+    let cases: [Case; 8] = [
+        (
+            None,
+            Some("skip_migrations = [\"x\"]\n"),
+            None,
+            "clm.toml",
+            "skip_migrations",
+        ),
+        (
+            None,
+            None,
+            Some("upgraded = \"y\"\n"),
+            "clm.local.toml",
+            "upgraded",
+        ),
+        (
+            None,
+            None,
+            Some("declined_migrations = [\"y\"]\n"),
+            "clm.local.toml",
+            "declined_migrations",
+        ),
+        (
+            Some("upgraded = \"y\"\n"),
+            None,
+            None,
+            "config.toml",
+            "upgraded",
+        ),
+        (
+            Some("skip_migrations = [\"y\"]\n"),
+            None,
+            None,
+            "config.toml",
+            "skip_migrations",
+        ),
+        (None, Some("upgraded = 3\n"), None, "clm.toml", "upgraded"),
+        (
+            None,
+            Some("declined_migrations = [1]\n"),
+            None,
+            "clm.toml",
+            "declined_migrations",
+        ),
+        (
+            None,
+            None,
+            Some("skip_migrations = \"x\"\n"),
+            "clm.local.toml",
+            "skip_migrations",
+        ),
+    ];
+    for (user, repo, local, file, key) in cases {
+        let mut f = Fixture::new(user, repo);
+        if let Some(local) = local {
+            f = f.local(local);
+        }
+        let e = f.load(&[]).unwrap_err();
+        assert!(e.to_string().contains(file), "{file} {key}: {e}");
+        assert!(e.to_string().contains(key), "{file} {key}: {e}");
+    }
+}
+
+#[test]
+fn local_settings_path_is_the_path_loading_reads() {
+    // req:config/local-settings-path@9aa79835
+    let (_dir, main, linked) = worktrees();
+    // The file doesn't exist, and the path is still the main worktree's.
+    assert_eq!(
+        clm_config::local_settings_path(&linked),
+        Some(main.join("clm.local.toml"))
+    );
+    assert_eq!(
+        clm_config::local_settings_path(&linked.join("tool")),
+        Some(main.join("tool/clm.local.toml"))
+    );
+    fs::write(main.join("clm.local.toml"), "defects = \"off\"\n").unwrap();
+    let s = no_user_load(&linked);
+    assert_eq!(
+        s.defects.layer,
+        Layer::File(clm_config::local_settings_path(&linked).unwrap())
+    );
+}
+
+#[test]
+fn local_settings_path_of_a_bare_common_dir_is_none() {
+    // req:config/local-settings-path@9aa79835
+    let dir = TempDir::new().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let wt = base.join("repo.git/worktrees/w");
+    fs::create_dir_all(&wt).unwrap();
+    fs::write(wt.join("commondir"), "../..\n").unwrap();
+    let root = base.join("w");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join(".git"), format!("gitdir: {}\n", wt.display())).unwrap();
+    assert_eq!(clm_config::local_settings_path(&root), None);
 }
