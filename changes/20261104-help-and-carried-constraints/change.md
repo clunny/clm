@@ -54,3 +54,9 @@ A read-only skill, `plugin/skills/help/SKILL.md`. It answers from what the insta
 - `deterministic-enforcement`: the auditor advises; the model's `#### Replaces` checks and the human's approval gate.
 - `method-in-the-plugin`: what a project must know about CLM's constraints comes from the binary, never only from this repository.
 - `doc-readers-marked`: tests that read this repository's `ARCHITECTURE.md` through the compiled copy carry a `clm:reads` marker naming it.
+
+## Open questions
+
+- **A project can fake being the source.** Any `ARCHITECTURE.md` holding a `#### Carries` block counts as CLM's own, which takes the carried set out of that project's bundles. No marker a program checks can tell CLM's repository from a copy of it, so the guard is the human review every `ARCHITECTURE.md` edit needs, and the `architecture-auditor` reports such an edit. Accepted rather than solved.
+- **An upgrade can fail an older project's `clm check`.** A `#### Replaces` naming a carried slug that a later `clm` renames or removes fails until the project follows; CLM renames a carried entry by expand-contract.
+- **The carried text cites CLM-only names** (decisions such as `node-size-budgets`). They are kept, and the bundle and page say they are CLM's own, rather than rewording fifteen entries to stand alone; a later change can reword them if adopters find the names confusing.
