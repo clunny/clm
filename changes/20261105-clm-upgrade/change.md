@@ -22,18 +22,47 @@ The human chose A; chose to block on a pending required migration, as the safest
 
 The decision `upgrade-migrations` records the choices and their reasons; the deltas state them as rules.
 
-- **Migrations** (new component `upgrade`, crate `clm-upgrade`): an ordered list in the binary, each named after the change that needed it, `required` or `advised`, with a `done` check over the project's files and either an `apply` (only for what CLM can rewrite exactly) or a `note` for the files the project owns in words. A note may carry the old and new template texts, so an unedited file is rewritten without a person.
-- **The stamp**: `clm.toml`'s `upgraded`, the last migration taken. `clm init` writes it as the newest migration, so a new project starts current. A project with none is judged by each migration's `done`. An `upgraded` the binary doesn't hold means the project is too new for it. `config` checks the key's shape and that only `clm.toml` sets it; `upgrade` reads it as plain TOML, since the settings a migration fixes may be ones `config` rejects.
-- **Blocking**: `clm` calls `require_current` before every command but `--version`, `help`, `status`, `guide`, `upgrade`, `defect`, `config`, `init`, `backlog`, `hook` and `view`, so a command added later blocks by default.
-- **Skipping a broken migration**: `skip_migrations` in the clone's `clm.local.toml` only, after `clm defect` reports it. It unblocks one machine and can't weaken another clone, so it needs no review and leaves `humans-review-intent`, a carried `method` constraint, as it is. This replaces the committed, reviewed skip first discussed.
-- **`clm upgrade`** lists what is pending; `--apply` applies the mechanical migrations and rewrites unedited files, stopping at the first note the human must take; `--note <id>` prints a note; `--done <id>` moves past a note migration, past an advised one even when declined, past a required one only once its `done` holds. It writes the working tree only.
-- **The gate**: a `clm.toml` that differs only in `upgraded` counts as a spec change needing no review, so a branch of note edits plus the stamp lands as `spec`, not `mixed`. An edit to `ARCHITECTURE.md` or `CAPABILITIES.md` still needs review, which is right: the team owns those words.
-- **`/clm:upgrade`**: runs `clm upgrade --apply` on an `upgrade/<YYYYMMDD>` branch, lands mechanical changes (code) on their own, then shows each note's edit beside the project's text, makes it on a yes, and lands the notes branch; reports a failing migration with `clm defect` and offers the local skip.
-- **Session start**: after the status, one line with the counts of pending required and advised migrations, whether commands are blocked, and `/clm:upgrade`. It never blocks.
-- **Keeping migrations honest** (new constraint `upgrades-carry-migrations`): `crates/clm-upgrade/corpus/v<version>/` holds a project as each published release from `v0.14.0` set it up, written by `corpus/make.sh` and seeded with each published binary. A test upgrades every entry and requires that nothing is pending, `clm check` passes and `clm init`'s files equal what it writes today. `migrations.lock` holds the hash of each shipped migration, and a test refuses an edit to one. `propose`'s builder check asks whether a change alters what existing projects hold.
-- **Release** (decision `release-records-upgrade-corpus`): `release-prepare.sh`'s bump commit adds the release's corpus entry and lock lines.
-- **First migrations**: two `advised` notes with old/new texts: `ARCHITECTURE.md` stops copying the carried constraints, and `CLAUDE.md` names `/clm:help`. Whatever else the corpus test shows a `v0.14.0` to `v0.18.0` project needs becomes a migration in the same build.
-- **`init-next-steps`** stops printing upgrade steps: they covered projects from before `20261025-forge-adapters`, which landed before the first published release, so no released project needs them.
+- **Migrations** (new component `upgrade`, crate `clm-upgrade`). They form an ordered list in the binary, each named after the change that needed it, with a `done` check over the project's files. There are two kinds:
+  - an *apply* migration is code `clm upgrade --apply` runs. Every `required` migration is one, since what CLM must read correctly it can rewrite exactly;
+  - a *note* migration is always `advised`: guidance for a file the project owns in words. It may carry old and new template texts, so a file nobody edited is rewritten without a person.
+- **The stamp.** `clm.toml`'s `upgraded` names the last migration taken, and `clm init` writes the newest one.
+  - An apply migration is pending when it comes after the stamp and its `done` is false. A note migration is pending while its `done` is false and `declined_migrations` doesn't name it.
+  - A project with no stamp is judged by `done` alone, so the block lifts as soon as the files are right.
+  - An unknown stamp means the project is too new for this binary.
+  - `config` checks both keys' shape, and that only `clm.toml` sets them. `upgrade` reads them as plain TOML, since the settings a migration fixes may be ones `config` rejects.
+- **Blocking.** `clm` calls `require_current` before every command except `--version`, `help`, `status`, `guide`, `upgrade`, `defect`, `config`, `init`, `backlog`, `hook` and `view`, and exits 4 when a required migration is pending. It checks the command's `--root`, or else the repository found from the current directory. A command added later is blocked by default.
+- **Skipping a broken migration.** `skip_migrations` may only be set in the clone's `clm.local.toml`, which `config`'s new `local_settings_path` locates, and the migration should be reported with `clm defect` first. The skip unblocks one machine and can't weaken another clone. So it needs no review, and it leaves `humans-review-intent`, a carried `method` constraint, untouched. This replaces the committed, reviewed skip first discussed.
+- **`clm upgrade`.**
+  - With no flag, it lists what is pending.
+  - `--apply` runs every pending apply migration, rewrites unedited files for the notes, sets `upgraded` to the newest migration, and names the notes still to take. It never stops early.
+  - `--note <id>` prints a note.
+  - `--decline <id>` records a declined note.
+  - `--lock <version>` is the release's.
+
+  It writes the working tree only.
+- **The gate.** A `clm.toml` whose only difference is `upgraded` and `declined_migrations` is left out of what the gate classifies. So the stamp rides on a code branch of mechanical migrations, or on a spec branch of note edits, without making either `mixed`. Edits to `ARCHITECTURE.md` and `CAPABILITIES.md` still need review.
+- **`/clm:upgrade`.**
+  - It runs `--apply` on an `upgrade/<YYYYMMDD>` branch.
+  - It walks each note with the human, editing on a yes and declining on a no.
+  - It lands the code part, then the spec part (`upgrade/<YYYYMMDD>-notes`).
+  - A failing migration is reported with `clm defect`, and the skill offers the local skip.
+- **Session start.** After the status, one line gives the counts of pending required and advised migrations, says whether commands are blocked (a skipped migration isn't counted as blocking), and suggests `/clm:upgrade`. It never blocks.
+- **Keeping migrations honest** (new constraint `upgrades-carry-migrations`).
+  - *The corpus.* `crates/clm-upgrade/corpus/v<version>.tar.gz` holds a project as each published release from `v0.14.0` set it up. The project is `clm init --lang rust --no-detectors --host none` plus a sample. Entries are written by `corpus/make.sh <version> <clm>`, which is deterministic, and seeded with each published binary. Tarballs keep the sample's marker out of the coverage scan and out of the component's size.
+  - *The corpus test* (`clm/upgrade-corpus`, in `crates/clm/tests/upgrade.rs`). It upgrades every entry and requires three things: nothing is pending, `clm check` passes, and `clm init`'s files equal what it writes today. It belongs to `clm`, which depends on `init`, so a template change selects it.
+  - *The lock.* `migrations.lock` holds each shipped migration's directory hash, and a test refuses an edit to one.
+  - *The builder check.* `propose`'s builder check asks whether a change alters what existing projects hold.
+- **Release** (decision `release-records-upgrade-corpus`, with `release-by-dispatch` amended).
+  - `release-prepare.sh` builds the bumped tree's `clm`, writes the release's corpus entry and lock lines, and puts them into the bump commit before its tests run.
+  - A release without a bump needs a corpus entry for its version already.
+- **First migrations.** Two advised notes, each carrying old and new texts:
+  - `ARCHITECTURE.md` stops copying the carried constraints;
+  - `CLAUDE.md` names `/clm:help`.
+
+  If the corpus test shows that a `v0.14.0` to `v0.18.0` project needs anything more, the build files a `question` item blocking `clm/upgrade-corpus`, since a new migration is a new requirement.
+- **Removed: `init-next-steps`' upgrade steps.** `clm init` stops printing them. They covered projects set up before `20261025-forge-adapters`, which landed before the first published release, so no released project needs them. The build removes the tests behind them.
+- **Docs.** The guide's reference page lists `clm upgrade` and the three settings. The glossary defines a migration and its kinds. The decisions `plain-terms-renames`, `init-cli-and-skill`, `local-settings` and `release-by-dispatch` carry amendments.
+- **This repository.** `backlog/stamp-this-repository-upgraded` stamps this repository once the build is installed, on a branch of its own (`settings-before-use`).
 
 ## Non-goals
 

@@ -665,7 +665,7 @@ A change that alters a file, key or format that projects set up by a published r
 - THEN the corpus test fails, since a project from an earlier release no longer upgrades to what `clm init` writes today
 
 #### Enforced by
-- upgrade/corpus-upgrades
+- clm/upgrade-corpus
 - upgrade/shipped-migrations-frozen
 
 #### Untested

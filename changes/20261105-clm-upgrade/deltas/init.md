@@ -72,6 +72,7 @@ The `clm.toml` `clm init` writes SHALL set `upgraded` to `upgrade`'s `latest()`,
 
 #### Needs
 - upgrade/migration-list
+- config/upgrade-settings
 
 #### Serves
 - capability/upgrade-clm

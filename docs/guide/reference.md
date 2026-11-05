@@ -40,7 +40,8 @@ The skills, the commands' settings and where to read more: a page to look things
 | `clm land <branch>` | land a branch on `main`: gate it, merge it, run the checks on the result and push `main` |
 | `clm wrap-up` | clean up landed work, and say whether the session can end |
 | `clm survey` | map a codebase, for drafting its spec graph |
-| `clm init` | set up or upgrade CLM's tooling in a repository |
+| `clm init` | set up CLM's tooling in a repository |
+| `clm upgrade` | list the migrations a project set up by an older `clm` still needs; `--apply` takes the mechanical ones, `--note <id>` prints one to take by hand, `--decline <id>` declines an advised one; `/clm:upgrade` walks you through them |
 | `clm defect` | report a problem with CLM itself |
 | `clm health` | one advisory report of the project's health: checks, pending, sizes, claims, stale questions, spec bloat, unexercised code and the requirements to reconsider ([How it works](how-it-works.md#health)) |
 | `clm capabilities [<slug>]` | what each capability costs (an estimate from the ledger's `effort` records and git), or one capability's page: its cost, workarounds, overlap, rules and decisions |
@@ -51,12 +52,15 @@ The skills, the commands' settings and where to read more: a page to look things
 
 ## Settings
 
-`clm.toml` at the repository's root holds the project's settings, and `~/.config/clm/config.toml` holds yours. `clm.local.toml` beside `clm.toml`, never committed, holds one clone's and may set any key. In the table, "the repository's" means `clm.toml` or `clm.local.toml`, never yours, and "any" means any of the three. `clm config get <key>` shows a setting and where it came from.
+`clm.toml` at the repository's root holds the project's settings, and `~/.config/clm/config.toml` holds yours. `clm.local.toml` beside `clm.toml`, never committed, holds one clone's and may set any key but `upgraded` and `declined_migrations`. In the table, "the repository's" means `clm.toml` or `clm.local.toml`, never yours, and "any" means any of the three. `clm config get <key>` shows a setting and where it came from.
 
 | Key | Where | Means |
 |---|---|---|
 | `detectors` | the repository's | dead-code and unused-dependency tools `clm check` runs: `[[detectors]]` tables, each with `name`, `command` and optional `hint` (how to install the tool), `timeout` (seconds, default 600) and `requires` (a path from the repository's root: the detector is skipped while nothing is there, such as `package.json` before a TypeScript project exists) |
 | `host` | the repository's | where the remote lives: `github` (the default), `git` or `none`; pull requests, branch deletion and issues go through it |
+| `upgraded` | `clm.toml` only | the last migration the project took; `clm init` and `clm upgrade --apply` write it. While a required migration is pending, most commands refuse to run |
+| `declined_migrations` | `clm.toml` only | the advised migrations the project chose not to take (`clm upgrade --decline`) |
+| `skip_migrations` | `clm.local.toml` only | required migrations this clone runs past while they are broken; report the migration with `clm defect` first |
 | `approval` | the repository's | whose approval lets a branch that needs review land: `any` (the default), anyone's, the author's included; `other`, only someone who wrote none of the branch's commits |
 | `land` | the repository's | `[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check`; optional `target_cap_gb`: the size, in gigabytes, above which a land removes its shared build directory `.clm/land` after its push |
 | `affected` | the repository's | `[affected]` with `all`: globs of changed files that make `clm affected` select every test, such as a lockfile or the toolchain pin |
