@@ -1,6 +1,6 @@
 # The CLM project
 
-*An article about CLM as a whole: what it is for, what it believes, where it went wrong and where it is going. It is not part of the spec and no check reads it. It describes the direction agreed on 2026-10-29. Much of it is not built yet, and where it differs from `ARCHITECTURE.md` or `specs/`, those describe CLM as it is today.*
+*An article about CLM as a whole: what it is for, what it believes, where it went wrong and where it is going. It is not part of the spec and no check reads it. It describes the direction agreed on 2026-10-29. Much of it has since been built: `CAPABILITIES.md`, yes-or-no review, traced rules and effort accounting. Where it differs from `ARCHITECTURE.md` or `specs/`, those describe CLM as it is today.*
 
 ## What CLM is
 
@@ -18,7 +18,7 @@ CLM is built with CLM. Its own specs, changes and backlog live in its repository
 
 ## What went wrong
 
-In its first eight days CLM grew to 3,414 commits, about 104,000 lines of Rust in 26 crates, 30 spec components, 454 requirements and 211 recorded decisions, at roughly 237 million tokens of model work. At the end of that time, 70 items were waiting on its one human, 21 of them reviews of changes that had already landed. Eighteen of the 30 components were over their size budget, and 18 backlog items existed only to split components further.
+In its first eight days CLM grew to 3,414 commits, about 104,000 lines of Rust in 26 crates, 30 spec components, 454 requirements and 211 recorded decisions, at about 158 million tokens of model work (roughly $2,580 at list prices). At the end of that time, 31 reviews of changes that had already landed were waiting on its one human: of the 32 changes that landed on the promise of a review after the fact, one was ever reviewed. Eighteen of the 30 components were over their size budget, and 18 backlog items existed only to split components further.
 
 Some of that is velocity and is fine. Most of it came from three structural mistakes.
 
