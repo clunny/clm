@@ -48,3 +48,6 @@ When a requirement of a product component changes what a capability test observe
 ## Open questions
 
 - The architecture audit noted that `forced-fixes-cover-additions` rejected design-time naming while this change adds it: kept, since this fix changes what a person sees, and the decision says why.
+- Builder check (fold): whether `draft-capability-test-fixes` asks the capability question of every requirement of every folded change or only the elements where changes met in the `clm draft --fold` prompt is left to the builder; the requirement text says "each requirement the change adds or modifies", read as every folded requirement.
+- Builder check (fold): `capability-tests-follow-rule` has `capability` among the `question` item's `components`, but the repository holds no `capability` component directory beyond its Design; the builder names the component the entry lists (the requirement's own) plus any the item concerns.
+- Builder check (fold): where the run build commits its `question` item is unstated; read as the `impl/*` branch, since adding a backlog item never makes a code branch mixed.
