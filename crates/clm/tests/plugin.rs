@@ -800,7 +800,7 @@ fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
 
 #[test]
 fn skills_point_at_the_guide() {
-    // req:plugin/method-pointers@b131a5c1
+    // req:plugin/method-pointers@3db98468
     let pages = guide_pages();
     assert!(pages.contains(&"shaping-the-graph".to_owned()), "{pages:?}");
     let mut files: Vec<PathBuf> = fs::read_dir(plugin().join("skills"))
