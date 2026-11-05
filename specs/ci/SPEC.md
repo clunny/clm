@@ -33,7 +33,7 @@ It runs one `cargo test -p <package> <targets>` per package, in package order, s
 
 **Toolchain** (`pinned-rust-toolchain`). The release workflow installs the toolchain `rust-toolchain.toml` names with `rustup show`, rather than `dtolnay/rust-toolchain@stable`. The file pins an exact version with `rustfmt`, `clippy` and the `wasm32-unknown-unknown` target, so the release builds with the same compiler as a local session. The release `build` job adds its matrix target on top with `rustup target add <target>`.
 
-**The release workflow.** `.github/workflows/release.yml` runs only on `workflow_dispatch` (`release-by-dispatch`), with one required input, `version`. It has `permissions: contents: write` and `concurrency: { group: release, cancel-in-progress: false }`, so two releases never run at once. It is the one job on a hosted runner (`host-ci-for-releases`); it runs a few times a week at most. Every job runs on `ubuntu-latest`: no job needs a macOS runner (`cross-built-macos-binaries`). The `build` matrix lists only `target`, and the job's `runs-on` is `ubuntu-latest`, since no column would differ between rows. Its jobs run in order, each needing the one before:
+**The release workflow.** `.github/workflows/release.yml` runs only on `workflow_dispatch` (`release-by-dispatch`), with one required input, `version`. It has `permissions: contents: write` and `concurrency: { group: release, cancel-in-progress: false }`, so two releases never run at once. It and the site workflow are the only jobs on a hosted runner (`host-ci-for-releases`, `site-worker-of-its-own`); each runs a few times a week at most. Every job runs on `ubuntu-latest`: no job needs a macOS runner (`cross-built-macos-binaries`). The `build` matrix lists only `target`, and the job's `runs-on` is `ubuntu-latest`, since no column would differ between rows. Its jobs run in order, each needing the one before:
 1. `prepare` runs `.github/scripts/release-prepare.sh <version>`. The logic lives in a script so tests can run it against a temporary repository whose `origin` is a local bare repository, with a fake `gh` on `PATH`. The script fails unless the `release` preconditions hold. Among them, every target `plugin/bin/clm` maps a platform to is a `target:` in the build matrix of `.github/workflows/release.yml` (`shim-assets-before-release`): the script reads both files as text, the shim's `target=<target>` assignments and the matrix's `target: <target>` lines, so a release whose shim would ask for an asset the release doesn't hold fails here, before anything is built, naming the asset.
 
    When `version` is higher than the workspace version, the script:
@@ -51,9 +51,9 @@ It runs one `cargo test -p <package> <targets>` per package, in package order, s
 3. `publish` runs `gh release create v<version> --target <sha> --generate-notes` with every asset, so the release is published with all its binaries at once. Then, when there was a bump, it merges `release/v<version>` into `main` and pushes `main`, then deletes the branch. The push is a fast-forward when `main` hasn't moved and a merge commit otherwise, and it retries if the push races. Only the release workflow changes the version, so the merge can't conflict. If the push still fails, the release is out but `main` names the old version. The job then fails, printing the `git` commands that merge `release/v<version>` into `main`, for a human to run. This push is the one push to `main` that isn't a `clm land`; `clm ledger verify` knows a release merge by its `Release v` message and doesn't report it, so `main` still audits clean.
 4. `web` (`web-deploy`) builds `web/` and deploys the app's Worker and its assets with `wrangler deploy`, using the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. It runs after `publish`, so a failed deploy doesn't undo the release. It can be rerun on its own. It doesn't build or deploy the site.
 
-A run that fails before `publish` publishes nothing and leaves `main` as it was, so it can be dispatched again. Events made with the workflow token start no workflows. That's why one dispatched workflow does every step. Deploying `web` on release, not on merge, matches how the plugin ships.
+A run that fails before `publish` publishes nothing and leaves `main` as it was, so it can be dispatched again. Events made with the workflow token start no workflows. That's why one dispatched workflow does every step. Deploying `web` on release, not on merge, matches how the plugin ships. With every target built on Linux, the release could run on this machine instead of Actions; it stays on Actions until `host-ci-for-releases` is revisited.
 
-**The site workflow** (`site-deploy`, `site-worker-of-its-own`). `.github/workflows/site.yml` runs only on `workflow_dispatch`, with no inputs, from `main`. It has `permissions: contents: read` and `concurrency: { group: site, cancel-in-progress: false }`. One job checks out `main`, runs `npm ci --ignore-scripts` and `npm run build` in `web/site/` with `UMAMI_WEBSITE_ID` from the Actions variable and `GITHUB_TOKEN` the workflow's own, then `wrangler deploy --config web/site/wrangler.toml` with the same two Cloudflare secrets. Publishing a post is setting its `draft` to `false` on a branch, landing it, and dispatching this workflow; a CLM release never publishes the site, and this workflow never touches the app. With every target built on Linux, the release could run on this machine instead of Actions; it stays on Actions until `host-ci-for-releases` is revisited.
+**The site workflow** (`site-deploy`, `site-worker-of-its-own`). `.github/workflows/site.yml` runs only on `workflow_dispatch`, with no inputs, from `main`. It has `permissions: contents: read` and `concurrency: { group: site, cancel-in-progress: false }`. One job checks out `main`, runs `npm ci --ignore-scripts` and `npm run build` in `web/site/` with `UMAMI_WEBSITE_ID` from the Actions variable and `GITHUB_TOKEN` the workflow's own, then `npx wrangler deploy` in `web/site/`, `wrangler` being a dev dependency of the site's own package (`web.site`), with the same two Cloudflare secrets. Publishing a post is setting its `draft` to `false` on a branch, landing it, and dispatching this workflow; a CLM release never publishes the site, and this workflow never touches the app.
 
 The Linux binaries are static `-musl` builds, so they run on any Linux of their architecture, whatever its glibc. There is no `-gnu` asset: a plugin version's shim downloads only its own version's release, so no shim that names a `-gnu` asset ever reads a release built after this. There is no Windows asset (`no-windows-support`): the shim maps no Windows platform, so no shim of this version or a later one asks for one, and a plugin version that still maps one reads only its own version's release.
 
@@ -68,7 +68,7 @@ The release workflow SHALL run only on `workflow_dispatch`, with a `version` inp
 - publish the release `v<version>` at that commit with `clm-<target>.tar.gz`, holding `clm`, and `clm-<target>.tar.gz.sha256` for every target;
 - only after publishing, bring the bump commit into `main`, with a commit message starting `Release v`.
 
-It SHALL be the only workflow in `.github/workflows/`.
+It and the site workflow (`site-deploy`) SHALL be the only workflows in `.github/workflows/`.
 
 #### Scenario: lower version
 - GIVEN workspace version `0.2.0`
@@ -90,10 +90,10 @@ It SHALL be the only workflow in `.github/workflows/`.
 - WHEN it is parsed
 - THEN it triggers only on `workflow_dispatch` with a required `version` input, its build matrix lists exactly the four targets above, with no `-gnu` and no `windows` target and no `windows-latest` runner, every target builds on `ubuntu-latest` with `cargo zigbuild` and no build step runs plain `cargo build`, no job runs on a `macos-*` runner, the Linux targets check the binary is statically linked, the two macOS builds set `MACOSX_DEPLOYMENT_TARGET` to `11.0` and the Linux targets' builds set none, the matrix rows hold only `target`, and the job that pushes to `main` runs `gh release create` before the push
 
-#### Scenario: only workflow
+#### Scenario: only workflows
 - GIVEN `.github/workflows/`
 - WHEN a test lists it
-- THEN it holds `release.yml` and nothing else
+- THEN it holds `release.yml` and `site.yml` and nothing else
 
 #### Scenario: same version
 - GIVEN workspace version `0.1.0` and no release or tag `v0.1.0`
@@ -417,12 +417,12 @@ Every workflow under `.github/workflows/` SHALL push nothing to `main` but the r
 - architecture/invite-only-web
 
 ### Requirement: site-deploy
-`.github/workflows/site.yml` SHALL run only on `workflow_dispatch`, build `web/site/` from `main` with `UMAMI_WEBSITE_ID` set from the repository's Actions variable of that name and `GITHUB_TOKEN` the workflow's own (`web.site/github-link`), and deploy it with `wrangler deploy --config web/site/wrangler.toml`, using only the Cloudflare credentials held in repository secrets, with `permissions` granting no more than `contents: read`, so the released site, and no other build, reports to the operator's analytics (`site-analytics-umami`).
+`.github/workflows/site.yml` SHALL run only on `workflow_dispatch`, build `web/site/` from `main` with `UMAMI_WEBSITE_ID` set from the repository's Actions variable of that name and `GITHUB_TOKEN` the workflow's own (`web.site/github-link`), and deploy it by running `npx wrangler deploy` in `web/site/`, using only the Cloudflare credentials held in repository secrets, with `permissions` granting no more than `contents: read` and `concurrency` group `site`, so the released site, and no other build, reports to the operator's analytics (`site-analytics-umami`).
 
 #### Scenario: dispatched only
 - GIVEN the repository
 - WHEN a test reads `.github/workflows/site.yml`
-- THEN its only trigger is `workflow_dispatch`, it checks out `main`, and its deploy step runs `wrangler deploy --config web/site/wrangler.toml` with `CLOUDFLARE_API_TOKEN` from secrets
+- THEN its only trigger is `workflow_dispatch`, it checks out `main`, its `concurrency` group is `site`, and its deploy step runs `npx wrangler deploy` in `web/site/` with `CLOUDFLARE_API_TOKEN` from secrets
 
 #### Scenario: website ID and token
 - GIVEN the site workflow

@@ -187,17 +187,17 @@ In the scenarios below, a fake `gh` for `o/r` answers `repo view --json url` wit
 - WHEN `clm hook guard` runs on `gh run rerun 42` and on `gh run rerun --job 900` with each
 - THEN each exits 2, the last two within 35 seconds; and the last two, each of which writes its process ID to a file and then `exec`s its sleep, have no process left with that ID once the guard has exited
 
+#### Scenario: dispatching the site
+- GIVEN the commands `gh workflow run site.yml`, `gh workflow run .github/workflows/Site.YAML` and `gh workflow run SITE`
+- WHEN `clm hook guard` runs on each
+- THEN each exits 2 naming `humans-cut-releases`
+
 #### Serves
 - capability/guard-sessions
 
 #### Needs
 - vcs/bounded-runs
 - host/git-through-layer
-
-#### Scenario: dispatching the site
-- GIVEN the commands `gh workflow run site.yml`, `gh workflow run .github/workflows/Site.YAML` and `gh workflow run SITE`
-- WHEN `clm hook guard` runs on each
-- THEN each exits 2 naming `humans-cut-releases`
 
 ### Requirement: defect-approval
 `clm hook guard` SHALL judge a `Bash` command with a segment that runs `clm defect`, or a `cargo run` that `approve-guard` treats as running it, whose arguments (for a `cargo run`, its tokens after the subcommand) hold neither `--help` nor `-h`, when the `defects` setting for the event's `cwd` is `ask` or can't be loaded and no other guard rule blocks the command (`defect-ask-shows-report`). A segment's report *can be shown* when its standard input (`guard-standard-input`) is a heredoc the shell sends as written. When every such segment's report can be shown, the guard SHALL print `hookSpecificOutput` with `permissionDecision: "ask"` and a reason that names `## CLM defects` and quotes, for each such segment in order, its own text as written, without its body, and its report, the body whole, and exit 0. When a segment's report can't be shown, it SHALL exit 2, writing to stderr a reason that names `defect-ask-shows-report`, says the guard can't show the report to the human, and tells the session to send the report as the body of a `<<'EOF'` heredoc on the `clm defect` line. When another guard rule also asks, it SHALL print one `ask` decision whose reason gives both rules' reasons; a refusal wins over any ask. A heredoc with no line ending it is no heredoc (`guard-heredocs`), so its report can't be shown. No guard rule SHALL match the heredoc body of such a segment. With `backlog` or `off` it SHALL treat the segment like any other.
