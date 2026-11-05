@@ -24,3 +24,19 @@ component: clm
 
 #### Needs
 - init/init-seeds-permissions
+
+## ADDED Requirements
+
+### Requirement: claude-md-pushes-with-clm
+This repository's `CLAUDE.md` SHALL NOT contain `git push`. Wherever it tells a session to push a branch to `origin` it SHALL name `clm branch push`, as the skills do (`plugin/skills-push-with-clm`), so a session in this repository that follows it under Claude Code's auto mode runs only `clm` commands to write to `origin` (`unattended-steps-run-clm`).
+
+#### Scenario: CLAUDE.md pushes through clm
+- GIVEN the repository
+- WHEN a test reads `CLAUDE.md`
+- THEN it doesn't contain `git push`, and it contains `clm branch push`
+
+#### Serves
+- capability/guard-sessions
+
+#### Needs
+- host/branch-push
