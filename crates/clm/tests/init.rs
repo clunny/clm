@@ -771,6 +771,7 @@ fn init_seeds_the_allow_rules() {
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
     assert_eq!(allowed(&dir), rules());
+    assert_eq!(clm_init::UNATTENDED_RULES.to_vec(), rules());
     assert_eq!(allowed(&dir).len(), 20);
     assert!(allowed(&dir).contains(&"Bash(clm land *)".to_owned()));
     assert!(
