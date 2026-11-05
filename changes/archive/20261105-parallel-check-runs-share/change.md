@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [parallel-check-runs-share-host-resources]
 ---
 
