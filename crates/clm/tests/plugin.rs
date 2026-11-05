@@ -4901,7 +4901,10 @@ fn help_skill_gaps(body: &str) -> Vec<String> {
             "`replaceable`",
             "`default`",
             "`method`",
-            "tier",
+            "say its tier and what CLM relies on",
+            "never from this repository's files or a URL",
+            "rather than guess",
+            "clm guide <page>",
             "Help changes no file.",
         ],
         &["docs/guide/"],
@@ -4977,6 +4980,9 @@ fn propose_replacing_constraints() {
         "`replaceable`",
         "`#### Enforced by` or `#### Untested`",
         "the human's approval, not the audit, decides",
+        "under `## Open questions`",
+        "The `architecture-auditor` judges",
+        "`deterministic-enforcement`",
     ] {
         assert!(paragraph.contains(needle), "{needle}");
     }
