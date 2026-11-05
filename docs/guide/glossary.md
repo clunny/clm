@@ -73,6 +73,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Defect:** a problem with CLM itself, reported with `clm defect`.
 - **Health:** one advisory report on the project: checks, pending work, sizes, stale questions and what to reconsider (`clm health`).
 - **Effort:** the work sessions spent, recorded in the ledger (`clm effort`), which `clm capabilities` turns into each capability's cost and `clm architecture` into each architectural constraint's.
+- **Migration:** one step that brings a project set up by an older `clm` up to date, `required` when a newer `clm` would misread the project without it and `advised` when the project's files only differ from what `clm init` writes today; `clm upgrade` lists and applies them, `/clm:upgrade` walks you through them, and `upgraded` in `clm.toml` records the last one the project took. An *apply* migration is made by `clm upgrade --apply` itself, and every required one is one; a *note* migration is an advised edit to a file the project owns, which you take or decline (`declined_migrations`). `skip_migrations`, in one clone's `clm.local.toml`, lets that clone run past a broken required migration.
 - **Detectors:** the dead-code and unused-dependency tools `clm check` runs (`detectors`).
 
 ## Commands
@@ -84,4 +85,4 @@ Every `clm` command, by what it's for. `clm help <command>` says more.
 - Checking: `clm check`, `clm gate`, `clm affected`, `clm unreferenced`, `clm fingerprint`.
 - Working: `clm claim`, `clm run`, `clm runner`, `clm triage`, `clm draft`, `clm intake`, `clm workaround`, `clm defect`, `clm superpowers`.
 - Landing: `clm rebase`, `clm autosync`, `clm pr`, `clm approve`, `clm land`, `clm wrap-up`, `clm reconnect`.
-- Setting up: `clm init`, `clm config`, `clm branch`, `clm issue`, `clm contribution`, `clm hook` (run by the plugin's hooks).
+- Setting up: `clm init`, `clm upgrade`, `clm config`, `clm branch`, `clm issue`, `clm contribution`, `clm hook` (run by the plugin's hooks).

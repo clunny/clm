@@ -336,6 +336,22 @@ CLM reaches people only through what they install, and a release that doesn't ma
 - WHEN the person installs the plugin
 - THEN its first session runs the release's `clm` binary of the same version
 
+### Capability: upgrade-clm
+A person can upgrade the `clm` a project uses to the latest release, from any earlier one, and get the project brought up to date with what the new release expects.
+
+#### Why
+A project set up by an older `clm` keeps what that release wrote, and one that skips releases misses the window in which old names still work, so without a way forward an upgrade breaks it or leaves it quietly out of date.
+
+#### Scenario: skipping releases
+- GIVEN a project as the first published release set it up
+- WHEN the person installs the latest `clm` and runs `clm upgrade --apply`, taking every edit `/clm:upgrade` proposes
+- THEN no migration is pending and `clm check` passes
+
+#### Scenario: required migration pending
+- GIVEN a project with a pending `required` migration
+- WHEN the person runs `clm check`
+- THEN it refuses, names the migration and points at `clm upgrade`, while `clm status` and `clm defect` still run
+
 ### Capability: pin-working-method
 A person can rely on every build following the same fixed version of the AI's working method.
 

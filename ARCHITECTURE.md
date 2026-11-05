@@ -656,6 +656,21 @@ Every land leaves `main` green while the components that use a contract haven't 
 #### Untested
 Whether a contract change breaks a caller, and so needs two steps, is a judgement; the markers it leaves are checked.
 
+### Constraint: upgrades-carry-migrations
+A change that alters a file, key or format that projects set up by a published release already hold SHALL ship the migration that brings those projects up to date, and a migration a release has shipped SHALL never change.
+
+#### Scenario: template change without a migration
+- GIVEN a branch that changes the `CLAUDE.md` `clm init` writes and adds no migration
+- WHEN it is landed
+- THEN the corpus test fails, since a project from an earlier release no longer upgrades to what `clm init` writes today
+
+#### Enforced by
+- clm/upgrade-corpus
+- upgrade/shipped-migrations-frozen
+
+#### Untested
+A change in what an existing file means, with no change in what `clm init` writes or `clm check` accepts, shows in no corpus project; the builder check asks about it.
+
 ### Constraint: checks-relax-before-use
 A change that relaxes a `clm check` rule SHALL land before anything relies on it, because the running `clm` judges every branch by its own rules.
 

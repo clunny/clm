@@ -2,7 +2,7 @@
 title: Init
 status: active
 owners: ["@clunny"]
-depends_on: [model, config, vcs]
+depends_on: [model, config, vcs, upgrade]
 paths: ["crates/clm-init/**"]
 successor: ""
 serves: [capability/adopt-clm]
@@ -29,14 +29,14 @@ Files `clm init` writes, each only when missing, and the one it adds lines to:
 Crate `clm-init`. Templates are compiled into the binary (`include_str!`), so a given `clm` version always writes the same bytes for the same inputs, and tests compare output to fixtures.
 
 **`clm init`.** Fails outside a git repository. It writes in the CLM repository found from the current directory as `root-from-cwd` finds it, and at the top of the git repository when there is none, so rerunning it from a subdirectory, or in a CLM repository that is a subdirectory such as `tool/`, writes that repository's files instead of starting a second one. `clm-init` finds the repository itself, by the same rule as `clm-hooks`' `clm_root`, because it doesn't depend on `clm-hooks`. Then:
-- *`clm.toml`*, when missing: `host`, `approval = "any"` with a comment on `other`, `[land] check = "scripts/clm-check.sh"`, and one `[[detectors]]` table per `--lang` from a built-in table (at least `rust`, `typescript` and `python`; each with its `hint` and a `requires` naming the language's manifest, `Cargo.toml`, `package.json` or `pyproject.toml`, so a repository without it skips the detector until it lands, and `typescript`'s tool run from `node_modules/.bin/`, so one without its dependencies installed is told to install them: `detector-requires-manifest`), or none with `--no-detectors`, which `/clm:init` passes for an existing codebase so it passes `clm check` before its dead code is cleaned up. `host` is `--host` when given; otherwise `github` when `origin`'s URL names `github.com`, `git` for any other remote, and `none` with no remote. It reads the URL from `git remote get-url origin` and calls no host.
+- *`clm.toml`*, when missing: `host`, `upgraded` (**Upgrades**), `approval = "any"` with a comment on `other`, `[land] check = "scripts/clm-check.sh"`, and one `[[detectors]]` table per `--lang` from a built-in table (at least `rust`, `typescript` and `python`; each with its `hint` and a `requires` naming the language's manifest, `Cargo.toml`, `package.json` or `pyproject.toml`, so a repository without it skips the detector until it lands, and `typescript`'s tool run from `node_modules/.bin/`, so one without its dependencies installed is told to install them: `detector-requires-manifest`), or none with `--no-detectors`, which `/clm:init` passes for an existing codebase so it passes `clm check` before its dead code is cleaned up. `host` is `--host` when given; otherwise `github` when `origin`'s URL names `github.com`, `git` for any other remote, and `none` with no remote. It reads the URL from `git remote get-url origin` and calls no host.
 - *`scripts/clm-check.sh`*, when missing: an executable starter that builds and tests for each `--lang` (`cargo test`, `npm ci && npm test`, `pytest`), each line run only once the language's manifest exists, so the bootstrap of a repository with no code yet passes it, for the project to edit. It is what `clm land` runs before `clm check`.
 - *`ARCHITECTURE.md`*, *`CAPABILITIES.md`*, *`specs/SPEC.md`* and *`CLAUDE.md`*, when missing: an `ARCHITECTURE.md` of a short preamble, a pointer to `clm guide constraints` for CLM's carried constraints, which reach the project from the `clm` it runs rather than as a copy in the file (`carried-constraints`), with how a project replaces or drops one by a `#### Replaces` block, and an empty `## Constraints` section for the project's own entries (`model/human-layers`), so a new repository starts with no entry its own tests would have to prove; a `CAPABILITIES.md` of a short preamble and an empty `## Capabilities` section, for the project's capabilities; a root component titled after the repository with `status: unbuilt` and no requirements; and a `CLAUDE.md` with CLM's working rules for sessions and a pointer to the guide as `clm guide`, never as a URL, so an adopter's sessions read the guide of the `clm` they run, offline (`method-in-the-plugin`). The rules that must hold live in `clm` and the plugin's skills and hooks, so an older `CLAUDE.md` never weakens them. `clm check` passes on the result.
 - *`.gitignore`*, in the same directory as `clm.toml`: three lines CLM needs ignored, in this order. `clm.local.toml` is `config`'s settings file for one clone, never committed (`local-settings`); `.clm/` holds a session's scratch files, such as a pull request body, and `clm run`'s and `clm draft`'s plans and prompts; and `.claude/worktrees/` holds the worktrees `plugin`'s skills cut their session branches in and Claude Code puts subagents' worktrees in (`init-ignores-session-files`). Left unignored, `git status` lists them, `git worktree remove` refuses a worktree holding a pull request body, and `git add -A` commits a scratch file or records a worktree as an embedded repository. An entry is *listed* when git already ignores it there: `git check-ignore -q --no-index <path>`, run through `clm-git` in that directory, exits 0 for the path `clm.local.toml`, `.clm/pr-body.md` or `.claude/worktrees/x/f` respectively (`reuse-first`), one call per entry in that order, since `-q` with several paths can't tell them apart. `--no-index` has git read the patterns whatever the index holds: without it git reports a tracked file as not ignored, so a repository that commits `clm.local.toml` would get the line again on every run (`init-rerun`). `clm-git`'s `git` reports exit 1 as a failure carrying its status, which `clm-init` reads as not listed, as `clm-git`'s own `is_ancestor` does, so `vcs` needs nothing new. So git's own rules decide, not a matcher of CLM's (an ignore file elsewhere, such as a parent directory's `.gitignore`, counts too), and the line `clm init` appends goes last, after any negation, so it takes effect. A git failure fails `clm init` before `.gitignore` is touched; files written before it stay written. That includes git refusing a probe path, as when `.clm` is a symbolic link: it fails closed. Because git reads the machine's own configuration, the tests run `clm init` with `GIT_CONFIG_GLOBAL` and `XDG_CONFIG_HOME` pointing into an empty temporary directory and `GIT_CONFIG_NOSYSTEM=1`, so a developer's global ignore can't change the outcome. Git also reads this clone's own excludes (`.git/info/exclude`, `core.excludesFile`), so an entry only they ignore counts as listed and isn't added for other clones: accepted, since that clone's sessions are the ones `clm init` runs for, and adding the line by hand fixes it. The `.gitignore` edits are those of `init-ignores-local-settings`; the added endings are `\r\n` when the file already holds one, so a Windows file stays consistent. In a CLM repository that is a subdirectory such as `tool/`, the lines go in `tool/.gitignore`, where they cover `tool/.clm/` and `tool/.claude/worktrees/`, the directories sessions started in `tool/` use; a session started at the top of the git repository is that repository's own to ignore.
 
 It writes no workflow: checks run and branches land through `clm land` on whoever's machine runs it, and approvals live in the ledger. It then prints, one per line under `Next steps (yours):`, what's left for the human: commit and push the result to `main` themselves, and, when the host protects `main`, let the identity that runs `clm land` push it (a bypass or an allowed pusher). It can't tell whether `main` is protected without calling the host, so it prints the second step as a conditional. A step that is already done isn't printed.
 
-**Upgrade steps** (`init-next-steps`). A repository set up by an earlier `clm init` keeps its files on a rerun (`init-rerun`), so the steps for bringing them up to date are the human's. `clm init` reads a kept `clm.toml` as plain TOML, not through `config`'s loader, which rejects a `merge` key, so it can say what to delete. In the `[land]` check, any value, an empty string included, counts as set; a malformed one is `config`'s to report. The workflow's first line is read after any byte-order mark, and a workflow with any other first line is the project's: no step names it. The workflow and `clm-build.sh` are looked for under the CLM repository and, when that is a subdirectory such as `tool/`, also at the top of the git repository, where the old `clm init` may have written them for the host to read; each step names the file by its path from the git repository's top (`tool/.github/workflows/clm.yml`) and the exact text to add or delete. A `clm.toml` that isn't valid TOML gets none of the `clm.toml` steps: `clm config` and every command that loads the settings report its error. `clm init` itself, which loads the settings only to pick the host its conditional step names, runs even with a `merge` key.
+**Upgrades** (`upgrade-migrations`). A repository set up by an earlier `clm init` keeps its files on a rerun (`init-rerun`); bringing it up to date is `upgrade`'s, through its migrations, `clm upgrade` and `/clm:upgrade`. `clm init` prints no upgrade step. The one thing it does for upgrades is stamp a `clm.toml` it writes with `upgraded`, the newest migration the running binary holds (`upgrade`'s `latest`), so a new repository starts with nothing pending. A kept `clm.toml` is never stamped: a repository with no `upgraded` is one `upgrade` judges by each migration's `done`.
 
 Re-running lists each file it skipped as `kept <path>` (`init-rerun`).
 
@@ -137,42 +137,17 @@ Running `clm init` again SHALL change no existing file, except that it SHALL add
 - THEN `clm config get detectors` prints nothing
 
 ### Requirement: init-next-steps
-`clm init` SHALL end by printing, under `Next steps (yours):`, the human's remaining steps: pushing the result to `main` themselves, and, if the host protects `main`, letting the identity that runs `clm land` push it. Before the push step it SHALL print one step for each upgrade a repository set up before `20261025-forge-adapters` still needs, reading a kept `clm.toml` as TOML without `config`'s validation, in this order: adding `host = "<host>"` when `clm.toml` sets no `host`, `<host>` being the host it would have written; deleting `merge` when `clm.toml` sets it; adding `[land]` with `check = "scripts/clm-check.sh"` when `clm.toml` sets no `land.check`, naming `.github/scripts/clm-build.sh` as the edits to move when that file exists; and deleting `.github/workflows/clm.yml` when that file's first line starts with `# Generated by clm init`, looking for it, and for `clm-build.sh`, under the CLM repository and at the top of the git repository. A `clm.toml` that isn't valid TOML SHALL get none of the `clm.toml` steps, and the workflow step SHALL still be printed. When it prints any of these it SHALL also print the push step. It SHALL change no existing file for them, and SHALL NOT name `CLM_RELEASES_TOKEN`, Actions, auto-merge or a status check.
+`clm init` SHALL end by printing, under `Next steps (yours):`, the human's remaining steps: pushing the result to `main` themselves, and, if the host protects `main`, letting the identity that runs `clm land` push it. It SHALL print no step for upgrading a repository an earlier `clm init` set up, which is `upgrade`'s (`upgrade-migrations`), and SHALL NOT name `CLM_RELEASES_TOKEN`, Actions, auto-merge or a status check.
 
 #### Scenario: next steps
 - GIVEN a fresh repository
 - WHEN `clm init` runs
 - THEN the output's next steps name pushing to `main` and `clm land`, and don't name `CLM_RELEASES_TOKEN` or `auto-merge`
 
-#### Scenario: repository set up before forge adapters
-- GIVEN a repository whose `origin` is `https://github.com/o/r.git`, with a committed `clm.toml` holding only `approval = "any"` and `merge = "auto"`, a `.github/workflows/clm.yml` whose first line is `# Generated by clm init (clm 0.5.0). Do not edit: run clm init again to regenerate.`, and a `.github/scripts/clm-build.sh`
+#### Scenario: an old clm.toml
+- GIVEN a repository with a committed `clm.toml` holding only `approval = "any"`
 - WHEN `clm init` runs
-- THEN it exits 0; `clm.toml`, `clm.yml` and `clm-build.sh` are unchanged; and its next steps name, in this order and before the push step, `host = "github"`, deleting `merge`, `check = "scripts/clm-check.sh"` together with `clm-build.sh`, and deleting `.github/workflows/clm.yml`
-
-#### Scenario: no remote
-- GIVEN the repository set up before forge adapters, with no remote
-- WHEN `clm init` runs
-- THEN the `host` step names `host = "none"`
-
-#### Scenario: settings that aren't TOML
-- GIVEN the repository set up before forge adapters, with `clm.toml` holding `host = `
-- WHEN `clm init` runs
-- THEN it exits 0, no next step names `host =`, `merge` or `[land]`, and one names deleting `.github/workflows/clm.yml`
-
-#### Scenario: old workflow at the top of a subdirectory CLM repository
-- GIVEN a git repository whose CLM repository is its subdirectory `tool/`, initialised by today's `clm init` and committed, with a committed `.github/workflows/clm.yml` at the top whose first line is `# Generated by clm init (clm 0.5.0). Do not edit: run clm init again to regenerate.`, and the current directory `tool/`
-- WHEN `clm init` runs
-- THEN `git status` shows no change, and a next step names deleting `.github/workflows/clm.yml`
-
-#### Scenario: current settings
-- GIVEN a repository just initialised by `clm init`
-- WHEN `clm init` runs again
-- THEN no next step names `clm.toml`, `merge` or `clm.yml`
-
-#### Scenario: the project's own workflow
-- GIVEN a repository just initialised by `clm init`, with a `.github/workflows/clm.yml` whose first line is `name: CLM`
-- WHEN `clm init` runs again
-- THEN no next step names `clm.yml`
+- THEN it exits 0, `clm.toml` is unchanged, and no next step names `clm.toml`, `host` or `[land]`
 
 ### Requirement: survey-map
 `clm survey` SHALL print, for the tracked files outside `specs/`, `changes/`, `backlog/` and `.github/`, each directory with file and line counts per language, the manifests, test directories, docs and ADRs, and the import edges between directories for Rust, TypeScript and Python, and SHALL print the same bytes on every run over the same tree.
@@ -638,3 +613,23 @@ The guide's entry pages SHALL stay written for a newcomer (`guide-entry-pages-fo
 #### Serves
 - architecture/carried-constraints
 - architecture/method-in-the-plugin
+
+### Requirement: init-stamps-upgraded
+The `clm.toml` `clm init` writes SHALL set `upgraded` to `upgrade`'s `latest()`, so a new repository has no migration pending. A kept `clm.toml` SHALL NOT be stamped.
+
+#### Scenario: new repository
+- GIVEN an empty directory under version control
+- WHEN `clm init` runs
+- THEN `clm.toml` sets `upgraded` to the newest migration's ID, and `clm upgrade` prints `up to date`
+
+#### Scenario: kept clm.toml
+- GIVEN a repository whose `clm.toml` sets no `upgraded`
+- WHEN `clm init` runs
+- THEN `clm.toml` is unchanged
+
+#### Needs
+- upgrade/migration-list
+- config/upgrade-settings
+
+#### Serves
+- capability/upgrade-clm

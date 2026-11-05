@@ -13,3 +13,5 @@ A repository comes under CLM through `/clm:init`. The skill holds the judgment: 
 Rejected:
 - The skill alone writing every file from templates in its text: quick to build, but the output varies between runs, nothing deterministic tests it, and upgrading means hand-editing each adopter's workflows.
 - A reusable workflow in this repository (`uses: clunny/clm/.github/workflows/clm.yml@vX`): one definition, but the repository is private, and only repositories with access to it may call its workflows.
+
+(Amended 2026-11-05, `20261105-clm-upgrade`: `clm init` still never touches a file again, but `clm upgrade --apply` may: it runs migrations that rewrite exactly what CLM can rewrite exactly (a settings key, a `.gitignore` line), and replaces a file the project owns only while it still equals a template an earlier `clm init` wrote byte for byte. Any other edit to a file the project owns is the human's, proposed by `/clm:upgrade` (`upgrade-migrations`).)

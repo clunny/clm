@@ -20,3 +20,5 @@ Rejected:
 - Publishing a release by hand in the GitHub UI to trigger the build. The assets arrive minutes after the release exists, and the version still has to be bumped separately.
 - A bump PR opened and auto-merged by the workflow. Its CI would never run under `GITHUB_TOKEN` without a PAT or App token.
 - Tag pushes as the trigger. Claude can push tags, and the guard can't tell a release tag from any other push.
+
+(Amended 2026-11-05, `20261105-clm-upgrade`: the bump commit also holds the release's upgrade corpus entry and the lock lines of the migrations it ships, both generated from the bumped tree by `release-prepare.sh`, so it is still made by the workflow and authored by no one; and a release without a bump needs a corpus entry for its version already (`release-records-upgrade-corpus`).)
