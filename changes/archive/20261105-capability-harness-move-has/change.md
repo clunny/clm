@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [capability-harness-move-has-no-route]
 ---
 
