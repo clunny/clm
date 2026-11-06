@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import type { HeadConfig, PageData } from 'vitepress'
 import { guideDir, guideFiles, plain, titleAndSummary } from './guide'
 import type { SiteFacts } from './agents'
+import { publishedPosts } from './blog'
+import type { Post } from './blog'
 
 export interface HeadFacts extends SiteFacts {
   headline: string
@@ -22,6 +24,12 @@ function guideName(relativePath: string): string | undefined {
   return m ? m[1] : undefined
 }
 
+/** The published post a page is, from its path (`blog/<slug>.md`), or undefined for any other page. */
+function postOf(relativePath: string): Post | undefined {
+  const m = /^blog\/(.+)\.md$/.exec(relativePath)
+  return m ? publishedPosts().find((p) => p.slug === m[1]) : undefined
+}
+
 /** Sets a page's title and description before it renders (`page-metadata`). */
 export function describePage(pageData: PageData, facts: HeadFacts): void {
   const { relativePath } = pageData
@@ -38,6 +46,19 @@ export function describePage(pageData: PageData, facts: HeadFacts): void {
     pageData.title = name === 'index' ? 'CLM guide' : page.title
     pageData.titleTemplate = name === 'index' ? false : ':title | CLM guide'
     pageData.description = page.summary
+    return
+  }
+  if (relativePath === 'blog/index.md') {
+    pageData.title = 'CLM blog'
+    pageData.titleTemplate = false
+    pageData.description = facts.blogDescription
+    return
+  }
+  const post = postOf(relativePath)
+  if (post) {
+    pageData.title = post.title
+    pageData.titleTemplate = ':title | CLM blog'
+    pageData.description = post.summary
     return
   }
   const own = join(facts.pagesDir, relativePath)
@@ -117,7 +138,7 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
     ['property', 'og:title', title],
     ['property', 'og:description', pageDescription],
     ['property', 'og:url', url],
-    ['property', 'og:type', 'website'],
+    ['property', 'og:type', postOf(relativePath) ? 'article' : 'website'],
     ['property', 'og:site_name', 'CLM'],
     ['property', 'og:image', `${siteUrl}/social-card.png`],
     ['name', 'twitter:card', 'summary_large_image'],
@@ -130,6 +151,45 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
   const name = guideName(relativePath)
   if (name !== undefined) {
     head.push(['link', { rel: 'alternate', type: 'text/markdown', href: `${siteUrl}/guide/${name}.md` }])
+  }
+  const post = postOf(relativePath)
+  const blogIndex = relativePath === 'blog/index.md'
+  if (post || blogIndex) {
+    head.push(['link', { rel: 'alternate', type: 'application/rss+xml', title: 'CLM blog', href: `${siteUrl}/blog/feed.xml` }])
+  }
+  if (post) {
+    head.push(['link', { rel: 'alternate', type: 'text/markdown', href: `${siteUrl}/blog/${post.slug}.md` }])
+    head.push(meta({ property: 'article:published_time', content: post.date }))
+    head.push(
+      jsonLd({
+        '@context': 'https://schema.org',
+        '@type': 'BlogPosting',
+        headline: post.title,
+        description: post.summary,
+        datePublished: post.date,
+        keywords: post.tags,
+        url: url,
+        author: { '@type': 'Organization', name: 'CLM' },
+        publisher: { '@type': 'Organization', name: 'CLM' },
+      }),
+    )
+  }
+  if (blogIndex) {
+    head.push(
+      jsonLd({
+        '@context': 'https://schema.org',
+        '@type': 'Blog',
+        name: 'CLM blog',
+        description: pageDescription,
+        url,
+        blogPost: publishedPosts().map((p) => ({
+          '@type': 'BlogPosting',
+          headline: p.title,
+          datePublished: p.date,
+          url: `${siteUrl}/blog/${p.slug}`,
+        })),
+      }),
+    )
   }
   if (relativePath === 'index.md') {
     head.push(

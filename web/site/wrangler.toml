@@ -1,0 +1,9 @@
+# The site's Worker (site-worker): assets only, so no request to the site runs a script. The app's
+# Worker claims the app's paths on the same hostname as routes, which Cloudflare runs first.
+name = "clm-site"
+compatibility_date = "2026-11-01"
+routes = [{ pattern = "clm-app.dev", custom_domain = true }]
+
+[assets]
+directory = "./dist"
+not_found_handling = "404-page"

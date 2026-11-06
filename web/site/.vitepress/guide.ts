@@ -72,6 +72,13 @@ export function guideSource(page: GuidePage): string {
 /** The page's address under the site, as a path: `/guide/` for the README. */
 export const pagePath = (name: string) => (name === 'index' ? '/guide/' : `/guide/${name}`)
 
+/** A file or directory of the repository on GitHub's `main`: `tree` for a directory, `blob` for a file. */
+export function repoLink(inRepo: string, endsWithSlash: boolean, anchor: string, repo: string): string {
+  const onDisk = join(repoRoot, inRepo)
+  const dir = endsWithSlash || (existsSync(onDisk) && statSync(onDisk).isDirectory())
+  return `https://github.com/${repo}/${dir ? 'tree' : 'blob'}/main/${inRepo.replace(/\/$/, '')}${anchor}`
+}
+
 /** The file's text for its Markdown copy: every inline link outside fenced code to another guide
  * file names that file's copy, and every other relative link names the file on GitHub's `main`. */
 export function rewriteLinks(text: string, page: GuidePage, siteUrl: string, repo: string): string {
@@ -97,9 +104,7 @@ export function rewriteLinks(text: string, page: GuidePage, siteUrl: string, rep
           const name = guide[1] === 'README.md' ? 'index' : guide[1].slice(0, -3)
           return `${open}${siteUrl}/guide/${name}.md${anchor}`
         }
-        const onDisk = join(repoRoot, inRepo)
-        const dir = path.endsWith('/') || (existsSync(onDisk) && statSync(onDisk).isDirectory())
-        return `${open}https://github.com/${repo}/${dir ? 'tree' : 'blob'}/main/${inRepo.replace(/\/$/, '')}${anchor}`
+        return `${open}${repoLink(inRepo, path.endsWith('/'), anchor, repo)}`
       })
     })
     .join('\n')
