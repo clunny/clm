@@ -19,6 +19,7 @@ Neither ever touches `main` or a branch under `clm/`, the ledgers' (`guard-block
 - `issue --title <title> --body-file <file> --repo <repo>`: files an issue where the host keeps them and prints its URL, for `clm defect` (`defect-reports`); on `azure`, `git` and `none` it prints the report and says there is nowhere to file it, since `clm defect`'s reports go to CLM's own repository on GitHub, not the project's host.
 
 - the contribution operations, for a project taking contributions from people without write access (`outside-contributions-are-intent`): the fork's parent; bringing a fork's `main` up to its parent's; opening a pull request on the parent; listing the open issues and pull requests (`list-contributions`); and, for a pull request or issue by number, reading it, fetching a pull request's head, commenting, closing and labelling. `azure`, `git` and `none` have no such thing.
+- the host a remote's URL names, for `clm init` (`host-for-remote`), and the steps a person takes to set a repository on that host up for CLM, which `clm init` prints (`host-setup-steps`), so `clm init` holds no host's names or permissions itself.
 - the open dependency alerts, for `clm intake` (`list-alerts`): each alert's number, severity, ecosystem, package and manifest path, so an alert reaches the backlog as an issue does (`dependency-alerts-through-intake`). `azure`, `git` and `none` have none.
 
 A caller never runs `gh` or `az` itself; everything host-specific is here, and a new host is a new adapter. One caller is exempt, by name (`git-through-layer`): `clm-hooks`' release guard, which looks up the GitHub Actions run that a session's own `gh run rerun` targets, on the repository and host that command names, whatever the `host` setting says (`release-guard-runs-gh`).
@@ -26,7 +27,7 @@ A caller never runs `gh` or `az` itself; everything host-specific is here, and a
 ## Design
 Crate `clm-host`. One trait, `Host`, with these operations, and an implementation per setting. `github` runs `gh pr create --base main --head <branch> --title --body-file`, `gh pr view --json number,state,headRefName` and `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>` (the REST call, since `gh pr edit` fails on `gh` versions that query the retired Projects (classic) API), and `gh issue create`. `branch delete` is `git push --force-with-lease=refs/heads/<branch>:<sha> origin :refs/heads/<branch>` for every host, `<sha>` being `--lease` or, without it, the tip of `refs/remotes/origin/<branch>`.`git` and `none` return `None` from `pr open`, print nothing for `pr body` and `issue`, and still delete branches when there is an `origin`.
 
-**Azure DevOps** (`azure-pull-requests`, `azure-through-az-cli`). `azure` runs the Azure CLI through `clm-git`'s `run`, with `--detect true` so `az` takes the organisation, project and repository from the clone's remote, and `--output json`; `az` holds the sign-in (`az login`, or `AZURE_DEVOPS_EXT_PAT`), so CLM reads no token. `pr open` first runs `az repos pr list --source-branch <branch> --status active` and, when it lists a pull request, prints that one's URL; otherwise it runs `az repos pr create --source-branch <branch> --target-branch main --title <title> --description @<file>`. Azure's `--source-branch` takes the bare branch name. The URL printed is the pull request's web page, `<repository.webUrl>/pullrequest/<pullRequestId>`, from the JSON `az` returns, since the `url` field there is the REST API's. `pr body` finds the current branch's active pull request the same way and runs `az repos pr update --id <pullRequestId> --description @<file>`. Every other operation is the trait's default, as for `git`: `issue` prints the report and says there is nowhere to file it, `parent` returns nothing, `list` and `alerts` return nothing, and the rest report that there is no such thing on the host.
+**Azure DevOps** (`azure-pull-requests`, `azure-through-az-cli`). `azure` runs the Azure CLI through `clm-git`'s `run`, with `--detect true` so `az` takes the organisation, project and repository from the clone's remote, and `--output json`; `az` holds the sign-in (`az login`, or `AZURE_DEVOPS_EXT_PAT`), so CLM reads no token. `pr open` first runs `az repos pr list --source-branch <branch> --target-branch main --status active` and, when it lists a pull request, prints the first one's URL; otherwise it runs `az repos pr create --source-branch <branch> --target-branch main --title <title> --description @<file>`, the file's path made absolute against the caller's directory, since `az` reads `@<file>` relative to the directory it runs in, the repository's root. Azure's `--source-branch` takes the bare branch name. The URL printed is the pull request's web page, `<repository.webUrl>/pullrequest/<pullRequestId>`, from the JSON `az` returns, since the `url` field there is the REST API's. `pr body` finds the current branch's active pull request the same way and runs `az repos pr update --id <pullRequestId> --description @<file>`. Every other operation is the trait's default, as for `git`: `issue` prints the report and says there is nowhere to file it, `parent` returns nothing, `list` and `alerts` return nothing, and the rest report that there is no such thing on the host.
 
 **Pushing a branch** (`branch-push`). `branch push` reads the checked-out branch with `git symbolic-ref --short HEAD` and pushes `HEAD:refs/heads/<branch>` to `origin`, setting the branch's upstream to `origin/<branch>`. When `refs/remotes/origin/<branch>` exists it passes `--force-with-lease=refs/heads/<branch>` with no value, which leases on that ref's tip, and `--force-if-includes`, which further refuses when that tip isn't in the local branch's reflog; git ignores `--force-if-includes` beside an explicit lease value, so the value is left out. Without the remote-tracking ref it passes `--force-with-lease=refs/heads/<branch>:`, which expects no branch on `origin`. So it is a compare-and-swap on what the session last saw (`lease-claims`): a branch another session pushed since the last fetch is refused with git's `stale info`, and one a fetch brought in but the session never had locally is refused by `--force-if-includes`, so a session overwrites only its own work. A rebased claim branch passes, since its old tip is in its reflog. It prints git's message, the remote's lines included, and `pushed <branch> <sha>` on success. It retries nothing: a transient refusal is the caller's to retry, as the prompts say (`orchestrator.run/prompt-commands`).
 
@@ -291,7 +292,7 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - capability/git-host
 
 ### Requirement: azure-pull-requests
-On `host = "azure"`, `clm pr open <branch> --title <title> --body-file <file>` SHALL print the web URL (`<repository web URL>/pullrequest/<id>`) of the branch's active pull request when `az repos pr list --source-branch <branch> --status active` lists one, and otherwise SHALL open one from the branch to `main` with that title and the file's contents as its description through `az repos pr create --source-branch <branch> --target-branch main --title <title> --description @<file>`, and print its web URL. `clm pr body <file>` SHALL set the description of the current branch's active pull request to the file's contents through `az repos pr update --id <id> --description @<file>`, changing nothing else, and print `updated #<id>`; it SHALL exit 1 without a call to `az` when the file is missing or blank, and with no `az repos pr update` when the branch has no active pull request. Every `az` call SHALL pass `--detect true` and `--output json` and go through `clm-git`'s `run`. When `az` fails, as it does when it isn't installed, lacks the `azure-devops` extension or isn't signed in, the command SHALL exit 1 printing `az`'s message.
+On `host = "azure"`, `clm pr open <branch> --title <title> --body-file <file>` SHALL print the web URL (`<repository web URL>/pullrequest/<id>`) of the branch's active pull request when `az repos pr list --source-branch <branch> --target-branch main --status active` lists one, and otherwise SHALL open one from the branch to `main` with that title and the file's contents as its description through `az repos pr create --source-branch <branch> --target-branch main --title <title> --description @<file>`, and print its web URL. `clm pr body <file>` SHALL set the description of the current branch's active pull request to the file's contents through `az repos pr update --id <id> --description @<file>`, changing nothing else, and print `updated #<id>`; it SHALL exit 1 without a call to `az` when the file is missing or blank, and with no `az repos pr update` when the branch has no active pull request. Every `az` call SHALL pass `--detect true` and `--output json` and go through `clm-git`'s `run`. When `az` fails, as it does when it isn't installed, lacks the `azure-devops` extension or isn't signed in, the command SHALL exit 1 printing `az`'s message.
 
 #### Scenario: opened
 - GIVEN `host = "azure"` and a fake `az` that records its calls, lists no active pull request for `spec/x`, and answers `pr create` with `pullRequestId` 12 and `repository.webUrl` `https://dev.azure.com/o/p/_git/r`
@@ -317,6 +318,9 @@ On `host = "azure"`, `clm pr open <branch> --title <title> --body-file <file>` S
 - capability/git-host
 - architecture/host-adapters
 
+#### Needs
+- config/host-setting
+
 ### Requirement: azure-other-operations
 On `host = "azure"`, `clm-host`'s operations other than `pr open`, `pr body`, `branch push` and `branch delete` SHALL behave as on `git`, running no `az` and no `gh`: `issue` SHALL print the report and say there is nowhere to file it, exiting 1; `parent` SHALL return nothing; `list` and `alerts` SHALL return an empty list; and `sync`, `open_on_parent`, `show`, `fetch`, `comment` and `label` SHALL report that there is no host.
 
@@ -334,3 +338,48 @@ On `host = "azure"`, `clm-host`'s operations other than `pr open`, `pr body`, `b
 - capability/git-host
 - architecture/host-adapters
 - architecture/yagni
+
+#### Needs
+- config/host-setting
+
+### Requirement: host-for-remote
+`clm-host` SHALL offer `host_for_remote(url)`, giving the `host` setting a remote's URL names: `github` when the URL's host is `github.com` or `ssh.github.com`, `azure` when it is `dev.azure.com` or `ssh.dev.azure.com` or ends in `.visualstudio.com`, and `git` for any other URL. It SHALL parse the host out of the URL's forms `https://[user@]host[:port]/...`, `http://...`, `ssh://[user@]host[:port]/...` and `user@host:path`, and compare it whole and without regard to case, so a path or a longer host that merely contains one of those names gives `git`. It SHALL run no process.
+
+#### Scenario: hosts named
+- GIVEN the URLs `https://github.com/o/r.git`, `git@github.com:o/r.git`, `https://o@dev.azure.com/o/p/_git/r`, `git@ssh.dev.azure.com:v3/o/p/r`, `https://o.visualstudio.com/p/_git/r` and `ssh://git@example.com/r.git`
+- WHEN `host_for_remote` reads each
+- THEN it gives `github`, `github`, `azure`, `azure`, `azure` and `git`
+
+#### Scenario: a name in the path
+- GIVEN the URLs `https://example.com/dev.azure.com/r.git`, `https://o.visualstudio.com.example.org/r` and `https://example.com/github.com/r.git`
+- WHEN `host_for_remote` reads each
+- THEN it gives `git` for each
+
+#### Serves
+- capability/git-host
+- capability/adopt-clm
+- architecture/host-adapters
+
+#### Needs
+- config/host-setting
+
+### Requirement: host-setup-steps
+`clm-host` SHALL offer `setup_steps(host)`, the lines a person follows to set a repository on that host up for CLM, which `clm init` prints among its next steps: on `azure`, installing the Azure CLI with its `azure-devops` extension and signing in with `az login`, then, if `main` has branch policies, granting the identity that runs `clm land` Azure DevOps' `Bypass policies when pushing` permission on `main`; on `github`, if `main` is protected, adding the identity that runs `clm land` to the bypass list of the rule or ruleset that protects it; on `git`, if the server protects `main`, letting the identity that runs `clm land` push it; on `none`, nothing. Each line about a protected `main` SHALL name `clm land`. It SHALL run no process.
+
+#### Scenario: azure
+- GIVEN `host = "azure"`
+- WHEN `setup_steps` runs
+- THEN its lines name `azure-devops`, `az login`, `Bypass policies when pushing` and `clm land`
+
+#### Scenario: github and none
+- GIVEN `host = "github"`, and in turn `host = "none"`
+- WHEN `setup_steps` runs
+- THEN the first's lines name `clm land` and none of `az login`, `azure-devops` or `Bypass policies when pushing`, and the second gives no line
+
+#### Serves
+- capability/git-host
+- capability/adopt-clm
+- architecture/host-adapters
+
+#### Needs
+- config/host-setting
