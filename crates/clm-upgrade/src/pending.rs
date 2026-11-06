@@ -10,11 +10,11 @@ use crate::{Kind, Level, Migration, migrations};
 pub struct TooNew(pub String);
 
 /// The top-level table of a TOML file, or none when it is missing or doesn't parse.
-fn table(path: &Path) -> Option<toml::Table> {
+pub(crate) fn table(path: &Path) -> Option<toml::Table> {
     std::fs::read_to_string(path).ok()?.parse().ok()
 }
 
-fn strings(table: &toml::Table, key: &str) -> Vec<String> {
+pub(crate) fn strings(table: &toml::Table, key: &str) -> Vec<String> {
     match table.get(key) {
         Some(toml::Value::Array(items)) => items
             .iter()
@@ -61,19 +61,29 @@ pub fn pending(root: &Path) -> Result<Vec<&'static Migration>, TooNew> {
     pending_in(migrations(), root)
 }
 
+impl TooNew {
+    pub(crate) fn message(&self) -> String {
+        format!(
+            "this project was upgraded by a newer `clm` (migration `{}`); install a newer `clm`",
+            self.0
+        )
+    }
+}
+
+/// The required migrations this clone's `clm.local.toml` skips.
+pub(crate) fn skipped(root: &Path) -> Vec<String> {
+    clm_config::local_settings_path(root)
+        .and_then(|path| table(&path))
+        .map(|local| strings(&local, "skip_migrations"))
+        .unwrap_or_default()
+}
+
 pub(crate) fn require_current_in(list: &[Migration], root: &Path) -> Result<(), String> {
     let pending = match pending_in(list, root) {
         Ok(pending) => pending,
-        Err(TooNew(id)) => {
-            return Err(format!(
-                "this project was upgraded by a newer `clm` (migration `{id}`); install a newer `clm`"
-            ));
-        }
+        Err(too_new) => return Err(too_new.message()),
     };
-    let skipped = clm_config::local_settings_path(root)
-        .and_then(|path| table(&path))
-        .map(|local| strings(&local, "skip_migrations"))
-        .unwrap_or_default();
+    let skipped = skipped(root);
     let blocking: Vec<&str> = pending
         .iter()
         .filter(|m| m.level == Level::Required && !skipped.iter().any(|s| s == m.id))

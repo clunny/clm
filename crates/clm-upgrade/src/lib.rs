@@ -1,6 +1,9 @@
 //! Bringing a project set up by an older `clm` up to date with the one that runs
 //! (`upgrade-migrations`).
 
+mod commands;
+#[cfg(test)]
+mod commands_tests;
 mod lock;
 #[cfg(test)]
 mod lock_tests;
@@ -11,6 +14,7 @@ mod tests;
 
 use std::path::Path;
 
+pub use commands::{apply, decline, list, note};
 pub use lock::{append_lock, check_lock};
 pub use pending::{TooNew, pending, require_current};
 
