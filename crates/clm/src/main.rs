@@ -672,13 +672,20 @@ enum Contribution {
 
 #[derive(Subcommand)]
 enum Branch {
-    /// Delete `origin`'s branch when its tip is still `--lease`, on every host.
+    /// Delete `origin`'s branch when its tip is still `--lease` (default: the tip last
+    /// fetched) and this clone pushed it, on every host.
     Delete {
         /// The branch, such as `impl/a`.
         branch: String,
         /// The commit `origin`'s branch must still be at.
         #[arg(long)]
-        lease: String,
+        lease: Option<String>,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Push the checked-out branch to `origin`, overwriting only what this clone last saw.
+    Push {
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -1370,7 +1377,12 @@ fn dispatch() -> ExitCode {
                     root,
                 },
         } => hosted("branch delete", root, |host, root| {
-            host.branch_delete(root, &branch, &lease).map(|()| None)
+            clm_host::delete_pushed_branch(host, root, &branch, lease.as_deref()).map(|()| None)
+        }),
+        Command::Branch {
+            branch: Branch::Push { root },
+        } => hosted("branch push", root, |_, root| {
+            clm_host::push_branch(root).map(Some)
         }),
         Command::Init {
             langs,
