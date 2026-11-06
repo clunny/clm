@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # web's build stops building the public site: already built
