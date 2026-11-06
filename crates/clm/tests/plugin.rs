@@ -4939,6 +4939,57 @@ fn help_skill() {
     }
 }
 
+/// What `upgrade-skill` asks of the `upgrade` skill.
+fn upgrade_skill_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "upgrade",
+        body,
+        &[
+            "clm upgrade --apply",
+            "clm upgrade --note",
+            "clm upgrade --decline",
+            "clm defect",
+            "skip_migrations",
+            "refuses together as `mixed`",
+            "clm land",
+            "clm defect --component upgrade",
+            "never setting it without their yes",
+            "clm branch push",
+            "origin/main",
+            "When it prints `up to date`, say so and stop",
+            "Cut the branch `upgrade/<YYYYMMDD>` from `origin/main` in a worktree of its own (`session-worktrees`)",
+            "upgrade/<YYYYMMDD>-notes",
+            "is one the human then approves again with `clm approve`",
+            "ask for the human's `clm approve` first and run `clm land` on their yes",
+            "beside the file's current text",
+            "Run `clm check`",
+            "`upgraded`",
+            "clm.local.toml",
+            "declined_migrations",
+            "clm approve",
+            "clm gate --base origin/main",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn upgrade_skill() {
+    // req:plugin/upgrade-skill@75544804
+    let (fm, body) = frontmatter(&plugin().join("skills/upgrade/SKILL.md"));
+    assert!(
+        fm["description"]
+            .as_str()
+            .is_some_and(|d| d.contains("up to date with the clm it runs"))
+    );
+    assert_eq!(upgrade_skill_gaps(&body), Vec::<String>::new());
+    // a skill that leaves out a command
+    let gaps = upgrade_skill_gaps(&body.replace("clm upgrade --decline", "elided"));
+    assert_reports(&gaps, "upgrade", "clm upgrade --decline");
+    let gaps = upgrade_skill_gaps(&body.replace("skip_migrations", "elided"));
+    assert_reports(&gaps, "upgrade", "skip_migrations");
+}
+
 /// What `propose-replacing-constraints` asks of the `propose` skill.
 fn replacing_constraints_gaps(body: &str) -> Vec<String> {
     text_gaps(
