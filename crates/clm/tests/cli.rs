@@ -1045,7 +1045,7 @@ fn this_repositorys_clm_toml() {
 
 #[test]
 fn config_get_in_a_linked_worktree_reads_the_main_worktrees_local_file() {
-    // req:config/local-settings@482dafad
+    // req:config/local-settings@6ef008e6
     // req:config/max-builds-setting@11205a64
     let dir = TempDir::new().unwrap();
     let base = dir.path().canonicalize().unwrap();
@@ -1440,4 +1440,31 @@ fn check_runs_a_detector_whose_required_file_exists() {
         "{stdout}"
     );
     assert!(dir.path().join("ran").exists());
+}
+
+#[test]
+fn config_get_prints_each_upgrade_key_with_its_file() {
+    // req:config/upgrade-settings@ec4b2181
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    write(&root, "specs/SPEC.md", "");
+    fs::create_dir(root.join(".git")).unwrap();
+    write(
+        &root,
+        "clm.toml",
+        "upgraded = \"20261105-clm-upgrade\"\ndeclined_migrations = [\"n\"]\n",
+    );
+    write(&root, "clm.local.toml", "skip_migrations = [\"x\"]\n");
+    for (key, want, file) in [
+        ("upgraded", "20261105-clm-upgrade", "clm.toml"),
+        ("declined_migrations", "n", "clm.toml"),
+        ("skip_migrations", "x", "clm.local.toml"),
+    ] {
+        let out = clm_config_get(&root, key);
+        assert_eq!(out.status.code(), Some(0), "{key}");
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap(),
+            format!("{want}\t{}\n", root.join(file).display())
+        );
+    }
 }
