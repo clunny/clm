@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - panel-s-pane-render-hook-throws-when-the-engine-aborts-a
 ---
