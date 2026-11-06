@@ -4939,6 +4939,48 @@ fn help_skill() {
     }
 }
 
+/// What `upgrade-skill` asks of the `upgrade` skill.
+fn upgrade_skill_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "upgrade",
+        body,
+        &[
+            "clm upgrade --apply",
+            "clm upgrade --note",
+            "clm upgrade --decline",
+            "clm defect",
+            "skip_migrations",
+            "mixed",
+            "clm land",
+            "up to date",
+            "upgrade/<YYYYMMDD>",
+            "upgrade/<YYYYMMDD>-notes",
+            "clm.local.toml",
+            "declined_migrations",
+            "clm approve",
+            "clm gate --base origin/main",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn upgrade_skill() {
+    // req:plugin/upgrade-skill@75544804
+    let (fm, body) = frontmatter(&plugin().join("skills/upgrade/SKILL.md"));
+    assert!(
+        fm["description"]
+            .as_str()
+            .is_some_and(|d| d.contains("up to date with the clm it runs"))
+    );
+    assert_eq!(upgrade_skill_gaps(&body), Vec::<String>::new());
+    // a skill that leaves out a command
+    let gaps = upgrade_skill_gaps(&body.replace("clm upgrade --decline", "elided"));
+    assert_reports(&gaps, "upgrade", "clm upgrade --decline");
+    let gaps = upgrade_skill_gaps(&body.replace("skip_migrations", "elided"));
+    assert_reports(&gaps, "upgrade", "skip_migrations");
+}
+
 /// What `propose-replacing-constraints` asks of the `propose` skill.
 fn replacing_constraints_gaps(body: &str) -> Vec<String> {
     text_gaps(
