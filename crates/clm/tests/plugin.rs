@@ -1605,7 +1605,12 @@ fn build_finishes_builds() {
     assert_reports(&gaps, "build", "left <path>");
     // A worktree `clm run --finish` couldn't remove goes to the human as printed.
     let left = sentence_with(&body, "left <path>");
-    for needle in ["as it stands", "go on"] {
+    for needle in [
+        "to the human as it stands",
+        "couldn't remove",
+        "go on, leaving the directory",
+        "to them",
+    ] {
         assert!(left.contains(needle), "{needle}: {left}");
     }
     // Builds launch only from the latest `clm next`, which runs again after each returns.
