@@ -4,7 +4,7 @@ date: 2026-11-06
 status: accepted
 ---
 
-Resolves `backlog/dependabot-alerts-reach-the-backlog-only-if-someone-looks` (`changes/20261106-ci-check-does-not/`). Refines `github-repo-settings`, which turned Dependabot's pull requests off and said an alert goes through the backlog, and extends `issues-enter-through-the-backlog`.
+Resolves `backlog/dependabot-alerts-reach-the-backlog-only-if-someone-looks` (`changes/20261106-ci-check-does-not/`). Refines `github-repo-settings`, which turned Dependabot's pull requests off and said an alert goes through the backlog, and `untrusted-text-read-only-verifier`, whose "no host text" now names the alert fields as its one addition; extends `issues-enter-through-the-backlog`.
 
 `clm intake` also lists the host's open dependency alerts, after the issues and pull requests, through `host` (`host-adapters`), and matches each to the backlog by a new backlog key, `alerts`, exactly as it matches an issue by `issues`: `new`, `imported` or `resolved`. `/clm:triage` already runs `clm intake` before it works the backlog, so an open alert shows in every triage without anyone remembering to look, and the human's yes turns it into a `kind: bug` item that a build fixes like any other. Once the updated dependency is on `main`, the host closes the alert itself, so nothing writes to the host.
 

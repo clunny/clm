@@ -36,4 +36,6 @@ Edge cases the change already knows:
 
 ## Open questions
 
-None yet.
+None left for the human. The builder check's questions are settled in the text: `intake` prints nothing only when no issue, pull request or alert is open, and prints `alerts unavailable` last, for any failure of the alerts; `list-alerts` names the JSON fields it reads and returns a missing field as `unknown`; alerts and issues match only their own key. Build notes it raised: `gh api --paginate` prints one JSON array per page, so the adapter reads them all (`--slurp` or a stream parse); `Host::alerts` defaults to an empty list, as `list` does, so `NoHost` and test fakes still build. The architecture audit's findings are fixed: `orchestrator.triage`'s Contract and Design and `plugin`'s Contract now name the alerts, the glossary's *Intake* entry covers them, and `untrusted-text-read-only-verifier` names the alert fields as its one addition to "no host text".
+
+Capability tests: `crates/clm/tests/capability/contribute_from_outside.rs` (`a_fixed_issue_shows`) runs `clm intake` with a fake `gh` that answers `[]` to anything but `issue`; the alerts call reads that as no alerts, so its exact output stays true, and `intake`'s build keeps it so.

@@ -1,6 +1,26 @@
 ---
 component: plugin
+base: { contract: "03ce3009bc7bfba6" }
 ---
+
+## MODIFIED Contract
+The Claude Code plugin `clm`, installed from this repo's marketplace. It provides:
+- the `clm` command on the Bash tool's PATH;
+- `clm defect`, which reports a defect in CLM itself as `config`'s `defects` setting says: as a backlog item in CLM's own repository, or as an issue filed through the host that the human approves (`defect-reports`, `host-adapters`); its rules are `plugin.hooks`';
+- hooks that call `clm hook <name>`, whose rules are `plugin.hooks`': to show the repo's state at session start, with the rule for reporting CLM defects, to have the human confirm `clm approve`, to block cutting releases and pushing to `main`, to have the human approve each defect issue, and to autosync spec work at the end of each turn;
+- skills `propose` (intent to one spec branch with its pull request, landed with `clm land` after the human's approval in the session, or, for a bug whose fix changes no spec, one code branch that deletes the bug's item) and `build` (drain `clm next`, building each component in a background subagent in parallel up to the clone's `max_builds`, and archiving the changes that complete), each ending with `clm wrap-up` and a summary that says whether the session can be ended;
+- skill `triage` (work the backlog down: take the host's inbox of issues and contributors' pull requests in first, through `clm intake`, the `issue-verifier` and the human's yes, and its open dependency alerts through `clm intake` and the human's yes, then show the human a menu of what `clm triage` holds and work only what they pick, drafting bug groups in background subagents and folding the changes needing review into one spec branch with one approval, ending with `clm wrap-up` and the same kind of summary);
+- skill `init`, which brings a repository under CLM (`init-cli-and-skill`): a short onboarding conversation, `clm init`, an explanation of graph shape before the first component map (`first-graph-teaches-shape`), the human's bootstrap push, then the first spec graph as a spec branch that needs review, drafted from the conversation for a new project or recovered from the code with `clm survey` for an existing one (`brownfield-survey`), carried on through `propose`'s landing steps;
+- skill `contribution` (take in a contributor's pull request or issue on the maintainer's side: judge its files, show it to the human, close it or land it on their yes, and credit its author; `clm guide contributions` says why);
+- skill `help` (answer a person's questions about CLM, read-only, from what the installed `clm` carries: the guide, `clm guide constraints` and, in a repository under CLM, its state; it points at the skill that acts and changes nothing);
+- skill `health` (run `clm health`, summarise its sections for the human, launch `spec-slimmer` on each component its bloat signals mark, and list what to take to `propose`: the reconsider candidates and the cuts; it changes nothing itself);
+- the `spec-auditor` subagent, which audits a diff against a component's spec, the `architecture-auditor` subagent, which audits a spec branch's design against `ARCHITECTURE.md` and the decisions it touches, the `spec-slimmer` subagent, which proposes cuts to a component's spec and code, and the `issue-verifier` subagent, which judges the host's issues and pull requests against the backlog, the specs, the code and `ARCHITECTURE.md`, each read-only.
+
+The CLM panel, a second plugin `clm-panel` in this marketplace, is `plugin.panel`.
+
+The plugin's version is the `clm` version it runs. Users update with `claude plugin update clm`, and the new version's shim downloads its binary on first use.
+
+The skills carry CLM's method to every adopter (`method-in-the-plugin`): what they don't say themselves, they point at as a page of the guide that `clm guide <page>` prints, never as a path in this repository.
 
 ## MODIFIED Requirements
 
