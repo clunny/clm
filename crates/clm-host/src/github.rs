@@ -195,7 +195,16 @@ impl Host for GitHub {
         let mut alerts = Vec::new();
         for page in serde_json::Deserializer::from_str(&out).into_iter::<Value>() {
             let page = page.map_err(|e| Error::Git(format!("gh api alerts: bad JSON: {e}")))?;
-            alerts.extend(page.as_array().into_iter().flatten().filter_map(alert));
+            let items = page
+                .as_array()
+                .ok_or_else(|| Error::Git("gh api alerts: a page is not a list".into()))?;
+            for item in items {
+                alerts.push(
+                    alert(item).ok_or_else(|| {
+                        Error::Git("gh api alerts: an alert has no number".into())
+                    })?,
+                );
+            }
         }
         Ok(alerts)
     }

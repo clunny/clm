@@ -360,6 +360,16 @@ fn unreadable_alerts_are_an_error() {
 }
 
 #[test]
+fn malformed_alert_pages_are_an_error() {
+    // req:host/list-alerts@7c2c7686
+    for body in [r#"{"message":"off"}"#, r#"[{"severity":"high"}]"#] {
+        with_gh(&[("dependabot/alerts", body)], |root, _| {
+            assert!(clm_host::adapter(Setting::Github).alerts(root).is_err());
+        });
+    }
+}
+
+#[test]
 fn alerts_without_a_host_run_no_gh() {
     // req:host/list-alerts@7c2c7686
     with_gh(&[], |root, dir| {
