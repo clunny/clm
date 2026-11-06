@@ -143,6 +143,8 @@ fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
     let dir = with_script(NEW_SCRIPT);
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    let dir = with_script(&format!("{NEW_SCRIPT}echo mine\n"));
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
 // req:upgrade/migration-check-script-from-root@0f7f933f
@@ -150,6 +152,6 @@ fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
 fn the_check_script_note_says_what_changed_for_every_language() {
     let dir = with_script(&format!("{OLD_SCRIPT}echo mine\n"));
     let note = crate::note(dir.path(), SCRIPT_ID).unwrap();
-    assert!(note.contains("root"), "{note}");
+    assert!(note.contains("BASH_SOURCE"), "{note}");
     assert!(note.contains("manifest"), "{note}");
 }
