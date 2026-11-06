@@ -57,7 +57,7 @@ fn place_file(r: &Repo, name: &str) -> String {
 
 #[test]
 fn the_date_is_the_given_clock_in_the_given_time_zone() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let r = with(&["a"]);
     assert_eq!(id(&r, &["a"]), "20261027-a");
     let r = with(&["a"]);
@@ -79,7 +79,7 @@ fn the_date_is_the_given_clock_in_the_given_time_zone() {
 
 #[test]
 fn scenario_id_taken() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let r = with(&["long-item-slug-with-many-words"]);
     let dir = "changes/archive/20261027-long-item-slug-with";
     write(&r.work, &format!("{dir}/change.md"), &change("applied"));
@@ -119,7 +119,7 @@ fn a_local_spec_branch_holds_its_id() {
 
 #[test]
 fn the_first_claimed_slug_names_the_change() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let r = with(&["a", "b"]);
     push_propose(&r.work, "a", 1);
     assert_eq!(id(&r, &["a", "b"]), "20261027-b");
@@ -298,7 +298,7 @@ fn scenario_draft_scratch_files() {
 
 #[test]
 fn draft_needing_review_folds() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     // A draft the gate calls `spec review` stops for the fold; one it passes as `spec` lands.
     let p = prompt_for(&["a"], &[]);
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
@@ -353,7 +353,7 @@ fn paragraph<'a>(p: &'a str, needle: &str) -> &'a str {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let r = with_items(&[
         (
             "a",
@@ -412,7 +412,7 @@ fn scenario_items_claimed_and_prompt_written() {
         "clm pr open spec/<id>",
         "clm land spec/<id>",
         "clm defect",
-        "git push origin --delete <ref>",
+        "clm branch delete <ref>",
         "landed <sha>",
         "proposed <id> review",
         "stopped:",
@@ -442,13 +442,13 @@ fn scenario_items_claimed_and_prompt_written() {
 
 #[test]
 fn scenario_draft_backlog_only_change() {
-    // req:orchestrator.triage/draft-backlog-only-change@6e9ed459
+    // req:orchestrator.triage/draft-backlog-only-change@7ca44fa8
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     for needle in [
         "edits `backlog/`",
         "`clm defect` on `spec/<id>`",
-        "git push origin --delete <ref>",
+        "clm branch delete <ref>",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
@@ -467,13 +467,13 @@ fn scenario_draft_backlog_only_change() {
     // Defects are reported on the branch before it is judged empty and deleted.
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
     assert!(at("`clm defect` on `spec/<id>`") < at("git switch --detach origin/main"));
-    // Each ref is deleted by its own push, and only when the branch changes nothing but
+    // Each ref is deleted by its own call, and only when the branch changes nothing but
     // its `change.md`.
-    let delete = paragraph(&p, "git push origin --delete <ref>");
+    let delete = paragraph(&p, "clm branch delete <ref>");
     for needle in [
         "nothing but its `change.md`",
-        "`git push origin --delete spec/<id>`",
-        "`git push origin --delete autosync/spec/<id>`",
+        "`clm branch delete spec/<id>`",
+        "`clm branch delete autosync/spec/<id>`",
     ] {
         assert!(delete.contains(needle), "{needle} missing from {delete}");
     }
@@ -741,7 +741,7 @@ fn scenario_a_dropped_item() {
 
 #[test]
 fn scenario_draft_no_old_command_names() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let p = prompt_for(&["a"], &[]);
     let words: Vec<&str> = p
         .split(|c: char| !c.is_alphanumeric() && c != '-')
@@ -780,5 +780,29 @@ fn scenario_a_workaround_items_prompt() {
         "(`workaround-flags`)",
     ] {
         assert!(para.contains(needle), "{needle} missing from {para}");
+    }
+}
+
+#[test]
+fn scenario_draft_capability_test_fixes_draft_prompt() {
+    // req:orchestrator.triage/draft-capability-test-fixes@daea8e6f
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let (_, p) = drafted_prompt(&r, &["a"]);
+    let check = paragraph(&p, "Then the builder check");
+    for needle in ["capability-tests-follow-rules", "CAPABILITIES.md"] {
+        assert!(check.contains(needle), "{needle} missing from {check}");
+    }
+}
+
+#[test]
+fn scenario_prompts_push_through_clm_draft_prompt() {
+    // req:orchestrator.triage/prompts-push-through-clm@0f8b1003
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let (_, p) = drafted_prompt(&r, &["a"]);
+    for needle in ["clm branch push", "clm branch delete"] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+    for absent in ["git push", "--force-with-lease"] {
+        assert!(!p.contains(absent), "{absent} in {p}");
     }
 }

@@ -121,7 +121,7 @@ fn local_branches(r: &Repo) -> String {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let (r, f) = (with_items(), fake());
     let before = local_branches(&r);
     let worktrees = git(&r.work, &["worktree", "list", "--porcelain"]);
@@ -235,7 +235,7 @@ fn scenario_items_claimed_and_prompt_written() {
 
 #[test]
 fn a_p5_draft_sets_no_priority() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -246,7 +246,7 @@ fn a_p5_draft_sets_no_priority() {
 
 #[test]
 fn scenario_one_item_refused() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["a", "b"]);
@@ -266,7 +266,7 @@ fn scenario_one_item_refused() {
 
 #[test]
 fn scenario_nothing_claimed() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["b"]);
@@ -277,7 +277,7 @@ fn scenario_nothing_claimed() {
 
 #[test]
 fn an_unknown_item_is_left() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["nope", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -286,7 +286,7 @@ fn an_unknown_item_is_left() {
 
 #[test]
 fn a_slug_given_twice_is_claimed_once() {
-    // req:orchestrator.triage/draft@908b8dd5
+    // req:orchestrator.triage/draft@d6d9db87
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["a", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
