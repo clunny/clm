@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [web-design-says-build-builds-site]
 ---
 
