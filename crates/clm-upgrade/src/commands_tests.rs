@@ -263,3 +263,13 @@ fn decline_refuses_what_it_may_not_decline() {
     assert!(decline_in(&list, stamped.path(), "a").is_err());
     assert_eq!(read(&stamped, "clm.toml"), "upgraded = \"z\"\n");
 }
+
+// req:upgrade/upgrade-note-and-decline@d61ca0b9
+#[test]
+fn decline_refuses_a_clm_toml_it_cannot_read() {
+    let dir = project("declined_migrations = [\"x\"\n");
+    assert!(decline_in(&[note_a()], dir.path(), "a").is_err());
+    assert_eq!(read(&dir, "clm.toml"), "declined_migrations = [\"x\"\n");
+    fs::remove_file(dir.path().join("clm.toml")).unwrap();
+    assert!(decline_in(&[note_a()], dir.path(), "a").is_err());
+}

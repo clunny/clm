@@ -112,9 +112,9 @@ pub(crate) fn decline_in(list: &[Migration], root: &Path, id: &str) -> Result<St
     {
         return Err(format!("`{id}` is not a pending note migration"));
     }
-    let mut declined = table(&root.join("clm.toml"))
-        .map(|t| strings(&t, "declined_migrations"))
-        .unwrap_or_default();
+    let config = table(&root.join("clm.toml"))
+        .ok_or_else(|| "clm.toml is missing or doesn't parse; fix it first".to_string())?;
+    let mut declined = strings(&config, "declined_migrations");
     declined.push(id.to_string());
     let value = format!(
         "[{}]",
