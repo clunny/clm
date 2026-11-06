@@ -133,14 +133,39 @@ test('npmrc ignores install scripts', () => {
   expect(npmrc.split('\n').map((l) => l.trim())).toContain('ignore-scripts=true')
 })
 
-test('the nav reads How it works, Guide, Get started, Web app, and every link to the app reads Web app', async ({
+test("wrangler.toml declares the site's own Worker, assets only", () => {
+  // req:web.site/site-worker@0fb56a72
+  const toml = readFileSync(join(siteDir, 'wrangler.toml'), 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l !== '' && !l.startsWith('#'))
+  expect(toml).toContain('name = "clm-site"')
+  expect(toml.filter((l) => /^main\s*=/.test(l))).toEqual([])
+  expect(toml.filter((l) => /^routes\s*=/.test(l))).toEqual([
+    'routes = [{ pattern = "clm-app.dev", custom_domain = true }]',
+  ])
+  const assets = toml.slice(toml.indexOf('[assets]') + 1)
+  expect(assets).toContain('not_found_handling = "404-page"')
+  // Where `npm run build` writes the site by default.
+  expect(assets).toContain('directory = "./dist"')
+  expect(readFileSync(join(siteDir, '.vitepress/config.ts'), 'utf8')).toContain("process.env.SITE_OUT || 'dist'")
+})
+
+test('the nav reads How it works, Guide, Blog, Get started, Web app, and every link to the app reads Web app', async ({
   page,
 }) => {
-  // req:web.site/nav-web-app@4bd0b477
+  // req:web.site/nav-web-app@c1d913a8
   for (const path of ['/', '/guide/quickstart']) {
     await page.goto(path)
     const nav = await page.locator('.VPNavBarMenu a').allTextContents()
-    expect(nav.map((t) => t.trim()).slice(0, 4), path).toEqual(['How it works', 'Guide', 'Get started', 'Web app'])
+    expect(nav.map((t) => t.trim()).slice(0, 5), path).toEqual([
+      'How it works',
+      'Guide',
+      'Blog',
+      'Get started',
+      'Web app',
+    ])
+    await expect(page.locator('.VPNavBarMenu a', { hasText: 'Blog' })).toHaveAttribute('href', '/blog/')
     await expect(page.locator('.VPNavBarMenu a', { hasText: 'Web app' })).toHaveAttribute('href', '/app/')
     const toApp = await page.locator('a[href="/app/"]').allTextContents()
     expect(toApp.length, path).toBeGreaterThan(0)

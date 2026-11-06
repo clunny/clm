@@ -5,6 +5,7 @@ import { guideSidebar } from './guide'
 import { robotsTxt, writeAgentFiles } from './agents'
 import { describePage, notFoundHtml, pageHead } from './head'
 import { readStars } from './stars'
+import { loadPosts } from './blog'
 
 // The repository the install commands name: the one place it is written (`install-repository`).
 // Until launch it is the private repository; at launch, the public one.
@@ -19,6 +20,14 @@ const firstLine =
   'Build software solo or as a team with AI writing every line, and still have a project you can maintain.'
 const description = `${headline} ${firstLine}`
 
+// The blog's description: the one place it is written (`page-metadata`).
+const blogDescription =
+  "What we've learned building CLM with CLM: the ideas, the mechanisms, and the things that didn't work. One post at a time."
+
+// Every post is read and checked here, drafts included, so a bad one fails the build, naming its file
+// (`blog-drafts-left-out`); nothing of a draft is kept.
+loadPosts()
+
 const githubUrl = `https://github.com/${installRepo}`
 const stars = await readStars(installRepo)
 
@@ -26,6 +35,7 @@ const facts = {
   siteUrl,
   installRepo,
   description,
+  blogDescription,
   headline,
   umamiId: process.env.UMAMI_WEBSITE_ID ?? '',
   pagesDir: resolve(import.meta.dirname, '../pages'),
@@ -63,6 +73,7 @@ export default defineConfig({
   },
   themeConfig: {
     installRepo,
+    blogDescription,
     headline,
     firstLine,
     githubUrl,
@@ -71,6 +82,7 @@ export default defineConfig({
     nav: [
       { text: 'How it works', link: '/#how-it-works', activeMatch: '^$' },
       { text: 'Guide', link: '/guide/', activeMatch: '^/guide/(?!quickstart)' },
+      { text: 'Blog', link: '/blog/', activeMatch: '^/blog/' },
       { text: 'Get started', link: '/guide/quickstart' },
       { text: 'Web app', link: '/app/', target: '_self' },
       {

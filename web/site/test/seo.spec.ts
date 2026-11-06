@@ -14,7 +14,7 @@ const ldJson = (html: string) =>
   Array.from(html.matchAll(/<script type="application\/ld\+json">([^<]*)<\/script>/g), (m) => JSON.parse(m[1]))
 
 test("a guide page's head holds its metadata and its social card", () => {
-  // req:web.site/page-metadata@6cc8ba05
+  // req:web.site/page-metadata@3f985405
   const html = read(mainDist, 'guide/quickstart.html')
   const sentence = 'From nothing to your first change built, for a new project or an existing one.'
   expect(title(html)).toBe('Quickstart | CLM guide')
@@ -37,7 +37,7 @@ test("a guide page's head holds its metadata and its social card", () => {
 
 test('a summary paragraph loses its Markdown in the description', () => {
   test.setTimeout(180_000)
-  // req:web.site/page-metadata@6cc8ba05
+  // req:web.site/page-metadata@3f985405
   const dir = fixture('plain', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [Why CLM](why-clm.md)\n',
     'why-clm.md': '# Why\n\nRun `clm guide` or read [Why CLM](why-clm.md) and **more**.\n',
@@ -51,7 +51,7 @@ test('a summary paragraph loses its Markdown in the description', () => {
 
 test('a guide file with no summary paragraph fails the build, naming it', () => {
   test.setTimeout(180_000)
-  // req:web.site/page-metadata@6cc8ba05
+  // req:web.site/page-metadata@3f985405
   const dir = fixture('nosummary', {
     'README.md': '# Guide\n\nThe guide.\n',
     'broken.md': '# Broken\n\n- a list\n- and no paragraph\n',
@@ -62,7 +62,7 @@ test('a guide file with no summary paragraph fails the build, naming it', () => 
 })
 
 test('the homepage, privacy and 404 pages have their own heads', () => {
-  // req:web.site/page-metadata@6cc8ba05
+  // req:web.site/page-metadata@3f985405
   const home = read(mainDist, 'index.html')
   const privacy = read(mainDist, 'privacy.html')
   expect(canonical(home)).toBe(`${SITE}/`)
@@ -81,7 +81,7 @@ test('the homepage, privacy and 404 pages have their own heads', () => {
 })
 
 test('robots.txt has one group for every crawler and names the sitemap', () => {
-  // req:web.site/crawler-files@4c151612
+  // req:web.site/crawler-files@7811e987
   const lines = read(mainDist, 'robots.txt').split('\n').map((l) => l.trim()).filter(Boolean)
   expect(lines.filter((l) => /^user-agent:/i.test(l))).toEqual(['User-agent: *'])
   expect(lines.filter((l) => /^allow:/i.test(l))).toEqual([])
@@ -94,7 +94,7 @@ test('robots.txt has one group for every crawler and names the sitemap', () => {
 })
 
 test('the sitemap lists the pages and nothing under /app/', () => {
-  // req:web.site/crawler-files@4c151612
+  // req:web.site/crawler-files@7811e987
   const urls = Array.from(read(mainDist, 'sitemap.xml').matchAll(/<loc>([^<]+)<\/loc>/g), (m) => m[1])
   for (const path of ['/', '/guide/', '/guide/quickstart', '/guide/spec-format', '/privacy']) {
     expect(urls).toContain(SITE + path)
@@ -105,7 +105,7 @@ test('the sitemap lists the pages and nothing under /app/', () => {
 })
 
 test('the homepage describes CLM as a SoftwareApplication', () => {
-  // req:web.site/structured-data@25bd0bd6
+  // req:web.site/structured-data@56e1b2db
   const [app, ...rest] = ldJson(read(mainDist, 'index.html'))
   expect(rest).toEqual([])
   expect(app['@type']).toBe('SoftwareApplication')
@@ -118,7 +118,7 @@ test('the homepage describes CLM as a SoftwareApplication', () => {
 
 test("the FAQ's structured data follows its file", () => {
   test.setTimeout(180_000)
-  // req:web.site/structured-data@25bd0bd6
+  // req:web.site/structured-data@56e1b2db
   const dir = fixture('faq', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [FAQ](faq.md)\n',
     'faq.md':
@@ -138,7 +138,7 @@ test("the FAQ's structured data follows its file", () => {
 })
 
 test("each guide file's Markdown copy is its text with the links rewritten", () => {
-  // req:web.site/agent-markdown@a56b453f
+  // req:web.site/agent-markdown@6ed9b7f5
   const pages = guideSidebar()
   expect(pages.length).toBeGreaterThan(3)
   for (const name of readdirSync(join(repoDocs, 'guide')).filter((f) => f.endsWith('.md'))) {
@@ -155,7 +155,7 @@ test("each guide file's Markdown copy is its text with the links rewritten", () 
 
 test('links in a Markdown copy are absolute, and code is left alone', () => {
   test.setTimeout(180_000)
-  // req:web.site/agent-markdown@a56b453f
+  // req:web.site/agent-markdown@6ed9b7f5
   const dir = fixture('copies', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [Reference](reference.md)\n',
     'reference.md':
@@ -176,7 +176,7 @@ test('links in a Markdown copy are absolute, and code is left alone', () => {
 })
 
 test('llms.txt lists the copies in the sidebar order', () => {
-  // req:web.site/agent-markdown@a56b453f
+  // req:web.site/agent-markdown@6ed9b7f5
   const text = read(mainDist, 'llms.txt')
   expect(text.startsWith('# CLM\n\n> ')).toBe(true)
   expect(text).toContain('/plugin marketplace add ' + 'clunny' + '/clm')
@@ -191,7 +191,7 @@ test('llms.txt lists the copies in the sidebar order', () => {
 
 test('llms-full.txt and llms.txt follow the guide files with no edit under web/site', () => {
   test.setTimeout(240_000)
-  // req:web.site/agent-markdown@a56b453f
+  // req:web.site/agent-markdown@6ed9b7f5
   const dir = fixture('drift', {
     'README.md': '# Guide\n\nThe guide.\n\n1. [Why](why.md)\n',
     'why.md': '# Why\n\nBecause.\n',
@@ -213,7 +213,7 @@ test('llms-full.txt and llms.txt follow the guide files with no edit under web/s
 })
 
 test('no built agent file is committed', () => {
-  // req:web.site/agent-markdown@a56b453f
+  // req:web.site/agent-markdown@6ed9b7f5
   const tracked = execFileSync('git', ['ls-files'], { cwd: resolve(siteDir, '../..'), encoding: 'utf8' }).split('\n')
   expect(tracked.filter((f) => /(^|\/)llms(-full)?\.txt$/.test(f))).toEqual([])
   expect(tracked.filter((f) => f.startsWith('web/site/public/') && f.endsWith('.md'))).toEqual([])
