@@ -99,7 +99,10 @@ pub fn append_lock(crate_dir: &Path, version: &str, ids: &[&str]) -> Result<Vec<
     let locked = read_lock(crate_dir)?;
     let mut lines = String::new();
     let mut added = Vec::new();
-    for id in ids.iter().filter(|id| !locked.iter().any(|(l, ..)| l == *id)) {
+    for id in ids
+        .iter()
+        .filter(|id| !locked.iter().any(|(l, ..)| l == *id))
+    {
         let hash = dir_hash(&migration_dir(crate_dir, id))
             .map_err(|e| format!("migration `{id}`: {e}"))?;
         lines.push_str(&format!("{id} {version} {hash}\n"));

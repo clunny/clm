@@ -2,10 +2,10 @@
 //! (`upgrade-migrations`).
 
 mod lock;
-mod migrations;
-mod pending;
 #[cfg(test)]
 mod lock_tests;
+mod migrations;
+mod pending;
 #[cfg(test)]
 mod tests;
 
