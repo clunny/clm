@@ -55,16 +55,18 @@ fn blocked_root(command: &Command) -> Option<Option<&Path>> {
         | C::Survey { root, .. }
         | C::Fingerprint { root, .. } => given(root),
         C::Capabilities {
-            command: Some(Capabilities::Decide { root, .. }),
-            ..
-        }
-        | C::Capabilities {
-            command: None,
+            command: Some(Capabilities::Decide { root: inner, .. }),
             root,
             ..
         }
         | C::Architecture {
-            command: Some(Architecture::Decide { root, .. }),
+            command: Some(Architecture::Decide { root: inner, .. }),
+            root,
+            ..
+        } => Some(inner.as_deref().or(root.as_deref())),
+        C::Capabilities {
+            command: None,
+            root,
             ..
         }
         | C::Architecture {
@@ -150,6 +152,31 @@ mod tests {
             &["land", "--root", "/r"],
             &["ledger", "show", "--root", "/r"],
             &["capabilities", "--root", "/r"],
+            &[
+                "capabilities",
+                "--root",
+                "/r",
+                "decide",
+                "x",
+                "--value",
+                "high",
+                "--decision",
+                "keep",
+            ],
+            &[
+                "architecture",
+                "--root",
+                "/r",
+                "decide",
+                "x",
+                "--value",
+                "high",
+                "--decision",
+                "keep",
+            ],
+            &["coverage", "--root", "/r"],
+            &["pending", "--root", "/r"],
+            &["rebase", "--root", "/r"],
         ] {
             let (asked, result) = run(args, cwd.path());
             assert_eq!(asked, [Path::new("/r")], "{args:?}");
@@ -160,7 +187,11 @@ mod tests {
     // req:clm/upgrade-blocks-commands@8787b1c6
     #[test]
     fn the_listed_commands_run_whatever_is_pending() {
-        let cwd = TempDir::new().unwrap();
+        let dir = TempDir::new().unwrap();
+        let cwd = dir.path().canonicalize().unwrap();
+        fs::create_dir_all(cwd.join("specs")).unwrap();
+        fs::write(cwd.join("specs/SPEC.md"), "").unwrap();
+        let cwd = &cwd;
         for args in [
             &["status", "--root", "/r"][..],
             &["guide"],
@@ -171,7 +202,7 @@ mod tests {
             &["hook", "guard"],
             &["view", "spec", "--root", "/r"],
         ] {
-            let (asked, result) = run(args, cwd.path());
+            let (asked, result) = run(args, cwd);
             assert!(asked.is_empty() && result.is_none(), "{args:?}");
         }
     }
