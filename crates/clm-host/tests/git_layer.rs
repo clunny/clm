@@ -15,7 +15,7 @@ const MAY_CALL_GH: [&str; 3] = ["clm-git", "clm-host", "clm-guard"];
 
 #[test]
 fn runs_processes_only_through_the_layer() {
-    // req:host/git-through-layer@c7361079
+    // req:host/git-through-layer@0d871c32
     let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest: toml::Table = std::fs::read_to_string(krate.join("Cargo.toml"))
         .unwrap()
@@ -37,9 +37,58 @@ fn runs_processes_only_through_the_layer() {
     assert!(found.is_empty(), "processes run outside clm-git: {found:?}");
 }
 
+/// The crates that may run the Azure CLI: the layer and this adapter.
+const MAY_CALL_AZ: [&str; 2] = ["clm-git", "clm-host"];
+
+/// The literal `"az"`, built so this file doesn't hold it.
+const AZ: &str = concat!("\"a", "z\"");
+
+#[test]
+fn no_other_crate_holds_az() {
+    // req:host/git-through-layer@0d871c32
+    let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let (mut expected, mut scanned) = (0, 0);
+    let mut found = Vec::new();
+    for entry in std::fs::read_dir(crates).unwrap() {
+        let dir = entry.unwrap().path();
+        let name = dir.file_name().unwrap().to_string_lossy().into_owned();
+        if MAY_CALL_AZ.contains(&name.as_str()) || !dir.join("Cargo.toml").is_file() {
+            continue;
+        }
+        expected += 1;
+        let files = rust_files(&dir.join("src"));
+        scanned += usize::from(!files.is_empty());
+        for file in files {
+            if holds_az(&std::fs::read_to_string(&file).unwrap()) {
+                found.push(file.display().to_string());
+            }
+        }
+    }
+    assert!(expected > 3, "only {expected} crates found");
+    assert_eq!(scanned, expected, "a crate's sources weren't read");
+    assert!(found.is_empty(), "holds the az literal: {found:?}");
+}
+
+/// Whether `text` holds the string literal `"az"`, whatever surrounds it.
+fn holds_az(text: &str) -> bool {
+    squeezed(text).contains(AZ)
+}
+
+#[test]
+fn the_az_matcher_sees_every_use() {
+    // req:host/git-through-layer@0d871c32
+    assert!(holds_az(concat!(
+        "clm_git::run(&dir, \"a",
+        "z\", &args, o)"
+    )));
+    assert!(holds_az(concat!("if t == \"a", "z\" {}")));
+    assert!(holds_az(concat!("Command::new(\n    \"a", "z\")")));
+    assert!(!holds_az("let azure = \"azure\";"));
+}
+
 #[test]
 fn no_other_crate_calls_gh() {
-    // req:host/git-through-layer@c7361079
+    // req:host/git-through-layer@0d871c32
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -178,7 +227,7 @@ fn names_gh(text: &str) -> bool {
 
 #[test]
 fn the_release_guard_lookup_only() {
-    // req:host/git-through-layer@c7361079
+    // req:host/git-through-layer@0d871c32
     let hooks = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -197,7 +246,7 @@ fn the_release_guard_lookup_only() {
 
 #[test]
 fn a_run_of_gh_is_caught() {
-    // req:host/git-through-layer@c7361079
+    // req:host/git-through-layer@0d871c32
     let one_line = concat!("clm_git::run(&dir, \"g", "h\", &args, options)");
     let split = concat!(
         "let _ = tx.send(clm_git::run(\n",
