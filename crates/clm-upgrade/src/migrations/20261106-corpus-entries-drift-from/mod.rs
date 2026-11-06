@@ -12,8 +12,9 @@ const NEW: &str = include_str!("new.sh");
 const ROOT_LINE: &str = "cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\"";
 
 fn done(root: &Path) -> bool {
-    fs::read_to_string(root.join("scripts/clm-check.sh"))
-        .map_or(true, |text| text.lines().any(|line| line == ROOT_LINE))
+    let script = root.join("scripts/clm-check.sh");
+    !script.exists()
+        || fs::read_to_string(script).is_ok_and(|text| text.lines().any(|line| line == ROOT_LINE))
 }
 
 pub(crate) const MIGRATION: Migration = Migration {
