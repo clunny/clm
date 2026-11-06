@@ -604,7 +604,6 @@ fn scenario_answers_in_the_prompt() {
         "designed, not left",
         "quoted in",
         "A `question` or `human-task` item the answers settle stays in",
-        "that bear on your items, and use only those",
         "goes into the specs the change edits",
     ] {
         assert!(steps.contains(needle), "{needle} missing from {steps}");
@@ -649,8 +648,11 @@ fn scenario_an_answer_that_leaves_only_code() {
         "draft-code-fix-written-rule",
         "`kind` to `bug`",
         "remove its `blocks`",
-        "clm claim <component> --fix backlog/<slug>",
-        "Resolves: backlog/<slug>",
+        "components whose `paths` hold the fix",
+        "quoting the answer",
+        "the answer turns it into a bug",
+        "other fields, such as `priority` and `issues`",
+        "end with the spec change's `landed <sha>`",
     ] {
         assert!(steps.contains(needle), "{needle} missing from {steps}");
     }
