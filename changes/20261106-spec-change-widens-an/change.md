@@ -41,6 +41,7 @@ resolves azure-host-variant-breaks-clm-host.
 ## Outcome
 
 - `docs/decisions/forced-fixes-cover-additions.md` refined: the arm that selects built code its spec names is a forced fix, and the three-step order for a widened type.
+- `ARCHITECTURE.md`'s `path-ownership` names the case among its forced fixes, with a scenario *added variant selects built code* (the architecture audit's finding: without it the constraint forbade what the decision allows).
 - `host/azure-pull-requests` and `host/azure-other-operations` state the `Azure` adapter's operations, tested by calling the adapter, and drop `#### Needs: config/host-setting`.
 - `host/azure-selected` (added): with `host = "azure"`, `adapter` gives `Azure`, proved through `clm pr open` and `clm issue`; needs `config/host-setting`. `capability/git-host`'s Azure DevOps scenario follows from it.
 - `config/host-setting` needs the two adapter requirements and says its build adds the arm as a forced fix.
@@ -59,6 +60,15 @@ The human's step 2 lists the `clm init --host azure` string arm beside the force
 
 None known.
 
+## Builder check, settled
+
+- Order: `host/azure-pull-requests` and `host/azure-other-operations`; then `config/host-setting`; then `host/azure-selected`, `host/host-for-remote`, `host/host-setup-steps` and `clm/init-host-values`; then `init/init-files` and `init/init-next-steps`. No cycle. The prompt-text requirements rely on none.
+- The adapter is exported as `clm_host::Azure`, so its tests call it directly with a fake `az` on `PATH` (now stated in `azure-pull-requests`).
+- The requirement that names what the variant selects may itself wait on the widening (`host/azure-selected` does); only the selected code must be built. Stated in the decision, `path-ownership` and the run prompt's requirement.
+- `config/host-setting`'s build also corrects `crates/clm-config/tests/config.rs`, which lists `azure` as a bad value; `crates/clm/tests/init.rs`'s refusal of `--host azure` belongs to `clm/init-host-values`.
+- Capability tests: only `host/azure-selected` changes what `capability/git-host`'s test sees (its Azure DevOps scenario); the rest change nothing at the boundary.
+
 ## Open questions
 
-None yet.
+- Until `host/azure-selected` is built, no test catches a wrong arm (say `Host::Azure => Box::new(NoHost)`): `config/host-setting`'s mutation spot-checks can't cover its forced fix. Accepted, since the next build in the order proves it.
+- Editing `path-ownership` in `ARCHITECTURE.md` (the architecture audit's finding, fixed) widens a `method` constraint's exception; the human's answer asked for the refinement, and the review shows the wording.

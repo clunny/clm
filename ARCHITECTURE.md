@@ -429,7 +429,7 @@ Every implementation rule SHALL name what it serves: a capability or an architec
 - model/serves
 
 ### Constraint: path-ownership
-A component's build SHALL change only its own `paths`. Three exceptions: a build that removes from or adds to its component's Contract may make the compile-only and test-fixture fixes the removal or addition forces in other components' code, where that code's behaviour doesn't change, naming each one in its pull request (`forced-fixes-cover-additions`); a build may re-cite, and bring up to the current text, a test in another component's `paths` that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`); and a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`).
+A component's build SHALL change only its own `paths`. Three exceptions: a build that removes from or adds to its component's Contract may make the compile-only and test-fixture fixes the removal or addition forces in other components' code, where that code's behaviour doesn't change, or, for a variant added to a type the other component matches exhaustively, the arm that selects the built code a requirement of that component names for that variant, naming each one in its pull request (`forced-fixes-cover-additions`); a build may re-cite, and bring up to the current text, a test in another component's `paths` that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`); and a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`).
 
 #### Scenario: removal forces a fix
 - GIVEN a build removing an enum variant that another component's `match` names
@@ -440,6 +440,11 @@ A component's build SHALL change only its own `paths`. Three exceptions: a build
 - GIVEN a build adding a field to a struct that another component builds by struct literal
 - WHEN it builds
 - THEN it sets the field in that literal to the value under which its component behaves as before, and its pull request names the fix
+
+#### Scenario: added variant selects built code
+- GIVEN a build adding a variant to an enum that another component's `match` covers exhaustively, where a requirement of that component names the code the variant selects there and that code is built
+- WHEN it builds
+- THEN it adds the arm that selects that code, and its pull request names the fix
 
 #### Scenario: stale marker in another component's files
 - GIVEN a build of `a` whose requirement `a/x` is cited at an older version by a test in `b`'s `paths`
