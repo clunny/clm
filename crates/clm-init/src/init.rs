@@ -122,7 +122,11 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         paths: Vec::new(),
     };
 
-    let toml = clm_toml(host, if opts.detectors { &langs } else { &[] });
+    let toml = clm_toml(
+        host,
+        clm_upgrade::latest(),
+        if opts.detectors { &langs } else { &[] },
+    );
     files.write("clm.toml", &toml)?;
     if files.write(CHECK_SCRIPT, &check_script(&langs))? {
         make_executable(&root.join(CHECK_SCRIPT)).map_err(|e| format!("{CHECK_SCRIPT}: {e}"))?;
@@ -488,7 +492,12 @@ fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<Strin
     steps
 }
 
-fn clm_toml(host: Host, langs: &[&Lang]) -> String {
+fn clm_toml(host: Host, newest_migration: Option<&str>, langs: &[&Lang]) -> String {
+    // The newest migration this binary holds, so a new repository has none pending
+    // (`init-stamps-upgraded`).
+    let upgraded = newest_migration.map_or(String::new(), |id| {
+        format!("# The last migration this repository took (`clm upgrade`).\nupgraded = \"{id}\"\n")
+    });
     let mut text = format!(
         "# CLM settings for this repository (`clm config get <key>` shows each).\n\
          \n\
@@ -497,6 +506,7 @@ fn clm_toml(host: Host, langs: &[&Lang]) -> String {
          # Whose approval of a spec change counts: `any` writer's, the author's included; set\n\
          # `other` to count only a person's other than the branch's commit authors.\n\
          approval = \"any\"\n\
+         {upgraded}\
          \n\
          # What `clm land` runs in the tree it lands, before `clm check`.\n\
          [land]\n\
@@ -578,4 +588,19 @@ fn outside(root: &Path) -> Result<String, String> {
 /// `text` escaped for a YAML double-quoted string.
 fn yaml_string(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clm_toml_is_stamped_with_the_newest_migration() {
+        // req:init/init-stamps-upgraded@37a0167c
+        let text = clm_toml(Host::None, Some("20261105-x"), &[]);
+        let table: toml::Table = text.parse().unwrap();
+        assert_eq!(table["upgraded"].as_str(), Some("20261105-x"));
+        let bare: toml::Table = clm_toml(Host::None, None, &[]).parse().unwrap();
+        assert!(!bare.contains_key("upgraded"));
+    }
 }
