@@ -258,6 +258,7 @@ dependencies = [
  "clm-sync",
  "clm-triage",
  "clm-unreferenced",
+ "clm-upgrade",
  "clm-view",
  "clm-view-repo",
  "roxmltree",
