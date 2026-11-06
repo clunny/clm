@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [claude-md-edit-plus-its-test-classify-mixed]
 ---
 
