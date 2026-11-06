@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [ci-check-does-not-install-web-site-deps-for-capabilities-web, dependabot-alerts-reach-the-backlog-only-if-someone-looks]
 ---
 

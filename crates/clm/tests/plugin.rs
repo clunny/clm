@@ -2196,6 +2196,8 @@ fn contributions_gaps(body: &str) -> Vec<String> {
             "Co-authored-by",
             "clm pr open",
             "issues",
+            "alerts:",
+            "alerts unavailable",
             "contribution",
         ],
         &[],
@@ -2204,7 +2206,7 @@ fn contributions_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn triage_takes_the_inbox_in() {
-    // req:plugin/triage-contributions@8b647918
+    // req:plugin/triage-contributions@3c8ee1dc
     let body = skill_body("triage");
     assert_eq!(contributions_gaps(&body), Vec::<String>::new());
     // triage without the verifier
@@ -2263,12 +2265,32 @@ fn triage_takes_the_inbox_in() {
     for needle in ["recommending waiting", "naming `<by>`"] {
         assert!(resolved.contains(needle), "{needle}: {resolved}");
     }
+    let alerts = sentence_with(step, "For the `alert <n> new` lines");
+    for needle in [
+        "no verifier",
+        "`critical` and `high`",
+        "`alerts: [<n>]`",
+        "`kind: bug`",
+        "whose `paths` hold its manifest",
+        "no `Co-authored-by` trailer",
+    ] {
+        assert!(alerts.contains(needle), "{needle}: {alerts}");
+    }
+    let alert_done = sentence_with(step, "For each `alert <n> resolved <slug> <by>` line");
+    for needle in [
+        "stays open on the host until the updated dependency is on `main`",
+        "once `<by>` is archived",
+    ] {
+        assert!(alert_done.contains(needle), "{needle}: {alert_done}");
+    }
+    let down = sentence_with(step, "On an `alerts unavailable` line");
+    assert!(down.contains("go on"), "{down}");
     let pull = sentence_with(step, "For each `pull <n>` line");
     assert!(pull.contains("`contribution` skill's steps"), "{pull}");
     assert!(step.contains("run `clm triage` again"), "{step}");
     let summary = sentence_with(&body, "end with a summary");
     assert!(
-        summary.contains("the issues taken in with their items"),
+        summary.contains("the issues and alerts taken in, with their items"),
         "{summary}"
     );
     for needle in [
@@ -2313,7 +2335,7 @@ fn menu_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn triage_shows_a_menu() {
-    // req:plugin/triage-menu@3c61eff2
+    // req:plugin/triage-menu@719df6fe
     let body = skill_body("triage");
     assert_eq!(menu_gaps(&body), Vec::<String>::new());
     // triage without the menu
@@ -2359,7 +2381,10 @@ fn triage_shows_a_menu() {
     let intake = sentence_with(&body, "Then run `clm triage`");
     assert!(intake.contains("`clm intake`"), "{intake}");
     let choices = [
-        ("*Contributions*", "`issue <n> resolved` and `pull` lines"),
+        (
+            "*Contributions*",
+            "`issue <n> resolved`, `pull`, `alert <n> new` and `alert <n> resolved` lines",
+        ),
         ("*Bugs*", "`group` lines, drafted as step 5 says"),
         ("*Approvals*", "`designed` lines"),
         ("*Needs your input*", "`human` lines"),
