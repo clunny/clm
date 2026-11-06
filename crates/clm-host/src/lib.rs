@@ -240,7 +240,7 @@ pub fn delete_pushed_branch(
     let tip = git(root, &["rev-parse", "--verify", "-q", &tracking]).unwrap_or_default();
     let lease = match lease {
         // An abbreviation names the same tip; the reflog and the host take the full hash.
-        Some(lease) => git(
+        Some(lease) if lease.chars().all(|c| c.is_ascii_hexdigit()) => git(
             root,
             &[
                 "rev-parse",
@@ -250,6 +250,7 @@ pub fn delete_pushed_branch(
             ],
         )
         .unwrap_or_else(|_| lease.to_string()),
+        Some(lease) => lease.to_string(),
         None if tip.is_empty() => {
             return Err(Error::Refused(format!(
                 "this clone didn't push {REMOTE}/{branch}: it has no such ref; left it"
