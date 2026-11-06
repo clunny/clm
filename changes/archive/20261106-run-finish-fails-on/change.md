@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [run-finish-fails-on-unwritable-worktree-dirs]
 ---
 

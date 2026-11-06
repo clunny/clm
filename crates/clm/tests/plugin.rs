@@ -1583,14 +1583,15 @@ fn finish_gaps(body: &str) -> Vec<String> {
             "exits 3",
             "max_builds",
             "clm.local.toml",
+            "left <path>",
         ],
-        &["CARGO_TARGET_DIR"],
+        &["CARGO_TARGET_DIR", "git worktree prune"],
     )
 }
 
 #[test]
 fn build_finishes_builds() {
-    // req:plugin/build-finishes-builds@0c3d6e0a
+    // req:plugin/build-finishes-builds@841e10ab
     let body = skill_body("build");
     assert_eq!(finish_gaps(&body), Vec::<String>::new());
     // build without finishing
@@ -1598,6 +1599,20 @@ fn build_finishes_builds() {
     assert_reports(&gaps, "build", "clm run --finish");
     let gaps = finish_gaps(&format!("{body}\nSet `CARGO_TARGET_DIR`.\n"));
     assert_reports(&gaps, "build", "CARGO_TARGET_DIR");
+    let gaps = finish_gaps(&format!("{body}\nRun `git worktree prune`.\n"));
+    assert_reports(&gaps, "build", "git worktree prune");
+    let gaps = finish_gaps(&body.replace("left <path>", "elided"));
+    assert_reports(&gaps, "build", "left <path>");
+    // A worktree `clm run --finish` couldn't remove goes to the human as printed.
+    let left = sentence_with(&body, "left <path>");
+    for needle in [
+        "to the human as it stands",
+        "couldn't remove",
+        "go on, leaving the directory",
+        "to them",
+    ] {
+        assert!(left.contains(needle), "{needle}: {left}");
+    }
     // Builds launch only from the latest `clm next`, which runs again after each returns.
     let latest = sentence_with(&body, "latest `clm next`");
     assert!(latest.contains("launch builds only"), "{latest}");
