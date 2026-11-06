@@ -58,7 +58,9 @@ fn skipping_releases() {
     let apply = repo.clm(&["upgrade", "--apply"]);
     assert!(apply.status.success(), "{}", printed(&apply));
     assert!(
-        repo.git(&["status", "--short"]).contains("clm.toml"),
+        fs::read_to_string(repo.root.join("clm.toml"))
+            .unwrap()
+            .contains("upgraded ="),
         "the stamp is not written"
     );
 
@@ -89,7 +91,8 @@ fn migration_pending_refuses_check_but_not_status_or_defect() {
     assert!(text.contains("99990101-from-the-future"), "{text}");
 
     let status = repo.clm(&["status"]);
-    assert_ne!(status.status.code(), Some(4), "{}", printed(&status));
+    assert!(status.status.success(), "{}", printed(&status));
+    // `defect` runs rather than being refused: whatever it answers, it is not exit 4.
     let defect = repo.clm(&["defect", "--title", "T", "--component", "a"]);
     assert_ne!(defect.status.code(), Some(4), "{}", printed(&defect));
 }
