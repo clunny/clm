@@ -56,6 +56,10 @@ fn the_flags_are_dispatched_and_exclusive() {
     let before = fs::read_to_string(dir.path().join("clm.toml")).unwrap();
     let apply = clm(dir.path(), &["upgrade", "--apply"]);
     assert_eq!(apply.status.code(), Some(0), "{apply:?}");
+    assert!(
+        apply.stdout.is_empty(),
+        "apply is not the listing: {apply:?}"
+    );
     assert_eq!(
         fs::read_to_string(dir.path().join("clm.toml")).unwrap(),
         before,
