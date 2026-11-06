@@ -1,9 +1,9 @@
-// The app under /app/ beside the site (web/app-at-app-path), its scoped install
+// The app under /app/ (web/app-at-app-path), its scoped install
 // (web/installable) and the retirement of the old root service worker
 // (web/retire-root-service-worker). The tests that need the built tree read `dist/` as the
 // build left it (the Playwright web server builds it) and serve it from a small static
-// server in the layout the deployed assets have, so a root registration can exist beside the
-// app's.
+// server in the layout the deployed assets have, with a stand-in page for the site, which
+// deploys on its own, so a root registration can exist beside the app's.
 import { createServer, type Server } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -29,14 +29,19 @@ interface Site {
   stop(): Promise<void>;
 }
 
-/** `dist/` as the deployed assets serve it: `<dir>/` is `<dir>/index.html`, and a guide page is
- * its `.html`. `/guide/...` answers carry `x-from: network`. */
+/** `dist/` as the deployed assets serve it: `<dir>/` is `<dir>/index.html`. The site's pages
+ * (`/` and `/guide/...`), which another Worker answers on the zone, are a stand-in page. All
+ * answers carry `x-from: network`. */
 async function serve(): Promise<Site> {
   let root: string | null = null;
   const server: Server = createServer((req, res) => {
     const path = decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname);
     if (path === '/sw.js' && root !== null) {
       res.writeHead(200, { 'content-type': 'text/javascript', 'x-from': 'network' }).end(root);
+      return;
+    }
+    if (path === '/' || path.startsWith('/guide/')) {
+      res.writeHead(200, { 'content-type': 'text/html', 'x-from': 'network' }).end('<!doctype html><title>site</title><p>the site');
       return;
     }
     const base = normalize(join(DIST, path));
@@ -73,17 +78,17 @@ async function signedOut(context: BrowserContext): Promise<void> {
   await context.route('**/api/**', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }));
 }
 
-// req:web/app-at-app-path@73ca0e1f
+// req:web/app-at-app-path@d9141ff8
 test.describe('app at /app/', () => {
-  test('built tree: the app under app/, the site at the root, the invited list under _clm/', () => {
+  test('built tree: the app under app/, the invited list under _clm/, the retiring worker, and no site', () => {
     const app = readFileSync(join(DIST, 'app/index.html'), 'utf8');
     const scripts = [...app.matchAll(/<script[^>]*\ssrc="([^"]+)"/g)].map((m) => m[1]);
     expect(scripts.length).toBeGreaterThan(0);
     for (const src of scripts) expect(src.startsWith('/app/'), src).toBe(true);
     expect(app).toContain('id="app"');
-    const home = readFileSync(join(DIST, 'index.html'), 'utf8');
-    expect(home).not.toContain('id="loadbar"');
-    expect(existsSync(join(DIST, 'guide/quickstart.html'))).toBe(true);
+    expect(readFileSync(join(DIST, 'sw.js'), 'utf8')).toContain('unregister');
+    expect(existsSync(join(DIST, 'index.html'))).toBe(false);
+    expect(existsSync(join(DIST, 'guide'))).toBe(false);
     expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(['clunny']);
   });
 

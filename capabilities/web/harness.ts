@@ -3,7 +3,7 @@
 // run by Miniflare), and the sign-in a reviewer does.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHmac, generateKeyPairSync, randomBytes } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -118,6 +118,12 @@ export interface App {
  */
 export async function startApp(fake: FakeGitHub): Promise<App> {
   const build = join(root, 'crates', 'clm-web', 'build')
+  // The two Workers answer on one zone: the site's assets at the root, the app's under `/app/`.
+  const assets = mkdtempSync(join(tmpdir(), 'clm-web-capability-assets-'))
+  const site = process.env.CLM_CAPABILITY_SITE_DIR
+  if (!site) throw new Error('CLM_CAPABILITY_SITE_DIR is unset: global-setup.ts builds the site')
+  cpSync(site, assets, { recursive: true })
+  cpSync(join(root, 'web', 'dist'), assets, { recursive: true })
   const key = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({ type: 'pkcs8', format: 'pem' }) as string
   const mf = new Miniflare(convertV4MiniflareOptions({
     host: '127.0.0.1',
@@ -134,7 +140,7 @@ export async function startApp(fake: FakeGitHub): Promise<App> {
       REPLICA: { className: 'Replica', useSQLite: true },
     },
     assets: {
-      directory: join(root, 'web', 'dist'),
+      directory: assets,
       binding: 'ASSETS',
       routerConfig: { has_user_worker: true },
       run_worker_first: ['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app'],
@@ -172,7 +178,10 @@ export async function startApp(fake: FakeGitHub): Promise<App> {
       })
       if (res.status !== 200) throw new Error(`the push webhook answered ${res.status}`)
     },
-    stop: () => mf.dispose(),
+    stop: async () => {
+      await mf.dispose()
+      rmSync(assets, { recursive: true, force: true })
+    },
   }
 }
 

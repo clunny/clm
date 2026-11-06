@@ -22,7 +22,7 @@ function inlineModule(code: string): string {
   return `(() => {\n${code.slice(0, exports.index)}\nreturn { ${fields.join(', ')} };\n})()`;
 }
 
-/** The app is served under this path, beside the site at the root (web/app-at-app-path). */
+/** The app is served under this path, at `/app/` of the zone (web/app-at-app-path). */
 const BASE = '/app/';
 
 /** Emits the PNG icons, and `sw.js` (served at `/app/sw.js`) with the build's files to
@@ -82,7 +82,7 @@ export default defineConfig({
   base: BASE,
   plugins: [buildAssets(new URL('../', import.meta.url)), pwa()],
   // ELK's bundle alone is about 1.4 MB; it loads on its own when a graph is drawn.
-  // The site is built into `dist/` first; the app goes under it.
+  // The app goes under `dist/app/`; the site is no part of this build (web/app-at-app-path).
   build: { outDir: 'dist/app', chunkSizeWarningLimit: 1600 },
   test: {
     environment: 'jsdom',
