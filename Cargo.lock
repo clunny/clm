@@ -453,6 +453,7 @@ dependencies = [
  "clm-config",
  "clm-git",
  "clm-model",
+ "clm-upgrade",
  "serde",
  "serde_json",
  "serde_yaml",
