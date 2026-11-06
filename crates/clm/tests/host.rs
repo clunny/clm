@@ -187,6 +187,21 @@ fn scenario_branch_another_sessions() {
 }
 
 #[test]
+fn branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip() {
+    // req:host/branch-delete@18b4bda5
+    let (r, gh) = (checkout("github"), fake_gh());
+    let tip = push_impl_a(&r, "a.txt");
+    let (code, _, err) = clm(
+        &r.work,
+        &gh,
+        &["branch", "delete", "impl/a", "--lease", &tip[..7]],
+        &[],
+    );
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(on_origin(&r, "impl/a"), "");
+}
+
+#[test]
 fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
     // req:host/branch-delete@18b4bda5
     let (r, gh) = (checkout("github"), fake_gh());
