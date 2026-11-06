@@ -244,6 +244,10 @@ fn every_corpus_entry_upgrades_to_what_init_writes() {
     let expected = init_files();
     let entries = entries();
     assert!(entries.len() >= 5, "the corpus holds v0.14.0 to v0.18.0");
+    assert!(
+        entries.iter().any(|e| e.ends_with("v0.14.0.tar.gz")),
+        "the corpus starts at v0.14.0"
+    );
     let failures: Vec<String> = entries
         .iter()
         .filter_map(|entry| check_entry(entry, &expected).err())
@@ -257,7 +261,9 @@ fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
     let mut expected = init_files();
     let claude = expected.get_mut("CLAUDE.md").unwrap();
     let text = String::from_utf8(claude.clone()).unwrap();
-    *claude = text.replacen("CLM", "CLX", 1).into_bytes();
+    let changed = text.replacen("CLM", "CLX", 1);
+    assert_ne!(changed, text, "the template names CLM");
+    *claude = changed.into_bytes();
     let entry = entries().pop().unwrap();
     let err = check_entry(&entry, &expected).unwrap_err();
     assert!(err.contains("CLAUDE.md"), "{err}");
