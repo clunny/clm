@@ -161,7 +161,7 @@ export function resolvePostLinks(
       if (/^\s*(```|~~~)/.test(line)) fenced = !fenced
       if (fenced) return line
       return line.replace(
-        /\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g,
+        /(?<!!)\[([^\]]*)\]\(([^)\s]+)((?:\s+"[^"]*")?)\)/g,
         (whole, label: string, target: string) => {
           if (/^([a-z][a-z0-9+.-]*:|#|\/)/i.test(target)) return whole
           const hash = target.indexOf('#')

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useData } from 'vitepress'
 
 interface Ref {
@@ -9,7 +10,7 @@ interface Ref {
 
 // The route's params, made by `pages/blog/[slug].paths.ts` from the published posts alone.
 const { params } = useData()
-const post = params.value as {
+const post = computed(() => params.value as {
   slug: string
   title: string
   summary: string
@@ -21,7 +22,7 @@ const post = params.value as {
   series: Required<Ref>[]
   prev: Ref | null
   next: Ref | null
-}
+})
 </script>
 
 <template>

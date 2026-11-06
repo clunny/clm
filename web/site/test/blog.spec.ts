@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { resolvePostLinks } from '../.vitepress/blog'
+import type { Post } from '../.vitepress/blog'
 import { blogFixture, build, filesUnder, post, read, serve, words } from './helpers'
 
 const SITE = 'https://clm-app.dev'
@@ -225,7 +227,23 @@ test("a post's head holds its title, summary, canonical link, article type and M
   expect(meta(html, 'property', 'og:type')).toBe('article')
   expect(meta(html, 'property', 'article:published_time')).toBe('2026-11-05')
   expect(html).toContain(`<link rel="alternate" type="text/markdown" href="${SITE}/blog/alpha.md">`)
-  expect(title(read(seriesOut, 'blog/index.html'))).toBe('CLM blog')
+  const index = read(seriesOut, 'blog/index.html')
+  expect(title(index)).toBe('CLM blog')
+  expect(meta(index, 'name', 'description')).toContain("What we've learned building CLM with CLM")
+  expect(meta(index, 'name', 'description')).not.toContain('Declare the intent')
+  expect(index).toContain(`<link rel="canonical" href="${SITE}/blog/">`)
+})
+
+test('in a post copy, a relative link into the repository names GitHub, and an image is no post link', () => {
+  // req:web.site/agent-markdown@6ed9b7f5
+  const draft = { slug: 'next', draft: true } as Post
+  const body = 'See [the readme](../../../README.md#top), [next](next.md) and ![pic](next.md).'
+  const alpha = { slug: 'alpha', file: 'alpha.md', draft: false, body } as Post
+  const repo = 'someone/clm-public'
+  const copy = resolvePostLinks(alpha, [alpha, draft], { kind: 'copy', siteUrl: SITE, repo })
+  expect(copy).toBe(
+    `See [the readme](https://github.com/${repo}/blob/main/README.md#top), next and ![pic](next.md).`,
+  )
 })
 
 test('the sitemap lists /blog/ and the published posts, and no draft', () => {

@@ -73,6 +73,7 @@ export default defineConfig({
   },
   themeConfig: {
     installRepo,
+    blogDescription,
     headline,
     firstLine,
     githubUrl,

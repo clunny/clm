@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { useData } from 'vitepress'
 import { data as posts } from './posts.data'
+
+const { theme } = useData()
 </script>
 
 <template>
@@ -7,10 +10,7 @@ import { data as posts } from './posts.data'
     <header class="blog-head">
       <div class="k">Blog</div>
       <h1>Building software when AI writes every line</h1>
-      <p>
-        What we've learned building CLM with CLM: the ideas, the mechanisms, and the things that
-        didn't work. One post at a time.
-      </p>
+      <p>{{ theme.blogDescription }}</p>
       <a class="rss" href="/blog/feed.xml" target="_self">RSS feed →</a>
     </header>
     <div v-if="posts.length > 0" class="blog-grid">
