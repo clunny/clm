@@ -524,6 +524,9 @@ fn init_skill_gaps(body: &str) -> Vec<String> {
             "outside",
             "incremental-adoption",
             "scripts/clm-check.sh",
+            "azure-pipelines.yml",
+            "Bypass policies when pushing",
+            "path filter",
         ],
         // `clm init` writes no workflow, regenerates no file and creates no labels.
         &[
@@ -570,7 +573,7 @@ fn init_skill_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn init_skill() {
-    // req:plugin/init-skill@8f00075e
+    // req:plugin/init-skill@27762fbb
     let (fm, body) = frontmatter(&plugin().join("skills/init/SKILL.md"));
     assert!(fm["description"].as_str().is_some_and(|d| !d.is_empty()));
     assert_eq!(init_skill_gaps(&body), Vec::<String>::new());
@@ -651,7 +654,7 @@ fn init_skill() {
         "its first capabilities",
         "its architectural constraints",
         "language and stack",
-        "Deploy, release and scheduled workflows stay",
+        "Deploy, release and scheduled workflows and pipelines stay",
         "Keep the list of what moved for `## Intent`",
     ] {
         assert!(body.contains(needle), "init: SKILL.md must say {needle}");
@@ -712,6 +715,9 @@ fn init_skill() {
         "clm approve",
         "bootstrap commit",
         "incremental-adoption",
+        "azure-pipelines.yml",
+        "Bypass policies when pushing",
+        "path filter",
     ] {
         let gaps = init_skill_gaps(&body.replace(needle, "elided"));
         assert_reports(&gaps, "init", needle);
