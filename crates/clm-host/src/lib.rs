@@ -239,6 +239,17 @@ pub fn delete_pushed_branch(
     let tracking = format!("refs/remotes/{REMOTE}/{branch}");
     let tip = git(root, &["rev-parse", "--verify", "-q", &tracking]).unwrap_or_default();
     let lease = match lease {
+        // An abbreviation names the same tip; the reflog and the host take the full hash.
+        Some(lease) if lease.chars().all(|c| c.is_ascii_hexdigit()) => git(
+            root,
+            &[
+                "rev-parse",
+                "--verify",
+                "-q",
+                &format!("{lease}^{{commit}}"),
+            ],
+        )
+        .unwrap_or_else(|_| lease.to_string()),
         Some(lease) => lease.to_string(),
         None if tip.is_empty() => {
             return Err(Error::Refused(format!(

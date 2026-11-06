@@ -187,6 +187,40 @@ fn scenario_branch_another_sessions() {
 }
 
 #[test]
+fn branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip() {
+    // req:host/branch-delete@18b4bda5
+    let (r, gh) = (checkout("github"), fake_gh());
+    let tip = push_impl_a(&r, "a.txt");
+    let (code, _, err) = clm(
+        &r.work,
+        &gh,
+        &["branch", "delete", "impl/a", "--lease", &tip[..7]],
+        &[],
+    );
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(on_origin(&r, "impl/a"), "");
+}
+
+#[test]
+fn branch_delete_refuses_a_lease_that_names_no_pushed_tip() {
+    // req:host/branch-delete@18b4bda5
+    let (r, gh) = (checkout("github"), fake_gh());
+    let old = push_impl_a(&r, "a.txt");
+    let new = push_impl_a(&r, "b.txt");
+    for lease in [&old[..7], "HEAD", "origin/impl/a", "deadbeef", "not a hash"] {
+        let (code, _, err) = clm(
+            &r.work,
+            &gh,
+            &["branch", "delete", "impl/a", "--lease", lease],
+            &[],
+        );
+        assert_eq!(code, Some(1), "{lease}: {err}");
+        assert!(err.contains("didn't push"), "{lease}: {err}");
+        assert_eq!(on_origin(&r, "impl/a"), new, "{lease}");
+    }
+}
+
+#[test]
 fn branch_delete_names_a_lease_that_is_not_the_pushed_tip() {
     // req:host/branch-delete@18b4bda5
     let (r, gh) = (checkout("github"), fake_gh());
