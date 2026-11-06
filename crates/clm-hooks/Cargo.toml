@@ -11,6 +11,7 @@ clm-git.workspace = true
 clm-host.workspace = true
 clm-model.workspace = true
 clm-sync.workspace = true
+clm-upgrade.workspace = true
 clm-view-repo.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

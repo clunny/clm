@@ -6,6 +6,7 @@ use std::path::Path;
 use serde_json::Value;
 
 mod defect;
+mod upgrade;
 pub use defect::defect;
 
 /// `SessionStart`: `clm status` for the CLM repository holding the event's `cwd`, then the
@@ -26,10 +27,24 @@ pub fn session_start(event: &str) -> String {
         spec_tokens: s.node_size.value.spec_tokens,
         code_tokens: s.node_size.value.code_tokens,
     });
+    let skipped = settings
+        .as_ref()
+        .ok()
+        .and_then(|s| s.skip_migrations.value.clone())
+        .unwrap_or_default();
+    let reminder = upgrade::upgrade_line(clm_upgrade::pending(root), &skipped);
     let Ok(status) = clm_view_repo::status(root, budgets) else {
-        return String::new();
+        // The reminder stands even when the status can't be read.
+        return reminder.map(|line| line + "\n").unwrap_or_default();
     };
     let mut text = format!("CLM state (`clm status`) of this repository:\n{status}");
+    if let Some(line) = reminder {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(&line);
+        text.push('\n');
+    }
     match settings {
         Ok(s) if s.defects.value == clm_config::Defects::Off => {}
         Ok(s) => {
