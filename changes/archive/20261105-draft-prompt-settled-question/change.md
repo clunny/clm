@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [draft-prompt-settled-question-code-only]
 ---
 
