@@ -258,7 +258,7 @@ pub fn prompt(job: &Job) -> String {
     let ship = format!(
         "Commit everything, then {sync}. Then {again} confirm \
          `clm gate --base origin/main` prints `code`, and push with \
-         `git push --force-with-lease`. Write the whole pull request body with `Write` to \
+         `clm branch push`. Write the whole pull request body with `Write` to \
          `{PR_BODY}` (outside git, like the logs) and open the branch's pull request with \
          `clm pr open {branch} --title <title> --body-file {PR_BODY}`. To correct the body, \
          rewrite that file and run `clm pr body {PR_BODY}`. The body has `## Plan`, \
@@ -270,7 +270,7 @@ pub fn prompt(job: &Job) -> String {
          the branch is on `main` and the build is done, whatever lines follow it (such as \
          `awaiting review: ...` or a warning). Otherwise go by its last line. \
          `gate/up-to-date`, or a conflict with `main`, means {sync}, then push with \
-         `git push --force-with-lease` and run `clm land` again. A failing check means fix \
+         `clm branch push` and run `clm land` again. A failing check means fix \
          it, commit, push and run `clm land` again. When the same failure comes back after \
          a fix, or for anything else, stop and say what it printed."
     );
@@ -348,7 +348,23 @@ pub fn prompt(job: &Job) -> String {
          and add a `deferred` item without `blocks`, whose `components` name both components and whose \
          body names the kept code, the component that uses it, and that the code goes once that \
          component no longer uses it. Files the root's Design gives every build to \
-         edit, such as the CLI's dispatch, the workspace manifest and its lockfile, aren't another component's code for this rule. Keep the \
+         edit, such as the CLI's dispatch, the workspace manifest and its lockfile, aren't another component's code for this rule. \
+         When a requirement you build changes what a test in the `capability` component's `paths` \
+         observes at the product's boundary (a screen, a path, a message or an output the test \
+         expects), update that test in your own branch, since your land runs the test and the \
+         `capability` component holds no requirement that could carry the move \
+         (`path-ownership`, `capability-tests-follow-rules`): change only the test's \
+         expectations, and the steps that reach them, where the requirement changed them, to \
+         what the requirement states; keep the test's citation as it is and drop no check the \
+         capability's scenarios, as `CAPABILITIES.md` now states them, state, so when the change \
+         edited the entry the test follows the entry's current text while its citation stays at \
+         the old version, leaving the capability `behind` for its own build to re-cite \
+         (`proven-by-tests`); and name each such fix under `## Fixes in other components` in \
+         your pull request body. A requirement under which a capability entry, as \
+         `CAPABILITIES.md` now states it, no longer holds is not such a fix: leave the \
+         requirement unbuilt, keeping the behaviour the test checks, and add a `question` \
+         backlog item whose `components` name both components, with `blocks` naming the \
+         requirement, and which names the entry, so a spec change edits it. Keep the \
          code lean and true to the component's Contract and Design, folding in the cleanups the spec asks for. When the list \
          is long, you may open your pull request and land once the tree is green with at most \
          {BUDGET} requirements built, leaving the rest pending for the next run; list what you \
@@ -369,7 +385,7 @@ pub fn prompt(job: &Job) -> String {
          each mutant, with the test that failed or the test you added, under `## Review` in \
          the pull request body.\n\n\
          After each step of your step plan, commit, {sync}, then push with \
-         `git push --force-with-lease`, which also keeps your claim alive. When the remote \
+         `clm branch push`, which also keeps your claim alive. When the remote \
          rejects a push as `remote rejected` with `(failure)`, or with `remote: fatal error`, \
          other builds are usually pushing at the same moment: wait a few seconds and push \
          again, at most twice more, before you stop and report git's message. That holds for \

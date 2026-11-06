@@ -412,8 +412,8 @@ fn push_retries_transient_rejections_only() {
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
-    // Said once, where the prompt first names `--force-with-lease`.
-    let first = p.find("--force-with-lease").unwrap();
+    // Said once, where the prompt first names `clm branch push`.
+    let first = p.find("clm branch push").unwrap();
     let retry = p.find("`remote rejected`").unwrap();
     assert!(first < retry, "{p}");
     assert_eq!(p.matches("`remote rejected`").count(), 1, "{p}");
@@ -778,5 +778,56 @@ fn scenario_review_every_diff() {
                 .all(|needle| para.contains(needle))
         });
         assert!(ok, "no review paragraph says every diff is reviewed: {p}");
+    }
+}
+
+#[test]
+fn scenario_capability_tests_follow_rule() {
+    // req:orchestrator.run/capability-tests-follow-rule@5d7ee5f9
+    let p = prompt(&job());
+    for needle in [
+        "a test in the `capability` component's `paths` observes at the product's boundary",
+        "update that test in your own branch",
+        "`capability-tests-follow-rules`",
+        "keep the test's citation as it is",
+        "`CAPABILITIES.md` now states them",
+        "leaving the capability `behind` for its own build to re-cite",
+        "name each such fix under `## Fixes in other components`",
+    ] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+}
+
+#[test]
+fn scenario_entry_no_longer_holds() {
+    // req:orchestrator.run/capability-tests-follow-rule@5d7ee5f9
+    let p = prompt(&job());
+    for needle in [
+        "no longer holds is not such a fix",
+        "leave the requirement unbuilt, keeping the behaviour the test checks",
+        "add a `question` backlog item whose `components` name both components, with `blocks` naming the requirement, and which names the entry",
+    ] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+    // Beside the removal rule, in every prompt, whatever the repository holds.
+    let removal = p.find("Never edit another component's code").unwrap();
+    let rule = p
+        .find("a test in the `capability` component's `paths`")
+        .unwrap();
+    assert!(removal < rule, "{p}");
+}
+
+#[test]
+fn scenario_pushes_through_clm_fresh_and_resumed() {
+    // req:orchestrator.run/prompt-pushes-through-clm@8e9fbdf3
+    let mut resumed = job();
+    resumed.resumed = true;
+    for j in [job(), resumed] {
+        let p = prompt(&j);
+        let text = p.split("The context bundle for").next().unwrap();
+        assert!(text.contains("clm branch push"), "{p}");
+        for forbidden in ["git push", "--force-with-lease"] {
+            assert!(!text.contains(forbidden), "{forbidden} in {text}");
+        }
     }
 }
