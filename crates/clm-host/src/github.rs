@@ -5,7 +5,7 @@ use std::path::Path;
 use clm_git::{REMOTE, current_branch, gh, git};
 use serde_json::Value;
 
-use crate::{Error, Host, Listed, Shown};
+use crate::{Alert, Error, Host, Listed, Shown};
 
 pub(crate) struct GitHub;
 
@@ -147,7 +147,68 @@ fn listed(root: &Path, kind: &str) -> Result<Vec<Listed>, Error> {
         .collect())
 }
 
+/// A field of an alert as one word: whitespace and control characters become `?`, and a
+/// missing or empty field is `unknown`.
+fn word(v: &Value) -> String {
+    match v.as_str() {
+        Some(s) if !s.is_empty() => s
+            .chars()
+            .map(|c| {
+                if c.is_whitespace() || c.is_control() {
+                    '?'
+                } else {
+                    c
+                }
+            })
+            .collect(),
+        _ => "unknown".into(),
+    }
+}
+
+fn alert(v: &Value) -> Option<Alert> {
+    let severity = match v["security_advisory"]["severity"].as_str() {
+        Some(s @ ("low" | "medium" | "high" | "critical")) => s.to_string(),
+        _ => "unknown".to_string(),
+    };
+    Some(Alert {
+        number: v["number"].as_u64()?,
+        severity,
+        ecosystem: word(&v["dependency"]["package"]["ecosystem"]),
+        package: word(&v["dependency"]["package"]["name"]),
+        manifest: word(&v["dependency"]["manifest_path"]),
+    })
+}
+
 impl Host for GitHub {
+    fn alerts(&self, root: &Path) -> Result<Vec<Alert>, Error> {
+        let args = [
+            "api",
+            "--paginate",
+            "-X",
+            "GET",
+            "repos/{owner}/{repo}/dependabot/alerts",
+            "-f",
+            "state=open",
+        ];
+        let out = gh(root, &args)?;
+        // `--paginate` prints each page's array in turn, with nothing between them.
+        let mut alerts = Vec::new();
+        for page in serde_json::Deserializer::from_str(&out).into_iter::<Value>() {
+            let page = page.map_err(|e| Error::Git(format!("gh api alerts: bad JSON: {e}")))?;
+            let items = page
+                .as_array()
+                .ok_or_else(|| Error::Git("gh api alerts: a page is not a list".into()))?;
+            for item in items {
+                alerts.push(
+                    alert(item).ok_or_else(|| {
+                        Error::Git("gh api alerts: an alert has no number".into())
+                    })?,
+                );
+            }
+        }
+        Ok(alerts)
+    }
+
     fn list(&self, root: &Path) -> Result<Vec<Listed>, Error> {
         let mut all = listed(root, "issue")?;
         all.extend(listed(root, "pr")?);

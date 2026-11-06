@@ -49,6 +49,18 @@ pub struct Listed {
     pub author: String,
 }
 
+/// An open dependency alert, as `alerts` reports it: one word per field, and none of the
+/// advisory's own text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Alert {
+    pub number: u64,
+    /// `low`, `medium`, `high`, `critical` or `unknown`.
+    pub severity: String,
+    pub ecosystem: String,
+    pub package: String,
+    pub manifest: String,
+}
+
 fn no_host<T>() -> Result<T, Error> {
     Err(Error::Refused("there is no host".into()))
 }
@@ -131,6 +143,11 @@ pub trait Host {
 
     /// The open issues and pull requests; empty without a host.
     fn list(&self, _root: &Path) -> Result<Vec<Listed>, Error> {
+        Ok(Vec::new())
+    }
+
+    /// The open dependency alerts; empty without a host.
+    fn alerts(&self, _root: &Path) -> Result<Vec<Alert>, Error> {
         Ok(Vec::new())
     }
 

@@ -24,8 +24,15 @@ fn with_gh<T>(answers: &[(&str, &str)], body: impl FnOnce(&Path, &Path) -> T) ->
         dir.path().display()
     );
     for (needle, out) in answers {
-        script +=
-            &format!("case \"$all\" in *'{needle}'*) cat <<'EOT'\n{out}\nEOT\nexit 0;; esac\n");
+        // An answer starting `FAIL:` is printed on stderr, and the fake exits 1.
+        script += &match out.strip_prefix("FAIL:") {
+            Some(why) => {
+                format!("case \"$all\" in *'{needle}'*) echo '{why}' >&2; exit 1;; esac\n")
+            }
+            None => {
+                format!("case \"$all\" in *'{needle}'*) cat <<'EOT'\n{out}\nEOT\nexit 0;; esac\n")
+            }
+        };
     }
     script += "echo 'Could not resolve to a PullRequest' >&2\nexit 1\n";
     let gh = dir.path().join("gh");
@@ -304,4 +311,82 @@ fn listing_without_a_host_runs_no_gh() {
             assert_eq!(calls(dir), "");
         });
     }
+}
+
+const ALERT_4: &str = r#"{"number":4,"security_advisory":{"severity":"high","summary":"s"},"dependency":{"package":{"ecosystem":"npm","name":"vite"},"manifest_path":"web/package-lock.json"}}"#;
+
+#[test]
+fn open_alerts() {
+    // req:host/list-alerts@7c2c7686
+    // Two pages, as `gh api --paginate` prints them: arrays one after another.
+    let pages = format!("[][{ALERT_4}]");
+    with_gh(&[("dependabot/alerts", &pages)], |root, dir| {
+        let alerts = clm_host::adapter(Setting::Github).alerts(root).unwrap();
+        assert_eq!(
+            alerts,
+            vec![clm_host::Alert {
+                number: 4,
+                severity: "high".into(),
+                ecosystem: "npm".into(),
+                package: "vite".into(),
+                manifest: "web/package-lock.json".into(),
+            }]
+        );
+        let seen = calls(dir);
+        assert!(seen.contains("api") && seen.contains("--paginate") && seen.contains("state=open"));
+        assert!(seen.contains("-X GET"), "{seen}");
+    });
+}
+
+#[test]
+fn alert_fields_are_one_word() {
+    // req:host/list-alerts@7c2c7686
+    let odd = r#"[{"number":5,"security_advisory":{"severity":"urgent"},"dependency":{"package":{"ecosystem":"","name":"a b\tc\nd\u0007e"}}}]"#;
+    with_gh(&[("dependabot/alerts", odd)], |root, _| {
+        let alerts = clm_host::adapter(Setting::Github).alerts(root).unwrap();
+        assert_eq!(alerts[0].number, 5);
+        assert_eq!(alerts[0].package, "a?b?c?d?e");
+        assert_eq!(alerts[0].severity, "unknown");
+        assert_eq!(alerts[0].ecosystem, "unknown");
+        assert_eq!(alerts[0].manifest, "unknown");
+    });
+}
+
+#[test]
+fn unreadable_alerts_are_an_error() {
+    // req:host/list-alerts@7c2c7686
+    with_gh(&[("dependabot/alerts", "FAIL:HTTP 403")], |root, _| {
+        let err = clm_host::adapter(Setting::Github).alerts(root).unwrap_err();
+        assert!(format!("{err:?}").contains("HTTP 403"), "{err:?}");
+    });
+}
+
+#[test]
+fn malformed_alert_pages_are_an_error() {
+    // req:host/list-alerts@7c2c7686
+    for body in [r#"{"message":"off"}"#, r#"[{"severity":"high"}]"#] {
+        with_gh(&[("dependabot/alerts", body)], |root, _| {
+            assert!(clm_host::adapter(Setting::Github).alerts(root).is_err());
+        });
+    }
+}
+
+#[test]
+fn alerts_without_a_host_run_no_gh() {
+    // req:host/list-alerts@7c2c7686
+    with_gh(&[], |root, dir| {
+        assert!(
+            clm_host::adapter(Setting::None)
+                .alerts(root)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            clm_host::adapter(Setting::Git)
+                .alerts(root)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(calls(dir), "");
+    });
 }
