@@ -41,7 +41,7 @@ needs a newer `clm`; commands are blocked until one is installed."
     if blocking > 0 {
         line.push_str("; commands are blocked");
     } else if !required.is_empty() {
-        line.push_str("; the required one is skipped on this clone");
+        line.push_str("; the required migration(s) are skipped on this clone");
     }
     line.push_str("; run `/clm:upgrade`.");
     Some(line)
