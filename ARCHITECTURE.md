@@ -324,7 +324,7 @@ CLM's constraints that govern how any project is built with it SHALL reach every
 Whether a replacement keeps the guarantee it replaces is a judgement, which the auditor advises on and the human's approval decides.
 
 ### Constraint: platform
-CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A git host (GitHub, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Moving to another agent is a change that needs review.
+CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A git host (GitHub, Azure DevOps, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Moving to another agent is a change that needs review.
 
 #### Scenario: no host
 - GIVEN a repository whose remote is a bare git server

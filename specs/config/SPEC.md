@@ -35,7 +35,7 @@ Some settings describe the repository rather than the user, and only the reposit
 | Key | Values | Default |
 |---|---|---|
 | `detectors` | an array of tables `[[detectors]]`, each with `name` (string), `command` (non-empty array of strings), optional `hint` (string), optional `requires` (a path relative to the repository root: `clm check` skips the detector while nothing exists there, `detector-requires-manifest`) and optional `timeout` (a whole number of seconds, at least `1`, default `600`: how long `clm check` lets the detector run before it stops it, `detector-timeouts`) | none |
-| `host` | `none`, `git`, `github`: where the repository's remote lives and which host adapter `clm` uses for pull requests, branch deletion and issues (`host-adapters`) | `github` |
+| `host` | `none`, `git`, `github`, `azure`: where the repository's remote lives and which host adapter `clm` uses for pull requests, branch deletion and issues (`host-adapters`) | `github` |
 | `approval` | `any`: any writer's approval of a diff counts, the author's included; `other`: only an approval by a person other than the branch's commit authors counts (`approval-policy`) | `any` |
 | `land` | a table with `check`, a non-empty string: the shell command `clm land` runs in the tree it lands, before `clm check` (`land-locally`), and optional `target_cap_gb`, a positive integer: the size in gigabytes (10^9 bytes) above which a land removes the shared target `.clm/land` after its push (`land/land-target-cap`) | none: `clm check` alone; `target_cap_gb = 15` |
 | `affected` | a table with `all`, an array of globs written as in a component's `paths`: changed files that make `clm affected` select every test although a component's `paths` hold them, such as a lockfile or the toolchain pin (`graph-test-selection`) | none: no glob |
@@ -156,7 +156,7 @@ Loading SHALL take `detectors` only from the repository's `clm.toml` or the clon
 - capability/configure-clm
 
 ### Requirement: host-setting
-Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `clm.local.toml`, defaulting to `github`, SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `host` for a value other than `none`, `git` or `github`, and SHALL fail naming the user's `config.toml` and the key when that file sets it.
+Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `clm.local.toml`, defaulting to `github`, SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `host` for a value other than `none`, `git`, `github` or `azure`, and SHALL fail naming the user's `config.toml` and the key when that file sets it.
 
 #### Scenario: default
 - GIVEN a repository with no `clm.toml`
@@ -168,8 +168,13 @@ Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `
 - WHEN `clm config get host` runs
 - THEN it prints `git` and the file's path
 
+#### Scenario: azure
+- GIVEN a repository `clm.toml` with `host = "azure"`
+- WHEN `clm config get host` runs
+- THEN it prints `azure` and the file's path
+
 #### Scenario: unknown host
-- GIVEN a repository `clm.toml` with `host = "gitlab"` or `host = "azure"`
+- GIVEN a repository `clm.toml` with `host = "gitlab"`
 - WHEN the settings are loaded
 - THEN it fails naming `clm.toml` and `host`
 
