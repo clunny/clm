@@ -51,7 +51,7 @@ fn job() -> Job {
 
 #[test]
 fn names_the_skills_plan_review_and_sync_points() {
-    // req:orchestrator.run/run@9445ebd9
+    // req:orchestrator.run/run@0691bb50
     let p = prompt(&job());
     let (first, rest) = p.split_once('\n').unwrap();
     assert_eq!(
@@ -689,7 +689,7 @@ fn scenario_why_no_pipe() {
 
 #[test]
 fn resume_prompt_says_the_branch_exists() {
-    // req:orchestrator.run/run@9445ebd9
+    // req:orchestrator.run/run@0691bb50
     let mut j = job();
     j.resumed = true;
     let p = prompt(&j);

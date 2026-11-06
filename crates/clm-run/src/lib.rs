@@ -16,7 +16,7 @@ use clm_check::{Pending, State as ReqState};
 use clm_git::git;
 use clm_model::{Files, Graph};
 pub use clm_orchestrator::Error;
-use clm_orchestrator::{PlaceKind, Placed, REMOTE, claim_node, free_place, take_place};
+use clm_orchestrator::{PlaceKind, Placed, REMOTE, claim_local, free_place, take_place};
 
 /// The branch a node's claim and build live on is `impl/<node>`.
 const BRANCH_PREFIX: &str = "impl/";
@@ -823,8 +823,35 @@ fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
             free(root, node, branch, h)?;
         }
         git(root, &["branch", "-q", "-D", branch])?;
+    } else if holder.is_none() && unpushed_claim(root, &local, branch)? {
+        git(root, &["branch", "-q", "-D", branch])?;
     }
     Ok(())
+}
+
+/// Whether the local `branch` is at a claim commit nobody pushed (`claim-local-before-push`):
+/// one parent, the parent's tree, the parent an ancestor of `origin/main`, and not contained
+/// in `origin/<branch>` (or no such branch). It holds no work, whoever made it.
+fn unpushed_claim(root: &Path, local: &str, branch: &str) -> Result<bool, Error> {
+    if git(root, &["rev-parse", "--verify", "-q", local]).is_err() {
+        return Ok(false);
+    }
+    let line = git(root, &["rev-list", "--parents", "-n", "1", local])?;
+    let shas: Vec<&str> = line.split_whitespace().collect();
+    let [tip, parent] = shas[..] else {
+        return Ok(false);
+    };
+    let tree = |rev: &str| git(root, &["rev-parse", &format!("{rev}^{{tree}}")]);
+    if tree(tip)? != tree(parent)?
+        || !clm_git::is_ancestor(root, parent, &format!("{REMOTE}/main"))?
+    {
+        return Ok(false);
+    }
+    let remote = format!("refs/remotes/{REMOTE}/{branch}");
+    Ok(
+        git(root, &["rev-parse", "--verify", "-q", &remote]).is_err()
+            || !clm_git::is_ancestor(root, tip, &remote)?,
+    )
 }
 
 /// Once the build holds its place, resumes the local branch `branch` when it contains the
@@ -849,11 +876,7 @@ fn prepare(root: &Path, node: &str, branch: &str, expiry_hours: u64) -> Result<b
         }
         return Ok(true);
     }
-    claim_node(root, node, expiry_hours)?;
-    if let Err(e) = git(root, &["branch", "-q", "--track", branch, &remote]) {
-        release(root, branch);
-        return Err(e.into());
-    }
+    claim_local(root, node, expiry_hours)?;
     Ok(false)
 }
 
@@ -873,26 +896,6 @@ fn holding(root: &Path, branch: &str) -> Result<Option<Holder>, Error> {
             path: w.path,
             main: i == 0,
         }))
-}
-
-/// Deletes the claim on `branch` this run just pushed, if it's still the tip. Best effort: a
-/// claim left behind lapses anyway.
-fn release(root: &Path, branch: &str) {
-    if let Ok(sha) = git(
-        root,
-        &["rev-parse", &format!("refs/remotes/{REMOTE}/{branch}")],
-    ) {
-        let _ = git(
-            root,
-            &[
-                "push",
-                "-q",
-                REMOTE,
-                &format!("--force-with-lease=refs/heads/{branch}:{}", sha),
-                &format!(":refs/heads/{branch}"),
-            ],
-        );
-    }
 }
 
 /// The graph of the tree at `dir` and `node`'s pending requirements, most urgent first.
