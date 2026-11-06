@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [run-cannot-resume-its-own-pushed-claim]
 ---
 
