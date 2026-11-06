@@ -304,7 +304,7 @@ CLM gets in the way most visibly while it is being used, and a defect not filed 
 - THEN a backlog item of kind `bug` records it, on the component the fix lies in
 
 ### Capability: git-host
-A person can use CLM with GitHub, a bare git server, or no host at all.
+A person can use CLM with GitHub, Azure DevOps, a bare git server, or no host at all.
 
 #### Why
 Git alone is the platform; a host adds pull requests and issues but must not be required.
@@ -313,6 +313,11 @@ Git alone is the platform; a host adds pull requests and issues but must not be 
 - GIVEN a repository whose remote is a bare git server
 - WHEN a person proposes, approves and lands a change
 - THEN every step works, with no pull requests
+
+#### Scenario: Azure DevOps
+- GIVEN a repository whose `origin` is on Azure DevOps, with `host = "azure"`
+- WHEN a person proposes a change and opens its pull request with `clm pr open`
+- THEN the pull request opens on Azure DevOps through the Azure CLI, and its URL is printed
 
 ### Capability: configure-clm
 A person can set CLM's settings for the repository, for one clone and for themselves, and see where each came from.

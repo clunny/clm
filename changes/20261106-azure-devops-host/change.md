@@ -1,6 +1,6 @@
 ---
 status: proposed
-resolves: [backlog/azure-devops-host]
+resolves: [azure-devops-host]
 ---
 
 # Azure DevOps as a git host
