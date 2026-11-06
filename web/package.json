@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm --prefix site ci --ignore-scripts && SITE_OUT=../dist npm --prefix site run build && tsc --noEmit && vite build",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc --noEmit && vite build",
     "deploy:check": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "build:worker":"cd ../crates/clm-web && cargo install -q worker-build --version 0.8.7 --locked && worker-build --release",
     "preview": "vite preview",
