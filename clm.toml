@@ -47,10 +47,8 @@ hint = "cargo install --locked --version 0.9.2 cargo-machete"
 name = "unreferenced-public-items"
 command = [
     "clm", "unreferenced",
-    # Kept until `crates/clm` calls them: `crates/clm` calls `require_current` before each command (clm/upgrade-command),
-    # and `clm upgrade --lock` calls `append_lock` and the lock test's `check_lock`
+    # Kept until `clm upgrade --lock` calls `append_lock` and the lock test's `check_lock`
     # (upgrade/upgrade-list and the rest of the CLI, left pending in the first upgrade build).
-    "--allow", "clm_upgrade::require_current",
     "--allow", "clm_upgrade::check_lock",
     "--allow", "clm_upgrade::append_lock",
     # pending: `clm run` claims through `claim_local`, so `claim_node` has no caller outside
