@@ -10,6 +10,8 @@ Now the draft's spec branch turns the item into a bug: `kind: bug`, no `blocks`,
 
 The question is still closed only by the human's answer, carried by a spec change. The build closes a bug, which is what the spec change made the item. `clm claim --fix` keeps refusing `question` items (`apply-deletes-answered-questions`, `deferred-work-resolves-in-code`).
 
+Refines `answers-reach-drafts` and `apply-deletes-answered-questions`. Both say the change that answers a question lists it in `resolves`, and `clm apply` then deletes it. On this route the change that answers the question leaves it out of `resolves` and turns it into a bug instead, and the code branch that fixes the bug deletes it.
+
 Rejected:
 - **Resolve the question and file a new bug.** This is what the draft did. A new slug is unclaimed between the land and the fix, so another triage may draft it too, and it loses the item's `issues`, which `clm intake` reads to report the issue resolved.
 - **Let `clm claim --fix` take a question once triage has recorded an answer.** The issue suggested this. A build could then delete a question that blocks its own requirements, answering for the human, as `deferred-work-resolves-in-code` rejects. It would also need a record of the answer that the command can read.

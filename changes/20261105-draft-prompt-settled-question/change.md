@@ -35,3 +35,8 @@ The decision `settled-question-becomes-bug` records the choice.
 - **The spec branch needs review.** The draft stops as any does, and the item's claim is kept while the branch waits (`propose-claims`). The bug lands with the fold and reaches the next `clm triage`, which drafts it as an ordinary code-only bug.
 - **The fix claim is refused after the land.** The bug stays on `main`, and the draft leaves it with `left <slug>: <reason>`. Its final line is still `landed <sha>` for the spec land.
 - **The fix lies in components the question didn't name.** The branch sets the bug's `components` to those, so the claim takes them, since `clm claim --fix` takes a component that the item on `origin/main` names.
+
+## Open questions
+
+- The builder check asked whether `clm claim <component> --fix backlog/<slug>` accepts an item that the draft's own `propose/<slug>` claim still holds. The existing code-fix route already claims items that `clm draft` claimed this way, so the change assumes it does and adds no `orchestrator` requirement.
+- The `#### Needs` entry `model/parse-backlog` was kept as it stood. The builder check pointed out that `model/parse-backlog-item` may be the intended rule. Neither is pending, so it blocks nothing.
