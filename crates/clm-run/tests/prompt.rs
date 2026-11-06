@@ -789,6 +789,7 @@ fn scenario_capability_tests_follow_rule() {
         "a test in the `capability` component's `paths` observes at the product's boundary",
         "update that test in your own branch",
         "`capability-tests-follow-rules`",
+        "change only the test's expectations, and the steps that reach them",
         "keep the test's citation as it is",
         "`CAPABILITIES.md` now states them",
         "leaving the capability `behind` for its own build to re-cite",
@@ -822,7 +823,11 @@ fn scenario_pushes_through_clm_fresh_and_resumed() {
     // req:orchestrator.run/prompt-pushes-through-clm@8e9fbdf3
     let mut resumed = job();
     resumed.resumed = true;
-    for j in [job(), resumed] {
+    let mut checked = job();
+    checked.check = Some("scripts/check.sh".into());
+    checked.read_from_main = true;
+    checked.capability_tests = true;
+    for j in [job(), resumed, checked] {
         let p = prompt(&j);
         let text = p.split("The context bundle for").next().unwrap();
         assert!(text.contains("clm branch push"), "{p}");
