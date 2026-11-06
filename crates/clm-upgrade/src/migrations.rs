@@ -4,5 +4,11 @@
 
 use crate::Migration;
 
+#[path = "migrations/20261105-clm-upgrade-2/mod.rs"]
+mod claude_md_names_help;
+#[path = "migrations/20261105-clm-upgrade/mod.rs"]
+mod constraints_copy;
+
 /// The migrations, oldest first.
-pub(crate) static LIST: &[Migration] = &[];
+pub(crate) static LIST: &[Migration] =
+    &[constraints_copy::MIGRATION, claude_md_names_help::MIGRATION];

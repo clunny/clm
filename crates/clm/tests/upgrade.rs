@@ -73,22 +73,42 @@ fn the_flags_are_dispatched_and_exclusive() {
     assert_eq!(both.status.code(), Some(2), "{both:?}");
 }
 
+/// Sets `clm.toml`'s `upgraded` to a migration no binary holds.
+fn stamp_too_new(root: &Path) {
+    let toml = root.join("clm.toml");
+    let text = fs::read_to_string(&toml).unwrap();
+    let mut lines: Vec<String> = text
+        .lines()
+        .filter(|l| !l.starts_with("upgraded"))
+        .map(String::from)
+        .collect();
+    lines.insert(0, "upgraded = \"99990101-future\"".to_string());
+    fs::write(&toml, lines.join("\n") + "\n").unwrap();
+}
+
 // req:clm/upgrade-command@86c8b58e
 #[test]
 fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
     let dir = initialised();
-    // The binary holds no migration to lock, so the lock is left unwritten.
+    // The project holds the migrations' directories, as the CLM repository does.
+    let migrations = dir.path().join("crates/clm-upgrade/src/migrations");
+    fs::create_dir_all(&migrations).unwrap();
+    let copied = Command::new("cp")
+        .arg("-r")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-upgrade/src/migrations/."))
+        .arg(&migrations)
+        .status()
+        .unwrap();
+    assert!(copied.success());
     let out = clm(dir.path(), &["upgrade", "--lock", "0.1.0"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(
-        !dir.path()
+        dir.path()
             .join("crates/clm-upgrade/migrations.lock")
             .exists()
     );
 
-    let toml = dir.path().join("clm.toml");
-    let text = fs::read_to_string(&toml).unwrap();
-    fs::write(&toml, format!("upgraded = \"99990101-future\"\n{text}")).unwrap();
+    stamp_too_new(dir.path());
     let too_new = clm(dir.path(), &["upgrade", "--lock", "0.1.0"]);
     assert_eq!(too_new.status.code(), Some(1), "{too_new:?}");
     assert!(String::from_utf8_lossy(&too_new.stderr).contains("newer `clm`"));
@@ -98,9 +118,7 @@ fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
 #[test]
 fn upgrade_from_a_subdirectory_reads_the_project_root() {
     let dir = initialised();
-    let toml = dir.path().join("clm.toml");
-    let text = fs::read_to_string(&toml).unwrap();
-    fs::write(&toml, format!("upgraded = \"99990101-future\"\n{text}")).unwrap();
+    stamp_too_new(dir.path());
     let out = clm(&dir.path().join("specs"), &["upgrade"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("newer `clm`"));
