@@ -1202,7 +1202,7 @@ fn a_branch_that_regenerates_nothing_merges_nothing() {
 
 #[test]
 fn an_archived_change_is_merged() {
-    // req:sync/reapply@e04f28bc req:sync.regenerate/stale-delta-merge@83a398e5
+    // req:sync/reapply@01d24eb6 req:sync.regenerate/stale-delta-merge@83a398e5
     let r = repo("spec/x");
     main_moves(
         &r,
