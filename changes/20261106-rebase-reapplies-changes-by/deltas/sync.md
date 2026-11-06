@@ -91,3 +91,6 @@ When the branch adds a change whose status is `applied`, adds a new archived cha
 - WHEN `clm rebase` runs
 - THEN it prints no `main changed` line and no `apply/` violation, makes no `Re-apply` or `Merge main into` commit, `specs/a/SPEC.md` is `origin/main`'s, and it exits 0
 
+
+#### Needs
+- sync.regenerate/regenerated-tree
