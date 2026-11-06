@@ -155,12 +155,23 @@ pub fn pending_in(root: &Path, node: Option<&str>) -> Result<Vec<Pending>, Vec<V
     if !violations.is_empty() {
         return Err(violations);
     }
-    let mut list = pending(&graph, &scan(root).req);
-    if let Some(node) = node {
+    pending_for(&graph, &scan(root).req, node)
+}
+
+/// The pending requirements of every component, or of `component`, for a graph and markers
+/// loaded from anywhere (`pending-narrows-on-a-graph`). A `component` the graph doesn't hold
+/// is the violation `pending_in` returns for it.
+pub fn pending_for(
+    graph: &clm_model::Graph,
+    markers: &[Marker],
+    component: Option<&str>,
+) -> Result<Vec<Pending>, Vec<Violation>> {
+    let mut list = pending(graph, markers);
+    if let Some(node) = component {
         // A removed node's obsolete markers are pending on the nodes owning their files.
         if !graph.nodes.contains_key(node) {
             return Err(vec![Violation {
-                path: Path::new("specs")
+                path: std::path::Path::new("specs")
                     .join(node.replace('.', "/"))
                     .join("SPEC.md"),
                 rule: "check.coverage/pending-report",
