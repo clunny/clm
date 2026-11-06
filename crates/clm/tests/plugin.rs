@@ -883,7 +883,7 @@ fn skills_point_at_the_guide() {
 
 #[test]
 fn skills_run_a_builder_check() {
-    // req:plugin/builder-check@db60baf8
+    // req:plugin/builder-check@43c9efb5
     // The check is a numbered step of its own, which says all of this itself, so text
     // elsewhere in the skill can't stand in for it.
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
@@ -967,6 +967,28 @@ fn skills_run_a_builder_check() {
         ),
         "{removal}"
     );
+    // A widened type another node matches exhaustively: the arm is a forced fix of the
+    // widening's build, and the requirements that reach it through the new value need it.
+    assert!(
+        removal.contains("and for exhaustive uses of each type the change widens"),
+        "{removal}"
+    );
+    let widened = steps[check]
+        .lines()
+        .find(|l| l.contains("`forced-fixes-cover-additions`"))
+        .expect(
+            "skills/propose/SKILL.md's builder check must mention `forced-fixes-cover-additions`",
+        );
+    for needle in [
+        "widens a type another component matches exhaustively",
+        "an added enum variant",
+        "need nothing of the widening",
+        "tested by calling that code directly",
+        "adds the arm as a forced fix",
+        "reach the code through the new value need the widening",
+    ] {
+        assert!(widened.contains(needle), "{needle}: {widened}");
+    }
     // A removal that can't carry that `#### Needs` goes in a second, deferred change.
     let deferred = steps[check]
         .lines()
@@ -1016,6 +1038,7 @@ fn skills_run_a_builder_check() {
         "contract-removal-needs",
         "contract-step-deferred",
         "rename-adds-then-removes",
+        "forced-fixes-cover-additions",
         "builds nothing",
         "builder-check-asks-order",
         "its own component",
@@ -1056,7 +1079,7 @@ fn skills_run_a_builder_check() {
 
 #[test]
 fn builder_check_reapplies_through_rebase() {
-    // req:plugin/builder-check@db60baf8
+    // req:plugin/builder-check@43c9efb5
     // By the builder check the change is `applied`, and `clm apply` refuses an applied
     // change (`apply/change-status`): a delta edited then reaches `specs/` through
     // `clm rebase`, which regenerates it from the applied deltas.
