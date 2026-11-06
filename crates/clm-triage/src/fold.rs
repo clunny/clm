@@ -304,8 +304,8 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a \
          human can supply into `question` or `human-task` backlog items whose `blocks` name the \
          requirements that wait (`requirement-blocks`); and list the rest under \
-         `## Open questions`. Ask the builder check's subagent, too, which capability tests \
-         each such requirement changes what they observe at the product's boundary: such work \
+         `## Open questions`. Ask the builder check's subagent, too, which capability tests see something different at the product's boundary because of each \
+         requirement on those elements: such work \
          is neither a requirement of `capability`, which holds none of its own, nor a \
          `#### Needs`, nor a backlog item, since the requirement's own build updates those tests \
          (`capability-tests-follow-rules`), so name them in that requirement's text; a \

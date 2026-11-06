@@ -455,9 +455,8 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a human \
          can supply into `question` or `human-task` backlog items whose `blocks` name the \
          requirements that wait (`requirement-blocks`); and list the rest under \
-         `## Open questions`. Ask the builder check's subagent, too, for which capability tests each \
-         requirement the change adds or modifies changes what they observe at the product's \
-         boundary: such work is neither a requirement of `capability`, which holds none of its \
+         `## Open questions`. Ask the builder check's subagent, too, which capability tests see something different at the product's boundary because of each \
+         requirement the change adds or modifies: such work is neither a requirement of `capability`, which holds none of its \
          own, nor a `#### Needs`, nor a backlog item, since the requirement's own build updates \
          those tests (`capability-tests-follow-rules`), so name them in that requirement's text; \
          a requirement under which a `CAPABILITIES.md` entry as written no longer holds edits \
