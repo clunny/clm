@@ -10,7 +10,7 @@ clm-config.workspace = true
 clm-git.workspace = true
 clm-model.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml.workspace = true
 streaming-iterator = "0.1.9"
 toml.workspace = true

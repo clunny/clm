@@ -10,7 +10,7 @@ const CHANGE: &str = "20261030-init";
 
 /// The node map `/clm:init` drafts from `clm survey` and agrees with the person, for
 /// `clm survey --components`: the root keeps the files `clm init` gave it, and the README.
-const MAP: &str = "components:\n  - { id: clm, paths: [\".gitignore\", \"README.md\", \"clm.toml\", \"scripts/clm-check.sh\"], depends_on: [] }\n  - { id: greeter, paths: [\"src/**\"], depends_on: [clm] }\n  - { id: capability, paths: [\"tests/capability/**\"], depends_on: [clm] }\noutside: []\n";
+const MAP: &str = "components:\n  - { id: clm, paths: [\".claude/settings.json\", \".gitignore\", \"README.md\", \"clm.toml\", \"scripts/clm-check.sh\"], depends_on: [] }\n  - { id: greeter, paths: [\"src/**\"], depends_on: [clm] }\n  - { id: capability, paths: [\"tests/capability/**\"], depends_on: [clm] }\noutside: []\n";
 
 const GREETER: &str = "---\ncomponent: greeter\ncreate: true\n---\n## Frontmatter\n\n```yaml\ntitle: Greeter\nstatus: specd\nowners: []\ndepends_on: [clm]\npaths: [\"src/**\"]\nserves: [capability/greet]\n```\n\n## Contract\n\n`greet` prints a greeting.\n\n## Design\n\nA shell function in `src/greet.sh`.\n\n## ADDED Requirements\n\n### Requirement: says-hi\n`greet` SHALL print `hi`.\n\n#### Scenario: greet\n- GIVEN the greeter sourced\n- WHEN `greet` runs\n- THEN it prints `hi`\n";
 
@@ -90,7 +90,7 @@ fn existing_codebase() {
     spec.write(
         &format!("changes/{CHANGE}/deltas/clm.md"),
         &format!(
-            "---\ncomponent: clm\ncreate: false\nbase: {{ frontmatter: \"{}\", contract: \"{}\", design: \"{}\" }}\n---\n## MODIFIED Frontmatter\n\n```yaml\npaths: [\".gitignore\", \"README.md\", \"clm.toml\", \"scripts/clm-check.sh\"]\noutside: []\n```\n\n## MODIFIED Contract\n\nThe greeter greets.\n\n## MODIFIED Design\n\n| Node | Responsibility |\n|---|---|\n| `clm` (root) | The tooling |\n| `greeter` | The greeting |\n| `capability` | The capabilities' tests |\n",
+            "---\ncomponent: clm\ncreate: false\nbase: {{ frontmatter: \"{}\", contract: \"{}\", design: \"{}\" }}\n---\n## MODIFIED Frontmatter\n\n```yaml\npaths: [\".claude/settings.json\", \".gitignore\", \"README.md\", \"clm.toml\", \"scripts/clm-check.sh\"]\noutside: []\n```\n\n## MODIFIED Contract\n\nThe greeter greets.\n\n## MODIFIED Design\n\n| Node | Responsibility |\n|---|---|\n| `clm` (root) | The tooling |\n| `greeter` | The greeting |\n| `capability` | The capabilities' tests |\n",
             base("frontmatter"),
             base("contract"),
             base("design")

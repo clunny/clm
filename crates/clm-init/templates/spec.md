@@ -3,7 +3,7 @@ title: "{{title}}"
 status: unbuilt
 owners: []
 depends_on: []
-paths: [".gitignore", "clm.toml", "scripts/clm-check.sh"]
+paths: [".claude/settings.json", ".gitignore", "clm.toml", "scripts/clm-check.sh"]
 outside: {{outside}}
 successor: ""
 ---

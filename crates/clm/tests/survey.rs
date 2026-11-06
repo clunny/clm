@@ -390,7 +390,7 @@ fn an_outside_glob_over_a_covered_file_exempts_nothing() {
 
 #[test]
 fn survey_reads_the_index_alone() {
-    // req:init/init-root-ownership@82afadf4
+    // req:init/init-root-ownership@6b897376
     let repo = repo(TWO_CRATES);
     fs::write(repo.path().join("untracked.txt"), "x\n").unwrap();
     assert!(!survey(repo.path()).contains("untracked.txt"));

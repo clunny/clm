@@ -475,6 +475,10 @@ enum Command {
         /// Where the remote lives (default: from `origin`'s URL, or `none` without one).
         #[arg(long, value_parser = ["none", "git", "github"])]
         host: Option<String>,
+        /// Write nothing: print the allow rules unattended sessions need that the project's
+        /// Claude Code settings lack, and exit 1 when one is missing.
+        #[arg(long, conflicts_with_all = ["langs", "no_detectors", "host"])]
+        check_permissions: bool,
     },
     /// Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>`
     /// when every test must run.
@@ -1372,7 +1376,24 @@ fn dispatch() -> ExitCode {
             langs,
             no_detectors,
             host,
+            check_permissions,
         } => {
+            if check_permissions {
+                return match std::env::current_dir()
+                    .map_err(|e| format!("current directory: {e}"))
+                    .and_then(|cwd| clm_init::check_permissions(&cwd))
+                {
+                    Ok(text) if text.is_empty() => ExitCode::SUCCESS,
+                    Ok(text) => {
+                        print!("{text}");
+                        ExitCode::FAILURE
+                    }
+                    Err(e) => {
+                        eprintln!("clm init: {e}");
+                        ExitCode::FAILURE
+                    }
+                };
+            }
             let opts = clm_init::Options {
                 langs,
                 detectors: !no_detectors,
