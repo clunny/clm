@@ -2266,9 +2266,25 @@ fn triage_takes_the_inbox_in() {
         assert!(resolved.contains(needle), "{needle}: {resolved}");
     }
     let alerts = sentence_with(step, "For the `alert <n> new` lines");
-    for needle in ["no verifier", "`critical` and `high`", "`alerts: [<n>]`"] {
+    for needle in [
+        "no verifier",
+        "`critical` and `high`",
+        "`alerts: [<n>]`",
+        "`kind: bug`",
+        "whose `paths` hold its manifest",
+        "no `Co-authored-by` trailer",
+    ] {
         assert!(alerts.contains(needle), "{needle}: {alerts}");
     }
+    let alert_done = sentence_with(step, "For each `alert <n> resolved <slug> <by>` line");
+    for needle in [
+        "stays open on the host until the updated dependency is on `main`",
+        "once `<by>` is archived",
+    ] {
+        assert!(alert_done.contains(needle), "{needle}: {alert_done}");
+    }
+    let down = sentence_with(step, "On an `alerts unavailable` line");
+    assert!(down.contains("go on"), "{down}");
     let pull = sentence_with(step, "For each `pull <n>` line");
     assert!(pull.contains("`contribution` skill's steps"), "{pull}");
     assert!(step.contains("run `clm triage` again"), "{step}");
