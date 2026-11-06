@@ -44,6 +44,7 @@ clm-web-replica = { path = "crates/clm-web-replica" }
 clm-replica = { path = "crates/clm-replica" }
 clm-health = { path = "crates/clm-health" }
 clm-rename = { path = "crates/clm-rename" }
+clm-upgrade = { path = "crates/clm-upgrade" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"
