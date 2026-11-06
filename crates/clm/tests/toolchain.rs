@@ -2,6 +2,8 @@
 //! `rust-toolchain.toml`, the workspace's build profiles, and the commands
 //! `.claude/settings.json` lets unattended sessions run.
 
+// clm:reads CLAUDE.md
+
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -132,8 +134,9 @@ fn wrong_profiles_reported() {
     assert_eq!(profile_violations(&good), Vec::<String>::new());
 }
 
-/// The Bash commands unattended sessions may run beyond `clm run`'s own.
-const ALLOWED: [&str; 8] = [
+/// The toolchain's Bash commands unattended sessions may run beyond `clm run`'s own; the `clm`
+/// rules `clm init` seeds come with them.
+const TOOLCHAIN: [&str; 8] = [
     "Bash(cargo *)",
     "Bash(npm ci *)",
     "Bash(npm install --ignore-scripts *)",
@@ -144,16 +147,24 @@ const ALLOWED: [&str; 8] = [
     "Bash(.github/scripts/ci-check.sh *)",
 ];
 
+fn allowed() -> Vec<&'static str> {
+    TOOLCHAIN
+        .into_iter()
+        .chain(clm_init::UNATTENDED_RULES)
+        .collect()
+}
+
 /// Every `permissions.allow` entry that isn't one of `ALLOWED`.
 fn disallowed(allow: &[&str]) -> Vec<String> {
+    let allowed = allowed();
     allow
         .iter()
-        .filter(|a| !ALLOWED.contains(a))
+        .filter(|a| !allowed.contains(a))
         .map(|a| a.to_string())
         .collect()
 }
 
-// req:clm/session-commands@0f65d198
+// req:clm/session-commands@7fb59303
 #[test]
 fn allowed_commands() {
     let text = fs::read_to_string(repo().join(".claude/settings.json")).unwrap();
@@ -170,12 +181,12 @@ fn allowed_commands() {
         })
         .collect();
     assert_eq!(disallowed(&allow), Vec::<String>::new());
-    for a in ALLOWED {
+    for a in allowed() {
         assert!(allow.contains(&a), "permissions.allow lacks {a}");
     }
 }
 
-// req:clm/session-commands@0f65d198
+// req:clm/session-commands@7fb59303
 #[test]
 fn bare_npx_refused() {
     assert_eq!(
@@ -186,8 +197,22 @@ fn bare_npx_refused() {
         "Bash(npm install *)",
         "Bash(npm *)",
         "Bash(rustup *)",
+        "Bash(git push *)",
+        "Bash(clm approve *)",
+        "Bash(clm approve)",
         "Bash(.github/scripts/clm.sh *)",
     ] {
         assert_eq!(disallowed(&[bad]), [bad], "{bad} not reported");
     }
+}
+
+// req:clm/claude-md-pushes-with-clm@78576ed9
+#[test]
+fn claude_md_pushes_through_clm() {
+    let text = fs::read_to_string(repo().join("CLAUDE.md")).unwrap();
+    assert!(!text.contains("git push"), "CLAUDE.md names `git push`");
+    assert!(
+        text.contains("clm branch push"),
+        "CLAUDE.md lacks `clm branch push`"
+    );
 }

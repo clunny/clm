@@ -8,7 +8,27 @@
       "Bash(npm test *)",
       "Bash(npx playwright test *)",
       "Bash(.github/scripts/ci-check.sh)",
-      "Bash(.github/scripts/ci-check.sh *)"
+      "Bash(.github/scripts/ci-check.sh *)",
+      "Bash(clm apply)",
+      "Bash(clm apply *)",
+      "Bash(clm branch)",
+      "Bash(clm branch *)",
+      "Bash(clm check)",
+      "Bash(clm check *)",
+      "Bash(clm claim)",
+      "Bash(clm claim *)",
+      "Bash(clm defect)",
+      "Bash(clm defect *)",
+      "Bash(clm gate)",
+      "Bash(clm gate *)",
+      "Bash(clm land)",
+      "Bash(clm land *)",
+      "Bash(clm pr)",
+      "Bash(clm pr *)",
+      "Bash(clm rebase)",
+      "Bash(clm rebase *)",
+      "Bash(clm workaround)",
+      "Bash(clm workaround *)"
     ]
   },
   "enabledPlugins": {
