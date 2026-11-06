@@ -1,6 +1,6 @@
 ---
 title: Upgrade
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: [config]
 paths: ["crates/clm-upgrade/**"]
