@@ -106,6 +106,9 @@ pub struct BacklogFrontmatter {
     /// The host's issues the item was taken in from, positive whole numbers
     /// (`issues-enter-through-the-backlog`).
     pub issues: Vec<u64>,
+    /// The host's dependency alerts the item was taken in from, positive whole numbers
+    /// (`dependency-alerts-through-intake`).
+    pub alerts: Vec<u64>,
 }
 
 /// A backlog item's frontmatter as written, before `components` and its old key
@@ -129,6 +132,8 @@ struct RawBacklogFrontmatter {
     requirement: Option<RequirementAt>,
     #[serde(default)]
     issues: Vec<u64>,
+    #[serde(default)]
+    alerts: Vec<u64>,
 }
 
 /// A key's value when the key is written at all, a null included.
@@ -154,6 +159,9 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
         if raw.issues.contains(&0) {
             return Err("`issues` entries must be positive whole numbers, not 0".into());
         }
+        if raw.alerts.contains(&0) {
+            return Err("`alerts` entries must be positive whole numbers, not 0".into());
+        }
         Ok(BacklogFrontmatter {
             title: raw.title,
             kind: raw.kind,
@@ -163,6 +171,7 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
             blocks: raw.blocks,
             requirement: raw.requirement,
             issues: raw.issues,
+            alerts: raw.alerts,
         })
     }
 }
