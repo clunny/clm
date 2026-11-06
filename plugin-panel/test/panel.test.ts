@@ -22,8 +22,11 @@ import {
   hasOriginMain,
   isViewTab,
   paneBody,
+  cachedRun,
   runClm,
   sessionDirGone,
+  unlessSuperseded,
+  viewKey,
   unfenced,
   viewArgs,
 } from '../src/panel.ts'
@@ -369,5 +372,39 @@ describe('panel-package', () => {
     const $ = fake({ files: [SHIM], answer: (argv: readonly string[]) => (argv[0] === 'git' ? ok('/usr/lib/git-core') : ok('chart')) })
     await runClm($, ['view', 'flight'], '/work/repo')
     expect($.calls).toEqual([{ argv: [SHIM, 'view', 'flight'], cwd: '/work/repo' }])
+  })
+})
+
+describe('superseded-draw', () => {
+  // req:plugin.panel/superseded-draw@261a6911
+  const aborted = new Error(`clm-panel: $.process.run(${SHIM}) aborted`)
+
+  test('a draw whose run the engine aborted ends without throwing and draws nothing, and the newer draw runs again', async () => {
+    const cache = new Map<string, Promise<Run>>()
+    let starts = 0
+    const draw = (outcome: () => Promise<Run>) => async () =>
+      (await cachedRun(cache, viewKey(1, ['view', 'flight']), () => (starts++, outcome()))).stdout
+    const first = await unlessSuperseded(draw(() => Promise.reject(aborted)), null)
+    expect(first).toBeNull()
+    const second = await unlessSuperseded(draw(() => Promise.resolve(ok('chart'))), null)
+    expect(second).toBe('chart')
+    expect(starts).toBe(2)
+  })
+
+  test('a failure that is not an abort is not swallowed', async () => {
+    await expect(unlessSuperseded(() => Promise.reject(new Error('boom')), null)).rejects.toThrow('boom')
+    await expect(unlessSuperseded(() => Promise.reject(new Error('aborted early')), null)).rejects.toThrow('aborted early')
+  })
+
+  test('an aborted run of clm or of git is not kept as an answer', async () => {
+    const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
+    expect(await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)).toBeNull()
+    expect(await unlessSuperseded(() => hasOriginMain($, '/work/repo'), null)).toBeNull()
+  })
+
+  test('another failure of clm still shows why it could not start', async () => {
+    const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'spawn EACCES' })
+    const run = await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)
+    expect(run?.stderr).toBe(`clm couldn't start: ${SHIM} in /work/repo: spawn EACCES`)
   })
 })

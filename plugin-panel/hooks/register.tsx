@@ -3,7 +3,7 @@
 // itself is the `clm` plugin's `commands/view.md`; answering it here shows the output without
 // a model turn.
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, RenderNode } from 'claude-code'
 
 import {
   dismiss,
@@ -29,6 +29,7 @@ import {
   TABS,
   type Run,
   type Span,
+  type Surface,
   cachedRun,
   isViewTab,
   command,
@@ -39,6 +40,7 @@ import {
   paneBody,
   runClm,
   unfenced,
+  unlessSuperseded,
   viewArgs,
   viewKey,
 } from '../src/panel.ts'
@@ -58,6 +60,8 @@ const generation = atom({ plugin: 'clm-panel', key: 'generation' } as const, 0)
 // The subagents this session launched, and the time their rows are drawn at.
 const agents = atom({ plugin: 'clm-panel', key: 'agents' } as const, [])
 const now = atom({ plugin: 'clm-panel', key: 'now' } as const, 0)
+
+type PaneEvent = { surface: Surface; props: { bodyColumns: number } }
 
 const LABELS = { spec: 'Spec', flight: 'Flight', blockers: 'Blockers', capabilities: 'Capabilities' } as const
 
@@ -210,179 +214,182 @@ export const register: Register = on => {
     return result
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE_ID }, async ($, e) => {
-    const shown = await read($, tab)
-    // Each surface's table is one member of a union: `Svg` is read by narrowing it.
-    const elements = $.ui.resolve(e)
-    const { Box, Text, Button } = elements
-    const Svg = 'Svg' in elements ? elements.Svg : undefined
-    // The Capabilities tab is no view: its text whatever the surface.
-    const page = shown === 'capabilities' ? await read($, capability) : null
-    const listed = capabilitiesPane(page)
-    const gen = await read($, generation)
-    // A draw's run the engine cut short is asked again, as `clm`'s runs are.
-    const atOrigin = await cachedRun(atMain, viewKey(gen, ORIGIN_MAIN_ARGV), () =>
-      $.session.cwd().then(cwd => hasOriginMain($, cwd)),
-    )
-    const args = isViewTab(shown) ? viewArgs(shown, e.surface, e.props.bodyColumns, atOrigin) : listed.args
-    const clm = (argv: string[]) =>
-      cachedRun(runs, viewKey(gen, argv), () => $.session.cwd().then(cwd => runClm($, argv, cwd)))
-    // The JSON models beside an ANSI chart, so its lines can be pressed (`node-inspector`),
-    // started with it.
-    const chosen = await read($, selected)
-    // On the Capabilities tab, the report the list's rows are matched against.
-    const models: { own?: string[]; other?: string[] } = isViewTab(shown)
-      ? modelRuns(shown, e.surface, chosen, atOrigin)
-      : { own: listed.report }
-    const [run, own, other] = await Promise.all([
-      clm(args),
-      models.own && clm(models.own),
-      models.other && clm(models.other),
-    ])
-    // The build rows go on the Flight tab only, drawn at the latest tick.
-    // Only the Flight tab reads `now`, so a tick redraws no other tab.
-    const list = shown === 'flight' ? await read($, agents) : []
-    const at = shown === 'flight' ? Math.max(await read($, now), ...list.map(a => a.startedAt)) : 0
+  // A draw the engine aborted for a newer one ends here, drawing nothing; the newer one draws.
+  on('ui.render', { component: 'Pane', requestId: PANE_ID }, ($, e) => unlessSuperseded(() => drawPane($, e), ''))
+}
 
-    // A span with `button` is drawn as a button after the line's text, not as text.
-    const runsOf = (line: Span[]) =>
-      line.length === 0
-        ? ' '
-        : line
-            .filter(s => s.button === undefined)
-            .map(s => (
-              <Text color={s.color} bold={s.bold} dimColor={s.dim}>
-                {s.text}
-              </Text>
-            ))
-    // A press changes an atom and nothing else: the redraw reruns no `clm` it already holds.
-    const press = (key: string) => {
-      const target = keyTarget(key)
-      if (target && 'node' in target) void update($, selected, s => pressNode(s, target.node))
-      else if (target && 'root' in target) void update($, unfolded, u => toggleRoot(u, target.root))
-      else if (target && 'dismiss' in target) void update($, agents, list => dismiss(list, target.dismiss))
-      else if (target) void update($, capability, () => target.capability)
-    }
-    const lines = (drawn: PaneLine[], wrap: 'wrap' | 'truncate-end' = 'truncate-end') =>
-      drawn.map(line => {
-        const buttons = line.spans.filter(s => s.button !== undefined)
-        if (buttons.length > 0) {
-          // A failed build row's first line: its text, then `Dismiss`.
-          return (
-            <Box flexDirection="row" gap={1}>
-              <Text wrap={wrap}>{runsOf(line.spans)}</Text>
-              {buttons.map(b => (
-                <Button key={b.button} label={b.text} role="dismiss" onPress={() => press(b.button!)} />
-              ))}
-            </Box>
-          )
-        }
-        return line.key === undefined ? (
-          <Text wrap={wrap}>{runsOf(line.spans)}</Text>
-        ) : (
-          <Button key={line.key} plain onPress={() => press(line.key!)}>
+async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
+  const shown = await read($, tab)
+  // Each surface's table is one member of a union: `Svg` is read by narrowing it.
+  const elements = $.ui.resolve(e)
+  const { Box, Text, Button } = elements
+  const Svg = 'Svg' in elements ? elements.Svg : undefined
+  // The Capabilities tab is no view: its text whatever the surface.
+  const page = shown === 'capabilities' ? await read($, capability) : null
+  const listed = capabilitiesPane(page)
+  const gen = await read($, generation)
+  // A draw's run the engine cut short is asked again, as `clm`'s runs are.
+  const atOrigin = await cachedRun(atMain, viewKey(gen, ORIGIN_MAIN_ARGV), () =>
+    $.session.cwd().then(cwd => hasOriginMain($, cwd)),
+  )
+  const args = isViewTab(shown) ? viewArgs(shown, e.surface, e.props.bodyColumns, atOrigin) : listed.args
+  const clm = (argv: string[]) =>
+    cachedRun(runs, viewKey(gen, argv), () => $.session.cwd().then(cwd => runClm($, argv, cwd)))
+  // The JSON models beside an ANSI chart, so its lines can be pressed (`node-inspector`),
+  // started with it.
+  const chosen = await read($, selected)
+  // On the Capabilities tab, the report the list's rows are matched against.
+  const models: { own?: string[]; other?: string[] } = isViewTab(shown)
+    ? modelRuns(shown, e.surface, chosen, atOrigin)
+    : { own: listed.report }
+  const [run, own, other] = await Promise.all([
+    clm(args),
+    models.own && clm(models.own),
+    models.other && clm(models.other),
+  ])
+  // The build rows go on the Flight tab only, drawn at the latest tick.
+  // Only the Flight tab reads `now`, so a tick redraws no other tab.
+  const list = shown === 'flight' ? await read($, agents) : []
+  const at = shown === 'flight' ? Math.max(await read($, now), ...list.map(a => a.startedAt)) : 0
+
+  // A span with `button` is drawn as a button after the line's text, not as text.
+  const runsOf = (line: Span[]) =>
+    line.length === 0
+      ? ' '
+      : line
+          .filter(s => s.button === undefined)
+          .map(s => (
+            <Text color={s.color} bold={s.bold} dimColor={s.dim}>
+              {s.text}
+            </Text>
+          ))
+  // A press changes an atom and nothing else: the redraw reruns no `clm` it already holds.
+  const press = (key: string) => {
+    const target = keyTarget(key)
+    if (target && 'node' in target) void update($, selected, s => pressNode(s, target.node))
+    else if (target && 'root' in target) void update($, unfolded, u => toggleRoot(u, target.root))
+    else if (target && 'dismiss' in target) void update($, agents, list => dismiss(list, target.dismiss))
+    else if (target) void update($, capability, () => target.capability)
+  }
+  const lines = (drawn: PaneLine[], wrap: 'wrap' | 'truncate-end' = 'truncate-end') =>
+    drawn.map(line => {
+      const buttons = line.spans.filter(s => s.button !== undefined)
+      if (buttons.length > 0) {
+        // A failed build row's first line: its text, then `Dismiss`.
+        return (
+          <Box flexDirection="row" gap={1}>
             <Text wrap={wrap}>{runsOf(line.spans)}</Text>
-          </Button>
+            {buttons.map(b => (
+              <Button key={b.button} label={b.text} role="dismiss" onPress={() => press(b.button!)} />
+            ))}
+          </Box>
         )
-      })
-    const tabs = (
-      <Box flexDirection="row" gap={1}>
-        {TABS.map(t => (
-          <Button
-            key={t}
-            label={LABELS[t]}
-            variant={t === shown ? 'primary' : 'secondary'}
-            onPress={() => {
-              // A tab change redraws: `clm view` runs again even for a tab shown before.
-              void update($, tab, () => t).then(() => update($, generation, n => n + 1))
-            }}
-          />
-        ))}
+      }
+      return line.key === undefined ? (
+        <Text wrap={wrap}>{runsOf(line.spans)}</Text>
+      ) : (
+        <Button key={line.key} plain onPress={() => press(line.key!)}>
+          <Text wrap={wrap}>{runsOf(line.spans)}</Text>
+        </Button>
+      )
+    })
+  const tabs = (
+    <Box flexDirection="row" gap={1}>
+      {TABS.map(t => (
+        <Button
+          key={t}
+          label={LABELS[t]}
+          variant={t === shown ? 'primary' : 'secondary'}
+          onPress={() => {
+            // A tab change redraws: `clm view` runs again even for a tab shown before.
+            void update($, tab, () => t).then(() => update($, generation, n => n + 1))
+          }}
+        />
+      ))}
+    </Box>
+  )
+  if (shown === 'capabilities') {
+    // `clm capabilities`' text on every surface; a page under `Back`; nothing that decides.
+    const drawn = capabilityView({ slug: page, run, report: own })
+    return (
+      <Box flexDirection="column">
+        {tabs}
+        {drawn.back && (
+          <Button key="back" label="Back" role="dismiss" onPress={() => void update($, capability, () => null)} />
+        )}
+        {drawn.error !== undefined && <Text color="error">{drawn.error}</Text>}
+        {/* `clm capabilities` takes no width: a page's prose wraps at the pane's edge. */}
+        {lines(drawn.lines, 'wrap')}
       </Box>
     )
-    if (shown === 'capabilities') {
-      // `clm capabilities`' text on every surface; a page under `Back`; nothing that decides.
-      const drawn = capabilityView({ slug: page, run, report: own })
-      return (
-        <Box flexDirection="column">
-          {tabs}
-          {drawn.back && (
-            <Button key="back" label="Back" role="dismiss" onPress={() => void update($, capability, () => null)} />
-          )}
-          {drawn.error !== undefined && <Text color="error">{drawn.error}</Text>}
-          {/* `clm capabilities` takes no width: a page's prose wraps at the pane's edge. */}
-          {lines(drawn.lines, 'wrap')}
-        </Box>
-      )
-    }
-    const body = paneBody(e.surface, run)
-    // Above the chart while the latest fetch failed, until one succeeds.
-    const warning = fetchWarning(latestFetch, await $.clock.now())
-    const fetchLine = warning && <Text wrap="truncate-end">{runsOf(warning)}</Text>
-    if ('error' in body) {
-      return (
-        <Box flexDirection="column">
-          {tabs}
-          {fetchLine}
-          <Text color="error">{body.error}</Text>
-        </Box>
-      )
-    }
-    // An ANSI chart carries the build rows under its node lines; the SVG is followed by them.
-    const drawn =
-      'ansi' in body ? undefined
-      : 'svg' in body && Svg ? <Svg source={body.svg} alt={`clm view ${shown}`} />
-      : undefined
-    if (!('ansi' in body)) {
-      return (
-        <Box flexDirection="column">
-          {tabs}
-          {fetchLine}
-          {drawn}
-          {lines(flightRows(undefined, list, at).map(spans => ({ spans })))}
-        </Box>
-      )
-    }
-    // Pressable node and root lines, folded chains and the inspector, or the chart as it came.
-    const chart = paneChart({
-      tab: shown,
-      chart: body.ansi,
-      own,
-      other,
-      selected: chosen,
-      unfolded: await read($, unfolded),
-      columns: e.props.bodyColumns,
-      contract: await read($, contract),
-    })
-    const [head, ...facts] = chart.inspector ?? []
-    const { detail } = chart
+  }
+  const body = paneBody(e.surface, run)
+  // Above the chart while the latest fetch failed, until one succeeds.
+  const warning = fetchWarning(latestFetch, await $.clock.now())
+  const fetchLine = warning && <Text wrap="truncate-end">{runsOf(warning)}</Text>
+  if ('error' in body) {
     return (
       <Box flexDirection="column">
         {tabs}
         {fetchLine}
-        {head && (
-          <Box flexDirection="row" gap={2}>
-            <Text wrap="truncate-end">{runsOf(head)}</Text>
-            <Button key="close" label="Close" role="dismiss" onPress={() => void update($, selected, () => null)} />
-          </Box>
-        )}
-        {facts.map(line => (
-          <Text wrap="truncate-end">{runsOf(line)}</Text>
-        ))}
-        {detail?.lines.map(line => (
-          <Text wrap="truncate-end">{runsOf(line)}</Text>
-        ))}
-        {detail && (
-          <Button
-            key="contract"
-            label="Contract"
-            variant={detail.button}
-            onPress={() => void update($, contract, was => !was)}
-          />
-        )}
-        {detail?.contract?.map(line => <Text>{line === '' ? ' ' : line}</Text>)}
-        {lines(shown === 'flight' ? withBuildRows(chart.lines, list, at) : chart.lines)}
+        <Text color="error">{body.error}</Text>
       </Box>
     )
+  }
+  // An ANSI chart carries the build rows under its node lines; the SVG is followed by them.
+  const drawn =
+    'ansi' in body ? undefined
+    : 'svg' in body && Svg ? <Svg source={body.svg} alt={`clm view ${shown}`} />
+    : undefined
+  if (!('ansi' in body)) {
+    return (
+      <Box flexDirection="column">
+        {tabs}
+        {fetchLine}
+        {drawn}
+        {lines(flightRows(undefined, list, at).map(spans => ({ spans })))}
+      </Box>
+    )
+  }
+  // Pressable node and root lines, folded chains and the inspector, or the chart as it came.
+  const chart = paneChart({
+    tab: shown,
+    chart: body.ansi,
+    own,
+    other,
+    selected: chosen,
+    unfolded: await read($, unfolded),
+    columns: e.props.bodyColumns,
+    contract: await read($, contract),
   })
+  const [head, ...facts] = chart.inspector ?? []
+  const { detail } = chart
+  return (
+    <Box flexDirection="column">
+      {tabs}
+      {fetchLine}
+      {head && (
+        <Box flexDirection="row" gap={2}>
+          <Text wrap="truncate-end">{runsOf(head)}</Text>
+          <Button key="close" label="Close" role="dismiss" onPress={() => void update($, selected, () => null)} />
+        </Box>
+      )}
+      {facts.map(line => (
+        <Text wrap="truncate-end">{runsOf(line)}</Text>
+      ))}
+      {detail?.lines.map(line => (
+        <Text wrap="truncate-end">{runsOf(line)}</Text>
+      ))}
+      {detail && (
+        <Button
+          key="contract"
+          label="Contract"
+          variant={detail.button}
+          onPress={() => void update($, contract, was => !was)}
+        />
+      )}
+      {detail?.contract?.map(line => <Text>{line === '' ? ' ' : line}</Text>)}
+      {lines(shown === 'flight' ? withBuildRows(chart.lines, list, at) : chart.lines)}
+    </Box>
+  )
 }
