@@ -739,8 +739,14 @@ pub fn finish(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Erro
                 continue;
             }
             if clean(&wt.path)? {
-                remove_worktree(root, &wt.path)?;
-                done.push(format!("removed {}", wt.path.display()));
+                done.push(match remove_worktree(root, &wt.path) {
+                    Ok(()) => format!("removed {}", wt.path.display()),
+                    Err(why) => format!(
+                        "left {}: {}; delete the directory by hand, then run git worktree prune",
+                        wt.path.display(),
+                        why.replace('\n', " ").trim()
+                    ),
+                });
             } else {
                 done.push(format!("kept {}: uncommitted changes", wt.path.display()));
             }
@@ -805,7 +811,7 @@ fn free(root: &Path, node: &str, branch: &str, holder: &Holder) -> Result<(), Er
             holder.path.display()
         )))
     } else {
-        remove_worktree(root, &holder.path)
+        remove_worktree(root, &holder.path).map_err(Error::Git)
     }
 }
 
@@ -1178,13 +1184,63 @@ fn clean(dir: &Path) -> Result<bool, Error> {
 }
 
 /// Removes the linked worktree at `path`, unlocking it first: Claude Code locks the
-/// worktrees it makes.
-fn remove_worktree(root: &Path, path: &Path) -> Result<(), Error> {
-    let path = path.to_string_lossy();
+/// worktrees it makes. A build can leave a directory without its owner's write
+/// permission, which git can't delete, so the worktree's directories are made writable
+/// first. It is about to be deleted, so nobody sees the permissions again.
+fn remove_worktree(root: &Path, path: &Path) -> Result<(), String> {
+    let arg = path.to_string_lossy();
     // Unlocking a worktree that isn't locked fails, and that's fine.
-    let _ = git(root, &["worktree", "unlock", &path]);
-    git(root, &["worktree", "remove", &path])?;
+    let _ = git(root, &["worktree", "unlock", &arg]);
+    make_writable(path);
+    git(root, &["worktree", "remove", &arg]).map_err(|e| e.to_string())?;
+    if path.exists() {
+        return Err("still on disk".to_string());
+    }
     Ok(())
+}
+
+/// Gives the owner read, write and execute permission on `dir` and every directory under
+/// it, before reading each one's entries so a directory its owner can't list is still
+/// walked. Never follows or changes a symbolic link, so nothing outside `dir` changes.
+/// Best effort: what can't be changed is left for git to report.
+fn make_writable(dir: &Path) {
+    let Ok(meta) = fs::symlink_metadata(dir) else {
+        return;
+    };
+    if !meta.is_dir() {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = meta.permissions().mode();
+        if mode & 0o700 != 0o700 {
+            let _ = fs::set_permissions(dir, fs::Permissions::from_mode(mode | 0o700));
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            perms.set_readonly(false);
+            let _ = fs::set_permissions(dir, perms);
+        }
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        make_writable(&path);
+        #[cfg(not(unix))]
+        if let Ok(m) = fs::symlink_metadata(&path) {
+            if m.is_file() && m.permissions().readonly() {
+                let mut perms = m.permissions();
+                perms.set_readonly(false);
+                let _ = fs::set_permissions(&path, perms);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
