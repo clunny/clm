@@ -108,6 +108,20 @@ export async function clmCommand($: Host): Promise<string> {
 const ABORTED = /\baborted$/
 
 /**
+ * A pane draw's answer, or `none` when the engine aborted one of its `$` calls because a newer
+ * draw replaced it: the superseded draw ends quietly and the newer one draws. Any other failure
+ * is thrown.
+ */
+export async function unlessSuperseded<T, N>(draw: () => Promise<T>, none: N): Promise<T | N> {
+  try {
+    return await draw()
+  } catch (e) {
+    if (ABORTED.test(e instanceof Error ? e.message : String(e))) return none
+    throw e
+  }
+}
+
+/**
  * Runs `clm` with `args` at `cwd`; a `clm` that can't start reads as a failure saying so: not
  * installed when no shim was found and there is no `clm` on PATH, else why it didn't start. A
  * run the engine aborted rejects, so no cache keeps it as `clm`'s failure.
