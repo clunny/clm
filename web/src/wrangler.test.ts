@@ -43,14 +43,38 @@ describe('wrangler.toml', () => {
     return rules.some((r) => !r.startsWith('!') && matches(r)) && !rules.some((r) => r.startsWith('!') && matches(r.slice(1)));
   };
 
-  it('sends only the API, sign-in, webhook, invited list and /app to the Worker (req:web/site-served-directly@f8994877)', () => {
+  it('sends only the API, sign-in, webhook, invited list and /app to the script (req:web/site-served-directly@13328342)', () => {
     for (const path of ['/api/repos', '/auth/login', '/webhook', '/_clm/invited.json', '/app']) {
       expect(toWorker(path), path).toBe(true);
     }
-    for (const path of ['/', '/guide/quickstart', '/404.html', '/app/', '/app/main.js', '/sw.js']) {
+    for (const path of ['/app/', '/app/main.js', '/sw.js']) {
       expect(toWorker(path), path).toBe(false);
     }
     expect(rawConfig.assets?.run_worker_first).toEqual(['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app']);
-    expect(rawConfig.assets?.not_found_handling).toBe('404-page');
+    expect(rawConfig.assets?.not_found_handling).toBe('none');
+  });
+
+  const routes: { pattern: string; zone_name?: string; custom_domain?: boolean }[] = rawConfig.routes ?? [];
+  // A route pattern matches a request URL's host and path, `*` standing for any run of characters.
+  const routed = (path: string): number =>
+    routes.filter((r) => new RegExp(`^${r.pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`).test(`clm-app.dev${path}`)).length;
+
+  it('routes exactly the app\'s seven paths on clm-app.dev, with no Custom Domain (req:web/site-served-directly@13328342)', () => {
+    expect(routes.map((r) => r.pattern).sort()).toEqual(
+      ['/app', '/app/*', '/api/*', '/auth/*', '/webhook', '/_clm/*', '/sw.js'].map((p) => `clm-app.dev${p}`).sort(),
+    );
+    for (const r of routes) {
+      expect(r.zone_name).toBe('clm-app.dev');
+      expect(r.custom_domain ?? false).toBe(false);
+    }
+  });
+
+  it('leaves the site\'s paths to the site\'s Worker (req:web/site-served-directly@13328342)', () => {
+    for (const path of ['/', '/guide/quickstart', '/blog/', '/blog/feed.xml', '/privacy', '/404.html']) {
+      expect(routed(path), path).toBe(0);
+    }
+    for (const path of ['/app/', '/api/repos', '/auth/login', '/webhook', '/_clm/invited.json', '/sw.js']) {
+      expect(routed(path), path).toBe(1);
+    }
   });
 });

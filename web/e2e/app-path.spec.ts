@@ -43,7 +43,7 @@ async function serve(): Promise<Site> {
     const candidates = [base, `${base}.html`, join(base, 'index.html')];
     const file = candidates.find((f) => f.startsWith(DIST) && existsSync(f) && statSync(f).isFile());
     if (!file) {
-      // `not_found_handling = "404-page"`: the site's own 404 page, with status 404.
+      // A missing path: status 404 (the fake serves the built 404 page; the deployed script answers plainly).
       const page404 = join(DIST, '404.html');
       res.writeHead(404, { 'content-type': 'text/html', 'x-from': 'network' }).end(existsSync(page404) ? readFileSync(page404) : 'not found');
       return;
@@ -98,19 +98,6 @@ test.describe('app at /app/', () => {
     await page.goto('/app/');
     await expect(page.locator('a.btn.pri')).toHaveAttribute('href', '/auth/login');
   });
-});
-
-// req:web/site-served-directly@f8994877
-test('a missing page gets the site\'s 404 page with status 404', async ({ page }) => {
-  const site = await serve();
-  try {
-    const res = await page.goto(`${site.origin}/guide/nothing-here`);
-    expect(res?.status()).toBe(404);
-    expect(existsSync(join(DIST, '404.html'))).toBe(true);
-    expect(await page.content()).toContain(readFileSync(join(DIST, '404.html'), 'utf8').match(/<title>([^<]*)<\/title>/)![1]);
-  } finally {
-    await site.stop();
-  }
 });
 
 // req:web/invited-users@cfd18219

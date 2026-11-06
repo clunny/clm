@@ -4,7 +4,18 @@
 name = "clm"
 main = "../crates/clm-web/build/index.js"
 compatibility_date = "2026-10-01"
-routes = [{ pattern = "clm-app.dev", custom_domain = true }]
+# The app's paths only, as routes (they run before the Custom Domain's Worker). The site's
+# Worker (`clm-site`) holds the Custom Domain and answers every other path
+# (web/site-served-directly).
+routes = [
+  { pattern = "clm-app.dev/app", zone_name = "clm-app.dev" },
+  { pattern = "clm-app.dev/app/*", zone_name = "clm-app.dev" },
+  { pattern = "clm-app.dev/api/*", zone_name = "clm-app.dev" },
+  { pattern = "clm-app.dev/auth/*", zone_name = "clm-app.dev" },
+  { pattern = "clm-app.dev/webhook", zone_name = "clm-app.dev" },
+  { pattern = "clm-app.dev/_clm/*", zone_name = "clm-app.dev" },
+  { pattern = "clm-app.dev/sw.js", zone_name = "clm-app.dev" },
+]
 
 [build]
 # The browser app into ./dist, then the Rust Worker for wasm32 with worker-build, pinned to
@@ -45,9 +56,9 @@ crons = []
 directory = "./dist"
 # The Worker reads `_clm/` (the invited list) through this binding.
 binding = "ASSETS"
-# The site is at the root and the app under /app/. Only the API, sign-in, the webhook, the
-# invited list (which the Worker answers 404) and `/app` (redirected to `/app/`) go to the
-# Worker first; the assets answer everything else to everyone, the retiring /sw.js included
-# (web/site-served-directly). A missing path gets the site's /404.html with status 404.
-not_found_handling = "404-page"
+# The app under /app/. Only the API, sign-in, the webhook, the invited list (which the Worker
+# answers 404) and `/app` (redirected to `/app/`) go to the script first; the assets answer
+# the app's files and the retiring /sw.js (web/site-served-directly). A missing path under
+# /app/ gets a plain 404.
+not_found_handling = "none"
 run_worker_first = ["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]

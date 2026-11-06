@@ -44,8 +44,8 @@ command builds the app into `web/dist` and the Worker into `crates/clm-web/build
 Done once on 2026-10-22. Nothing here needs doing again unless something is lost.
 
 - **Domain.** `clm-app.dev`, registered through Cloudflare Registrar on the operator's
-  account. `wrangler.toml` makes it the Worker's custom domain, so Cloudflare creates the DNS
-  record and certificate on deploy.
+  account. The site's Worker (`clm-site`) holds it as its Custom Domain; `wrangler.toml`
+  routes only the app's paths on the zone to this Worker, ahead of it.
 - **Worker.** `clm`, holding the secrets below.
 - **KV namespace.** `clm-cache`, id `9fa493aaa0a54d219b2dfebb5f681b9e`, bound as `CLM`. To
   create one again: `npx wrangler kv namespace create clm-cache`, then put its id in
