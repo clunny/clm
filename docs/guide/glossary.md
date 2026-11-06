@@ -44,7 +44,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Run / runner:** `clm run` prepares one component's build for a session; `clm runner` builds everything in the queue unattended, one session per component.
 - **Build place:** one of the clone's slots for a build running at once (`max_builds`).
 - **Draft:** an unattended session that designs one change from backlog items (`clm draft`).
-- **Intake:** matching the host's open issues and pull requests to the backlog, saying of each issue whether it is new, taken in by an item or resolved (`clm intake`).
+- **Intake:** matching the host's open issues, pull requests and dependency alerts to the backlog, saying of each issue and alert whether it is new, taken in by an item (whose `issues` or `alerts` names it) or resolved (`clm intake`).
 - **Oversized:** a component whose spec or code is larger than its size budget (`clm size`).
 - **Expand-contract:** changing a contract in two steps: add the new one beside the old, move everyone over, then remove the old, marked meanwhile with `clm:remove-by <change-id>`. *Usually:* parallel change.
 
