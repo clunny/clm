@@ -10,6 +10,8 @@ mod lock_tests;
 mod migrations;
 mod pending;
 #[cfg(test)]
+mod shipped_tests;
+#[cfg(test)]
 mod tests;
 
 use std::path::Path;
