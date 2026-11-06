@@ -97,3 +97,61 @@ fn an_edited_claude_md_without_help_is_left_and_noted() {
     );
     assert!(out.contains(&format!("note {HELP_ID}\n")), "{out}");
 }
+
+const OLD_SCRIPT: &str = include_str!("migrations/20261106-corpus-entries-drift-from/old.sh");
+const NEW_SCRIPT: &str = include_str!("migrations/20261106-corpus-entries-drift-from/new.sh");
+const SCRIPT_ID: &str = "20261106-corpus-entries-drift-from";
+
+fn with_script(text: &str) -> TempDir {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::create_dir(dir.path().join("scripts")).unwrap();
+    fs::write(dir.path().join("scripts/clm-check.sh"), text).unwrap();
+    dir
+}
+
+// req:upgrade/migration-check-script-from-root@0f7f933f
+#[test]
+fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
+    assert!(!OLD_SCRIPT.contains("BASH_SOURCE"));
+    let dir = with_script(OLD_SCRIPT);
+    assert!(list(dir.path()).unwrap().contains(SCRIPT_ID));
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("applied {SCRIPT_ID}\n")), "{out}");
+    let text = fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap();
+    assert_eq!(text, NEW_SCRIPT);
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-check-script-from-root@0f7f933f
+#[test]
+fn an_edited_check_script_is_left_and_noted() {
+    let edited = format!("{OLD_SCRIPT}echo mine\n");
+    let dir = with_script(&edited);
+    let out = apply(dir.path()).unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap(),
+        edited
+    );
+    assert!(out.contains(&format!("note {SCRIPT_ID}\n")), "{out}");
+    assert!(!out.contains("applied"), "{out}");
+}
+
+// req:upgrade/migration-check-script-from-root@0f7f933f
+#[test]
+fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    let dir = with_script(NEW_SCRIPT);
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    let dir = with_script(&format!("{NEW_SCRIPT}echo mine\n"));
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-check-script-from-root@0f7f933f
+#[test]
+fn the_check_script_note_says_what_changed_for_every_language() {
+    let dir = with_script(&format!("{OLD_SCRIPT}echo mine\n"));
+    let note = crate::note(dir.path(), SCRIPT_ID).unwrap();
+    assert!(note.contains("BASH_SOURCE"), "{note}");
+    assert!(note.contains("manifest"), "{note}");
+}
