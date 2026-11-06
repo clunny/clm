@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 
 mod closed_stdout;
+mod upgrade_gate;
 
 #[derive(Parser)]
 #[command(
@@ -810,7 +811,13 @@ fn main() -> ExitCode {
 }
 
 fn dispatch() -> ExitCode {
-    match Cli::parse().command {
+    let command = Cli::parse().command;
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    if let Some(error) = upgrade_gate::blocked(&command, &cwd, clm_upgrade::require_current) {
+        eprintln!("{error}");
+        return ExitCode::from(4);
+    }
+    match command {
         Command::Check { no_detectors, root } => {
             let root = repo_root(root);
             let mut violations = check(&root, !no_detectors);
