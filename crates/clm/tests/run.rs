@@ -768,6 +768,23 @@ fn scenario_interrupted_before_the_push() {
 }
 
 #[test]
+fn an_empty_commit_off_main_is_not_an_unpushed_claim() {
+    // req:orchestrator.run/run@0691bb50
+    let (r, f) = (repo(), fake());
+    let tree = git(&r.work, &["rev-parse", "origin/main^{tree}"]);
+    let root = git(&r.work, &["commit-tree", tree.trim(), "-m", "unrelated"]);
+    let tip = git(
+        &r.work,
+        &["commit-tree", tree.trim(), "-p", root.trim(), "-m", "empty"],
+    );
+    git(&r.work, &["branch", "impl/b", tip.trim()]);
+    let stderr = refused(&r, &f, "b", &[], 1);
+    assert!(stderr.contains("impl/b"), "{stderr}");
+    assert_eq!(local_tip(&r, "impl/b"), Some(tip.trim().to_string()));
+    assert!(remote_tip(&r, "impl/b").is_none(), "no claim pushed");
+}
+
+#[test]
 fn scenario_another_clone_claimed_meanwhile() {
     // req:orchestrator.run/run@0691bb50
     let (r, f) = (repo(), fake());
