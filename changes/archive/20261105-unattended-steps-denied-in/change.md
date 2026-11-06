@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [unattended-steps-denied-in-auto-mode]
 human_burdens:
   - "Once the change is built, one check in notespeed in auto mode, from a worktree session, that a rebased build pushes with `clm branch push` and lands, and a no-review draft lands (backlog/check-subagent-honours-allow-rule); nothing waits on it."
