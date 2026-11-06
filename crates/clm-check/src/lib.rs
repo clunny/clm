@@ -171,7 +171,7 @@ pub fn pending_for(
         // A removed node's obsolete markers are pending on the nodes owning their files.
         if !graph.nodes.contains_key(node) {
             return Err(vec![Violation {
-                path: Path::new("specs")
+                path: std::path::Path::new("specs")
                     .join(node.replace('.', "/"))
                     .join("SPEC.md"),
                 rule: "check.coverage/pending-report",

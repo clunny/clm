@@ -612,6 +612,11 @@ fn pending_for_narrows_a_loaded_graph_as_pending_in_does() {
     let from_graph = clm_check::pending_for(&g, &markers, Some("a")).unwrap();
     let ids = |l: &[clm_check::Pending]| l.iter().map(|p| p.to_string()).collect::<Vec<_>>();
     assert_eq!(ids(&from_root), ids(&from_graph));
+    assert_eq!(
+        clm_check::pending_for(&g, &markers, None).unwrap().len(),
+        2,
+        "no component leaves the list whole"
+    );
     assert_eq!(from_graph.len(), 1);
     assert_eq!(from_graph[0].id, "a/x");
     let first = clm_check::pending_in(d, Some("nope")).unwrap_err();
