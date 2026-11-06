@@ -1689,3 +1689,23 @@ fn independent_changes_keep_id_order() {
         Regenerated::Tree(_) => panic!("y is stale after x"),
     }
 }
+
+#[test]
+fn when_every_change_has_an_unknown_base_the_first_in_id_order_goes() {
+    // req:sync.regenerate/regenerated-tree@e590dd2e
+    let r = repo("spec/x");
+    add_applied(&r, "w", &design_delta(&"0".repeat(64), "W1"));
+    add_applied(&r, "x", &design_delta(&"1".repeat(64), "X1"));
+
+    match regenerate_ids(&r, &["x", "w"]) {
+        Regenerated::Stopped { left, .. } => {
+            assert!(
+                left.iter()
+                    .any(|l| l.contains("apply/stale-base") && l.contains("changes/w/deltas/a.md")),
+                "{left:?}"
+            );
+            assert!(!left.iter().any(|l| l.contains("changes/x/")), "{left:?}");
+        }
+        Regenerated::Tree(_) => panic!("both bases are unknown"),
+    }
+}
