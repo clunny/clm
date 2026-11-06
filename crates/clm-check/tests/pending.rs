@@ -597,3 +597,26 @@ fn paths_match_as_git_glob_pathspecs_do() {
         assert_eq!(owned, expected, "pattern {pattern}");
     }
 }
+
+#[test]
+fn pending_for_narrows_a_loaded_graph_as_pending_in_does() {
+    // req:check/pending-narrows-on-a-graph@1c2fb00a
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", &spec(&["x"]));
+    write(d, "specs/b/SPEC.md", &spec(&["y"]));
+    let g = graph(d);
+    let markers = clm_check::scan(d).req;
+    let from_root = clm_check::pending_in(d, Some("a")).unwrap();
+    let from_graph = clm_check::pending_for(&g, &markers, Some("a")).unwrap();
+    let ids = |l: &[clm_check::Pending]| l.iter().map(|p| p.to_string()).collect::<Vec<_>>();
+    assert_eq!(ids(&from_root), ids(&from_graph));
+    assert_eq!(from_graph.len(), 1);
+    assert_eq!(from_graph[0].id, "a/x");
+    let first = clm_check::pending_in(d, Some("nope")).unwrap_err();
+    let second = clm_check::pending_for(&g, &markers, Some("nope")).unwrap_err();
+    assert_eq!(first[0].message, second[0].message);
+    assert_eq!(first[0].path, second[0].path);
+    assert!(first[0].message.contains("nope"));
+}
