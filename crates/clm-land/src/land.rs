@@ -124,7 +124,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         if let Some((target, true)) = &target
             && check_runs(&p)
         {
-            let (file, waited) = lock::lock(target)?;
+            let (file, waited) = lock::land(target)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
             if waited {
                 p = prepare()?;
@@ -220,7 +220,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         let land_tree_for_readers;
         let dir: &Scratch = match &target {
             Some((target, true)) if checked && runs => {
-                lock = Some(lock::lock(target)?.0);
+                lock = Some(lock::land(target)?.0);
                 drop(temp.take());
                 land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
                 &land_tree_for_readers
