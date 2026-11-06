@@ -185,8 +185,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Only the released site reports to the operator's analytics (site-analytics-umami).
-          UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
-          # The site's build reads the star count without the anonymous rate limit.
-          GITHUB_TOKEN: ${{ github.token }}
         run: npx wrangler deploy

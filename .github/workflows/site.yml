@@ -1,0 +1,41 @@
+name: Site
+
+# A human dispatches a site deploy (site-deploy): publishing a post is landing its `draft: false`
+# and running this. A CLM release never publishes the site, and this never touches the app.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: install
+        working-directory: web/site
+        run: npm ci --ignore-scripts
+      - name: build
+        working-directory: web/site
+        env:
+          # Only the released site reports to the operator's analytics (site-analytics-umami).
+          UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
+          # The star count is read without GitHub's anonymous rate limit (web.site/github-link).
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run build
+      - name: deploy
+        working-directory: web/site
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler deploy
