@@ -111,7 +111,7 @@ fn scenario_existing_local_branch() {
     let r = repo();
     let main = git(&r.work, &["rev-parse", "origin/main"]);
     git(&r.work, &["branch", "impl/b", main.trim()]);
-    assert!(claim_local(&r.work, "b", 4).is_err());
+    assert!(matches!(claim_local(&r.work, "b", 4), Err(Error::Git(_))));
     assert_eq!(remote_tip(&r, "impl/b"), None);
     assert_eq!(local_tip(&r, "impl/b").as_deref(), Some(main.trim()));
 }
@@ -122,4 +122,31 @@ fn scenario_plain_claim() {
     let r = repo();
     assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
     assert_eq!(local_tip(&r, "impl/b"), None);
+}
+
+#[test]
+fn refusals_leave_no_local_branch() {
+    // req:orchestrator/claim-local@90252fd0
+    let r = repo();
+    push_claim(&r.work, "b", 1);
+    assert!(matches!(
+        claim_local(&r.work, "b", 4),
+        Err(Error::Refused(_))
+    ));
+    assert_eq!(local_tip(&r, "impl/b"), None);
+    assert!(matches!(
+        claim_local(&r.work, "zz", 4),
+        Err(Error::Refused(_))
+    ));
+}
+
+#[test]
+fn takeover_of_a_lapsed_claim_records_the_branch() {
+    // req:orchestrator/claim-local@90252fd0
+    let r = repo();
+    let old = push_claim(&r.work, "b", 5);
+    assert_eq!(claim_local(&r.work, "b", 4).unwrap(), "impl/b");
+    let tip = remote_tip(&r, "impl/b").unwrap();
+    assert_ne!(tip, old);
+    assert_eq!(local_tip(&r, "impl/b").as_deref(), Some(tip.as_str()));
 }
