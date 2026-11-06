@@ -649,7 +649,8 @@ fn claim_failing_in_git_exits_2() {
 fn claim_released_when_the_branch_cant_be_made() {
     // req:orchestrator.run/run@0691bb50
     let (r, f) = (repo(), fake());
-    // A stale lock makes `git branch` fail after the claim is pushed.
+    // A stale lock makes recording the local branch fail, which `claim_local` does before
+    // it pushes, so nothing is claimed.
     write(&r.work, ".git/refs/heads/impl/b.lock", "");
     refused(&r, &f, "b", &[], 2);
     assert!(remote_tip(&r, "impl/b").is_none(), "the claim is released");
@@ -782,6 +783,21 @@ fn an_empty_commit_off_main_is_not_an_unpushed_claim() {
     assert!(stderr.contains("impl/b"), "{stderr}");
     assert_eq!(local_tip(&r, "impl/b"), Some(tip.trim().to_string()));
     assert!(remote_tip(&r, "impl/b").is_none(), "no claim pushed");
+}
+
+#[test]
+fn an_unpushed_claim_a_worktree_has_checked_out_is_refused() {
+    // req:orchestrator.run/run@0691bb50
+    let (r, f) = (repo(), fake());
+    let tip = unpushed_claim(&r);
+    let wt = r.work.join(".claude/worktrees/agent-1");
+    git(
+        &r.work,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "impl/b"],
+    );
+    let stderr = refused(&r, &f, "b", &[], 1);
+    assert!(stderr.contains("impl/b"), "{stderr}");
+    assert_eq!(local_tip(&r, "impl/b"), Some(tip));
 }
 
 #[test]
