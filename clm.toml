@@ -53,5 +53,8 @@ command = [
     "--allow", "clm_upgrade::require_current",
     "--allow", "clm_upgrade::check_lock",
     "--allow", "clm_upgrade::append_lock",
+    # pending: `clm run` claims through `claim_local`, so `claim_node` has no caller outside
+    # its library; backlog/narrow-claim-node.
+    "--allow", "clm_orchestrator::claim_node",
 ]
 hint = "scripts/dev-install.sh"
