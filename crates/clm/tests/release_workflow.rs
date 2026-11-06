@@ -1209,6 +1209,7 @@ fn a_failing_lock_fails_prepare_and_pushes_nothing() {
     f.commit("lock can't be appended to");
     let r = f.run("0.3.0");
     assert_failed_before_pushing(&r);
+    assert!(r.stderr.contains("lock the migrations"), "{}", r.stderr);
 }
 
 /// A failure after the version bump: nothing is created or pushed.

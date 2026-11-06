@@ -93,10 +93,10 @@ clm_bin=$(realpath "${CARGO_TARGET_DIR:-target}")/release/clm
 "$corpus_dir/make.sh" "$version" "$clm_bin" || fail "couldn't make the upgrade corpus entry"
 "$clm_bin" upgrade --lock "$version" || fail "couldn't lock the migrations"
 
-cargo test --all
-
 git add "$cargo_toml" Cargo.lock "$plugin_json" "$panel_json" "$corpus_dir/v$version.tar.gz" \
   crates/clm-upgrade/migrations.lock
+cargo test --all
+
 git -c user.name='github-actions[bot]' \
   -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
   commit -q -m "Release $tag"
