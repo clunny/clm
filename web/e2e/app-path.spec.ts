@@ -43,7 +43,7 @@ async function serve(): Promise<Site> {
     const candidates = [base, `${base}.html`, join(base, 'index.html')];
     const file = candidates.find((f) => f.startsWith(DIST) && existsSync(f) && statSync(f).isFile());
     if (!file) {
-      // A path the site's Worker answers: the site's own 404 page, with status 404.
+      // A missing path: status 404 (the fake serves the built 404 page; the deployed script answers plainly).
       const page404 = join(DIST, '404.html');
       res.writeHead(404, { 'content-type': 'text/html', 'x-from': 'network' }).end(existsSync(page404) ? readFileSync(page404) : 'not found');
       return;
