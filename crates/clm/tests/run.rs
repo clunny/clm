@@ -1252,10 +1252,18 @@ fn scenario_unwritable_directory_removed() {
     fs::write(&exclude, format!("{old}cache/\n")).unwrap();
     fs::create_dir_all(wt.join("cache/sub")).unwrap();
     fs::write(wt.join("cache/sub/f"), "x\n").unwrap();
-    chmod(&wt.join("cache/sub"), 0o555);
+    let outside = r.work.join("outside-dir");
+    fs::create_dir_all(&outside).unwrap();
+    chmod(&outside, 0o555);
+    std::os::unix::fs::symlink(&outside, wt.join("cache/link")).unwrap();
+    chmod(&wt.join("cache/sub"), 0o000);
     chmod(&wt.join("cache"), 0o555);
     let out = finished(&r, "b");
     assert!(!wt.exists(), "the worktree's directory is gone: {out}");
+    use std::os::unix::fs::PermissionsExt;
+    let mode = fs::metadata(&outside).unwrap().permissions().mode();
+    assert_eq!(mode & 0o777, 0o555, "nothing outside the worktree changes");
+    chmod(&outside, 0o755);
     let list = git(&r.work, &["worktree", "list"]);
     assert!(!list.contains("agent-1"), "{list}");
     for line in [
