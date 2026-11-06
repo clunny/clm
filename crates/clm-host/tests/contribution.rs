@@ -334,16 +334,18 @@ fn open_alerts() {
         );
         let seen = calls(dir);
         assert!(seen.contains("api") && seen.contains("--paginate") && seen.contains("state=open"));
+        assert!(seen.contains("-X GET"), "{seen}");
     });
 }
 
 #[test]
 fn alert_fields_are_one_word() {
     // req:host/list-alerts@7c2c7686
-    let odd = r#"[{"number":5,"security_advisory":{"severity":"urgent"},"dependency":{"package":{"ecosystem":"","name":"a b\tc\nd"}}}]"#;
+    let odd = r#"[{"number":5,"security_advisory":{"severity":"urgent"},"dependency":{"package":{"ecosystem":"","name":"a b\tc\nd\u0007e"}}}]"#;
     with_gh(&[("dependabot/alerts", odd)], |root, _| {
         let alerts = clm_host::adapter(Setting::Github).alerts(root).unwrap();
-        assert_eq!(alerts[0].package, "a?b?c?d");
+        assert_eq!(alerts[0].number, 5);
+        assert_eq!(alerts[0].package, "a?b?c?d?e");
         assert_eq!(alerts[0].severity, "unknown");
         assert_eq!(alerts[0].ecosystem, "unknown");
         assert_eq!(alerts[0].manifest, "unknown");
