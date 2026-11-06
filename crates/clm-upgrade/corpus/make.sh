@@ -36,5 +36,5 @@ out=$here/v$version.tar.gz
 tmp=$work/entry.tar.gz
 # Everything but .git, in byte order of the names, with no time, owner or group.
 LC_ALL=C find . -path ./.git -prune -o -type f -print | sed 's|^\./||' | LC_ALL=C sort >"$work/names"
-tar --format=ustar --mtime=@0 --owner=0 --group=0 --numeric-owner --no-recursion -cf - -T "$work/names" | gzip -n >"$tmp"
+tar --format=ustar --mtime=@0 --mode='u=rwX,go=rX' --owner=0 --group=0 --numeric-owner --no-recursion -cf - -T "$work/names" | gzip -n >"$tmp"
 mv "$tmp" "$out"

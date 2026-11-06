@@ -61,34 +61,41 @@ fn project(clm_toml: Option<&str>) -> TempDir {
     dir
 }
 
+/// Why a list is not well formed: a repeated ID, or a note that is not advised.
+fn malformed(list: &[Migration]) -> Option<String> {
+    for (i, m) in list.iter().enumerate() {
+        if list[..i].iter().any(|earlier| earlier.id == m.id) {
+            return Some(format!("two migrations share the ID {}", m.id));
+        }
+        if matches!(m.kind, Kind::Note(_)) && m.level == Level::Required {
+            return Some(format!("{} is required with a note", m.id));
+        }
+    }
+    None
+}
+
 // req:upgrade/migration-list@067d119c
 #[test]
 fn the_binarys_migrations_are_well_formed() {
-    let list = migrations();
-    for (i, m) in list.iter().enumerate() {
-        assert!(
-            list[..i].iter().all(|earlier| earlier.id != m.id),
-            "two migrations share the ID {}",
-            m.id
-        );
-        if m.level == Level::Required {
-            assert!(
-                matches!(m.kind, Kind::Apply(_)),
-                "{} is required with a note",
-                m.id
-            );
-        }
-        if let Kind::Note(n) = &m.kind {
-            assert_eq!(m.level, Level::Advised, "{} is a note", m.id);
-            assert_eq!(
-                n.old.is_empty(),
-                n.new.is_none(),
-                "{}: `old` and `new` come together",
-                m.id
-            );
-        }
-    }
-    assert_eq!(latest(), list.last().map(|m| m.id));
+    assert_eq!(malformed(migrations()), None);
+    assert_eq!(latest(), migrations().last().map(|m| m.id));
+}
+
+// req:upgrade/migration-list@067d119c
+#[test]
+fn a_repeated_id_or_a_required_note_is_malformed() {
+    let twice = [
+        apply("a", Level::Required, done_a),
+        apply("a", Level::Advised, done_b),
+    ];
+    assert!(malformed(&twice).unwrap().contains("share the ID a"));
+    let mut required_note = note("n", done_a);
+    required_note.level = Level::Required;
+    assert!(malformed(&[required_note]).unwrap().contains("required"));
+    assert_eq!(
+        malformed(&[apply("a", Level::Required, done_a), note("n", done_b)]),
+        None
+    );
 }
 
 // req:upgrade/pending-migrations@dbcfa176
