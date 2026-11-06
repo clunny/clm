@@ -3208,7 +3208,7 @@ fn triage_enters_branch_worktree() {
     ] {
         assert!(first.contains(needle), "{needle}: {first}");
     }
-    assert!(body.contains("There, rebase, resolve, commit, push and land."));
+    assert!(body.contains("There, rebase, resolve, commit, push with `clm branch push` and land."));
     let never = sentence_with(&body, "Never reach into that worktree");
     for needle in ["`cd`", "`git -C`", "subagent"] {
         assert!(never.contains(needle), "{needle}: {never}");
