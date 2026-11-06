@@ -23,6 +23,7 @@ mod right_model_per_task;
 mod see_project_state;
 mod triage_unattended;
 mod unattended_runner;
+mod upgrade_clm;
 mod work_concurrently;
 mod wrap_up_session;
 
