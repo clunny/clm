@@ -128,6 +128,21 @@ pub fn refusal(node: &str, state: Option<&State>) -> Option<String> {
 }
 
 pub fn claim_node(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
+    claim_component(root, node, expiry_hours, false)
+}
+
+/// [`claim_node`] for `clm run`, which records the local branch `impl/<node>` before it
+/// pushes (`claim-local`).
+pub fn claim_local(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
+    claim_component(root, node, expiry_hours, true)
+}
+
+fn claim_component(
+    root: &Path,
+    node: &str,
+    expiry_hours: u64,
+    local: bool,
+) -> Result<String, Error> {
     node_id(node)?;
     let (queue, mut claims) = queue_on_main(root, expiry_hours)?;
     if let Some(why) = refusal(node, queue.node(node).map(|n| &n.state)) {
@@ -135,7 +150,14 @@ pub fn claim_node(root: &Path, node: &str, expiry_hours: u64) -> Result<String, 
     }
     // The queue says the node isn't claimed, so any branch there is released: lapsed or
     // merged.
-    push_node_claim(root, node, claims.remove(node))
+    let expect = claims.remove(node).map_or(String::new(), |c| c.sha);
+    push_claim_commit(
+        root,
+        node,
+        &format!("{BRANCH_PREFIX}{node}"),
+        &expect,
+        local,
+    )
 }
 
 /// Claims `node` for a code-only fix of bug or deferred item `item` (`backlog/<slug>`), whatever its
@@ -294,6 +316,18 @@ pub(crate) fn push_new_claim(
     branch: &str,
     expect: &str,
 ) -> Result<String, Error> {
+    push_claim_commit(root, what, branch, expect, false)
+}
+
+/// [`push_new_claim`], optionally recording the local branch at the claim commit before
+/// the first push and removing it again when the tip read afterwards isn't the claim.
+fn push_claim_commit(
+    root: &Path,
+    what: &str,
+    branch: &str,
+    expect: &str,
+    local: bool,
+) -> Result<String, Error> {
     let main = format!("{REMOTE}/main");
     let tree = git(root, &["rev-parse", &format!("{main}^{{tree}}")])?;
     let parent = git(root, &["rev-parse", &main])?;
@@ -309,6 +343,18 @@ pub(crate) fn push_new_claim(
         ],
     )?;
     let commit = commit.as_str();
+    if local {
+        record_local(root, branch, commit)?;
+    }
+    let release_local = || {
+        if local {
+            // Best effort: a branch left behind is judged by the next `clm run`.
+            let _ = git(
+                root,
+                &["update-ref", "-d", &format!("refs/heads/{branch}"), commit],
+            );
+        }
+    };
     // A rejected push isn't always a lost race, so the tip on `origin` decides. Two retries
     // cover a transient failure, such as a lock held by a parallel push from this repo or a
     // forge's `fatal error in commit_refs`; the lease still guards each swap.
@@ -335,12 +381,14 @@ pub(crate) fn push_new_claim(
             return Ok(branch.to_string());
         }
         if tip != expect {
+            release_local();
             return Err(Error::Refused(format!(
                 "`{what}` was claimed by someone else first"
             )));
         }
         let Some(&wait) = waits.next() else {
             // The tip shows nothing was claimed, so running the command again is safe.
+            release_local();
             return Err(Error::Git(format!(
                 "git push: {why}\nthe failure may be transient: nothing was claimed, so it \
                  is safe to run the same command again"
@@ -348,6 +396,25 @@ pub(crate) fn push_new_claim(
         };
         std::thread::sleep(std::time::Duration::from_secs(wait));
     }
+}
+
+/// Creates the local `branch` at `commit` with `origin/<branch>` as its upstream. `git
+/// branch` refuses a branch that exists, so none is moved. The upstream is set by config,
+/// since the remote-tracking ref `--track` needs doesn't exist before the push.
+fn record_local(root: &Path, branch: &str, commit: &str) -> Result<(), Error> {
+    git(root, &["branch", "-q", "--no-track", branch, commit])?;
+    let set =
+        |key: &str, value: &str| git(root, &["config", &format!("branch.{branch}.{key}"), value]);
+    if let Err(e) =
+        set("remote", REMOTE).and_then(|_| set("merge", &format!("refs/heads/{branch}")))
+    {
+        let _ = git(
+            root,
+            &["update-ref", "-d", &format!("refs/heads/{branch}"), commit],
+        );
+        return Err(e.into());
+    }
+    Ok(())
 }
 
 /// The fixed waits before each retry of a rejected claim push whose tip didn't move.
