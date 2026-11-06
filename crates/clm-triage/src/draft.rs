@@ -314,7 +314,23 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          deletes the items it resolves when it is archived: edit its `backlog/<slug>.md` \
          on `spec/<id>` to what the answers leave of it, say in `## Intent` what you \
          changed and that the item stays open, and take the backlog-only route \
-         (`draft-backlog-only-change`) when nothing else is left to design.\n\n"
+         (`draft-backlog-only-change`) when nothing else is left to design. A `question` \
+         item the answers settle while leaving only code to change, a requirement or \
+         scenario as written already stating what that code must do \
+         (`draft-code-fix-written-rule`) and no requirement the item blocks waiting to be \
+         built for it, is the exception to the settled items that stay in `resolves`: take \
+         it out of `resolves` (the list you first wrote) and have it turned into a bug. On \
+         `spec/<id>` set its `kind` to `bug`, remove its `blocks`, set its `components` to \
+         the components whose `paths` hold the fix and rewrite its body to the code work \
+         left, naming the requirement the fix restores and quoting the answer, keeping its \
+         slug and its other fields, such as `priority` and `issues`; say in `## Intent` that \
+         the answer turns it into a bug, and take the backlog-only route when nothing else \
+         is left to design. Once `clm land spec/<id>` has landed the branch, fix that bug \
+         in this draft by component, as you fix any code-only bug, with \
+         `clm claim <component> --fix backlog/<slug>` and a `Resolves: backlog/<slug>` \
+         trailer, leaving it with `left <slug>: <reason>` when the claim is refused, and end \
+         with the spec change's `landed <sha>`. When the branch needs review it stops the \
+         draft as any does, and the bug is left to the next triage.\n\n"
             .to_string()
     };
     p.push_str(&format!(

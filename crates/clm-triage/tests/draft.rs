@@ -588,7 +588,7 @@ fn answered_prompt(r: &Repo, slugs: &[&str], answers: &str) -> String {
 
 #[test]
 fn scenario_answers_in_the_prompt() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     let r = with_items(&[("q", "kind: question\n", "Which default?")]);
     let p = answered_prompt(&r, &["q"], "q: use the default\n");
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
@@ -613,7 +613,7 @@ fn scenario_answers_in_the_prompt() {
 
 #[test]
 fn scenario_an_answer_that_only_edits_an_item() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     let r = with_items(&[("h", "kind: human-task\n", "Do the steps.")]);
     let p = answered_prompt(
         &r,
@@ -632,8 +632,33 @@ fn scenario_an_answer_that_only_edits_an_item() {
 }
 
 #[test]
+fn scenario_an_answer_that_leaves_only_code() {
+    // req:orchestrator.triage/draft-answers@fea55e1d
+    let r = with_items(&[("q", "kind: question\n", "Which?")]);
+    let p = answered_prompt(
+        &r,
+        &["q"],
+        "q: the rule already says so, only the code is left\n",
+    );
+    let steps = &p[p.find("## Steps").expect("steps")..];
+    for needle in [
+        "only code to change",
+        "turned into a bug",
+        "has landed the branch",
+        "the next triage",
+        "draft-code-fix-written-rule",
+        "`kind` to `bug`",
+        "remove its `blocks`",
+        "clm claim <component> --fix backlog/<slug>",
+        "Resolves: backlog/<slug>",
+    ] {
+        assert!(steps.contains(needle), "{needle} missing from {steps}");
+    }
+}
+
+#[test]
 fn answers_go_in_verbatim_and_trimmed() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n\n  Use `x` <y> & {z}.\n\nAll: P1.  \n\n");
     assert!(
@@ -644,7 +669,7 @@ fn answers_go_in_verbatim_and_trimmed() {
 
 #[test]
 fn scenario_unreadable_answers() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let dir = r.work.join("a-directory.md");
     fs::create_dir_all(&dir).unwrap();
@@ -669,7 +694,7 @@ fn scenario_unreadable_answers() {
 
 #[test]
 fn answers_are_read_before_fetching() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     // With `origin` gone, a fetch would fail in git; the unreadable file refuses first.
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     fs::remove_dir_all(&r.origin).unwrap();
@@ -691,7 +716,7 @@ fn answers_are_read_before_fetching() {
 
 #[test]
 fn scenario_no_answers() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     assert!(!p.contains("The human's answers"), "{p}");
@@ -699,7 +724,7 @@ fn scenario_no_answers() {
 
 #[test]
 fn scenario_whitespace_only_answers() {
-    // req:orchestrator.triage/draft-answers@aad51008
+    // req:orchestrator.triage/draft-answers@fea55e1d
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n  \n\t\n");
     assert!(!p.contains("The human's answers"), "{p}");
