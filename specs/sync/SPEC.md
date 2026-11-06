@@ -164,6 +164,10 @@ When the branch adds a change whose status is `applied`, adds a new archived cha
 - WHEN `clm rebase` runs
 - THEN it prints no `main changed` line and no `apply/` violation, makes no `Re-apply` or `Merge main into` commit, `specs/a/SPEC.md` is `origin/main`'s, and it exits 0
 
+
+#### Needs
+- sync.regenerate/regenerated-tree
+
 ### Requirement: judged-by-check
 After a rebase that completes and any regeneration, `clm rebase` SHALL load the settings on every branch, printing the error and exiting 1 when they don't load, and SHALL run every `clm check` rule on the result, print any violations, and exit 1 if there are any, 0 otherwise. It SHALL load the settings and run the check on the branch's `HEAD` commit, checked out in a temporary worktree outside the repository, never on the working tree, so no uncommitted edit and no untracked or ignored file changes the outcome, and SHALL remove that worktree before it exits. A file that a settings error or a violation names SHALL be printed by its path in the repository, never by its path in the temporary worktree.
 
