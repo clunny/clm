@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 # Keep the required-migration workaround until a real required migration ships
