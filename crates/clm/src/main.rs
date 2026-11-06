@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 
 mod closed_stdout;
+mod upgrade_command;
 mod upgrade_gate;
 
 #[derive(Parser)]
@@ -165,6 +166,23 @@ enum Command {
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
+    },
+    /// List the migrations this project still needs, or take them: bring a project set up by
+    /// an older `clm` up to date.
+    Upgrade {
+        /// Run the pending apply migrations, rewrite unedited files a note migration
+        /// replaces, and stamp `upgraded`.
+        #[arg(long, conflicts_with_all = ["note", "decline", "lock"])]
+        apply: bool,
+        /// Print a migration's note.
+        #[arg(long, value_name = "ID", conflicts_with_all = ["apply", "decline", "lock"])]
+        note: Option<String>,
+        /// Decline a pending note migration.
+        #[arg(long, value_name = "ID", conflicts_with_all = ["apply", "note", "lock"])]
+        decline: Option<String>,
+        /// Lock the migrations a release ships (the release runs this).
+        #[arg(long, value_name = "VERSION", conflicts_with_all = ["apply", "note", "decline"])]
+        lock: Option<String>,
     },
     /// Print a component's element hashes, for recording as delta bases.
     Hashes {
@@ -956,6 +974,29 @@ fn dispatch() -> ExitCode {
                 None => {
                     eprintln!("clm context: no component `{node}`");
                     ExitCode::from(2)
+                }
+            }
+        }
+        Command::Upgrade {
+            apply,
+            note,
+            decline,
+            lock,
+        } => {
+            let request = upgrade_command::Request {
+                apply,
+                note,
+                decline,
+                lock,
+            };
+            match upgrade_command::run(&repo_root(None), request) {
+                Ok(text) => {
+                    print!("{text}");
+                    ExitCode::SUCCESS
+                }
+                Err(why) => {
+                    eprintln!("clm upgrade: {why}");
+                    ExitCode::FAILURE
                 }
             }
         }

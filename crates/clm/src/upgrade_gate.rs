@@ -22,6 +22,7 @@ fn blocked_root(command: &Command) -> Option<Option<&Path>> {
         | C::Init { .. }
         | C::Backlog { .. }
         | C::Hook { .. }
+        | C::Upgrade { .. }
         | C::View { .. } => None,
         C::Check { root, .. }
         | C::Coverage { root }
