@@ -65,12 +65,13 @@ pub(crate) fn list_in(list: &[Migration], root: &Path) -> Result<String, String>
 pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String> {
     let pending = pending_or_refuse(list, root)?;
     let mut out = String::new();
+    let mut failures = String::new();
     for m in &pending {
         match &m.kind {
-            Kind::Apply(run) => {
-                run(root).map_err(|e| format!("migration `{}` failed: {e}", m.id))?;
-                out.push_str(&format!("applied {}\n", m.id));
-            }
+            Kind::Apply(run) => match run(root) {
+                Ok(()) => out.push_str(&format!("applied {}\n", m.id)),
+                Err(e) => failures.push_str(&format!("migration `{}` failed: {e}\n", m.id)),
+            },
             Kind::Note(n) => {
                 let Some(new) = n.new else { continue };
                 let path = root.join(n.file);
@@ -80,6 +81,10 @@ pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String
                 }
             }
         }
+    }
+    if !failures.is_empty() {
+        // Never stop early, but never stamp a project a migration failed on.
+        return Err(format!("{out}{failures}"));
     }
     if let Some(latest) = list.last() {
         set_key(root, "upgraded", &quote(latest.id))?;

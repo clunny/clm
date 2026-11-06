@@ -264,6 +264,47 @@ fn decline_refuses_what_it_may_not_decline() {
     assert_eq!(read(&stamped, "clm.toml"), "upgraded = \"z\"\n");
 }
 
+// req:upgrade/upgrade-apply@6939e42f
+#[test]
+fn a_failing_migration_does_not_stop_the_others_or_stamp() {
+    let bad = Migration {
+        id: "bad",
+        level: Level::Required,
+        done: never,
+        kind: Kind::Apply(|_| Err("boom".to_string())),
+    };
+    let list = [bad, apply_m()];
+    let dir = project("");
+    let err = apply_in(&list, dir.path()).unwrap_err();
+    assert!(
+        err.contains("applied m") && err.contains("`bad` failed: boom"),
+        "{err}"
+    );
+    assert!(dir.path().join("m").exists());
+    assert_eq!(read(&dir, "clm.toml"), "");
+}
+
+// req:upgrade/upgrade-list@97f2a710
+#[test]
+fn an_advised_migration_is_never_marked_skipped() {
+    let main = TempDir::new().unwrap();
+    let init = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(main.path())
+        .status()
+        .unwrap();
+    assert!(init.success());
+    fs::write(
+        main.path().join("clm.local.toml"),
+        "skip_migrations = [\"a\"]\n",
+    )
+    .unwrap();
+    assert_eq!(
+        list_in(&[note_a()], main.path()).unwrap(),
+        "a advised note CLAUDE.md names /clm:help\n"
+    );
+}
+
 // req:upgrade/upgrade-note-and-decline@d61ca0b9
 #[test]
 fn decline_refuses_a_clm_toml_it_cannot_read() {
