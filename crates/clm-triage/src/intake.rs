@@ -1,17 +1,60 @@
-//! `clm intake`: the host's open issues and pull requests matched to the backlog
-//! (`issues-enter-through-the-backlog`). Every line carries numbers, slugs, change IDs,
-//! commits and logins only, never a title or body (`untrusted-text-read-only-verifier`).
+//! `clm intake`: the host's open issues, pull requests and dependency alerts matched to the
+//! backlog (`issues-enter-through-the-backlog`, `dependency-alerts-through-intake`). Every
+//! line carries numbers, slugs, change IDs, commits, logins and an alert's one-word fields
+//! only, never a title or body (`untrusted-text-read-only-verifier`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use clm_git::{fetch, git, tree_blobs};
 use clm_host::Host;
-use clm_model::{parse_backlog_item, parse_change_frontmatter};
+use clm_model::{BacklogFrontmatter, parse_backlog_item, parse_change_frontmatter};
 
 use crate::{Error, REMOTE, main_graph};
 
-/// `clm intake`: one line per open issue or pull request of `host`, sorted by number.
+/// The numbers an item took in from the host: its `issues` or its `alerts`.
+type Taken = fn(&BacklogFrontmatter) -> &[u64];
+
+fn issues_of(f: &BacklogFrontmatter) -> &[u64] {
+    &f.issues
+}
+
+fn alerts_of(f: &BacklogFrontmatter) -> &[u64] {
+    &f.alerts
+}
+
+/// How the backlog stands to a set of open numbers: the items that name each, and for the
+/// rest the item a later deletion removed, with the deleting commit.
+struct Matches {
+    imported: BTreeMap<u64, Vec<String>>,
+    resolved: BTreeMap<u64, (String, String)>,
+}
+
+impl Matches {
+    /// The line's tail for `n`: `imported <slug>...` or `resolved <slug> <by>`, or `None` for
+    /// a number nothing took in.
+    fn status(
+        &self,
+        root: &Path,
+        changes: &BTreeMap<String, String>,
+        n: u64,
+    ) -> Result<Option<String>, Error> {
+        if let Some(slugs) = self.imported.get(&n) {
+            return Ok(Some(format!("imported {}", slugs.join(" "))));
+        }
+        let Some((slug, commit)) = self.resolved.get(&n) else {
+            return Ok(None);
+        };
+        let by = match changes.get(slug) {
+            Some(id) => id.clone(),
+            None => git(root, &["rev-parse", "--short", commit])?,
+        };
+        Ok(Some(format!("resolved {slug} {by}")))
+    }
+}
+
+/// `clm intake`: one line per open issue or pull request of `host`, sorted by number, then
+/// one per open dependency alert, sorted by number, or `alerts unavailable` in their place.
 pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
     fetch(root)?;
     let mut open = host.list(root).map_err(|e| match e {
@@ -19,28 +62,30 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
         | clm_host::Error::Git(why)
         | clm_host::Error::Nowhere(why) => Error::Refused(why),
     })?;
-    if open.is_empty() {
+    open.sort_by_key(|o| o.number);
+    // A login that may read issues may still be refused the alerts.
+    let alerts = host.alerts(root).ok().map(|mut a| {
+        a.sort_by_key(|a| a.number);
+        a
+    });
+    if open.is_empty() && alerts.as_ref().is_some_and(Vec::is_empty) {
         return Ok(Vec::new());
     }
-    open.sort_by_key(|o| o.number);
     let graph = main_graph(root)?;
-    let mut imported: BTreeMap<u64, Vec<&str>> = BTreeMap::new();
-    for item in graph.backlog.values() {
-        for n in &item.frontmatter.issues {
-            imported.entry(*n).or_default().push(&item.slug);
-        }
-    }
-    let unmatched: BTreeSet<u64> = open
+    let items: Vec<(&str, &BacklogFrontmatter)> = graph
+        .backlog
+        .values()
+        .map(|i| (i.slug.as_str(), &i.frontmatter))
+        .collect();
+    let issue_numbers: Vec<u64> = open
         .iter()
-        .filter(|o| !o.pull_request && !imported.contains_key(&o.number))
+        .filter(|o| !o.pull_request)
         .map(|o| o.number)
         .collect();
-    let resolved = if unmatched.is_empty() {
-        BTreeMap::new()
-    } else {
-        deleted_items(root, &unmatched)?
-    };
-    let changes = if resolved.is_empty() {
+    let alert_numbers: Vec<u64> = alerts.iter().flatten().map(|a| a.number).collect();
+    let issues = matches(root, &items, &issue_numbers, issues_of)?;
+    let alert_matches = matches(root, &items, &alert_numbers, alerts_of)?;
+    let changes = if issues.resolved.is_empty() && alert_matches.resolved.is_empty() {
         BTreeMap::new()
     } else {
         resolving_changes(root)?
@@ -49,28 +94,65 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
     for o in &open {
         if o.pull_request {
             lines.push(format!("pull {} {}", o.number, o.author));
-        } else if let Some(slugs) = imported.get(&o.number) {
-            lines.push(format!("issue {} imported {}", o.number, slugs.join(" ")));
-        } else if let Some((slug, commit)) = resolved.get(&o.number) {
-            let by = match changes.get(slug.as_str()) {
-                Some(id) => id.clone(),
-                None => git(root, &["rev-parse", "--short", commit])?,
-            };
-            lines.push(format!("issue {} resolved {slug} {by}", o.number));
         } else {
-            lines.push(format!("issue {} new", o.number));
+            let status = issues.status(root, &changes, o.number)?;
+            let status = status.as_deref().unwrap_or("new");
+            lines.push(format!("issue {} {status}", o.number));
+        }
+    }
+    match &alerts {
+        None => lines.push("alerts unavailable".to_string()),
+        Some(alerts) => {
+            for a in alerts {
+                let tail = match alert_matches.status(root, &changes, a.number)? {
+                    Some(status) => status,
+                    None => format!(
+                        "new {} {} {} {}",
+                        a.severity, a.ecosystem, a.package, a.manifest
+                    ),
+                };
+                lines.push(format!("alert {} {tail}", a.number));
+            }
         }
     }
     Ok(lines)
 }
 
-/// For each of `wanted` the most recent item deleted from `origin/main`'s `backlog/` whose
-/// `issues` named it, as its slug and the deleting commit. The item is read at the deleting
-/// commit's first parent, checking nothing against a graph; a file that no longer parses is
-/// skipped.
+/// The items that took in each of `numbers` (by `taken`), and for the numbers no item takes
+/// in, the item deleted from `origin/main` that did.
+fn matches(
+    root: &Path,
+    items: &[(&str, &BacklogFrontmatter)],
+    numbers: &[u64],
+    taken: Taken,
+) -> Result<Matches, Error> {
+    let mut imported: BTreeMap<u64, Vec<String>> = BTreeMap::new();
+    for (slug, frontmatter) in items {
+        for n in taken(frontmatter).iter().filter(|n| numbers.contains(n)) {
+            imported.entry(*n).or_default().push((*slug).to_string());
+        }
+    }
+    let unmatched: BTreeSet<u64> = numbers
+        .iter()
+        .copied()
+        .filter(|n| !imported.contains_key(n))
+        .collect();
+    let resolved = if unmatched.is_empty() {
+        BTreeMap::new()
+    } else {
+        deleted_items(root, &unmatched, taken)?
+    };
+    Ok(Matches { imported, resolved })
+}
+
+/// For each of `wanted` the most recent item deleted from `origin/main`'s `backlog/` that
+/// `taken` says took it in, as its slug and the deleting commit. The item is read at the
+/// deleting commit's first parent, checking nothing against a graph; a file that no longer
+/// parses is skipped.
 fn deleted_items(
     root: &Path,
     wanted: &BTreeSet<u64>,
+    taken: Taken,
 ) -> Result<BTreeMap<u64, (String, String)>, Error> {
     let main = format!("{REMOTE}/main");
     let log = git(
@@ -108,9 +190,7 @@ fn deleted_items(
         let Ok(item) = parse_backlog_item(slug, &text) else {
             continue;
         };
-        for n in item
-            .frontmatter
-            .issues
+        for n in taken(&item.frontmatter)
             .iter()
             .filter(|n| wanted.contains(n))
         {
