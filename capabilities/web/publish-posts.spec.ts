@@ -65,11 +65,14 @@ const filesUnder = (dir: string, rel = ''): string[] =>
   })
 
 /** What a crawler reads: the sitemap's locations, `llms.txt` and the feed. */
-const crawled = (base: string) => ({
-  sitemap: Array.from(readFileSync(join(base, 'sitemap.xml'), 'utf8').matchAll(/<loc>([^<]+)<\/loc>/g), (m) => m[1]),
-  llms: readFileSync(join(base, 'llms.txt'), 'utf8'),
-  feed: readFileSync(join(base, 'blog', 'feed.xml'), 'utf8'),
-})
+async function crawled(base: string) {
+  const get = async (path: string) => (await fetch(`${base}${path}`)).text()
+  return {
+    sitemap: Array.from((await get('/sitemap.xml')).matchAll(/<loc>([^<]+)<\/loc>/g), (m) => m[1]),
+    llms: await get('/llms.txt'),
+    feed: await get('/blog/feed.xml'),
+  }
+}
 
 test('a series is published one post at a time, and a draft shows nowhere', async ({ page }) => {
   // req:capability/publish-posts@20404270
@@ -92,8 +95,8 @@ test('a series is published one post at a time, and a draft shows nowhere', asyn
     const cards = page.locator('.blog-card')
     await expect(cards).toHaveCount(2)
     expect((await cards.allInnerTexts()).join('\n')).toContain('Part two')
-    await expect(cards.nth(0)).toHaveAttribute('href', '/blog/part-two')
-    await expect(cards.nth(1)).toHaveAttribute('href', '/blog/part-one')
+    await expect(page.locator('.blog-card[href="/blog/part-two"]')).toHaveCount(1)
+    await expect(page.locator('.blog-card[href="/blog/part-one"]')).toHaveCount(1)
 
     await page.goto(`${served.base}/blog/part-two`)
     const main = page.locator('.clm-post')
@@ -101,7 +104,7 @@ test('a series is published one post at a time, and a draft shows nowhere', asyn
     await expect(main.locator('.post-nav .prev')).toHaveAttribute('href', '/blog/part-one')
     await expect(main.locator('.post-nav .next')).toHaveCount(0)
 
-    const first = crawled(before)
+    const first = await crawled(served.base)
     for (const slug of ['part-one', 'part-two']) {
       expect(first.sitemap).toContain(`${SITE}/blog/${slug}`)
       expect(first.llms).toContain(`${SITE}/blog/${slug}.md`)
@@ -126,13 +129,15 @@ test('a series is published one post at a time, and a draft shows nowhere', asyn
 
     await page.goto(`${servedAfter.base}/blog/`)
     await expect(page.locator('.blog-card')).toHaveCount(3)
-    await expect(page.locator('.blog-card').nth(0)).toHaveAttribute('href', '/blog/quokka-finale')
+    await expect(page.locator('.blog-card[href="/blog/quokka-finale"]')).toHaveCount(1)
+    await page.goto(`${servedAfter.base}/blog/quokka-finale`)
+    await expect(page.locator('.clm-post h1')).toHaveText(DRAFT_TITLE)
 
     await page.goto(`${servedAfter.base}/blog/part-two`)
     await expect(page.locator('.clm-post .post-nav .next')).toHaveAttribute('href', '/blog/quokka-finale')
     await expect(page.locator('.clm-post .post-body a', { hasText: 'the finale' })).toHaveAttribute('href', '/blog/quokka-finale')
 
-    const second = crawled(after)
+    const second = await crawled(servedAfter.base)
     expect(second.sitemap).toContain(`${SITE}/blog/quokka-finale`)
     expect(second.llms).toContain(`[${DRAFT_TITLE}](${SITE}/blog/quokka-finale.md)`)
     expect(second.feed).toContain(`<link>${SITE}/blog/quokka-finale</link>`)
