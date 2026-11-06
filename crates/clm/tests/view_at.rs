@@ -325,6 +325,10 @@ fn pending_behind_origin_main() {
     let err = stderr(&there);
     assert!(err.starts_with(&format!("origin/main {main}")), "{err}");
     assert!(!err.contains('⚠'), "{err}");
+    // The same first line the chart of that commit begins with.
+    let chart = stdout(&clm(d, &["view", "spec", "--at", "origin/main"]));
+    assert_eq!(err, format!("{}\n", chart.lines().next().unwrap()));
+    assert!(err.trim_end().ends_with("· checkout impl/a"), "{err}");
     assert_eq!(tree_state(d), before);
 }
 
@@ -378,4 +382,8 @@ fn pending_names_its_commit_beside_violations_and_narrows_alike() {
     assert_eq!(bad.status.code(), Some(1), "{bad:?}");
     assert!(!stdout(&bad).is_empty());
     assert!(stderr(&bad).starts_with("origin/main "), "{}", stderr(&bad));
+    // `clm view --at` on that commit prints the violations too, and no chart.
+    let view = clm(d, &["view", "spec", "--at", "origin/main"]);
+    assert_eq!(view.status.code(), Some(1), "{view:?}");
+    assert_eq!(stdout(&view), stdout(&bad));
 }
