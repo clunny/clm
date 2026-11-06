@@ -1394,7 +1394,7 @@ fn serves_edited_on_main_is_not_reported_stale() {
 
 #[test]
 fn regenerated_builds_the_tree_without_touching_the_repository() {
-    // req:sync.regenerate/regenerated-tree@6edd202a
+    // req:sync.regenerate/regenerated-tree@e590dd2e
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     let b = node_a("specd", "c", &["s"]).replace("title: A", "title: B");
@@ -1417,7 +1417,7 @@ fn regenerated_builds_the_tree_without_touching_the_repository() {
 
 #[test]
 fn regenerated_merges_only_when_asked() {
-    // req:sync.regenerate/regenerated-tree@6edd202a
+    // req:sync.regenerate/regenerated-tree@e590dd2e
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -1477,7 +1477,7 @@ fn regenerated_merges_only_when_asked() {
 
 #[test]
 fn regenerated_reads_a_clm_root_in_a_subdirectory() {
-    // req:sync.regenerate/regenerated-tree@6edd202a
+    // req:sync.regenerate/regenerated-tree@e590dd2e
     let r = repo("spec/x");
     let sub = r.work.join("sub");
     main_moves(
@@ -1516,7 +1516,7 @@ fn regenerated_reads_a_clm_root_in_a_subdirectory() {
 
 #[test]
 fn the_tree_holds_the_human_layers_and_decisions() {
-    // req:sync.regenerate/regenerated-tree@6edd202a
+    // req:sync.regenerate/regenerated-tree@e590dd2e
     let r = repo("spec/x");
     let serving_e = |slug: &str| {
         format!(
@@ -1570,4 +1570,142 @@ fn the_tree_holds_the_human_layers_and_decisions() {
         violations.iter().all(|v| v.rule != "apply/resulting-graph"),
         "{violations:?}"
     );
+}
+
+/// `regenerated(.., false)` on `origin/main` for `ids`, in the order given.
+fn regenerate_ids(r: &Repo, ids: &[&str]) -> Regenerated {
+    git(&r.work, &["fetch", "-q", "origin"]);
+    let onto = git(&r.work, &["rev-parse", "origin/main"]);
+    let ids: Vec<String> = ids.iter().map(|s| s.to_string()).collect();
+    regenerated(&r.work, &onto, &ids, false).unwrap()
+}
+
+/// A delta of `a` that rewrites its Contract to `text`, with base `base`.
+fn contract_delta(base: &str, text: &str) -> String {
+    format!(
+        "---\ncomponent: a\nbase: {{ contract: \"{base}\" }}\n---\n## MODIFIED Contract\n{text}\n"
+    )
+}
+
+#[test]
+fn a_change_built_on_another_sorts_first() {
+    // req:sync.regenerate/regenerated-tree@e590dd2e
+    let r = repo("spec/x");
+    main_moves(&r, &[("specs/a/SPEC.md", &a_designed("one\ntwo\nthree"))]);
+    pull(&r);
+    let h1 = hash(&r, "design");
+    apply_change(&r, "x", "", &design_delta(&h1, "X1\ntwo\nthree"));
+    let h2 = hash(&r, "design");
+    add_applied(&r, "w", &design_delta(&h2, "X1\nW2\nthree"));
+
+    match regenerate_ids(&r, &["w", "x"]) {
+        Regenerated::Tree(tree) => {
+            let spec = tree_text(&tree, "specs/a/SPEC.md");
+            assert!(spec.contains("## Design\nX1\nW2\nthree\n"), "{spec}");
+        }
+        Regenerated::Stopped { left, .. } => panic!("{left:?}"),
+    }
+}
+
+#[test]
+fn a_change_that_adds_what_another_modifies_goes_after_it() {
+    // req:sync.regenerate/regenerated-tree@e590dd2e
+    let r = repo("spec/x");
+    apply_change(&r, "x", "", &adds_x());
+    let base = hash(&r, "requirement:x");
+    let delta = format!(
+        "---\ncomponent: a\n---\n## MODIFIED Requirements\n\
+         ### Requirement: x <!-- base: {base} -->\nIt SHALL x, reworked.\n\n#### Scenario: s\n- ok\n"
+    );
+    add_applied(&r, "w", &delta);
+
+    match regenerate_ids(&r, &["w", "x"]) {
+        Regenerated::Tree(tree) => {
+            let spec = tree_text(&tree, "specs/a/SPEC.md");
+            assert!(spec.contains("It SHALL x, reworked."), "{spec}");
+        }
+        Regenerated::Stopped { left, .. } => panic!("{left:?}"),
+    }
+}
+
+#[test]
+fn a_change_stale_against_main_goes_before_the_one_built_on_it() {
+    // req:sync.regenerate/regenerated-tree@e590dd2e
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_a("specd", "one\ntwo\nthree", &["p"]),
+        )],
+    );
+    pull(&r);
+    let h0 = hash(&r, "contract");
+    apply_change(&r, "x", "", &contract_delta(&h0, "X1\ntwo\nthree"));
+    let h2 = hash(&r, "contract");
+    add_applied(&r, "w", &contract_delta(&h2, "X1\nW2\nthree"));
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_a("specd", "M1\ntwo\nthree", &["p"]),
+        )],
+    );
+
+    match regenerate_ids(&r, &["w", "x"]) {
+        Regenerated::Stopped { left, .. } => {
+            assert!(
+                left.iter()
+                    .any(|l| l.contains("apply/stale-base") && l.contains("changes/x/deltas/a.md")),
+                "{left:?}"
+            );
+            assert!(
+                left.contains(&format!("main changed contract of a since {h0}")),
+                "{left:?}"
+            );
+            assert!(!left.iter().any(|l| l.contains("changes/w/")), "{left:?}");
+        }
+        Regenerated::Tree(_) => panic!("x is stale against main"),
+    }
+}
+
+#[test]
+fn independent_changes_keep_id_order() {
+    // req:sync.regenerate/regenerated-tree@e590dd2e
+    let (r, h1, _) = folded_x_and_y();
+
+    match regenerate_ids(&r, &["y", "x"]) {
+        Regenerated::Stopped { left, .. } => {
+            assert!(
+                left.iter()
+                    .any(|l| l.contains("apply/stale-base") && l.contains("changes/y/deltas/a.md")),
+                "{left:?}"
+            );
+            assert!(
+                left.contains(&format!("x changed design of a since {h1}")),
+                "{left:?}"
+            );
+        }
+        Regenerated::Tree(_) => panic!("y is stale after x"),
+    }
+}
+
+#[test]
+fn when_every_change_has_an_unknown_base_the_first_in_id_order_goes() {
+    // req:sync.regenerate/regenerated-tree@e590dd2e
+    let r = repo("spec/x");
+    add_applied(&r, "w", &design_delta(&"0".repeat(64), "W1"));
+    add_applied(&r, "x", &design_delta(&"1".repeat(64), "X1"));
+
+    match regenerate_ids(&r, &["x", "w"]) {
+        Regenerated::Stopped { left, .. } => {
+            assert!(
+                left.iter()
+                    .any(|l| l.contains("apply/stale-base") && l.contains("changes/w/deltas/a.md")),
+                "{left:?}"
+            );
+            assert!(!left.iter().any(|l| l.contains("changes/x/")), "{left:?}");
+        }
+        Regenerated::Tree(_) => panic!("both bases are unknown"),
+    }
 }
