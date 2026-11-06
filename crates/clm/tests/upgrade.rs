@@ -93,3 +93,15 @@ fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
     assert_eq!(too_new.status.code(), Some(1), "{too_new:?}");
     assert!(String::from_utf8_lossy(&too_new.stderr).contains("newer `clm`"));
 }
+
+// req:clm/upgrade-command@86c8b58e
+#[test]
+fn upgrade_from_a_subdirectory_reads_the_project_root() {
+    let dir = initialised();
+    let toml = dir.path().join("clm.toml");
+    let text = fs::read_to_string(&toml).unwrap();
+    fs::write(&toml, format!("upgraded = \"99990101-future\"\n{text}")).unwrap();
+    let out = clm(&dir.path().join("specs"), &["upgrade"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("newer `clm`"));
+}
