@@ -108,6 +108,10 @@ fn the_script_writes_the_same_entry_every_time() {
         names.iter().all(|n| !n.starts_with(".git/")),
         "the entry holds .git"
     );
+    // `init` ran with `--no-detectors --host none`.
+    let settings = fs::read_to_string(out.path().join("clm.toml")).unwrap();
+    assert!(settings.contains("host = \"none\""), "{settings}");
+    assert!(!settings.contains("[[detectors]]"), "{settings}");
     // The sample's placeholder is a marker prefix, not left in the file.
     let test = fs::read_to_string(out.path().join("tests/sample.rs")).unwrap();
     assert!(!test.contains("@REQ@") && test.contains(concat!("req", ":sample/greets@")));
