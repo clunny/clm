@@ -430,7 +430,7 @@ fn guard_allows_every_other_event() {
 
 #[test]
 fn guard_blocks_cutting_releases() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     for command in [
         // dispatching a release
         "gh workflow run release.yml -f version=0.2.0",
@@ -461,6 +461,13 @@ fn guard_blocks_cutting_releases() {
         "gh workflow run --ref main release.yml",
         "gh workflow run --ref main --json release.yml",
         "gh workflow run -f version=1 Release",
+        // dispatching the site
+        "gh workflow run site.yml",
+        "gh workflow run .github/workflows/Site.YAML",
+        "gh workflow run SITE",
+        "gh workflow run site",
+        "gh workflow run -R o/r site.yaml",
+        "gh workflow run --ref main site.yml",
     ] {
         let why = blocks(&bash(command));
         assert!(why.contains("humans-cut-releases"), "{command}: {why}");
@@ -479,7 +486,7 @@ fn guard_blocks_cutting_releases() {
 
 #[test]
 fn guard_allows_reading_releases_and_runs() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     for command in [
         // reading releases
         "gh release list",
@@ -492,6 +499,9 @@ fn guard_allows_reading_releases_and_runs() {
         "gh workflow run ci.yml -f target=release.yml",
         "gh workflow run prerelease.yml",
         "gh workflow run release.yml.bak",
+        "gh workflow run site.yml.bak",
+        "gh workflow run website.yml",
+        "gh workflow run ci.yml -f target=site.yml",
         "gh workflow view release.yml",
         "gh api repos/o/r/releases",
         "gh api repos/o/r/releases/latest --jq .tag_name",

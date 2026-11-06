@@ -126,7 +126,7 @@ fn guard_command_asks_with_the_reason() {
 
 #[test]
 fn guard_command_blocks_dispatching_a_release() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "gh workflow run release.yml -f version=0.2.0" },
@@ -135,6 +135,21 @@ fn guard_command_blocks_dispatching_a_release() {
     let out = hook("guard", &event);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("humans-cut-releases"));
+    // dispatching the site
+    for command in [
+        "gh workflow run site.yml",
+        "gh workflow run .github/workflows/Site.YAML",
+        "gh workflow run SITE",
+    ] {
+        let event = serde_json::json!({
+            "tool_name": "Bash",
+            "tool_input": { "command": command },
+        })
+        .to_string();
+        let out = hook("guard", &event);
+        assert_eq!(out.status.code(), Some(2), "{command}: {out:?}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains("humans-cut-releases"));
+    }
 }
 
 /// A `PATH` whose `gh` is `script`, held in `dir`, ahead of the system's.
@@ -162,6 +177,9 @@ fn fake_rest_gh(dir: &Path, calls: &Path, url: &str) -> String {
              */actions/runs/76) echo '{{\"name\":\"Publish\",\"path\":\".github/workflows/release.yaml\"}}' ;;\n\
              */actions/runs/78) echo '{{\"name\":\"release\",\"path\":\".github/workflows/publish.yml\"}}' ;;\n\
              */actions/runs/79) echo '{{\"name\":\"Publish\",\"path\":\".github/workflows/release.yml@refs/heads/main\"}}' ;;\n\
+             */actions/runs/80) echo '{{\"name\":\"Publish\",\"path\":\".github/workflows/Site.YML\"}}' ;;\n\
+             */actions/runs/81) echo '{{\"name\":\"SITE\",\"path\":\".github/workflows/pages.yml\"}}' ;;\n\
+             */actions/runs/82) echo '{{\"name\":\"Publish\",\"path\":\".github/workflows/site.yaml@refs/heads/main\"}}' ;;\n\
              */actions/runs/0) echo '{{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}}' ;;\n\
              */actions/runs/42) echo '{{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}}' ;;\n\
              */actions/runs/43) echo '{{\"name\":\"CI\"}}' ;;\n\
@@ -186,7 +204,7 @@ fn take_calls(calls: &Path) -> Vec<String> {
 
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
@@ -199,6 +217,10 @@ fn guard_blocks_rerunning_a_release_run() {
         "gh run rerun 76",
         "gh run rerun 78",
         "gh run rerun 79",
+        // a site run is a release run
+        "gh run rerun 80",
+        "gh run rerun 81",
+        "gh run rerun 82",
         // a body a shell runs
         "bash <<'EOF'\ngh run rerun 77\nEOF",
     ] {
@@ -296,7 +318,7 @@ fn guard_blocks_rerunning_a_release_run() {
 
 #[test]
 fn guard_looks_a_rerun_up_where_it_runs() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/p/q");
@@ -390,7 +412,7 @@ fn guard_looks_a_rerun_up_where_it_runs() {
 
 #[test]
 fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     // a repository that can't be resolved: `repo view` fails, or its `url` isn't
     // `<scheme>://<host>/<owner>/<repo>`
     let api_ci = "if [ \"$1\" = api ]; then \
@@ -422,7 +444,7 @@ fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
 
 #[test]
 fn guard_answers_a_hanging_lookup_within_its_budget() {
-    // req:plugin.hooks.guard/release-guard@c8e4bdbb
+    // req:plugin.hooks.guard/release-guard@e9278dcb
     // One never answers `repo view`, one answers it but never `api`. Each writes its process
     // ID to `pids` and then `exec`s its sleep, so the sleep has that ID.
     let hanging = TempDir::new().unwrap();
