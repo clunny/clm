@@ -255,7 +255,7 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          ## Steps\n\n\
          First check `git branch --show-current`, then run \
          `git switch -c spec/{batch} origin/main` and push it with \
-         `git push -u origin spec/{batch}`.\n\n\
+         `clm branch push`.\n\n\
          {UNATTENDED} When a change can't be folded without a decision only the human can \
          make, such as two changes that contradict each other, leave it out before anything \
          of it is brought over, and put `left <id>: <reason>` for it in your final message, \
@@ -304,7 +304,13 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a \
          human can supply into `question` or `human-task` backlog items whose `blocks` name the \
          requirements that wait (`requirement-blocks`); and list the rest under \
-         `## Open questions`. Fix in the \
+         `## Open questions`. Ask the builder check's subagent, too, which capability tests \
+         each such requirement changes what they observe at the product's boundary: such work \
+         is neither a requirement of `capability`, which holds none of its own, nor a \
+         `#### Needs`, nor a backlog item, since the requirement's own build updates those tests \
+         (`capability-tests-follow-rules`), so name them in that requirement's text; a \
+         requirement under which a `CAPABILITIES.md` entry as written no longer holds edits \
+         that entry in the change instead, a hand edit. Fix in the \
          changes each `architecture-auditor` finding you agree with, and write each one you leave under \
          `## Open questions` in the `change.md` of the folded change whose element it \
          concerns, with why, since the pull request body carries each change's open questions \
@@ -313,7 +319,7 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          run `clm check`, commit, and \
          {REBASE}, then run `clm gate --base origin/main` again.\n\n\
          Never push to, rebase or delete a folded change's branch ({branches}).\n\n\
-         After each commit, {REBASE}, then push with `git push --force-with-lease`. Read \
+         After each commit, {REBASE}, then push with `clm branch push`. Read \
          `clm rebase`'s outcome from its last line, never from its exit code: \
          `rebase incomplete` means something is left for you, and `rebase failed` means git \
          itself failed, so run it once more and, if it fails again, stop and say why.\n\n\

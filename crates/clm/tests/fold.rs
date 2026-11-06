@@ -125,7 +125,7 @@ fn scenario_several_changes_folded() {
         "`x`",
         "git branch --show-current",
         "git switch -c spec/20261027-a-fold origin/main",
-        "git push -u origin spec/20261027-a-fold",
+        "clm branch push",
         "git diff origin/main...origin/spec/20261027-a",
         "git diff origin/main...origin/spec/20261027-b",
         "git apply --3way",

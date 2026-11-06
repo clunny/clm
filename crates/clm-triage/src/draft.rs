@@ -323,7 +323,7 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          clone's place by it. First check `git branch --show-current`, then run \
          `git switch -c spec/{id} origin/main`. Write `changes/{id}/change.md` with `status: proposed`, `resolves` naming \
          every item above ({resolves}), and {priority}. Commit it and push it with \
-         `git push -u origin spec/<id>`: the spec work then holds the items past their \
+         `clm branch push`: the spec work then holds the items past their \
          claims' expiry (`propose-claims`). Never rename `<id>` after that.\n\n\
          {answered}Before the job, check each item against `origin/main`: an item filed while another \
          change was fixing the same thing outlives that change, and drafting it costs a whole \
@@ -455,7 +455,13 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a human \
          can supply into `question` or `human-task` backlog items whose `blocks` name the \
          requirements that wait (`requirement-blocks`); and list the rest under \
-         `## Open questions`. A requirement that removes or renames part of a component's Contract \
+         `## Open questions`. Ask the builder check's subagent, too, for which capability tests each \
+         requirement the change adds or modifies changes what they observe at the product's \
+         boundary: such work is neither a requirement of `capability`, which holds none of its \
+         own, nor a `#### Needs`, nor a backlog item, since the requirement's own build updates \
+         those tests (`capability-tests-follow-rules`), so name them in that requirement's text; \
+         a requirement under which a `CAPABILITIES.md` entry as written no longer holds edits \
+         that entry in the change instead, a hand edit. A requirement that removes or renames part of a component's Contract \
          that another component's code uses needs the requirements that move each such component off \
          it (`contract-removal-needs`). Write a rename as two requirements of the provider in \
          the same change (`rename-adds-then-removes`): an adding one that offers the new name \
@@ -488,7 +494,7 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          re-applies the edited deltas, since the change is `applied` by then and \
          `clm apply` refuses it. Then run `clm gate --base origin/main` again, whose first \
          line is the one the pull request and the land below go by, and push as below.\n\n\
-         After each commit, {rebase}, then push with `git push --force-with-lease`. Read \
+         After each commit, {rebase}, then push with `clm branch push`. Read \
          `clm rebase`'s outcome from its last line, never from its exit code: `rebase incomplete` \
          means something is left for you, and `rebase failed` means git itself failed, so run \
          it once more and, if it fails again, stop and say why.\n\n\
@@ -516,7 +522,7 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          body, rewrite that file and run `clm pr body {PR_BODY}`. Then run \
          `clm land spec/<id>` and go by what it prints: a line `landed <sha> ...` ends the \
          draft; otherwise go by its last line. `gate/up-to-date` or a conflict with `main` \
-         means {rebase}, push with `git push --force-with-lease` and land again; a failing \
+         means {rebase}, push with `clm branch push` and land again; a failing \
          check means fix it, commit, push and land again.\n\n\
          Before deciding there is no spec change, report the CLM defects you met with \
          `clm defect` on `spec/<id>` (`defect-reports`): `clm defect` writes to the current \
@@ -525,11 +531,10 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          and lands. Only when every item was fixed on a code branch or left and `spec/<id>` \
          changes nothing but its `change.md` is there no spec change: run \
          `git switch --detach origin/main`, delete `spec/<id>` locally, and delete the \
-         branches on `origin`, each with its own `git push origin --delete <ref>`: \
-         `git push origin --delete spec/<id>`, then \
-         `git push origin --delete autosync/spec/<id>`. A ref `origin` doesn't have fails \
-         only its own push, which is fine; one push naming both fails whole when either is \
-         missing, deleting neither. So no empty change holds the items.\n\n\
+         branches on `origin`, each with its own `clm branch delete <ref>`: \
+         `clm branch delete spec/<id>`, then \
+         `clm branch delete autosync/spec/<id>`. A ref the clone never fetched fails only \
+         its own call, which is fine, and leaves the other to be deleted. So no empty change holds the items.\n\n\
          End your final message with one line: `landed <sha>`, with the spec change's land \
          (a change that only changes the backlog included, even when its items are on `left` \
          lines), or the last fix branch's when there was no spec change; \

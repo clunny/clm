@@ -273,3 +273,28 @@ fn a_live_change_is_judged_as_fold_says_whatever_the_archive_holds() {
     assert!(out.launcher.is_none());
     assert!(out.left[0].1.contains("not `applied`"), "{:?}", out.left);
 }
+
+#[test]
+fn scenario_draft_capability_test_fixes_fold_prompt() {
+    // req:orchestrator.triage/draft-capability-test-fixes@daea8e6f
+    let p = fold_prompt(&["20261027-a", "20261027-b"]);
+    let para = p
+        .split("\n\n")
+        .find(|s| s.contains("Then the builder check"))
+        .expect("builder check paragraph");
+    for needle in ["capability-tests-follow-rules", "CAPABILITIES.md"] {
+        assert!(para.contains(needle), "{needle} missing from {para}");
+    }
+}
+
+#[test]
+fn scenario_prompts_push_through_clm_fold_prompt() {
+    // req:orchestrator.triage/prompts-push-through-clm@0f8b1003
+    let several = fold_prompt(&["20261027-a", "20261027-b"]);
+    assert!(several.contains("clm branch push"), "{several}");
+    for p in [several, fold_prompt(&["20261027-a"])] {
+        for absent in ["git push", "--force-with-lease"] {
+            assert!(!p.contains(absent), "{absent} in {p}");
+        }
+    }
+}
