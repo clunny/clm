@@ -467,7 +467,7 @@ fn scenario_draft_backlog_only_change() {
     // Defects are reported on the branch before it is judged empty and deleted.
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
     assert!(at("`clm defect` on `spec/<id>`") < at("git switch --detach origin/main"));
-    // Each ref is deleted by its own push, and only when the branch changes nothing but
+    // Each ref is deleted by its own call, and only when the branch changes nothing but
     // its `change.md`.
     let delete = paragraph(&p, "clm branch delete <ref>");
     for needle in [
