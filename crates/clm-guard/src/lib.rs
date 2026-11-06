@@ -63,7 +63,7 @@ pub fn guard(event: &str) -> Decision {
     if judged.iter().any(|j| release::cuts_release(&j.tokens)) || release::reruns_release(&reruns) {
         reasons.push(
             "clm: only a human cuts a release (`humans-cut-releases`). Ask the user to \
-             dispatch the Release workflow."
+             dispatch the Release or Site workflow."
                 .to_string(),
         );
     }
