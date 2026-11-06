@@ -536,7 +536,7 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `clm pr open spec/<id> --title <title> --body-file {PR_BODY}`; to correct the \
          body, rewrite that file and run `clm pr body {PR_BODY}`. Then run \
          `clm land spec/<id>` and go by what it prints: a line `landed <sha> ...` ends the \
-         draft; otherwise go by its last line. `gate/up-to-date` or a conflict with `main` \
+         draft (unless an item the answers turned into a bug still waits for its fix); otherwise go by its last line. `gate/up-to-date` or a conflict with `main` \
          means {rebase}, push with `clm branch push` and land again; a failing \
          check means fix it, commit, push and land again.\n\n\
          Before deciding there is no spec change, report the CLM defects you met with \
