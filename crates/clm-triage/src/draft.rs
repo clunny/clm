@@ -487,7 +487,13 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          name `clm:remove-by` the change, which stays live until the removal is built \
          (`expand-contract`). The builder check searches each user's code for exhaustive uses \
          (a `match`, a `switch` with no default, a map keyed by the type) the adding one must \
-         not break. When the removal can't carry that `#### Needs` (the \
+         not break. A requirement that widens a type another component matches exhaustively \
+         (an added enum variant) needs that component's requirements that build and name the \
+         code the new value selects there, which need nothing of the widening and are tested \
+         by calling that code directly, so the widening's build adds the arm as a forced fix; \
+         that component's requirements that reach the code through the new value need the \
+         widening (`forced-fixes-cover-additions`). The builder check searches each user's code \
+         for exhaustive uses of a type the change widens too. When the removal can't carry that `#### Needs` (the \
          removing component is required and the component that must move is optional, or the removed \
          text is a whole requirement under `REMOVED Requirements`), put the contract step in \
          a second change on the same branch, left `proposed`, and add a `kind: deferred` \
