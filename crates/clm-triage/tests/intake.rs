@@ -6,7 +6,7 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use clm_host::{Error as HostError, Host, Listed};
+use clm_host::{Alert, Error as HostError, Host, Listed};
 use clm_triage::{Error, intake};
 use common::*;
 use tempfile::TempDir;
@@ -14,6 +14,7 @@ use tempfile::TempDir;
 /// A host that lists `open` and files nothing.
 struct Fake {
     open: Result<Vec<Listed>, String>,
+    alerts: Result<Vec<Alert>, String>,
 }
 
 impl Host for Fake {
@@ -28,6 +29,19 @@ impl Host for Fake {
     }
     fn list(&self, _: &Path) -> Result<Vec<Listed>, HostError> {
         self.open.clone().map_err(HostError::Git)
+    }
+    fn alerts(&self, _: &Path) -> Result<Vec<Alert>, HostError> {
+        self.alerts.clone().map_err(HostError::Git)
+    }
+}
+
+fn alert(number: u64) -> Alert {
+    Alert {
+        number,
+        severity: "high".into(),
+        ecosystem: "npm".into(),
+        package: "vite".into(),
+        manifest: "web/package-lock.json".into(),
     }
 }
 
@@ -48,7 +62,10 @@ fn pull(number: u64, author: &str) -> Listed {
 }
 
 fn host(open: Vec<Listed>) -> Fake {
-    Fake { open: Ok(open) }
+    Fake {
+        open: Ok(open),
+        alerts: Ok(Vec::new()),
+    }
 }
 
 fn lines(r: &Repo, open: Vec<Listed>) -> Vec<String> {
@@ -57,7 +74,7 @@ fn lines(r: &Repo, open: Vec<Listed>) -> Vec<String> {
 
 #[test]
 fn scenario_new_imported_and_a_pull_request() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     write(
         &r.work,
@@ -77,7 +94,7 @@ fn scenario_new_imported_and_a_pull_request() {
 
 #[test]
 fn imported_names_every_item_sorted() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     for slug in ["zeta", "alpha"] {
         write(
@@ -92,7 +109,7 @@ fn imported_names_every_item_sorted() {
 
 #[test]
 fn scenario_resolved_by_a_change() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     write(
         &r.work,
@@ -125,7 +142,7 @@ fn scenario_resolved_by_a_change() {
 
 #[test]
 fn resolved_by_a_live_change_naming_it_in_resolves_only() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     write(
         &r.work,
@@ -148,7 +165,7 @@ fn resolved_by_a_live_change_naming_it_in_resolves_only() {
 
 #[test]
 fn scenario_resolved_by_a_code_fix() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     write(
         &r.work,
@@ -167,7 +184,7 @@ fn scenario_resolved_by_a_code_fix() {
 
 #[test]
 fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     for (slug, text) in [
         ("old", "---\ntitle: T\nkind: bug\nissues: [9]\n---\n"),
@@ -186,7 +203,7 @@ fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
 
 #[test]
 fn scenario_no_strangers_text() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     // `Listed` holds a number, a kind and a login: a stranger's title or body has nowhere
     // to go, and the lines are built from those fields alone.
@@ -196,7 +213,7 @@ fn scenario_no_strangers_text() {
 
 #[test]
 fn scenario_no_host() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     let out = lines(&r, vec![]);
     assert!(out.is_empty());
@@ -204,10 +221,11 @@ fn scenario_no_host() {
 
 #[test]
 fn a_failing_list_is_refused_with_its_reason() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let r = repo();
     let fake = Fake {
         open: Err("gh: not logged in".into()),
+        alerts: Ok(Vec::new()),
     };
     match intake(&r.work, &fake) {
         Err(Error::Refused(why)) => assert!(why.contains("not logged in"), "{why}"),
@@ -217,10 +235,143 @@ fn a_failing_list_is_refused_with_its_reason() {
 
 #[test]
 fn git_failure_is_a_git_error() {
-    // req:orchestrator.triage/intake@87c47609
+    // req:orchestrator.triage/intake@9f6e86d5
     let dir = TempDir::new().unwrap();
     assert!(matches!(
         intake(dir.path(), &host(vec![issue(1)])),
         Err(Error::Git(_))
     ));
+}
+
+fn with_alerts(r: &Repo, open: Vec<Listed>, alerts: Result<Vec<Alert>, String>) -> Vec<String> {
+    let fake = Fake {
+        open: Ok(open),
+        alerts,
+    };
+    intake(&r.work, &fake).unwrap()
+}
+
+#[test]
+fn scenario_alerts_after_the_inbox() {
+    // req:orchestrator.triage/intake@9f6e86d5
+    let r = repo();
+    write(
+        &r.work,
+        "backlog/bump-x.md",
+        "---\ntitle: T\nkind: bug\nalerts: [2]\n---\n",
+    );
+    push_main(&r.work, "item");
+    assert_eq!(
+        with_alerts(&r, vec![issue(92)], Ok(vec![alert(4), alert(2)])),
+        [
+            "issue 92 new",
+            "alert 2 imported bump-x",
+            "alert 4 new high npm vite web/package-lock.json"
+        ]
+    );
+}
+
+#[test]
+fn scenario_alert_resolved_by_a_code_fix() {
+    // req:orchestrator.triage/intake@9f6e86d5
+    let r = repo();
+    write(
+        &r.work,
+        "backlog/bump-y.md",
+        "---\ntitle: T\nkind: bug\nalerts: [7]\n---\n",
+    );
+    push_main(&r.work, "add");
+    fs::remove_file(r.work.join("backlog/bump-y.md")).unwrap();
+    push_main(&r.work, "delete");
+    let sha = git(&r.work, &["rev-parse", "--short", "HEAD"]);
+    assert_eq!(
+        with_alerts(&r, vec![], Ok(vec![alert(7)])),
+        [format!("alert 7 resolved bump-y {}", sha.trim())]
+    );
+}
+
+#[test]
+fn an_alert_resolved_by_a_change_names_that_change() {
+    // req:orchestrator.triage/intake@9f6e86d5
+    let r = repo();
+    write(
+        &r.work,
+        "backlog/bump-z.md",
+        "---\ntitle: T\nkind: bug\nalerts: [8]\n---\n",
+    );
+    push_main(&r.work, "add");
+    fs::remove_file(r.work.join("backlog/bump-z.md")).unwrap();
+    write(
+        &r.work,
+        "changes/archive/20260101-c/change.md",
+        &change_md("done", "resolves: [bump-z]\n"),
+    );
+    push_main(&r.work, "delete");
+    assert_eq!(
+        with_alerts(&r, vec![], Ok(vec![alert(8)])),
+        ["alert 8 resolved bump-z 20260101-c"]
+    );
+}
+
+#[test]
+fn issue_and_alert_numbers_never_match_each_others_items() {
+    // req:orchestrator.triage/intake@9f6e86d5
+    let r = repo();
+    write(
+        &r.work,
+        "backlog/by-issue.md",
+        "---\ntitle: T\nkind: bug\nissues: [3]\n---\n",
+    );
+    write(
+        &r.work,
+        "backlog/by-alert.md",
+        "---\ntitle: T\nkind: bug\nalerts: [5]\n---\n",
+    );
+    write(
+        &r.work,
+        "backlog/gone-by-issue.md",
+        "---\ntitle: T\nkind: bug\nissues: [6]\n---\n",
+    );
+    push_main(&r.work, "items");
+    fs::remove_file(r.work.join("backlog/gone-by-issue.md")).unwrap();
+    push_main(&r.work, "delete");
+    let sha = git(&r.work, &["rev-parse", "--short", "HEAD"]);
+    assert_eq!(
+        with_alerts(
+            &r,
+            vec![issue(5), issue(6), issue(2)],
+            Ok(vec![alert(3), alert(6)])
+        ),
+        [
+            "issue 2 new".to_string(),
+            "issue 5 new".to_string(),
+            format!("issue 6 resolved gone-by-issue {}", sha.trim()),
+            "alert 3 new high npm vite web/package-lock.json".to_string(),
+            "alert 6 new high npm vite web/package-lock.json".to_string()
+        ]
+    );
+}
+
+#[test]
+fn scenario_alerts_refused() {
+    // req:orchestrator.triage/intake@9f6e86d5
+    let r = repo();
+    assert_eq!(
+        with_alerts(&r, vec![issue(92)], Err("gh: 403".into())),
+        ["issue 92 new", "alerts unavailable"]
+    );
+}
+
+#[test]
+fn alerts_without_issues_and_a_refusal_without_issues() {
+    // req:orchestrator.triage/intake@9f6e86d5
+    let r = repo();
+    assert_eq!(
+        with_alerts(&r, vec![], Ok(vec![alert(1)])),
+        ["alert 1 new high npm vite web/package-lock.json"]
+    );
+    assert_eq!(
+        with_alerts(&r, vec![], Err("gh: 403".into())),
+        ["alerts unavailable"]
+    );
 }
