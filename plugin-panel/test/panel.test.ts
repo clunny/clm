@@ -396,6 +396,12 @@ describe('superseded-draw', () => {
     await expect(unlessSuperseded(() => Promise.reject(new Error('aborted early')), null)).rejects.toThrow('aborted early')
   })
 
+  test('an aborted run of clm or of git is not kept as an answer', async () => {
+    const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'x aborted' })
+    expect(await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)).toBeNull()
+    expect(await unlessSuperseded(() => hasOriginMain($, '/work/repo'), null)).toBeNull()
+  })
+
   test('another failure of clm still shows why it could not start', async () => {
     const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'spawn EACCES' })
     const run = await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)
