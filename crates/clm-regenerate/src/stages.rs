@@ -8,7 +8,7 @@ use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use clm_model::{Graph, ROOT_ID};
+use clm_model::{Change, Graph, ROOT_ID};
 
 use crate::Error;
 use crate::stale::{History, text};
@@ -107,6 +107,29 @@ impl Stages {
             }
         }
         movers
+    }
+
+    /// Whether a base `change` records for a Contract, Design or requirement it modifies or
+    /// removes (`stale_bases` names those `apply` doesn't accept as current) has no text at
+    /// any stage or in `onto`'s history: it is a base another change has yet to produce.
+    pub(crate) fn has_unknown_base(
+        &self,
+        root: &Path,
+        onto: &str,
+        change: &Change,
+    ) -> Result<bool, Error> {
+        for delta in &change.deltas {
+            let node = self.last().nodes.get(&delta.node);
+            for (element, base) in clm_apply::stale_bases(node, delta) {
+                if self
+                    .base_text(root, onto, &delta.node, &element, &base)?
+                    .is_none()
+                {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     /// `base`'s text for `element` of `node`: at its stage, else at the newest commit in

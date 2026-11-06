@@ -66,7 +66,7 @@ pub enum Regenerated {
 /// `regenerated-tree`, the one place that builds a regenerated `specs/`: `onto`'s `specs/`
 /// (none when it has none) with `HEAD`'s `changes/`, `backlog/`, `docs/decisions/`,
 /// `ARCHITECTURE.md` and `CAPABILITIES.md`, each taken under the
-/// CLM root's prefix in the repository, then each change of `ids` re-applied in order,
+/// CLM root's prefix in the repository, then the changes of `ids` re-applied one at a time in the order their bases give (`next_change`),
 /// stopping at the first with violations under its own directory or that doesn't apply. With
 /// `merge`, a stale delta is first merged as `stale-delta-merge` states, and the merge
 /// commits (`Merge <movers> into <id>`) are made in `root`; without it nothing in `root`'s
@@ -106,15 +106,21 @@ pub fn regenerated(
     let mut merged_lines = Vec::new();
     // `stale-delta-names-movers`: the graph loaded before each change, kept as its stage.
     let mut stages = Stages::new();
-    let mut previous: Option<&str> = None;
-    for id in ids {
+    let mut previous: Option<String> = None;
+    // `reapply-order-follows-bases`: `ids` are a set, applied in the order the bases give.
+    let mut left_to_apply: Vec<&String> = ids.iter().collect();
+    left_to_apply.sort();
+    left_to_apply.dedup();
+    while !left_to_apply.is_empty() {
         let mut merged = false;
+        let mut id = left_to_apply[0];
         let mut first = true;
         loop {
             let (graph, all) = clm_model::load(&tree);
             if first {
-                stages.push(previous, graph);
+                stages.push(previous.as_deref(), graph);
                 first = false;
+                id = next_change(root, &stages, &left_to_apply, onto)?;
             } else {
                 stages.reload(graph);
             }
@@ -156,17 +162,36 @@ pub fn regenerated(
                 left,
             });
         }
-        previous = Some(id);
+        left_to_apply.retain(|&other| other != id);
+        previous = Some(id.clone());
     }
     // The regenerated tree is the last stage.
     let (graph, _) = clm_model::load(&tree);
-    stages.push(previous, graph);
+    stages.push(previous.as_deref(), graph);
     Ok(Regenerated::Tree(Tree {
         root: tree,
         _dir: tmp,
         stages,
         merged: merged_lines,
     }))
+}
+
+/// `reapply-order-follows-bases`: of the changes left, in ID order, the first none of whose
+/// recorded bases is unknown, or the first when every one has an unknown base. A change the
+/// graph doesn't hold has none, so ID order reaches it and its violations stop the run.
+fn next_change<'a>(
+    root: &Path,
+    stages: &Stages,
+    left: &[&'a String],
+    onto: &str,
+) -> Result<&'a String, Error> {
+    for &id in left {
+        match stages.last().changes.get(id) {
+            Some(change) if stages.has_unknown_base(root, onto, change)? => {}
+            _ => return Ok(id),
+        }
+    }
+    Ok(left[0])
 }
 
 /// The violations of loading `graph` that lie under change `id`'s directory, or all of them
