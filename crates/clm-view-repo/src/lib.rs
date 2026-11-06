@@ -136,6 +136,9 @@ pub fn view(
         }
         Source::At { rev, budgets } => {
             let at = at::read(root, rev, budgets)?;
+            if !at.violations.is_empty() {
+                return Err(Error::Violations(at.violations));
+            }
             (at.graph, at.markers, at.oversized, Some(Head::At(at.head)))
         }
     };
@@ -157,4 +160,44 @@ pub fn view(
         )),
     };
     Ok(render(&view, format, width, head.as_ref()))
+}
+
+/// The first line of a chart that begins with `head`, as plain text: the line the views
+/// print, taken from `clm-view` rather than formatted again here (`pending-names-its-commit`).
+fn head_text(head: Head) -> String {
+    let none = flight_view(&Graph::default(), &[], &[], 0, DEFAULT_EXPIRY_HOURS);
+    render(&View::Flight(none), Format::Text, usize::MAX, Some(&head))
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// What `clm pending` prints: the line naming the commit for stderr, and the pending lines.
+type PendingReport = (Option<String>, Result<Vec<clm_check::Pending>, Error>);
+
+/// `clm pending [<component>] [--at <rev>]` (`pending-names-its-commit`): the line naming
+/// the commit it describes, in plain text (none when `HEAD` can't be read, or when `rev`
+/// names no commit), and the pending lines of the working tree or of `rev`'s tree, or the
+/// spec graph's violations, or why `rev` couldn't be read.
+pub fn pending(root: &Path, component: Option<&str>, at: Option<&str>) -> PendingReport {
+    let Some(rev) = at else {
+        let line = checkout(root).map(|c| head_text(Head::Checkout(c)));
+        return (
+            line,
+            clm_check::pending_in(root, component).map_err(Error::Violations),
+        );
+    };
+    match at::read(root, rev, None) {
+        Err(e) => (None, Err(e)),
+        Ok(commit) => {
+            let line = head_text(Head::At(commit.head));
+            if !commit.violations.is_empty() {
+                return (Some(line), Err(Error::Violations(commit.violations)));
+            }
+            let list = clm_check::pending_for(&commit.graph, &commit.markers, component)
+                .map_err(Error::Violations);
+            (Some(line), list)
+        }
+    }
 }

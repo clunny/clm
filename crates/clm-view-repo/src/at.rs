@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use clm_check::{Length, Marker, Size};
-use clm_model::{Files, Graph};
+use clm_model::{Files, Graph, Violation};
 
 use clm_view::At;
 
@@ -17,6 +17,8 @@ const BINARY_PROBE: usize = 8000;
 /// What `--at` reads from a commit.
 pub(crate) struct Commit {
     pub graph: Graph,
+    /// The graph's violations; the markers and the size report are then left empty.
+    pub violations: Vec<Violation>,
     pub markers: Vec<Marker>,
     /// The nodes over their budgets, when `budgets` was given and could be read.
     pub oversized: Option<BTreeSet<String>>,
@@ -66,8 +68,21 @@ pub(crate) fn read(root: &Path, rev: &str, budgets: Option<BudgetsFrom>) -> Resu
     let tree = tree(root, &hash).map_err(failed)?;
     let files = &tree.files;
     let (graph, violations) = clm_model::load_files(files);
+    let head = At {
+        rev: rev.to_string(),
+        commit: hash.get(..7).unwrap_or(&hash).to_string(),
+        fetched: fetched(root),
+        branch: clm_git::current_branch(root).ok().flatten(),
+        now: clm_git::now(),
+    };
     if !violations.is_empty() {
-        return Err(Error::Violations(violations));
+        return Ok(Commit {
+            graph,
+            violations,
+            markers: Vec::new(),
+            oversized: None,
+            head,
+        });
     }
     let markers: Vec<Marker> = files
         .iter()
@@ -104,15 +119,9 @@ pub(crate) fn read(root: &Path, rev: &str, budgets: Option<BudgetsFrom>) -> Resu
                 .collect(),
         )
     });
-    let head = At {
-        rev: rev.to_string(),
-        commit: hash.get(..7).unwrap_or(&hash).to_string(),
-        fetched: fetched(root),
-        branch: clm_git::current_branch(root).ok().flatten(),
-        now: clm_git::now(),
-    };
     Ok(Commit {
         graph,
+        violations,
         markers,
         oversized,
         head,
