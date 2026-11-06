@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # Keep the required-migration workaround until a real required migration ships
