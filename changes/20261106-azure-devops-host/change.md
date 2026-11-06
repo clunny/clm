@@ -38,10 +38,13 @@ How landing meets the host's branch policies:
 - `issue`, the contribution operations, `list` and `alerts` behave as on `git`: `issue` prints the report and says there is nowhere to file it, since `clm defect` files on CLM's own GitHub repository, not the project's; `parent` returns nothing; `list` and `alerts` return nothing; the rest report that the host has no such thing. No capability asks for Azure work items, forks or dependency alerts yet (`yagni`).
 - `branch push` and `branch delete` are plain git on every host, unchanged.
 - No crate but `clm-git` and `clm-host` runs `az`, which `git-through-layer`'s scan checks as it checks `gh`.
+- What `clm init` needs to know of a host moves into the adapter (`host-adapters`): `host_for_remote(url)` gives the `host` a remote names, parsing the URL's host and comparing it whole (`github.com` or `ssh.github.com`; `dev.azure.com`, `ssh.dev.azure.com` or `*.visualstudio.com`; else `git`), and `setup_steps(host)` gives the steps a person takes on that host: on Azure, installing the Azure CLI with `azure-devops` and `az login`, and granting `Bypass policies when pushing` to the identity that runs `clm land`; on GitHub, the bypass list of the rule protecting `main`. `init` gains `depends_on: host` and keeps no host's names.
 
 **Settings** (`config`). `host` accepts `azure`.
 
-**`clm init`** (`init`). With no `--host`, an `origin` URL whose host is `dev.azure.com`, `ssh.dev.azure.com` or ends in `.visualstudio.com` gives `host = "azure"`; `--host azure` sets it. On `azure`, `Next steps (yours):` names installing the Azure CLI with its `azure-devops` extension and signing in, and the protected-`main` step names Azure's "Bypass policies when pushing" for the identity that runs `clm land`. It still calls no host.
+**The CLI** (`clm`). `clm init --host` accepts `azure` (`init-host-values`).
+
+**`clm init`** (`init`). With no `--host`, `host` is `host_for_remote` of `origin`'s URL; `--host azure` sets it. `Next steps (yours):` prints pushing the bootstrap commit, then the host's `setup_steps`. It still calls no host.
 
 **`/clm:init`** (`plugin`). Its CI step also reads Azure Pipelines (`azure-pipelines.yml`, and pipeline YAML the repository holds elsewhere, such as `.azure-pipelines/`): build and test steps move into `scripts/clm-check.sh`, and those pipelines (or their build-and-test stages) are removed; deploy, release and scheduled pipelines stay, as GitHub's do. It tells the human that build-validation branch policies stop being the gate once `clm land` lands, that the lander needs the bypass permission, and, for a deploy pipeline triggered by `main` with no path filter, that spec-only lands (`specs/`, `changes/`, `backlog/`) would trigger it too, suggesting the filter. It never removes a branch policy or a pipeline on the host: those are the human's.
 
@@ -57,7 +60,12 @@ How landing meets the host's branch policies:
 - `web-optional`: the web app's Azure support is a separate idea; nothing here touches `web`, `web.worker` or `replica`.
 - No migration: `azure` is a new accepted value, and a project's existing `clm.toml` is unchanged (`upgrades-carry-migrations`).
 
+## Build order
+
+`config/host-setting` first (`Host::Azure`); then `clm/init-host-values` and `host`'s `azure-pull-requests`, `azure-other-operations`, `host-for-remote` and `host-setup-steps`; then `init`'s `init-files` and `init-next-steps`; `capability/git-host` waits on the azure pull requests. The `#### Needs` blocks carry this. `host/git-through-layer` and `plugin/init-skill` need nothing. Adding `Host::Azure` breaks the exhaustive matches in `clm-config`'s `Display` and `clm-host`'s `adapter`, both built under `config/host-setting` and the azure host requirements; the other uses compare with `Host::None` and treat Azure as having a remote, which is right.
+
 ## Left to the builder
 
 - How `az`'s JSON is parsed for the pull request's ID and URL, and the fake `az` the tests use.
 - Where `--host azure` is parsed, alongside the other values.
+- The real JSON shapes of `az repos pr list` and `create`, which the fake `az` must match; no test reaches a real Azure DevOps organisation.

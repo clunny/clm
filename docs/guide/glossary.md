@@ -60,7 +60,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Writer:** the name your ledger records are made under.
 - **Fingerprint:** a hash of a branch's diff, which an approval is tied to (`clm fingerprint`).
 - **Signed repository:** one whose `docs/allowed_signers` lists the keys whose ledger records count; only a signed approval lets a branch that needs review land there.
-- **Host:** where the remote lives, `github`, `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`, `clm contribution` for a fork's pull requests and issues).
+- **Host:** where the remote lives, `github`, `azure` (Azure DevOps), `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`, `clm contribution` for a fork's pull requests and issues).
 - **Reconnect:** pushing a `main` that was landed with no remote to a newly added `origin` (`clm reconnect`).
 
 ## The backlog and the project's health

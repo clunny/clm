@@ -243,7 +243,7 @@ Drafted from the current specs and accepted as is on 2026-10-29, with its three 
 
 20. **Guard AI sessions:** hooks that stop unsafe actions, such as an AI approving its own change (`plugin.hooks`).
 21. **Report defects in CLM:** file a defect from inside a session (`clm defect`, `plugin.hooks`).
-22. **Work with your git host:** pull requests and issues on GitHub, Azure DevOps, a bare server or no host (`host`). **Cut**, in part: the Azure DevOps adapter has no user and is blocked on an account.
+22. **Work with your git host:** pull requests and issues on GitHub, Azure DevOps, a bare server or no host (`host`). The Azure DevOps adapter, cut while it had no user, came back in `20261106-azure-devops-host` for pull requests only; the web app's Azure support is still an idea (`backlog/azure-devops-web`).
 23. **Configure CLM:** settings for the repository, the clone and the user (`config`).
 24. **Install and release CLM:** the release workflow, the plugin packaging, and the self-hosting install for CLM's own repository (`ci`, `plugin`, `clm` root).
 25. **Pin the AI's working method:** a fixed superpowers version that every build follows, with an eval that gates upgrades (`orchestrator.run`, `clm superpowers`). **Cut**: the eval, not the pin.

@@ -29,7 +29,7 @@ Tests that need a deployed system, such as integration tests on a test cluster, 
 Tests too slow for every land have two places to go:
 
 - **before the land, for what changed**: `clm affected` selects the tests for the components a branch touches, so `[land] check` can run only the slow tests a change could break;
-- **after the land**: a pipeline runs them on `main` and reports. When one fails, find the land that broke it with `git bisect --first-parent` (each land is one merge commit on `main`), and file the failure as a `bug` item on that land's component, since CLM doesn't yet bring it into the backlog by itself. Then fix forward with `clm claim <component> --fix backlog/<slug>`, or revert the land on a branch of its own and land that. Nothing rewrites `main`, so clones that already pulled need nothing.
+- **after the land**: a pipeline runs them on `main` and reports. When one fails, find the land that broke it with `git bisect --first-parent` (each land is one merge commit on `main`), and file the failure as a `bug` item on that land's component, since CLM doesn't yet bring it into the backlog by itself. Then claim the fix with `clm claim <component> --fix backlog/<slug>`, and on that branch either fix forward or revert the land (`git revert -m 1 <land>`); a revert leaves the land's requirements pending again, for the queue to rebuild. Nothing rewrites `main`, so clones that already pulled need nothing.
 
 ## A protected `main`
 
