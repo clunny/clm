@@ -2750,7 +2750,7 @@ fn propose_triage_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn propose_elaborates_ideas() {
-    // req:plugin/propose-elaborates-ideas@c3cf5e73
+    // req:plugin/propose-elaborates-ideas@839ccda3
     let full = skill_body("propose");
     // The rules sit in a section of their own, outside the numbered steps.
     let section = full
@@ -2787,7 +2787,7 @@ fn propose_elaborates_ideas() {
         "## Approaches",
         "propose/<slug>",
         "autosync/spec/<YYYYMMDD>-idea-<slug>",
-        "git push origin --delete",
+        "clm branch delete",
         "elaborate-ideas-on-main",
         "from: backlog/<slug>",
     ] {
@@ -3261,20 +3261,20 @@ fn triage_checks_splits() {
     }
 }
 
-/// The sentences of `text` that tell Claude to push without `--force-with-lease`: a
-/// plain push is refused once `clm rebase` has rebased the branch onto `origin/main`.
+/// The sentences of `text` that tell Claude to push other than with `clm branch push`: a
+/// raw push is refused once `clm rebase` has rebased the branch onto `origin/main`.
 fn plain_pushes(text: &str) -> Vec<&str> {
     text.lines()
         .flat_map(|l| l.split(". "))
         .filter(|s| s.split(|c: char| !c.is_alphanumeric()).any(|w| w == "push"))
-        .filter(|s| !s.contains("--force-with-lease") && !s.contains("ever push"))
+        .filter(|s| !s.contains("clm branch push") && !s.contains("ever push"))
         .collect()
 }
 
 #[test]
 fn propose_pushes_with_lease_after_rebase() {
     // req:plugin/skills@b943c3b9
-    // The skills follow `CLAUDE.md`'s change flow, which pushes with `--force-with-lease`
+    // The skills push with `clm branch push` (`skills-push-with-clm`)
     // after `clm rebase`. Steps 10 and 12 and the code-fix path push after a rebase.
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
     let steps = numbered_steps(&body);
@@ -3290,15 +3290,15 @@ fn propose_pushes_with_lease_after_rebase() {
         assert_eq!(
             plain_pushes(text),
             Vec::<&str>::new(),
-            "propose: {name} must push with `git push --force-with-lease` after `clm rebase`"
+            "propose: {name} must push with `clm branch push` after `clm rebase`"
         );
     }
-    // A plain push is caught; a lease push and the rule against pushing `main` are not.
+    // A plain push is caught; a `clm branch push` and the rule against pushing `main` are not.
     assert_eq!(
         plain_pushes("Write the body and push, then open the page."),
         ["Write the body and push, then open the page."]
     );
-    assert!(plain_pushes("Push with `git push --force-with-lease`, then land.").is_empty());
+    assert!(plain_pushes("Push with `clm branch push`, then land.").is_empty());
     assert!(plain_pushes("Never push `main` by any means but `clm land`.").is_empty());
 }
 
@@ -3373,7 +3373,7 @@ fn propose_offers_code_fixes() {
         "`Co-Authored-By`",
         "`Resolves: backlog/<slug>`",
         "`clm gate --base origin/main`",
-        "git push --force-with-lease",
+        "clm branch push",
         "clm pr open",
         "clm land",
     ];
@@ -5049,7 +5049,7 @@ fn architecture_audit() {
 
 #[test]
 fn triage_revises_a_declined_fold() {
-    // req:plugin/triage-revises-declined-fold@94dd9989
+    // req:plugin/triage-revises-declined-fold@b4e8e3cf
     let body = skill_body("triage");
     let step = numbered_steps(&body)
         .into_iter()
@@ -5058,7 +5058,7 @@ fn triage_revises_a_declined_fold() {
     for needle in [
         "different design",
         "clm rebase",
-        "--force-with-lease",
+        "clm branch push",
         "triage-revises-declined-fold",
         "ask again",
         "the one design",
@@ -5076,4 +5076,148 @@ fn triage_revises_a_declined_fold() {
         &[],
     );
     assert_reports(&gaps, "triage", "triage-revises-declined-fold");
+}
+
+/// What `skills-push-with-clm` asks of a `SKILL.md`: no raw push.
+fn raw_push_gaps(skill: &str, body: &str) -> Vec<String> {
+    text_gaps(skill, body, &[], &[concat!("git", " push")])
+}
+
+#[test]
+fn skills_push_with_clm() {
+    // req:plugin/skills-push-with-clm@69c54954
+    let skills = plugin().join("skills");
+    let mut names: Vec<String> = std::fs::read_dir(&skills)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert!(!names.is_empty());
+    for name in &names {
+        assert_eq!(raw_push_gaps(name, &skill_body(name)), Vec::<String>::new());
+    }
+    for name in ["propose", "contribution", "triage", "build"] {
+        let gaps = text_gaps(name, &skill_body(name), &["clm branch push"], &[]);
+        assert_eq!(gaps, Vec::<String>::new());
+    }
+    for name in ["propose", "build"] {
+        let gaps = text_gaps(name, &skill_body(name), &["clm branch delete"], &[]);
+        assert_eq!(gaps, Vec::<String>::new());
+    }
+    // a skill with a raw push
+    let raw = skill_body("triage").replace(
+        "clm branch push",
+        concat!("git", " push --force-with-lease"),
+    );
+    assert_reports(&raw_push_gaps("triage", &raw), "triage", "git push");
+}
+
+/// What `unattended-permissions-check` asks of the `build` and `triage` skills.
+fn permission_check_gaps(skill: &str, body: &str) -> Vec<String> {
+    text_gaps(
+        skill,
+        body,
+        &[
+            "clm init --check-permissions",
+            "auto mode",
+            ".claude/settings.json",
+            ".claude/settings.local.json",
+            "exits 1",
+            "any other code",
+            "never refusing",
+            "Never write either file",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn skills_check_the_permission_rules() {
+    // req:plugin/unattended-permissions-check@e8390775
+    for name in ["build", "triage"] {
+        assert_eq!(
+            permission_check_gaps(name, &skill_body(name)),
+            Vec::<String>::new()
+        );
+    }
+    let build = skill_body("build");
+    let gaps = text_gaps(
+        "build",
+        &build,
+        &["clm branch push", "clm branch delete"],
+        &[concat!("git", " push --force-with-lease")],
+    );
+    assert_eq!(gaps, Vec::<String>::new());
+    // the check comes before the first launch
+    let triage = skill_body("triage");
+    assert!(
+        triage.find("clm init --check-permissions").unwrap()
+            < triage.find("AskUserQuestion").unwrap()
+    );
+    // skill without the check
+    let gaps = permission_check_gaps(
+        "triage",
+        &triage.replace("clm init --check-permissions", "elided"),
+    );
+    assert_reports(&gaps, "triage", "clm init --check-permissions");
+}
+
+/// What `builder-check-asks-migrations` asks of the `propose` skill's builder-check step.
+fn migration_gaps(step: &str) -> Vec<String> {
+    text_gaps(
+        "propose",
+        step,
+        &[
+            "`clm init`",
+            "migration",
+            "requirement of `upgrade`",
+            "`done` check",
+            "`apply` or `note`",
+            "upgrades-carry-migrations",
+            "`required` migration is always an `apply`",
+        ],
+        &[],
+    )
+}
+
+/// What `builder-check-capability-tests` asks of the `propose` skill's builder-check step.
+fn capability_test_gaps(step: &str) -> Vec<String> {
+    text_gaps(
+        "propose",
+        step,
+        &[
+            "capability tests",
+            "capability-tests-follow-rules",
+            "neither a requirement of `capability`",
+            "nor a `#### Needs`",
+            "nor a backlog item",
+            "`CAPABILITIES.md` entry",
+        ],
+        &[],
+    )
+}
+
+fn builder_check_step() -> String {
+    numbered_steps(&skill_body("propose"))
+        .into_iter()
+        .find(|s| s.contains("Run a builder check"))
+        .expect("builder check step")
+}
+
+#[test]
+fn builder_check_asks_migrations() {
+    // req:plugin/builder-check-asks-migrations@16ee864d
+    let step = builder_check_step();
+    assert_eq!(migration_gaps(&step), Vec::<String>::new());
+    let gaps = migration_gaps(&step.replace("upgrades-carry-migrations", "elided"));
+    assert_reports(&gaps, "propose", "upgrades-carry-migrations");
+}
+
+#[test]
+fn builder_check_asks_capability_tests() {
+    // req:plugin/builder-check-capability-tests@5dd84ff9
+    let step = builder_check_step();
+    assert_eq!(capability_test_gaps(&step), Vec::<String>::new());
+    let gaps = capability_test_gaps(&step.replace("capability-tests-follow-rules", "elided"));
+    assert_reports(&gaps, "propose", "capability-tests-follow-rules");
 }
