@@ -695,6 +695,25 @@ if [ "$1 $2" = "release list" ]; then cat "$dir/releases"; fi
 exit 0
 "#;
 
+/// Builds nothing: `cargo build` writes a `clm` whose `upgrade --lock <version>` appends a line
+/// for migration `b` to `crates/clm-upgrade/migrations.lock`. Any other call is the real cargo.
+const FAKE_CARGO: &str = r#"#!/usr/bin/env bash
+if [ "$1" = build ]; then
+  mkdir -p "$CARGO_TARGET_DIR/release"
+  cat > "$CARGO_TARGET_DIR/release/clm" <<'CLM'
+#!/bin/sh
+[ "$1 $2" = "upgrade --lock" ] || exit 2
+echo "$3 b" >> crates/clm-upgrade/migrations.lock
+CLM
+  chmod +x "$CARGO_TARGET_DIR/release/clm"
+  exit 0
+fi
+exec @REAL@ "$@"
+"#;
+
+/// Writes the entry `make.sh <version> <clm>` is asked for.
+const FAKE_MAKE_SH: &str = "#!/bin/sh\necho entry > \"$(dirname \"$0\")/v$1.tar.gz\"\n";
+
 /// A git repository whose `origin` is a local bare repository with `main` pushed.
 struct Fixture {
     dir: TempDir,
@@ -767,11 +786,27 @@ impl Fixture {
             "",
         )
         .unwrap();
+        executable(
+            &work.join("crates/clm-upgrade/corpus/make.sh"),
+            FAKE_MAKE_SH,
+        );
+        fs::write(work.join("crates/clm-upgrade/migrations.lock"), "").unwrap();
         f.cargo(&["generate-lockfile", "--offline"]);
 
         let bin = f.bin();
         fs::create_dir_all(&bin).unwrap();
         executable(&bin.join("gh"), FAKE_GH);
+        // `cargo build` leaves a fake `clm` where a release build would; the rest is real.
+        let real_cargo = Command::new("sh")
+            .args(["-c", "command -v cargo"])
+            .output()
+            .unwrap()
+            .stdout;
+        let real_cargo = String::from_utf8(real_cargo).unwrap();
+        executable(
+            &bin.join("cargo"),
+            &FAKE_CARGO.replace("@REAL@", real_cargo.trim()),
+        );
         fs::write(bin.join("releases"), "").unwrap();
         fs::write(bin.join("gh.log"), "").unwrap();
 
@@ -1107,6 +1142,8 @@ fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
         [
             "Cargo.lock",
             "Cargo.toml",
+            "crates/clm-upgrade/corpus/v0.2.0.tar.gz",
+            "crates/clm-upgrade/migrations.lock",
             "plugin-panel/.claude-plugin/plugin.json",
             "plugin/.claude-plugin/plugin.json",
         ]
@@ -1130,6 +1167,55 @@ fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
     assert_eq!(plugin["version"], "0.2.0");
     assert_eq!(plugin["author"]["version"], "keep");
     assert!(!r.gh_log.contains("release create"), "{}", r.gh_log);
+}
+
+#[test]
+fn a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line() {
+    // req:ci/release-records-upgrade-corpus@211e6d4c
+    let f = Fixture::new("0.2.0");
+    let r = f.run("0.3.0");
+    assert!(r.ok, "{}", r.stderr);
+    let show = |path: &str| f.git(&f.bare(), &["show", &format!("release/v0.3.0:{path}")]);
+    assert_eq!(show("crates/clm-upgrade/corpus/v0.3.0.tar.gz"), "entry\n");
+    assert_eq!(show("crates/clm-upgrade/migrations.lock"), "0.3.0 b\n");
+}
+
+#[test]
+fn a_failing_corpus_entry_fails_prepare_and_pushes_nothing() {
+    // req:ci/release-records-upgrade-corpus@211e6d4c
+    let f = Fixture::new("0.2.0");
+    executable(
+        &f.work().join("crates/clm-upgrade/corpus/make.sh"),
+        "#!/bin/sh\nexit 1\n",
+    );
+    f.commit("make.sh fails");
+    let r = f.run("0.3.0");
+    assert_failed_before_pushing(&r);
+    assert!(
+        r.stderr.contains("make the upgrade corpus entry"),
+        "{}",
+        r.stderr
+    );
+}
+
+#[test]
+fn a_failing_lock_fails_prepare_and_pushes_nothing() {
+    // req:ci/release-records-upgrade-corpus@211e6d4c
+    let f = Fixture::new("0.2.0");
+    let lock = f.work().join("crates/clm-upgrade/migrations.lock");
+    fs::remove_file(&lock).unwrap();
+    fs::create_dir(&lock).unwrap();
+    fs::write(lock.join("x"), "").unwrap();
+    f.commit("lock can't be appended to");
+    let r = f.run("0.3.0");
+    assert_failed_before_pushing(&r);
+}
+
+/// A failure after the version bump: nothing is created or pushed.
+fn assert_failed_before_pushing(r: &Run) {
+    assert!(!r.ok, "expected failure; stderr: {}", r.stderr);
+    assert!(!r.gh_log.contains("release create"), "{}", r.gh_log);
+    assert_eq!(r.refs_before, r.refs_after);
 }
 
 #[test]
