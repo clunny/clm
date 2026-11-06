@@ -5060,7 +5060,7 @@ fn triage_revises_a_declined_fold() {
         "clm rebase",
         "clm branch push",
         "triage-revises-declined-fold",
-        "ask again",
+        "push with `clm branch push`, and ask again",
         "the one design",
         "plain no",
         "switch into the worktree that holds `spec/<batch>`",
