@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-pending-describes-the-checkout-without-naming-its-commit]
 ---
 
