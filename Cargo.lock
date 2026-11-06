@@ -231,7 +231,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
 name = "clm"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clap",
  "clm-affected",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "clm-affected"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-git",
@@ -281,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "clm-apply"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-model",
  "tempfile",
@@ -289,7 +289,7 @@ dependencies = [
 
 [[package]]
 name = "clm-approval"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-gate",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "clm-check"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-apply",
  "clm-coverage",
@@ -315,7 +315,7 @@ dependencies = [
 
 [[package]]
 name = "clm-checkpoint"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-git",
@@ -327,7 +327,7 @@ dependencies = [
 
 [[package]]
 name = "clm-config"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "serde",
  "tempfile",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "clm-context"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-model",
  "tempfile",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "clm-coverage"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-git",
  "clm-model",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "clm-effort"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-git",
@@ -367,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "clm-fingerprint"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-git",
  "sha2",
@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "clm-gate"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-fingerprint",
  "clm-git",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "clm-git"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "tempfile",
  "toml",
@@ -397,7 +397,7 @@ dependencies = [
 
 [[package]]
 name = "clm-guard"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-git",
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "clm-health"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-effort",
@@ -423,7 +423,7 @@ dependencies = [
 
 [[package]]
 name = "clm-hooks"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-git",
@@ -439,7 +439,7 @@ dependencies = [
 
 [[package]]
 name = "clm-host"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-git",
@@ -450,7 +450,7 @@ dependencies = [
 
 [[package]]
 name = "clm-init"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-git",
@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "clm-land"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-apply",
  "clm-approval",
@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "clm-ledger"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-gate",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "clm-model"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "clm-orchestrator"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-git",
@@ -528,7 +528,7 @@ dependencies = [
 
 [[package]]
 name = "clm-regenerate"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-apply",
  "clm-check",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "clm-rename"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-apply",
  "clm-coverage",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "clm-replica"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-config",
@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "clm-run"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-config",
@@ -583,7 +583,7 @@ dependencies = [
 
 [[package]]
 name = "clm-runner"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-git",
  "libc",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "clm-sync"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-apply",
  "clm-check",
@@ -613,7 +613,7 @@ dependencies = [
 
 [[package]]
 name = "clm-triage"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-git",
@@ -626,7 +626,7 @@ dependencies = [
 
 [[package]]
 name = "clm-unreferenced"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-git",
  "serde_json",
@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "clm-upgrade"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-config",
  "sha2",
@@ -650,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "clm-view"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-model",
@@ -662,7 +662,7 @@ dependencies = [
 
 [[package]]
 name = "clm-view-repo"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-check",
  "clm-git",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "clm-web"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "aes-gcm",
  "base64",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "clm-web-live"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "aes-gcm",
  "base64",
@@ -714,7 +714,7 @@ dependencies = [
 
 [[package]]
 name = "clm-web-platform"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "base64",
  "clm-gate",
@@ -732,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "clm-web-replica"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "base64",
  "clm-replica",
@@ -746,7 +746,7 @@ dependencies = [
 
 [[package]]
 name = "clm-web-review"
-version = "0.18.0"
+version = "0.19.0"
 dependencies = [
  "clm-gate",
  "clm-ledger",
