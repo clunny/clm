@@ -87,6 +87,10 @@ enum Command {
         /// Component ID; every component when omitted.
         #[arg(value_name = "COMPONENT")]
         node: Option<String>,
+        /// List this commit's pending requirements, read from git's objects, instead of the
+        /// working tree's.
+        #[arg(long)]
+        at: Option<String>,
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -863,15 +867,24 @@ fn dispatch() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Command::Pending { node, root } => {
-            match clm_check::pending_in(&repo_root(root), node.as_deref()) {
+        Command::Pending { node, at, root } => {
+            let (head, result) =
+                clm_view_repo::pending(&repo_root(root), node.as_deref(), at.as_deref());
+            if let Some(head) = head {
+                eprintln!("{head}");
+            }
+            match result {
                 Ok(list) => {
                     for line in list {
                         println!("{line}");
                     }
                     ExitCode::SUCCESS
                 }
-                Err(violations) => report(&violations),
+                Err(clm_view_repo::Error::Violations(violations)) => report(&violations),
+                Err(clm_view_repo::Error::At(why)) => {
+                    eprintln!("{why}");
+                    ExitCode::FAILURE
+                }
             }
         }
         Command::Size { node, root } => size(&repo_root(root), node.as_deref()),

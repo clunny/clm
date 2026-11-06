@@ -298,3 +298,84 @@ fn at_a_commit_below_the_repositorys_top() {
     let here = json(&clm(&d, &["view", "spec", "--format", "json"]));
     assert_eq!(node_json(&here, "a")["oversized"], false, "{here:#}");
 }
+
+fn stderr(out: &Output) -> String {
+    String::from_utf8(out.stderr.clone()).unwrap()
+}
+
+#[test]
+fn pending_behind_origin_main() {
+    // req:view.repo/pending-names-its-commit@85770540
+    let dir = ahead_of_the_checkout();
+    let d = dir.path();
+    let before = tree_state(d);
+    let head = git(d, &["rev-parse", "HEAD"])[..7].to_string();
+    let main = git(d, &["rev-parse", "origin/main"])[..7].to_string();
+    let here = clm(d, &["pending"]);
+    assert_eq!(here.status.code(), Some(0), "{here:?}");
+    assert!(stdout(&here).starts_with("a/x "), "{}", stdout(&here));
+    assert!(stdout(&here).trim_end().ends_with("unbuilt"));
+    assert_eq!(
+        stderr(&here),
+        format!("commit {head}  ⚠ 1 behind origin/main\n")
+    );
+    let there = clm(d, &["pending", "--at", "origin/main"]);
+    assert_eq!(there.status.code(), Some(0), "{there:?}");
+    assert_eq!(stdout(&there), "");
+    let err = stderr(&there);
+    assert!(err.starts_with(&format!("origin/main {main}")), "{err}");
+    assert!(!err.contains('⚠'), "{err}");
+    assert_eq!(tree_state(d), before);
+}
+
+#[test]
+fn pending_up_to_date() {
+    // req:view.repo/pending-names-its-commit@85770540
+    let dir = ahead_of_the_checkout();
+    let d = dir.path();
+    git(d, &["merge", "-q", "--ff-only", "origin/main"]);
+    let head = git(d, &["rev-parse", "HEAD"])[..7].to_string();
+    let out = clm(d, &["pending"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
+    assert_eq!(stderr(&out), format!("commit {head}\n"));
+}
+
+#[test]
+fn pending_no_such_commit() {
+    // req:view.repo/pending-names-its-commit@85770540
+    let dir = ahead_of_the_checkout();
+    let out = clm(dir.path(), &["pending", "--at", "nowhere"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert!(stderr(&out).contains("nowhere"), "{}", stderr(&out));
+}
+
+#[test]
+fn pending_names_its_commit_beside_violations_and_narrows_alike() {
+    // req:view.repo/pending-names-its-commit@85770540
+    let dir = ahead_of_the_checkout();
+    let d = dir.path();
+    let head = git(d, &["rev-parse", "HEAD"])[..7].to_string();
+    // An unknown component is the same violation with or without `--at`.
+    let here = clm(d, &["pending", "ghost"]);
+    let there = clm(d, &["pending", "ghost", "--at", "origin/main"]);
+    assert_eq!(here.status.code(), Some(1), "{here:?}");
+    assert_eq!(stdout(&here), stdout(&there));
+    assert!(stdout(&here).contains("ghost"), "{}", stdout(&here));
+    assert!(stderr(&here).starts_with(&format!("commit {head}")));
+    assert!(stderr(&there).starts_with("origin/main "));
+    // A graph that doesn't load: violations on stdout, the commit line still on stderr.
+    write(d, "specs/a/SPEC.md", "not a spec");
+    let bad = clm(d, &["pending"]);
+    assert_eq!(bad.status.code(), Some(1), "{bad:?}");
+    assert!(!stdout(&bad).is_empty());
+    assert!(stderr(&bad).starts_with(&format!("commit {head}")));
+    git(d, &["add", "-A"]);
+    git(d, &["commit", "-qm", "bad"]);
+    git(d, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    let bad = clm(d, &["pending", "--at", "origin/main"]);
+    assert_eq!(bad.status.code(), Some(1), "{bad:?}");
+    assert!(!stdout(&bad).is_empty());
+    assert!(stderr(&bad).starts_with("origin/main "), "{}", stderr(&bad));
+}
