@@ -49,17 +49,27 @@ pub(crate) fn cuts_release(tokens: &[String]) -> bool {
     }
 }
 
-/// Whether a workflow argument names the release workflow, as gh matches workflows: in
-/// any case, by name (`release`) or by file (`release.yml`, `release.yaml`, or a path
-/// ending in one).
+/// Whether a workflow argument names the release or the site workflow, as gh matches
+/// workflows: in any case, by name (`release`, `site`) or by file (`release.yml`,
+/// `release.yaml`, `site.yml`, `site.yaml`, or a path ending in one).
 fn names_release(workflow: &str) -> bool {
-    workflow.eq_ignore_ascii_case("release") || release_file(workflow)
+    release_name(workflow) || release_file(workflow)
 }
 
-/// Whether a path's file name is `release.yml` or `release.yaml`, in any case.
+/// Whether a workflow name is `release` or `site`, in any case.
+fn release_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("release") || name.eq_ignore_ascii_case("site")
+}
+
+/// Whether a path's file name is `release.yml`, `release.yaml`, `site.yml` or
+/// `site.yaml`, in any case.
 fn release_file(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
-    name.eq_ignore_ascii_case("release.yml") || name.eq_ignore_ascii_case("release.yaml")
+    ["release", "site"].iter().any(|stem| {
+        [".yml", ".yaml"]
+            .iter()
+            .any(|ext| name.eq_ignore_ascii_case(&format!("{stem}{ext}")))
+    })
 }
 
 /// What one command segment's `gh run rerun` re-runs, and where `gh` would look it up.
@@ -242,11 +252,12 @@ fn repo_from_url(url: &str) -> Option<(String, String)> {
 }
 
 /// Whether a looked-up run is a release run (`release-run-lookup`): its workflow file, cut
-/// at any `@`, is `release.yml` or `release.yaml`, or its workflow is named `release`, in
-/// any case. A run without a string `path` and `name` may be one.
+/// at any `@`, is `release.yml`, `release.yaml`, `site.yml` or `site.yaml`, or its workflow
+/// is named `release` or `site`, in any case. A run without a string `path` and `name` may
+/// be one.
 fn release_run(run: &Value) -> bool {
     let (Some(path), Some(name)) = (run["path"].as_str(), run["name"].as_str()) else {
         return true;
     };
-    release_file(path.split('@').next().unwrap_or(path)) || name.eq_ignore_ascii_case("release")
+    release_file(path.split('@').next().unwrap_or(path)) || release_name(name)
 }
