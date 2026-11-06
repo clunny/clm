@@ -23,7 +23,9 @@ A build can leave an ignored directory without its owner's write bit, for instan
 ## Outcome
 
 - `orchestrator.run`'s Design bullet *Finishing a build* says how `--finish` makes a clean worktree removable and what it prints when removal still fails.
-- `orchestrator.run/run-finish` adds both behaviours and two scenarios: *unwritable directory removed* and *worktree git can't remove*.
+- `orchestrator.run/run-finish` adds both behaviours and two scenarios: *unwritable directory removed* and *worktree git can't remove*. A `left` line takes the place of `removed`, with git's error on one line.
+- `plugin/build-finishes-builds` has the `build` skill pass each `left <path>: ...` line to the human and go on, never running `git worktree remove` or `git worktree prune` itself (`method-in-the-plugin`); it already needs `orchestrator.run/run-finish`. No capability test changes: `build_from_spec` finishes only clean worktrees and asserts success, which still holds.
+- `backlog/wrap-up-and-runner-trip-on-unwritable-worktree-dirs` records the same failure in `clm wrap-up` (`orchestrator.checkpoint`) and the runner (`orchestrator.runner`), which remove build worktrees too (`fold-small-defer-large`).
 
 ## Constraints
 
@@ -37,4 +39,4 @@ A build can leave an ignored directory without its owner's write bit, for instan
 
 ## Open questions
 
-- `clm draft --finish` (`orchestrator.triage`) and `clm wrap-up`'s worktree removal (`orchestrator.checkpoint`) run `git worktree remove` too and would trip on the same unwritable directory; `draft --finish` already reports a failure as `kept <path>: <error>` and goes on. Drafts don't unpack archives, so this change leaves both as they are (`yagni`); a report against either would extend the same fix to it.
+- `clm draft --finish` (`orchestrator.triage`) runs `git worktree remove` too, but it already reports a failure as `kept <path>: <error>` and goes on, and drafts don't unpack archives, so it is left as it is (`yagni`). `clm wrap-up` and the runner, which remove build worktrees, are filed as a backlog item rather than designed here, to keep this change to the item it resolves.
