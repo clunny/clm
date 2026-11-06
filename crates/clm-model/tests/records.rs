@@ -569,12 +569,21 @@ fn taken_in_from_alerts() {
     assert!(violations.is_empty(), "{violations:?}");
     assert_eq!(graph.backlog["x"].frontmatter.alerts, vec![4]);
     assert!(graph.backlog["x"].frontmatter.issues.is_empty());
+
+    let dir = repo(&[(
+        "backlog/y.md",
+        "---\ntitle: T\nkind: bug\nissues: [7]\nalerts: [4]\n---\n",
+    )]);
+    let (graph, violations) = load(dir.path());
+    assert!(violations.is_empty(), "{violations:?}");
+    assert_eq!(graph.backlog["y"].frontmatter.issues, vec![7]);
+    assert_eq!(graph.backlog["y"].frontmatter.alerts, vec![4]);
 }
 
 #[test]
 fn an_alert_that_isnt_a_number() {
     // req:model/parse-backlog@ae7a1b85
-    for bad in ["[0]", "[\"#4\"]", "[-1]"] {
+    for bad in ["[0]", "[\"#4\"]", "[-1]", "[1.5]"] {
         let text = format!("---\ntitle: T\nkind: bug\nalerts: {bad}\n---\n");
         let dir = repo(&[("backlog/x.md", &text)]);
         let (_, violations) = load(dir.path());
