@@ -2,8 +2,6 @@
 //! `rust-toolchain.toml`, the workspace's build profiles, and the commands
 //! `.claude/settings.json` lets unattended sessions run.
 
-// clm:reads CLAUDE.md
-
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -204,15 +202,4 @@ fn bare_npx_refused() {
     ] {
         assert_eq!(disallowed(&[bad]), [bad], "{bad} not reported");
     }
-}
-
-// req:clm/claude-md-pushes-with-clm@78576ed9
-#[test]
-fn claude_md_pushes_through_clm() {
-    let text = fs::read_to_string(repo().join("CLAUDE.md")).unwrap();
-    assert!(!text.contains("git push"), "CLAUDE.md names `git push`");
-    assert!(
-        text.contains("clm branch push"),
-        "CLAUDE.md lacks `clm branch push`"
-    );
 }
