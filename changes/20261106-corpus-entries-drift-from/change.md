@@ -39,6 +39,10 @@ Make `clm/upgrade-corpus` buildable. A build of its test found three files where
 
 Known edge cases: a project whose script was set up for a language other than Rust, or for several, is never rewritten automatically, since one note carries one `new` text; its note says what to change. No workarounds are known.
 
+## Decisions
+
+- `corpus-skips-first-run-files` refines `upgrade-migrations`' corpus test: it records which files the comparison leaves out, why, and what that costs.
+
 ## Open questions
 
-None.
+- The architecture audit noted that leaving the whole root `specs/SPEC.md` out takes its template, not just the `paths` line, out of `upgrades-carry-migrations`' only enforcer. Normalising only the `paths` entry was considered and not taken: the human's answer leaves the whole file out, and the root spec's title and `outside` depend on the repository, so the file has no fixed template to compare. The decision `corpus-skips-first-run-files` records the cost. Whether `upgrades-carry-migrations` should also name the two files under its `#### Untested` is left to the reviewer, since editing `ARCHITECTURE.md` would make this change need review.
