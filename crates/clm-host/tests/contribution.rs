@@ -319,7 +319,7 @@ const ALERT_4: &str = r#"{"number":4,"security_advisory":{"severity":"high","sum
 fn open_alerts() {
     // req:host/list-alerts@7c2c7686
     // Two pages, as `gh api --paginate` prints them: arrays one after another.
-    let pages = format!("[{ALERT_4}][]");
+    let pages = format!("[][{ALERT_4}]");
     with_gh(&[("dependabot/alerts", &pages)], |root, dir| {
         let alerts = clm_host::adapter(Setting::Github).alerts(root).unwrap();
         assert_eq!(
