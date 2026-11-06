@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [corpus-entries-drift-from-init-without-a-migration]
 ---
 
