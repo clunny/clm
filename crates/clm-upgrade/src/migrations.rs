@@ -4,11 +4,16 @@
 
 use crate::Migration;
 
+#[path = "migrations/20261106-corpus-entries-drift-from/mod.rs"]
+mod check_script_from_root;
 #[path = "migrations/20261105-clm-upgrade-2/mod.rs"]
 mod claude_md_names_help;
 #[path = "migrations/20261105-clm-upgrade/mod.rs"]
 mod constraints_copy;
 
 /// The migrations, oldest first.
-pub(crate) static LIST: &[Migration] =
-    &[constraints_copy::MIGRATION, claude_md_names_help::MIGRATION];
+pub(crate) static LIST: &[Migration] = &[
+    constraints_copy::MIGRATION,
+    claude_md_names_help::MIGRATION,
+    check_script_from_root::MIGRATION,
+];

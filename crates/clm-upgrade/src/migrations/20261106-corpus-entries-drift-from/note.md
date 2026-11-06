@@ -1,0 +1,2 @@
+scripts/clm-check.sh runs from the repository's root
+`clm init` now writes a `scripts/clm-check.sh` that changes to the repository's root first, then runs each language's build and tests only when that language's manifest exists (`Cargo.toml` for Rust, and so on), so it passes in a repository with no code yet and runs the same from any directory. Edit your `scripts/clm-check.sh` the same way: add `cd "$(dirname "${BASH_SOURCE[0]}")/.."` after `set -euo pipefail`, and wrap each language's command in a test for its manifest.
