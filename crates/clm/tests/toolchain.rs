@@ -154,7 +154,7 @@ fn allowed() -> Vec<&'static str> {
         .collect()
 }
 
-/// Every `permissions.allow` entry that isn't one of `ALLOWED`.
+/// Every `permissions.allow` entry that isn't one of `allowed()`.
 fn disallowed(allow: &[&str]) -> Vec<String> {
     let allowed = allowed();
     allow
