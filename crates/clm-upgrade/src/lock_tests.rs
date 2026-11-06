@@ -44,9 +44,9 @@ fn the_directory_hash_covers_names_bytes_and_order() {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    assert_eq!(crate::dir_hash(dir.path()).unwrap(), want);
+    assert_eq!(crate::lock::dir_hash(dir.path()).unwrap(), want);
     fs::write(dir.path().join("a"), "ONE").unwrap();
-    assert_ne!(crate::dir_hash(dir.path()).unwrap(), want);
+    assert_ne!(crate::lock::dir_hash(dir.path()).unwrap(), want);
 }
 
 // req:upgrade/shipped-migrations-frozen@b7c05840

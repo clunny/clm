@@ -91,28 +91,6 @@ fn the_binarys_migrations_are_well_formed() {
     assert_eq!(latest(), list.last().map(|m| m.id));
 }
 
-// req:upgrade/migration-list@067d119c
-#[test]
-fn a_fresh_project_has_every_migration_done() {
-    let dir = TempDir::new().unwrap();
-    let root = dir.path().canonicalize().unwrap();
-    let git = std::process::Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(&root)
-        .status()
-        .unwrap();
-    assert!(git.success());
-    let opts = clm_init::Options {
-        langs: vec!["rust".into()],
-        detectors: false,
-        host: Some(clm_config::Host::None),
-    };
-    clm_init::init(&root, &opts).unwrap();
-    for m in migrations() {
-        assert!((m.done)(&root), "{} is not done on a fresh project", m.id);
-    }
-}
-
 // req:upgrade/pending-migrations@dbcfa176
 #[test]
 fn stamped_projects_get_the_apply_migrations_after_the_stamp() {

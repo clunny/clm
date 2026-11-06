@@ -22,7 +22,7 @@ fn files(dir: &Path, prefix: &str, out: &mut Vec<String>) -> std::io::Result<()>
 
 /// The SHA-256, in hex, of the concatenation, over every file under `dir` in byte order of its
 /// relative path, of the path, a NUL byte, the file's bytes and a NUL byte.
-pub fn dir_hash(dir: &Path) -> std::io::Result<String> {
+pub(crate) fn dir_hash(dir: &Path) -> std::io::Result<String> {
     let mut names = Vec::new();
     files(dir, "", &mut names)?;
     names.sort_unstable_by(|a, b| a.as_bytes().cmp(b.as_bytes()));

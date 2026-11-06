@@ -640,7 +640,6 @@ name = "clm-upgrade"
 version = "0.18.0"
 dependencies = [
  "clm-config",
- "clm-init",
  "sha2",
  "tempfile",
  "toml",

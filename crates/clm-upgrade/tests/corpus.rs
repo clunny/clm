@@ -110,7 +110,7 @@ fn the_script_writes_the_same_entry_every_time() {
     );
     // The sample's placeholder is a marker prefix, not left in the file.
     let test = fs::read_to_string(out.path().join("tests/sample.rs")).unwrap();
-    assert!(!test.contains("@REQ@") && test.contains("req:sample/greets@"));
+    assert!(!test.contains("@REQ@") && test.contains(concat!("req", ":sample/greets@")));
 }
 
 // req:upgrade/corpus-entry-script@f42f9f3c
@@ -123,6 +123,31 @@ fn the_script_fails_and_writes_nothing_when_the_check_fails() {
     let out = make(dir.path(), "9.9.9", &fake);
     assert!(!out.status.success());
     assert!(!dir.path().join("v9.9.9.tar.gz").exists());
+}
+
+// req:upgrade/migration-list@067d119c
+#[test]
+fn a_fresh_project_has_every_migration_done() {
+    let clm = built_clm();
+    let dir = TempDir::new().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    for args in [&["init", "-q"][..], &["config", "user.name", "t"]] {
+        let status = Command::new("git")
+            .args(args)
+            .current_dir(&root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+    let status = Command::new(&clm)
+        .args(["init", "--lang", "rust", "--no-detectors", "--host", "none"])
+        .current_dir(&root)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    for m in clm_upgrade::migrations() {
+        assert!((m.done)(&root), "{} is not done on a fresh project", m.id);
+    }
 }
 
 // req:upgrade/corpus-seeded@43044b86

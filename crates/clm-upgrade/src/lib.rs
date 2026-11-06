@@ -11,7 +11,7 @@ mod tests;
 
 use std::path::Path;
 
-pub use lock::{append_lock, check_lock, dir_hash};
+pub use lock::{append_lock, check_lock};
 pub use pending::{TooNew, pending, require_current};
 
 /// Whether a migration blocks commands while it is pending.
