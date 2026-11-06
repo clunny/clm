@@ -1672,6 +1672,7 @@ fn origin_gaps(body: &str) -> Vec<String> {
             "clm status",
             "views-name-their-commit",
             "origin/impl/<component>",
+            "clm pending --at origin/main",
         ],
         &[],
     )
@@ -1679,10 +1680,14 @@ fn origin_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn build_reads_origin() {
-    // req:plugin/build-reads-origin@6963f670
+    // req:plugin/build-reads-origin@c1f35a76
     let body = skill_body("build");
     assert_eq!(origin_gaps(&body), Vec::<String>::new());
-    for needle in ["views-name-their-commit", "origin/impl/<component>"] {
+    for needle in [
+        "views-name-their-commit",
+        "origin/impl/<component>",
+        "clm pending --at origin/main",
+    ] {
         let gaps = origin_gaps(&body.replace(needle, "elided"));
         assert_reports(&gaps, "build", needle);
     }
@@ -1697,6 +1702,10 @@ fn build_reads_origin() {
     let build = sentence_with(&body, "origin/impl/<component>");
     for needle in ["clm wrap-up", "never", "git -C <worktree>"] {
         assert!(build.contains(needle), "{needle}: {build}");
+    }
+    let summary = sentence_with(&body, "clm pending --at origin/main");
+    for needle in ["clm next", "without `--at`", "question"] {
+        assert!(summary.contains(needle), "{needle}: {summary}");
     }
 }
 
