@@ -156,7 +156,7 @@ Loading SHALL take `detectors` only from the repository's `clm.toml` or the clon
 - capability/configure-clm
 
 ### Requirement: host-setting
-Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `clm.local.toml`, defaulting to `github`, SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `host` for a value other than `none`, `git`, `github` or `azure`, and SHALL fail naming the user's `config.toml` and the key when that file sets it.
+Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `clm.local.toml`, defaulting to `github`, SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `host` for a value other than `none`, `git`, `github` or `azure`, and SHALL fail naming the user's `config.toml` and the key when that file sets it. The `azure` value widens `Host`, which `clm-host`'s `adapter` matches exhaustively, so this requirement's build adds there the arm that gives the `Azure` adapter for it, already built (`host/azure-pull-requests`) and named for that value by `host/azure-selected`, as a forced fix (`forced-fixes-cover-additions`).
 
 #### Scenario: default
 - GIVEN a repository with no `clm.toml`
@@ -191,6 +191,10 @@ Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `
 #### Serves
 - capability/git-host
 - architecture/host-adapters
+
+#### Needs
+- host/azure-pull-requests
+- host/azure-other-operations
 
 ### Requirement: approval-setting
 Loading SHALL take `approval` only from the repository's `clm.toml` or the clone's `clm.local.toml`, defaulting to `any`, SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `approval` for a value other than `any` or `other`, and SHALL fail naming the user's `config.toml` and the key when that file sets it.
