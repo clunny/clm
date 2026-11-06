@@ -430,6 +430,7 @@ dependencies = [
  "clm-host",
  "clm-model",
  "clm-sync",
+ "clm-upgrade",
  "clm-view-repo",
  "serde_json",
  "tempfile",

@@ -88,6 +88,31 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
 }
 
 #[test]
+fn session_start_reminds_to_upgrade() {
+    // req:plugin.hooks/session-upgrade-reminder@5a5a1830
+    let start = |repo: &TempDir| {
+        let event = serde_json::json!({ "cwd": repo.path() }).to_string();
+        let out = hook("session-start", &event);
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        String::from_utf8(out.stdout).unwrap()
+    };
+    // Nothing pending: no line.
+    let text = start(&clm_repo(None));
+    assert!(!text.contains("/clm:upgrade"), "{text}");
+    // A project a newer `clm` upgraded: the line, after the status.
+    let repo = clm_repo(Some("upgraded = \"20990101-from-the-future\"\n"));
+    let text = start(&repo);
+    let claims = text.find("\nclaims\n").expect("claims section");
+    let line = text.find("needs a newer `clm`").expect("reminder");
+    assert!(line > claims, "{text}");
+    // Even when `clm status` fails.
+    fs::write(repo.path().join("specs/SPEC.md"), "not a spec").unwrap();
+    let text = start(&repo);
+    assert!(text.contains("needs a newer `clm`"), "{text}");
+    assert!(!text.contains("CLM status"), "{text}");
+}
+
+#[test]
 fn session_start_states_the_defect_rule() {
     // req:plugin.hooks/defect-rule@c40c6863
     let start = |repo: &TempDir| {
