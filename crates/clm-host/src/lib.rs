@@ -3,12 +3,14 @@
 
 mod azure;
 mod github;
+mod remote;
 
 use std::path::Path;
 
 pub use azure::Azure;
 use clm_git::{REMOTE, current_branch, git};
 use github::GitHub;
+pub use remote::{host_for_remote, setup_steps};
 
 #[derive(Debug)]
 pub enum Error {

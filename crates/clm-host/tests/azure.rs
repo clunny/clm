@@ -206,7 +206,7 @@ fn az_not_signed_in() {
             .page_open(root, "spec/x", "x", &root.join("body.md"))
             .unwrap_err();
         match err {
-            Error::Git(message) => assert!(message.contains("az login"), "{message}"),
+            Error::Refused(message) => assert!(message.contains("az login"), "{message}"),
             other => panic!("{other:?}"),
         }
         let err = Azure.page_body(root, &root.join("body.md")).unwrap_err();
