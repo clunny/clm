@@ -37,7 +37,7 @@ The state is plain data: maps from path to text and blob SHA, the marker index, 
 
 The code moves here from `clm-web` (`no-dead-code`), keeping its tests, which this component's build re-points at the new requirement IDs. Computation is whole-state: nothing is recomputed per component until a repository shows it needs that (`yagni`).
 
-**Marker index.** A `Tip` change rescans only the files it carries, with `clm_check::markers_in`. A file is binary when the source says so, or when its text has a NUL byte in its first 8000 bytes, as `clm size` decides. While `pending_fetch` holds paths, the snapshot's coverage is `Indexing { done }` and its `sizes` is `"indexing"`, as before.
+**Marker index.** A `Tip` change rescans only the files it carries, with `clm_check::markers_in`. A file is binary when the source says so, or when its text has a NUL byte in its first 8000 bytes, as `clm size` decides. While `pending_fetch` holds paths, the snapshot's coverage is `Indexing { done }` and its `sizes` is `"indexing"`.
 
 **Writes.** `validate` answers what the Worker's routes checked before: a decision's entry, its version against the entry's version now, and whether the tip is signed; a proposal's slug against the backlog, `resolved` and the open proposals. Since the replica holds the ledgers and the tip, the check needs no request. The runtime first brings the replica up to the tip, so "now" means the tip, as `decide` requires.
 
