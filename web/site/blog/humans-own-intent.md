@@ -91,13 +91,13 @@ CLM's spec graph comes from the *Spec Growth Engine* paper ([arXiv:2606.27045](h
 
 ## Try it
 
-The site is [clm-app.dev](https://clm-app.dev). In Claude Code:
+The site is [clm-app.dev](https://clm-app.dev), and the [quickstart](https://clm-app.dev/guide/quickstart) walks through your first change. In Claude Code:
 
 ```
 /plugin marketplace add clunny/clm
 /plugin install clm@clm
 ```
 
-Then run `/clm:init` in a repository, new or existing, and follow the quickstart.
+Then run `/clm:init` in a repository, new or existing.
 
 Next in the series: **"Every requirement has a test that names it, at its version"**, on the `req:` markers that turn "is it built?" into a question a program can answer.
