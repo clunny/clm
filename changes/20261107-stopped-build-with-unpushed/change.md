@@ -15,14 +15,14 @@ The refusal guards against two things: commits on the local branch nobody pushed
 
 ## Approaches
 
-- **Resume what `clm branch push` would accept (chosen).** The local branch has held `origin/impl/<component>`'s tip: the tip is an ancestor of the branch's tip or of an entry of its reflog. Reuses git's own test and the one `clm branch push` already makes (`reuse-first`), so `clm run` and the resumed build's first push agree by construction. Containment stays the common case.
+- **Resume what `clm branch push` would accept (chosen).** The local branch has held `origin/impl/<component>`'s tip: the tip is an ancestor of the branch's tip or of an entry of its reflog. Reuses git's own test and the one `clm branch push` already makes (`reuse-first`), so every branch `clm run` resumes is one the resumed build's first push accepts while `origin` stays where the fetch found it (the push also takes a branch with no `origin` branch at all, which `clm run` claims rather than resumes). Containment stays the common case.
 - **`clm run --finish` pushes a stopped build's branch.** Rejected: the step that frees a place would start writing to `origin` for a build that may have stopped part-way, from the orchestrating checkout rather than on the checked-out branch `clm branch push` works on. The resumed build pushes the same branch at its first rebase point anyway.
 - **Accept only a rebased claim commit, by structure.** Rejected: a build that had pushed work and then rebased rewrote that work too, which a structural test of the claim alone would still refuse.
 - **Teach the build skill to reconcile.** Rejected: the orchestrating session may not run git in a build's worktree, and `clm run` can judge the case itself. With the fix, the exit 1 that remains is a branch that has never held `origin`'s tip, which only the human can reconcile, so the skill's existing rule (tell the human what it printed, launch nothing) is right and the plugin needs no change.
 
 ## Outcome
 
-- `orchestrator.run/run`: resumes on the held-tip test; a new scenario, *stopped after a rebase*, covers the reported case, locked worktree included; the *unpushed leftover branch* scenario says its branch never held `origin`'s tip, so it stays a refusal.
+- `orchestrator.run/run`: resumes on the held-tip test; a new scenario, *stopped after a rebase*, covers the reported case, locked worktree included; the *unpushed leftover branch* scenario says its branch never held `origin`'s tip, so it stays a refusal. An *unpushed claim*, which the leftovers step deletes, is now one on a branch that never held `origin`'s tip: a bare claim the build rebased before any work has that shape, and deleting it would leave the run refused by this clone's own live claim, so it is resumed instead (new scenario *claim rebased before any work*). The resume unlocks the worktree it removes, as the landed case does, and the refusal says the branch never held `origin`'s tip. (From the builder check.)
 - `orchestrator.run`'s Contract says a stopped build keeps its branch, pushed or not; its Design states the rule and why it matches `clm branch push`.
 - No `plugin` delta: the item named `plugin` for the skill's handling of the refusal, which the fix makes unnecessary for this case.
 
