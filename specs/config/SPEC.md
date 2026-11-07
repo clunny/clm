@@ -53,7 +53,7 @@ The first two record the repository's state rather than a choice, so only the re
 
 A table (`[component_size]`, `[health]`, `[effort]`, `[land]`, `[affected]`, `[[detectors]]`) is one key: the first layer that sets the table supplies all of it, and layers never merge within a table, so a `clm.local.toml` with `[component_size] code_tokens = 60000` gives `spec_tokens` its default, not `clm.toml`'s value.
 
-Loading the settings for a repository root (or none) gives each key's value and the layer it came from, or an error naming the file or variable and the key; an error in a file names the file that set the value, `clm.local.toml` or `clm.toml`. `clm config get <key>` prints them, naming the file the value came from.
+Loading the settings for a repository root (or none) gives each key's value and the layer it came from, or an error naming the file or variable and the key; an error in a file names the file that set the value, `clm.local.toml` or `clm.toml`. `clm config get <key>` prints one, naming the file the value came from, and `clm config list` prints every key the same way, one line each (`config-list`). `docs/guide/settings.md`, the guide's page `settings`, says what each key does, what each choice trades off and where it may be set, and has a section for every key `clm config list` prints (`settings-guide-covers-keys`, `settings-guide-page`).
 
 ## Design
 Crate `clm-config`. Files are TOML, read with the `toml` crate into a struct that denies unknown fields. The user's file is read into a struct without the repository-only keys, the repository's into one without `writer`, and `clm.local.toml` into one with every key, so setting a key in the wrong file is an unknown-key error naming that file and the key. A missing file is skipped, a file that can't be parsed is an error naming it. A variable is read only when set: `CLM_AUTOSYNC` accepts `0`, `false`, `1` and `true` (any other value is an error, which leaves autosync off for that turn), `CLM_DEFECTS` the key's values, `CLM_WRITER` a slug (lowercase letters, digits and `-`), and `CLM_MAX_BUILDS` a whole number of at least `1` written in decimal digits. The environment and `XDG_CONFIG_HOME`/`HOME` are passed in, not read globally, so tests don't touch the process environment. Tests of commands and hooks that load settings set `XDG_CONFIG_HOME` to an empty directory, so the developer's own file never leaks in.
@@ -67,6 +67,8 @@ Crate `clm-config`. Files are TOML, read with the `toml` crate into a struct tha
 The repository root is whoever calls it decides: `clm config` uses the CLM repository found from the current directory as `plugin`'s `session-start` does, and none outside one.
 
 `clm config get <key>` prints `<value>` and the layer, tab-separated: `env CLM_DEFECTS`, the file's path, or `default`. It exits 1 with the error on an unknown key or when the settings can't be loaded. For `detectors` it prints the detectors' names, comma-separated, or nothing. For `land` it prints `check=<command>` or nothing. For `affected` it prints `all=<glob>,<glob>`, or nothing. For `health` it prints `reconsider=<n>,scenarios=<n>,exceptions=<n>,stale_days=<n>`, followed by `,lcov=<path>` when it is set. For `effort` it prints `workaround_flag=<n>`.
+
+`clm config list` loads the settings once and prints, for each key in the crate's one ordered list of keys, `KEYS` (`autosync`, `defects`, `max_builds`, `writer`, `host`, `approval`, `land`, `verify`, `affected`, `detectors`, `component_size`, `health`, `effort`, `upgraded`, `declined_migrations`, `skip_migrations`), `<key>`, then what `clm config get <key>` prints, tab-separated. `get` and `list` both read that list, so a key `get` accepts is one `list` prints. When loading fails it prints the error to stderr, nothing to stdout, and exits 1, so a session validates an edit by running it. Its subcommand is a `Config::List` arm beside `Config::Get` in `crates/clm/src/main.rs`, which this component's build adds, as the build of a component that gains a command edits the root's dispatch; the arm calls a `clm-config` function that formats the lines. `KEYS` holds `verify`, which `get` prints once `verify-setting` is built, so this component builds `verify-setting` before `config-list`. A test of this crate reads `docs/guide/settings.md` (with a `clm:reads` marker, `doc-readers-marked`) and fails naming each key of `KEYS` that no heading `` ### `<key>` `` holds. It doesn't fail on a heading for a key `KEYS` lacks: a change that adds a key writes its section on the spec branch, which lands before the build that parses the key, as the glossary's entries do (`propose-adds-settings-sections`).
 
 This repository's `clm.toml` sets `defects = "backlog"`, `host = "github"`, `[land] check = ".github/scripts/ci-check.sh"`, `[affected] all = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/clm/src/**", ".github/scripts/ci-check.sh"]` (the workspace's manifest and lockfile and the toolchain pin, which every crate builds with; the CLI's dispatch, which every test in `crates/clm/tests/` runs through, though each cites only the components it tests; and the check script, which does the selecting), `[health] lcov = "target/lcov.info"` (the tracefile `.github/scripts/coverage.sh` writes, `ci/coverage-script`, which `clm health`'s `unexercised` signal reads, `lcov-coverage-signal`; `health-lcov-here`) and two detectors: `unused-dependencies`, whose command is `["cargo-machete"]` (run directly, not as `cargo machete`: under `cargo run` or `cargo test` it inherits `CARGO_PKG_NAME` and reads `machete` as a path) with the hint `cargo install --locked --version <x.y.z> cargo-machete`, and `unreferenced-public-items`, whose command is `clm unreferenced` with this repository's allow-list (`public-item-detector`, `unreferenced-allow-then-narrow`) and whose hint is `scripts/dev-install.sh` (`dogfood-from-main`). Its `.gitignore` lists `clm.local.toml`, `.clm/` and `.claude/worktrees/`, as `clm init` writes them in other repositories (`init-ignores-session-files`), each as an exact line with no leading `/` (`local-settings-ignored`).
 
@@ -628,3 +630,39 @@ Loading SHALL take `verify` only from the repository's `clm.toml` or the clone's
 
 #### Serves
 - capability/slow-tests-after-land
+
+### Requirement: config-list
+`clm config list` SHALL print one line per key, in the order `autosync`, `defects`, `max_builds`, `writer`, `host`, `approval`, `land`, `verify`, `affected`, `detectors`, `component_size`, `health`, `effort`, `upgraded`, `declined_migrations`, `skip_migrations`, each `<key>`, the value `clm config get <key>` prints and its layer, tab-separated, and exit 0. When the settings can't be loaded it SHALL print nothing to stdout and exit 1 with the error, naming the file or variable and the key, on stderr. Every key `clm config get` accepts SHALL be one it prints.
+
+#### Scenario: every key
+- GIVEN a CLM repository whose `clm.toml` sets `defects = "backlog"`, a `clm.local.toml` beside it with `max_builds = 5`, and no user file or variables
+- WHEN `clm config list` runs in it
+- THEN it prints sixteen lines in the stated order, one is `defects`, `backlog` and the path of `clm.toml`, one is `max_builds`, `5` and the path of `clm.local.toml`, one is `autosync`, `true` and `default`, and it exits 0
+
+#### Scenario: an invalid edit
+- GIVEN a CLM repository whose `clm.local.toml` sets `max_builds = 0`
+- WHEN `clm config list` runs in it
+- THEN stdout is empty, stderr names `clm.local.toml` and `max_builds`, and it exits 1
+
+#### Scenario: a key get knows
+- GIVEN every key `clm config get` accepts
+- WHEN a test compares them with the keys `clm config list` prints
+- THEN they are the same
+
+### Requirement: settings-guide-covers-keys
+The guide's page `docs/guide/settings.md` SHALL hold, for every key `clm config list` prints, a heading `` ### `<key>` ``. A test of this component SHALL read the page and fail naming each key that has no such heading, and SHALL NOT fail on a heading naming a key `clm config list` doesn't print.
+
+#### Scenario: this repository
+- GIVEN this repository's `docs/guide/settings.md`
+- WHEN the test runs
+- THEN it passes
+
+#### Scenario: a key left out
+- GIVEN a page holding a heading for every key but `max_builds`
+- WHEN the check runs on it
+- THEN it reports `max_builds`
+
+#### Scenario: a key not yet parsed
+- GIVEN a page holding a heading for every key and one for `colour`
+- WHEN the check runs on it
+- THEN it reports nothing
