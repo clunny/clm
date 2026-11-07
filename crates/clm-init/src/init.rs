@@ -378,12 +378,7 @@ fn host_of(root: &Path) -> Host {
     let Ok(url) = git(root, &["remote", "get-url", REMOTE]) else {
         return Host::None;
     };
-    let url = url.to_ascii_lowercase();
-    if url.contains("github.com") {
-        Host::Github
-    } else {
-        Host::Git
-    }
+    clm_host::host_for_remote(&url)
 }
 
 /// The repository's `host`: what a `clm.toml` it kept sets, else `written`, the one it wrote.
@@ -461,8 +456,9 @@ fn make_executable(path: &Path) -> std::io::Result<()> {
 
 /// The steps left for the human: the `permissions` step, then the push, skipped once `git`
 /// shows it done and nothing else is left to commit.
-/// Whether the host protects `main` would take asking it, so that step stays, as a
-/// conditional. `paths` are all of CLM's files, written or kept.
+/// then the host's own setup steps (`clm-host`'s `setup_steps`), conditional because whether
+/// the host protects `main` would take asking it. `paths` are all of CLM's files, written or
+/// kept.
 fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<String>) -> Vec<String> {
     let mut steps: Vec<String> = permissions.into_iter().collect();
     // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or
@@ -482,13 +478,7 @@ fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<Strin
                 .into(),
         );
     }
-    if host != Host::None {
-        steps.push(
-            "If the host protects `main`, let the identity that runs `clm land` push it (a \
-             bypass or an allowed pusher)."
-                .into(),
-        );
-    }
+    steps.extend(clm_host::setup_steps(host));
     steps
 }
 

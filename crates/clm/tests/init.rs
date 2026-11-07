@@ -57,17 +57,19 @@ fn repo() -> (TempDir, std::path::PathBuf) {
 fn fake_hosts() -> TempDir {
     let dir = TempDir::new().unwrap();
     let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
-    let script = format!(
-        "#!/bin/sh\nprintf 'gh %s\\n' \"$*\" >> '{log}'\nexit 1\n",
-        log = dir.path().join("log").display(),
-    );
-    let path = dir.path().join("gh");
-    fs::write(&path, script).unwrap();
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    for host in ["gh", "az"] {
+        let script = format!(
+            "#!/bin/sh\nprintf '{host} %s\\n' \"$*\" >> '{log}'\nexit 1\n",
+            log = dir.path().join("log").display(),
+        );
+        let path = dir.path().join(host);
+        fs::write(&path, script).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
     dir
 }
 
-/// Every call the fake `gh` saw.
+/// Every call the fake `gh` and `az` saw.
 fn host_calls(hosts: &TempDir) -> String {
     fs::read_to_string(hosts.path().join("log")).unwrap_or_default()
 }
@@ -133,7 +135,7 @@ fn host_line(dir: &Path) -> String {
 
 #[test]
 fn empty_repository() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let hosts = fake_hosts();
@@ -184,7 +186,7 @@ fn layer_entries(dir: &Path, layer: &str, hosts: &TempDir) -> Vec<String> {
 
 #[test]
 fn init_writes_capabilities() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     let out = init(&dir, &["--lang", "rust"], &hosts);
@@ -447,7 +449,7 @@ fn root_outside_skips_clm_files_and_escapes() {
 
 #[test]
 fn no_remote() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(host_line(&dir), "host = \"none\"");
@@ -455,7 +457,7 @@ fn no_remote() {
 
 #[test]
 fn host_given() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     init(&dir, &["--host", "git"], &fake_hosts());
@@ -465,6 +467,17 @@ fn host_given() {
         init(&dir, &["--host", host], &fake_hosts());
         assert_eq!(host_line(&dir), format!("host = \"{host}\""));
     }
+}
+
+#[test]
+fn azure_remote() {
+    // req:init/init-files@633c5ab3
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://o@dev.azure.com/o/p/_git/r");
+    let hosts = fake_hosts();
+    init(&dir, &[], &hosts);
+    assert_eq!(host_line(&dir), "host = \"azure\"");
+    assert_eq!(host_calls(&hosts), "", "clm init called a host");
 }
 
 #[test]
@@ -492,11 +505,12 @@ fn host_unknown_refused() {
 
 #[test]
 fn host_from_origin() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     for (url, host) in [
         ("git@github.com:o/r.git", "github"),
         ("https://GitHub.com/o/r", "github"),
-        ("https://dev.azure.com/o/p/_git/r", "git"),
+        ("https://o@dev.azure.com/o/p/_git/r", "azure"),
+        ("https://example.com/o/r.git", "git"),
         ("ssh://git@example.com/srv/r.git", "git"),
     ] {
         let (_tmp, dir) = repo();
@@ -508,7 +522,7 @@ fn host_from_origin() {
 
 #[test]
 fn project_files_kept() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Our rules\n");
     write(&dir, "clm.toml", "defects = \"off\"\n");
@@ -671,7 +685,7 @@ fn no_ci(steps: &str) {
 
 #[test]
 fn next_steps_name_the_push_and_clm_land() {
-    // req:init/init-next-steps@25f9338e
+    // req:init/init-next-steps@01bcacd1
     let (_tmp, dir) = repo();
     let steps = next_steps(&init(&dir, &["--lang", "rust"], &fake_hosts()));
     assert!(steps.contains("push them to `main`"), "{steps}");
@@ -682,14 +696,30 @@ fn next_steps_name_the_push_and_clm_land() {
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let steps = next_steps(&init(&dir, &[], &fake_hosts()));
-    assert!(steps.contains("protects `main`"), "{steps}");
-    assert!(steps.contains("runs `clm land` push"), "{steps}");
+    for line in clm_host::setup_steps(clm_config::Host::Github) {
+        assert!(steps.contains(&line), "{line}: {steps}");
+    }
+    no_ci(&steps);
+}
+
+#[test]
+fn azure_next_steps() {
+    // req:init/init-next-steps@01bcacd1
+    let (_tmp, dir) = repo();
+    let steps = next_steps(&init(&dir, &["--host", "azure"], &fake_hosts()));
+    let given = clm_host::setup_steps(clm_config::Host::Azure);
+    assert!(!given.is_empty());
+    for line in given {
+        assert!(steps.contains(&line), "{line}: {steps}");
+    }
+    assert!(steps.contains("az login"), "{steps}");
+    assert!(steps.contains("Bypass policies when pushing"), "{steps}");
     no_ci(&steps);
 }
 
 #[test]
 fn next_steps_skip_what_is_done() {
-    // req:init/init-next-steps@25f9338e
+    // req:init/init-next-steps@01bcacd1
     // The push is left after a local commit, and not once `origin/main` has the files; the
     // protection step stays, since `clm init` can't ask the host.
     let (tmp, dir) = repo();
@@ -734,7 +764,7 @@ fn step(steps: &str, words: &[&str]) -> usize {
 
 #[test]
 fn an_old_clm_toml_gets_no_upgrade_step() {
-    // req:init/init-next-steps@25f9338e
+    // req:init/init-next-steps@01bcacd1
     let (_tmp, dir) = repo();
     write(&dir, "clm.toml", "approval = \"any\"\n");
     commit_all(&dir);
@@ -1121,7 +1151,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
 
 #[test]
 fn not_a_repository() {
-    // req:init/init-files@1f4fb754
+    // req:init/init-files@633c5ab3
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join("plain");
     fs::create_dir(&dir).unwrap();
