@@ -39,6 +39,7 @@ Some settings describe the repository rather than the user, and only the reposit
 | `approval` | `any`: any writer's approval of a diff counts, the author's included; `other`: only an approval by a person other than the branch's commit authors counts (`approval-policy`) | `any` |
 | `land` | a table with `check`, a non-empty string: the shell command `clm land` runs in the tree it lands, before `clm check` (`land-locally`), and optional `target_cap_gb`, a positive integer: the size in gigabytes (10^9 bytes) above which a land removes the shared target `.clm/land` after its push (`land/land-target-cap`) | none: `clm check` alone; `target_cap_gb = 15` |
 | `affected` | a table with `all`, an array of globs written as in a component's `paths`: changed files that make `clm affected` select every test although a component's `paths` hold them, such as a lockfile or the toolchain pin (`graph-test-selection`) | none: no glob |
+| `verify` | a table: `check`, a non-empty string, the slow-test command `clm verify` runs after the land; `mode`, `local`, `pipeline` or `import`: where the slow tests run and who records the result; optional `triggers`, an array of `change-done`, `queue-drained` and `work-done` (the last only with `mode = "local"`); optional `every`, a table with `lands` and `days`, each a positive integer; and `workflow`, a non-empty string, required with `mode = "import"` and refused otherwise: the host pipeline whose runs `clm verify` reads (`verify-after-land`) | none: slow tests stay in `[land] check` |
 | `component_size` | a table with `spec_tokens` and `code_tokens`, each a positive integer: the size in tokens above which a component whose frontmatter sets no `size_budget` is oversized (`node-size-budgets`, `oversized-is-a-state`, `component-size-setting`) | `spec_tokens = 12000`, `code_tokens = 40000` |
 | `health` | a table with `reconsider`, `scenarios`, `exceptions` and `stale_days`, each a positive integer, and `lcov`, a path relative to the repository root, at least one ordinary name with no root, prefix or `..` component and neither `,`, `=` nor a control character in it, optional: the score at which `clm rebase` files a reconsider item for a requirement, the scenario and exception-clause counts above which `clm health` flags one, the days after which an open `question` or `human` item is reported, and the lcov file `clm health` reads (`health-advises`, `lcov-coverage-signal`) | `reconsider = 3`, `scenarios = 6`, `exceptions = 4`, `stale_days = 30`, no `lcov` |
 | `effort` | a table with `workaround_flag`, a positive integer: the count of unsettled workaround flags on one capability at which `clm workaround` warns and exits 3, telling the session to stop and ask whether to redesign it (`redesign-before-workaround`, `check.health`) | `workaround_flag = 3` |
@@ -591,3 +592,39 @@ Loading the settings SHALL accept `upgraded`, a string, and `declined_migrations
 
 #### Serves
 - capability/upgrade-clm
+
+### Requirement: verify-setting
+Loading SHALL take `verify` only from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table with `check`, a non-empty string; `mode`, one of `local`, `pipeline` and `import`; optional `triggers`, an array of distinct values among `change-done`, `queue-drained` and `work-done`, default empty; optional `every`, a table whose keys `lands` and `days` are each optional and a positive integer; and `workflow`, a non-empty string. It SHALL fail naming the file that sets it and `verify` for a `verify` that isn't a table, for any other key in it or in `every`, for a missing or empty `check`, a missing or unknown `mode`, an unknown or repeated trigger, `work-done` with a `mode` other than `local`, an `every` value that isn't a positive integer, a `workflow` missing with `mode = "import"` or set with another mode; and SHALL fail naming the user's `config.toml` and the key when that file sets it. `clm config get verify` SHALL print `mode=<mode>,check=<command>`, followed by `,triggers=<t>+<t>...` when there are triggers, `,every.lands=<n>` and `,every.days=<n>` when set and `,workflow=<name>` when set, and the path of the file that sets it, or nothing and `default`.
+
+#### Scenario: set
+- GIVEN a repository `clm.toml` with `[verify]`, `check = "scripts/slow.sh"`, `mode = "local"` and `triggers = ["change-done", "work-done"]`
+- WHEN `clm config get verify` runs
+- THEN it prints `mode=local,check=scripts/slow.sh,triggers=change-done+work-done` and the file's path
+
+#### Scenario: import needs a workflow
+- GIVEN a repository `clm.toml` with `[verify]`, `check = "scripts/slow.sh"` and `mode = "import"`
+- WHEN the settings are loaded
+- THEN it fails naming `clm.toml` and `verify`
+
+#### Scenario: work done is local only
+- GIVEN a repository `clm.toml` with `[verify]`, `check = "x"`, `mode = "pipeline"` and `triggers = ["work-done"]`
+- WHEN the settings are loaded
+- THEN it fails naming `clm.toml` and `verify`
+
+#### Scenario: zero lands
+- GIVEN a repository `clm.toml` with `[verify]`, `check = "x"`, `mode = "local"` and `every = { lands = 0 }`
+- WHEN the settings are loaded
+- THEN it fails naming `clm.toml` and `verify`
+
+#### Scenario: unset
+- GIVEN a repository `clm.toml` with no `[verify]`
+- WHEN `clm config get verify` runs
+- THEN it prints nothing for the value and `default`
+
+#### Scenario: from the user's file
+- GIVEN a user `config.toml` with a `[verify]` table
+- WHEN the settings are loaded
+- THEN it fails naming `config.toml` and `verify`
+
+#### Serves
+- capability/slow-tests-after-land

@@ -1,6 +1,8 @@
 ---
 title: "Slow tests after the land: a red run on main reaches the backlog, its land is found, and the line stops for that component"
 kind: idea
+priority: P2
+issues: [262]
 components: [host, orchestrator.triage, land, gate]
 ---
 
