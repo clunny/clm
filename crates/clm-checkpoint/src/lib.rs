@@ -75,6 +75,7 @@ pub fn checkpoint(root: &Path) -> Result<Report, Error> {
     // The main checkout also leaves a build's `worktree-agent-*` branch once `origin/main`
     // holds its tip.
     let mut checked_out = BTreeSet::new();
+    let mut left = BTreeSet::new();
     for (i, wt) in worktrees.iter().enumerate() {
         let Some(b) = wt.branch.as_deref() else {
             continue;
@@ -104,8 +105,20 @@ pub fn checkpoint(root: &Path) -> Result<Report, Error> {
             && is_build_worktree(&wt.path)
             && !caller.starts_with(&wt.path)
         {
-            remove_worktree(root, &wt.path)?;
-            lines.push(format!("removed {}", wt.path.display()));
+            match clm_git::remove_worktree(root, &wt.path) {
+                Ok(()) => lines.push(format!("removed {}", wt.path.display())),
+                Err(e) => {
+                    // The landed branch stays for the next wrap-up, and nothing of this
+                    // directory is judged: git may no longer know it as a worktree.
+                    lines.push(format!(
+                        "left {}: {}; delete the directory by hand, then run git worktree prune",
+                        wt.path.display(),
+                        e.to_string().replace('\n', " ").trim()
+                    ));
+                    left.insert(wt.path.clone());
+                    continue;
+                }
+            }
         } else {
             continue;
         }
@@ -213,7 +226,7 @@ pub fn checkpoint(root: &Path) -> Result<Report, Error> {
     let mut own_branches = BTreeSet::new();
     for (i, wt) in worktrees.iter().enumerate() {
         let path = &wt.path;
-        if !path.exists() {
+        if !path.exists() || left.contains(path) {
             continue;
         }
         let own = *path == caller;
@@ -480,16 +493,6 @@ fn clean(dir: &Path) -> Result<bool, Error> {
     Ok(git(dir, &["status", "--porcelain"])?.is_empty())
 }
 
-/// Removes the linked worktree at `path`, unlocking it first: Claude Code locks the
-/// worktrees it makes.
-fn remove_worktree(root: &Path, path: &Path) -> Result<(), Error> {
-    let path = path.to_string_lossy();
-    // Unlocking a worktree that isn't locked fails, and that's fine.
-    let _ = git(root, &["worktree", "unlock", &path]);
-    git(root, &["worktree", "remove", &path])?;
-    Ok(())
-}
-
 /// Whether change `id` is in `origin/main`, live or archived.
 fn change_in_main(root: &Path, id: &str) -> bool {
     ["changes", "changes/archive"].iter().any(|dir| {
@@ -511,7 +514,7 @@ mod tests {
 
     #[test]
     fn agent_dirs_directly_in_claude_worktrees_are_builds() {
-        // req:orchestrator.checkpoint/checkpoint@f59546e3
+        // req:orchestrator.checkpoint/checkpoint@1c25c797
         assert!(is_build_worktree(Path::new("/r/.claude/worktrees/agent-1")));
         assert!(!is_build_worktree(Path::new("/r/.claude/worktrees/p3")));
         assert!(!is_build_worktree(Path::new("/r/worktrees/agent-1")));
