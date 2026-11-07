@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # The public site shows no repository data
