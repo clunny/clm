@@ -7,7 +7,7 @@ use crate::{Repo, landed, printed};
 
 #[test]
 fn bare_server() {
-    // req:capability/git-host@4c4fceda
+    // req:capability/git-host@3a12ab25
     let repo = Repo::init();
     // `origin` is a bare git server.
     repo.land_on_origin("true");
@@ -83,5 +83,97 @@ fn bare_server() {
         !called.exists(),
         "gh was called: {}",
         fs::read_to_string(&called).unwrap()
+    );
+}
+
+#[test]
+fn azure_devops() {
+    // req:capability/git-host@3a12ab25
+    let repo = Repo::init();
+    // The repository is set up for Azure DevOps.
+    repo.write("clm.toml", "host = \"azure\"\n");
+    repo.commit("host azure");
+    repo.git(&["push", "-q", "origin", "main"]);
+
+    // A fake `az` that records its calls: no active pull request, and a created one.
+    let bin = repo.root.parent().unwrap().join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let calls = bin.join("az-calls");
+    let az = bin.join("az");
+    let created =
+        r#"{"pullRequestId": 12, "repository": {"webUrl": "https://dev.azure.com/o/p/_git/r"}}"#;
+    fs::write(
+        &az,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\ncase \"$*\" in\n*'pr list'*) echo '[]';;\n*'pr create'*) echo '{created}';;\n*) echo 'unexpected call' >&2; exit 1;;\nesac\n",
+            calls.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&az, fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    // Propose a change on a branch, then open its pull request.
+    repo.git(&["switch", "-q", "-c", "spec/x"]);
+    let capabilities = fs::read_to_string(repo.root.join("CAPABILITIES.md")).unwrap();
+    repo.write(
+        "CAPABILITIES.md",
+        &capabilities.replace("A person can c.", "A person can c, on Azure."),
+    );
+    repo.write(
+        "changes/20261030-azure/change.md",
+        "---\nstatus: applied\n---\n\n## Intent\n\nc, on Azure.\n",
+    );
+    repo.commit("x");
+    let check = repo.clm(&["check"]);
+    assert!(check.status.success(), "{}", printed(&check));
+    repo.git(&["push", "-q", "-u", "origin", "spec/x"]);
+    let body = repo.root.parent().unwrap().join("body.md");
+    fs::write(&body, "## Intent\n\nx.\n").unwrap();
+    let out = repo.clm_env(
+        &[
+            "pr",
+            "open",
+            "spec/x",
+            "--title",
+            "x",
+            "--body-file",
+            body.to_str().unwrap(),
+        ],
+        "",
+        &[("PATH", &path)],
+    );
+    assert!(out.status.success(), "{}", printed(&out));
+    // Its URL is printed.
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "https://dev.azure.com/o/p/_git/r/pullrequest/12"
+    );
+    // The pull request was opened through the Azure CLI.
+    let recorded = fs::read_to_string(&calls).unwrap();
+    let create = recorded
+        .lines()
+        .find(|l| l.contains("repos pr create"))
+        .unwrap_or_else(|| panic!("no pr create: {recorded}"));
+    let description = format!("--description @{}", body.display());
+    for want in [
+        "--source-branch spec/x",
+        "--target-branch main",
+        "--title x",
+        "--detect true",
+        "--output json",
+        description.as_str(),
+    ] {
+        assert!(create.contains(want), "{create}");
+    }
+    // It looked for an active pull request first.
+    let listed = recorded.find("repos pr list").unwrap();
+    assert!(
+        listed < recorded.find("repos pr create").unwrap(),
+        "{recorded}"
     );
 }
