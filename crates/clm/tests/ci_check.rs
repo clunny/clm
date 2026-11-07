@@ -3,6 +3,8 @@
 //! `npx`, `clm` and `claude` first on `PATH` (or, for one test, with no `claude` on `PATH` at
 //! all), and the scripts' text is read for what a run can't show.
 
+// clm:reads clm.toml
+
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};

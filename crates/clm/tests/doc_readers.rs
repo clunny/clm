@@ -56,7 +56,7 @@ fn differing(paths: &[&str]) -> Vec<Changed> {
 
 #[test]
 fn the_retired_terms_test_reads_the_specs() {
-    // req:clm/doc-readers-marked@54c98381
+    // req:clm/doc-readers-marked@49fef14e
     let selected = readers(&differing(&["specs/SPEC.md"]), &markers());
     assert!(
         selected.contains(&"crates/clm/tests/retired_terms.rs".to_string()),
@@ -66,7 +66,7 @@ fn the_retired_terms_test_reads_the_specs() {
 
 #[test]
 fn the_root_documents_have_readers() {
-    // req:clm/doc-readers-marked@54c98381
+    // req:clm/doc-readers-marked@49fef14e
     let all = markers();
     for doc in [
         "ARCHITECTURE.md",
@@ -85,4 +85,13 @@ fn the_root_documents_have_readers() {
         selected.contains(&"crates/clm/tests/readme.rs".to_string()),
         "{selected:?}"
     );
+}
+
+#[test]
+fn the_readers_of_clm_toml() {
+    // req:clm/doc-readers-marked@49fef14e
+    let selected = readers(&differing(&["clm.toml"]), &markers());
+    for file in ["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"] {
+        assert!(selected.contains(&file.to_string()), "{selected:?}");
+    }
 }
