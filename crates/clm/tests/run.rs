@@ -1220,7 +1220,7 @@ fn landed_build(r: &Repo, f: &Fake) -> PathBuf {
 
 #[test]
 fn scenario_landed_build_tidied() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let out = finished(&r, "b");
@@ -1244,7 +1244,7 @@ fn chmod(path: &Path, mode: u32) {
 #[cfg(unix)]
 #[test]
 fn scenario_unwritable_directory_removed() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let exclude = r.work.join(".git/info/exclude");
@@ -1278,7 +1278,7 @@ fn scenario_unwritable_directory_removed() {
 #[cfg(unix)]
 #[test]
 fn scenario_worktree_git_cant_remove() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     // Git can't delete the worktree's directory from a parent it can't write to.
@@ -1301,7 +1301,7 @@ fn scenario_worktree_git_cant_remove() {
 
 #[test]
 fn scenario_stopped_build_kept() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = resumable(&r, &f);
     let pushed = remote_tip(&r, "impl/b");
@@ -1319,7 +1319,7 @@ fn scenario_stopped_build_kept() {
 
 #[test]
 fn scenario_dirty_worktree_kept() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     fs::write(wt.join("notes.txt"), "mine\n").unwrap();
@@ -1335,7 +1335,7 @@ fn scenario_dirty_worktree_kept() {
 
 #[test]
 fn scenario_checkout_outside_the_worktrees_directory() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     prompt(&r, &f, "b", &[]);
     let other = r.work.parent().unwrap().join("other");
@@ -1351,7 +1351,7 @@ fn scenario_checkout_outside_the_worktrees_directory() {
 
 #[test]
 fn finish_prints_landed_with_no_worktree() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     git(&r.work, &["worktree", "unlock", wt.to_str().unwrap()]);
@@ -1362,7 +1362,7 @@ fn finish_prints_landed_with_no_worktree() {
 
 #[test]
 fn scenario_nothing_to_finish() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let r = repo();
     let out = finished(&r, "b");
     assert!(!out.contains("freed"), "{out}");
@@ -1371,7 +1371,7 @@ fn scenario_nothing_to_finish() {
 
 #[test]
 fn finish_from_a_linked_worktree_looks_under_the_main_one() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let session = r.work.parent().unwrap().join("session");
@@ -1387,7 +1387,7 @@ fn finish_from_a_linked_worktree_looks_under_the_main_one() {
 
 #[test]
 fn finish_never_removes_the_worktree_it_runs_in() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     let ran = clm_finish_in(&r, &wt, "b");
@@ -1398,7 +1398,7 @@ fn finish_never_removes_the_worktree_it_runs_in() {
 
 #[test]
 fn finish_keeps_a_branch_landed_only_locally() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     // `origin/impl/b` gets a commit `origin/main` lacks, so not every tip has landed.
@@ -1424,7 +1424,7 @@ fn finish_keeps_a_branch_landed_only_locally() {
 
 #[test]
 fn finish_fails_in_git_with_exit_2() {
-    // req:orchestrator.run/run-finish@187b9cf7
+    // req:orchestrator.run/run-finish@3b60c443
     let r = repo();
     git(&r.work, &["remote", "set-url", "origin", "/no/such/origin"]);
     assert_eq!(clm_finish(&r, "b").code, Some(2));
