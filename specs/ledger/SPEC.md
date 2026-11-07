@@ -13,7 +13,7 @@ The records that say what was approved, checked and landed, as facts in git that
 
 Record kinds:
 - `approved`: `fingerprint`, `branch`, `change` (a change ID, or null). A human's approval of a diff (`pinned-approval`).
-- `checked`: `code_key`, `command`. A tree whose code key passed the check command.
+- `checked`: `code_key`, `command`. A tree whose code key passed the check command, or whose code key `code_key_with` maps, its `clm.toml` settings unchanged, to one that did, the land having run that tree's `clm check` and the tests that read `clm.toml` (`land/settings-unchanged-is-checked`).
 - `landed`: `commit`, `branch`, `land_kind` (`spec` or `code`), `review` (whether the land needed a human's review, `gate/needs-review`; false for code), `fingerprint`, `code_key` (the landed commit's code key, which the land's `checked` record names), `changes` (the live change IDs a spec land added or modified). Older records lack `code_key` (`landed-record-names-its-code-key`). Records from before review was yes or no (`yes-no-review`) have `tier` instead of `review`: `HARD` reads as `review: true`, anything else as `false`.
 - `subscribed`: `endpoint`, `p256dh`, `auth`. A browser's Web Push subscription for this repo, which `web.worker` notifies (`push-subscriptions-in-ledger`).
 - `unsubscribed`: `subscription` (the `id` of a `subscribed` record). That subscription's end.
@@ -674,7 +674,7 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 - capability/slow-tests-after-land
 
 ### Requirement: code-key-with
-`code_key_with(root, rev, path, from)` SHALL return the key `code_key(root, rev)` would return were `path`'s entry in `rev`'s tree the one `from`'s tree holds, or absent where `from`'s tree holds none, computed from the two trees' listings without writing a git object. For a path `doc_only` names it SHALL return `code_key(root, rev)`.
+`code_key_with(root, rev, path, from)` SHALL return the key `code_key(root, rev)` would return were `path`'s entry in `rev`'s tree the one `from`'s tree holds, or absent where `from`'s tree holds none, computed from the two trees' listings without writing a git object: `from`'s line for `path` replaces `rev`'s verbatim (mode and object included), or is inserted where `ls-tree -r` would list it, in byte order of paths, when `rev`'s tree holds none, and `path` names one file, matched exactly. For a path `doc_only` names it SHALL return `code_key(root, rev)`.
 
 #### Scenario: one file taken from the base
 - GIVEN commit `a`, and commit `b` on it that changes `clm.toml` and `docs/x.md`
@@ -683,6 +683,11 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 
 #### Scenario: absent in from
 - GIVEN commit `a`, and commit `b` on it that adds `tool.toml`
+- WHEN `code_key_with(root, b, "tool.toml", a)` runs
+- THEN it returns `code_key(root, a)`
+
+#### Scenario: absent in rev
+- GIVEN commit `a` holding `tool.toml`, and commit `b` on it that removes it
 - WHEN `code_key_with(root, b, "tool.toml", a)` runs
 - THEN it returns `code_key(root, a)`
 
