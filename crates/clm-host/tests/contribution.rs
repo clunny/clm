@@ -272,10 +272,9 @@ fn no_host_runs_no_gh() {
 
 #[test]
 fn listing_open_issues_and_pull_requests() {
-    // req:host/list-contributions@80662182
+    // req:host/list-contributions@2311b721
     let issues = r#"[{"number":73,"author":{"login":"clunny"},"title":"secret words"}]"#;
-    let prs =
-        r#"[{"number":80,"author":{"login":"dana"}},{"number":81,"author":{"login":"ghost"}}]"#;
+    let prs = r#"[{"number":80,"author":{"login":"dana"},"isCrossRepository":true},{"number":81,"author":{"login":"ghost"},"isCrossRepository":true},{"number":82,"author":{"login":"clunny"},"isCrossRepository":false},{"number":83,"author":{"login":"eve"}}]"#;
     with_gh(&[("issue list", issues), ("pr list", prs)], |root, dir| {
         let listed = clm_host::adapter(Setting::Github).list(root).unwrap();
         let want = |number, pull_request, author: &str| clm_host::Listed {
@@ -297,6 +296,11 @@ fn listing_open_issues_and_pull_requests() {
             for part in ["--state open", "--json", "--limit 1000"] {
                 assert!(line.contains(part), "{line}");
             }
+            assert_eq!(
+                line.contains("isCrossRepository"),
+                kind == "pr list",
+                "{line}"
+            );
             assert!(!line.contains("title") && !line.contains("body"), "{line}");
         }
     });
@@ -304,7 +308,7 @@ fn listing_open_issues_and_pull_requests() {
 
 #[test]
 fn listing_without_a_host_runs_no_gh() {
-    // req:host/list-contributions@80662182
+    // req:host/list-contributions@2311b721
     for setting in [Setting::None, Setting::Git] {
         with_gh(&[("", "[]")], |root, dir| {
             assert!(clm_host::adapter(setting).list(root).unwrap().is_empty());
