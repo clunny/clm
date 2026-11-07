@@ -27,5 +27,6 @@ The browser and site suites move to `[verify]` once `20261107-slow-tests-after-l
 
 ## Constraints
 
-- Every test must pass while others run beside it. The build that moves to `nextest` fixes any test that collides on a fixed port, path or process-wide setting, as `20261107-parallel-builds-test-runs`' `tests-run-concurrently` will ask of every project.
+- Every test must pass while others run beside it, as `tests-run-concurrently` asks. The `ci` build changes no other component's test (`path-ownership`): a test that fails under `nextest` becomes a `kind: bug` item on its component blocking `ci/nextest-runner`, and the script moves once those are fixed.
+- On a failure the script prints one line naming the failed phase rather than the whole summary, so the 40 lines a refused land shows stay the failure's (`land/land-check-log`).
 - The phase lines go to stderr, so the output's tail on a failed land stays the failure's.

@@ -52,25 +52,19 @@ The Linux binaries are static `-musl` builds, so they run on any Linux of their 
 
 The code key lives in `ledger`, landing in `land` and approval pinning in the ledger's fingerprints.
 
-**Running the tests** (`nextest-runner`, `test-tools`). The Rust tests run under `cargo-nextest`, which runs a package's test binaries at once, one process per test, where `cargo test` runs the binaries one after another: a full run measured on 2026-11-07 spent 160 of its 180 seconds of `cargo test` running 367 binaries in turn on a 24-core machine. Every test of this repository must therefore pass while the others run beside it on one host, which `tests-run-concurrently` will ask of every project; a test that shares a fixed port, path or process-wide setting with another is fixed in the build that moves to `nextest`, as the tests are code of the components they cite. `nextest` doesn't run doctests, so a full run follows it with `cargo test --doc --workspace`. `.github/scripts/test-tools.sh` installs `cargo-nextest` (`cargo install --locked --version <x.y.z> cargo-nextest`, the newest release at build time, which `~/.cargo/bin` keeps from repeating), and `ci-check.sh` runs it after `detector-tools.sh` and before its first `cargo` line. It is a script of its own because the release's `prepare` job runs `detector-tools.sh` and keeps `cargo test --all` (`release-prepare.sh`), the full backstop, and so shouldn't build `nextest`; `detector-tools.sh` keeps installing only the detectors' tools.
+**Running the tests** (`nextest-runner`, `test-tools`). The Rust tests run under `cargo-nextest`, which runs a package's test binaries at once, one process per test, where `cargo test` runs the binaries one after another: a full run measured on 2026-11-07 spent 160 of its 180 seconds of `cargo test` running 367 binaries in turn on a 24-core machine. Every test of this repository must therefore pass while the others run beside it on one host, which `tests-run-concurrently` asks of every project. The tests are code of the components that own or cite them (`path-ownership`), so the build that moves the script to `nextest` changes no test: it runs `cargo nextest run --workspace`, and for each test that fails under it and not under `cargo test` it files a `kind: bug` backlog item on that test's component whose `blocks` names `ci/nextest-runner`, and builds the rest (`requirement-blocks`). Once those land, the script moves. `nextest` doesn't run doctests, so a full run follows it with `cargo test --doc --workspace`. `.github/scripts/test-tools.sh` installs `cargo-nextest` (`cargo install --locked --version <x.y.z> cargo-nextest`, the newest release at build time, which `~/.cargo/bin` keeps from repeating), and `ci-check.sh` runs it after `detector-tools.sh` and before its first `cargo` line. It is a script of its own because the release's `prepare` job runs `detector-tools.sh` and keeps `cargo test --all` (`release-prepare.sh`), the full backstop, and so shouldn't build `nextest`; `detector-tools.sh` keeps installing only the detectors' tools.
 
-**Phase times** (`phase-times`). The script times each phase it runs, by the shell's `SECONDS`: the tool installs, fmt, clippy, the wasm builds, the Rust tests, and each npm suite, capability package and plugin validation. After a phase it prints `ci-check: <phase> <n>s` to stderr, and when it exits, passing or failing, an `EXIT` trap prints `ci-check: phases` and one `<n>s <phase>` line per phase run, the phase that failed included, and `<n>s total`. They go to stderr so the output's last lines stay the failure's, which `clm land` shows when the check fails.
+**Phase times** (`phase-times`). The script times each phase it runs, by the shell's `SECONDS`: the tool installs (one phase, `tools`), fmt, clippy, the wasm builds, the Rust tests, and each npm suite, capability package and plugin validation. After a phase it prints `ci-check: <phase> <n>s` to stderr. An `EXIT` trap, which keeps the script's exit status, prints on a pass `ci-check: phases`, one `<n>s <phase>` line per phase and `<n>s total`, and on a failure only `ci-check: failed in <phase> after <n>s, <n>s total`: `clm land` shows the last 40 lines of a failed check (`land/land-check-log`), and a summary after the failure would push the failure's own lines out of them.
 
 ## ADDED Requirements
 
 ### Requirement: nextest-runner
-`.github/scripts/ci-check.sh` SHALL run the Rust tests with `cargo nextest run`, never with `cargo test` except for doctests: a full run SHALL run `cargo nextest run --workspace --no-tests=pass` and then `cargo test --doc --workspace`, and a selected run SHALL run the commands `selected-tests` states. Every test of the workspace SHALL pass when run under `cargo nextest run`, each test in its own process and a package's tests at once.
+`.github/scripts/ci-check.sh` SHALL run the Rust tests with `cargo nextest run`, never with `cargo test` except for doctests: a full run SHALL run `cargo nextest run --workspace --no-tests=pass` and then `cargo test --doc --workspace`, and a selected run SHALL run the commands `selected-tests` states. The build that makes this current SHALL change no test outside this component's `paths`: for each test that fails under `cargo nextest run --workspace` and passes under `cargo test`, it SHALL file a `kind: bug` backlog item on the test's component whose `blocks` names this requirement, and leave the script on `cargo test` until those are resolved.
 
 #### Scenario: full run
 - GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments, and `CLM_SELECTION` unset
 - WHEN it runs
 - THEN `cargo` ran `nextest run --workspace --no-tests=pass`, then `test --doc --workspace`, and no other `test`
-
-#### Scenario: this repository under nextest
-- GIVEN this repository's workspace
-- WHEN `cargo nextest run --workspace` runs
-- THEN every test passes
-
 
 ### Requirement: test-tools
 `.github/scripts/test-tools.sh` SHALL install `cargo-nextest` with `cargo install --locked --version <x.y.z> cargo-nextest`, an exact version, and nothing else. `.github/scripts/ci-check.sh` SHALL run it after `.github/scripts/detector-tools.sh` and before its first `cargo` line. No workflow and no other script SHALL run it, and no other file SHALL install `cargo-nextest`.
@@ -92,18 +86,17 @@ The code key lives in `ledger`, landing in `land` and approval pinning in the le
 
 
 ### Requirement: phase-times
-`.github/scripts/ci-check.sh` SHALL time each phase it runs: the tool installs, `cargo fmt`, `cargo clippy`, the wasm builds, the Rust tests, and each npm suite, capability package and `claude plugin validate` it runs. After each it SHALL print `ci-check: <phase> <n>s` to stderr, `<n>` the whole seconds it took, and on exit, passing or failing, it SHALL print to stderr `ci-check: phases`, then one line `<n>s <phase>` per phase it ran, in order, the one that failed included, then `<n>s total`. It SHALL print nothing of these to stdout.
+`.github/scripts/ci-check.sh` SHALL time each phase it runs: the tool installs, as one phase `tools`, then `cargo fmt`, `cargo clippy`, the wasm builds, the Rust tests, and each npm suite, capability package and `claude plugin validate` it runs. After each it SHALL print `ci-check: <phase> <n>s` to stderr, `<n>` the whole seconds it took. On exit it SHALL keep its exit status and print to stderr: when it passes, `ci-check: phases`, then one line `<n>s <phase>` per phase, in order, then `<n>s total`; when a phase fails, only `ci-check: failed in <phase> after <n>s, <n>s total`. It SHALL print nothing of these to stdout.
 
 #### Scenario: a passing run
 - GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments and pass, and an empty selection file
 - WHEN it runs
-- THEN it exits 0, stderr holds `ci-check: phases`, a line ending in ` fmt`, one ending in ` clippy`, and a last line matching `<n>s total`, and stdout holds no line starting `ci-check:`
+- THEN it exits 0, stderr holds `ci-check: phases`, a line ending in ` tools`, one ending in ` fmt`, one ending in ` clippy`, and a last line matching `<n>s total`, and stdout holds no line starting `ci-check:`
 
 #### Scenario: a failing phase
-- GIVEN the same fakes, but the `cargo` fake fails on `clippy`
+- GIVEN the same fakes, but the `cargo` fake exits 3 on `clippy`
 - WHEN it runs
-- THEN it exits non-zero, and stderr's summary lists the clippy phase and `total`, and no wasm-build or test phase
-
+- THEN it exits 3, stderr's last line is `ci-check: failed in clippy after <n>s, <n>s total`, stderr holds no `ci-check: phases`, and no line names a wasm-build or test phase
 
 ## MODIFIED Requirements
 
