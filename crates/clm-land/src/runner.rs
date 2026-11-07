@@ -34,7 +34,8 @@ pub struct CheckRun {
 /// to (`.clm/check.lock` in the CLM root of its main worktree), printing a waiting line once
 /// when another check holds it. Its stdout and stderr go, in the order written, to stderr and
 /// to `log` when given (created with its directories and truncated), as `check-log` says. The
-/// log is left for the caller to keep or remove.
+/// log is left for the caller to keep or remove. `dir` is the CLM root of a checkout (a land
+/// tree included), not a subdirectory of it, since the lock's place follows from it.
 pub fn run_check(
     command: &str,
     dir: &Path,

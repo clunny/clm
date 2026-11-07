@@ -231,7 +231,8 @@ impl<'a> Repo<'a> {
         log: Option<&Path>,
     ) -> Result<(), Error> {
         // The runner `verify` shares: one check at a time on the clone, whatever the target
-        // (`land/check-lock`, `land/shared-check-runner`). `--check-only` names no step.
+        // (`land/check-lock`, `land/shared-check-runner`). `--check-only` passes no log, so its
+        // refusal repeats no tail and names no step.
         let mut env = runner::CheckEnv {
             set: vars
                 .iter()
