@@ -62,6 +62,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Signed repository:** one whose `docs/allowed_signers` lists the keys whose ledger records count; only a signed approval lets a branch that needs review land there.
 - **Host:** where the remote lives, `github`, `azure` (Azure DevOps), `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`, `clm contribution` for a fork's pull requests and issues).
 - **Reconnect:** pushing a `main` that was landed with no remote to a newly added `origin` (`clm reconnect`).
+- **Verify:** running the tests too slow for every land after it, at moments the project sets in `[verify]` (a change finishing, the queue draining, the end of a build, every N lands or days, a release), on your machine or the host's pipeline, and recording the result in the ledger (`clm verify`). A red result names the land that broke it, and `clm land` holds code lands on that land's components until the fix lands. *Usually:* a nightly or post-merge test stage.
 
 ## The backlog and the project's health
 
@@ -84,5 +85,5 @@ Every `clm` command, by what it's for. `clm help <command>` says more.
 - Writing specs: `clm context`, `clm hashes`, `clm apply`, `clm archive`, `clm rename`, `clm survey`, `clm guide`.
 - Checking: `clm check`, `clm gate`, `clm affected`, `clm unreferenced`, `clm fingerprint`.
 - Working: `clm claim`, `clm run`, `clm runner`, `clm triage`, `clm draft`, `clm intake`, `clm workaround`, `clm defect`, `clm superpowers`.
-- Landing: `clm rebase`, `clm autosync`, `clm pr`, `clm approve`, `clm land`, `clm wrap-up`, `clm reconnect`.
+- Landing: `clm rebase`, `clm autosync`, `clm pr`, `clm approve`, `clm land`, `clm verify`, `clm wrap-up`, `clm reconnect`.
 - Setting up: `clm init`, `clm upgrade`, `clm config`, `clm branch`, `clm issue`, `clm contribution`, `clm hook` (run by the plugin's hooks).

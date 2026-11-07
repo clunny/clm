@@ -26,10 +26,32 @@ Tests that need a deployed system, such as integration tests on a test cluster, 
 
 ## Slow tests
 
-Tests too slow for every land have two places to go:
+Tests too slow for every land have three places to go:
 
 - **before the land, for what changed**: `clm affected` selects the tests for the components a branch touches, so `[land] check` can run only the slow tests a change could break;
-- **after the land**: a pipeline runs them on `main` and reports. When one fails, find the land that broke it with `git bisect --first-parent` (each land is one merge commit on `main`), and file the failure as a `bug` item on that land's component, since CLM doesn't yet bring it into the backlog by itself. Then claim the fix with `clm claim <component> --fix backlog/<slug>`, and on that branch either fix forward or revert the land (`git revert -m 1 <land>`); a revert leaves the land's requirements pending again, for the queue to rebuild. Nothing rewrites `main`, so clones that already pulled need nothing.
+- **after the land, with `clm verify`**: set `[verify]` in `clm.toml` and take the tests out of `[land] check`. Lands then wait only for the fast checks;
+- **before a release**: a release or deploy step runs `clm verify --commit <sha>`, which passes at once when that commit already passed, and otherwise runs or reads the slow tests for it.
+
+### When they run
+
+`clm verify --due` runs them only when one of the project's triggers has fired since the last verified commit of `main`, and otherwise exits in seconds:
+
+- `change-done`: a change finished (it was archived). The usual choice: a change is the piece of work you approved, so a failure points at one change;
+- `queue-drained`: nothing is left to build;
+- `work-done`: a build or triage session ended (`/clm:build` and `/clm:triage` run `clm verify --due --event work-done` before they wrap up). Local mode only;
+- `every = { lands = N, days = D }`: a backstop, so long-running changes still get checked.
+
+A failed last run makes any later land due, so a fix is checked at once. A run covers every test `clm affected` selects since the tests last passed.
+
+### Where they run
+
+- `mode = "local"`: on the machine that calls `clm verify`, in its own tree under `.clm/verify-tree`. It never holds up `clm land`, so keep the slow tests from colliding with `[land] check` on one machine (a fixed port, say).
+- `mode = "pipeline"`: the host's pipeline runs `clm verify --due` on every push to `main` and records the result itself. Give the workflow the right to push `clm/ledger/*` (on GitHub, `permissions: contents: write`), set `CLM_WRITER` to a name for it, and in a signed repository give it a key of its own in `docs/allowed_signers`.
+- `mode = "import"` with `workflow = "<name>"`: the pipeline runs the slow tests and only reports; `clm verify --import`, which `/clm:triage` runs, reads its runs on `main` and records them. The pipeline needs no write access, and can gate its slow job on `clm verify --due --dry-run`, which exits 0 when a run is due and 3 when not. GitHub only for now.
+
+### When one fails
+
+A failed run names the land that broke it: one land, or the first red one when `clm verify` bisects the lands since the last pass along `main`'s first parents (`clm verify --bisect <sha>` does it on your machine in import mode). `clm intake` lists it, `/clm:triage` offers it as a bug on that land's components, and `clm land` refuses code lands on those components until a branch whose commit carries `Resolves: backlog/<slug>` for that bug lands, or a later run passes. Other components keep landing. Fix forward on `clm claim <component> --fix backlog/<slug>`, or revert the land there with `git revert -m 1 <land>`, which leaves its requirements pending again for the queue to rebuild. Nothing rewrites `main`, so clones that already pulled need nothing.
 
 ## A protected `main`
 

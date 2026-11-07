@@ -167,6 +167,17 @@ One door, run on the lander's own machine, means `main` is always checked and no
 - WHEN the person runs `clm land`
 - THEN `main` is unchanged and the failure is shown
 
+### Capability: slow-tests-after-land
+A person can take tests too slow for every land out of the land and have them run after it, at moments the project chooses, on its CI host or its own machines, and learn of a break as a bug on the components it broke, with code lands there held until it is fixed.
+
+#### Why
+Every test in the land check costs every land, and builds land all day. A slow suite belongs after the land, but only if a failure there still comes back to the work that caused it.
+
+#### Scenario: a slow test breaks after the land
+- GIVEN a project whose slow tests run after the land when a change finishes, and a land that breaks one of them
+- WHEN the change finishes and the slow tests run
+- THEN the failure is recorded against the land that caused it, triage offers it as a bug on that land's components, and code lands on those components are refused until a fix lands or a later run passes
+
 ### Capability: work-concurrently
 Several people and sessions can work on the same repository at once without overwriting each other's work.
 
