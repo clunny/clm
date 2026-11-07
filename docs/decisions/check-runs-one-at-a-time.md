@@ -12,7 +12,9 @@ Every run of `[land] check` on a clone, by `clm land` or by `clm land --check-on
 
 **Cost.** Checks on a clone run one after another, so parallel builds wait for each other's pre-land checks as their lands already did for each other's land checks. Building and testing the code still run in parallel; only the configured check command is serialised.
 
+**Amended 2026-11-07.** The lock covered only `[land] check`, while builds run the project's tests outside it on every edit and in spot-checks, and one project's fixed-port tests still failed beside another build (GitHub issue #266). Serialising those runs would undo parallel builds. The lock stays for every `[land] check` run, as it is; the per-run slot this decision rejected is now the rule (`build-slots`): every CLM-built project's tests must run concurrently on one host, keying what they must know in advance on `CLM_SLOT` (`tests-run-concurrently`). The objections below stand as costs: the rule binds every project as a carried constraint rather than relying on each to adopt it, and covers paths and servers as well as ports.
+
 **Alternatives.**
-- *A port or slot per run* (an environment variable such as a run number the project's tests read). Rejected: it works only for projects that adopt it, covers ports and nothing else, and a project that forgets fails intermittently just as before.
+- *A port or slot per run* (an environment variable such as a run number the project's tests read). Rejected here, and later adopted beside the lock (see the amendment): it works only for projects that adopt it, covers ports and nothing else, and a project that forgets fails intermittently just as before.
 - *Only warn in the method that fixed-port tests fail under parallel builds.* Rejected: it moves the defect to every adopter, and builds still waste their retries.
 - *A setting to turn the lock off for projects whose tests share nothing.* Not now (`yagni`): nothing has shown the serialised checks to be the bottleneck; add it when one does.

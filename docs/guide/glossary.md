@@ -44,7 +44,8 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Small change:** a code change, or an edit to `docs/` or `CLAUDE.md`, that leaves every requirement, scenario and design as written true, landed from a branch of its own with no claim and no change (`small-change-no-claim`).
 - **Harness:** the plumbing the capability tests run on (runner settings, the script that starts the system under test, ports, worker counts), held in the Design of the component that builds those tests. **Harness-only work** changes only it and is never a requirement; it lands as a small change (`human-layer-proof`). *Usually:* the test harness.
 - **Run / runner:** `clm run` prepares one component's build for a session; `clm runner` builds everything in the queue unattended, one session per component.
-- **Build place:** one of the clone's slots for a build running at once (`max_builds`).
+- **Build place:** one of the clone's `max_builds` places for a build or draft running at once.
+- **Slot:** the number a build place holds, from 1 up, distinct among the clone's builds; `clm land` passes it to the check as `CLM_SLOT` (0 outside a place), so the project's tests can key a port or path on it and run beside other builds' tests.
 - **Draft:** an unattended session that designs one change from backlog items (`clm draft`).
 - **Intake:** matching the host's open issues, pull requests and dependency alerts to the backlog, saying of each issue and alert whether it is new, taken in by an item (whose `issues` or `alerts` names it) or resolved (`clm intake`).
 - **Oversized:** a component whose spec or code is larger than its size budget (`clm size`).
