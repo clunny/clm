@@ -187,9 +187,10 @@ pub enum VerifyMode {
     Import,
 }
 
-/// `id` if it is a full 40-hex commit ID.
+/// `id` if it is a full 40-hex commit ID, in lowercase as git writes it, since records are
+/// looked up by exact string.
 fn full_id<E: serde::de::Error>(id: String) -> Result<String, E> {
-    if id.len() == 40 && id.chars().all(|c| c.is_ascii_hexdigit()) {
+    if id.len() == 40 && id.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')) {
         Ok(id)
     } else {
         Err(E::custom(format!("`{id}` is not a full commit ID")))

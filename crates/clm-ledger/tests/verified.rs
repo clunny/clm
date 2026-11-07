@@ -68,11 +68,13 @@ fn bad_result() {
             "\"since\":null",
             &format!("\"since\":\"{}\"", id('A').replace('A', "g")),
         ),
+        // Git writes IDs in lowercase, and records are looked up by exact string.
+        line(7, 'c', "true", "2026-01-01T00:00:00.000Z", None).replace(&ok, &"C".repeat(40)),
         line(6, 'c', "true", "2026-01-01T00:00:00.000Z", None),
     ]
     .join("\n");
     let fold = fold_records(&[("one", &bad)]);
-    assert_eq!(fold.warnings.len(), 5, "{:?}", fold.warnings);
+    assert_eq!(fold.warnings.len(), 6, "{:?}", fold.warnings);
     assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
     assert_eq!(fold.verifications[&id('c')].len(), 1);
 }
