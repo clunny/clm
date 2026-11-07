@@ -28,11 +28,19 @@ name = "code_key"
 required-features = ["git"]
 
 [[test]]
+name = "code_key_with"
+required-features = ["git"]
+
+[[test]]
 name = "fold"
 required-features = ["git"]
 
 [[test]]
 name = "sign"
+required-features = ["git"]
+
+[[test]]
+name = "verified"
 required-features = ["git"]
 
 [[test]]

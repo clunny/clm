@@ -123,6 +123,13 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             }
         }
     }
+    // The caller's own records are in `at` order, so the last one for a commit is its newest.
+    let mut newest_verified: std::collections::HashMap<&str, &str> = Default::default();
+    for record in fold.records.iter().filter(|r| r.writer == writer) {
+        if let Body::Verified { commit, .. } = &record.body {
+            newest_verified.insert(commit, &record.id);
+        }
+    }
     let superseded = |record: &Record| match &record.body {
         Body::Approved { fingerprint, .. } => fingerprints.contains(fingerprint.as_str()),
         // The diff they were about is on `main`, whatever their branch.
@@ -138,6 +145,10 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             .efforts
             .get(&record.id)
             .is_some_and(|latest| latest != record),
+        // Only the caller's newest result for each commit stays.
+        Body::Verified { commit, .. } => newest_verified
+            .get(commit.as_str())
+            .is_some_and(|id| *id != record.id),
         Body::Landed { .. }
         | Body::Subscribed { .. }
         | Body::Unsubscribed { .. }
