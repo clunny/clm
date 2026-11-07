@@ -18,3 +18,5 @@ Rejected:
 - **Leaving it to the build's `question` item.** That is today's behaviour: it works, but costs a dead-end build and a second spec PR for each case.
 
 (Amended 2026-11-05, `20261105-capability-harness-move-has`: work in the `capability` component that a rule makes necessary, by changing what a capability test observes, is not a requirement, since that component holds none of its own: the rule's own build updates those tests (`capability-tests-follow-rules`), and the change names them in the rule's text.)
+
+(Amended 2026-11-07, `20261107-harness-only-capability-work`: the one Design edit that drives work without a requirement is a change to the capability suite's harness, which no requirement can state; its spec branch records the code it owes as a `kind: deferred` item instead (`human-layer-proof`).)

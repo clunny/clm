@@ -11,3 +11,5 @@ So the code-branch route is for a bug that breaks a requirement or scenario as w
 The same day showed the other half: `web/loading-indicator` and `web/graph-fills-height` had requirements, but nothing in the human layers asked for them, so the re-founding cut them as tracing to nothing. `ui-quality` in `ARCHITECTURE.md` now names them under `#### Enforced by`, which puts their removal under review.
 
 Rejected: a gate rule refusing a `Resolves:` code fix whose test cites no requirement added on the branch (most real bugs do break a rule as written, and a program can't tell which).
+
+(Amended 2026-11-07, `20261107-harness-only-capability-work`: a bug in the capability suite's harness alone is outside this rule. It restores no behaviour a person or test observes, only the Design of the component that builds the capability tests, which holds no requirement of its own, so there is nothing for a test to cite and nothing for a requirement to add. It is fixed on a small-change branch whose commit deletes the item with `Resolves: backlog/<slug>`, never with `clm claim --fix` (`human-layer-proof`).)
