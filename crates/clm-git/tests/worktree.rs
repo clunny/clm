@@ -1,3 +1,5 @@
+#![cfg(unix)]
+
 mod common;
 
 use clm_git::{Error, remove_worktree};
@@ -30,7 +32,8 @@ fn unwritable_directory_removed() {
     sh(&root, &["worktree", "lock", w.to_str().unwrap()]);
     std::fs::create_dir_all(w.join("cache/deep")).unwrap();
     std::fs::write(w.join("cache/deep/f"), "x").unwrap();
-    std::fs::set_permissions(w.join("cache/deep"), std::fs::Permissions::from_mode(0o500)).unwrap();
+    // No access at all: only a chmod made before the entries are read can reach `f`.
+    std::fs::set_permissions(w.join("cache/deep"), std::fs::Permissions::from_mode(0o000)).unwrap();
     std::fs::set_permissions(w.join("cache"), std::fs::Permissions::from_mode(0o500)).unwrap();
     remove_worktree(&root, &w).unwrap();
     assert!(!w.exists());
