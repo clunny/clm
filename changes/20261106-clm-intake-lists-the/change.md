@@ -23,10 +23,14 @@ resolves: [clm-intake-lists-the-repository-s-own-branch-pull-requests-as]
 
 - `gh pr list` asks for `isCrossRepository` beside the number and author, and `list` drops a pull request where it is false.
 - `clm intake` prints no `pull` line for the repository's own branches' pull requests.
+- The guide's `contributions` page says `clm intake` lists the open pull requests from forks (`method-in-the-plugin`).
+- The build updates `crates/clm-host/tests/contribution.rs`'s `gh pr list` fixture, which has no `isCrossRepository` today. No capability test feeds `gh pr list` output, so none sees a difference.
 
 ## Edge cases
 
 - A collaborator with write access who opens a pull request from a branch of the repository itself is not listed. Accepted: such a person lands through `clm land`, and a pull request there is only for reading a diff (`land-locally`); contributions of intent come from forks.
+
+- A pull request `gh` reports without `isCrossRepository` (an older `gh`) is left out rather than listed, so a doubt never sends a repository's own branch to the contribution flow.
 
 ## Constraints
 
