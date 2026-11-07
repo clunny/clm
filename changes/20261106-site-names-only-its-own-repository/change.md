@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 # The site names only CLM's own repository
