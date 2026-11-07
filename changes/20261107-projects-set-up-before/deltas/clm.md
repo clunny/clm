@@ -44,8 +44,8 @@ For each rule of `clm-init`'s `UNATTENDED_RULES`, the list `init/init-seeds-perm
 
 #### Scenario: a rule no migration offers
 - GIVEN a repository the built `clm init` has just set up, with `Bash(clm example)` added to its `.claude/settings.json`, and the rule list `Bash(clm example)`
-- WHEN the test's check runs on that list
-- THEN it fails, naming `Bash(clm example)`
+- WHEN the test's check runs on that list, removing `Bash(clm example)` and so leaving every rule a migration offers in place
+- THEN `clm upgrade` lists nothing pending, and the check fails, naming `Bash(clm example)`
 
 #### Needs
 - upgrade/migration-unattended-allow-rules

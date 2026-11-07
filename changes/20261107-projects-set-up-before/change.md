@@ -40,12 +40,14 @@ For the corpus gap:
 - `unattended-steps-run-clm`: nothing writes `.claude/settings.json` but the human (and `clm init` on a first run).
 - `land-locally`: the settings are the project's once written.
 
-Known edge cases: a project set up before `v0.19.0` has no settings file and a root whose `paths` don't list one, so taking the note takes a spec change to the root's `paths` before the file is committed (the note and the skill say so). A project that keeps its rules only in `.claude/settings.local.json` counts as done, as `clm init --check-permissions` counts it. The capability test `capability/upgrade-clm`'s *skipping releases* must take this note's edit (write the rules, list the file in the root's `paths`) to reach `up to date`; the migration's requirement names that. No workarounds are known.
+Known edge cases: a project set up before `v0.19.0` has no settings file and a root whose `paths` don't list one, so taking the note takes a spec change to the root's `paths` before the file is committed (the note and the skill say so). A project that keeps its rules only in `.claude/settings.local.json` counts as done, as `clm init --check-permissions` counts it. The capability test `capability/upgrade-clm`'s *skipping releases* must take this note's edit (write the rules, list the file in the root's `paths`) to reach `up to date`; the migration's requirement names that, and the unit fixtures in `crates/clm-upgrade/src/shipped_tests.rs` and `crates/clm/tests/hooks.rs`'s session-start fixture that stand for an up-to-date project gain a settings file holding the rules. Taking the note in a project before `v0.19.0` lands in three branches (code, notes with the root's `paths` change, then the settings file), which `plugin/upgrade-skill-settings-by-hand` states. No workarounds are known.
 
 ## Decisions
 
-- `allow-rules-offered-by-note`: refines `unattended-steps-run-clm` and `corpus-skips-first-run-files`.
+- `allow-rules-offered-by-note`: refines `unattended-steps-run-clm`, `corpus-skips-first-run-files` and `upgrade-migrations` (its `done` also reads the clone's `.claude/settings.local.json`, as the architecture audit asked it to say).
 
 ## Open questions
 
-None yet.
+- **`upgrades-carry-migrations`' `#### Enforced by`** (architecture audit, `human-layer-proof`). `clm/upgrade-covers-allow-rules` enforces the constraint and lists it under `#### Serves`, but the change doesn't add it to the constraint's `#### Enforced by`, since editing `ARCHITECTURE.md` would make this change need review for a one-line listing. The reviewer may add it by hand later; until then the rule is traced only from its own side.
+- **Build order** (builder check). `init/init-seeds-permissions` is `behind`: the code seeds twenty rules, not `verify`'s two. Until it is built a fresh project lacks two of the migration's rules, so the migration's `#### Needs` names it and `clm/upgrade-covers-allow-rules` needs it too. The order is `init/init-seeds-permissions`, then `upgrade/migration-unattended-allow-rules`, then the `clm` and `plugin` requirements.
+- **A merge in `skills/upgrade/SKILL.md`** (builder check). `plugin/upgrade-skill-offers-verify`, also pending, edits the same file; the second build to land resolves it in `clm rebase`.
