@@ -119,8 +119,18 @@ fn azure_devops() {
 
     // Propose a change on a branch, then open its pull request.
     repo.git(&["switch", "-q", "-c", "spec/x"]);
-    repo.write("note.md", "x\n");
+    let capabilities = fs::read_to_string(repo.root.join("CAPABILITIES.md")).unwrap();
+    repo.write(
+        "CAPABILITIES.md",
+        &capabilities.replace("A person can c.", "A person can c, on Azure."),
+    );
+    repo.write(
+        "changes/20261030-azure/change.md",
+        "---\nstatus: applied\n---\n\n## Intent\n\nc, on Azure.\n",
+    );
     repo.commit("x");
+    let check = repo.clm(&["check"]);
+    assert!(check.status.success(), "{}", printed(&check));
     repo.git(&["push", "-q", "-u", "origin", "spec/x"]);
     let body = repo.root.parent().unwrap().join("body.md");
     fs::write(&body, "## Intent\n\nx.\n").unwrap();
