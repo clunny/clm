@@ -33,6 +33,7 @@ pub enum Host {
     None,
     Git,
     Github,
+    Azure,
 }
 
 impl fmt::Display for Host {
@@ -41,6 +42,7 @@ impl fmt::Display for Host {
             Host::None => "none",
             Host::Git => "git",
             Host::Github => "github",
+            Host::Azure => "azure",
         })
     }
 }
