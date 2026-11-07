@@ -14,9 +14,9 @@ What this repository runs on GitHub Actions, and the check command `clm land` ru
 ## Design
 **The check script.** `.github/scripts/ci-check.sh` runs fmt, clippy, tests, then the `web` checks: the wasm builds and the `web/` and `plugin-panel/` suites (`web-checks`). The panel's `npm test` type-checks `plugin-panel/` with `tsc` first, against the panel's own declarations of the plugin API (`plugin.panel/type-check`, `panel-types-hand-written`), so a type error in the panel fails the check as a failing test does; `tsc` and `claude plugin validate` catch different faults, and neither replaces the other. After the panel's tests it runs `claude plugin validate plugin-panel`, which reads the panel's manifest, hooks module and type contract as Claude Code loads them, so a module Claude Code would refuse to load fails the check instead of landing (`panel-validate`). It runs with neither `--strict` nor `--profile`: only what the engine would refuse fails it, not warnings or the plugin directory's listing checks (a LICENSE, an icon); the panel's own tests strip types and never load the module as the engine does. Without `claude` on `PATH`, as for a person without Claude Code, the validation is skipped (`panel-validate-skips-without-claude`). The `clm` plugin, `plugin/`, is validated the same way, `claude plugin validate plugin` with the same flags and the same skip, whenever every test is selected or the selection names a file under `plugin/` (`plugin-validate`, `plugin-validate-at-land`): its manifest, hooks, skills, agents and command are read by the same loader, and a frontmatter or hook Claude Code refuses would otherwise land on its tests' word lists alone. The validator is whatever `claude` the landing machine has, unpinned: that is the Claude Code that loads the plugin there, so its verdict is the one that matters, and a refusal after an auto-update is a real finding about the plugin, fixed as code; a land that touches nothing under `plugin/` or `plugin-panel/` never runs either validation, so an update can't fail a land of unrelated code. It doesn't run `clm check`: `clm land` runs that itself after the command, and a session runs it on its own. It first runs `.github/scripts/detector-tools.sh`, which installs the tools behind `clm.toml`'s detectors (only `cargo-machete`, with `cargo install --locked --version <x.y.z> cargo-machete`, the newest release at build time), because `this_repository_is_clean` runs `clm check`, which runs the detectors; `~/.cargo/bin` keeps the install from repeating. The step that runs `web/`'s browser tests first installs Playwright's Chromium, in `web/` (`browser-install`). The install is idempotent: it fetches only the Chromium revision `web/`'s `@playwright/test` pins, into Playwright's per-machine cache, and does nothing when that revision is already there, so a land pays for a download only when the pin moves. Without `--with-deps` it needs no `sudo`, so `clm land` and an unattended session run it; Chromium's system libraries are a once-per-machine step a human takes (`npx playwright install-deps chromium`), and only `--with-deps`, which a hosted runner that sets `CI` would need, reaches `sudo`. No workflow runs the script and `clm land` unsets `CI`, so only a human who sets it, or a hosted runner, reaches that path. Installing on every run keeps a cached browser one revision behind the pin from failing every `web` e2e test with `Executable doesn't exist` and no hint of the fix. npm runs no dependency's install script (`unattended-commands`). `.claude/settings.json` allows the script by this path (`clm/session-commands`).
 
-**Selected tests** (`selected-tests`, `graph-test-selection`). When `CLM_SELECTION` names a file, as `clm land` sets it, the script runs only the tests that file's `file` lines call for; fmt, clippy, the detector tools and the wasm builds always run, since they check the whole tree and are quick beside the tests. When the variable is unset or empty, or the file's first line starts `all`, it runs every test (`cargo test --all`, both npm suites and both capability packages): a session, the release's `prepare` job and a human running it by hand get the full suite. Lines other than `file <path>` (`check.affected`'s component lines, or anything unexpected) select nothing. The selection maps paths to targets as `selected-tests` says. The package of `crates/<dir>/` is the first `name = "<package>"` line after the `[package]` line of its `Cargo.toml`; a `src/` file selects `--lib` when the package has `src/lib.rs` and `--bins` when it has `src/main.rs` or `src/bin/`; a selected package with no tests is fine, `cargo test` passes with none. A file under `plugin-panel/` also selects `claude plugin validate plugin-panel`, a file under `plugin/` selects `claude plugin validate plugin`, and any other file selects nothing.
+**Selected tests** (`selected-tests`, `graph-test-selection`). When `CLM_SELECTION` names a file, as `clm land` sets it, the script runs only the tests that file's `file` lines call for; fmt, clippy, the detector tools and the wasm builds always run, since they check the whole tree and are quick beside the tests. When the variable is unset or empty, or the file's first line starts `all`, it runs every test (`cargo nextest run --workspace` and `cargo test --doc --workspace`, both npm suites and both capability packages): a session, the release's `prepare` job and a human running it by hand get the full suite. Lines other than `file <path>` (`check.affected`'s component lines, or anything unexpected) select nothing. The selection maps paths to targets as `selected-tests` says. The package of `crates/<dir>/` is the first `name = "<package>"` line after the `[package]` line of its `Cargo.toml`; a `src/` file selects `--lib` when the package has `src/lib.rs` and `--bins` when it has `src/main.rs` or `src/bin/`; a selected package with no tests is fine: every run passes `--no-tests=pass`. A file under `plugin-panel/` also selects `claude plugin validate plugin-panel`, a file under `plugin/` selects `claude plugin validate plugin`, and any other file selects nothing.
 
-It runs one `cargo test -p <package> <targets>` per package, in package order, so a `--test` flag never applies to a package that lacks the target, and none when no package is selected. A file under `crates/<dir>/` with no `Cargo.toml` (a deleted crate) selects nothing. The script reads the file with shell builtins only, so the selection costs no build. A selected run leaves out doctests (`--doc` can't be combined with other targets); they run in every full run, and this repository has few. `this_repository_is_clean` cites the root's requirements, which nearly every change affects, and `clm land` runs `clm check` after the command anyway.
+It runs one `cargo nextest run --no-tests=pass -p <package> <targets>` per package, in package order, so a `--test` flag never applies to a package that lacks the target, and none when no package is selected. A selected run leaves out doctests, as `nextest` never runs them. A file under `crates/<dir>/` with no `Cargo.toml` (a deleted crate) selects nothing. The script reads the file with shell builtins only, so the selection costs no build. They run in every full run, through `cargo test --doc`, and this repository has few. `this_repository_is_clean` cites the root's requirements, which nearly every change affects, and `clm land` runs `clm check` after the command anyway.
 
 **Capability packages** (`web-checks`, `capability-browser-packages`). `capabilities/web/` and `capabilities/panel/` are npm packages of `capability`'s own, holding the capability tests a person reaches through a browser or a pane (`capability`). Neither depends on `web` or `plugin.panel` in the spec graph, so the selection reaches them only through their own files, and the script adds them where they test what changed: it runs `capabilities/web/` whenever it runs `web/`'s suite, and `capabilities/panel/` whenever it runs `plugin-panel/`'s. Running `capabilities/web/` is, in `capabilities/web/` after `web/`'s `npm ci` (its tests build the app with `web/`'s own dependencies): `npm ci --ignore-scripts`, the Playwright Chromium install `browser-install` describes, and `npm test -- --retries=1` (`capability-web-retries`), which Playwright reads as its `--retries=1`. A test that fails runs once more from the start, in a fresh browser context, and the package fails only when a test fails on both attempts; Playwright's output names a test that passed only on its retry `flaky`, with the first attempt's error. The machine that runs the script runs other builds' compiles and suites at the same time (`build-places`), and each of the package's tests starts its own Worker in Miniflare and lands branches with `clm land`, so under that load one has failed at a step that takes a second on an idle machine, with its 30 s assertion timeout spent, then passed alone and on the rerun. Without the retry, each such failure cost a whole land's check. The retry is the script's, not the package's config, so a person or a build that runs `npm test` in the package by hand sees every failure. `web/`'s suite, whose failures under load were fixed at their causes, and `capabilities/panel/`, which has shown none, run with no retry. Running `capabilities/panel/` is `npm ci --ignore-scripts` and `npm test` there, after `claude plugin validate plugin-panel`. Each runs after the suite it follows. Both versions of `@playwright/test` are pinned alike, so the second install fetches nothing.
 
@@ -58,6 +58,10 @@ A run that fails before `publish` publishes nothing and leaves `main` as it was,
 The Linux binaries are static `-musl` builds, so they run on any Linux of their architecture, whatever its glibc. There is no `-gnu` asset: a plugin version's shim downloads only its own version's release, so no shim that names a `-gnu` asset ever reads a release built after this. There is no Windows asset (`no-windows-support`): the shim maps no Windows platform, so no shim of this version or a later one asks for one, and a plugin version that still maps one reads only its own version's release.
 
 The code key lives in `ledger`, landing in `land` and approval pinning in the ledger's fingerprints.
+
+**Running the tests** (`nextest-runner`, `test-tools`). The Rust tests run under `cargo-nextest`, which runs a package's test binaries at once, one process per test, where `cargo test` runs the binaries one after another: a full run measured on 2026-11-07 spent 160 of its 180 seconds of `cargo test` running 367 binaries in turn on a 24-core machine. Every test of this repository must therefore pass while the others run beside it on one host, which `tests-run-concurrently` asks of every project. The tests are code of the components that own or cite them (`path-ownership`), so the build that moves the script to `nextest` changes no test: it runs `cargo nextest run --workspace`, and for each test that fails under it and not under `cargo test` it files a `kind: bug` backlog item on that test's component whose `blocks` names `ci/nextest-runner`, and builds the rest (`requirement-blocks`). Once those land, the script moves. `nextest` doesn't run doctests, so a full run follows it with `cargo test --doc --workspace`. `.github/scripts/test-tools.sh` installs `cargo-nextest` (`cargo install --locked --version <x.y.z> cargo-nextest`, the newest release at build time, which `~/.cargo/bin` keeps from repeating), and `ci-check.sh` runs it after `detector-tools.sh` and before its first `cargo` line. It is a script of its own because the release's `prepare` job runs `detector-tools.sh` and keeps `cargo test --all` (`release-prepare.sh`), the full backstop, and so shouldn't build `nextest`; `detector-tools.sh` keeps installing only the detectors' tools.
+
+**Phase times** (`phase-times`). The script times each phase it runs, by the shell's `SECONDS`: the tool installs (one phase, `tools`), fmt, clippy, the wasm builds, the Rust tests, and each npm suite, capability package and plugin validation. After a phase it prints `ci-check: <phase> <n>s` to stderr. An `EXIT` trap, which keeps the script's exit status, prints on a pass `ci-check: phases`, one `<n>s <phase>` line per phase and `<n>s total`, and on a failure only `ci-check: failed in <phase> after <n>s, <n>s total`: `clm land` shows the last 40 lines of a failed check (`land/land-check-log`), and a summary after the failure would push the failure's own lines out of them.
 
 ## Requirements
 
@@ -192,37 +196,37 @@ Every `uses:` line in `.github/workflows/` SHALL name an action at a major versi
 - capability/install-and-release
 
 ### Requirement: selected-tests
-`.github/scripts/ci-check.sh` SHALL run every test, with the same commands as without this requirement, when `CLM_SELECTION` is unset or empty or the file it names starts with an `all` line. Otherwise it SHALL run, among the tests, only these, for the file's `file <path>` lines, ignoring every other line: for `crates/<dir>/tests/<name>.rs`, that package's `--test <name>`; for any other file under `crates/<dir>/tests/`, that package's `--tests`; for a file under `crates/<dir>/src/`, that package's unit tests (`--lib`, `--bins`, whichever targets it has); for any other file under `crates/<dir>/`, that package's `--tests`; for a file under `web/` or `plugin-panel/`, that directory's `npm ci` and `npm test`, and the capability package `web-checks` runs after it; for a file under `capabilities/web/` or `capabilities/panel/`, that package as `web-checks` runs it, after `web/`'s `npm ci` for `capabilities/web/`; each suite and package at most once; with one `cargo test -p <package>` per selected package, the package being the one `crates/<dir>/Cargo.toml` names, and no `cargo test` when none is selected. Its fmt, clippy, detector-tool and wasm-build steps SHALL run whatever the selection.
+`.github/scripts/ci-check.sh` SHALL run every test, with the commands `nextest-runner` states, when `CLM_SELECTION` is unset or empty or the file it names starts with an `all` line. Otherwise it SHALL run, among the tests, only these, for the file's `file <path>` lines, ignoring every other line: for `crates/<dir>/tests/<name>.rs`, that package's `--test <name>`; for any other file under `crates/<dir>/tests/`, that package's `--tests`; for a file under `crates/<dir>/src/`, that package's unit tests (`--lib`, `--bins`, whichever targets it has); for any other file under `crates/<dir>/`, that package's `--tests`; for a file under `web/` or `plugin-panel/`, that directory's `npm ci` and `npm test`, and the capability package `web-checks` runs after it; for a file under `capabilities/web/` or `capabilities/panel/`, that package as `web-checks` runs it, after `web/`'s `npm ci` for `capabilities/web/`; each suite and package at most once; with one `cargo nextest run --no-tests=pass -p <package>` with those targets per selected package, the package being the one `crates/<dir>/Cargo.toml` names, and no Rust test run when none is selected. Its fmt, clippy, detector-tool and wasm-build steps SHALL run whatever the selection.
 
 #### Scenario: one integration test
 - GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments, both capability packages present, and `CLM_SELECTION` naming a file with the component line of `orchestrator.run` and `file crates/clm/tests/run.rs`
 - WHEN it runs
-- THEN `cargo` ran fmt, clippy and the wasm builds, and one `test` with `-p clm --test run`, and `npm` ran no suite and no package
+- THEN `cargo` ran fmt, clippy and the wasm builds, and one `nextest run` with `--no-tests=pass -p clm --test run`, and no `test`, and `npm` ran no suite and no package
 
 #### Scenario: helper and source files
 - GIVEN the same fakes and a selection with `file crates/clm-land/tests/common/mod.rs` and `file crates/clm-check/src/lib.rs`
 - WHEN it runs
-- THEN `cargo test` ran once with `-p clm-check --lib` and once with `-p clm-land --tests`
+- THEN `cargo nextest run` ran once with `-p clm-check --lib` and once with `-p clm-land --tests`
 
 #### Scenario: web file
 - GIVEN the same fakes and a selection with only `file web/src/app.ts`
 - WHEN it runs
-- THEN `npm` ran `ci` and `test` in `web/` and then in `capabilities/web/` only, and `cargo` ran no `test`
+- THEN `npm` ran `ci` and `test` in `web/` and then in `capabilities/web/` only, and `cargo` ran no `test` and no `nextest`
 
 #### Scenario: capability package file
 - GIVEN the same fakes and a selection with `file capabilities/panel/watch-beside-chat.test.ts` and `file capabilities/web/follow-from-browser.spec.ts`
 - WHEN it runs
-- THEN `npm` ran `ci` and `test` in `capabilities/panel/`, `ci` in `web/`, and `ci` and `test` in `capabilities/web/`, each once, never `test` in `web/` or in `plugin-panel/`, and `cargo` ran no `test`
+- THEN `npm` ran `ci` and `test` in `capabilities/panel/`, `ci` in `web/`, and `ci` and `test` in `capabilities/web/`, each once, never `test` in `web/` or in `plugin-panel/`, and `cargo` ran no `test` and no `nextest`
 
 #### Scenario: everything
 - GIVEN the same fakes and a selection whose one line is `all Cargo.lock`, and again with `CLM_SELECTION` unset
 - WHEN it runs
-- THEN each time `cargo test --all` ran and both npm suites and both capability packages ran
+- THEN each time `cargo nextest run --workspace` and then `cargo test --doc --workspace` ran, and both npm suites and both capability packages ran
 
 #### Scenario: empty selection
 - GIVEN the same fakes and an empty selection file
 - WHEN it runs
-- THEN `cargo` ran fmt, clippy and the wasm builds and no `test`, and `npm` ran no suite and no package
+- THEN `cargo` ran fmt, clippy and the wasm builds and no `test` or `nextest`, and `npm` ran no suite and no package
 
 ### Requirement: panel-validate
 Wherever `.github/scripts/ci-check.sh` runs `plugin-panel/`'s tests, it SHALL also run `claude plugin validate plugin-panel` and fail when that command exits non-zero. When no `claude` is on `PATH`, it SHALL print `skipped claude plugin validate: claude is not on PATH` to stderr and go on as if the step had passed.
@@ -460,3 +464,42 @@ When `release-prepare.sh` bumps the version, it SHALL build `clm` from the bumpe
 #### Serves
 - capability/upgrade-clm
 - architecture/upgrades-carry-migrations
+
+### Requirement: nextest-runner
+`.github/scripts/ci-check.sh` SHALL run the Rust tests with `cargo nextest run`, never with `cargo test` except for doctests: a full run SHALL run `cargo nextest run --workspace --no-tests=pass` and then `cargo test --doc --workspace`, and a selected run SHALL run the commands `selected-tests` states. The build that makes this current SHALL change no test outside this component's `paths`: for each test that fails under `cargo nextest run --workspace` and passes under `cargo test`, it SHALL file a `kind: bug` backlog item on the test's component whose `blocks` names this requirement, and leave the script on `cargo test` until those are resolved.
+
+#### Scenario: full run
+- GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments, and `CLM_SELECTION` unset
+- WHEN it runs
+- THEN `cargo` ran `nextest run --workspace --no-tests=pass`, then `test --doc --workspace`, and no other `test`
+
+### Requirement: test-tools
+`.github/scripts/test-tools.sh` SHALL install `cargo-nextest` with `cargo install --locked --version <x.y.z> cargo-nextest`, an exact version, and nothing else. `.github/scripts/ci-check.sh` SHALL run it after `.github/scripts/detector-tools.sh` and before its first `cargo` line. No workflow and no other script SHALL run it, and no other file SHALL install `cargo-nextest`.
+
+#### Scenario: the install
+- GIVEN `.github/scripts/test-tools.sh`
+- WHEN its text is read
+- THEN one line installs `cargo-nextest` with `--locked` and an exact `--version`, and no other line runs `cargo install`
+
+#### Scenario: run before the tests
+- GIVEN `.github/scripts/ci-check.sh`
+- WHEN its text is read
+- THEN a line runs `.github/scripts/test-tools.sh` after the line running `.github/scripts/detector-tools.sh` and before the first `cargo` line
+
+#### Scenario: not in the release
+- GIVEN the release workflow and `.github/scripts/release-prepare.sh`
+- WHEN their text is read
+- THEN neither names `test-tools.sh` or `nextest`
+
+### Requirement: phase-times
+`.github/scripts/ci-check.sh` SHALL time each phase it runs: the tool installs, as one phase `tools`, then `cargo fmt`, `cargo clippy`, the wasm builds, the Rust tests, and each npm suite, capability package and `claude plugin validate` it runs. After each it SHALL print `ci-check: <phase> <n>s` to stderr, `<n>` the whole seconds it took. On exit it SHALL keep its exit status and print to stderr: when it passes, `ci-check: phases`, then one line `<n>s <phase>` per phase, in order, then `<n>s total`; when a phase fails, only `ci-check: failed in <phase> after <n>s, <n>s total`. It SHALL print nothing of these to stdout.
+
+#### Scenario: a passing run
+- GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments and pass, and an empty selection file
+- WHEN it runs
+- THEN it exits 0, stderr holds `ci-check: phases`, a line ending in ` tools`, one ending in ` fmt`, one ending in ` clippy`, and a last line matching `<n>s total`, and stdout holds no line starting `ci-check:`
+
+#### Scenario: a failing phase
+- GIVEN the same fakes, but the `cargo` fake exits 3 on `clippy`
+- WHEN it runs
+- THEN it exits 3, stderr's last line is `ci-check: failed in clippy after <n>s, <n>s total`, stderr holds no `ci-check: phases`, and no line names a wasm-build or test phase
