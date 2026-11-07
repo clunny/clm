@@ -968,16 +968,23 @@ fn config_get_in_repo(clm_toml: Option<&str>, key: &str) -> (String, PathBuf) {
 
 #[test]
 fn config_get_host_defaults_to_github() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     let (out, _) = config_get_in_repo(None, "host");
     assert_eq!(out, "github\tdefault\n");
 }
 
 #[test]
 fn config_get_host_from_the_repository() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     let (out, path) = config_get_in_repo(Some("host = \"git\"\n"), "host");
     assert_eq!(out, format!("git\t{}\n", path.display()));
+}
+
+#[test]
+fn config_get_host_azure() {
+    // req:config/host-setting@cbcd8366
+    let (out, path) = config_get_in_repo(Some("host = \"azure\"\n"), "host");
+    assert_eq!(out, format!("azure\t{}\n", path.display()));
 }
 
 #[test]
@@ -1015,7 +1022,7 @@ fn config_get_land_defaults_to_nothing() {
 #[test]
 fn this_repositorys_clm_toml() {
     // req:config/land-check-setting@9a71815d
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     // req:config/affected-setting@7b51c4ec
     // req:config/health-lcov-here@1b784026
     // This repository's `clm.toml`, in a fresh repository, so a `clm.local.toml` in the

@@ -219,6 +219,7 @@ fn check_body(root: &Path, file: &Path) -> Result<(), Error> {
 pub fn adapter(host: clm_config::Host) -> Box<dyn Host> {
     match host {
         clm_config::Host::Github => Box::new(GitHub),
+        clm_config::Host::Azure => Box::new(Azure),
         clm_config::Host::Git | clm_config::Host::None => Box::new(NoHost),
     }
 }

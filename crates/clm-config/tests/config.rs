@@ -435,7 +435,7 @@ fn process_env_keeps_a_variable_that_is_not_utf8_set() {
 
 #[test]
 fn host_defaults_to_github() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     for repo in [None, Some("defects = \"off\"\n")] {
         let s = Fixture::new(None, repo).load(&[]).unwrap();
         assert_eq!(s.host.value, Host::Github);
@@ -448,11 +448,12 @@ fn host_defaults_to_github() {
 
 #[test]
 fn host_from_the_repository() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     for (text, want) in [
         ("none", Host::None),
         ("git", Host::Git),
         ("github", Host::Github),
+        ("azure", Host::Azure),
     ] {
         let f = Fixture::new(None, Some(&format!("host = \"{text}\"\n")));
         let s = f.load(&[]).unwrap();
@@ -464,8 +465,8 @@ fn host_from_the_repository() {
 
 #[test]
 fn unknown_host_fails() {
-    // req:config/host-setting@70891496
-    for bad in ["host = \"gitlab\"\n", "host = \"azure\"\n", "host = 1\n"] {
+    // req:config/host-setting@cbcd8366
+    for bad in ["host = \"gitlab\"\n", "host = 1\n"] {
         let f = Fixture::new(None, Some(bad));
         let e = f.load(&[]).unwrap_err();
         assert_eq!(e.source, Some(f.repo_file().display().to_string()));
@@ -475,7 +476,7 @@ fn unknown_host_fails() {
 
 #[test]
 fn host_in_the_user_file_fails() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     let e = error(&Fixture::new(Some("host = \"none\"\n"), None), &[]);
     assert!(e.contains("config.toml"), "{e}");
     assert!(e.contains("unknown field `host`"), "{e}");
@@ -483,7 +484,7 @@ fn host_in_the_user_file_fails() {
 
 #[test]
 fn host_has_no_variable() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     let s = Fixture::new(None, None)
         .load(&[("CLM_HOST", "none")])
         .unwrap();
@@ -835,7 +836,7 @@ fn no_local_file_adds_no_layer() {
 
 #[test]
 fn repository_only_keys_set_locally_fail_naming_the_local_file() {
-    // req:config/host-setting@70891496
+    // req:config/host-setting@cbcd8366
     // req:config/approval-setting@ee7ad72c
     // req:config/land-check-setting@9a71815d
     // req:config/component-size-setting@8f8238ab
