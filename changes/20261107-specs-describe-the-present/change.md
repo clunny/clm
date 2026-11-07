@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 ## Intent
@@ -13,4 +13,4 @@ Have specs describe the system as it is now, not how it got there. `clm health` 
 
 ## Outcome
 
-Only Design and Contract text changes, and no requirement is touched. Nothing needs building, so the change is archived on its spec branch. `web.worker`'s "Moving them into the replica waits until they show up over budget" is dropped because `backlog/replica-spec-reviews` already holds that idea.
+Only Design and Contract text changes, and no requirement is touched. Nothing needs building, so the change is archived on its spec branch. `web.worker`'s "Moving them into the replica waits until they show up over budget" is dropped because `backlog/replica-spec-reviews` already holds that idea. The **Size** paragraph's note that the budget is due a review once the view code left goes to `backlog/web-worker-budget-above-its-code` (`fold-small-defer-large`).
