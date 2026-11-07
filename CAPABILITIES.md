@@ -176,7 +176,7 @@ Every test in the land check costs every land, and builds land all day. A slow s
 #### Scenario: a slow test breaks after the land
 - GIVEN a project whose slow tests run after the land when a change finishes, and a land that breaks one of them
 - WHEN the change finishes and the slow tests run
-- THEN the failure is recorded against the land that caused it, triage offers it as a bug on that land's components, and code lands on those components are refused until a fix lands or a later run passes
+- THEN the failure is recorded against the land that caused it, a land touching those components warns of it, triage offers it as a bug on them, and once the person takes it in, code lands on those components are refused until its fix lands
 
 ### Capability: work-concurrently
 Several people and sessions can work on the same repository at once without overwriting each other's work.

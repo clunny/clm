@@ -68,7 +68,7 @@ depends_on: [orchestrator, model, check, vcs, land, host, ledger]
 ## ADDED Requirements
 
 ### Requirement: intake-verify-failures
-After the host's lines, with or without a host, `clm intake` SHALL read the fold's `verified` records naming commits on `origin/main`'s first-parent chain after the newest one whose record passed (all of them when none passed), take the newest record of each such red commit, and print one line for each, in first-parent order: `verify <sha> imported <slug>...` when items on `origin/main`'s backlog name the commit in their `verify_failures`, sorted by slug, and otherwise `verify <sha> new <culprit> <component>...`, `<culprit>` being the record's culprit or `unknown`, both commits abbreviated as `git rev-parse --short` abbreviates them, and the components sorted. A red result followed by a green one on `main` SHALL print nothing.
+After the host's lines, with or without a host, `clm intake` SHALL take the fold's `unresolved_reds` over `origin/main`'s first-parent chain (`ledger/verified-record`) and print one line for each, in first-parent order: `verify <sha> imported <slug>...` when items on `origin/main`'s backlog name the commit in their `verify_failures`, sorted by slug, and otherwise `verify <sha> new <culprit> <component>...`, `<culprit>` being the record's culprit or `unknown`, both commits abbreviated as `git rev-parse --short` abbreviates them, and the components sorted. A red result followed by a green one on `main` SHALL print nothing.
 
 #### Scenario: a new failure
 - GIVEN a passing `verified` record for `origin/main~2` and a red one for `origin/main` with culprit `origin/main~1` and components `b` and `a`

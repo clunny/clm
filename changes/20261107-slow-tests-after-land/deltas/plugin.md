@@ -15,12 +15,13 @@ component: plugin
 #### Needs
 - init/init-verify-comment
 - verify/verify-due
+- clm/verify-command
 
 #### Serves
 - capability/slow-tests-after-land
 
 ### Requirement: skills-run-verify
-`skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, at the end of the run, after its lands and before `clm wrap-up`, to run `clm verify --due --event work-done` and show the human its `verify` line; a `verify failed` line SHALL be shown as a slow test that broke on `main`, which the next triage takes in. `skills/triage/SKILL.md` SHALL also tell Claude to run `clm verify --import` just before `clm intake`, and SHALL say, among `clm intake`'s lines, that `verify <sha> new <culprit> <component>...` is a slow test that failed after the land, which no item has taken in: Claude shows them together with no verifier, offering `P1`, and writes each one taken in as a `kind: bug` item whose `verify_failures` holds the commit's full ID (`git rev-parse <sha>`), whose `components` are the line's, and whose body names the culprit land, its change and the verify log, on the same `intake/<YYYYMMDD-HHMM>` branch as the other items taken in, saying that `clm land` holds code lands on those components until the fix, whose commit carries `Resolves: backlog/<slug>`, lands or a later run passes (`verify-after-land`).
+`skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, at the end of the run, after its lands and before `clm wrap-up`, to run `clm verify --due --event work-done` and show the human its `verify` line; a `verify failed` line SHALL be shown as a slow test that broke on `main`, which the next triage takes in. `skills/triage/SKILL.md` SHALL also tell Claude to run `clm verify --import` just before `clm intake`, and SHALL say, among `clm intake`'s lines, that `verify <sha> new <culprit> <component>...` is a slow test that failed after the land, which no item has taken in: Claude shows them together with no verifier, offering `P1`, and writes each one taken in as a `kind: bug` item whose `verify_failures` holds the commit's full ID (`git rev-parse <sha>`), whose `components` are the line's, and whose body names the culprit land, its change and the verify log, on the same `intake/<YYYYMMDD-HHMM>` branch as the other items taken in, saying that, once the item is on `main`, `clm land` holds code lands on those components until the fix, whose commit carries `Resolves: backlog/<slug>`, lands, and that an item for a failure that proves a flake is deleted on the human's word (`verify-after-land`). It SHALL say that taking a `verify` line in is the human's decision that the failure is real: until then `clm land` only warns.
 
 #### Scenario: the shipped skills
 - GIVEN the plugin's `skills/build/SKILL.md` and `skills/triage/SKILL.md`
@@ -36,6 +37,22 @@ component: plugin
 - verify/verify-due
 - verify/verify-import
 - orchestrator.triage/intake-verify-failures
+- clm/verify-command
+
+#### Serves
+- capability/slow-tests-after-land
+
+### Requirement: upgrade-skill-offers-verify
+`skills/upgrade/SKILL.md` SHALL tell Claude, when `clm upgrade --apply` prints `applied` for the migration that adds the commented `[verify]` section (`upgrade/migration-offer-verify`), to ask the human the same questions `/clm:init` asks about slow tests (`init-skill-asks-verify`), set `[verify]` on a yes, and leave the section commented on a no.
+
+#### Scenario: the shipped upgrade skill
+- GIVEN the plugin's `skills/upgrade/SKILL.md`
+- WHEN a test reads it
+- THEN it contains `[verify]` and `Slow tests can run after the land`
+
+#### Needs
+- upgrade/migration-offer-verify
+- clm/verify-command
 
 #### Serves
 - capability/slow-tests-after-land

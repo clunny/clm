@@ -20,20 +20,20 @@ Running a project's slow tests after the land, at the moments the project choose
 - `clm verify --import`: in `import` mode, the record of every completed pipeline run on `main` newer than the last record, run nothing; in the other modes it prints `verify nothing to import` and exits 0.
 - `clm verify --bisect <sha>`: the land that broke a red commit, found by running `[verify] check` on the lands it covers (`verify-bisect`).
 
-Every outcome is one line on stdout starting `verify `: `verify not-due <why>`, `verify due <trigger>`, `verify passed <sha> <n> lands`, `verify failed <sha> culprit <land|unknown> components <component>...`, `verify pending <sha>` and `verify nothing to import`, `<sha>` abbreviated as `git rev-parse --short` abbreviates it. It exits 0 when it passed, nothing was due or there was nothing to import; 1 when the verification failed, or with the reason when it can't run (a `<sha>` not on `origin/main`'s first parents, a `[verify]` it can't use); 2 when git fails; and 3 when the result is pending or, with `--dry-run`, nothing is due. Each verification it decides appends one `verified` record (`ledger`); nothing else writes one.
+Every outcome is one line on stdout starting `verify `: `verify not-due <why>`, `verify due <trigger>`, `verify passed <sha> <n> lands`, `verify failed <sha> culprit <land|unknown> components <component>...`, `verify pending <sha>` and `verify nothing to import`, `<sha>` abbreviated as `git rev-parse --short` abbreviates it. It exits 0 when it passed, nothing was due or there was nothing to import; 1 when the verification failed, or with the reason when it can't run (a `<sha>` not on `origin/main`'s first parents, a `[verify]` it can't use); 2 when git fails; 3 when, with `--dry-run`, nothing is due; and 4 when the result is pending (`import`). Each verification it decides appends one `verified` record (`ledger`); nothing else writes one.
 
 ## Design
-**Since when.** The *last verified commit* is the newest commit on `origin/main`'s first-parent chain that a `verified` record names, whatever its result; the *last green commit* the newest that one with `passed: true` names. The *unverified lands* are the first-parent commits of `origin/main` after the last verified commit, up to its head, or all of them when no record exists. A run's tests are selected with `clm affected --base <last green commit>` (`graph-test-selection`), handed to the check as `CLM_SELECTION` as `[land] check` gets it, so a run covers everything changed since the tests last passed, the lands of an earlier red run included; with no green record there is no selection and every test runs.
+**Since when.** The *last verified commit* is the newest commit on `origin/main`'s first-parent chain that a `verified` record names, whatever its result; the *last green commit* the newest that one with `passed: true` names. The *unverified lands* are the first-parent commits of `origin/main` after the last verified commit, up to its head, or all of them when no record exists. A run's tests are selected by `check.affected`'s library call with the last green commit as its base, as `clm affected --base <last green commit>` selects them (`graph-test-selection`), written to a file and handed to the check as `CLM_SELECTION` as `[land] check` gets it, so a run covers everything changed since the tests last passed, the lands of an earlier red run included; with no green record there is no selection and every test runs.
 
-**Triggers** (`verify-due`). Read from `[verify] triggers` and `[verify] every` over the unverified lands: `change-done` when one of them adds a `changes/archive/<id>/change.md` (`git diff --diff-filter=A` against its first parent); `queue-drained` when `check.coverage` finds no pending requirement in `origin/main`'s tree; `work-done` when the caller passed `--event work-done`; `every.lands` when there are at least that many; `every.days` when the oldest of them was committed at least that many days ago. A red last record makes any unverified land a trigger (`red-again`), since a fix may have landed. No unverified land means nothing is due, whatever else holds.
+**Triggers** (`verify-due`). Read from `[verify] triggers` and `[verify] every` over the unverified lands: `change-done` when one of them adds a `changes/archive/<id>/change.md` (`git diff --diff-filter=A` against its first parent); `queue-drained` when `check.coverage` finds no pending requirement in `origin/main`'s head, checked out into the verify tree (only when `queue-drained` is among the triggers); `work-done` when the caller passed `--event work-done`; `every.lands` when there are at least that many; `every.days` when the oldest of them was committed at least that many days ago. A red last record makes any unverified land a trigger (`red-again`), since a fix may have landed. No unverified land means nothing is due, whatever else holds.
 
-**The run** (`verify-run`). It checks `origin/main`'s head out into `<home>/.clm/verify-tree` as `land` keeps its land tree (`fixed-land-tree`), `<home>` found as `land` finds it, and runs `[verify] check` there through `land`'s shared check runner (`land/shared-check-runner`) under its own lock, `<home>/.clm/verify.lock`, printing `waiting for another verify on <home>/.clm/verify.lock` once when it waits, with its output copied to stderr and to `<home>/.clm/verify-logs/<sha>.log`. It holds neither `land.lock` nor `check.lock`, so `clm land` never waits for it; the guide asks the project to keep its slow tests from colliding with `[land] check` on one machine (a fixed port, say). `local` and `pipeline` differ only in where the project calls it: `pipeline` is a host pipeline running `clm verify --due` on each push to `main`, with `CLM_WRITER` naming it and the right to push `clm/ledger/*`. A run killed before it records leaves its trigger due.
+**The run** (`verify-run`). It checks `origin/main`'s head out into `<home>/.clm/verify-tree` as `land` keeps its land tree (`fixed-land-tree`), `<home>` found as `land` finds it, and runs `[verify] check` there through `land`'s shared check runner (`land/shared-check-runner`), so under the clone's check lock, `<home>/.clm/check.lock`, like every other check of the clone (`check-runs-one-at-a-time`): CLM can't know what a project's tests share, so a slow run and a land's check never overlap. A land on the same clone waits while a slow run's check runs; triggers make that rare, and a project that can't accept the wait runs its slow tests in `pipeline` mode or from another clone. Each bisect probe takes the lock afresh, so lands can go between probes. Its output goes to stderr and to `<home>/.clm/verify-logs/<sha>.log`, which a passing run removes and a failing one keeps. `local` and `pipeline` differ only in where the project calls it: `pipeline` is a host pipeline running `clm verify --due` on each push to `main`, with `CLM_WRITER` naming it and the right to push `clm/ledger/*`. A run killed before it records leaves its trigger due. `clm verify --commit <sha>` for a commit other than the head takes the last verified commit before it as its `since` and checks that commit out.
 
-**Import** (`verify-import`). `host`'s `runs` for `[verify] workflow` (`host/list-runs`), each with its head commit, whether it completed and its conclusion. A completed run whose conclusion is `success` or `failure` on an unverified land is a result; the newest such run's commit is the one recorded, `passed` from its conclusion and `run` its URL. Any other conclusion (cancelled, skipped) is no result. With none, `verify pending <head>`.
+**Import** (`verify-import`). `host`'s `runs` for `[verify] workflow` (`host/list-runs`), each with its head commit, whether it completed and its conclusion. A completed run whose conclusion is `success` or `failure` on an unverified land is a result; the newest such run's commit is the one recorded, covering the unverified lands up to it, `passed` from its conclusion and `run` its URL. Any other conclusion (cancelled, skipped) is no result. With none, `verify pending <head>`, exit 4.
 
-**Culprits and components** (`verify-bisect`). A red result over one unverified land names that land as the culprit. Over several, `local` and `pipeline` runs bisect at once: a binary search of the first-parent lands between the last green commit (exclusive) and the red one, each probe running the same selection in the verify tree, the first red land being the culprit; `import` records `culprit: null` and leaves the search to `clm verify --bisect <sha>` on a developer's machine, which appends a fresh red record for the same commit with the culprit found. The record's components are those whose `paths` hold a file the culprit's first-parent diff changes, or, with no culprit, a file any of the covered lands' diffs change.
+**Culprits and components** (`verify-bisect`). A red result over one unverified land names that land as the culprit. Over several, `local` and `pipeline` runs bisect at once: a binary search of the first-parent lands between the last green commit (exclusive) and the red one, each probe running the same selection in the verify tree, the first red land being the culprit; `import` records `culprit: null` and leaves the search to `clm verify --bisect <sha>` on a developer's machine, which appends a fresh red record for the same commit with the culprit found. The record's components are those whose `paths` hold a file the culprit's first-parent diff changes, or, with no culprit, a file any of the covered lands' diffs change; when no component's `paths` hold such a file (a land that changed only doc-only paths), the root component.
 
-**What it stops.** A red record holds code lands on its components until a green record follows it on `main` (`land/verify-stop`); `clm intake` lists it for triage (`orchestrator.triage/intake`).
+**What it stops.** A red record is a report: `clm intake` lists it for triage (`orchestrator.triage/intake-verify-failures`) and `clm land` warns a branch touching its components. Once the human takes it in as a `kind: bug` item with `verify_failures`, `clm land` holds code lands on the item's components until a branch whose commit carries `Resolves: backlog/<slug>` for it lands (`land/verify-stop`). A host's run never holds a land by itself (`land-locally`).
 
 ## ADDED Requirements
 
@@ -80,10 +80,10 @@ Every outcome is one line on stdout starting `verify `: `verify not-due <why>`, 
 - ledger/verified-record
 
 ### Requirement: verify-run
-In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/main`'s head out into `.clm/verify-tree` in the CLM root of the main worktree and run `[verify] check` there through `land/shared-check-runner`, with `CLM_SELECTION` naming the output of `clm affected --base <last green commit>` when a green record exists and unset otherwise, under an exclusive lock on `.clm/verify.lock` beside it and neither `land.lock` nor `check.lock`, its output copied to stderr and to `.clm/verify-logs/<sha>.log`. It SHALL then append one `verified` record naming the head, the result, the last verified commit as `since`, the unverified lands, the culprit and components (`verify-bisect`), the mode and no `run`, print `verify passed <sha> <n> lands` and exit 0, or print `verify failed <sha> culprit <land|unknown> components <component>...` and the log's path and exit 1. A run that ends before the check exits SHALL append nothing.
+In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/main`'s head out into `.clm/verify-tree` in the CLM root of the main worktree and run `[verify] check` there through `land/shared-check-runner`, with `CLM_SELECTION` naming the output of `clm affected --base <last green commit>` when a green record exists and unset otherwise, so under the clone's `.clm/check.lock`, its output copied to stderr and to `.clm/verify-logs/<sha>.log`, removed when the check passes and kept when it fails. It SHALL then append one `verified` record naming the head, the result, the last verified commit as `since`, the unverified lands, the culprit and components (`verify-bisect`), the mode and no `run`, print `verify passed <sha> <n> lands` and exit 0, or print `verify failed <sha> culprit <land|unknown> components <component>...` and the log's path and exit 1. A run that ends before the check exits SHALL append nothing.
 
 #### Scenario: passing run
-- GIVEN `mode = "local"`, `triggers = ["every"]`, `every = { lands = 1 }`, one land since a passing record, and a `[verify] check` that records `CLM_SELECTION` and its working directory and exits 0
+- GIVEN `mode = "local"`, `triggers = []`, `every = { lands = 1 }`, one land since a passing record, and a `[verify] check` that records `CLM_SELECTION` and its working directory and exits 0
 - WHEN `clm verify --due` runs
 - THEN the check ran in `.clm/verify-tree` on `origin/main`'s head with `CLM_SELECTION` set, the ledger holds a `verified` record for the head with `passed: true` and that one land, and it printed `verify passed <sha> 1 lands` and exited 0
 
@@ -92,15 +92,15 @@ In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/mai
 - WHEN `clm verify --due` runs
 - THEN it exits 1, prints `verify failed <sha> culprit <the land>` with that land's components and the log's path, and the ledger holds a `verified` record with `passed: false`
 
-#### Scenario: a land does not wait
-- GIVEN a `[verify] check` that sleeps 3 seconds, and a code branch whose `[land] check` passes at once
+#### Scenario: a land waits for the slow check
+- GIVEN a `[verify] check` that appends `start verify` to a log, sleeps 2 seconds and appends `end verify`, and a code branch whose `[land] check` appends `land` to the log
 - WHEN `clm verify --due` starts and `clm land` runs on the branch while it sleeps
-- THEN the land prints `landed` before the verify ends, and neither printed a `waiting` line
+- THEN the log reads `start verify`, `end verify`, `land`, and the land printed `waiting for another check` naming `.clm/check.lock`
 
 #### Scenario: one at a time
-- GIVEN the same sleeping `[verify] check`
+- GIVEN a `[verify] check` that appends `start` to a log, sleeps 2 seconds and appends `end`
 - WHEN two `clm verify --due` start together in one clone
-- THEN one printed `waiting for another verify` naming `.clm/verify.lock`, and their checks never overlapped
+- THEN the log reads `start`, `end`, `start`, `end`, and one printed `waiting for another check`
 
 #### Needs
 - config/verify-setting
@@ -108,7 +108,7 @@ In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/mai
 - land/shared-check-runner
 
 ### Requirement: verify-import
-In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`'s `runs` for `[verify] workflow` and run no check. The newest completed run whose conclusion is `success` or `failure` on an unverified land SHALL be recorded as a `verified` record for that run's commit, with `passed` from its conclusion, `run` its URL, `culprit` the land when that commit's run covers one unverified land and null otherwise; a run with any other conclusion, or one not completed, SHALL be no result. With no result it SHALL print `verify pending <head>` and exit 3, appending nothing. `--due` SHALL import only when a trigger holds, as `verify-due` says; `--import` SHALL import whatever result there is. When `host`'s `runs` fails it SHALL exit 1 with its message.
+In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`'s `runs` for `[verify] workflow` and run no check. The newest completed run whose conclusion is `success` or `failure` on an unverified land SHALL be recorded as a `verified` record for that run's commit, covering the unverified lands up to it, with `passed` from its conclusion, `run` its URL, `culprit` the land when it covers one and null otherwise; a run with any other conclusion, or one not completed, SHALL be no result. With no result it SHALL print `verify pending <head>` and exit 4, appending nothing. `--due` SHALL import only when a trigger holds, as `verify-due` says; `--import` SHALL import whatever result there is. When `host`'s `runs` fails it SHALL exit 1 with its message.
 
 #### Scenario: a passing run imported
 - GIVEN `mode = "import"`, `workflow = "slow"`, one land since a passing record, and a fake `gh` reporting a completed run of `slow` on that land with conclusion `success`
@@ -118,7 +118,7 @@ In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`
 #### Scenario: still running
 - GIVEN the same, but the run's status is `in_progress`
 - WHEN `clm verify --import` runs
-- THEN it prints `verify pending <sha>`, exits 3 and appends nothing
+- THEN it prints `verify pending <sha>`, exits 4 and appends nothing
 
 #### Scenario: a cancelled run is no result
 - GIVEN a completed run on the land with conclusion `cancelled`
@@ -136,7 +136,7 @@ In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`
 - host/list-runs
 
 ### Requirement: verify-commit
-`clm verify --commit <sha>` SHALL refuse with exit 1 a commit that isn't on `origin/main`'s first-parent chain. For one that is, it SHALL answer from the ledger when a `verified` record names it, printing `verify passed` or `verify failed` and exiting 0 or 1, and otherwise verify it as `verify-run` or `verify-import` verifies `origin/main`'s head, triggers aside, appending the record.
+`clm verify --commit <sha>` SHALL refuse with exit 1 a commit that isn't on `origin/main`'s first-parent chain. For one that is, it SHALL answer from the ledger when a `verified` record names it, printing `verify passed` or `verify failed` and exiting 0 or 1, and otherwise verify it as `verify-run` or `verify-import` verifies `origin/main`'s head, triggers aside, with the commit checked out and the last verified commit before it as `since`, appending the record.
 
 #### Scenario: already verified
 - GIVEN a passing `verified` record for commit `c` on `main`
@@ -154,10 +154,12 @@ In `import` mode, `clm verify --due` and `clm verify --import` SHALL read `host`
 - THEN it exits 1 saying the commit isn't on `main`, and runs nothing
 
 #### Needs
+- config/verify-setting
+- host/list-runs
 - ledger/verified-record
 
 ### Requirement: verify-bisect
-When `verify-run` finds a red result over more than one unverified land, it SHALL find the culprit by binary search over the first-parent lands after the last green commit up to the red one, running `[verify] check` with the same selection on each probe in the verify tree, the culprit being the first land on which it fails, and SHALL record it and the components whose `paths` hold a file the culprit's first-parent diff changes. Over one unverified land, that land is the culprit. In `import` mode the record SHALL have `culprit: null` and the components of every covered land. `clm verify --bisect <sha>`, for a commit a red record names, SHALL run the same search on the machine that runs it and append a red record for that commit naming the culprit and its components.
+When `verify-run` finds a red result over more than one unverified land, it SHALL find the culprit by binary search over the first-parent lands after the last green commit up to the red one, running `[verify] check` with the same selection on each probe in the verify tree, the culprit being the first land on which it fails, and SHALL record it and the components whose `paths` hold a file the culprit's first-parent diff changes, or the root component when none does. Over one unverified land, that land is the culprit. In `import` mode the record SHALL have `culprit: null` and the components of every covered land. `clm verify --bisect <sha>`, for a commit a red record names, SHALL run the same search on the machine that runs it and append a red record for that commit naming the culprit and its components.
 
 #### Scenario: the breaking land found
 - GIVEN a passing record for `main`'s commit `g`, three lands after it, `l1` changing `crates/a/x.rs`, `l2` changing `crates/b/y.rs` and `l3` changing `crates/a/z.rs`, components `a` and `b` owning `crates/a/**` and `crates/b/**`, and a `[verify] check` that fails on any tree holding `l2`'s change
@@ -170,5 +172,6 @@ When `verify-run` finds a red result over more than one unverified land, it SHAL
 - THEN a red record for `l3` naming `l2` and `[b]` is appended
 
 #### Needs
+- config/verify-setting
 - ledger/verified-record
 - land/shared-check-runner

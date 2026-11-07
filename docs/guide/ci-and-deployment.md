@@ -45,13 +45,15 @@ A failed last run makes any later land due, so a fix is checked at once. A run c
 
 ### Where they run
 
-- `mode = "local"`: on the machine that calls `clm verify`, in its own tree under `.clm/verify-tree`. It never holds up `clm land`, so keep the slow tests from colliding with `[land] check` on one machine (a fixed port, say).
+- `mode = "local"`: on the machine that calls `clm verify`, in its own tree under `.clm/verify-tree`. Its check takes the clone's check lock, like every check on the clone, so a land on that clone waits while a slow run's check runs. If that wait matters, use `pipeline` mode or run `clm verify` from another clone.
 - `mode = "pipeline"`: the host's pipeline runs `clm verify --due` on every push to `main` and records the result itself. Give the workflow the right to push `clm/ledger/*` (on GitHub, `permissions: contents: write`), set `CLM_WRITER` to a name for it, and in a signed repository give it a key of its own in `docs/allowed_signers`.
 - `mode = "import"` with `workflow = "<name>"`: the pipeline runs the slow tests and only reports; `clm verify --import`, which `/clm:triage` runs, reads its runs on `main` and records them. The pipeline needs no write access, and can gate its slow job on `clm verify --due --dry-run`, which exits 0 when a run is due and 3 when not. GitHub only for now.
 
+Every clone that reads a `clm.toml` with `[verify]` needs a `clm` that knows it; an older one refuses the unknown table.
+
 ### When one fails
 
-A failed run names the land that broke it: one land, or the first red one when `clm verify` bisects the lands since the last pass along `main`'s first parents (`clm verify --bisect <sha>` does it on your machine in import mode). `clm intake` lists it, `/clm:triage` offers it as a bug on that land's components, and `clm land` refuses code lands on those components until a branch whose commit carries `Resolves: backlog/<slug>` for that bug lands, or a later run passes. Other components keep landing. Fix forward on `clm claim <component> --fix backlog/<slug>`, or revert the land there with `git revert -m 1 <land>`, which leaves its requirements pending again for the queue to rebuild. Nothing rewrites `main`, so clones that already pulled need nothing.
+A failed run names the land that broke it: one land, or the first red one when `clm verify` bisects the lands since the last pass along `main`'s first parents (`clm verify --bisect <sha>` does it on your machine in import mode). `clm intake` lists it, and `clm land` warns a branch touching those components. `/clm:triage` offers it as a bug on them; taking it in is your judgement that the failure is real, not a flake. From then on `clm land` refuses code lands on those components until a branch whose commit carries `Resolves: backlog/<slug>` for that bug lands. Other components keep landing, and a host's run never holds a land by itself. Fix forward on `clm claim <component> --fix backlog/<slug>`, or revert the land there with `git revert -m 1 <land>`, which leaves its requirements pending again for the queue to rebuild. Nothing rewrites `main`, so clones that already pulled need nothing.
 
 ## A protected `main`
 

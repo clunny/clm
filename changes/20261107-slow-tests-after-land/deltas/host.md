@@ -23,12 +23,12 @@ A caller never runs `gh` or `az` itself; everything host-specific is here, and a
 ## ADDED Requirements
 
 ### Requirement: list-runs
-`clm-host` SHALL offer `runs(workflow)`, which on `github` returns the runs of that workflow on branch `main`, newest first, each with its ID, head commit, whether it has completed, its conclusion and its URL, through `gh run list --workflow <workflow> --branch main --limit 100 --json databaseId,headSha,status,conclusion,url`, taking completed from `status` being `completed` and the conclusion from `conclusion`. A head commit that isn't 40 hex digits SHALL drop the run, and a conclusion holding anything but lower-case letters and `_` SHALL come back as `unknown`, so a caller prints one word. It SHALL return no run's title, log or other text. When `gh` fails it SHALL return an error carrying `gh`'s message. On `azure`, `git` and `none` it SHALL return an error saying the host lists no pipeline runs, and run no `gh` or `az`.
+`clm-host` SHALL offer `runs(workflow)`, which on `github` returns the runs of that workflow on branch `main`, newest first, each with its ID, head commit, whether it has completed, its conclusion and its URL, through `gh run list --workflow <workflow> --branch main --event push --limit 100 --json databaseId,headSha,status,conclusion,url`, taking completed from `status` being `completed` and the conclusion from `conclusion`. A head commit that isn't 40 hex digits SHALL drop the run, and a conclusion that is missing, empty or holds anything but lower-case letters and `_` SHALL come back as `unknown`, so a caller prints one word. It SHALL return no run's title, log or other text. When `gh` fails it SHALL return an error carrying `gh`'s message. On `azure`, `git` and `none` it SHALL return an error saying the host lists no pipeline runs, and run no `gh` or `az`.
 
 #### Scenario: runs listed
 - GIVEN `host = "github"` and a fake `gh` reporting a completed run 11 of `slow` on commit `c` with conclusion `failure`, and a run 12 still `in_progress`
 - WHEN `runs("slow")` runs
-- THEN it returns both, run 11 completed with conclusion `failure` and its URL, run 12 not completed, and `gh` got `run list`, `--workflow slow` and `--branch main`
+- THEN it returns both, run 11 completed with conclusion `failure` and its URL, run 12 not completed, and `gh` got `run list`, `--workflow slow`, `--branch main` and `--event push`
 
 #### Scenario: odd conclusion
 - GIVEN a fake `gh` reporting a completed run whose conclusion is `Fail ure`
