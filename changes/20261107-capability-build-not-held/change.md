@@ -37,4 +37,6 @@ A capability can hold no `#### Needs`, so the queue derives its wait from the ru
 
 ## Open questions
 
-None.
+- The two changes folded here met in `orchestrator`'s Design: this change restates it whole, so it also carries the place-file `slot` line and the slot choice under the lock that `orchestrator/place-slots` (change `20261107-parallel-builds-test-runs`) requires (architecture audit finding; `spec-is-current`). Land them together.
+- `orchestrator/priority-orders-components` is `behind` and its code is said to need no change beyond the new scenario's test, which waits on `check.coverage/pending-report` (its `#### Needs`).
+- Left to the builder (builder check): how the capability-tests prompt paragraph recognises its component (reuse `prompt-serves`' predicate), and whether it also covers a test that passes but proves old text.
