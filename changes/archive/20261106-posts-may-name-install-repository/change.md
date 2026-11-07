@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # Blog posts may name the install repository

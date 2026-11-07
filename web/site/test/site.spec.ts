@@ -67,7 +67,7 @@ test('the homepage holds its five sections in order with the credits linked', as
 
 test('the install commands name the one configured repository', () => {
   test.setTimeout(180_000)
-  // req:web.site/install-repository@b53df95f
+  // req:web.site/install-repository@3b9ed6ef
   const out = join(siteDir, '.test-dist', 'repo')
   execFileSync('npx', ['vitepress', 'build', '.'], {
     cwd: siteDir,
@@ -76,13 +76,16 @@ test('the install commands name the one configured repository', () => {
   })
   const html = readFileSync(join(out, 'index.html'), 'utf8')
   expect(html).toContain('/plugin marketplace add someone/clm-public')
-  // The default repository is written in the config alone.
+  // The default repository is written in the config alone, but for the blog's posts, which are
+  // written text, as the guide's files are, and may name it in their own install commands.
   const needle = 'clunny' + '/clm'
+  const posts = join(siteDir, 'blog')
   const named: string[] = []
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
       if (['node_modules', 'dist', '.test-dist', 'test-results', 'cache', 'package-lock.json'].includes(name)) continue
       const path = join(dir, name)
+      if (path === posts) continue
       if (statSync(path).isDirectory()) walk(path)
       else if (readFileSync(path, 'utf8').includes(needle)) named.push(relative(siteDir, path))
     }
@@ -93,7 +96,7 @@ test('the install commands name the one configured repository', () => {
 
 test('the install commands default to the public repository', () => {
   test.setTimeout(180_000)
-  // req:web.site/install-repository@b53df95f
+  // req:web.site/install-repository@3b9ed6ef
   const out = join(siteDir, '.test-dist', 'default-repo')
   const env = { ...process.env, SITE_OUT: out, GITHUB_STARS: '1' }
   delete env.INSTALL_REPO
