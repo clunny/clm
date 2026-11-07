@@ -19,7 +19,7 @@ Crate `clm-land`, called from `crates/clm`'s `land`, `approve` (re-exported from
 2. Run the gate on the head against `origin/main` in the tree this attempt checks in (**Places**, below), adding `--approved` when approved. A violation prints as the gate printed it and exits 1; `gate/approval` tells the caller to ask the human for `clm approve <branch>`.
 3. `git merge-tree --write-tree origin/main <head>`. A conflict, or `specs/` changed on both sides, exits 1 telling the caller to run `clm rebase`.
 4. The merge commit, `git commit-tree <merged tree> -p origin/main -p <head>`, message `Merge <branch> into main`, with `Change: <id>` on a following line for a spec land that adds or modifies live changes (the first by ID), committed as the repository's git user. A head that already contains `main` is still merged with a merge commit, so a claim's tip reaches `main` only through its land (`merged-claims-released`). The commit is checked out detached into the tree, so the gate and the checks run on a commit. Then **Derived specs** (below).
-5. The merged tree's code key (`ledger`). When a `checked` record names it with the same command, it asks **Readers of checked code** (below): when they select no file, only `clm check --no-detectors` runs; when they select some, `[land] check` runs as below with their selection and then `clm check --no-detectors`, and no second `checked` record is appended; otherwise **Selected tests** (below), `[land] check` through `sh -c` with `CI` unset (so a script that installs a browser only in CI doesn't) and `CARGO_TARGET_DIR` set to `<home>/.clm/land` unless the caller set it non-empty, and then `CARGO_INCREMENTAL=0` unless the caller set that non-empty (`shared-land-target`), then `clm check`, and on success a `checked` record. `<main>` is the first worktree `git worktree list --porcelain` lists and `<home>` the CLM root in it, `<main>/<prefix>` with `<prefix>` what `git rev-parse --show-prefix` prints in the CLM root, computed once; a land from a build's worktree under `.claude/worktrees/` so shares one target (`build-places`). The gate then runs again on the merge commit, since a file both sides touched can change whether it needs review, and in a signed repository `land.approval` signs the `landed` record.
+5. The merged tree's code key (`ledger`). When a `checked` record names it with the same command, it asks **Readers of checked code** (below): when they select no file, only `clm check --no-detectors` runs; when they select some, `[land] check` runs as below with their selection and then `clm check --no-detectors`, and no second `checked` record is appended. When none names it and the CLM root's `clm.toml` differs between the fetched base and the merge commit only in what `clm-gate`'s `settings_unchanged` leaves out (`upgraded`, `declined_migrations`, comments and formatting), it looks up the *settings-free key* instead, in the same place the attempt computes the code key, before the lock (**Places**), so a land it counts as checked takes no lock unless its readers select a file, `ledger`'s `code_key_with(root, <merge>, <prefix>clm.toml, <base>)`: when a `checked` record names that with the same command, the land goes on as one whose code key is checked, as above, and once `clm check --no-detectors` (and the readers' check, when they selected a file) passes it appends a `checked` record for the merged tree's own code key, so the `landed` record names a checked key and a retry finds it (`settings-unchanged-is-checked`); otherwise **Selected tests** (below), `[land] check` through `sh -c` with `CI` unset (so a script that installs a browser only in CI doesn't) and `CARGO_TARGET_DIR` set to `<home>/.clm/land` unless the caller set it non-empty, and then `CARGO_INCREMENTAL=0` unless the caller set that non-empty (`shared-land-target`), then `clm check`, and on success a `checked` record. `<main>` is the first worktree `git worktree list --porcelain` lists and `<home>` the CLM root in it, `<main>/<prefix>` with `<prefix>` what `git rev-parse --show-prefix` prints in the CLM root, computed once; a land from a build's worktree under `.claude/worktrees/` so shares one target (`build-places`). The gate then runs again on the merge commit, since a file both sides touched can change whether it needs review, and in a signed repository `land.approval` signs the `landed` record.
 6. `git push origin <merge>:refs/heads/main --force-with-lease=refs/heads/main:<the base step 1 fetched>`. A refusal isn't always `main` moving (`land-push-retry`), so it fetches `origin`'s `main` again, directly rather than through step 1's offline refusal, and judges it: the merge commit means the push went through; neither the merge commit nor the base means `main` moved and the next attempt starts, its `checked` record standing, so a retry with the same code key runs only `clm check --no-detectors`; still the base means a refusal for another reason, such as `[remote rejected] main (failure)` while other sessions push, and the same commit is pushed again with the same lease at most twice more, after fixed waits of 1 and then 2 seconds with no override, these pushes not counting as attempts. Still the base after the last is exit 2 with git's message, including the remote's lines (the push drops `--quiet` if it hides them), and a line saying the failure may be transient and that running `clm land <branch>` again is safe. When the refetch fails the push may have gone through, so it exits 2 with the push's message alone. Ten moved attempts exit 1 saying `main` keeps moving.
 7. Append, in one commit (`ledger/append-all`), the `effort` records `clm effort record --branch <branch>` would append for the branch's sessions on this machine, read once before the first attempt so neither the reading nor a second ledger push lengthens the time `main` has moved with no `landed` record (`effort-accounted`; the reader's warnings print prefixed `effort: `, and when it can't read at all it warns `effort not recorded: <why>`), then `landed`: commit, branch, `land_kind` and `review` from the gate's first line, fingerprint, the step-5 code key as `code_key`, the change IDs. When `append` reports `landed` unpushed and `host` isn't `none`, it warns `the landed record isn't on origin yet: git push origin clm/ledger/<person>/<clone>` and still exits 0, since `main` has moved. Then `host`'s `branch delete <branch> --lease <head>` for an `impl/*`, `spec/*` or `propose/*` branch (a failure warns), the local branch too when it is checked out nowhere (`clm wrap-up` tidies one that is), and for `impl/*`, **Freeing a build's disk** (below).
 8. Print `landed <sha> <kind>`.
@@ -677,3 +677,40 @@ Before merging, `clm land` SHALL take the *held* components: the `components` of
 
 #### Serves
 - capability/slow-tests-after-land
+
+### Requirement: settings-unchanged-is-checked
+When no `checked` record names the merged tree's code key with the same command, `clm land` SHALL count the tree as checked when the bytes of the CLM root's `clm.toml` differ between the fetched base and the merge commit (a missing file read as `None`), `clm-gate`'s `settings_unchanged` is true of its bytes at the two, and a `checked` record names, with the same command, the key `ledger`'s `code_key_with(root, <merge>, <prefix>clm.toml, <base>)` returns. It SHALL then run what a land whose code key is checked runs (`clm check --no-detectors`, preceded by `[land] check` only when the readers `clm affected --base <sha> --readers` prints select a file, a test marked `clm:reads clm.toml` among them) and, once that passes, SHALL append a `checked` record for the merged tree's own code key with that command before the push. The lookup SHALL be made where the attempt computes the merged tree's code key, before it decides on the land lock, so such a land takes the lock only when its readers select a file. Its build adds to `crates/clm/tests/capability/upgrade_clm.rs` a land of a stamp-only branch that runs no `[land] check`. Any other difference in `clm.toml`, or no `checked` record for that key, SHALL leave the land to run its check as before.
+
+#### Scenario: the upgrade stamp only
+- GIVEN a branch that changes only `upgraded` in `clm.toml` and edits `docs/x.md`, no `clm:reads` marker naming either, and a `checked` record for `origin/main`'s code key with the configured command
+- WHEN `clm land` runs
+- THEN the check command never ran, `clm check --no-detectors` ran on the merged tree, the ledger has a `checked` record for the merged tree's code key, and the branch landed with that code key
+
+#### Scenario: a comment only
+- GIVEN a branch that only appends a commented-out table to `clm.toml`, and a `checked` record for `origin/main`'s code key with the configured command
+- WHEN `clm land` runs
+- THEN the check command never ran and the branch landed
+
+#### Scenario: a reader of clm.toml
+- GIVEN the same stamp-only branch and `checked` record, and `crates/e/tests/r.rs` holding `clm:reads clm.toml`
+- WHEN `clm land` runs
+- THEN the check command ran once with `CLM_SELECTION` naming a file that holds only `file crates/e/tests/r.rs`, and the branch landed
+
+#### Scenario: a setting changed
+- GIVEN a branch that changes `upgraded` and `[land] check` in `clm.toml`, and a `checked` record for `origin/main`'s code key with the old command
+- WHEN `clm land` runs
+- THEN the new check command ran and `clm check` ran with its detectors
+
+#### Scenario: code changed too
+- GIVEN a branch that changes only `upgraded` in `clm.toml` and `crates/a/src/lib.rs`, and a `checked` record for `origin/main`'s code key
+- WHEN `clm land` runs
+- THEN the check command ran
+
+#### Needs
+- ledger/code-key-with
+- gate/settings-unchanged
+- clm/doc-readers-marked
+
+#### Serves
+- capability/upgrade-clm
+- capability/land-safely
