@@ -25,8 +25,10 @@ resolves: [wrap-up-and-runner-trip-on-unwritable-worktree-dirs]
 - `vcs` adds `remove-worktree`: `remove_worktree(root, path)`, unlock, the permission walk, `git worktree remove` without `--force`, and `Error::StillOnDisk` when git succeeded but the directory remains. Its Contract names the function and its Design takes the walk's description from `orchestrator.run`'s.
 - `orchestrator.run/run-finish` removes through `remove_worktree` and holds no removal of its own; its behaviour and scenarios are unchanged. Its build moves `clm-run` onto the function and deletes `remove_worktree` and `make_writable` there.
 - `orchestrator.checkpoint/checkpoint` removes through `remove_worktree` and prints the `left` line for a worktree it can't remove, keeping that worktree's local branch, with two scenarios: *unwritable directory in a build's worktree* and *build's worktree git can't remove*. A `left` line doesn't make the wrap-up incomplete: a build's worktree is never the session's own, and its branch has landed.
+- `plugin` adds `wrap-up-left-lines`: every skill that runs `clm wrap-up` tells Claude to pass its `left <path>: ...` lines to the human as they stand and leave the directory to them, as `build-finishes-builds` already does for `clm run --finish` (`method-in-the-plugin`).
 - `orchestrator.runner/runner-worktree-leftover` removes through `remove_worktree` and, when that fails, starts no session, prints the `left` line with the absolute path and runs `clm run --finish <component>`, with two scenarios: *unwritable leftover replaced* and *leftover git can't remove*. The runner no longer passes `--force`: the leftover was already judged clean, and `remove_worktree` unlocks it.
-- Each of the three modified requirements has `#### Needs` `vcs/remove-worktree`.
+- Each of the three modified requirements has `#### Needs` `vcs/remove-worktree`; `plugin/wrap-up-left-lines` needs `orchestrator.checkpoint/checkpoint`.
+- No capability test sees a difference: `wrap_up_session`, `unattended_runner` and `build_from_spec` remove only ordinary worktrees.
 
 ## Constraints
 
@@ -37,9 +39,10 @@ resolves: [wrap-up-and-runner-trip-on-unwritable-worktree-dirs]
 ## Edge cases
 
 - The *git can't remove* scenarios need a worktree git deterministically can't delete without running as root: `orchestrator.run`'s test makes the worktree's parent directory unwritable for the run, and the same works for `.claude/worktrees/` in `clm wrap-up`'s and the runner's tests, and for `vcs`'s *git refuses* scenario an untracked file that isn't ignored does it.
-- The unwritable-directory and symbolic-link scenarios are Unix tests (permission bits); on Windows the walk clears read-only attributes, which no scenario covers, as in `20261106-run-finish-fails-on`.
+- The unwritable-directory and symbolic-link scenarios are Unix tests (permission bits). CLM supports Linux and macOS only (`no-windows-support`), so `remove-worktree` states no Windows behaviour; `orchestrator.run`'s build drops `clm-run`'s non-Unix branch of the walk when it moves to the function.
+- After a failed removal, what is left of the directory may hold a `.git` file pointing at a gitdir git has deleted, where `git status` fails: `clm wrap-up` skips a path it printed as `left` when it reports dirty work, so that failure can't exit 2.
 - Dropping the runner's `--force` means a leftover holding an initialised submodule, which git refuses without it, is now reported as `left` rather than removed. Runner worktrees are detached at `origin/main`, and a clean one holds only what a build put in ignored paths; a human clears the rare case by hand, as the line says.
 
 ## Open questions
 
-- None yet.
+- None. The architecture audit's two findings (no skill told sessions what to do with `clm wrap-up`'s `left` line; a Windows-only clause against `no-windows-support`) are fixed in the change.
