@@ -91,8 +91,7 @@ fn the_root_documents_have_readers() {
 fn the_readers_of_clm_toml() {
     // req:clm/doc-readers-marked@49fef14e
     let selected = readers(&differing(&["clm.toml"]), &markers());
-    assert!(
-        selected.contains(&"crates/clm/tests/cli.rs".to_string()),
-        "{selected:?}"
-    );
+    for file in ["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"] {
+        assert!(selected.contains(&file.to_string()), "{selected:?}");
+    }
 }
