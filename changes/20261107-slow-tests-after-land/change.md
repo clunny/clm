@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [slow-tests-after-land]
 priority: P2
 ---

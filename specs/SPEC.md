@@ -2,7 +2,7 @@
 title: CLM
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade]
+depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify]
 paths: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/build.rs", "crates/clm/src/**", "crates/clm/tests/*.rs", "rust-toolchain.toml", ".claude/settings.json", ".gitattributes", "scripts/dev-install.sh", "README.md", "CONTRIBUTING.md", "LICENSE"]
 outside: []
 serves: [capability/install-and-release, architecture/platform]
@@ -53,6 +53,7 @@ The root's `paths` name `crates/clm`'s manifest, build script, sources and top-l
 | `ledger` | Approvals, checks and lands as records in per-writer ledger branches |
 | `land` | `clm land`, `clm approve`, `clm reconnect`: landing on `main` from the machine that runs it |
 | `land.approval` | Whether a branch's diff is approved or held, and `clm approve` (crate `clm-approval`) |
+| `verify` | `clm verify`: a project's slow tests run after the land, at the moments it chooses, and their result recorded |
 | `effort` | `clm effort record`, `clm capabilities` and `clm architecture`: the work each land spent, and what each capability and architectural constraint costs |
 | `host` | The host adapter: pull requests, remote branch deletion and issues on GitHub or no host |
 | `view` | Views for people: `clm status` and `clm view` (spec, flight, blockers) as charts, SVG and JSON |
@@ -878,3 +879,21 @@ This repository's `CLAUDE.md` SHALL NOT contain `git push`. Wherever it tells a 
 
 #### Needs
 - config/host-setting
+
+### Requirement: verify-command
+`clm` SHALL dispatch `clm verify [--due [--event work-done] [--dry-run] | --commit <sha> | --import | --bisect <sha>]` to `clm-verify`, for the CLM repository found from the current directory (`root-from-cwd`), and `clm --help` SHALL list it.
+
+#### Scenario: dispatch
+- GIVEN a repository `clm init` has just set up
+- WHEN `clm verify --due` runs in a subdirectory of it
+- THEN it prints `verify off: no [verify] in clm.toml` and exits 0
+
+#### Needs
+- verify/verify-due
+- verify/verify-run
+- verify/verify-import
+- verify/verify-commit
+- verify/verify-bisect
+
+#### Serves
+- capability/slow-tests-after-land
