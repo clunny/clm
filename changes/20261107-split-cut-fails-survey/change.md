@@ -14,7 +14,7 @@ The survey reads the tree before any file moves, which is what makes it a cheap 
 ## Approaches
 
 - **A field in the survey's component map listing the excused edges, each with the requirement that removes it, which the survey would then not report.** Rejected: it adds a key and code to `clm survey` (component `init`) for a judgement the survey can't make, since the requirement it would name lives in a delta the survey doesn't read, and `clm check` already proves after the build that no such edge is left (`reuse-first`, `yagni`).
-- **The skill and guide say when the line may stand, and the change lists the edges for the reviewer (chosen).** No code changes beyond the skill's text. The conditions: the importing file moves into a crate or package of the child's own; a requirement the change adds or modifies states the removal, naming the importing file, the file it imports and what replaces the import; and `change.md` lists each such edge with that requirement's ID under `## Edges the change removes`. A `survey/cycle` line never stands.
+- **The skill and guide say when the line may stand, and the change lists the edges for the reviewer (chosen).** No code changes beyond the skill's text. The conditions: the importing file moves into a crate or package of the child's own; a requirement the change adds to the child, whose build moves the importing file (`path-ownership`), states the removal, naming the importing file, the file it imports and what replaces the import, and what the parent must do for it, such as passing the value in, is a parent's requirement whose `#### Needs` names the child's; and `change.md` lists each such edge with the child's requirement ID under `## Edges the change removes`, as the record of what the child's build must remove. A `survey/cycle` line never stands.
 
 ## Outcome
 
@@ -25,6 +25,7 @@ The survey reads the tree before any file moves, which is what makes it a cheap 
 
 - The move into a crate of the child's own is what keeps `clm check` green on the spec branch: until the build makes the child's files, no file its `paths` match exists, so `check/undeclared-imports` (and its before-apply judging) has nothing of the child's to judge. An in-place cut's edge would fail `clm check` on the spec branch before any build could remove it, so it never stands.
 - Nothing new enforces the removal: once the child is built, `clm check` reports any edge its build left as `check/undeclared-imports`, or the `depends_on` cycle it would need, so the graph stays acyclic after the build.
+- `## Edges the change removes` is a record, not a review gate: a split usually lands on checks, and the approval ask doesn't show the section. What proves the removal is `clm check` after the child's build (architecture audit finding, settled this way).
 - Edge cases and workarounds known now: none.
 
 ## Open questions
