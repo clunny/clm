@@ -140,11 +140,11 @@ fn compacted() {
     let a = clone_with_origin(dir.path(), "a", "A");
     let b = clone_with_origin(dir.path(), "b", "B");
     let home = dir.path();
-    // Another writer's result for `c`, which compaction leaves alone.
-    let other = clm_ledger::append(&b, body('c', false), &env(home, &[])).unwrap();
     clm_ledger::append(&a, body('c', false), &env(home, &[])).unwrap();
     clm_ledger::append(&a, body('d', true), &env(home, &[])).unwrap();
     let newer = clm_ledger::append(&a, body('c', true), &env(home, &[])).unwrap();
+    // Another writer's later result for `c` is not the caller's newest, and stays.
+    let other = clm_ledger::append(&b, body('c', false), &env(home, &[])).unwrap();
     let done = clm_ledger::compact(&a, &env(home, &[])).unwrap();
     assert_eq!(done.removed, 1, "{:?}", done.warnings);
     let fold = clm_ledger::fold(&a).unwrap();
