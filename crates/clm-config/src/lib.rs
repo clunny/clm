@@ -392,6 +392,9 @@ impl Settings {
     /// The key's value as its TOML value (for `detectors`, the names, comma-separated), and
     /// the layer it came from.
     pub fn get(&self, key: &str) -> Result<(String, &Layer), Error> {
+        if !KEYS.contains(&key) {
+            return Err(Error::new(None, format!("unknown key `{key}`")));
+        }
         match key {
             "autosync" => Ok((self.autosync.value.to_string(), &self.autosync.layer)),
             "defects" => Ok((self.defects.value.to_string(), &self.defects.layer)),

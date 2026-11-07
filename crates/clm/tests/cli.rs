@@ -1536,3 +1536,18 @@ fn every_key_config_list_prints_is_one_config_get_accepts() {
         assert_eq!(out.status.code(), Some(0), "{key}");
     }
 }
+
+#[test]
+fn config_get_verify_prints_the_table_and_the_file() {
+    // req:config/verify-setting@5bf87fcc
+    let (out, file) = config_get_in_repo(
+        Some("[verify]\ncheck = \"scripts/slow.sh\"\nmode = \"local\"\n"),
+        "verify",
+    );
+    assert_eq!(
+        out,
+        format!("mode=local,check=scripts/slow.sh\t{}\n", file.display())
+    );
+    let (out, _) = config_get_in_repo(None, "verify");
+    assert_eq!(out, "\tdefault\n");
+}

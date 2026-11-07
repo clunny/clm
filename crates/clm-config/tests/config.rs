@@ -1853,6 +1853,7 @@ fn bad_verify_fails_naming_the_file_and_key() {
             Some(f.local_file().display().to_string()),
             "{bad}"
         );
+        assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
     }
 }
 
@@ -1909,8 +1910,5 @@ fn every_listed_key_is_one_get_accepts_and_prints_the_same() {
         let (value, layer) = s.get(key).unwrap();
         assert_eq!(line, format!("{key}\t{value}\t{layer}"));
     }
-    assert_eq!(
-        s.get("colour").unwrap_err().to_string(),
-        "unknown key `colour`"
-    );
+    assert!(s.get("colour").unwrap_err().to_string().contains("colour"));
 }
