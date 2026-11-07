@@ -169,10 +169,11 @@ fn body_updated() {
             update.contains("--id 12") && update.contains(&body),
             "{update}"
         );
-        assert!(update.contains("--detect true") && update.contains("--output json"));
-        for other in ["--title", "--status", "--auto-complete", "--draft"] {
-            assert!(!update.contains(other), "{other} in {update}");
-        }
+        // Nothing else that changes the pull request: the whole call is exactly this.
+        assert_eq!(
+            update,
+            format!("repos pr update --id 12 {body} --detect true --output json")
+        );
     });
 }
 
