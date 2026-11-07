@@ -400,7 +400,7 @@ fn readers_selection_fails_says_why() {
 
 #[test]
 fn check_log_cant_be_created() {
-    // req:land/check-log@153c9698
+    // req:land/check-log@6fefb1a1
     let f = Fixture::new("");
     f.write("check-prints", "echo checked\n");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -428,7 +428,7 @@ fn check_log_cant_be_created() {
 
 #[test]
 fn check_output_reaches_stderr_in_order() {
-    // req:land/check-log@153c9698
+    // req:land/check-log@6fefb1a1
     let f = Fixture::new("");
     f.write(
         "check-prints",

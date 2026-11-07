@@ -40,11 +40,12 @@ pub(crate) fn land(target: &Path) -> Result<(File, bool), Error> {
     lock(Path::new(&path), &waiting, |line| eprintln!("{line}"))
 }
 
-/// Locks `check.lock` in `places`, the check lock.
-pub(crate) fn check(places: &Path) -> Result<File, Error> {
+/// Locks `check.lock` in `places`, the check lock, passing the waiting line to `say` once
+/// when another check holds it.
+pub(crate) fn check(places: &Path, say: impl FnOnce(&str)) -> Result<File, Error> {
     let path = places.join("check.lock");
     let waiting = format!("waiting for another check on {}", path.display());
-    lock(&path, &waiting, |line| eprintln!("{line}")).map(|(file, _)| file)
+    lock(&path, &waiting, say).map(|(file, _)| file)
 }
 
 #[cfg(test)]
