@@ -1,5 +1,6 @@
 // clm:reads specs/**
 // clm:reads backlog/**
+// clm:reads clm.toml
 
 use std::fs;
 use std::path::{Path, PathBuf};
