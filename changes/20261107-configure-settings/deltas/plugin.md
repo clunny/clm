@@ -12,14 +12,15 @@ The plugin SHALL ship `skills/configure/SKILL.md`, with a `description` in its f
 - for a change, say which files may set the key and recommend one: `clm.toml` for the project, the clone's `clm.local.toml` for this clone, the person's own `config.toml` for every project of theirs; never set a key in a file the page forbids, and say when an environment variable sets the key, since a file's value doesn't count while it does;
 - edit the file in place, keeping its comments and other keys, then run `clm config list` again, and on a failure fix the edit or undo it;
 - commit nothing for `clm.local.toml` or the person's own file, which take effect at once;
-- gather every `clm.toml` edit of the session on one branch `config/<YYYYMMDD>-<slug>` cut from `origin/main` in a worktree of its own (`session-worktrees`), commit it there, and land it by the first line of `clm gate --base origin/main` as `propose` lands a branch: on `code` or `spec`, `clm branch push`, `clm pr open` and `clm land`; on `spec review`, which an edit to `approval` makes, show the human the edit and ask for their approval, and on a yes run `clm approve` through the guard's confirmation before `clm land`; then `clm wrap-up`.
+- gather every `clm.toml` edit of the session on one branch `config/<YYYYMMDD>-<slug>` cut from `origin/main` in a worktree of its own, `.claude/worktrees/<YYYYMMDD>-<slug>`, never switching the checkout it started in, or, in a session whose checkout already lies under `.claude/worktrees/`, with `git switch -c` in that checkout (`session-worktrees`); commit it there, and land it by the first line of `clm gate --base origin/main` as `propose` lands a branch: on `code` or `spec`, `clm branch push`, `clm pr open` and `clm land`; on `spec review`, which an edit to `approval` makes, show the human the edit and ask for their approval, and on a yes run `clm approve` through the guard's confirmation before `clm land`;
+- once it has landed, delete the pushed branch with `clm branch delete`, since `clm land` deletes only claim branches (`small-change-no-claim`); remove the worktree with `git worktree remove` from the directory it started in, or, in a session already under `.claude/worktrees/`, switch off the branch with `git switch --detach origin/main` and remove nothing; then run `clm wrap-up` and pass each `left <path>: ...` line it prints to the human as it stands.
 
 It SHALL tell Claude never to push `main` by any means but `clm land`, and to run `clm approve` only after the human says yes in the conversation, through the guard's confirmation. A test in `crates/clm/tests/plugin.rs`, a function over the skill's text, SHALL read the skill and fail naming what it lacks.
 
 #### Scenario: the skill
 - GIVEN the plugin's `skills/configure/SKILL.md`
 - WHEN a test reads it
-- THEN it names `clm config list`, `clm guide settings`, `clm.local.toml`, `/clm:upgrade`, `clm gate`, `spec review`, `clm approve`, `clm land` and `clm wrap-up`
+- THEN it names `clm config list`, `clm guide settings`, `clm.local.toml`, `/clm:upgrade`, `clm gate`, `spec review`, `clm approve`, `clm land`, `clm branch delete`, `git switch --detach origin/main` and `clm wrap-up`
 
 #### Scenario: a skill that doesn't validate
 - GIVEN a `configure` `SKILL.md` that doesn't mention `clm config list`
@@ -75,3 +76,40 @@ The plugin SHALL ship `skills/help/SKILL.md` with a `description` in its frontma
 #### Serves
 - architecture/method-in-the-plugin
 - architecture/carried-constraints
+
+### Requirement: method-pointers <!-- base: 3db98468a0dc7fb1 -->
+`skills/init/SKILL.md` SHALL tell Claude, before drafting the component map, for a new project and for a repository with code, to explain to the human that a component is the unit one build session holds, its spec and its code; that a component splits along seams by nesting the carved-out part as its child; that plumbing several components copy becomes a shared component; and that a component over its size budget is a visible state, not an error; to point at `clm guide shaping-the-graph`; and, in its closing summary, to point at `clm guide using-clm` for the workflows and at `clm guide how-it-works` for how a change flows and where decisions go. No skill or agent SHALL name `docs/guide/`, except `propose`, which SHALL name only the two guide pages a spec branch edits for a term or a key, `docs/guide/glossary.md` and `docs/guide/settings.md` (`propose-adds-glossary-terms`, `propose-adds-settings-sections`). Every `clm guide <page>` a skill or agent names, `<page>` being a lowercase name of letters, digits and hyphens, SHALL be a page `clm guide` prints: a file `docs/guide/<page>.md`, `docs/spec-format.md` for `spec-format`, `docs/guide/README.md` for `index`, or the generated page `constraints` (`init/guide-constraints-page`).
+
+#### Needs
+- init/guide-command
+- init/guide-constraints-page
+
+#### Scenario: init explains the shape
+- GIVEN an `init` `SKILL.md` that doesn't mention `clm guide shaping-the-graph`, or whose sentence naming it doesn't come before the component map is drafted
+- WHEN the tests run
+- THEN a test fails naming the skill and `clm guide shaping-the-graph`
+
+#### Scenario: init without the flow pointer
+- GIVEN an `init` `SKILL.md` that doesn't mention `clm guide using-clm`
+- WHEN the tests run
+- THEN a test fails naming the skill and `clm guide using-clm`
+
+#### Scenario: init without the mechanisms pointer
+- GIVEN an `init` `SKILL.md` that doesn't mention `clm guide how-it-works`
+- WHEN the tests run
+- THEN a test fails naming the skill and `clm guide how-it-works`
+
+#### Scenario: a repository path
+- GIVEN a skill that names `docs/guide/shaping-the-graph.md`
+- WHEN the tests run
+- THEN a test fails naming the skill and `docs/guide/`
+
+#### Scenario: propose names the pages it edits
+- GIVEN a `propose` `SKILL.md` that names `docs/guide/glossary.md` and `docs/guide/settings.md`, and no other path under `docs/guide/`
+- WHEN the tests run
+- THEN no test fails naming `docs/guide/`
+
+#### Scenario: a page that doesn't exist
+- GIVEN a skill that names `clm guide no-such-page`
+- WHEN the tests run
+- THEN a test fails naming the skill and `no-such-page`

@@ -7,7 +7,7 @@ CLM's settings change how it behaves in your project: where reports go, how many
 Each setting's value comes from the first of these that sets it:
 
 1. its environment variable, for the few settings that have one;
-2. `clm.local.toml` beside `clm.toml`: this clone's, never committed;
+2. `clm.local.toml`: this clone's, never committed. It's read from the repository's directory in the clone's main worktree (the first one `git worktree list` prints), whichever worktree you run in, so one file serves them all; `clm config list` prints its path;
 3. `clm.toml` at the repository's root: the project's, shared by everyone;
 4. `~/.config/clm/config.toml` (or under `$XDG_CONFIG_HOME`): yours, for every project;
 5. its default.
@@ -60,7 +60,7 @@ Where: `clm.toml` or `clm.local.toml`.
 `[verify]`: slow tests that run after a land instead of before it, so lands stay fast. `check`: the slow-test command. `mode`: `local` (`clm verify` runs it on this machine), `pipeline` (a host pipeline runs it and records the result) or `import` (`clm verify` reads the runs of the pipeline `workflow` names). Optional `triggers` (`change-done`, `queue-drained`, and `work-done` with `local` only) and `every` (`lands`, `days`): when a run is due.
 
 - **Unset** (the default): slow tests, if any, stay in `[land] check`, and every land waits for them.
-- **Set** to keep lands fast: a failing run then reaches the backlog after the land, and the components it names stop building until it's fixed. You trade catching a break before `main` for lands that don't wait.
+- **Set** to keep lands fast: a failing run is reported after the land, `/clm:triage` offers it to you, and once you take it in as a bug, code lands on the components it names wait until its fix lands. You trade catching a break before `main` for lands that don't wait.
 
 Where: `clm.toml` or `clm.local.toml`.
 
