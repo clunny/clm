@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-failed-land-check-s-refusal-shows-a-tail-of-output-that-may]
 ---
 
