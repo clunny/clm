@@ -9,11 +9,11 @@ serves: [capability/approve-intent, capability/land-safely, architecture/per-wri
 ---
 
 ## Contract
-The records that say what was approved, checked and landed, as facts in git that any clone can replay (`per-writer-ledgers`). Each writer appends to its own branch, `clm/ledger/<person>/<clone>`, so appends never race, and the state is the fold over the union of every ledger branch on `origin` and the writer's own. Crate `clm-ledger` offers, as library calls: `writer(root)` (this clone's identity, creating it on first use), `append(root, record)` (commit the record to the writer's branch and push it), `fold(root)` (the state: approvals by fingerprint, checks by code key, lands by commit, and the live push subscriptions by `id`, each with its `writer`, `at`, `endpoint`, `p256dh` and `auth`, the open web proposals by `id`, the comments and the change requests by branch (`web-proposals-as-ledger-records`, `web-review-feedback-as-ledger-records`), the effort records by `id` the capability decisions by capability, and the verifications by commit), `append_all(root, entries)` (several records in one commit and one push), `effort_id(session, branch)` (an `effort` record's `id`), `code_key(root, rev)` (a commit's tree with the doc-only paths left out, hashed), `doc_only(path)` (whether `code_key` leaves a path out, which `check.affected` reads so its selection and the code key agree), `person(writer)` (the person part of a `<person>/<clone>` writer), `slug(name)` (a name slugged as `writer` slugs git's `user.name`, which `land.approval` and `verify` slug commit authors with: `person-slug`), `Fold::cleared(request)` (whether a `changes_requested` record is cleared at its fingerprint, the one rule `land.approval` and `web.worker` hold by: `request-cleared`), and, for signed repositories (`signed-ledger-records`), `signed(root, rev)` (whether `rev`'s tree holds `docs/allowed_signers`), `sign(root, record, namespace)` (the record with its `id`, `writer`, `at` and `sig` filled in, signed with the person's key) and `signed_by(root, rev, record, namespace)` (whether the record's `sig` is a valid signature by a key `rev`'s `docs/allowed_signers` lists for the record's writer's person). `clm ledger compact` prunes the caller's own superseded records, `clm ledger verify` audits `main` against the records, approvals and signatures included, and `clm ledger show` prints the fold. Changing a record kind or a field name is a change to this Contract: `land`, `gate`, `view`, `web.worker` and the skills all read them.
+The records that say what was approved, checked and landed, as facts in git that any clone can replay (`per-writer-ledgers`). Each writer appends to its own branch, `clm/ledger/<person>/<clone>`, so appends never race, and the state is the fold over the union of every ledger branch on `origin` and the writer's own. Crate `clm-ledger` offers, as library calls: `writer(root)` (this clone's identity, creating it on first use), `append(root, record)` (commit the record to the writer's branch and push it), `fold(root)` (the state: approvals by fingerprint, checks by code key, lands by commit, and the live push subscriptions by `id`, each with its `writer`, `at`, `endpoint`, `p256dh` and `auth`, the open web proposals by `id`, the comments and the change requests by branch (`web-proposals-as-ledger-records`, `web-review-feedback-as-ledger-records`), the effort records by `id` the capability decisions by capability, and the verifications by commit), `append_all(root, entries)` (several records in one commit and one push), `effort_id(session, branch)` (an `effort` record's `id`), `code_key(root, rev)` (a commit's tree with the doc-only paths left out, hashed), `code_key_with(root, rev, path, from)` (`rev`'s code key with `path`'s entry as it is in `from`, which `land` reads to count a `clm.toml` whose settings are unchanged as checked), `doc_only(path)` (whether `code_key` leaves a path out, which `check.affected` reads so its selection and the code key agree), `person(writer)` (the person part of a `<person>/<clone>` writer), `slug(name)` (a name slugged as `writer` slugs git's `user.name`, which `land.approval` and `verify` slug commit authors with: `person-slug`), `Fold::cleared(request)` (whether a `changes_requested` record is cleared at its fingerprint, the one rule `land.approval` and `web.worker` hold by: `request-cleared`), and, for signed repositories (`signed-ledger-records`), `signed(root, rev)` (whether `rev`'s tree holds `docs/allowed_signers`), `sign(root, record, namespace)` (the record with its `id`, `writer`, `at` and `sig` filled in, signed with the person's key) and `signed_by(root, rev, record, namespace)` (whether the record's `sig` is a valid signature by a key `rev`'s `docs/allowed_signers` lists for the record's writer's person). `clm ledger compact` prunes the caller's own superseded records, `clm ledger verify` audits `main` against the records, approvals and signatures included, and `clm ledger show` prints the fold. Changing a record kind or a field name is a change to this Contract: `land`, `gate`, `view`, `web.worker` and the skills all read them.
 
 Record kinds:
 - `approved`: `fingerprint`, `branch`, `change` (a change ID, or null). A human's approval of a diff (`pinned-approval`).
-- `checked`: `code_key`, `command`. A tree whose code key passed the check command.
+- `checked`: `code_key`, `command`. A tree whose code key passed the check command, or whose code key `code_key_with` maps, its `clm.toml` settings unchanged, to one that did, the land having run that tree's `clm check` and the tests that read `clm.toml` (`land/settings-unchanged-is-checked`).
 - `landed`: `commit`, `branch`, `land_kind` (`spec` or `code`), `review` (whether the land needed a human's review, `gate/needs-review`; false for code), `fingerprint`, `code_key` (the landed commit's code key, which the land's `checked` record names), `changes` (the live change IDs a spec land added or modified). Older records lack `code_key` (`landed-record-names-its-code-key`). Records from before review was yes or no (`yes-no-review`) have `tier` instead of `review`: `HARD` reads as `review: true`, anything else as `false`.
 - `subscribed`: `endpoint`, `p256dh`, `auth`. A browser's Web Push subscription for this repo, which `web.worker` notifies (`push-subscriptions-in-ledger`).
 - `unsubscribed`: `subscription` (the `id` of a `subscribed` record). That subscription's end.
@@ -672,3 +672,26 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 
 #### Serves
 - capability/slow-tests-after-land
+
+### Requirement: code-key-with
+`code_key_with(root, rev, path, from)` SHALL return the key `code_key(root, rev)` would return were `path`'s entry in `rev`'s tree the one `from`'s tree holds, or absent where `from`'s tree holds none, computed from the two trees' listings without writing a git object: `from`'s line for `path` replaces `rev`'s verbatim (mode and object included), or is inserted where `ls-tree -r` would list it, in byte order of paths, when `rev`'s tree holds none, and `path` names one file, matched exactly. For a path `doc_only` names it SHALL return `code_key(root, rev)`.
+
+#### Scenario: one file taken from the base
+- GIVEN commit `a`, and commit `b` on it that changes `clm.toml` and `docs/x.md`
+- WHEN `code_key_with(root, b, "clm.toml", a)` runs
+- THEN it returns `code_key(root, a)`, and `code_key(root, b)` differs from it
+
+#### Scenario: absent in from
+- GIVEN commit `a`, and commit `b` on it that adds `tool.toml`
+- WHEN `code_key_with(root, b, "tool.toml", a)` runs
+- THEN it returns `code_key(root, a)`
+
+#### Scenario: absent in rev
+- GIVEN commit `a` holding `tool.toml`, and commit `b` on it that removes it
+- WHEN `code_key_with(root, b, "tool.toml", a)` runs
+- THEN it returns `code_key(root, a)`
+
+#### Scenario: another file differs too
+- GIVEN commit `a`, and commit `b` on it that changes `clm.toml` and `crates/a/src/lib.rs`
+- WHEN `code_key_with(root, b, "clm.toml", a)` runs
+- THEN it differs from `code_key(root, a)`
