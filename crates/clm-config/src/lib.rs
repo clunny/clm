@@ -244,6 +244,83 @@ pub struct Affected {
     pub all: Vec<String>,
 }
 
+/// Where the slow tests run and who records the result (`verify-after-land`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerifyMode {
+    /// `clm verify` runs the command on this machine.
+    Local,
+    /// A host pipeline runs it and records the result.
+    Pipeline,
+    /// `clm verify` reads the runs of the pipeline `workflow` names.
+    Import,
+}
+
+impl VerifyMode {
+    fn name(self) -> &'static str {
+        match self {
+            VerifyMode::Local => "local",
+            VerifyMode::Pipeline => "pipeline",
+            VerifyMode::Import => "import",
+        }
+    }
+}
+
+/// A moment at which the slow tests run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerifyTrigger {
+    ChangeDone,
+    QueueDrained,
+    /// Only with `VerifyMode::Local`.
+    WorkDone,
+}
+
+impl VerifyTrigger {
+    fn name(self) -> &'static str {
+        match self {
+            VerifyTrigger::ChangeDone => "change-done",
+            VerifyTrigger::QueueDrained => "queue-drained",
+            VerifyTrigger::WorkDone => "work-done",
+        }
+    }
+}
+
+/// The slow tests `clm verify` runs after the land (`verify-after-land`): `[verify]` in
+/// `clm.toml`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Verify {
+    /// The slow-test command; never empty.
+    pub check: String,
+    pub mode: VerifyMode,
+    /// Distinct, in the order written.
+    pub triggers: Vec<VerifyTrigger>,
+    /// A run is due after this many lands, when set; at least 1.
+    pub every_lands: Option<u64>,
+    /// A run is due after this many days, when set; at least 1.
+    pub every_days: Option<u64>,
+    /// The host pipeline whose runs `clm verify` reads; set exactly with `VerifyMode::Import`.
+    pub workflow: Option<String>,
+}
+
+impl fmt::Display for Verify {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "mode={},check={}", self.mode.name(), self.check)?;
+        if !self.triggers.is_empty() {
+            let names: Vec<&str> = self.triggers.iter().map(|t| t.name()).collect();
+            write!(f, ",triggers={}", names.join("+"))?;
+        }
+        if let Some(lands) = self.every_lands {
+            write!(f, ",every.lands={lands}")?;
+        }
+        if let Some(days) = self.every_days {
+            write!(f, ",every.days={days}")?;
+        }
+        if let Some(workflow) = &self.workflow {
+            write!(f, ",workflow={workflow}")?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
     pub autosync: Setting<bool>,
@@ -261,6 +338,9 @@ pub struct Settings {
     pub approval: Setting<Approval>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: `clm check` alone.
     pub land: Setting<Option<Land>>,
+    /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: slow tests stay in
+    /// `[land] check`.
+    pub verify: Setting<Option<Verify>>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone.
     pub node_size: Setting<NodeSize>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: no glob.
@@ -278,7 +358,37 @@ pub struct Settings {
     pub skip_migrations: Setting<Option<Vec<String>>>,
 }
 
+/// Every key `Settings::get` accepts, in the order `clm config list` prints them (`config-list`).
+pub const KEYS: [&str; 16] = [
+    "autosync",
+    "defects",
+    "max_builds",
+    "writer",
+    "host",
+    "approval",
+    "land",
+    "verify",
+    "affected",
+    "detectors",
+    "component_size",
+    "health",
+    "effort",
+    "upgraded",
+    "declined_migrations",
+    "skip_migrations",
+];
+
 impl Settings {
+    /// One line per key of `KEYS`: the key, then what `get` gives, tab-separated (`config-list`).
+    pub fn list(&self) -> Result<Vec<String>, Error> {
+        KEYS.iter()
+            .map(|key| {
+                let (value, layer) = self.get(key)?;
+                Ok(format!("{key}\t{value}\t{layer}"))
+            })
+            .collect()
+    }
+
     /// The key's value as its TOML value (for `detectors`, the names, comma-separated), and
     /// the layer it came from.
     pub fn get(&self, key: &str) -> Result<(String, &Layer), Error> {
@@ -305,6 +415,10 @@ impl Settings {
                     None => String::new(),
                 };
                 Ok((value, &self.land.layer))
+            }
+            "verify" => {
+                let value = self.verify.value.as_ref().map(Verify::to_string);
+                Ok((value.unwrap_or_default(), &self.verify.layer))
             }
             "component_size" => Ok((self.node_size.value.to_string(), &self.node_size.layer)),
             "affected" => {
@@ -386,6 +500,8 @@ struct RepoFile {
     host: Option<Host>,
     approval: Option<Approval>,
     land: Option<toml::Value>,
+    /// Read raw, as `land` is.
+    verify: Option<toml::Value>,
     component_size: Option<toml::Value>,
     /// The table's old name, read only to refuse it by name.
     node_size: Option<toml::Value>,
@@ -412,6 +528,8 @@ struct LocalFile {
     approval: Option<Approval>,
     /// Read raw, as `component_size` is.
     land: Option<toml::Value>,
+    /// Read raw, as `component_size` is.
+    verify: Option<toml::Value>,
     /// Read raw so every error `component_size` reports names it, which toml's own don't.
     component_size: Option<toml::Value>,
     /// The table's old name, read only to refuse it by name.
@@ -455,6 +573,7 @@ impl From<RepoFile> for LocalFile {
             host: f.host,
             approval: f.approval,
             land: f.land,
+            verify: f.verify,
             component_size: f.component_size,
             node_size: f.node_size,
             affected: f.affected,
@@ -501,6 +620,7 @@ fn defaults() -> Settings {
         host: default(Host::Github),
         approval: default(Approval::Any),
         land: default(None),
+        verify: default(None),
         node_size: default(NodeSize::default()),
         affected: default(None),
         health: default(Health::default()),
@@ -605,6 +725,7 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     }
     let max_builds = file.max_builds.map(|v| max_builds(v, path)).transpose()?;
     let land = file.land.map(|v| land(v, path)).transpose()?;
+    let verify = file.verify.map(|v| verify(v, path)).transpose()?;
     if file.node_size.is_some() {
         return Err(Error::file(
             path,
@@ -636,6 +757,7 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     set(&mut settings.host, file.host, layer());
     set(&mut settings.approval, file.approval, layer());
     set(&mut settings.land, land.map(Some), layer());
+    set(&mut settings.verify, verify.map(Some), layer());
     set(&mut settings.node_size, node_size, layer());
     set(&mut settings.affected, affected.map(Some), layer());
     set(&mut settings.health, health, layer());
@@ -816,6 +938,119 @@ fn land(value: toml::Value, path: &Path) -> Result<Land, Error> {
         ))),
         None => Err(fail("`check` is missing".into())),
     }
+}
+
+/// Reads `[verify]`: a table with a non-empty string `check`, a `mode`, optional distinct
+/// `triggers`, an optional `every` table of positive integers and a `workflow` that `import`
+/// requires and the other modes refuse.
+fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
+    let fail = |problem: String| Error::file(path, format!("`verify`: {problem}"));
+    let toml::Value::Table(table) = value else {
+        return Err(fail(format!("must be a table, not {value}")));
+    };
+    if let Some(key) = table.keys().find(|k| {
+        !matches!(
+            k.as_str(),
+            "check" | "mode" | "triggers" | "every" | "workflow"
+        )
+    }) {
+        return Err(fail(format!(
+            "unknown key `{key}`, expected `check`, `mode`, `triggers`, `every` or `workflow`"
+        )));
+    }
+    let check = match table.get("check") {
+        Some(toml::Value::String(check)) if !check.is_empty() => check.clone(),
+        Some(other) => {
+            return Err(fail(format!(
+                "`check` must be a non-empty string, not {other}"
+            )));
+        }
+        None => return Err(fail("`check` is missing".into())),
+    };
+    let mode = match table.get("mode").and_then(toml::Value::as_str) {
+        Some("local") => VerifyMode::Local,
+        Some("pipeline") => VerifyMode::Pipeline,
+        Some("import") => VerifyMode::Import,
+        _ => match table.get("mode") {
+            Some(other) => {
+                return Err(fail(format!(
+                    "`mode` must be `local`, `pipeline` or `import`, not {other}"
+                )));
+            }
+            None => return Err(fail("`mode` is missing".into())),
+        },
+    };
+    let mut triggers = Vec::new();
+    if let Some(value) = table.get("triggers") {
+        let Some(items) = value.as_array() else {
+            return Err(fail(format!("`triggers` must be an array, not {value}")));
+        };
+        for item in items {
+            let trigger = match item.as_str() {
+                Some("change-done") => VerifyTrigger::ChangeDone,
+                Some("queue-drained") => VerifyTrigger::QueueDrained,
+                Some("work-done") => VerifyTrigger::WorkDone,
+                _ => {
+                    return Err(fail(format!(
+                        "unknown trigger {item}, expected `change-done`, `queue-drained` or \
+                         `work-done`"
+                    )));
+                }
+            };
+            if triggers.contains(&trigger) {
+                return Err(fail(format!("trigger {item} is repeated")));
+            }
+            if trigger == VerifyTrigger::WorkDone && mode != VerifyMode::Local {
+                return Err(fail("trigger `work-done` needs `mode = \"local\"`".into()));
+            }
+            triggers.push(trigger);
+        }
+    }
+    let (mut every_lands, mut every_days) = (None, None);
+    if let Some(value) = table.get("every") {
+        let toml::Value::Table(every) = value else {
+            return Err(fail(format!("`every` must be a table, not {value}")));
+        };
+        for (key, value) in every {
+            let slot = match key.as_str() {
+                "lands" => &mut every_lands,
+                "days" => &mut every_days,
+                _ => {
+                    return Err(fail(format!(
+                        "`every`: unknown key `{key}`, expected `lands` or `days`"
+                    )));
+                }
+            };
+            *slot = Some(at_least_one(value.as_integer()).ok_or_else(|| {
+                fail(format!(
+                    "`every`: `{key}` must be a positive integer, not {value}"
+                ))
+            })?);
+        }
+    }
+    let workflow = match (table.get("workflow"), mode) {
+        (Some(toml::Value::String(w)), VerifyMode::Import) if !w.is_empty() => Some(w.clone()),
+        (Some(other), VerifyMode::Import) => {
+            return Err(fail(format!(
+                "`workflow` must be a non-empty string, not {other}"
+            )));
+        }
+        (None, VerifyMode::Import) => {
+            return Err(fail("`mode = \"import\"` needs a `workflow`".into()));
+        }
+        (Some(_), _) => {
+            return Err(fail("`workflow` is only for `mode = \"import\"`".into()));
+        }
+        (None, _) => None,
+    };
+    Ok(Verify {
+        check,
+        mode,
+        triggers,
+        every_lands,
+        every_days,
+        workflow,
+    })
 }
 
 /// Reads `[affected]`: a table whose one key, `all`, is an array of non-empty strings.
