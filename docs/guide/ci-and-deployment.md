@@ -8,6 +8,8 @@ Continuous integration means every change joins `main` quickly and `main` always
 
 The checks run on the machine that runs `clm land`. If your team wants a controlled environment, run `clm land` on a shared machine you trust. CLM generates no pipeline for it.
 
+When the check fails, `clm land` repeats its last 40 lines and keeps its whole output at `.clm/land-logs/<branch>.log`. If your check script runs several steps, print `::group::<name>` as each one starts and `::endgroup::` as it ends, as GitHub Actions does. The refusal then names the step that was running when the check failed and the lines of the log it spans, so a session reads the failure even when it lies more than 40 lines back.
+
 ## Deployment is yours
 
 Every commit on `main` is checked, so every commit is deployable. Whether and when you deploy is your choice:

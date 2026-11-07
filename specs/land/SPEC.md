@@ -34,7 +34,7 @@ Crate `clm-land`, called from `crates/clm`'s `land`, `approve` (re-exported from
 
 **Readers of checked code** (`doc-readers-marked`). `code_key` leaves the doc-only paths out, so a `checked` record says nothing of the tests that read them: a spec branch's prose can fail such a test (a retired term under `specs/`) on a tree whose code was checked. A land whose code key is checked checks the merge commit out into a temporary worktree, as an attempt with no lock does, and runs `clm affected --base <sha> --readers` there (`check.affected/affected-readers`), `<sha>` as in **Selected tests**. When it prints nothing, the attempt goes on in that worktree with no lock. The gate on the head and **Derived specs** have run by then, in that worktree. When it prints a line, the attempt removes that worktree and goes on as one whose check runs: it takes the lock when the check compiles into `.clm/land`, checks the merge commit out into the land tree (a caller's `CARGO_TARGET_DIR` keeps the temporary worktree, with no lock), so the check reuses the warm target, and runs `[land] check`, so the readers' tests alone, with `CLM_SELECTION` naming a file holding that output unchanged. When it fails, it prints `clm affected failed: <reason>; the check runs every test` as **Selected tests** does and goes on the same way with `CLM_SELECTION` unset. A failing check exits 1 as any land's does.
 
-**The check's output** (`land-check-log`). One pipe (`std::io::pipe`) carries `[land] check`'s stdout and stderr in the order written, copied to stderr and to `<home>/.clm/land-logs/<branch>.log`, the branch's slashes as directories, created and truncated first; the last 40 lines (split on `\n`) are kept in memory. It reads until the pipe closes, so a check must end what it starts. A failing check's refusal, printed last as `clm land: <why>`, is `last 40 lines of `<check>`:`, those lines and `` `<check>` fails on the merge with main; its output is at <path> ``, and the log stays; a passing check removes it. A log that can't be created warns naming the path, and the refusal then has no `; its output is at` clause. `clm check`'s output isn't logged.
+**The check's output** (`land-check-log`, `check-step-markers`). One pipe (`std::io::pipe`) carries `[land] check`'s stdout and stderr in the order written, copied to stderr and to `<home>/.clm/land-logs/<branch>.log`, the branch's slashes as directories, created and truncated first; the last 40 lines (split on `\n`) are kept in memory. It reads until the pipe closes, so a check must end what it starts. **Steps.** While reading, the runner numbers the output's lines from 1 and follows the steps the check marks in GitHub Actions' form, testing each line with a trailing `\r` removed: a line starting `::group::` starts a step named by the rest of the line, trimmed, at that line, ending any step open at the line before it; a line that is `::endgroup::` once trailing whitespace is trimmed ends the open step at that line; a line of either kind can sit anywhere in the output, a marker split across reads is matched once the line is whole, and a last line with no `\n` counts. The step open when the pipe closes, if any, is the *last step*, spanning its marker line to the output's last line; when every step had ended, or none was marked, there is none. Only the name, the first line and the line count are kept, so the steps cost no memory beyond the tail. A failing check's refusal, printed last as `clm land: <why>`, is `last 40 lines of `<check>`:`, those lines and `` `<check>` fails on the merge with main ``, followed with a last step by `` ; the step open when it ended is `<name>`, lines <first> to <last> of its output `` and with a log by `` ; its output is at <path> ``, and the log stays; a passing check removes it. A log that can't be created warns naming the path, and the refusal then has no `; its output is at` clause; the line numbers then count the output copied to stderr. `clm check`'s output isn't logged, and `--check-only` and `verify` name no step.
 
 **Freeing a build's disk** (`land-frees-build-target`). After the push and the append of an `impl/*` land it deletes the `target/` at `git rev-parse --show-toplevel` when that is a linked worktree whose `HEAD` is the landed branch, printing `removed <path>`; a missing one is skipped and a failed delete warns. `clm run --finish` removes the worktree itself (`orchestrator.run`).
 
@@ -455,12 +455,12 @@ An attempt of `clm land` that holds the lock on `.clm/land.lock` SHALL check the
 - THEN the first lands, the second exits 1, and `git status --porcelain` in the main worktree prints nothing, with no `target/` directory there
 
 ### Requirement: check-log
-`clm land` SHALL write `[land] check`'s stdout and stderr, in the order produced, to `.clm/land-logs/<branch>.log` in the CLM root of the main worktree while also printing them to stderr. When the check fails its refusal SHALL hold, under a line naming the check, the last 40 lines of that output, kept in memory, and end with a line naming the log's path, and it SHALL keep the log; when the check passes it SHALL remove the log. When the log can't be created it SHALL warn naming the path and run the check all the same, and a failing check's refusal then names no path.
+`clm land` SHALL write `[land] check`'s stdout and stderr, in the order produced, to `.clm/land-logs/<branch>.log` in the CLM root of the main worktree while also printing them to stderr. When the check fails its refusal SHALL hold, under a line naming the check, the last 40 lines of that output, kept in memory, and end with a line naming the log's path, and it SHALL keep the log; when the check passes it SHALL remove the log. When the log can't be created it SHALL warn naming the path and run the check all the same, and a failing check's refusal then names no path. The check MAY mark its steps in its output with GitHub Actions' group lines (`check-step-markers`): a line starting `::group::` starts a step named by the rest of the line, trimmed, ending any step open, and a line `::endgroup::` ends the open step, each tested with trailing whitespace removed. When a step is open as a failing check's output ends, the refusal's last line SHALL also name that step and the first and last line numbers, counted from 1 in the whole output, of the lines it spans, from its `::group::` line to the output's last line. When no step is open then, because the check marked none or ended every step it marked, the refusal SHALL be as it is for a check that marks none.
 
 #### Scenario: failing check's tail and log
 - GIVEN a `[land] check` that prints the lines `1` to `100`, the odd ones to stdout and the even ones to stderr, and exits 1
 - WHEN `clm land impl/a` runs
-- THEN it exits 1, its stderr holds a line naming the check followed by the lines `61` to `100`, the refusal names the main worktree's `.clm/land-logs/impl/a.log`, and that file holds the lines `1` to `100` in order
+- THEN it exits 1, its stderr holds a line naming the check followed by the lines `61` to `100`, the refusal names the main worktree's `.clm/land-logs/impl/a.log` and no step, and that file holds the lines `1` to `100` in order
 
 #### Scenario: short output repeated whole
 - GIVEN a `[land] check` that prints three lines and exits 1
@@ -476,6 +476,21 @@ An attempt of `clm land` that holds the lock on `.clm/land.lock` SHALL check the
 - GIVEN a file, not a directory, at the main worktree's `.clm/land-logs`
 - WHEN `clm land impl/a` runs with a passing check
 - THEN it warns naming the log's path, the check ran, and the branch landed
+
+#### Scenario: the failing step named
+- GIVEN a `[land] check` that prints `::group::unit`, 5 lines and `::endgroup::`, then `::group::e2e`, a line `boom` and 60 more lines, and exits 1
+- WHEN `clm land impl/a` runs
+- THEN it exits 1, its stderr holds the last 40 lines after the line naming the check, and the refusal's last line names the step `e2e`, lines 8 to 69, and the log's path
+
+#### Scenario: a step that ended isn't named
+- GIVEN a `[land] check` that prints `::group::unit`, a line and `::endgroup::`, then a line `boom`, and exits 1
+- WHEN `clm land impl/a` runs
+- THEN it exits 1 and the refusal names the log's path and no step
+
+#### Scenario: a group marker split across writes
+- GIVEN a `[land] check` that writes `::gro`, sleeps 0.2 seconds, writes `up::e2e` and a newline, prints a line `boom`, and exits 1
+- WHEN `clm land impl/a` runs
+- THEN the refusal names the step `e2e`, lines 1 to 2
 
 ### Requirement: records-effort
 After the push to `main`, `clm land` SHALL append, in the commit that appends `landed` and before it, the `effort` records `clm effort record --branch <branch>` would append for the landed branch's sessions on this machine, read once before its first attempt from the transcripts directory its environment gives (`effort/record-command`). When they can't be read it SHALL warn, naming why, and land as before.
@@ -643,7 +658,7 @@ Before merging, `clm land` SHALL take the *held* components: the `components` of
 - capability/slow-tests-after-land
 
 ### Requirement: shared-check-runner
-`clm-land` SHALL offer as a library call the runner that `clm land` and `clm land --check-only` run `[land] check` through: it takes the command, the directory to run it in, an optional selection file for `CLM_SELECTION`, the environment to set and unset, and the log file's path, runs the command through `sh -c` under the clone's check lock (`check-lock`), printing its waiting line once when it waits, copies its output to stderr and the log as `land-check-log` says, and returns whether it passed with the last 40 lines, leaving the log for the caller to keep or remove. `clm land` and `--check-only` SHALL call it with the environment they set today, so their behaviour is unchanged.
+`clm-land` SHALL offer as a library call the runner that `clm land` and `clm land --check-only` run `[land] check` through: it takes the command, the directory to run it in, an optional selection file for `CLM_SELECTION`, the environment to set and unset, and the log file's path, runs the command through `sh -c` under the clone's check lock (`check-lock`), printing its waiting line once when it waits, copies its output to stderr and the log as `land-check-log` says, and returns whether it passed with the last 40 lines and the step open when its output ended, if any, with that step's name and first and last line numbers as `check-log` counts them, leaving the log for the caller to keep or remove. `clm land` and `--check-only` SHALL call it with the environment they set today, so their behaviour is unchanged apart from `check-log`'s step in a land's refusal.
 
 #### Scenario: a caller waits on the check lock
 - GIVEN a command that writes `ok` and exits 0, and `.clm/check.lock` held by another process that releases it after 1 second
@@ -654,6 +669,11 @@ Before merging, `clm land` SHALL take the *held* components: the `components` of
 - GIVEN a `[land] check` that fails printing 50 numbered lines
 - WHEN `clm land` runs
 - THEN its refusal holds lines 11 to 50 and the log's path, as `land-check-log` says
+
+#### Scenario: the open step returned
+- GIVEN a command that prints `::group::a`, a line, `::group::b` and two lines, and exits 1
+- WHEN the runner runs the command
+- THEN it returns a failure with the step `b`, lines 3 to 5
 
 #### Serves
 - capability/slow-tests-after-land
