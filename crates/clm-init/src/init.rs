@@ -455,10 +455,9 @@ fn make_executable(path: &Path) -> std::io::Result<()> {
 }
 
 /// The steps left for the human: the `permissions` step, then the push, skipped once `git`
-/// shows it done and nothing else is left to commit.
-/// then the host's own setup steps (`clm-host`'s `setup_steps`), conditional because whether
-/// the host protects `main` would take asking it. `paths` are all of CLM's files, written or
-/// kept.
+/// shows it done and nothing else is left to commit, then the host's own setup steps
+/// (`clm-host`'s `setup_steps`), always printed since whether the host protects `main` would
+/// take asking it. `paths` are all of CLM's files, written or kept.
 fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<String>) -> Vec<String> {
     let mut steps: Vec<String> = permissions.into_iter().collect();
     // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or

@@ -696,7 +696,9 @@ fn next_steps_name_the_push_and_clm_land() {
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let steps = next_steps(&init(&dir, &[], &fake_hosts()));
-    for line in clm_host::setup_steps(clm_config::Host::Github) {
+    let given = clm_host::setup_steps(clm_config::Host::Github);
+    assert!(!given.is_empty());
+    for line in given {
         assert!(steps.contains(&line), "{line}: {steps}");
     }
     no_ci(&steps);
@@ -709,8 +711,11 @@ fn azure_next_steps() {
     let steps = next_steps(&init(&dir, &["--host", "azure"], &fake_hosts()));
     let given = clm_host::setup_steps(clm_config::Host::Azure);
     assert!(!given.is_empty());
-    for line in given {
-        assert!(steps.contains(&line), "{line}: {steps}");
+    // Each line whole, after the push step, in order.
+    let lines: Vec<&str> = steps.lines().map(|l| l.trim_start_matches("- ")).collect();
+    let push = step(&steps, &["push them to `main`"]);
+    for (i, line) in given.iter().enumerate() {
+        assert_eq!(lines.get(push + 1 + i), Some(&line.as_str()), "{steps}");
     }
     assert!(steps.contains("az login"), "{steps}");
     assert!(steps.contains("Bypass policies when pushing"), "{steps}");
@@ -721,7 +726,7 @@ fn azure_next_steps() {
 fn next_steps_skip_what_is_done() {
     // req:init/init-next-steps@01bcacd1
     // The push is left after a local commit, and not once `origin/main` has the files; the
-    // protection step stays, since `clm init` can't ask the host.
+    // host's setup steps stay, since `clm init` can't ask the host.
     let (tmp, dir) = repo();
     let hosts = fake_hosts();
     let steps = next_steps(&init(&dir, &[], &hosts));
