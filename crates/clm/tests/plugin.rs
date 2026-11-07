@@ -1634,19 +1634,12 @@ fn wrap_up_gaps(skills: &[(String, String)]) -> Vec<String> {
 #[test]
 fn wrap_up_left_lines() {
     // req:plugin/wrap-up-left-lines@969152a0
-    let skills: Vec<(String, String)> = [
-        "build",
-        "triage",
-        "propose",
-        "contribution",
-        "init",
-        "health",
-        "help",
-        "upgrade",
-    ]
-    .iter()
-    .map(|s| (s.to_string(), skill_body(s)))
-    .collect();
+    let mut names: Vec<String> = fs::read_dir(plugin().join("skills"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    let skills: Vec<(String, String)> = names.iter().map(|s| (s.clone(), skill_body(s))).collect();
     assert_eq!(wrap_up_gaps(&skills), Vec::<String>::new());
     // Each skill that runs `clm wrap-up` passes the left lines on, and none of them
     // does it by pruning worktrees itself.
@@ -1657,7 +1650,13 @@ fn wrap_up_left_lines() {
             .find(|p| p.contains("clm wrap-up") && p.contains("left <path>"))
             .unwrap_or_else(|| panic!("{name}: no paragraph"));
         let sentence = sentence_with(p, "left <path>");
-        for needle in ["as it stands", "couldn't remove", "to them"] {
+        for needle in [
+            "as it stands",
+            "couldn't remove",
+            "doesn't make the wrap-up incomplete",
+            "any command the line names",
+            "to them",
+        ] {
             assert!(sentence.contains(needle), "{name}: {needle}: {sentence}");
         }
     }
