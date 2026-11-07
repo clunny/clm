@@ -1636,7 +1636,9 @@ fn wrap_up_left_lines() {
     // req:plugin/wrap-up-left-lines@969152a0
     let mut names: Vec<String> = fs::read_dir(plugin().join("skills"))
         .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .map(|e| e.unwrap())
+        .filter(|e| e.file_type().unwrap().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
     let skills: Vec<(String, String)> = names.iter().map(|s| (s.clone(), skill_body(s))).collect();
@@ -1654,6 +1656,7 @@ fn wrap_up_left_lines() {
             "as it stands",
             "couldn't remove",
             "doesn't make the wrap-up incomplete",
+            "leave the directory",
             "any command the line names",
             "to them",
         ] {
