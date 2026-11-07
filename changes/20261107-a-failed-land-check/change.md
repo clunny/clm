@@ -40,4 +40,13 @@ Make a failed `[land] check`'s refusal say where the failure is, not only repeat
 - A `::group::` with an empty name is still a step, named by the empty string.
 - With no log (it couldn't be created), the line numbers count the output copied to stderr.
 
-Out of scope: this repository's `.github/scripts/ci-check.sh` and the `scripts/clm-check.sh` that `/clm:init` writes printing markers. Each is a small follow-up once the land names steps, and neither is needed for the item.
+Out of scope: this repository's `.github/scripts/ci-check.sh` and the `scripts/clm-check.sh` that `/clm:init` writes printing markers. Neither is needed for the item. They are recorded as `backlog/ci-check-marks-no-steps` and `backlog/init-check-starter-marks-no-steps`.
+
+## Open questions
+
+The builder check raised these about `land/shared-check-runner`, which `20261107-slow-tests-after-land` added and nothing has built yet. They predate this change, which only adds the step to what the runner returns, so they are left to that build to settle within the requirement as written:
+
+- where the runner finds the check lock's path, since its inputs name no CLM root (a land checks in `.clm/land-tree` or a temporary worktree, so the run directory can't give it);
+- whether its log path is optional, since `--check-only` keeps no log today;
+- the shape of the environment it takes, and whether the selection file is separate from it;
+- the refusal wording stays with each caller (`clm land` here, `verify` later), and the runner returns the facts the wording needs.
