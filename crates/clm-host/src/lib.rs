@@ -1,10 +1,12 @@
 //! The host adapter: pages, remote branch deletion and issues (specs/host/SPEC.md). Every
 //! process runs through `clm-git`.
 
+mod azure;
 mod github;
 
 use std::path::Path;
 
+pub use azure::Azure;
 use clm_git::{REMOTE, current_branch, git};
 use github::GitHub;
 
@@ -188,10 +190,15 @@ impl Host for NoHost {
     }
 
     fn issue(&self, root: &Path, _: &str, body_file: &Path, _: &str) -> Result<String, Error> {
-        let report = std::fs::read_to_string(root.join(body_file))
-            .map_err(|e| Error::Refused(format!("{}: {e}", body_file.display())))?;
-        Err(Error::Nowhere(report))
+        nowhere_to_file(root, body_file)
     }
+}
+
+/// An issue on a host with nowhere to file it: fails with the report that wasn't filed.
+fn nowhere_to_file(root: &Path, body_file: &Path) -> Result<String, Error> {
+    let report = std::fs::read_to_string(root.join(body_file))
+        .map_err(|e| Error::Refused(format!("{}: {e}", body_file.display())))?;
+    Err(Error::Nowhere(report))
 }
 
 /// Refuses a body file that is missing or holds only whitespace: a page body can't be

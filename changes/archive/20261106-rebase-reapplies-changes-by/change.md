@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [rebase-reapplies-changes-by-id-not-dependency]
 ---
 
