@@ -65,6 +65,19 @@ pub struct Alert {
     pub manifest: String,
 }
 
+/// A run of a host pipeline, as `runs` reports it: one word per field, and none of the run's
+/// own text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Run {
+    pub id: u64,
+    /// The head commit, 40 hex digits.
+    pub head: String,
+    pub completed: bool,
+    /// Lower-case letters and `_`, or `unknown`.
+    pub conclusion: String,
+    pub url: String,
+}
+
 fn no_host<T>() -> Result<T, Error> {
     Err(Error::Refused("there is no host".into()))
 }
@@ -153,6 +166,12 @@ pub trait Host {
     /// The open dependency alerts; empty without a host.
     fn alerts(&self, _root: &Path) -> Result<Vec<Alert>, Error> {
         Ok(Vec::new())
+    }
+
+    /// The runs of pipeline `workflow` on `main`, newest first; an error on a host that lists
+    /// none.
+    fn runs(&self, _root: &Path, _workflow: &str) -> Result<Vec<Run>, Error> {
+        Err(Error::Refused("the host lists no pipeline runs".into()))
     }
 
     /// Deletes [`REMOTE`]'s `branch` when its tip is still `lease`: plain git on every host,

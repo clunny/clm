@@ -5,7 +5,7 @@ use std::path::Path;
 use clm_git::{REMOTE, current_branch, gh, git};
 use serde_json::Value;
 
-use crate::{Alert, Error, Host, Listed, Shown};
+use crate::{Alert, Error, Host, Listed, Run, Shown};
 
 pub(crate) struct GitHub;
 
@@ -185,7 +185,56 @@ fn alert(v: &Value) -> Option<Alert> {
     })
 }
 
+/// A run's conclusion as one word: lower-case letters and `_`, else `unknown`.
+fn conclusion(v: &Value) -> String {
+    match v.as_str() {
+        Some(s) if !s.is_empty() && s.chars().all(|c| c.is_ascii_lowercase() || c == '_') => {
+            s.to_string()
+        }
+        _ => "unknown".into(),
+    }
+}
+
+/// A run from `gh run list`; `None` when its head isn't a full commit hash.
+fn run(v: &Value) -> Option<Run> {
+    let head = v["headSha"].as_str()?;
+    if head.len() != 40 || !head.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(Run {
+        id: v["databaseId"].as_u64()?,
+        head: head.to_string(),
+        completed: v["status"].as_str() == Some("completed"),
+        conclusion: conclusion(&v["conclusion"]),
+        url: text(&v["url"]),
+    })
+}
+
 impl Host for GitHub {
+    fn runs(&self, root: &Path, workflow: &str) -> Result<Vec<Run>, Error> {
+        let args = [
+            "run",
+            "list",
+            "--workflow",
+            workflow,
+            "--branch",
+            "main",
+            "--event",
+            "push",
+            "--limit",
+            "100",
+            "--json",
+            "databaseId,headSha,status,conclusion,url",
+        ];
+        let items = json("gh run list", &gh(root, &args)?)?;
+        Ok(items
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(run)
+            .collect())
+    }
+
     fn alerts(&self, root: &Path) -> Result<Vec<Alert>, Error> {
         let args = [
             "api",
