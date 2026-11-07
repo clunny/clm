@@ -643,7 +643,7 @@ The fold, `fold` and `fold_records` alike, SHALL parse `decided` records and hol
 - architecture/reuse-first
 
 ### Requirement: verified-record
-The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and hold them by `commit`, the newest by `at` first, skipping with a warning a line whose `passed` isn't a boolean, whose `mode` isn't `local`, `pipeline` or `import`, or whose `commit`, `since`, `lands` or `culprit` holds anything but full 40-hex commit IDs (or null where null is allowed). `append` SHALL write it like any record, and sign it in a signed repository (`record-signing`). `clm ledger show` SHALL print a `verified` record as `verified <commit> passed|failed <writer> <at>`. `clm ledger compact` SHALL keep the caller's newest `verified` record for each commit and drop older ones for the same commit.
+The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and hold them by `commit`, the newest by `at` first, skipping with a warning a line whose `passed` isn't a boolean, whose `mode` isn't `local`, `pipeline` or `import`, or whose `commit`, `since`, `lands` or `culprit` holds anything but full 40-hex commit IDs (or null where null is allowed). `append` SHALL write it like any record, unsigned in every repository: a `verified` record holds no land by itself (`land/verify-stop` reads the backlog item triage takes it in as), so it is a report, as the kinds other than `approved` and `landed` are. `clm ledger show` SHALL print a `verified` record as `verified <commit> passed|failed <writer> <at>`. `clm ledger compact` SHALL keep the caller's newest `verified` record for each commit and drop older ones for the same commit. `Fold::unresolved_reds(chain)`, given a first-parent chain of commits oldest first, SHALL return the newest record of each commit after the last one whose newest record passed (of every commit when none passed) whose newest record failed, in chain order, for `verify`, `land` and `orchestrator.triage` to read alike.
 
 #### Scenario: by commit
 - GIVEN two `verified` records for commit `c`, the second red with culprit `l`, and one for commit `d`
@@ -659,6 +659,11 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 - GIVEN a passing `verified` record for commit `c`
 - WHEN `clm ledger show` runs
 - THEN it prints `verified <c> passed <writer> <at>`
+
+#### Scenario: unresolved reds
+- GIVEN a chain `a`, `b`, `c`, `d`, a passing record for `a`, a red one for `b`, a red then a passing one for `c`, and a red one for `d`
+- WHEN `unresolved_reds` reads the chain
+- THEN it returns `d`'s record alone, since `c`'s newest record passed
 
 #### Scenario: compacted
 - GIVEN the caller's two `verified` records for commit `c`
