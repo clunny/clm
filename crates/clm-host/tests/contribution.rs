@@ -444,14 +444,14 @@ fn runs_are_listed() {
 fn an_odd_conclusion_is_unknown() {
     // req:host/list-runs@008f0107
     let out = format!(
-        r#"[{{"databaseId":1,"headSha":"{SHA_C}","status":"completed","conclusion":"Fail ure","url":"u"}},{{"databaseId":2,"headSha":"{SHA_C}","status":"completed","conclusion":"timed_out","url":"u"}},{{"databaseId":3,"headSha":"{SHA_C}","status":"completed","url":"u"}}]"#
+        r#"[{{"databaseId":1,"headSha":"{SHA_C}","status":"completed","conclusion":"Fail ure","url":"u"}},{{"databaseId":2,"headSha":"{SHA_C}","status":"completed","conclusion":"timed_out","url":"u"}},{{"databaseId":4,"headSha":"{SHA_C}","status":"completed","conclusion":"Failure","url":"u"}},{{"databaseId":3,"headSha":"{SHA_C}","status":"completed","url":"u"}}]"#
     );
     with_gh(&[("run list", &out)], |root, _| {
         let runs = clm_host::adapter(Setting::Github)
             .runs(root, "slow")
             .unwrap();
         let conclusions: Vec<_> = runs.iter().map(|r| r.conclusion.as_str()).collect();
-        assert_eq!(conclusions, ["unknown", "timed_out", "unknown"]);
+        assert_eq!(conclusions, ["unknown", "timed_out", "unknown", "unknown"]);
     });
 }
 
