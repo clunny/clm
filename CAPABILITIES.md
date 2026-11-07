@@ -278,7 +278,7 @@ A person can rely on AI sessions being stopped from unsafe actions, such as appr
 A session that can approve or push for itself makes every other rule optional.
 
 #### Scenario: push to main
-- GIVEN a session on `main`
+- GIVEN a session on `main` in a repository under CLM
 - WHEN it runs `git push`
 - THEN the guard blocks it
 
