@@ -12,4 +12,4 @@ The same day showed the other half: `web/loading-indicator` and `web/graph-fills
 
 Rejected: a gate rule refusing a `Resolves:` code fix whose test cites no requirement added on the branch (most real bugs do break a rule as written, and a program can't tell which).
 
-(Amended 2026-11-07, `20261107-harness-only-capability-work`: a fix to the capability suite's harness restores the Design of the component that builds the capability tests, which holds the harness and no requirement of its own, so that Design as written is the rule such a fix restores (`human-layer-proof`).)
+(Amended 2026-11-07, `20261107-harness-only-capability-work`: a bug in the capability suite's harness alone is outside this rule. It restores no behaviour a person or test observes, only the Design of the component that builds the capability tests, which holds no requirement of its own, so there is nothing for a test to cite and nothing for a requirement to add. It is fixed on a small-change branch whose commit deletes the item with `Resolves: backlog/<slug>`, never with `clm claim --fix` (`human-layer-proof`).)

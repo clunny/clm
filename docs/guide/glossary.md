@@ -41,6 +41,8 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Component status:** `unbuilt` (specified, not built yet), `active` (built and kept current) and `deprecated`.
 - **Queue:** the components with pending requirements, in priority order (`clm next`). A component in it is `ready` (work no one holds), `claimed` (a build holds it) or `blocked` (its pending requirements wait on a `#### Needs` or a backlog item); one with nothing pending is `converged`.
 - **Claim:** pushing a branch that tells other sessions you're working on a component (`impl/<component>`) or a backlog item (`propose/<slug>`); it lapses when no one pushes to it for a while (`clm claim`). *Usually:* assigning a ticket to yourself.
+- **Small change:** a code change, or an edit to `docs/` or `CLAUDE.md`, that leaves every requirement, scenario and design as written true, landed from a branch of its own with no claim and no change (`small-change-no-claim`).
+- **Harness:** the plumbing the capability tests run on (runner settings, the script that starts the system under test, ports, worker counts), held in the Design of the component that builds those tests. **Harness-only work** changes only it and is never a requirement; it lands as a small change (`human-layer-proof`). *Usually:* the test harness.
 - **Run / runner:** `clm run` prepares one component's build for a session; `clm runner` builds everything in the queue unattended, one session per component.
 - **Build place:** one of the clone's slots for a build running at once (`max_builds`).
 - **Draft:** an unattended session that designs one change from backlog items (`clm draft`).
