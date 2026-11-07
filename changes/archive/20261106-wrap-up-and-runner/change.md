@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [wrap-up-and-runner-trip-on-unwritable-worktree-dirs]
 ---
 

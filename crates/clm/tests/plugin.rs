@@ -1612,6 +1612,64 @@ fn finish_gaps(body: &str) -> Vec<String> {
     )
 }
 
+/// The skills that name `clm wrap-up` without a paragraph that also names `left <path>`
+/// (`wrap-up-left-lines`), and any skill that tells Claude to run `git worktree prune`.
+fn wrap_up_gaps(skills: &[(String, String)]) -> Vec<String> {
+    let mut gaps = Vec::new();
+    for (name, body) in skills {
+        if body.contains("git worktree prune") {
+            gaps.push(format!("{name}: git worktree prune"));
+        }
+        if body.contains("clm wrap-up")
+            && !body
+                .split("\n\n")
+                .any(|p| p.contains("clm wrap-up") && p.contains("left <path>"))
+        {
+            gaps.push(format!("{name}: left <path>"));
+        }
+    }
+    gaps
+}
+
+#[test]
+fn wrap_up_left_lines() {
+    // req:plugin/wrap-up-left-lines@969152a0
+    let mut names: Vec<String> = fs::read_dir(plugin().join("skills"))
+        .unwrap()
+        .map(|e| e.unwrap())
+        .filter(|e| e.file_type().unwrap().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    let skills: Vec<(String, String)> = names.iter().map(|s| (s.clone(), skill_body(s))).collect();
+    assert_eq!(wrap_up_gaps(&skills), Vec::<String>::new());
+    // Each skill that runs `clm wrap-up` passes the left lines on, and none of them
+    // does it by pruning worktrees itself.
+    for name in ["build", "triage", "propose", "contribution", "init"] {
+        let body = skill_body(name);
+        let p = body
+            .split("\n\n")
+            .find(|p| p.contains("clm wrap-up") && p.contains("left <path>"))
+            .unwrap_or_else(|| panic!("{name}: no paragraph"));
+        let sentence = sentence_with(p, "left <path>");
+        for needle in [
+            "as it stands",
+            "couldn't remove",
+            "doesn't make the wrap-up incomplete",
+            "leave the directory",
+            "any command the line names",
+            "to them",
+        ] {
+            assert!(sentence.contains(needle), "{name}: {needle}: {sentence}");
+        }
+    }
+    // A skill that names `clm wrap-up` and no paragraph naming `left <path>` with it.
+    let bare = vec![("build".to_string(), "Run `clm wrap-up`.".to_string())];
+    assert_reports(&wrap_up_gaps(&bare), "build", "left <path>");
+    let pruned = vec![("build".to_string(), "Run `git worktree prune`.".to_string())];
+    assert_reports(&wrap_up_gaps(&pruned), "build", "git worktree prune");
+}
+
 #[test]
 fn build_finishes_builds() {
     // req:plugin/build-finishes-builds@841e10ab
