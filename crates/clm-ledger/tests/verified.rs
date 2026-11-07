@@ -34,9 +34,10 @@ fn body(commit: char, passed: bool) -> Body {
 fn by_commit() {
     // req:ledger/verified-record@844d746f
     let text = [
-        line(1, 'c', "true", "2026-01-01T00:00:00.000Z", None),
-        line(2, 'c', "false", "2026-01-02T00:00:00.000Z", Some('a')),
+        // Read newest first, so the order is by `at`, not by line.
         line(3, 'd', "true", "2026-01-03T00:00:00.000Z", None),
+        line(2, 'c', "false", "2026-01-02T00:00:00.000Z", Some('a')),
+        line(1, 'c', "true", "2026-01-01T00:00:00.000Z", None),
     ]
     .join("\n");
     let fold = fold_records(&[("one", &text)]);
@@ -61,7 +62,9 @@ fn bad_result() {
     let bad = [
         line(1, 'c', "\"yes\"", "2026-01-01T00:00:00.000Z", None),
         line(2, 'c', "true", "2026-01-01T00:00:00.000Z", None).replace("local", "remote"),
-        line(3, 'c', "true", "2026-01-01T00:00:00.000Z", None).replace(&ok, "abc123"),
+        line(3, 'c', "true", "2026-01-01T00:00:00.000Z", None).replacen(&ok, "abc123", 1),
+        line(8, 'c', "true", "2026-01-01T00:00:00.000Z", None)
+            .replace("\"lands\":[\"", "\"lands\":[\"x"),
         line(4, 'c', "true", "2026-01-01T00:00:00.000Z", None)
             .replace("\"culprit\":null", "\"culprit\":\"zz\""),
         line(5, 'c', "true", "2026-01-01T00:00:00.000Z", None).replace(
@@ -74,7 +77,7 @@ fn bad_result() {
     ]
     .join("\n");
     let fold = fold_records(&[("one", &bad)]);
-    assert_eq!(fold.warnings.len(), 6, "{:?}", fold.warnings);
+    assert_eq!(fold.warnings.len(), 7, "{:?}", fold.warnings);
     assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
     assert_eq!(fold.verifications[&id('c')].len(), 1);
 }
@@ -135,14 +138,20 @@ fn compacted() {
     // req:ledger/verified-record@844d746f
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
+    let b = clone_with_origin(dir.path(), "b", "B");
     let home = dir.path();
+    // Another writer's result for `c`, which compaction leaves alone.
+    let other = clm_ledger::append(&b, body('c', false), &env(home, &[])).unwrap();
     clm_ledger::append(&a, body('c', false), &env(home, &[])).unwrap();
     clm_ledger::append(&a, body('d', true), &env(home, &[])).unwrap();
     let newer = clm_ledger::append(&a, body('c', true), &env(home, &[])).unwrap();
     let done = clm_ledger::compact(&a, &env(home, &[])).unwrap();
     assert_eq!(done.removed, 1, "{:?}", done.warnings);
     let fold = clm_ledger::fold(&a).unwrap();
-    assert_eq!(fold.verifications[&id('c')].len(), 1);
-    assert_eq!(fold.verifications[&id('c')][0].id, newer.record.id);
+    let mut ids: Vec<_> = fold.verifications[&id('c')].iter().map(|r| &r.id).collect();
+    ids.sort();
+    let mut want = [&newer.record.id, &other.record.id];
+    want.sort();
+    assert_eq!(ids, want);
     assert_eq!(fold.verifications[&id('d')].len(), 1);
 }
