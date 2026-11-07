@@ -25,7 +25,9 @@ fn pr(root: &Path, args: &[&str]) -> Result<Value, Error> {
             stdin: None,
             env: &[],
         },
-    )?;
+    )
+    // A failed `az` (not installed, not signed in) is a refusal with its message: exit 1.
+    .map_err(|e| Error::Refused(e.to_string()))?;
     serde_json::from_slice(&out).map_err(|e| Error::Git(format!("az repos pr: bad JSON: {e}")))
 }
 

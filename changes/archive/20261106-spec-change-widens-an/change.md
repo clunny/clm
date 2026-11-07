@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [spec-change-widens-an-exhaustively-matched-enum-with-no, azure-host-variant-breaks-clm-host]
 ---
 

@@ -706,3 +706,67 @@ fn scenario_pr_with_no_host() {
     let (_, _, err) = clm(&r.work, &gh, &BODY_ARGS, &env);
     assert!(err.contains("clm pr body"), "{err}");
 }
+
+/// A fake `az` beside the fake `gh`: `repos pr list` prints `[]`, `repos pr create` prints a
+/// pull request 12, and `$FAKE_AZ_FAIL` makes every call print it on stderr and exit 1. Every
+/// call is logged to `$FAKE_OUT/az`.
+fn fake_az(gh: &Gh) {
+    write_exec(
+        &gh.dir.path().join("bin/az"),
+        "#!/bin/sh\necho \"$*\" >> \"$FAKE_OUT/az\"\n\
+         [ -z \"$FAKE_AZ_FAIL\" ] || { echo \"$FAKE_AZ_FAIL\" >&2; exit 1; }\n\
+         case \"$*\" in\n\
+         *'repos pr list'*) echo '[]';;\n\
+         *'repos pr create'*) echo \
+         '{\"pullRequestId\":12,\"repository\":{\"webUrl\":\"https://dev.azure.com/o/p/_git/r\"}}';;\n\
+         esac\n",
+    );
+}
+
+fn az_calls(gh: &Gh) -> Vec<String> {
+    fs::read_to_string(gh.dir.path().join("az"))
+        .unwrap_or_default()
+        .lines()
+        .map(String::from)
+        .collect()
+}
+
+#[test]
+fn scenario_azure_pull_request_through_the_setting() {
+    // req:host/azure-selected@ef11e15d
+    let (r, gh) = (checkout("azure"), fake_gh());
+    fake_az(&gh);
+    let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(out, "https://dev.azure.com/o/p/_git/r/pullrequest/12\n");
+    assert!(
+        az_calls(&gh).iter().any(|c| c.contains("repos pr create")),
+        "{:?}",
+        az_calls(&gh)
+    );
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn scenario_azure_not_signed_in() {
+    // req:host/azure-selected@ef11e15d
+    let (r, gh) = (checkout("azure"), fake_gh());
+    fake_az(&gh);
+    let env = [("FAKE_AZ_FAIL", "Please run 'az login'")];
+    let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
+    assert_eq!(code, Some(1), "{out}{err}");
+    assert!(format!("{out}{err}").contains("az login"), "{out}{err}");
+}
+
+#[test]
+fn scenario_azure_issue_through_the_setting() {
+    // req:host/azure-selected@ef11e15d
+    let (r, gh) = (checkout("azure"), fake_gh());
+    fake_az(&gh);
+    write(&r.work, "r.md", "The report\n");
+    let (code, out, err) = clm(&r.work, &gh, &ISSUE_ARGS, &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert_eq!(out, "The report\n");
+    assert!(err.contains("nowhere to file it"), "{err}");
+    assert!(gh.calls().is_empty() && az_calls(&gh).is_empty());
+}
