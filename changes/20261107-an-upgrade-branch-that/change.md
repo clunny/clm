@@ -27,6 +27,18 @@ A `/clm:upgrade` branch that takes notes, and a migration that only adds comment
 - The Worker's "checked" chip for an upgrade branch's head still shows unchecked until it lands, since the Worker computes the plain code key. Accepted: the chip advises, and the land decides.
 - The appended `checked` record is written for a tree whose `[land] check` didn't run in full. It is honest in what it states, that the tree's code and settings passed: the code is the checked code, the settings are the same, and the tests that read `clm.toml` ran.
 
+## Settled by the builder check and the audit
+
+- **Tests that read `clm.toml`** (audit, `doc-readers-marked`). `crates/clm/tests/cli.rs` reads this repository's `clm.toml` comments, and nothing made it carry a marker, since the marker rule covered doc-only paths only. `clm/doc-readers-marked` now covers `clm.toml` too, and `land/settings-unchanged-is-checked` needs it, so the marker is in place before a comment-only land can skip that test.
+- **What `checked` means** (audit, `legacy-code-key`). That decision refused to let a land pass on another tree's record with nothing tying the two together. Here the tie is exact: the two keys differ only in `clm.toml`'s entry, and its settings parse equal. `ledger`'s Contract now defines a `checked` record to include that case, rather than adding a field no reader would act on (`yagni`).
+- **`gate`'s Contract** (audit, `ancestor-scoped-context`) names `settings_unchanged`, so `land`'s builder sees it.
+- **Where the lookup runs** (builder check). Where the attempt computes the code key, before the lock decision, and only when `clm.toml`'s bytes differ; `code_key_with` inserts `from`'s entry in `ls-tree` order when `rev` has none. `capability/upgrade-clm`'s tests gain a stamp-only land.
+
+## Open questions
+
+- **The guide doesn't state the marker rule** (audit, `method-in-the-plugin`). Adopters' tests that read their own doc-only files already needed a `clm:reads` marker, and the guide never says so; this change adds `clm.toml` to what such a marker covers. Filed as `backlog/the-guide-never-says-a-test-reading-the-project-s-own-files-needs-a-clm-reads-marker` rather than edited here, since a guide page is code for the code key and belongs to `init`'s build.
+- **No decision file.** The choice is recorded here and in `land`'s Design rather than in `docs/decisions/upgrade-migrations.md`, keeping the branch to spec paths; the archived change keeps the reasoning.
+
 ## Constraints
 
 - `deterministic-enforcement`: the lookup is a program's comparison of parsed TOML and tree listings.
