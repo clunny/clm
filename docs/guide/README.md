@@ -13,6 +13,7 @@ The guide is also at [clm-app.dev/guide/](https://clm-app.dev/guide/), and `clm 
 7. [Contributions](contributions.md): taking suggestions and spec changes from people outside the project.
 8. [Hackathons](hackathons.md): a small team going from idea to working software in hours.
 9. [Shaping the graph](shaping-the-graph.md): how big a component is, when and how to split one, shared layers.
-10. [Reference](reference.md): the spec format, decisions, commands.
-11. [Glossary](glossary.md): every term CLM uses, in plain words.
-12. [FAQ](faq.md): short answers to the questions people ask first, and how CLM compares with other tools.
+10. [Settings](settings.md): every setting, what each choice trades off, and how to change it.
+11. [Reference](reference.md): the spec format, decisions, commands.
+12. [Glossary](glossary.md): every term CLM uses, in plain words.
+13. [FAQ](faq.md): short answers to the questions people ask first, and how CLM compares with other tools.

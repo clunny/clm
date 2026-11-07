@@ -17,6 +17,7 @@ The skills, the commands' settings and where to read more: a page to look things
 | `/clm:contribution` | take in a contributor's pull request or issue: judge its files, show it to you, close it or land it on your yes |
 | `/clm:help` | ask how CLM works or how to do something; it answers from the guide and changes nothing |
 | `/clm:health` | read the health report and propose cuts, for you to take to `/clm:propose` |
+| `/clm:configure` | review every setting, or change one (`/clm:configure set concurrent builds`): it explains the trade-offs, edits the right file and lands the edit |
 
 ## Commands
 
@@ -52,25 +53,7 @@ The skills, the commands' settings and where to read more: a page to look things
 
 ## Settings
 
-`clm.toml` at the repository's root holds the project's settings, and `~/.config/clm/config.toml` holds yours. `clm.local.toml` beside `clm.toml`, never committed, holds one clone's and may set any key but `upgraded` and `declined_migrations`. In the table, "the repository's" means `clm.toml` or `clm.local.toml`, never yours, and "any" means any of the three. `clm config get <key>` shows a setting and where it came from.
-
-| Key | Where | Means |
-|---|---|---|
-| `detectors` | the repository's | dead-code and unused-dependency tools `clm check` runs: `[[detectors]]` tables, each with `name`, `command` and optional `hint` (how to install the tool), `timeout` (seconds, default 600) and `requires` (a path from the repository's root: the detector is skipped while nothing is there, such as `package.json` before a TypeScript project exists) |
-| `host` | the repository's | where the remote lives: `github` (the default), `git` or `none`; pull requests, branch deletion and issues go through it |
-| `upgraded` | `clm.toml` only | the last migration the project took; `clm init` and `clm upgrade --apply` write it. While a required migration is pending, most commands refuse to run |
-| `declined_migrations` | `clm.toml` only | the advised migrations the project chose not to take (`clm upgrade --decline`) |
-| `skip_migrations` | `clm.local.toml` only | required migrations this clone runs past while they are broken; report the migration with `clm defect` first |
-| `approval` | the repository's | whose approval lets a branch that needs review land: `any` (the default), anyone's, the author's included; `other`, only someone who wrote none of the branch's commits |
-| `land` | the repository's | `[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check`; optional `target_cap_gb`: the size, in gigabytes, above which a land removes its shared build directory `.clm/land` after its push |
-| `affected` | the repository's | `[affected]` with `all`: globs of changed files that make `clm affected` select every test, such as a lockfile or the toolchain pin |
-| `component_size` | the repository's | `[component_size]` with `spec_tokens` (default 12000) and `code_tokens` (default 40000): the size above which a component with no `size_budget` is oversized ([Shaping the graph](shaping-the-graph.md)) |
-| `health` | the repository's | `[health]` with `reconsider` (default 3), `scenarios` (6), `exceptions` (4), `stale_days` (30) and `lcov` (a path): the thresholds behind `clm health` and the reconsider questions `clm rebase` files, and the coverage file it reads |
-| `effort` | the repository's | `[effort]` with `workaround_flag` (default 3): the unsettled workarounds on one capability at which `clm workaround` stops a build to ask whether to redesign it |
-| `writer` | yours, `clm.local.toml` or `CLM_WRITER`, never `clm.toml` | the name your approvals, checks and lands are recorded under; defaults to the repository's git `user.name`, as a slug |
-| `autosync` | any | push spec work in progress to `autosync/<branch>` after each turn |
-| `defects` | any | where `clm defect` sends reports: `ask`, `backlog` or `off` |
-| `max_builds` | any | how many builds and drafts may run on this clone at once (default 3) |
+Every setting, what each choice trades off and where it may be set is in [Settings](settings.md). `clm config list` prints them all with where each came from, and `/clm:configure` changes them.
 
 ## How a change flows
 
