@@ -120,7 +120,8 @@ fn with_author_id(root: &Path, mut shown: Shown) -> Result<Shown, Error> {
     Ok(shown)
 }
 
-/// The open items `kind` (`issue` or `pr`) lists, each with its number and author's login.
+/// The open items `kind` (`issue` or `pr`) lists, each with its number and author's login;
+/// a pull request counts only when `gh` reports its head in another repository.
 fn listed(root: &Path, kind: &str) -> Result<Vec<Listed>, Error> {
     let args = [
         kind,
@@ -128,7 +129,11 @@ fn listed(root: &Path, kind: &str) -> Result<Vec<Listed>, Error> {
         "--state",
         "open",
         "--json",
-        "number,author",
+        if kind == "pr" {
+            "number,author,isCrossRepository"
+        } else {
+            "number,author"
+        },
         "--limit",
         "1000",
     ];
@@ -137,6 +142,7 @@ fn listed(root: &Path, kind: &str) -> Result<Vec<Listed>, Error> {
         .as_array()
         .into_iter()
         .flatten()
+        .filter(|item| kind != "pr" || item["isCrossRepository"].as_bool() == Some(true))
         .filter_map(|item| {
             Some(Listed {
                 number: item["number"].as_u64()?,
