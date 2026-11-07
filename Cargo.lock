@@ -454,6 +454,7 @@ version = "0.19.0"
 dependencies = [
  "clm-config",
  "clm-git",
+ "clm-host",
  "clm-model",
  "clm-upgrade",
  "serde",
