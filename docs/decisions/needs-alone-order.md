@@ -16,6 +16,6 @@ A node is now ready when it has an unblocked pending requirement, whatever the s
 
 **Would change if** builds often stop for a missing dependency that no `Needs` named; then the builder check, not a node-level wait, is what to strengthen.
 
-Refined by `serving-rules-order-capabilities`: a capability, which can hold no `Needs`, also waits on the never-built rules that serve it.
+Refined by `serving-rules-order-capabilities`: a capability, which can hold no `Needs`, also waits on the rules that serve it that are never built, or changed and themselves blocked.
 
 Refined by `builder-check-asks-order`: the builder check asks per requirement what unbuilt work it relies on, as this decision's "would change if" asked.

@@ -624,7 +624,7 @@ The unit of building SHALL be the component: a build brings a component's code u
 - orchestrator/priority-orders-components
 
 ### Constraint: needs-alone-order
-A component SHALL be ready when it has an unblocked pending requirement, whatever the state of the components it depends on; only a requirement's `Needs`, and for a capability the never-built rules that serve it (`serving-rules-order-capabilities`), order work between components.
+A component SHALL be ready when it has an unblocked pending requirement, whatever the state of the components it depends on; only a requirement's `Needs`, and for a capability the rules serving it that are never built, or changed and themselves blocked (`serving-rules-order-capabilities`), order work between components.
 
 #### Scenario: dependency pending
 - GIVEN component `b` depending on `a`, both with pending requirements and no `Needs` between them
