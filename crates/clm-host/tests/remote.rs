@@ -16,6 +16,7 @@ fn hosts_named() {
         ("ssh://git@ssh.github.com:443/o/r.git", Host::Github),
         ("HTTPS://GitHub.com/o/r", Host::Github),
         ("https://GitHub.com:8443/o/r", Host::Github),
+        ("http://github.com/o/r", Host::Github),
         ("", Host::Git),
     ] {
         assert_eq!(host_for_remote(url), want, "{url}");
