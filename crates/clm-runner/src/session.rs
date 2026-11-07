@@ -73,8 +73,13 @@ impl Launch<'_> {
                         path.display()
                     )));
                 }
-                let remove = ["worktree", "remove", "--force", path_str(&path)?];
-                clm_git::git(self.root, &remove).map_err(git_failed)?;
+                clm_git::remove_worktree(self.root, &path).map_err(|e| {
+                    let why = e.to_string().lines().collect::<Vec<_>>().join("; ");
+                    NotStarted(format!(
+                        "left {}: {why}; delete the directory by hand, then run git worktree prune",
+                        path.display()
+                    ))
+                })?;
             } else {
                 clm_git::git(self.root, &["worktree", "prune"]).map_err(git_failed)?;
             }

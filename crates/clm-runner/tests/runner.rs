@@ -568,7 +568,7 @@ fn scenario_silent_failure() {
 
 #[test]
 fn scenario_clean_leftover_replaced() {
-    // req:orchestrator.runner/runner-worktree-leftover@9bb429a7
+    // req:orchestrator.runner/runner-worktree-leftover@dd9862db
     let f = fixture();
     let wt = f.worktree("a");
     git(
@@ -602,7 +602,7 @@ fn scenario_clean_leftover_replaced() {
 
 #[test]
 fn scenario_dirty_leftover_kept() {
-    // req:orchestrator.runner/runner-worktree-leftover@9bb429a7
+    // req:orchestrator.runner/runner-worktree-leftover@dd9862db
     let f = fixture();
     let wt = f.worktree("a");
     git(
@@ -636,7 +636,7 @@ fn scenario_dirty_leftover_kept() {
 
 #[test]
 fn untracked_leftover_kept() {
-    // req:orchestrator.runner/runner-worktree-leftover@9bb429a7
+    // req:orchestrator.runner/runner-worktree-leftover@dd9862db
     let f = fixture();
     let wt = f.worktree("a");
     git(
@@ -871,4 +871,91 @@ fn plugin_list_after_the_prerequisites() {
     let out = f.run(None, true);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(f.plugin_calls().is_empty(), "{:?}", f.plugin_calls());
+}
+
+#[cfg(unix)]
+fn clean_leftover(f: &Fixture) -> PathBuf {
+    let wt = f.worktree("a");
+    git(
+        &f.work,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            wt.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    wt
+}
+
+#[cfg(unix)]
+fn running_as_root() -> bool {
+    // SAFETY: geteuid(2) takes no arguments and cannot fail.
+    unsafe { libc::geteuid() == 0 }
+}
+
+#[cfg(unix)]
+fn chmod(path: &Path, mode: u32) {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn scenario_unwritable_leftover_replaced() {
+    // req:orchestrator.runner/runner-worktree-leftover@dd9862db
+    if running_as_root() {
+        return;
+    }
+    let f = fixture();
+    let wt = clean_leftover(&f);
+    let cache = wt.join(".clm/cache");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(cache.join("f"), "x\n").unwrap();
+    chmod(&cache, 0o555);
+    f.set("next.1", "a\n");
+    let out = f.run(Some("acceptEdits"), true);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(f.fake.join("claude.a.args").exists(), "{out:?}");
+    assert_eq!(
+        git(&wt, &["rev-parse", "HEAD"]),
+        git(&f.work, &["rev-parse", "origin/main"])
+    );
+    assert!(!wt.join(".clm/cache").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn scenario_leftover_git_cant_remove() {
+    // req:orchestrator.runner/runner-worktree-leftover@dd9862db
+    if running_as_root() {
+        return;
+    }
+    let f = fixture();
+    let wt = clean_leftover(&f);
+    // Git can't delete the worktree's directory from a parent its owner can't write.
+    let parent = wt.parent().unwrap().to_path_buf();
+    chmod(&parent, 0o555);
+    f.set("next.1", "a\n");
+    let out = f.run(Some("acceptEdits"), true);
+    chmod(&parent, 0o755);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(!f.fake.join("claude.a.args").exists(), "{out:?}");
+    let all = text(&out.stdout) + &text(&out.stderr);
+    let line = all
+        .lines()
+        .find(|l| l.starts_with("left "))
+        .unwrap_or_else(|| panic!("no `left` line: {all}"));
+    assert!(line.contains(&wt.display().to_string()), "{line}");
+    assert!(
+        line.ends_with("; delete the directory by hand, then run git worktree prune"),
+        "{line}"
+    );
+    assert!(
+        f.clm_calls()
+            .iter()
+            .any(|c| c.starts_with("run --finish a "))
+    );
 }
