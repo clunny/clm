@@ -34,6 +34,9 @@ pub enum Error {
         command: String,
         why: String,
     },
+    StillOnDisk {
+        path: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -52,6 +55,7 @@ impl fmt::Display for Error {
                 write!(f, "{command}: timed out after {limit:?}")
             }
             Error::Unreadable { command, why } => write!(f, "{command}: {why}"),
+            Error::StillOnDisk { path } => write!(f, "{path}: still on disk"),
         }
     }
 }
@@ -60,7 +64,10 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Error::Spawn { source, .. } => Some(source),
-            Error::Failed { .. } | Error::TimedOut { .. } | Error::Unreadable { .. } => None,
+            Error::Failed { .. }
+            | Error::TimedOut { .. }
+            | Error::Unreadable { .. }
+            | Error::StillOnDisk { .. } => None,
         }
     }
 }
@@ -547,5 +554,58 @@ impl<'a> Extraction<'a> {
             .collect();
         let env = [("GIT_INDEX_FILE", self.index.as_os_str())];
         run(self.root, "git", &args, Options { stdin, env: &env })
+    }
+}
+
+/// Removes the linked worktree at `path` whole, ignored files included. Claude Code locks
+/// the worktrees it makes, so it unlocks first (failing for one that isn't locked is
+/// fine). A build can leave a directory without its owner's write permission, which git
+/// can't delete, so the owner is given access to `path` and every directory under it
+/// before `git worktree remove` runs, without `--force`: a worktree git refuses stays.
+pub fn remove_worktree(root: &Path, path: &Path) -> Result<(), Error> {
+    let arg = path.to_string_lossy();
+    let _ = git(root, &["worktree", "unlock", &arg]);
+    make_writable(path);
+    git(root, &["worktree", "remove", &arg])?;
+    if path.exists() {
+        return Err(Error::StillOnDisk {
+            path: arg.into_owned(),
+        });
+    }
+    Ok(())
+}
+
+/// Gives the owner read, write and execute permission on `dir` and every directory under
+/// it, before reading each one's entries so a directory its owner can't list is still
+/// walked. Never follows or changes a symbolic link, so nothing outside `dir` changes.
+/// Best effort: what can't be changed is left for git to report.
+fn make_writable(dir: &Path) {
+    let Ok(meta) = std::fs::symlink_metadata(dir) else {
+        return;
+    };
+    if !meta.is_dir() {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = meta.permissions().mode();
+        if mode & 0o700 != 0o700 {
+            let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(mode | 0o700));
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let mut perms = meta.permissions();
+        if perms.readonly() {
+            perms.set_readonly(false);
+            let _ = std::fs::set_permissions(dir, perms);
+        }
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        make_writable(&entry.path());
     }
 }
