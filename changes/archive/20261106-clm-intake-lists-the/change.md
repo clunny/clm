@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-intake-lists-the-repository-s-own-branch-pull-requests-as]
 ---
 
