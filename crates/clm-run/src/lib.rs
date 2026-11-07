@@ -333,13 +333,17 @@ pub fn prompt(job: &Job) -> String {
          literal, in code or in a fixture, that must now name the added field) and the fix sets that \
          field to the value under which the provider behaves as before, so the other component's \
          behaviour doesn't change, make the fix and name each one under \
-         `## Fixes in other components` in your pull request body. A rename is not such a fix \
-         (`rename-adds-then-removes`), and neither is an arm for an added variant that another \
-         component matches exhaustively, nor an added field with no value under which the provider \
+         `## Fixes in other components` in your pull request body. An arm for an added variant that \
+         another component matches exhaustively is such a fix only when a requirement of that \
+         component, in the specs as applied, names what the variant selects there and the code it \
+         selects is built (the requirements that build it current), the arm selecting that code and \
+         nothing else. A rename is not such a fix \
+         (`rename-adds-then-removes`), and neither is any other arm for an added variant, nor an \
+         added field with no value under which the provider \
          behaves as before, since those decide what the other component does. When building a \
          requirement would break another component's code or tests because that component still uses \
          what the requirement removes, or because what it adds needs more there than such a fix (a \
-         rename, an arm for an added variant or a field with no such value), keep the old path \
+         rename, an arm for an added variant whose selected code isn't built or named, or a field with no such value), keep the old path \
          working and that component building as it stands, leave the requirement unbuilt, and add a \
          `question` backlog item whose `components` name both components, with `blocks` naming the \
          requirement, saying which component uses what, so a spec branch gives the requirement the \

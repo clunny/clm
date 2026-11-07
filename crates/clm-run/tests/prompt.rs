@@ -339,7 +339,7 @@ fn scenario_no_shared_install() {
 
 #[test]
 fn scenario_removal_breaks_dependant() {
-    // req:orchestrator.run/removal-breaks-dependant@fb1ba857
+    // req:orchestrator.run/removal-breaks-dependant@fee35b44
     let p = prompt(&job());
     let obsolete = p
         .find("For an `obsolete` requirement, remove the code and tests its markers mark")
@@ -368,14 +368,14 @@ fn scenario_removal_breaks_dependant() {
 
 #[test]
 fn scenario_addition_forces_a_fix() {
-    // req:orchestrator.run/removal-breaks-dependant@fb1ba857
+    // req:orchestrator.run/removal-breaks-dependant@fee35b44
     let p = prompt(&job());
     for needle in [
         "or only build a value that gains a field (a struct literal, in code or in a fixture, that must now name the added field)",
         "sets that field to the value under which the provider behaves as before",
         "so the other component's behaviour doesn't change",
         "A rename is not such a fix (`rename-adds-then-removes`)",
-        "neither is an arm for an added variant that another component matches exhaustively",
+        "and neither is any other arm for an added variant",
         "an added field with no value under which the provider behaves as before",
         "since those decide what the other component does",
     ] {
@@ -384,8 +384,20 @@ fn scenario_addition_forces_a_fix() {
 }
 
 #[test]
+fn scenario_arm_selecting_built_code() {
+    // req:orchestrator.run/removal-breaks-dependant@fee35b44
+    let p = prompt(&job());
+    for needle in [
+        "arm for an added variant that another component matches exhaustively is such a fix only when a requirement of that component, in the specs as applied, names what the variant selects there and the code it selects is built (the requirements that build it current), the arm selecting that code and nothing else",
+        "a rename, an arm for an added variant whose selected code isn't built or named, or a field with no such value",
+    ] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+}
+
+#[test]
 fn removal_rule_for_an_obsolete_requirement_is_in_every_prompt() {
-    // req:orchestrator.run/removal-breaks-dependant@fb1ba857
+    // req:orchestrator.run/removal-breaks-dependant@fee35b44
     let mut j = job();
     j.pending.retain(|i| i.state != "obsolete");
     let p = prompt(&j);
