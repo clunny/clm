@@ -323,6 +323,29 @@ CLM's constraints that govern how any project is built with it SHALL reach every
 #### Untested
 Whether a replacement keeps the guarantee it replaces is a judgement, which the auditor advises on and the human's approval decides.
 
+### Constraint: tests-run-concurrently
+A project's tests, and the check command that runs them, SHALL pass while other runs of them overlap on the same host, each in its own checkout: no test binds a fixed port, writes a fixed path outside its checkout and the system's temporary directory, or relies on a server or database another run shares. A port or path a run must know in advance, such as the port of a server the check starts, is keyed on `CLM_SLOT`, the number CLM gives each build and its checks, distinct among the builds of one clone, and 0 when unset (`build-slots`). CLM runs builds in parallel and runs their tests outside any lock, so making the tests able to overlap is the project's part of that.
+
+#### Scenario: a preview server
+- GIVEN a project whose check starts a preview server for its browser tests, and two builds of it on one clone
+- WHEN both run their tests at once
+- THEN each server listens on a port derived from its own `CLM_SLOT`, or one the system chose, and both runs pass
+
+#### Carries
+- replaceable
+
+#### Guarantee
+Two runs of the project's tests on one host, from different build places of a clone, never fail each other through a resource the host holds, so CLM can build in parallel without serialising the tests its builds run.
+
+#### Enforced by
+- orchestrator/place-slots
+- land/check-slot
+- orchestrator.run/prompt-slot
+- plugin/init-skill-concurrent-tests
+
+#### Untested
+Whether a project's tests take a host resource another run shares is something CLM can't see; a collision shows as a test that fails beside another build and passes alone. Runs outside a build place (the human's own checkout, `clm verify`'s local run, a draft's code fix) all have slot 0, so two of them can still collide on a port keyed on it; the check lock keeps their `[land] check` and `[verify] check` runs apart, but not their tests run by hand.
+
 ### Constraint: platform
 CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A git host (GitHub, Azure DevOps, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Moving to another agent is a change that needs review.
 
