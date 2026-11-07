@@ -149,12 +149,21 @@ fn azure_devops() {
         .lines()
         .find(|l| l.contains("repos pr create"))
         .unwrap_or_else(|| panic!("no pr create: {recorded}"));
+    let description = format!("--description @{}", body.display());
     for want in [
         "--source-branch spec/x",
         "--target-branch main",
         "--title x",
-        "--description @",
+        "--detect true",
+        "--output json",
+        description.as_str(),
     ] {
         assert!(create.contains(want), "{create}");
     }
+    // It looked for an active pull request first.
+    let listed = recorded.find("repos pr list").unwrap();
+    assert!(
+        listed < recorded.find("repos pr create").unwrap(),
+        "{recorded}"
+    );
 }
