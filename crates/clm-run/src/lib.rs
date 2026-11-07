@@ -1186,6 +1186,7 @@ fn worktrees(root: &Path) -> Result<Vec<clm_git::Worktree>, Error> {
 fn clean(dir: &Path) -> Result<bool, Error> {
     Ok(git(dir, &["status", "--porcelain"])?.is_empty())
 }
+
 #[cfg(test)]
 mod tests {
     #[test]
