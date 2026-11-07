@@ -496,7 +496,7 @@ enum Command {
         #[arg(long)]
         no_detectors: bool,
         /// Where the remote lives (default: from `origin`'s URL, or `none` without one).
-        #[arg(long, value_parser = ["none", "git", "github"])]
+        #[arg(long, value_parser = ["none", "git", "github", "azure"])]
         host: Option<String>,
         /// Write nothing: print the allow rules unattended sessions need that the project's
         /// Claude Code settings lack, and exit 1 when one is missing.
@@ -1474,6 +1474,7 @@ fn dispatch() -> ExitCode {
                     "none" => clm_config::Host::None,
                     "git" => clm_config::Host::Git,
                     "github" => clm_config::Host::Github,
+                    "azure" => clm_config::Host::Azure,
                     other => unreachable!("clap allows no host `{other}`"),
                 }),
             };

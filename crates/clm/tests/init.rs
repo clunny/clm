@@ -465,13 +465,29 @@ fn host_given() {
         init(&dir, &["--host", host], &fake_hosts());
         assert_eq!(host_line(&dir), format!("host = \"{host}\""));
     }
+}
 
-    for bad in ["gitlab", "azure"] {
-        let (_tmp, dir) = repo();
-        let out = clm(&dir, &["init", "--host", bad], &path_with(&fake_hosts()));
-        assert_ne!(out.status.code(), Some(0), "{bad}: {out:?}");
-        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
-    }
+#[test]
+fn host_azure_given() {
+    // req:clm/init-host-values@404984ac
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    init(&dir, &["--host", "azure"], &fake_hosts());
+    assert_eq!(host_line(&dir), "host = \"azure\"");
+}
+
+#[test]
+fn host_unknown_refused() {
+    // req:clm/init-host-values@404984ac
+    let (_tmp, dir) = repo();
+    let out = clm(
+        &dir,
+        &["init", "--host", "gitlab"],
+        &path_with(&fake_hosts()),
+    );
+    assert_eq!(out.status.code(), Some(2), "clap refuses it: {out:?}");
+    assert!(!dir.join("clm.toml").exists());
+    assert_eq!(fs::read_dir(&dir).unwrap().count(), 1, "only .git");
 }
 
 #[test]
