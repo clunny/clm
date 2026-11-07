@@ -782,7 +782,7 @@ Every view of the web app SHALL show that it is loading while it waits, keep wha
 Whether a view feels good to use is a judgement; what is enforced is each detail someone chose to keep.
 
 ### Constraint: invite-only-web
-Only the logins listed in `web`'s Contract SHALL sign in to the web app under `/app/` and reach its API; nothing it shows of a repository is public. The public site (`web.site`) is open to everyone and holds nothing of any repository. Adding a login edits that list, and lands on checks like any change without a burden.
+Only the logins listed in `web`'s Contract SHALL sign in to the web app under `/app/` and reach its API; nothing it shows of a repository is public. The public site (`web.site`) is open to everyone and shows none of the repository data the web app keeps behind sign-in: no repository's specs, backlog or changes. CLM's own documentation, which it builds from CLM's repository, is public by design, and it may name and link repositories, such as CLM's own in its install commands. Adding a login edits that list, and lands on checks like any change without a burden.
 
 #### Scenario: stranger signs in
 - GIVEN a GitHub login not on the list
