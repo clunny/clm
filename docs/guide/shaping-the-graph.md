@@ -61,6 +61,8 @@ outside: ["**"]
 
 `clm survey --components <file>` exits 0 for a cut whose imports run one way, and otherwise reports each `survey/undeclared-edge` or `survey/cycle`. It reads the tree as it is, before any file moves, and that is enough: whether files can move into a crate of their own is exactly whether their imports already run one way.
 
+The survey also reports an edge the change itself removes, such as a carved-out file importing a parent module that one of the change's requirements replaces with a value the parent passes in. Don't move the parent's module into the child to silence it. Such a `survey/undeclared-edge` line may stand when the importing file moves into a crate or package of the child's own (so `clm check` judges none of the child's files until the build makes them), a requirement the change adds to the child states the removal, naming the importing file, the file it imports and what replaces the import (what the parent must do for it, such as passing the value in, being a parent's requirement that needs the child's), and `change.md` lists the edge with the child's requirement under `## Edges the change removes`. A `survey/cycle` line never stands. Once the child is built, `clm check` reports any such edge the build left.
+
 The `propose` skill knows this and will do it when a change splits a component, checking the cut first; `triage` checks a split the same way before it recommends one.
 
 ## Shared layers
