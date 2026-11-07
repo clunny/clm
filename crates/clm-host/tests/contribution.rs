@@ -401,7 +401,7 @@ const SHA_C: &str = "cccccccccccccccccccccccccccccccccccccccc";
 fn runs_are_listed() {
     // req:host/list-runs@008f0107
     let out = format!(
-        r#"[{{"databaseId":12,"headSha":"{SHA_C}","status":"in_progress","conclusion":"","url":"https://h/12"}},{{"databaseId":11,"headSha":"{SHA_C}","status":"completed","conclusion":"failure","url":"https://h/11"}},{{"databaseId":10,"headSha":"short","status":"completed","conclusion":"success","url":"https://h/10"}}]"#
+        r#"[{{"databaseId":12,"headSha":"{SHA_C}","status":"in_progress","conclusion":"","url":"https://h/12"}},{{"databaseId":11,"headSha":"{SHA_C}","status":"completed","conclusion":"failure","url":"https://h/11"}},{{"databaseId":10,"headSha":"short","status":"completed","conclusion":"success","url":"https://h/10"}},{{"databaseId":9,"headSha":"abc123","status":"completed","conclusion":"success","url":"https://h/9"}},{{"databaseId":8,"headSha":"gggggggggggggggggggggggggggggggggggggggg","status":"completed","conclusion":"success","url":"https://h/8"}}]"#
     );
     with_gh(&[("run list", &out)], |root, dir| {
         let runs = clm_host::adapter(Setting::Github)
