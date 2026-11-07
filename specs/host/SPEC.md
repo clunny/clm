@@ -18,7 +18,7 @@ The one place CLM talks to a git host beyond `git` itself (`host-adapters`). The
 Neither ever touches `main` or a branch under `clm/`, the ledgers' (`guard-blocks-push-to-main`): `main` moves only through `clm land` (`land-locally`).
 - `issue --title <title> --body-file <file> --repo <repo>`: files an issue where the host keeps them and prints its URL, for `clm defect` (`defect-reports`); on `azure`, `git` and `none` it prints the report and says there is nowhere to file it, since `clm defect`'s reports go to CLM's own repository on GitHub, not the project's host.
 
-- the contribution operations, for a project taking contributions from people without write access (`outside-contributions-are-intent`): the fork's parent; bringing a fork's `main` up to its parent's; opening a pull request on the parent; listing the open issues and pull requests (`list-contributions`); and, for a pull request or issue by number, reading it, fetching a pull request's head, commenting, closing and labelling. `azure`, `git` and `none` have no such thing.
+- the contribution operations, for a project taking contributions from people without write access (`outside-contributions-are-intent`): the fork's parent; bringing a fork's `main` up to its parent's; opening a pull request on the parent; listing the open issues and the open pull requests from forks (`list-contributions`), not those of branches pushed to the repository itself, which `pr open` opens for reading a diff; and, for a pull request or issue by number, reading it, fetching a pull request's head, commenting, closing and labelling. `azure`, `git` and `none` have no such thing.
 - the host a remote's URL names, for `clm init` (`host-for-remote`), and the steps a person takes to set a repository on that host up for CLM, which `clm init` prints (`host-setup-steps`), so `clm init` holds no host's names or permissions itself.
 - the open dependency alerts, for `clm intake` (`list-alerts`): each alert's number, severity, ecosystem, package and manifest path, so an alert reaches the backlog as an issue does (`dependency-alerts-through-intake`). `azure`, `git` and `none` have none.
 
@@ -214,12 +214,17 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - capability/contribute-from-outside
 
 ### Requirement: list-contributions
-`clm-host` SHALL offer `list`, which on `github` returns the repository's open issues and open pull requests, each with its number, whether it is an issue or a pull request, and its author's login, through `gh issue list` and `gh pr list` with `--state open` and `--json`, each with `--limit 1000` rather than `gh`'s default of 30; an author whose account is gone is `ghost`, as `gh` reports it. It SHALL return no title, body or other text the author wrote, so nothing a caller prints from it carries a stranger's words. On `git` and `none` it SHALL return an empty list and run no `gh`.
+`clm-host` SHALL offer `list`, which on `github` returns the repository's open issues and the open pull requests whose head is in another repository, each with its number, whether it is an issue or a pull request, and its author's login, through `gh issue list` and `gh pr list` with `--state open` and `--json`, each with `--limit 1000` rather than `gh`'s default of 30, and SHALL leave out a pull request whose head is a branch of the repository itself, as `gh` reports it in `isCrossRepository`, since every branch CLM pushes opens one for reading its diff (`pr open`) and none of those is a contribution (`outside-contributions-are-intent`); an author whose account is gone is `ghost`, as `gh` reports it. It SHALL return no title, body or other text the author wrote, so nothing a caller prints from it carries a stranger's words. On `git` and `none` it SHALL return an empty list and run no `gh`.
 
 #### Scenario: issues and pull requests
-- GIVEN `host = "github"` and a fake `gh` reporting open issue 73 by `clunny` and open pull request 80 by `dana`
+- GIVEN `host = "github"` and a fake `gh` reporting open issue 73 by `clunny` and open pull request 80 by `dana` from a fork
 - WHEN `list` runs
 - THEN it returns issue 73 by `clunny` and pull request 80 by `dana`, and `gh` got `--state open` for both
+
+#### Scenario: the repository's own branch
+- GIVEN `host = "github"` and a fake `gh` reporting open pull request 80 by `dana` from a fork and open pull request 81 by `clunny` whose head is `impl/a` in the repository itself
+- WHEN `list` runs
+- THEN it returns pull request 80 by `dana` only
 
 #### Scenario: no host
 - GIVEN `host = "none"`
