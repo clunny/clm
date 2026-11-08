@@ -11,6 +11,7 @@ mod exe;
 mod land;
 mod lock;
 mod reconnect;
+mod runner;
 mod scratch;
 
 use std::fmt;
@@ -20,6 +21,7 @@ use std::process::{Command, Stdio};
 pub use check_only::check_only;
 pub use land::land;
 pub use reconnect::reconnect;
+pub use runner::{CheckEnv, CheckRun, Step, run_check};
 
 pub use clm_approval::{Env, Output};
 
@@ -194,8 +196,7 @@ impl<'a> Repo<'a> {
     /// `<prefix>` where the CLM root is in its git repository): where a land keeps everything
     /// it keeps (`land/land-tree`). Computed once per land, every place derived from it.
     fn places(&self) -> Result<PathBuf, Error> {
-        let prefix = self.git(&["rev-parse", "--show-prefix"])?;
-        Ok(self.main_worktree()?.join(prefix).join(".clm"))
+        runner::places_of(&self.root)
     }
 
     /// Where `[land] check` builds: the caller's `CARGO_TARGET_DIR`, else `land` in `places`,
@@ -229,19 +230,35 @@ impl<'a> Repo<'a> {
         fails: &str,
         log: Option<&Path>,
     ) -> Result<(), Error> {
-        // One check at a time on the clone, whatever the target, held until the command ends
-        // (`land/check-lock`).
-        let _check_lock = lock::check(&self.places()?)?;
-        let mut command = check_command(check, dir, target);
-        command.envs(vars.iter().copied()).stdin(Stdio::null());
+        // The runner `verify` shares: one check at a time on the clone, whatever the target
+        // (`land/check-lock`, `land/shared-check-runner`). `--check-only` passes no log, so its
+        // refusal repeats no tail and names no step.
+        let mut env = runner::CheckEnv {
+            set: vars
+                .iter()
+                .filter(|(name, _)| *name != "CLM_SELECTION")
+                .map(|(name, value)| (name.to_string(), value.as_os_str().to_owned()))
+                .collect(),
+            unset: vec!["CI".to_string()],
+        };
+        if let Some(target) = target {
+            env.set
+                .push(("CARGO_TARGET_DIR".into(), target.as_os_str().to_owned()));
+        }
+        let selection = vars
+            .iter()
+            .find(|(name, _)| *name == "CLM_SELECTION")
+            .map(|(_, path)| *path);
+        let run = runner::run_in(&self.places()?, check, dir, selection, &env, log, |line| {
+            eprintln!("{line}")
+        })?;
         let Some(log) = log else {
-            if !command.stdout(std::io::stderr()).status()?.success() {
+            if !run.passed {
                 return Err(Error::Refused(format!("`{check}` {fails}")));
             }
             return Ok(());
         };
-        let run = check_log::run(command, log)?;
-        if run.status.success() {
+        if run.passed {
             let _ = std::fs::remove_file(log);
             return Ok(());
         }
@@ -251,6 +268,12 @@ impl<'a> Repo<'a> {
             why.push('\n');
         }
         why.push_str(&format!("`{check}` {fails}"));
+        if let Some(step) = &run.step {
+            why.push_str(&format!(
+                "; the step open when it ended is `{}`, lines {} to {} of its output",
+                step.name, step.first, step.last
+            ));
+        }
         if run.logged {
             why.push_str(&format!("; its output is at {}", log.display()));
         }
@@ -336,23 +359,6 @@ pub(crate) fn temp_parent(env: &Env) -> Result<PathBuf, Error> {
     Ok(std::path::absolute(parent)?)
 }
 
-/// `sh -c <check>` in `dir`, with `CI` unset, so a script that installs a browser only in CI
-/// doesn't, and `CARGO_TARGET_DIR` set to `target` when given, else left as it is.
-/// `CLM_SELECTION` is unset too, so only a selection this land made reaches the check.
-fn check_command(check: &str, dir: &Path, target: Option<&Path>) -> Command {
-    let mut command = Command::new("sh");
-    command
-        .arg("-c")
-        .arg(check)
-        .current_dir(dir)
-        .env_remove("CI")
-        .env_remove("CLM_SELECTION");
-    if let Some(target) = target {
-        command.env("CARGO_TARGET_DIR", target);
-    }
-    command
-}
-
 /// The file `clm affected`'s output is in, removed with its directory when dropped.
 pub(crate) struct Selection {
     _dir: tempfile::TempDir,
@@ -376,29 +382,4 @@ pub(crate) enum Verdict {
     Spec {
         review: bool,
     },
-}
-
-#[cfg(test)]
-mod tests {
-    use std::ffi::OsStr;
-    use std::path::Path;
-
-    #[test]
-    fn check_runs_outside_ci() {
-        // req:land/land@c409726a
-        let target = Path::new("/r/.clm/land");
-        let command = super::check_command("true", Path::new("/w"), Some(target));
-        let envs: Vec<_> = command.get_envs().collect();
-        assert!(envs.contains(&(OsStr::new("CI"), None)), "{envs:?}");
-        // req:land/selected-tests@3c8754b6
-        let selection = (OsStr::new("CLM_SELECTION"), None);
-        assert!(envs.contains(&selection), "{envs:?}");
-        assert!(
-            envs.contains(&(
-                OsStr::new("CARGO_TARGET_DIR"),
-                Some(OsStr::new("/r/.clm/land"))
-            )),
-            "{envs:?}"
-        );
-    }
 }
