@@ -24,6 +24,7 @@ if [ -e "$DIR/affected-fails" ]; then
   exit 1
 fi
 if [[ " $* " == *" --why "* ]]; then
+  if [ -e "$DIR/why-fails" ]; then echo "no chain here" >&2; exit 1; fi
   if [ -e "$DIR/why-out" ]; then cat "$DIR/why-out"; fi
 elif [[ " $* " == *" --readers "* ]]; then
   if [ -e "$DIR/readers-out" ]; then cat "$DIR/readers-out"; fi
