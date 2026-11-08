@@ -93,10 +93,9 @@ fn replayed(root: &Path, rev: &str, id: &str, source: &str) -> Result<tempfile::
         fs::create_dir_all(dir).map_err(|e| io(dir, e))?;
     }
     fs::write(&change, with_status(source, "proposed")).map_err(|e| io(&change, e))?;
-    // `rename` lists the files git tracks to report what it left, so the copy is a
-    // repository of its own.
-    git(tree.path(), &["init", "-q"])?;
-    git(tree.path(), &["add", "-A"])?;
+    // No repository of its own and no git command here, as `rename/replay` builds its tree:
+    // `rename` reads a directory that is no repository as it reads the replay's, and a
+    // `GIT_DIR` the environment sets never reaches the clone.
     clm_rename::rename(tree.path(), id)?;
     Ok(tree)
 }

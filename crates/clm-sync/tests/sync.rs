@@ -2725,7 +2725,7 @@ fn rename_branch() -> Repo {
 
 #[test]
 fn main_moved_under_a_rename() {
-    // req:sync/regenerate-renames@6f762b88
+    // req:sync/regenerate-renames@0a813763
     let r = rename_branch();
     // `main` adds a requirement `w` to the node and a backlog item blocking `a/p`.
     main_moves(
@@ -2754,9 +2754,54 @@ fn main_moved_under_a_rename() {
     assert_eq!(origin_main(&r), main, "never pushes");
 }
 
+/// Runs `git` in `w` with the git directory `g` named in the environment.
+fn git_env(w: &Path, g: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(w)
+        .env("GIT_DIR", g)
+        .env("GIT_WORK_TREE", w)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8(out.stdout).unwrap().trim().to_string()
+}
+
+#[test]
+fn a_clone_the_environment_names() {
+    // req:sync/regenerate-renames@0a813763
+    // The child half: the test binary runs itself with the variables set, so no other
+    // test in this process sees them.
+    if let Ok(work) = std::env::var("CLM_SYNC_TEST_WORK") {
+        let report = sync(Path::new(&work)).unwrap();
+        assert!(report.ok, "{:?}", report.lines);
+        return;
+    }
+    let r = rename_branch();
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    let (w, g) = (r.work.clone(), r._dirs.1.path().join("g"));
+    fs::rename(w.join(".git"), &g).unwrap();
+    let main = origin_main(&r);
+    let config = fs::read(g.join("config")).unwrap();
+
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "a_clone_the_environment_names", "--nocapture"])
+        .env("CLM_SYNC_TEST_WORK", &w)
+        .env("GIT_DIR", &g)
+        .env("GIT_WORK_TREE", &w)
+        .output()
+        .unwrap();
+
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(git_env(&w, &g, &["rev-parse", "HEAD^"]), main);
+    assert_eq!(git_env(&w, &g, &["log", "-1", "--format=%s"]), "Rename r");
+    assert_eq!(git_env(&w, &g, &["status", "--porcelain"]), "");
+    assert_eq!(fs::read(g.join("config")).unwrap(), config);
+}
+
 #[test]
 fn a_defect_report_survives_and_a_second_run_changes_nothing() {
-    // req:sync/regenerate-renames@6f762b88
+    // req:sync/regenerate-renames@0a813763
     let r = rename_branch();
     write(
         &r.work,
@@ -2782,7 +2827,7 @@ fn a_defect_report_survives_and_a_second_run_changes_nothing() {
 
 #[test]
 fn a_hand_edit_on_a_rename_branch() {
-    // req:sync/regenerate-renames@6f762b88
+    // req:sync/regenerate-renames@0a813763
     let r = rename_branch();
     write(&r.work, "src/lib.rs", "one\ntwo\nthree\nfour\n");
     commit(&r.work, "hand edit");
@@ -2797,7 +2842,7 @@ fn a_hand_edit_on_a_rename_branch() {
 
 #[test]
 fn a_rename_main_refuses_leaves_the_branch() {
-    // req:sync/regenerate-renames@6f762b88
+    // req:sync/regenerate-renames@0a813763
     let r = rename_branch();
     // `main` gains a `q` of its own, so `a/p` to `a/q` can no longer be carried out.
     main_moves(
