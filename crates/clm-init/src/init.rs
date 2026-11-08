@@ -461,7 +461,8 @@ fn make_executable(path: &Path) -> std::io::Result<()> {
 /// (`clm-host`'s `setup_steps`), always printed since whether the host protects `main` would
 /// take asking it. `paths` are all of CLM's files, written or kept.
 fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<String>) -> Vec<String> {
-    let mut steps: Vec<String> = permissions.into_iter().collect();
+    let mut steps: Vec<String> = missing_main(root).into_iter().collect();
+    steps.extend(permissions);
     // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or
     // there's no remote to push to.
     let mut status = vec!["status", "--porcelain", "--"];
@@ -481,6 +482,45 @@ fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<Strin
     }
     steps.extend(clm_host::setup_steps(host));
     steps
+}
+
+/// The step that names renaming the current branch to `main`, when it isn't `main` and neither
+/// a local `main` nor the remote's exists (`init-names-missing-main`). Renames nothing. A
+/// detached `HEAD` or a git failure gives no step.
+fn missing_main(root: &Path) -> Option<String> {
+    let current = clm_git::current_branch(root).ok()??;
+    if current == "main"
+        || git(
+            root,
+            &["rev-parse", "--verify", "--quiet", "refs/heads/main"],
+        )
+        .is_ok()
+    {
+        return None;
+    }
+    let has_remote = git(root, &["remote", "get-url", REMOTE]).is_ok();
+    if has_remote {
+        // Ask the remote; when it can't be reached, go by what was last fetched.
+        let tracked = format!("refs/remotes/{REMOTE}/main");
+        let exists = match git(root, &["ls-remote", "--heads", REMOTE, "refs/heads/main"]) {
+            Ok(out) => !out.trim().is_empty(),
+            Err(_) => git(root, &["rev-parse", "--verify", "--quiet", &tracked]).is_ok(),
+        };
+        if exists {
+            return None;
+        }
+    }
+    let mut step = format!(
+        "CLM lands only on a branch named `main`, and this repository's is `{current}`; rename \
+         it with `git branch -m {current} main`."
+    );
+    if has_remote {
+        step.push_str(
+            " The remote's default branch, CI triggers and branch protection keyed to the old \
+             name move with it.",
+        );
+    }
+    Some(step)
 }
 
 fn clm_toml(host: Host, newest_migration: Option<&str>, langs: &[&Lang]) -> String {
