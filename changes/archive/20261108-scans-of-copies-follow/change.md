@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [scans-of-copies-follow-git-dir-to-the-clone]
 ---
 
