@@ -233,8 +233,8 @@ impl<'a> Repo<'a> {
     }
 
     /// `[land] check` in `dir` through `sh -c`, outside CI, building into `target` when
-    /// given, with `vars` set and `CLM_SLOT` set to `slot`, under the clone's check lock when
-    /// `locked`; refused as `` `<check>` <fails> `` when it fails. With `log`
+    /// given, with `vars` set and `CLM_SLOT` set to `slot`, under the clone's check lock
+    /// with a ticket of `lane`, when it has one; refused as `` `<check>` <fails> `` when it fails. With `log`
     /// (a land's), its output also goes to that log and a failure repeats its last lines and
     /// names the log, which a pass removes (`land/check-log`).
     fn project_check(
@@ -246,7 +246,7 @@ impl<'a> Repo<'a> {
         fails: &str,
         how: CheckHow,
     ) -> Result<(), Error> {
-        let CheckHow { log, slot, locked } = how;
+        let CheckHow { log, slot, lane } = how;
         // The runner `verify` shares: one check at a time on the clone, whatever the target
         // (`land/check-lock`, `land/shared-check-runner`), except a `--check-only` run in a
         // build place. `--check-only` passes no log, so its refusal repeats no tail and names
@@ -276,7 +276,7 @@ impl<'a> Repo<'a> {
             selection,
             &env,
             log,
-            locked,
+            lane,
             |line| eprintln!("{line}"),
         )?;
         let Some(log) = log else {
@@ -376,11 +376,11 @@ impl<'a> Repo<'a> {
 }
 
 /// How a `[land] check` is run beyond its command: where its output is logged, the slot it
-/// gets (`land/check-slot`) and whether it takes the check lock (`land/check-lock`).
+/// gets (`land/check-slot`) and the lane it takes the check lock in, if any (`land/check-lock`, `land/lock-queue`).
 pub(crate) struct CheckHow<'a> {
     pub(crate) log: Option<&'a Path>,
     pub(crate) slot: u64,
-    pub(crate) locked: bool,
+    pub(crate) lane: Option<lock::Lane>,
 }
 
 /// The directory `clm-land`'s temporary directories go in: `TMPDIR` through the injected

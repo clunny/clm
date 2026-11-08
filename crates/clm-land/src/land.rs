@@ -8,6 +8,7 @@ use clm_ledger::{Body, Entry, LandKind};
 
 use crate::exe::Exe;
 use crate::lock;
+use crate::lock::Lane;
 use crate::scratch::Scratch;
 use crate::{CheckHow, Selected};
 use crate::{Env, Error, Output, Repo, Verdict, is_claim};
@@ -155,13 +156,15 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         if let Some((target, true)) = &target
             && check_runs(&p)
         {
-            let (file, waited) = lock::land(target)?;
+            // Unchecked code: the check runs every test the branch can break, so an ordinary
+            // ticket (`land/lock-queue`).
+            let held = lock::land(target, Lane::Ordinary)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
-            if waited {
+            if held.waited {
                 p = prepare()?;
             }
             if check_runs(&p) {
-                lock = Some(file);
+                lock = Some(held);
             }
         }
         let Prepared {
@@ -276,10 +279,17 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         }
         // Readers to run on checked code: the check compiles into the shared target, so
         // under its lock and in the land tree, not the temporary worktree.
+        let check_lane = if checked && selection.is_some() {
+            Lane::Priority
+        } else {
+            Lane::Ordinary
+        };
         let land_tree_for_readers;
         let dir: &Scratch = match &target {
             Some((target, true)) if checked && runs => {
-                lock = Some(lock::land(target)?.0);
+                // A readers' selection that ran takes the priority lane; one that failed, so
+                // that every test runs, the ordinary (`land/lock-queue`).
+                lock = Some(lock::land(target, check_lane)?);
                 drop(temp.take());
                 land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
                 &land_tree_for_readers
@@ -314,7 +324,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 CheckHow {
                     log: Some(&log),
                     slot,
-                    locked: true,
+                    lane: Some(check_lane),
                 },
             )?;
         }

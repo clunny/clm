@@ -15,7 +15,7 @@ fn passes() -> CheckEnv {
 
 #[test]
 fn a_caller_waits_on_the_check_lock() {
-    // req:land/shared-check-runner@46a11d5f
+    // req:land/shared-check-runner@05214b4c
     let f = Fixture::new("");
     let work = std::fs::canonicalize(f.work()).unwrap();
     let lock_path = work.join(".clm/check.lock");
@@ -40,7 +40,7 @@ fn a_caller_waits_on_the_check_lock() {
 
 #[test]
 fn the_open_step_returned() {
-    // req:land/shared-check-runner@46a11d5f
+    // req:land/shared-check-runner@05214b4c
     let f = Fixture::new("");
     let script = "echo '::group::a'; echo x; echo '::group::b'; echo y; echo z; exit 1";
     let run = run_check(script, &f.work(), None, &passes(), None).unwrap();
@@ -59,7 +59,7 @@ fn the_open_step_returned() {
 
 #[test]
 fn the_selection_and_the_environment_reach_the_command() {
-    // req:land/shared-check-runner@46a11d5f
+    // req:land/shared-check-runner@05214b4c
     let f = Fixture::new("");
     let selection = f.path("selection");
     std::fs::write(&selection, "file a\n").unwrap();
@@ -86,7 +86,7 @@ fn the_selection_and_the_environment_reach_the_command() {
 
 #[test]
 fn land_unchanged() {
-    // req:land/shared-check-runner@46a11d5f
+    // req:land/shared-check-runner@05214b4c
     let f = Fixture::new("");
     f.write("check-prints", "for i in $(seq 50); do echo $i; done\n");
     f.write("check-fails", "");

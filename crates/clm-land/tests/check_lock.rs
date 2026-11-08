@@ -40,7 +40,7 @@ fn assert_unlocked(f: &Fixture) {
 
 #[test]
 fn overlapping_check_only_runs() {
-    // req:land/check-lock@4322253a
+    // req:land/check-lock@a6608578
     let f = Fixture::new("");
     logging_check(&f);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -60,7 +60,7 @@ fn overlapping_check_only_runs() {
 
 #[test]
 fn a_check_only_run_beside_a_land() {
-    // req:land/check-lock@4322253a
+    // req:land/check-lock@a6608578
     let f = Fixture::new("");
     logging_check(&f);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -82,7 +82,7 @@ fn a_check_only_run_beside_a_land() {
 
 #[test]
 fn a_land_with_the_callers_target() {
-    // req:land/check-lock@4322253a
+    // req:land/check-lock@a6608578
     let f = Fixture::new("");
     logging_check(&f);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -105,7 +105,7 @@ fn a_land_with_the_callers_target() {
 
 #[test]
 fn released_after_a_failing_check() {
-    // req:land/check-lock@4322253a
+    // req:land/check-lock@a6608578
     let f = Fixture::new("");
     f.write("check-fails", "");
     for _ in 0..2 {
@@ -118,7 +118,7 @@ fn released_after_a_failing_check() {
 
 #[test]
 fn checked_code_takes_no_check_lock() {
-    // req:land/check-lock@4322253a
+    // req:land/check-lock@a6608578
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     f.mark_checked("origin/main");
@@ -132,7 +132,7 @@ fn checked_code_takes_no_check_lock() {
 
 #[test]
 fn a_check_only_run_in_a_build_place() {
-    // req:land/check-lock@4322253a
+    // req:land/check-lock@a6608578
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.place("a", 1, "impl/a");
