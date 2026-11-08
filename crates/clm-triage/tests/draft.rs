@@ -220,6 +220,7 @@ fn scenario_draft_code_fix_written_rule() {
         "test plumbing",
         "own test suite",
         "only an architecture entry states",
+        "unless its work is test plumbing",
         "no claim",
         "citing no requirement",
         "`human-layer-proof`",
