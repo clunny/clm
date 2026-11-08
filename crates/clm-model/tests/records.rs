@@ -600,12 +600,14 @@ fn taken_in_from_a_red_run() {
 fn a_short_or_upper_case_commit_is_refused() {
     // req:model/parse-backlog@fa4b09c8
     for bad in [
-        "abc123",
-        "0123456789ABCDEF0123456789ABCDEF01234567",
-        "0123456789abcdef0123456789abcdef0123456g",
-        "0123456789abcdef0123456789abcdef012345678",
+        "\"abc123\"",
+        "\"\"",
+        "\"0123456789ABCDEF0123456789ABCDEF01234567\"",
+        "\"0123456789abcdef0123456789abcdef0123456g\"",
+        "\"0123456789abcdef0123456789abcdef012345678\"",
+        "123",
     ] {
-        let text = format!("---\ntitle: T\nkind: bug\nverify_failures: [\"{bad}\"]\n---\n");
+        let text = format!("---\ntitle: T\nkind: bug\nverify_failures: [{bad}]\n---\n");
         let dir = repo(&[("backlog/x.md", &text)]);
         let (_, violations) = load(dir.path());
         assert!(
