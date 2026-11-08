@@ -151,12 +151,15 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     files.write("CLAUDE.md", CLAUDE)?;
 
     let mut out = files.out;
-    let steps = next_steps(
-        &root,
-        &files.paths,
-        configured_host(&root, host),
-        permission_step(&root),
-    );
+    let host = configured_host(&root, host);
+    let steps = next_steps(&root, &files.paths, host, permission_step(&root));
+    // After the steps, which go by the remote the repository had (`init-keeps-a-remote`).
+    let kept = clm_host::keep_remote(&root, host).map_err(|e| match e {
+        clm_host::Error::Refused(m) | clm_host::Error::Nowhere(m) | clm_host::Error::Git(m) => m,
+    })?;
+    if let Some(bare) = kept {
+        out.push_str(&format!("created remote {REMOTE} at {}\n", bare.display()));
+    }
     if !steps.is_empty() {
         out.push_str("\nNext steps (yours):\n");
         for step in steps {
