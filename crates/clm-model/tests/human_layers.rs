@@ -450,7 +450,7 @@ fn need_on_entry_rejected() {
 
 #[test]
 fn blocks_may_name_an_entry() {
-    // req:model/parse-backlog@ae7a1b85
+    // req:model/parse-backlog@fa4b09c8
     let item = "---\ntitle: T\nkind: question\nblocks: [capability/approve, architecture/single-source]\n---\n";
     clean(&[
         ("ARCHITECTURE.md", &architecture(GIT_IS_TRUTH)),
@@ -538,7 +538,7 @@ fn load_files_same_as_load() {
 
 #[test]
 fn friction_may_flag_an_entry() {
-    // req:model/parse-backlog@ae7a1b85
+    // req:model/parse-backlog@fa4b09c8
     let version = &content_hash(APPROVE)[..8];
     let flag = |v: &str| {
         format!("---\ntitle: T\nkind: friction\nrequirement: capability/approve@{v}\n---\n")
