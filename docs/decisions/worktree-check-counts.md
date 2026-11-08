@@ -1,0 +1,20 @@
+---
+title: "A build's passing pre-land check counts for its land, and runs outside the check lock"
+date: 2026-11-07
+status: accepted
+---
+
+`clm land --check-only` runs `[land] check` with the tests `clm affected` selects against `origin/main`, as a land does. When it and `clm check` pass on a clean working tree whose committed `HEAD` contains `origin/main`, the same commit before and after, it appends a `checked` record for `HEAD`'s code key with the land's command (`land/check-only`). A land of that branch made before `main` moves merges to the same tree, finds its code key checked, and runs only `clm check --no-detectors` and the readers of checked code, taking no lock. When `main` has moved, the merged tree's key differs and the land runs its usual selected check. A `--check-only` run in a build place, whose `CLM_SLOT` isn't 0, takes no check lock (`land/check-lock`); a land's check, a `--check-only` run outside a place and `clm verify`'s local run still do.
+
+**Why.** Each build checked its code twice through the one queue the check lock makes: a full `--check-only` in its worktree, serialised with every land and every other build's check, and then the land's own check on the merge, even when `main` hadn't moved and the merge was the tree just checked. With several builds at once, lands waited behind a queue of full checks (388 s each in this repository, measured 2026-11-07). The human chose both parts: take builds' pre-land checks out of the lock, and let a passing one count for the land.
+
+**Why the record can be trusted.** A land matches a `checked` record by code key alone, exactly (`legacy-code-key` refuses any looser match), so the record says only that a tree with that key passed the command. A clean, committed `HEAD` that contains `origin/main` is the tree a land of it makes while `main` stays there, and the record is made by the same `clm` helpers, on the same clone and machine, into the same ledger, with the same selection a land would hand the check. The selection matters: a land's own `checked` record has always come from a selected run, so a full run would only make the build slower than the land it stands in for. What differs is ignored state, a build's `target/` against the land tree's cleaned checkout and warm `.clm/land`; a check that passes only through an ignored file it doesn't make is the project check's defect, which the next land after `main` moves, or `clm verify`, shows.
+
+**Why outside the lock, and why only in a place.** The check lock (`check-runs-one-at-a-time`) kept two checks' tests from colliding on a host resource. `tests-run-concurrently` and `CLM_SLOT` (`build-slots`) now make every CLM-built project's tests able to overlap on one host, and a replacement of that constraint must keep the same guarantee, so builds' checks, each with its own slot, don't need it. Runs outside a place all have slot 0, which keeps nothing apart, so they keep the lock. A land keeps it too: lands are serialised by `land-target-lock` already, and nothing has shown the lock costs a land anything more.
+
+**Alternatives.**
+- *A setting to turn the lock off.* Rejected (`yagni`): the slot already says which runs can overlap, and a project whose tests can't overlap breaks `tests-run-concurrently` whatever the setting says.
+- *Keep `--check-only` a full run, and only record it.* Rejected: slower than the land's own check for no more proof, since the land's record has always been a selected run.
+- *A selection only when `--check-only` can't record.* Rejected: the recorded run would then stand for more than a land proves, and cost more.
+- *A dry-run land (fetch, merge, check, no push).* Rejected here as in `land-check-command`: it needs the branch pushed first, and checks a merge the session hasn't made; with `HEAD` containing `origin/main`, the worktree already is that merge.
+- *Drop the check lock everywhere.* Not now: lands are serialised by the land lock anyway, and slot-0 runs still need it.
