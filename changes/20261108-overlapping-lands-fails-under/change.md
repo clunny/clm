@@ -31,6 +31,7 @@ Linked worktrees of one clone share its refs. Once the first land has pushed `ma
 
 - `land/offline-land` gains the retry and the narrower `offline`, with two scenarios: a fetch that fails once with `cannot lock ref` and then succeeds lands, and a fetch that keeps failing while `origin` answers exits 1 with git's message and no `offline`. Both run the `clm` binary with a fake `git` first on `PATH`, as `land-push-retry`'s *pushed though git failed* does.
 - The Design's **Offline** paragraph says why a failed fetch is tried again and how the land then tells offline from a local failure.
+- `clm approve` has its own fetch in `land.approval` with the same flaw. It is out of this change's component, so it is filed as `backlog/clm-approve-calls-a-lost-ref-race-offline` (found by the architecture audit).
 - `overlapping_lands` and `held_through_the_gate_on_the_merge` need no change: they pass once the waiting land's fetch survives the race.
 
 ## Constraints
