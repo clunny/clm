@@ -453,7 +453,6 @@ dependencies = [
 name = "clm-init"
 version = "0.22.0"
 dependencies = [
- "clm-affected",
  "clm-config",
  "clm-git",
  "clm-host",
