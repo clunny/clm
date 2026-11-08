@@ -92,11 +92,18 @@ const LAND_WAIT: &str = " Wait for a `clm land` you started{check_land} until it
                           your worktree. When your turn ends while a command you started in the \
                           background still runs, because waiting for its completion notice is all \
                           that is left, the message ending that turn is not your final message, \
-                          since the orchestrating session receives it as the build's result: it \
-                          carries no closing line, neither `landed <sha>` nor `stopped: \
+                          since the orchestrating session may receive it as the build's result: \
+                          it carries no closing line, neither `landed <sha>` nor `stopped: \
                           <reason>`, and ends with the line `waiting: <command>`, naming the \
                           command you wait for; your final message comes in a later turn, once \
-                          the command has ended.";
+                          the command has ended. You hand back one report, your final message \
+                          (`one-report-per-run`): a tool that delivers your report to the \
+                          orchestrating session and accepts one report per run, such as Claude \
+                          Code's `SubagentHandback`, is never called for the message ending a \
+                          turn that waits, which you end as plain text, and is called once, with \
+                          the final message, since a report sent while waiting uses up the run's \
+                          one report and the final message would then never reach the \
+                          orchestrating session.";
 
 const REVIEW_LEVEL: &str = "medium";
 const SPEC_AUDITOR: &str = "clm:spec-auditor";
