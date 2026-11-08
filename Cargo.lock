@@ -645,6 +645,7 @@ name = "clm-upgrade"
 version = "0.20.0"
 dependencies = [
  "clm-config",
+ "serde_json",
  "sha2",
  "tempfile",
  "toml",

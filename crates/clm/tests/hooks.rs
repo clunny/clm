@@ -81,6 +81,29 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
         "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nr\n",
     )
     .unwrap();
+    // An up-to-date project allows the unattended `clm` rules (`upgrade/migration-unattended-allow-rules`).
+    let rules: Vec<String> = [
+        "apply",
+        "branch",
+        "check",
+        "claim",
+        "defect",
+        "gate",
+        "land",
+        "pr",
+        "rebase",
+        "verify",
+        "workaround",
+    ]
+    .iter()
+    .flat_map(|s| [format!("Bash(clm {s})"), format!("Bash(clm {s} *)")])
+    .collect();
+    fs::create_dir_all(dir.path().join(".claude")).unwrap();
+    fs::write(
+        dir.path().join(".claude/settings.json"),
+        serde_json::json!({ "permissions": { "allow": rules } }).to_string(),
+    )
+    .unwrap();
     if let Some(settings) = settings {
         fs::write(dir.path().join("clm.toml"), settings).unwrap();
     }

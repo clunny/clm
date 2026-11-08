@@ -20,7 +20,35 @@ fn project(architecture: &str, claude: &str) -> TempDir {
     fs::write(dir.path().join("clm.toml"), "defects = \"ask\"\n").unwrap();
     fs::write(dir.path().join("ARCHITECTURE.md"), architecture).unwrap();
     fs::write(dir.path().join("CLAUDE.md"), claude).unwrap();
+    write_settings(dir.path(), "settings.json", &all_rules());
     dir
+}
+
+const SUBCOMMANDS: [&str; 11] = [
+    "apply",
+    "branch",
+    "check",
+    "claim",
+    "defect",
+    "gate",
+    "land",
+    "pr",
+    "rebase",
+    "verify",
+    "workaround",
+];
+
+fn all_rules() -> Vec<String> {
+    SUBCOMMANDS
+        .iter()
+        .flat_map(|s| [format!("Bash(clm {s})"), format!("Bash(clm {s} *)")])
+        .collect()
+}
+
+fn write_settings(root: &std::path::Path, name: &str, allow: &[String]) {
+    fs::create_dir_all(root.join(".claude")).unwrap();
+    let text = serde_json::json!({ "enabledPlugins": {}, "permissions": { "allow": allow } });
+    fs::write(root.join(".claude").join(name), text.to_string()).unwrap();
 }
 
 // req:upgrade/migration-carried-constraints-copy@42c5fa08
@@ -154,4 +182,125 @@ fn the_check_script_note_says_what_changed_for_every_language() {
     let note = crate::note(dir.path(), SCRIPT_ID).unwrap();
     assert!(note.contains("BASH_SOURCE"), "{note}");
     assert!(note.contains("manifest"), "{note}");
+}
+
+const RULES_ID: &str = "20261107-projects-set-up-before";
+const RULES_NOTE: &str = "Unattended sessions need clm's allow rules in .claude/settings.json";
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn a_project_without_settings_is_offered_the_rules_and_nothing_is_written() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::remove_dir_all(dir.path().join(".claude")).unwrap();
+    assert!(
+        list(dir.path())
+            .unwrap()
+            .contains(&format!("{RULES_ID} advised note {RULES_NOTE}\n"))
+    );
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("note {RULES_ID}\n")), "{out}");
+    assert!(!out.contains("applied"), "{out}");
+    assert!(!dir.path().join(".claude").exists());
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn a_project_lacking_only_the_newest_rules_keeps_its_settings() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    let rules: Vec<String> = all_rules()
+        .into_iter()
+        .filter(|r| !r.contains("verify"))
+        .collect();
+    write_settings(dir.path(), "settings.json", &rules);
+    let before = fs::read_to_string(dir.path().join(".claude/settings.json")).unwrap();
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("note {RULES_ID}\n")), "{out}");
+    let after = fs::read_to_string(dir.path().join(".claude/settings.json")).unwrap();
+    assert_eq!(before, after);
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn each_subcommand_needs_both_its_bare_and_its_argument_rule() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    for keep in [
+        |r: &String| !r.ends_with(" *)"),
+        |r: &String| r.ends_with(" *)"),
+        |r: &String| !r.contains("verify"),
+    ] {
+        let rules: Vec<String> = all_rules().into_iter().filter(keep).collect();
+        write_settings(dir.path(), "settings.json", &rules);
+        assert!(list(dir.path()).unwrap().contains(RULES_ID));
+    }
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn the_rules_may_be_split_across_the_two_settings_files() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    let (land, rest): (Vec<_>, Vec<_>) =
+        all_rules().into_iter().partition(|r| r == "Bash(clm land)");
+    write_settings(dir.path(), "settings.json", &rest);
+    assert!(list(dir.path()).unwrap().contains(RULES_ID));
+    write_settings(dir.path(), "settings.local.json", &land);
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn the_older_rule_form_does_not_count() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    let mut rules: Vec<String> = all_rules()
+        .into_iter()
+        .filter(|r| !r.starts_with("Bash(clm land"))
+        .collect();
+    rules.push("Bash(clm land:*)".to_string());
+    write_settings(dir.path(), "settings.json", &rules);
+    assert!(list(dir.path()).unwrap().contains(RULES_ID));
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn a_settings_file_that_is_not_the_expected_json_allows_nothing() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join(".claude/settings.json"), "not json").unwrap();
+    assert!(list(dir.path()).unwrap().contains(RULES_ID));
+    fs::write(
+        dir.path().join(".claude/settings.json"),
+        r#"{"permissions":{"allow":"Bash(clm apply)"}}"#,
+    )
+    .unwrap();
+    assert!(list(dir.path()).unwrap().contains(RULES_ID));
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn a_declined_rules_migration_is_not_listed() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::remove_dir_all(dir.path().join(".claude")).unwrap();
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("declined_migrations = [\"{RULES_ID}\"]\n"),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
+fn the_rules_note_lists_the_rules_and_the_ways_out() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::remove_dir_all(dir.path().join(".claude")).unwrap();
+    let note = crate::note(dir.path(), RULES_ID).unwrap();
+    for rule in all_rules() {
+        assert!(note.contains(&format!("`{rule}`")), "{rule}: {note}");
+    }
+    assert!(note.contains("clm init --check-permissions"), "{note}");
+    assert!(
+        note.contains(&format!("clm upgrade --decline {RULES_ID}")),
+        "{note}"
+    );
+    assert!(note.contains("`paths`"), "{note}");
+    assert!(note.contains("by hand"), "{note}");
+    assert!(note.contains("spec change"), "{note}");
 }

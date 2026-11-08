@@ -87,6 +87,33 @@ fn session_start_is_silent_elsewhere() {
     // A broken spec tree: status fails, so the hook says nothing.
     fs::create_dir_all(dir.path().join("specs")).unwrap();
     fs::write(dir.path().join("specs/SPEC.md"), "---\ntitle: R\n---\n").unwrap();
+    // An up-to-date project allows the unattended `clm` rules, so no upgrade line shows
+    // (`upgrade/migration-unattended-allow-rules`).
+    let rules: Vec<String> = [
+        "apply",
+        "branch",
+        "check",
+        "claim",
+        "defect",
+        "gate",
+        "land",
+        "pr",
+        "rebase",
+        "verify",
+        "workaround",
+    ]
+    .iter()
+    .flat_map(|s| [format!("Bash(clm {s})"), format!("Bash(clm {s} *)")])
+    .collect();
+    fs::create_dir_all(dir.path().join(".claude")).unwrap();
+    fs::write(
+        dir.path().join(".claude/settings.json"),
+        format!(
+            "{{\"permissions\":{{\"allow\":{}}}}}",
+            serde_json::json!(rules)
+        ),
+    )
+    .unwrap();
     assert_eq!(start(dir.path()), "");
     assert_eq!(session_start("not json"), "");
 }

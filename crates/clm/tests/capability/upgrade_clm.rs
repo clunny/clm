@@ -64,6 +64,38 @@ fn skipping_releases() {
         "the stamp is not written"
     );
 
+    // The one edit left is the note's, which `/clm:upgrade` has the human take by hand: the
+    // allow rules for unattended `clm` commands, and the settings file in the root's `paths`.
+    let rules: Vec<String> = [
+        "apply",
+        "branch",
+        "check",
+        "claim",
+        "defect",
+        "gate",
+        "land",
+        "pr",
+        "rebase",
+        "verify",
+        "workaround",
+    ]
+    .iter()
+    .flat_map(|s| [format!("Bash(clm {s})"), format!("Bash(clm {s} *)")])
+    .collect();
+    repo.write(
+        ".claude/settings.json",
+        &serde_json::json!({ "permissions": { "allow": rules } }).to_string(),
+    );
+    let spec = fs::read_to_string(repo.root.join("specs/SPEC.md")).unwrap();
+    let edited = spec.replacen(
+        "\"scripts/clm-check.sh\"]",
+        "\"scripts/clm-check.sh\", \".claude/settings.json\"]",
+        1,
+    );
+    assert_ne!(edited, spec, "the root's paths line has changed shape");
+    repo.write("specs/SPEC.md", &edited);
+    repo.commit("take the allow rules by hand");
+
     let after = repo.clm(&["upgrade"]);
     assert!(after.status.success(), "{}", printed(&after));
     assert_eq!(printed(&after), "up to date\n");
