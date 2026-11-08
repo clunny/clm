@@ -30,7 +30,7 @@ fn hook(r: &Repo, name: &str, body: &str) {
 
 #[test]
 fn scenario_branch_before_the_push() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     hook(
         &r,
@@ -51,7 +51,7 @@ fn scenario_branch_before_the_push() {
 
 #[test]
 fn scenario_lost_race() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     hook(
         &r,
@@ -75,7 +75,7 @@ fn scenario_lost_race() {
 
 #[test]
 fn scenario_rejected_for_another_reason() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     pre_receive(&r, "echo declined by test >&2\nexit 1\n");
     let why = match claim_local(&r.work, "b", 4) {
@@ -89,7 +89,7 @@ fn scenario_rejected_for_another_reason() {
 
 #[test]
 fn scenario_tip_unreadable() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     hook(
         &r,
@@ -107,7 +107,7 @@ fn scenario_tip_unreadable() {
 
 #[test]
 fn scenario_existing_local_branch() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     let main = git(&r.work, &["rev-parse", "origin/main"]);
     git(&r.work, &["branch", "impl/b", main.trim()]);
@@ -118,7 +118,7 @@ fn scenario_existing_local_branch() {
 
 #[test]
 fn scenario_plain_claim() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     assert_eq!(claim(&r.work, "b", 4).unwrap(), "impl/b");
     assert_eq!(local_tip(&r, "impl/b"), None);
@@ -126,7 +126,7 @@ fn scenario_plain_claim() {
 
 #[test]
 fn refusals_leave_no_local_branch() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     push_claim(&r.work, "b", 1);
     assert!(matches!(
@@ -142,11 +142,21 @@ fn refusals_leave_no_local_branch() {
 
 #[test]
 fn takeover_of_a_lapsed_claim_records_the_branch() {
-    // req:orchestrator/claim-local@90252fd0
+    // req:orchestrator/claim-local@bf90a932
     let r = repo();
     let old = push_claim(&r.work, "b", 5);
     assert_eq!(claim_local(&r.work, "b", 4).unwrap(), "impl/b");
     let tip = remote_tip(&r, "impl/b").unwrap();
     assert_ne!(tip, old);
     assert_eq!(local_tip(&r, "impl/b").as_deref(), Some(tip.as_str()));
+}
+
+#[test]
+fn scenario_no_other_public_claim_call() {
+    // req:orchestrator/claim-local@bf90a932
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let repo = std::fs::read_to_string(src.join("repo.rs")).unwrap();
+    let lib = std::fs::read_to_string(src.join("lib.rs")).unwrap();
+    assert!(!repo.contains("pub fn claim_node"), "claim_node is public");
+    assert!(!lib.contains("claim_node"), "claim_node is re-exported");
 }
