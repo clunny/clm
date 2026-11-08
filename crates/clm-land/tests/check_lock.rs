@@ -52,7 +52,7 @@ fn overlapping_check_only_runs() {
         let one = s.spawn(|| clm_land::check_only(&a, None, &env));
         let two = s.spawn(|| clm_land::check_only(&b, None, &env));
         for out in [one.join().unwrap().unwrap(), two.join().unwrap().unwrap()] {
-            assert_eq!(out.lines, ["checks pass"]);
+            assert_eq!(out.lines.last().unwrap(), "checks pass");
         }
     });
     assert_serial(&f, 2);
@@ -72,7 +72,10 @@ fn a_check_only_run_beside_a_land() {
         let only = s.spawn(|| clm_land::check_only(&linked, None, &env));
         let landed = land.join().unwrap().unwrap();
         assert!(landed.lines[0].starts_with("landed "), "{:?}", landed.lines);
-        assert_eq!(only.join().unwrap().unwrap().lines, ["checks pass"]);
+        assert_eq!(
+            only.join().unwrap().unwrap().lines.last().unwrap(),
+            "checks pass"
+        );
     });
     assert_serial(&f, 2);
 }

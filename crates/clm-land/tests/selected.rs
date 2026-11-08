@@ -6,7 +6,7 @@ use common::Fixture;
 
 #[test]
 fn selection_handed_over() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-out", "component a\nfile crates/a/src/lib.rs\n");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
@@ -21,7 +21,7 @@ fn selection_handed_over() {
 
 #[test]
 fn base_is_the_fetched_main() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // `main` moves after the branch was made, so the fetched `main` isn't the merge base.
@@ -34,7 +34,7 @@ fn base_is_the_fetched_main() {
 
 #[test]
 fn selection_fails() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -45,7 +45,7 @@ fn selection_fails() {
 
 #[test]
 fn code_already_checked() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     f.mark_checked("origin/main");
@@ -61,7 +61,7 @@ fn code_already_checked() {
 
 #[test]
 fn readers_of_checked_code() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("readers-out", "file crates/a/tests/r.rs\n");
     f.branch("spec/x", &[("ARCHITECTURE.md", "# x\n")]);
@@ -78,7 +78,7 @@ fn readers_of_checked_code() {
 
 #[test]
 fn a_reader_fails_on_checked_code() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("readers-out", "file crates/a/tests/r.rs\n");
     f.write("check-fails", "");
@@ -91,7 +91,7 @@ fn a_reader_fails_on_checked_code() {
 
 #[test]
 fn readers_selection_fails_on_checked_code() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("spec/x", &[("ARCHITECTURE.md", "# x\n")]);

@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn check_runs_outside_ci() {
-        // req:land/land@c409726a
+        // req:land/land@f4bd0a7c
         let env = CheckEnv {
             set: vec![("CARGO_TARGET_DIR".into(), "/r/.clm/land".into())],
             unset: vec!["CI".into()],
@@ -118,7 +118,7 @@ mod tests {
         let command = shell("true", Path::new("/w"), None, &env);
         let envs: Vec<_> = command.get_envs().collect();
         assert!(envs.contains(&(OsStr::new("CI"), None)), "{envs:?}");
-        // req:land/selected-tests@3c8754b6
+        // req:land/selected-tests@912a8d72
         let selection = (OsStr::new("CLM_SELECTION"), None);
         assert!(envs.contains(&selection), "{envs:?}");
         assert!(

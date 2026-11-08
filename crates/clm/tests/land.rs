@@ -139,7 +139,7 @@ const PUSH_TO_MAIN_FAILS: &str = "if [ \"$1\" = push ]; then for a in \"$@\"; do
 
 #[test]
 fn refetch_fails() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -162,7 +162,7 @@ fn refetch_fails() {
 
 #[test]
 fn pushed_though_git_failed() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     // A `git` that pushes to `main` and then reports a failure whatever happened.
@@ -323,7 +323,7 @@ fn checked_code_takes_no_lock() {
 
 #[test]
 fn check_only_checks_the_working_tree() {
-    // req:land/check-only@57b7e93c
+    // req:land/check-only@938e24c2
     let f = Fixture::new("");
     let work = f.work();
     // An uncommitted edit: the check runs on the working tree as it stands.
@@ -336,7 +336,14 @@ fn check_only_checks_the_working_tree() {
         .unwrap();
     let stderr = text(&out.stderr);
     assert!(out.status.success(), "{stderr}");
-    assert_eq!(text(&out.stdout).trim(), "checks pass");
+    // The edit keeps the check from counting for a land, and it is said before the verdict.
+    assert_eq!(
+        text(&out.stdout).lines().collect::<Vec<_>>(),
+        [
+            "not recorded: the working tree has uncommitted changes",
+            "checks pass"
+        ]
+    );
     // In the working tree, outside CI, building where the caller's environment says.
     let pwd = fs::canonicalize(&work).unwrap();
     assert_eq!(f.lines("check-pwd.log"), [pwd.display().to_string()]);
@@ -366,7 +373,7 @@ fn check_only_checks_the_working_tree() {
 
 #[test]
 fn selection_fails_says_why() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -383,7 +390,7 @@ fn selection_fails_says_why() {
 
 #[test]
 fn readers_selection_fails_says_why() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("ARCHITECTURE.md", "# x\n")]);

@@ -463,8 +463,9 @@ enum Command {
     Land {
         /// The branch (default: the current one).
         branch: Option<String>,
-        /// Run the land's check command and `clm check` on the working tree, and land and
-        /// record nothing: print `checks pass` or name the command that failed.
+        /// Run the land's check command and `clm check` on the working tree and land
+        /// nothing: print `checks pass` (after `recorded <sha> as checked` when a clean
+        /// committed head counts for a land) or name the command that failed.
         #[arg(long)]
         check_only: bool,
         /// Repository root (default: the CLM repository holding the current directory).
