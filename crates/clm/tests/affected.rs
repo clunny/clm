@@ -526,6 +526,7 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
 #[test]
 fn why_prints_the_chain_through_a_dependency() {
     // req:check.affected/why-chain@7e236f82
+    // req:clm/affected-why-command@2b2b52c9
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -561,6 +562,7 @@ fn why_says_not_selected_and_all() {
 #[test]
 fn why_with_readers_exits_1_naming_both_flags() {
     // req:check.affected/why-chain@7e236f82
+    // req:clm/affected-why-command@2b2b52c9
     let dir = repo("");
     let out = clm_affected_with(
         dir.path(),
