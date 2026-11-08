@@ -355,6 +355,28 @@ fn workarounds_not_counted_when_settings_fail() {
 #[test]
 fn land_target_reaches_health() {
     // req:clm/health-land-target@a8db0736
+    land_time_line(
+        "host = \"git\"\n[land]\ncheck = \"true\"\ncheck_target_seconds = 45\n",
+        "health/land-time: 1 of 1 timed lands over 45s",
+    );
+}
+
+#[test]
+fn land_target_defaults_when_unset() {
+    // req:clm/health-land-target@a8db0736
+    land_time_line(
+        "host = \"git\"\n[land]\ncheck = \"true\"\n",
+        "health/land-time: 0 of 1 timed lands over 120s",
+    );
+    land_time_line(
+        "host = \"git\"\n",
+        "health/land-time: 0 of 1 timed lands over 120s",
+    );
+}
+
+/// Runs `clm health` in a clone holding `clm.toml` and one timed land of 50 seconds, and
+/// asserts that its output has the `expected` line.
+fn land_time_line(clm_toml: &str, expected: &str) {
     use clm_ledger::{Body, LandKind};
     let dir = TempDir::new().unwrap();
     let root = ledger_common::clone_with_origin(dir.path(), "repo", "Ann");
@@ -363,11 +385,7 @@ fn land_target_reaches_health() {
         "specs/SPEC.md",
         "---\ntitle: T\nstatus: active\nowners: []\n---\n",
     );
-    write(
-        &root,
-        "clm.toml",
-        "host = \"git\"\n[land]\ncheck = \"true\"\ncheck_target_seconds = 45\n",
-    );
+    write(&root, "clm.toml", clm_toml);
     let body = Body::Landed {
         commit: "c1".into(),
         branch: "impl/a".into(),
@@ -389,10 +407,5 @@ fn land_target_reaches_health() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert!(
-        stdout
-            .lines()
-            .any(|l| l == "health/land-time: 1 of 1 timed lands over 45s"),
-        "{stdout}"
-    );
+    assert!(stdout.lines().any(|l| l == expected), "{stdout}");
 }
