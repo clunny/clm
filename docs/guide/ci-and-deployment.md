@@ -16,6 +16,10 @@ Your specs and other prose don't count as code for a land. When a branch changes
 
 So when a test reads one of those files of your project's own tree, such as a test that checks your specs for a retired term, give it the marker. Without one, a branch that changes only that file lands without running the test, and can leave `main` failing it until a later land happens to run it. `clm affected --readers` prints the test files whose markers match what the current branch changes, and `clm land` runs `[land] check` with the environment variable `CLM_SELECTION` naming a file that lists them, as it names the selected tests of a code land. A test that reads only fixtures it writes itself, or only code, needs no marker. Markdown files are never readers.
 
+### A build's own check counts for its land
+
+Before it lands, a build runs `clm land --check-only` in its own worktree: your whole `[land] check`, every test, and `clm check`. When that passes on a committed branch with no uncommitted change that already contains `origin/main`, it is recorded, and a land of the branch made before `main` moves runs no check of its own. So the check must pass from a clean checkout: one that passes only because of a file git ignores and the check doesn't make itself, such as a build output left from earlier work, can pass in the build and fail at a later land.
+
 ## Deployment is yours
 
 Every commit on `main` is checked, so every commit is deployable. Whether and when you deploy is your choice:
@@ -30,7 +34,7 @@ Tests that need a deployed system, such as integration tests on a test cluster, 
 
 **Promotion after `main` (the default).** `main` deploys to the test environment, the integration tests run there, and only a green build goes on to production. Before the land, the checks run everything that proves the requirements with what lies outside stubbed, as CLM's tests are meant to. Lands stay fast, and a failure on the cluster usually points at a missing requirement or a wrong stub.
 
-**`main` itself.** If `main` must be integration-green, make `[land] check` deploy the merged tree to the test environment, run the tests and fail on red. The environment runs the tests; `clm land` reads the result and decides. Spec-only lands skip it, since a tree whose code was already checked runs only `clm check`. The cost is throughput: lands are serial, so a 30-minute run allows two code lands an hour, a land whose push loses the race to another runs again, and a flaky environment blocks every land. A shared test environment also breaks `tests-run-concurrently` (`clm guide constraints`), since builds run their tests at once: the check lock keeps `[land] check` runs apart, but not tests a build runs by hand. Such a project keeps the environment out of the tests its builds run, or replaces that constraint with one of its own that keeps its guarantee.
+**`main` itself.** If `main` must be integration-green, make `[land] check` deploy the merged tree to the test environment, run the tests and fail on red. The environment runs the tests; `clm land` reads the result and decides. Spec-only lands skip it, since a tree whose code was already checked runs only `clm check`. The cost is throughput: lands are serial, so a 30-minute run allows two code lands an hour, a land whose push loses the race to another runs again, and a flaky environment blocks every land. A shared test environment also breaks `tests-run-concurrently` (`clm guide constraints`), since builds run their tests at once: the check lock keeps lands' `[land] check` runs apart, but not a build's own run of it before the land, which starts at once in its build place, nor tests a build runs by hand. Such a project keeps the environment out of the tests its builds run, or replaces that constraint with one of its own that keeps its guarantee.
 
 ## Slow tests
 
@@ -53,7 +57,7 @@ A failed last run makes any later land due, so a fix is checked at once. A run c
 
 ### Where they run
 
-- `mode = "local"`: on the machine that calls `clm verify`, in its own tree under `.clm/verify-tree`. Its check takes the clone's check lock, like every check on the clone, so a land on that clone waits while a slow run's check runs. If that wait matters, use `pipeline` mode or run `clm verify` from another clone.
+- `mode = "local"`: on the machine that calls `clm verify`, in its own tree under `.clm/verify-tree`. Its check takes the clone's check lock, as a land's does, so a land on that clone waits while a slow run's check runs. If that wait matters, use `pipeline` mode or run `clm verify` from another clone.
 - `mode = "pipeline"`: the host's pipeline runs `clm verify --due` on every push to `main` and records the result itself. Give the workflow the right to push `clm/ledger/*` (on GitHub, `permissions: contents: write`), set `CLM_WRITER` to a name for it, and in a signed repository give it a key of its own in `docs/allowed_signers`.
 - `mode = "import"` with `workflow = "<name>"`: the pipeline runs the slow tests and only reports; `clm verify --import`, which `/clm:triage` runs, reads its runs on `main` and records them. The pipeline needs no write access, and can gate its slow job on `clm verify --due --dry-run`, which exits 0 when a run is due and 3 when not. GitHub only for now.
 
