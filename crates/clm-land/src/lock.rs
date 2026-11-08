@@ -271,10 +271,10 @@ pub(crate) fn take(
         let (name, ticket_path, file) = loop {
             let name = ticket_name(counter, rank);
             let ticket_path = queue.dir.join(&name);
-            let prefix = format!("{counter:020}-");
+            let digits = format!("{counter:020}-");
             let taken = std::fs::read_dir(&queue.dir)?
                 .filter_map(Result::ok)
-                .any(|e| e.file_name().to_string_lossy().starts_with(&prefix));
+                .any(|e| e.file_name().to_string_lossy().starts_with(&digits));
             counter += 1;
             if taken {
                 continue;
@@ -549,6 +549,19 @@ mod tests {
             Some(STREAK),
         );
         assert_eq!(got, ["ord1", "ord5"]);
+    }
+
+    #[test]
+    fn a_priority_lane_p1_run_goes_before_the_cap_runs() {
+        // req:land/lock-queue@7af00d95
+        let (got, _) = run_in_order_after(
+            &[
+                ("ord5", Rank::ORDINARY),
+                ("pri1", rank(Lane::Priority, Priority::P1)),
+            ],
+            Some(STREAK),
+        );
+        assert_eq!(got, ["pri1", "ord5"]);
     }
 
     #[test]
