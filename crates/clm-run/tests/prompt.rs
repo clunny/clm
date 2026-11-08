@@ -885,7 +885,7 @@ fn scenario_recorded_check_explained() {
         .expect("a landing paragraph");
     for needle in [
         "recorded",
-        "rebase ok",
+        "after `clm rebase` prints `rebase ok`",
         "not recorded:",
         "formatter",
         "linter",

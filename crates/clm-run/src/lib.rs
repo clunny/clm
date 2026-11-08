@@ -867,8 +867,9 @@ fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
 }
 
 /// Whether the local `branch` is at a claim commit nobody pushed (`claim-local-before-push`):
-/// one parent, the parent's tree, the parent an ancestor of `origin/main`, and not contained
-/// in `origin/<branch>` (or no such branch). It holds no work, whoever made it.
+/// one parent, the parent's tree, the parent an ancestor of `origin/main`, on a branch that
+/// never held `origin/<branch>`'s tip (or with no such branch). It holds no work, whoever
+/// made it.
 fn unpushed_claim(root: &Path, local: &str, branch: &str) -> Result<bool, Error> {
     if git(root, &["rev-parse", "--verify", "-q", local]).is_err() {
         return Ok(false);
@@ -902,7 +903,8 @@ fn held(root: &Path, local: &str, branch: &str) -> Result<bool, Error> {
     // No reflog (or an expired one) leaves only the local tip.
     let log = git(root, &["reflog", "show", "--format=%H", local]).unwrap_or_default();
     for sha in log.lines() {
-        if clm_git::is_ancestor(root, &remote, sha)? {
+        // An entry whose commit is gone (pruned) holds nothing.
+        if clm_git::is_ancestor(root, &remote, sha).unwrap_or(false) {
             return Ok(true);
         }
     }
