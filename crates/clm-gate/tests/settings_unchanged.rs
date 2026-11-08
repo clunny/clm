@@ -39,6 +39,18 @@ fn a_setting() {
 }
 
 #[test]
+fn only_top_level_notes_are_left_out() {
+    // req:gate/settings-unchanged@e141f56b
+    let a = b"[land]\nupgraded = \"1\"\n";
+    let b = b"[land]\nupgraded = \"2\"\n";
+    assert!(!settings_unchanged(Some(a), Some(b)));
+    assert!(settings_unchanged(
+        Some(b"declined_migrations = [\"m\"]\n"),
+        Some(b"")
+    ));
+}
+
+#[test]
 fn unreadable() {
     // req:gate/settings-unchanged@e141f56b
     assert!(!settings_unchanged(Some(BEFORE), Some(b"upgraded = [\n")));

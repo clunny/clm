@@ -79,8 +79,9 @@ pub fn settings_unchanged(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
 /// unchanged and the parsed tables differ, so a comment-only edit is some other change
 /// (`upgrade-stamp-left-out`).
 pub fn upgrade_stamp_only(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
-    settings_unchanged(before, after)
-        && parse_sides(before, after).is_some_and(|(before, after)| before != after)
+    parse_sides(before, after).is_some_and(|(before, after)| {
+        before != after && without_notes(before) == without_notes(after)
+    })
 }
 
 /// Whether `approval-setting` counts `clm.toml` as a spec change, given its bytes on each
