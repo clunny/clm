@@ -104,20 +104,9 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
         .collect();
     let pending_ids: BTreeSet<String> = coverage.iter().map(|c| c.id.clone()).collect();
     let moves = moves(graph);
-    // The `unbuilt` rules that serve each pending capability, by one pass
-    // (`serving-rules-order-capabilities`).
-    let mut serving: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-    for c in coverage.iter().filter(|c| c.state == State::Unbuilt) {
-        for cap in graph.effective_serves(&c.id) {
-            if pending_ids.contains(cap) {
-                serving.entry(cap).or_default().push(c.id.clone());
-            }
-        }
-    }
-    // What a requirement waits on: its pending `Needs`; for an `unbuilt` or `behind`
-    // capability, the `unbuilt` rules that serve it; and, when it is obsolete, the pending
-    // requirements a move took it to (`moved-markers-wait`).
-    let waits_on = |id: &str, state: State| {
+    // What a requirement waits on besides its serving rules: its pending `Needs`, and, when it
+    // is obsolete, the pending requirements a move took it to (`moved-markers-wait`).
+    let base_waits = |id: &str, state: State| {
         let mut needs: BTreeSet<String> = graph
             .requirement(id)
             .into_iter()
@@ -125,9 +114,6 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
             .filter(|n| pending_ids.contains(*n))
             .cloned()
             .collect();
-        if let Some(rules) = serving.get(id).filter(|_| state != State::Obsolete) {
-            needs.extend(rules.iter().cloned());
-        }
         if state == State::Obsolete {
             needs.extend(
                 follow(graph, &moves, id.to_string())
@@ -135,7 +121,38 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
                     .filter(|n| pending_ids.contains(n)),
             );
         }
-        needs.into_iter().collect()
+        needs
+    };
+    // The rules that hold back each pending capability, by one pass over the requirements
+    // (`serving-rules-order-capabilities`): the `unbuilt` ones, and the `behind` ones that an
+    // item or a wait blocks. A rule's own blockers never include a capability's wait, so they
+    // are known first.
+    let mut serving: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for c in &coverage {
+        let holds_back = match c.state {
+            State::Unbuilt => true,
+            State::Behind => {
+                blocks.contains_key(c.id.as_str()) || !base_waits(&c.id, c.state).is_empty()
+            }
+            _ => false,
+        };
+        if !holds_back {
+            continue;
+        }
+        for cap in graph.effective_serves(&c.id) {
+            if pending_ids.contains(cap) {
+                serving.entry(cap).or_default().push(c.id.clone());
+            }
+        }
+    }
+    // What a requirement waits on: the above, and for an `unbuilt` or `behind` capability the
+    // rules that hold it back.
+    let waits_on = |id: &str, state: State| {
+        let mut needs = base_waits(id, state);
+        if let Some(rules) = serving.get(id).filter(|_| state != State::Obsolete) {
+            needs.extend(rules.iter().cloned());
+        }
+        needs.into_iter().collect::<Vec<_>>()
     };
 
     let mut out: Vec<Pending> = coverage
