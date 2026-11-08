@@ -13,8 +13,8 @@ The records that say what was approved, checked and landed, as facts in git that
 
 Record kinds:
 - `approved`: `fingerprint`, `branch`, `change` (a change ID, or null). A human's approval of a diff (`pinned-approval`).
-- `checked`: `code_key`, `command`, and, when the check command was timed, `seconds` (its wall-clock time in whole seconds) and `steps` (the steps it marked, in order, each `{name, seconds, selected_by}`, `selected_by` the paths its `::clm-selected::` lines named: `land/step-times`), read back by `Fold::timed_lands(n)` (`checked-times`). A tree whose code key passed the check command and `clm check`, written by `clm land` for its merged tree or by `clm land --check-only` for a clean, committed `HEAD` that contains `origin/main` (`land/check-only`, `worktree-check-counts`), or whose code key `code_key_with` maps, its `clm.toml` settings unchanged, to one that did, the land having run that tree's `clm check` and the tests that read `clm.toml` (`land/settings-unchanged-is-checked`).
-- `landed`: `commit`, `branch`, `land_kind` (`spec` or `code`), `review` (whether the land needed a human's review, `gate/needs-review`; false for code), `fingerprint`, `code_key` (the landed commit's code key, which the land's `checked` record names), `changes` (the live change IDs a spec land added or modified). Older records lack `code_key` (`landed-record-names-its-code-key`). Records from before review was yes or no (`yes-no-review`) have `tier` instead of `review`: `HARD` reads as `review: true`, anything else as `false`.
+- `checked`: `code_key`, `command`. A tree whose code key passed the check command and `clm check`, written by `clm land` for its merged tree or by `clm land --check-only` for a clean, committed `HEAD` that contains `origin/main` (`land/check-only`, `worktree-check-counts`), or whose code key `code_key_with` maps, its `clm.toml` settings unchanged, to one that did, the land having run that tree's `clm check` and the tests that read `clm.toml` (`land/settings-unchanged-is-checked`).
+- `landed`: `commit`, `branch`, `land_kind` (`spec` or `code`), `review` (whether the land needed a human's review, `gate/needs-review`; false for code), `fingerprint`, `code_key` (the landed commit's code key, which the land's `checked` record names), `changes` (the live change IDs a spec land added or modified), and, when the land ran `[land] check`, `check_seconds` (the command's wall-clock time in whole seconds, rounded down) and `steps` (each step it marked, in order, as `{name, seconds, selected_by}`, `selected_by` the paths its `::clm-selected::` lines named: `land/step-times`), which `Fold::timed_lands(n)` reads back as `TimedLand { commit, at, check_seconds, steps }` with `TimedStep { name, seconds, selected_by }` (`landed-times`). A `checked` record stays a fact about a code key and carries no times (`graph-test-selection`, `land-times-on-the-landed-record`). Older records lack `code_key` (`landed-record-names-its-code-key`). Records from before review was yes or no (`yes-no-review`) have `tier` instead of `review`: `HARD` reads as `review: true`, anything else as `false`.
 - `subscribed`: `endpoint`, `p256dh`, `auth`. A browser's Web Push subscription for this repo, which `web.worker` notifies (`push-subscriptions-in-ledger`).
 - `unsubscribed`: `subscription` (the `id` of a `subscribed` record). That subscription's end.
 - `proposed`: `slug`, `title`, `body`, and the components at `/nodes`. A backlog item proposed from the web app, which `clm rebase` files as `backlog/<slug>.md` on the next `impl/*` branch (`web-proposals-as-ledger-records`).
@@ -706,20 +706,20 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 - WHEN `code_key_with(root, b, "clm.toml", a)` runs
 - THEN it differs from `code_key(root, a)`
 
-### Requirement: checked-times
-`append` SHALL write a `checked` record's `seconds` and `steps` when the record has them and leave both fields out when it has none, and `fold` SHALL keep them on each `checked` record it reads; a record without them SHALL read as untimed. `Fold::timed_lands(n)` SHALL return the last `n` `landed` records by `at`, oldest first, each with the `seconds` and `steps` of the latest timed `checked` record, by `at`, whose code key is the land's code key, leaving out a land whose code key no timed `checked` record names.
+### Requirement: landed-times
+`append` SHALL write a `landed` record's `check_seconds` and `steps` when the record has them and leave both fields out when it has none, and `fold` SHALL keep them on each `landed` record it reads, reading a record without them as untimed and a step without `selected_by` as selected by no path. `Fold::timed_lands(n)` SHALL return, oldest first, the last `n` `landed` records by `at` that carry `check_seconds`, each as a `TimedLand` with its commit, `at`, `check_seconds` and `steps`.
 
 #### Scenario: times round-trip
 - GIVEN an empty ledger
-- WHEN `append` runs with a `checked` record for key `k` with `seconds` 30 and one step `web` of 25 seconds selected by `web/src/main.ts`, and then the ledger is folded
-- THEN the fold's `checked` record for `k` has `seconds` 30 and that step, and the record's line in `records.jsonl` holds `"seconds":30`
+- WHEN `append` runs with a `landed` record with `check_seconds` 30 and one step `web` of 25 seconds selected by `web/src/main.ts`, and then the ledger is folded
+- THEN the fold's `landed` record has `check_seconds` 30 and that step, and its line in `records.jsonl` holds `"check_seconds":30`
 
 #### Scenario: untimed records
-- GIVEN a ledger whose `checked` record for key `k` was written without `seconds` or `steps`
+- GIVEN a ledger whose `landed` record was written without `check_seconds` or `steps`
 - WHEN it is folded
 - THEN the record reads as untimed, and its line holds neither field
 
 #### Scenario: the last timed lands
-- GIVEN `landed` records `a`, `b` and `c` in that order of `at`, with code keys `ka`, `kb` and `kc`, a timed `checked` record for `ka` and for `kc`, and an untimed one for `kb`
+- GIVEN `landed` records `a`, `b` and `c` in that order of `at`, `a` and `c` with `check_seconds` and `b` without
 - WHEN `Fold::timed_lands(2)` runs
-- THEN it returns `a` and then `c`, each with its record's `seconds` and `steps`
+- THEN it returns `a` and then `c`, each with its `check_seconds` and `steps`
