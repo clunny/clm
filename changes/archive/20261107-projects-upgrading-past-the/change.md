@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P2
 resolves: [projects-upgrading-past-the-check-lock-lift-aren-t-told-their-tests-must-overlap]
 ---
