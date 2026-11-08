@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [the-guide-never-says-a-test-reading-the-project-s-own-files-needs-a-clm-reads-marker]
 ---
 
