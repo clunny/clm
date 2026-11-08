@@ -612,6 +612,7 @@ fn guard_resets_on_a_cd_it_cannot_follow() {
         "cd ~/w && git push",
         "cd w && cd $X && git push",
         "cd w && cd - && git push",
+        "cd w && cd ~/w && git push",
         "cd w && cd && git push",
         "cd w && cd `pwd` && git push",
     ] {
@@ -632,6 +633,13 @@ fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
         Some(dir.path()),
     ));
     assert!(!why.contains("cd gone"), "{why}");
+    for prefix in ["env -C", "sudo -D"] {
+        let why = blocks_push(&bash_in_opt(
+            &format!("cd gone; {prefix} {} git push", absolute.display()),
+            Some(dir.path()),
+        ));
+        assert!(!why.contains("cd gone"), "{why}");
+    }
     let why = blocks_push(&bash_in_opt("cd gone; cd m && git push", Some(dir.path())));
     assert!(why.contains("cd gone"), "{why}");
 }
