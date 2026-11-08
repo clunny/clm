@@ -291,7 +291,7 @@ fn with_changes(nodes: &[(&str, &str)], changes: Vec<Vec<(String, String)>>) -> 
 
 #[test]
 fn scenario_higher_priority_first() {
-    // req:orchestrator/next@1f34c883 req:orchestrator/priority-orders-components@2eae7556
+    // req:orchestrator/next@1f34c883 req:orchestrator/priority-orders-components@b239015b
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -310,7 +310,7 @@ fn scenario_higher_priority_first() {
 
 #[test]
 fn scenario_urgent_work_pulls_the_node_it_needs_forward() {
-    // req:orchestrator/priority-orders-components@2eae7556
+    // req:orchestrator/priority-orders-components@b239015b
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -330,7 +330,7 @@ fn scenario_urgent_work_pulls_the_node_it_needs_forward() {
 
 #[test]
 fn scenario_passes_through_a_claimed_node() {
-    // req:orchestrator/priority-orders-components@2eae7556
+    // req:orchestrator/priority-orders-components@b239015b
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -358,7 +358,7 @@ fn scenario_passes_through_a_claimed_node() {
 
 #[test]
 fn scenario_dependency_lends_no_priority() {
-    // req:orchestrator/priority-orders-components@2eae7556 req:orchestrator/next@1f34c883
+    // req:orchestrator/priority-orders-components@b239015b req:orchestrator/next@1f34c883
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("b", &["x"])),
@@ -378,7 +378,7 @@ fn scenario_dependency_lends_no_priority() {
 
 #[test]
 fn scenario_capability_pulls_its_serving_rules_forward() {
-    // req:orchestrator/priority-orders-components@2eae7556
+    // req:orchestrator/priority-orders-components@b239015b
     let capability_node = "---\ntitle: Capabilities\nstatus: active\nowners: []\npaths: [\"tests/capabilities/**\"]\n---\n\n## Contract\nThe tests.\n\n## Design\nThe harness.\n";
     let capabilities =
         "## Capabilities\n\n### Capability: c\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
@@ -408,8 +408,47 @@ fn scenario_capability_pulls_its_serving_rules_forward() {
 }
 
 #[test]
+fn scenario_capability_pulls_a_changed_serving_rules_needs_forward() {
+    // req:orchestrator/priority-orders-components@b239015b
+    let capability_node = "---\ntitle: Capabilities\nstatus: active\nowners: []\npaths: [\"tests/capabilities/**\"]\n---\n\n## Contract\nThe tests.\n\n## Design\nThe harness.\n";
+    let capabilities =
+        "## Capabilities\n\n### Capability: c\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
+    let w = node_with(
+        "",
+        "serves: [capability/c]\n",
+        &[("x", "It SHALL.\n\n#### Needs\n- b/y")],
+    );
+    let mut files: Vec<(String, String)> = vec![
+        (ROOT.0.into(), ROOT.1.into()),
+        ("specs/capability/SPEC.md".into(), capability_node.into()),
+        ("CAPABILITIES.md".into(), capabilities.into()),
+        ("ARCHITECTURE.md".into(), "## Requirements\n".into()),
+        ("specs/w/SPEC.md".into(), w),
+        ("specs/b/SPEC.md".into(), node("", &["y"])),
+        ("specs/d/SPEC.md".into(), node("", &["x"])),
+    ];
+    files.extend(adds("20260101-c", "P1", "capability", "c"));
+    files.extend(adds("20260101-w", "", "w", "x"));
+    files.extend(adds("20260101-b", "", "b", "y"));
+    files.extend(adds("20260101-d", "P3", "d", "x"));
+    let refs: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    let g = graph(&refs);
+    let markers = [
+        marker("capability/c", Some("11111111"), 1),
+        marker("w/x", Some("11111111"), 2),
+    ];
+    let q = queue(&g, &markers, &[]);
+    assert_eq!(q.next(), ["b", "d"]);
+    assert_eq!(priority(&q, "b"), Priority::P1);
+    assert_eq!(priority(&q, "w"), Priority::P1);
+}
+
+#[test]
 fn scenario_blocked_requirement_does_not_lend_its_priority() {
-    // req:orchestrator/priority-orders-components@2eae7556
+    // req:orchestrator/priority-orders-components@b239015b
     let mut files = vec![
         ("specs/b/SPEC.md".to_string(), node("", &["x", "y"])),
         ("specs/c/SPEC.md".to_string(), node("", &["x"])),
@@ -490,7 +529,7 @@ fn nodes_serialise_with_a_state_tag() {
 
 #[test]
 fn priority_reaches_no_node_it_doesnt_need() {
-    // req:orchestrator/priority-orders-components@2eae7556
+    // req:orchestrator/priority-orders-components@b239015b
     // `a` (P1) depends on `b`, whose only pending requirement is blocked by an item, and on
     // `c`, which is converged: it needs neither, so neither is pulled forward.
     let mut files = vec![
