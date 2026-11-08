@@ -1569,7 +1569,13 @@ fn build_launches_subagents() {
     // A build that stopped without landing is built again the same way, until it lands or
     // stops twice for the same reason.
     let retry = sentence_with(&body, "stopped without landing");
-    for needle in ["same way", "until it lands", "twice", "same reason"] {
+    for needle in [
+        "same way",
+        "until it lands",
+        "twice",
+        "same reason",
+        "isn't one you resume",
+    ] {
         assert!(retry.contains(needle), "{needle}: {retry}");
     }
 }
@@ -2490,6 +2496,7 @@ fn triage_shows_a_menu() {
         "`issue <n> new`",
         "counted together",
         "step 2a says",
+        "imported` lines are not counted",
         "before every other choice but the *Approvals*",
     ] {
         assert!(contributions.contains(needle), "{needle}: {contributions}");
@@ -3133,6 +3140,10 @@ fn build_unclosed_builds() {
     assert_reports(&unclosed_gaps(&bare), "build", "landed impl/<component>");
     let finish = sentence_with(&body, "landed impl/<component>");
     assert!(finish.contains("clm run --finish <component>"), "{finish}");
+    assert!(
+        finish.contains("the resume rule above holds back"),
+        "{finish}"
+    );
     for needle in [
         "tell the human that it landed without its closing line",
         "don't count it as a stop",
@@ -3217,6 +3228,8 @@ fn build_resumes_sound_builds() {
     ] {
         assert!(counted.contains(needle), "{needle}: {counted}");
     }
+    let timing = sentence_with(&body, "Resume it once the cause has cleared");
+    assert!(timing.contains("limit has reset"), "{timing}");
     let tell = sentence_with(&body, "Tell the human why it stopped");
     assert!(tell.contains("what to clear"), "{tell}");
     let resume = sentence_with(&body, "Resume it with `SendMessage`");
