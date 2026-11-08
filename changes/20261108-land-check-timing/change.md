@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 from: backlog/slow-land-checks-go-unnoticed
 ---
 
@@ -34,7 +34,7 @@ Also rejected: a rule that files a backlog item when lands exceed the target oft
 
 **The record** (`ledger`). `checked` gains two optional fields: `seconds`, the command's time, and `steps`, a list of `{name, seconds, selected_by}`. A record without them, whether older or from a check that marks no steps, reads as untimed. They're a few dozen bytes on a record every land already writes to its writer's own ledger branch, so they add no write, no contention and no rebase (`per-writer-ledgers`).
 
-**The chain** (`check.affected`). `clm affected --why <path> [--base <ref>]` prints why the change selects `<path>`, one link per line. A changed file selects itself. Otherwise the file is selected through the component its `req:` marker cites, or through its owner, and that component is affected either because it owns a changed file or through a `depends_on` path to one, ending at a changed file. A file the change doesn't select is reported as such. `land` calls the same library function.
+**The chain** (`check.affected`). `clm affected --why <path> [--base <ref>]` prints why the change selects `<path>`, one link per line. A changed file selects itself. Otherwise the file is selected through the component its `req:` marker cites, or through its owner, and that component is affected either because it owns a changed file or through a `depends_on` path to one, ending at a changed file. A file the change doesn't select is reported as such. `land` runs it as it already runs `clm affected`, against the same base.
 
 **After a passing land** (`land`). `clm land` prints one line with the check's time against the target. When the time is over the target it also prints:
 - the three costliest steps, each with its time and the chain for its first `selected_by` path;
@@ -52,6 +52,8 @@ Nothing is filed and the land isn't affected. The output itself carries the hint
 - when the agent judges that a pattern needs work, it files a backlog item naming the steps and chains.
 
 `docs/guide/settings.md`'s `land` section documents `check_target_seconds`.
+
+**The capability.** `CAPABILITIES.md`'s `slow-tests-after-land` gains what a person learns from a land over the target, with a scenario. `land/check-time-report`'s build adds it to `capability`'s tests.
 
 ## Constraints
 

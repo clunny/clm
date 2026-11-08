@@ -28,6 +28,7 @@ serves: [capability/know-health, architecture/health-advises]
 | `workaround` | `workaround` backlog item, with the requirement it names (`workaround-flags`) |
 | `rewritten` | requirement that two or more archived changes modified |
 | `churn` | requirement the committed history cites at three or more versions, counted from the markers each commit added (`churn-from-marker-history`) |
+| `land-time` | step, among the five with the most seconds over the last 50 timed lands (`ledger/checked-times`), with its runs, median and total seconds and the paths that most often selected it; the summary line says how many of those lands exceeded `[land] check_target_seconds` (`land-time-signal`) |
 | `many-scenarios` | requirement with more scenarios than the `scenarios` setting |
 | `many-exceptions` | requirement whose text holds more exception clauses than the `exceptions` setting |
 | `reconsider` | requirement whose score reaches the `reconsider` setting, with its breakdown and whether `backlog/reconsider-<component>-<slug>.md` exists |
@@ -329,3 +330,20 @@ The field of `Settings` that holds the size budgets SHALL be `component_size`, n
 
 #### Serves
 - architecture/plain-terms
+
+### Requirement: land-time-signal
+`clm health` SHALL report a `land-time` signal over the last 50 timed lands, as `ledger`'s `Fold::timed_lands(50)` gives them: one line for each of the up to five steps, by name, with the most total seconds across them, most first, naming its runs, its median and total seconds and up to three `selected_by` paths that most often selected it, and a summary line saying how many of those lands exceeded `[land] check_target_seconds`. With no timed land it SHALL report nothing for the signal.
+
+#### Scenario: slow steps
+- GIVEN a ledger with three timed lands over a target of 60 seconds, each with a step `web` of 100 seconds selected by `web/src/main.ts` and a step `fmt` of 1 second, and one under it with only `fmt`
+- WHEN `clm health` runs
+- THEN its `land-time` lines name `web` first, with 3 runs, a median of 100 and a total of 300 seconds and `web/src/main.ts`, then `fmt` with 4 runs, the summary says 3 of 4 lands exceeded the target, and it exits 0
+
+#### Scenario: no timings
+- GIVEN a ledger whose `checked` records are all untimed
+- WHEN `clm health` runs
+- THEN it prints no `land-time` line
+
+#### Needs
+- ledger/checked-times
+- config/land-check-setting

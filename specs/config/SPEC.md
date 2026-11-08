@@ -37,7 +37,7 @@ Some settings describe the repository rather than the user, and only the reposit
 | `detectors` | an array of tables `[[detectors]]`, each with `name` (string), `command` (non-empty array of strings), optional `hint` (string), optional `requires` (a path relative to the repository root: `clm check` skips the detector while nothing exists there, `detector-requires-manifest`) and optional `timeout` (a whole number of seconds, at least `1`, default `600`: how long `clm check` lets the detector run before it stops it, `detector-timeouts`) | none |
 | `host` | `none`, `git`, `github`, `azure`: where the repository's remote lives and which host adapter `clm` uses for pull requests, branch deletion and issues (`host-adapters`) | `github` |
 | `approval` | `any`: any writer's approval of a diff counts, the author's included; `other`: only an approval by a person other than the branch's commit authors counts (`approval-policy`) | `any` |
-| `land` | a table with `check`, a non-empty string: the shell command `clm land` runs in the tree it lands, before `clm check` (`land-locally`), and optional `target_cap_gb`, a positive integer: the size in gigabytes (10^9 bytes) above which a land removes the shared target `.clm/land` after its push (`land/land-target-cap`) | none: `clm check` alone; `target_cap_gb = 15` |
+| `land` | a table with `check`, a non-empty string: the shell command `clm land` runs in the tree it lands, before `clm check` (`land-locally`), and optional `target_cap_gb`, a positive integer: the size in gigabytes (10^9 bytes) above which a land removes the shared target `.clm/land` after its push (`land/land-target-cap`), and optional `check_target_seconds`, a positive integer: the time in seconds a land's check aims to stay within, past which the land reports where its time went and what selected it (`land/check-time-report`) | none: `clm check` alone; `target_cap_gb = 15`; `check_target_seconds = 120` |
 | `affected` | a table with `all`, an array of globs written as in a component's `paths`: changed files that make `clm affected` select every test although a component's `paths` hold them, such as a lockfile or the toolchain pin (`graph-test-selection`) | none: no glob |
 | `verify` | a table: `check`, a non-empty string, the slow-test command `clm verify` runs after the land; `mode`, `local`, `pipeline` or `import`: where the slow tests run and who records the result; optional `triggers`, an array of `change-done`, `queue-drained` and `work-done` (the last only with `mode = "local"`); optional `every`, a table with `lands` and `days`, each a positive integer; and `workflow`, a non-empty string, required with `mode = "import"` and refused otherwise: the host pipeline whose runs `clm verify` reads (`verify-after-land`) | none: slow tests stay in `[land] check` |
 | `component_size` | a table with `spec_tokens` and `code_tokens`, each a positive integer: the size in tokens above which a component whose frontmatter sets no `size_budget` is oversized (`node-size-budgets`, `oversized-is-a-state`, `component-size-setting`) | `spec_tokens = 12000`, `code_tokens = 40000` |
@@ -222,7 +222,7 @@ Loading SHALL take `approval` only from the repository's `clm.toml` or the clone
 - architecture/approval-policy
 
 ### Requirement: land-check-setting
-Loading SHALL take `land` only from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table whose key `check` is a non-empty string and whose optional key `target_cap_gb` is a positive integer, defaulting to no command and a cap of 15. It SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `land` for a `land` that isn't a table, for any other key in it, for a `check` that is missing or isn't a non-empty string, or for a `target_cap_gb` that isn't a positive integer, and SHALL fail naming the user's `config.toml` and the key when that file sets it. `clm config get land` SHALL print `check=<command>`, followed by `,target_cap_gb=<n>` when the table sets it, and the path of the file that sets it, or nothing and `default`.
+Loading SHALL take `land` only from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table whose key `check` is a non-empty string and whose optional keys `target_cap_gb` and `check_target_seconds` are positive integers, defaulting to no command, a cap of 15 and a target of 120 seconds. It SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `land` for a `land` that isn't a table, for any other key in it, for a `check` that is missing or isn't a non-empty string, or for a `target_cap_gb` or `check_target_seconds` that isn't a positive integer, and SHALL fail naming the user's `config.toml` and the key when that file sets it. `clm config get land` SHALL print `check=<command>`, followed by `,target_cap_gb=<n>` when the table sets it and then `,check_target_seconds=<n>` when the table sets it, and the path of the file that sets it, or nothing and `default`.
 
 #### Scenario: set
 - GIVEN a repository `clm.toml` with `[land]` and `check = "scripts/clm-check.sh"`
@@ -238,6 +238,21 @@ Loading SHALL take `land` only from the repository's `clm.toml` or the clone's `
 - GIVEN a repository `clm.toml` with `[land]` and only `check = "scripts/clm-check.sh"`
 - WHEN the settings are loaded
 - THEN the land cap is 15
+
+#### Scenario: target set
+- GIVEN a repository `clm.toml` with `[land]`, `check = "scripts/clm-check.sh"` and `check_target_seconds = 90`
+- WHEN `clm config get land` runs
+- THEN it prints `check=scripts/clm-check.sh,check_target_seconds=90` and the file's path, and the loaded settings' target is 90 seconds
+
+#### Scenario: target defaults
+- GIVEN a repository `clm.toml` with `[land]` and only `check = "scripts/clm-check.sh"`
+- WHEN the settings are loaded
+- THEN the land check's target is 120 seconds
+
+#### Scenario: zero target
+- GIVEN a repository `clm.toml` with `[land]`, `check = "scripts/clm-check.sh"` and `check_target_seconds = 0`
+- WHEN the settings are loaded
+- THEN it fails naming `clm.toml` and `land`
 
 #### Scenario: zero cap
 - GIVEN a repository `clm.toml` with `[land]`, `check = "scripts/clm-check.sh"` and `target_cap_gb = 0`
