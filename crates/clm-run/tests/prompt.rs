@@ -51,7 +51,7 @@ fn job() -> Job {
 
 #[test]
 fn names_the_skills_plan_review_and_sync_points() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let p = prompt(&job());
     let (first, rest) = p.split_once('\n').unwrap();
     assert_eq!(
@@ -701,7 +701,7 @@ fn scenario_why_no_pipe() {
 
 #[test]
 fn resume_prompt_says_the_branch_exists() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let mut j = job();
     j.resumed = true;
     let p = prompt(&j);
@@ -847,4 +847,59 @@ fn scenario_pushes_through_clm_fresh_and_resumed() {
             assert!(!text.contains(forbidden), "{forbidden} in {text}");
         }
     }
+}
+
+#[test]
+fn scenario_capability_tests_component_waits_for_a_changed_rule() {
+    // req:orchestrator.run/capability-waits-for-changed-rule@3f55c108
+    let mut j = job();
+    j.capability_tests = true;
+    let p = prompt(&j);
+    for needle in [
+        "a rule it exercises is still `behind`",
+        "stop at that capability and leave it pending",
+        "file no backlog item",
+        "`serving-rules-order-capabilities`",
+    ] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+}
+
+#[test]
+fn scenario_other_component_has_no_capability_wait() {
+    // req:orchestrator.run/capability-waits-for-changed-rule@3f55c108
+    let p = prompt(&job());
+    assert!(!p.contains("serving-rules-order-capabilities"), "{p}");
+    assert!(!p.contains("leave it pending"), "{p}");
+}
+
+#[test]
+fn scenario_recorded_check_explained() {
+    // req:orchestrator.run/prompt-recorded-check@6391bb97
+    let mut j = job();
+    j.check = Some("scripts/check.sh".into());
+    let p = prompt(&j);
+    let land = p
+        .split("\n\n")
+        .find(|para| para.contains("Then land with `clm land`"))
+        .expect("a landing paragraph");
+    for needle in [
+        "recorded",
+        "rebase ok",
+        "not recorded:",
+        "formatter",
+        "linter",
+        "clm land --check-only",
+        "run no `clm rebase`",
+    ] {
+        assert!(land.contains(needle), "{needle} missing from {land}");
+    }
+}
+
+#[test]
+fn scenario_recorded_check_needs_a_check_command() {
+    // req:orchestrator.run/prompt-recorded-check@6391bb97
+    let p = prompt(&job());
+    assert!(!p.contains("not recorded:"), "{p}");
+    assert!(!p.contains("formatter"), "{p}");
 }

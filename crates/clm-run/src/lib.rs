@@ -255,6 +255,33 @@ pub fn prompt(job: &Job) -> String {
     } else {
         ""
     };
+    // Only a repository with a `[land] check` has a check to record (`prompt-recorded-check`).
+    let recorded = if job.check.is_some() {
+        "A passing `clm land --check-only` on a committed `HEAD` that contains `origin/main`, \
+         with no uncommitted change and no untracked file git doesn't ignore, is recorded, so \
+         that `clm land` runs no check of its own while `main` hasn't moved since. That is why \
+         you run that check after committing everything and after `clm rebase` prints `rebase \
+         ok`, and why between the check and `clm land` you commit nothing, edit no tracked \
+         file and run no `clm rebase`. When the check prints `not recorded:`, the land runs the \
+         check itself, which costs time and nothing else. Before that check, run by hand the \
+         formatter and the linter the check command runs, whatever the project's are, and the \
+         tests of the code you changed, so a slip shows in seconds rather than after a whole \
+         check. "
+    } else {
+        ""
+    };
+    // The component that builds the capability tests leaves a capability pending while a
+    // rule it exercises is `behind` (`capability-waits-for-changed-rule`).
+    let waits = if job.capability_tests {
+        " When a capability's test can't pass because a rule it exercises is still `behind`, \
+         its rebuild not yet landed, stop at that capability and leave it pending: file no \
+         backlog item and re-cite no test whose checks still prove the entry's old text \
+         (`proven-by-tests`), since `clm pending` holds a capability back while such a rule is \
+         blocked and, when nothing blocks the rule, the rule's build is ready and the \
+         capability's next build finds it current (`serving-rules-order-capabilities`)."
+    } else {
+        ""
+    };
     let ship = format!(
         "Commit everything, then {sync}. Then {again} confirm \
          `clm gate --base origin/main` prints `code`, and push with \
@@ -266,7 +293,7 @@ pub fn prompt(job: &Job) -> String {
          `## CLM defects`. \
          Summarise your step plan under `## Plan`, under `## Review` list every finding and \
          what you did about it, and under `## Workarounds` in the pull request body list your workaround flags.\n\n\
-         Then land with `clm land` and go by what it prints. A line `landed <sha> ...` means \
+         Then land with `clm land` and go by what it prints. {recorded}A line `landed <sha> ...` means \
          the branch is on `main` and the build is done, whatever lines follow it (such as \
          `awaiting review: ...` or a warning). Otherwise go by its last line. \
          `gate/up-to-date`, or a conflict with `main`, means {sync}, then push with \
@@ -368,7 +395,7 @@ pub fn prompt(job: &Job) -> String {
          `CAPABILITIES.md` now states it, no longer holds is not such a fix: leave the \
          requirement unbuilt, keeping the behaviour the test checks, and add a `question` \
          backlog item whose `components` name both components, with `blocks` naming the \
-         requirement, and which names the entry, so a spec change edits it. Keep the \
+         requirement, and which names the entry, so a spec change edits it.{waits} Keep the \
          code lean and true to the component's Contract and Design, folding in the cleanups the spec asks for. When the list \
          is long, you may open your pull request and land once the tree is green with at most \
          {BUDGET} requirements built, leaving the rest pending for the next run; list what you \
@@ -857,11 +884,29 @@ fn unpushed_claim(root: &Path, local: &str, branch: &str) -> Result<bool, Error>
     {
         return Ok(false);
     }
+    Ok(!held(root, local, branch)?)
+}
+
+/// Whether the remote branch `origin/<branch>` exists and the local branch `local` has held
+/// its tip: that tip is an ancestor of the local tip or of an entry of the local branch's
+/// reflog, the test git's `--force-if-includes` makes (`run`). A branch rebased since it was
+/// pushed has held it, though it no longer contains it.
+fn held(root: &Path, local: &str, branch: &str) -> Result<bool, Error> {
     let remote = format!("refs/remotes/{REMOTE}/{branch}");
-    Ok(
-        git(root, &["rev-parse", "--verify", "-q", &remote]).is_err()
-            || !clm_git::is_ancestor(root, tip, &remote)?,
-    )
+    if git(root, &["rev-parse", "--verify", "-q", &remote]).is_err() {
+        return Ok(false);
+    }
+    if clm_git::is_ancestor(root, &remote, local)? {
+        return Ok(true);
+    }
+    // No reflog (or an expired one) leaves only the local tip.
+    let log = git(root, &["reflog", "show", "--format=%H", local]).unwrap_or_default();
+    for sha in log.lines() {
+        if clm_git::is_ancestor(root, &remote, sha)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Once the build holds its place, resumes the local branch `branch` when it contains the
@@ -869,12 +914,11 @@ fn unpushed_claim(root: &Path, local: &str, branch: &str) -> Result<bool, Error>
 /// A local branch that may hold commits nobody pushed is left as it is and the run refused.
 fn prepare(root: &Path, node: &str, branch: &str, expiry_hours: u64) -> Result<bool, Error> {
     let local = format!("refs/heads/{branch}");
-    let remote = format!("refs/remotes/{REMOTE}/{branch}");
     let exists = |rf: &str| git(root, &["rev-parse", "--verify", "-q", rf]).is_ok();
     if exists(&local) {
-        if !(exists(&remote) && clm_git::is_ancestor(root, &remote, &local)?) {
+        if !held(root, &local, branch)? {
             return Err(Error::Refused(format!(
-                "the local branch `{branch}` isn't landed and doesn't contain \
+                "the local branch `{branch}` isn't landed and never held \
                  `{REMOTE}/{branch}`, so it may hold commits nobody pushed, or miss commits \
                  pushed since; reconcile or delete it to run `{node}` again"
             )));

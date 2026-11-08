@@ -164,7 +164,7 @@ fn checked_out(r: &Repo, branch: &str) -> bool {
 
 #[test]
 fn scenario_node_prepared() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let (launcher, p) = launched_in(&r.work, &r.work, &f, "b", &[]);
     let bundle = clm_context::bundle(&load(&r.work), &r.work, "b").unwrap();
@@ -227,7 +227,7 @@ fn scenario_node_prepared() {
 
 #[test]
 fn an_earlier_prompt_file_is_replaced() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     write(&r.work, ".clm/prompts/b.md", "an earlier run's prompt\n");
     let p = prompt(&r, &f, "b", &[]);
@@ -237,7 +237,7 @@ fn an_earlier_prompt_file_is_replaced() {
 
 #[test]
 fn a_refused_run_leaves_an_earlier_prompt_file_alone() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     write(&r.work, ".clm/prompts/b.md", "an earlier run's prompt\n");
     push_claim(&r.work, "b", 1);
@@ -250,7 +250,7 @@ fn a_refused_run_leaves_an_earlier_prompt_file_alone() {
 
 #[test]
 fn prompts_directory_that_cant_be_made_refuses_before_claiming() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     write(&r.work, ".clm", "a file, not a directory\n");
     let stderr = refused(&r, &f, "b", &[], 1);
@@ -260,7 +260,7 @@ fn prompts_directory_that_cant_be_made_refuses_before_claiming() {
 
 #[test]
 fn prompt_file_that_cant_be_written_exits_1_naming_it() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     fs::create_dir_all(r.work.join(".clm/prompts/b.md")).unwrap();
     let stderr = refused(&r, &f, "b", &[], 1);
@@ -596,7 +596,7 @@ fn scenario_needing_requirement_left_out() {
 
 #[test]
 fn pinned_superpowers_comes_from_the_cache() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let cache = TempDir::new().unwrap();
     let pinned = cache
@@ -618,7 +618,7 @@ fn pinned_superpowers_comes_from_the_cache() {
 
 #[test]
 fn missing_skill_refuses_before_claiming() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     fs::remove_dir_all(f.superpowers.join("skills/writing-plans")).unwrap();
     let stderr = refused(&r, &f, "b", &[], 1);
@@ -628,7 +628,7 @@ fn missing_skill_refuses_before_claiming() {
 
 #[test]
 fn scenario_claimed_elsewhere() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "b", 1);
     refused(&r, &f, "b", &[], 1);
@@ -638,7 +638,7 @@ fn scenario_claimed_elsewhere() {
 
 #[test]
 fn claim_failing_in_git_exits_2() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     pre_receive(&r, "echo 'declined by test' >&2\nexit 1\n");
     refused(&r, &f, "b", &[], 2);
@@ -647,7 +647,7 @@ fn claim_failing_in_git_exits_2() {
 
 #[test]
 fn claim_released_when_the_branch_cant_be_made() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     // A stale lock makes recording the local branch fail, which `claim_local` does before
     // it pushes, so nothing is claimed.
@@ -658,7 +658,7 @@ fn claim_released_when_the_branch_cant_be_made() {
 
 #[test]
 fn main_checkout_on_the_branch_is_refused() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     prompt(&r, &f, "b", &[]);
     git(&r.work, &["checkout", "-q", "impl/b"]);
@@ -692,7 +692,7 @@ fn unpushed_branch(r: &Repo) -> String {
 
 #[test]
 fn scenario_unpushed_leftover_branch() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     for lapsed_claim in [true, false] {
         let (r, f) = (repo(), fake());
         let claim = lapsed_claim.then(|| push_claim(&r.work, "b", 5));
@@ -706,7 +706,7 @@ fn scenario_unpushed_leftover_branch() {
 
 #[test]
 fn scenario_landed_leftover_branch() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     git(&r.work, &["branch", "impl/b", "origin/main"]);
     prompt(&r, &f, "b", &[]);
@@ -736,7 +736,7 @@ fn unpushed_claim(r: &Repo) -> String {
 
 #[test]
 fn scenario_interrupted_after_the_push() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     prompt(&r, &f, "b", &[]);
     let claim = remote_tip(&r, "impl/b").expect("claimed");
@@ -754,7 +754,7 @@ fn scenario_interrupted_after_the_push() {
 
 #[test]
 fn scenario_interrupted_before_the_push() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let leftover = unpushed_claim(&r);
     assert!(remote_tip(&r, "impl/b").is_none());
@@ -770,7 +770,7 @@ fn scenario_interrupted_before_the_push() {
 
 #[test]
 fn an_empty_commit_off_main_is_not_an_unpushed_claim() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let tree = git(&r.work, &["rev-parse", "origin/main^{tree}"]);
     let root = git(&r.work, &["commit-tree", tree.trim(), "-m", "unrelated"]);
@@ -787,7 +787,7 @@ fn an_empty_commit_off_main_is_not_an_unpushed_claim() {
 
 #[test]
 fn an_unpushed_claim_a_worktree_has_checked_out_is_refused() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let tip = unpushed_claim(&r);
     let wt = r.work.join(".claude/worktrees/agent-1");
@@ -802,7 +802,7 @@ fn an_unpushed_claim_a_worktree_has_checked_out_is_refused() {
 
 #[test]
 fn scenario_another_clone_claimed_meanwhile() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     unpushed_claim(&r);
     let theirs = push_claim(&r.work, "b", 1);
@@ -834,7 +834,7 @@ fn resumable(r: &Repo, f: &Fake) -> PathBuf {
 
 #[test]
 fn scenario_resume_with_unlanded_commits() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let wt = resumable(&r, &f);
     let pushed = remote_tip(&r, "impl/b");
@@ -850,6 +850,68 @@ fn scenario_resume_with_unlanded_commits() {
     ] {
         assert!(p.contains(s), "{s}: {p}");
     }
+}
+
+/// Moves `origin/main` on by a commit, then rebases the local `impl/b` onto it, in the
+/// worktree `wt` that has it checked out, so the branch no longer contains `origin/impl/b`.
+fn rebased_onto_newer_main(r: &Repo, wt: &Path) {
+    write(&r.work, "newer.txt", "newer\n");
+    push_main(&r.work, "main moves");
+    git(wt, &["rebase", "-q", "origin/main"]);
+    let (remote, local) = (
+        remote_tip(r, "impl/b").unwrap(),
+        local_tip(r, "impl/b").unwrap(),
+    );
+    assert!(!is_ancestor(&r.work, &remote, &local), "rebased away");
+}
+
+fn is_ancestor(dir: &Path, a: &str, b: &str) -> bool {
+    Command::new("git")
+        .args(["merge-base", "--is-ancestor", a, b])
+        .current_dir(dir)
+        .status()
+        .unwrap()
+        .success()
+}
+
+#[test]
+fn scenario_stopped_after_a_rebase() {
+    // req:orchestrator.run/run@6635d389
+    let (r, f) = (repo(), fake());
+    let wt = build_worktree(&r, &f);
+    git(&r.work, &["worktree", "lock", wt.to_str().unwrap()]);
+    write(&wt, "src/b.rs", "b\n");
+    git(&wt, &["add", "-A"]);
+    git(&wt, &["commit", "-qm", "work"]);
+    rebased_onto_newer_main(&r, &wt);
+    let (claim, tip) = (remote_tip(&r, "impl/b"), local_tip(&r, "impl/b"));
+    let p = prompt(&r, &f, "b", &[]);
+    assert_eq!(remote_tip(&r, "impl/b"), claim, "no claim pushed");
+    assert!(!wt.exists(), "the build's worktree is gone");
+    assert_eq!(local_tip(&r, "impl/b"), tip, "the commit stays");
+    for s in [
+        "`impl/b` already exists",
+        "Start with `clm rebase`",
+        "land the same branch",
+    ] {
+        assert!(p.contains(s), "{s}: {p}");
+    }
+}
+
+#[test]
+fn scenario_claim_rebased_before_any_work() {
+    // req:orchestrator.run/run@6635d389
+    let (r, f) = (repo(), fake());
+    let wt = build_worktree(&r, &f);
+    rebased_onto_newer_main(&r, &wt);
+    git(
+        &r.work,
+        &["worktree", "remove", "--force", wt.to_str().unwrap()],
+    );
+    let (claim, tip) = (remote_tip(&r, "impl/b"), local_tip(&r, "impl/b"));
+    prompt(&r, &f, "b", &[]);
+    assert_eq!(remote_tip(&r, "impl/b"), claim, "no claim pushed");
+    assert_eq!(local_tip(&r, "impl/b"), tip, "still the rebased commit");
 }
 
 /// An earlier build's branch `impl/b`, cut when `b/y` needed uncited `c/z`, pushed with a
@@ -933,7 +995,7 @@ fn scenario_resumed_branch_that_conflicts_with_main() {
 
 #[test]
 fn resume_of_a_bare_claim() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     build_worktree(&r, &f);
     let claim = remote_tip(&r, "impl/b");
@@ -944,7 +1006,7 @@ fn resume_of_a_bare_claim() {
 
 #[test]
 fn resume_refuses_once_the_claim_is_lost() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     build_worktree(&r, &f);
     // Someone takes over the claim with a commit the local branch doesn't have.
@@ -957,7 +1019,7 @@ fn resume_refuses_once_the_claim_is_lost() {
 
 #[test]
 fn dirty_worktree_on_resume_is_refused() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let wt = resumable(&r, &f);
     fs::write(wt.join("notes.txt"), "mine\n").unwrap();
@@ -979,7 +1041,7 @@ fn landed_leftover(r: &Repo, f: &Fake) -> (PathBuf, String) {
 
 #[test]
 fn scenario_landed_leftover_worktree() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let (wt, old) = landed_leftover(&r, &f);
     prompt(&r, &f, "b", &[]);
@@ -993,7 +1055,7 @@ fn scenario_landed_leftover_worktree() {
 
 #[test]
 fn scenario_dirty_leftover() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     let (r, f) = (repo(), fake());
     let (wt, old) = landed_leftover(&r, &f);
     let notes = wt.join("notes.txt");
@@ -1006,7 +1068,7 @@ fn scenario_dirty_leftover() {
 
 #[test]
 fn scenario_node_that_writes_a_protected_path() {
-    // req:orchestrator.run/run@0691bb50
+    // req:orchestrator.run/run@6635d389
     // req:orchestrator/next@1f34c883
     let (r, f) = (repo(), fake());
     write(
