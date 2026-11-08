@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [land-specs-still-name-a-local-main-base]
 ---
 
