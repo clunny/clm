@@ -93,6 +93,9 @@ impl From<std::io::Error> for Error {
 /// The branches deleted from `origin` once landed.
 const CLAIM_PREFIXES: [&str; 3] = ["impl/", "spec/", "propose/"];
 
+/// Seconds waited before each retry of a failed fetch of `origin`.
+const FETCH_RETRY_WAITS: [u64; 2] = [1, 2];
+
 const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
 
 fn is_claim(branch: &str) -> bool {
@@ -134,12 +137,36 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`; a failure is being offline.
+    /// `git fetch origin`, tried again after a failure (`fetch_retrying`).
     fn fetch(&self) -> Result<(), Error> {
-        if clm_git::fetch(&self.root).is_err() {
-            return Err(Error::Refused(OFFLINE.into()));
+        self.fetch_retrying(&["fetch", clm_git::REMOTE])
+    }
+
+    /// Runs the fetch `args`, and on a failure tries it again, at most twice more, after 1
+    /// and 2 seconds, so a fetch that lost a race with another land of the clone over a
+    /// remote-tracking ref goes on (`land/offline-land`). When the last try fails it is
+    /// offline only if `origin` can't be reached either; otherwise git's message is the reason.
+    pub(crate) fn fetch_retrying(&self, args: &[&str]) -> Result<(), Error> {
+        let mut waits = FETCH_RETRY_WAITS.into_iter();
+        loop {
+            let failed = match self.git(args) {
+                Ok(_) => return Ok(()),
+                Err(e) => e,
+            };
+            match waits.next() {
+                Some(secs) => std::thread::sleep(std::time::Duration::from_secs(secs)),
+                None => {
+                    let reachable = self
+                        .git(&["ls-remote", "--quiet", clm_git::REMOTE, "HEAD"])
+                        .is_ok();
+                    return Err(Error::Refused(if reachable {
+                        failed.to_string()
+                    } else {
+                        OFFLINE.into()
+                    }));
+                }
+            }
         }
-        Ok(())
     }
 
     /// The commit `rev` names, or `None` when it names none.

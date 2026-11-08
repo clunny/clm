@@ -69,7 +69,7 @@ fn ledger_on_new_origin(f: &Fixture) -> bool {
 
 #[test]
 fn no_host_lands_through_the_clones_own_remote() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let f = Fixture::local();
     let old = f.remote("main");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -106,7 +106,7 @@ fn no_host_lands_through_the_clones_own_remote() {
 
 #[test]
 fn offline_with_a_remote_refuses() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let f = Fixture::new("host = \"github\"");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -125,7 +125,7 @@ fn offline_with_a_remote_refuses() {
 
 #[test]
 fn offline_with_no_host_refuses_too() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let f = Fixture::local();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -144,7 +144,7 @@ fn offline_with_no_host_refuses_too() {
 
 #[test]
 fn first_push_after_adding_a_remote() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let (f, _) = landed_through_remote();
     let landed = f.remote("main");
     repoint_origin(&f, false);
@@ -161,7 +161,7 @@ fn first_push_after_adding_a_remote() {
 
 #[test]
 fn origin_main_behind_local() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let (f, _) = landed_through_remote();
     let landed = f.remote("main");
     let first = f.parents(&f.path("origin.git"), &landed)[0].clone();
@@ -218,7 +218,7 @@ fn reconnect_names_rebase() {
 
 #[test]
 fn origin_moved() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let (f, _) = landed_through_remote();
     repoint_origin(&f, true);
     let theirs = new_origin(&f, "main");
@@ -230,7 +230,7 @@ fn origin_moved() {
 
 #[test]
 fn reconnect_without_origin_refuses() {
-    // req:land/offline-land@795d1e93
+    // req:land/offline-land@42e20984
     let (f, _) = landed_through_remote();
     f.git(&f.work(), &["remote", "remove", "origin"]);
     let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
