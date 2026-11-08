@@ -185,7 +185,7 @@ fn served_repo(dir: &Path) -> std::path::PathBuf {
         "specs/a/SPEC.md",
         "---\ntitle: A\nstatus: active\nowners: []\nserves: [capability/p]\n---\n\n## Contract\nc\n\n## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Scenario: s\n- ok\n",
     );
-    write(&root, "clm.toml", "host = \"none\"\n");
+    write(&root, "clm.toml", "host = \"git\"\n");
     root
 }
 
@@ -319,7 +319,7 @@ fn workaround_flag_from_settings() {
     write(
         &root,
         "clm.toml",
-        "host = \"none\"\n[effort]\nworkaround_flag = 2\n",
+        "host = \"git\"\n[effort]\nworkaround_flag = 2\n",
     );
     assert_eq!(flag_x(&root).status.code(), Some(0));
     let out = flag_x(&root);
@@ -337,7 +337,7 @@ fn workarounds_not_counted_when_settings_fail() {
     write(
         &root,
         "clm.toml",
-        "host = \"none\"\n[effort]\nworkaround_flag = 0\n",
+        "host = \"git\"\n[effort]\nworkaround_flag = 0\n",
     );
     let out = flag_x(&root);
     assert_eq!(out.status.code(), Some(0), "{out:?}");

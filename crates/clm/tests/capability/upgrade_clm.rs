@@ -98,7 +98,9 @@ fn skipping_releases() {
 
     let after = repo.clm(&["upgrade"]);
     assert!(after.status.success(), "{}", printed(&after));
-    assert_eq!(printed(&after), "up to date\n");
+    // Stdout alone: this project's `host = "none"` with a real `origin` also warns on stderr
+    // (`clm/none-remote-before-commands`).
+    assert_eq!(String::from_utf8_lossy(&after.stdout), "up to date\n");
     let check = repo.clm(&["check"]);
     assert!(check.status.success(), "{}", printed(&check));
 }
