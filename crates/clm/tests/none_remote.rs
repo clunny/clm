@@ -214,6 +214,7 @@ fn a_real_origin_under_none_is_left_and_warned_about() {
     );
     let stderr = err(&next);
     assert!(stderr.contains("host = \"git\""), "{stderr}");
+    assert!(stderr.contains("lands will push main"), "{stderr}");
     assert!(!stderr.contains("the clone's own remote"), "{stderr}");
 }
 

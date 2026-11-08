@@ -91,7 +91,7 @@ fn origin_is_own(root: &Path) -> bool {
         (Ok(a), Ok(b)) => a == b,
         _ => a == b,
     };
-    same(Path::new(&url), &own)
+    same(Path::new(url.strip_prefix("file://").unwrap_or(&url)), &own)
 }
 
 #[cfg(test)]
