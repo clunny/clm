@@ -10,10 +10,13 @@ mod check_script_from_root;
 mod claude_md_names_help;
 #[path = "migrations/20261105-clm-upgrade/mod.rs"]
 mod constraints_copy;
+#[path = "migrations/20261107-projects-set-up-before/mod.rs"]
+mod unattended_allow_rules;
 
 /// The migrations, oldest first.
 pub(crate) static LIST: &[Migration] = &[
     constraints_copy::MIGRATION,
     claude_md_names_help::MIGRATION,
     check_script_from_root::MIGRATION,
+    unattended_allow_rules::MIGRATION,
 ];
