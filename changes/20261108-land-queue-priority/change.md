@@ -15,7 +15,7 @@ Lands waiting for a clone's land lock or check lock are ordered by the priority 
 - **Derive the priority when the land queues** (chosen). It comes from what the branch and the base already hold: the component's effective priority, the changes the branch adds and the items it resolves. Nothing new is recorded, and every kind of branch gets a priority by one rule.
 - **Record the priority on the branch or the place.** For example, `clm run` writes it into the build's place file. Rejected: spec, fix and small-change branches have no place, and a recorded value goes stale as `main` moves.
 - **Priority above the cheap lane at every level.** Rejected by the human: below `P1`, a short check delays an urgent land little and spares the lands queued behind it.
-- **A guaranteed turn for low-priority lands after some time.** Not asked for. Priority orders and never holds work back (`priority-orders-nodes`), and the queue drains when lands stop.
+- **A guaranteed turn for low-priority lands after some time.** Offered and not chosen: the human kept only the cap on cheap turns, raised to six. In the land queue, then, priority can hold a lower land back while higher ones keep arriving, unlike `priority-orders-nodes`' rule for readiness; the decision's amendment says why that is acceptable.
 
 ## Outcome
 
