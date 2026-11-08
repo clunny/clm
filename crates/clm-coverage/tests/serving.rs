@@ -1,4 +1,4 @@
-//! A pending capability waits on the `unbuilt` rules that serve it
+//! A pending capability waits on the `unbuilt` rules that serve it, and on the `behind` ones that an item or a wait blocks
 //! (`serving-rules-order-capabilities`).
 
 mod common;
@@ -51,7 +51,7 @@ fn line(list: &[Pending], id: &str) -> String {
 
 #[test]
 fn capability_waits_on_its_serving_rules() {
-    // req:check.coverage/pending-report@f7b79187
+    // req:check.coverage/pending-report@89a3068a
     let dir = repo(&[
         (
             "a",
@@ -77,7 +77,7 @@ fn capability_waits_on_its_serving_rules() {
 
 #[test]
 fn serving_rules_built() {
-    // req:check.coverage/pending-report@f7b79187
+    // req:check.coverage/pending-report@89a3068a
     let dir = repo(&[(
         "a",
         node("serves: [capability/c]\n", &[("y", false), ("z", false)]),
@@ -97,7 +97,7 @@ fn serving_rules_built() {
 
 #[test]
 fn edited_capability_waits_on_a_new_serving_rule() {
-    // req:check.coverage/pending-report@f7b79187
+    // req:check.coverage/pending-report@89a3068a
     let dir = repo(&[("a", node("serves: [capability/c]\n", &[("x", false)]))]);
     let g = graph(dir.path());
     let markers = [marker("capability/c", Some("00000000"), "tests/t.rs", 1)];
@@ -107,7 +107,7 @@ fn edited_capability_waits_on_a_new_serving_rule() {
 
 #[test]
 fn serving_rule_on_an_optional_node() {
-    // req:check.coverage/pending-report@f7b79187
+    // req:check.coverage/pending-report@89a3068a
     let dir = repo(&[(
         "w",
         node("optional: true\nserves: [capability/c]\n", &[("x", false)]),
@@ -128,7 +128,7 @@ fn serving_rule_on_an_optional_node() {
 
 #[test]
 fn obsolete_capability_waits_on_no_serving_rule() {
-    // req:check.coverage/pending-report@f7b79187
+    // req:check.coverage/pending-report@89a3068a
     // Only an `unbuilt` or `behind` capability waits on its serving rules. A node still serving
     // a removed capability is a `model/serves` violation, but the queue reads the graph anyway.
     let dir = repo(&[("a", node("serves: [capability/gone]\n", &[("x", false)]))]);
@@ -152,7 +152,7 @@ fn obsolete_capability_waits_on_no_serving_rule() {
 
 #[test]
 fn every_wait_in_one_list() {
-    // req:check.coverage/pending-report@f7b79187
+    // req:check.coverage/pending-report@89a3068a
     let a = "---\ntitle: A\nstatus: active\nowners: []\npaths: [\"a/**\"]\n---\n\n## Requirements\n\n### Requirement: y\ny.\n\n#### Scenario: s\n- ok\n\n#### Needs\n- b/z\n";
     let dir = repo(&[
         ("a", a.to_string()),
@@ -167,4 +167,56 @@ fn every_wait_in_one_list() {
     assert_eq!(of("a/y").waits_on, ["b/z"]);
     assert_eq!(of("capability/c").waits_on, ["w/x"]);
     assert!(of("a/y").blocked_by.is_empty() && of("capability/c").blocked_by.is_empty());
+}
+
+/// The scenario's components: `a` serving `capability/c` with `x` (needing `b/z`), `w` and `y`,
+/// `b` holding `z`, and every `a` rule cited at an older version.
+fn changed_rules() -> TempDir {
+    let a = "---\ntitle: A\nstatus: active\nowners: []\npaths: [\"a/**\"]\nserves: [capability/c]\n---\n\n## Requirements\n\n### Requirement: x\nx.\n\n#### Scenario: s\n- ok\n\n#### Needs\n- b/z\n\n### Requirement: w\nw.\n\n#### Scenario: s\n- ok\n\n### Requirement: y\ny.\n\n#### Scenario: s\n- ok\n";
+    let dir = repo(&[
+        ("a", a.to_string()),
+        ("b", node("", &[("z", false)]).replace("src/**", "b/**")),
+    ]);
+    write(
+        dir.path(),
+        "backlog/q.md",
+        "---\ntitle: Q\nkind: question\nblocks: [a/w]\n---\n",
+    );
+    dir
+}
+
+fn old_markers() -> Vec<clm_coverage::Marker> {
+    ["capability/c", "a/x", "a/w", "a/y"]
+        .iter()
+        .enumerate()
+        .map(|(i, id)| marker(id, Some("00000000"), "tests/t.rs", i + 1))
+        .collect()
+}
+
+#[test]
+fn changed_serving_rule_that_waits() {
+    // req:check.coverage/pending-report@89a3068a
+    let dir = changed_rules();
+    let list = pending(&graph(dir.path()), &old_markers());
+    let of = |id: &str| list.iter().find(|p| p.id == id).unwrap().to_string();
+    assert!(of("capability/c").ends_with(" blocked a/w,a/x"), "{list:?}");
+    assert!(of("a/x").ends_with(" blocked b/z"));
+    assert!(of("a/w").ends_with(" blocked backlog/q"));
+    assert!(!of("a/y").contains("blocked"));
+}
+
+#[test]
+fn changed_serving_rule_released() {
+    // req:check.coverage/pending-report@89a3068a
+    let dir = changed_rules();
+    std::fs::remove_file(dir.path().join("backlog/q.md")).unwrap();
+    let g = graph(dir.path());
+    let mut markers = old_markers();
+    markers.push(current(&g, "b/z", "tests/t.rs", 9));
+    let list = pending(&g, &markers);
+    let v = g.requirement("capability/c").unwrap().version();
+    assert_eq!(
+        line(&list, "capability/c"),
+        format!("capability/c {v} behind 00000000")
+    );
 }
