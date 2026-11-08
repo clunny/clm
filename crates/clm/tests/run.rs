@@ -1515,3 +1515,33 @@ fn refusals_say_component() {
     let err = refused(&r, &f, "a/b", &[], 1);
     assert!(err.contains("`a/b` isn't a component ID"), "{err}");
 }
+
+#[test]
+fn scenario_prompt_slot() {
+    // req:orchestrator.run/prompt-slot@c8307c1b
+    let (r, f) = (repo(), fake());
+    push_claim(&r.work, "a", 0);
+    git(&r.work, &["fetch", "-q", "origin"]);
+    take(&r, "a");
+    // The place `a` holds slot 1 and counts, so `b` takes slot 2.
+    let fresh = prompt(&r, &f, "b", &[]);
+    // Resuming a branch with unlanded commits, while the place `b` still counts.
+    let wt = build_worktree(&r, &f);
+    write(&wt, "src/b.rs", "b\n");
+    git(&wt, &["add", "-A"]);
+    git(&wt, &["commit", "-qm", "work"]);
+    git(&wt, &["push", "-q", "origin", "HEAD:impl/b"]);
+    let resumed = prompt(&r, &f, "b", &[]);
+    assert!(resumed.contains("`impl/b` already exists"), "{resumed}");
+    for p in [&fresh, &resumed] {
+        assert!(p.contains("CLM_SLOT=2"), "{p}");
+        assert!(p.contains("tests-run-concurrently"), "{p}");
+        assert!(p.contains("fixed port"), "{p}");
+        assert!(
+            p.split("\n\n")
+                .filter(|q| q.contains("one plain command"))
+                .all(|q| !q.contains("CLM_SLOT=")),
+            "{p}"
+        );
+    }
+}

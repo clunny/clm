@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [parallel-builds-test-runs-collide-on-fixed-host-resources]
 ---
 
