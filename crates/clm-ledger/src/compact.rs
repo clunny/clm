@@ -32,11 +32,8 @@ pub struct Compacted {
 /// kept.
 pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Compacted, Error> {
     let writer = crate::writer(root, env)?;
-    let hosted = clm_config::load(Some(root), env)?.host.value != clm_config::Host::None;
-    if hosted {
-        // Offline, the fold is what was last fetched, which prunes no more than it should.
-        let _ = clm_git::fetch(root);
-    }
+    // Offline, the fold is what was last fetched, which prunes no more than it should.
+    let _ = clm_git::fetch(root);
     let fold = crate::fold(root)?;
     let landed: Vec<&Record> = fold.lands.values().flatten().collect();
     let mut fingerprints = HashSet::new();
@@ -174,7 +171,7 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         }
         (removed > 0).then(|| kept.into_bytes())
     })?;
-    if committed && !branch::push(root, &name, env)? && hosted {
+    if committed && !branch::push(root, &name)? {
         let short = name.trim_start_matches("refs/heads/");
         warnings.push(format!(
             "the compacted ledger isn't on origin yet: git push origin {short}"

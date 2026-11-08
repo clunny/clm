@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [verified-record-does-not-say-commit-ids-are-lowercase]
 ---
 

@@ -26,7 +26,7 @@ fn lines(text: &str) -> Vec<serde_json::Value> {
 
 #[test]
 fn first_record() {
-    // req:ledger/append@58df8447
+    // req:ledger/append@d894aff0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let head = sh(&clone, &["rev-parse", "HEAD"]);
@@ -66,7 +66,7 @@ fn first_record() {
 
 #[test]
 fn second_record() {
-    // req:ledger/append@58df8447
+    // req:ledger/append@d894aff0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let env = env(dir.path(), &[]);
@@ -85,7 +85,7 @@ fn second_record() {
 
 #[test]
 fn offline() {
-    // req:ledger/append@58df8447
+    // req:ledger/append@d894aff0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let nowhere = dir.path().join("nowhere.git");
@@ -125,20 +125,23 @@ fn push_refused() {
 }
 
 #[test]
-fn no_host_pushes_nothing() {
-    // req:ledger/append@58df8447
+fn no_host_pushes_to_its_own_remote() {
+    // req:ledger/append@d894aff0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     std::fs::write(clone.join("clm.toml"), "host = \"none\"\n").unwrap();
     let out = clm_ledger::append(&clone, approved("f"), &env(dir.path(), &[])).unwrap();
-    assert!(!out.pushed);
+    assert!(out.pushed);
     let origin = dir.path().join("origin.git");
-    assert_eq!(sh(&origin, &["branch", "--list", "clm/*"]), "");
+    let branch = format!("clm/ledger/{}", out.record.writer);
+    assert_eq!(sh(&origin, &["branch", "--list", "clm/*"]), branch.as_str());
+    let records = lines(&sh(&origin, &["show", &format!("{branch}:records.jsonl")]));
+    assert_eq!(records[0]["id"], out.record.id.as_str());
 }
 
 #[test]
 fn concurrent_appends_keep_every_record() {
-    // req:ledger/append@58df8447
+    // req:ledger/append@d894aff0
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     std::fs::write(clone.join("clm.toml"), "host = \"none\"\n").unwrap();

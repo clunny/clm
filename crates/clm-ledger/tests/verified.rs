@@ -32,7 +32,7 @@ fn body(commit: char, passed: bool) -> Body {
 
 #[test]
 fn by_commit() {
-    // req:ledger/verified-record@844d746f
+    // req:ledger/verified-record@e728354d
     let text = [
         // Read newest first, so the order is by `at`, not by line.
         line(3, 'd', "true", "2026-01-03T00:00:00.000Z", None),
@@ -56,8 +56,27 @@ fn by_commit() {
 }
 
 #[test]
+fn uppercase_commit() {
+    // req:ledger/verified-record@e728354d
+    let upper =
+        line(1, 'a', "true", "2026-01-01T00:00:00.000Z", None).replace(&id('a'), &"A".repeat(40));
+    let fold = fold_records(&[("one", &upper)]);
+    assert!(fold.verifications.is_empty());
+    assert_eq!(fold.warnings.len(), 1, "{:?}", fold.warnings);
+    assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
+    // The same rule holds for `culprit`.
+    let culprit = line(2, 'b', "false", "2026-01-01T00:00:00.000Z", Some('a')).replace(
+        &format!("\"culprit\":\"{}\"", id('a')),
+        &format!("\"culprit\":\"{}\"", "A".repeat(40)),
+    );
+    let fold = fold_records(&[("one", &culprit)]);
+    assert!(fold.verifications.is_empty());
+    assert_eq!(fold.warnings.len(), 1, "{:?}", fold.warnings);
+}
+
+#[test]
 fn bad_result() {
-    // req:ledger/verified-record@844d746f
+    // req:ledger/verified-record@e728354d
     let ok = id('c');
     let bad = [
         line(1, 'c', "\"yes\"", "2026-01-01T00:00:00.000Z", None),
@@ -84,7 +103,7 @@ fn bad_result() {
 
 #[test]
 fn shown() {
-    // req:ledger/verified-record@844d746f
+    // req:ledger/verified-record@e728354d
     let text = [
         line(1, 'c', "true", "2026-01-01T00:00:00.000Z", None),
         line(2, 'd', "false", "2026-01-02T00:00:00.000Z", None),
@@ -108,7 +127,7 @@ fn shown() {
 
 #[test]
 fn unresolved_reds() {
-    // req:ledger/verified-record@844d746f
+    // req:ledger/verified-record@e728354d
     let text = [
         line(1, 'a', "true", "2026-01-01T00:00:00.000Z", None),
         line(2, 'b', "false", "2026-01-02T00:00:00.000Z", None),
@@ -143,7 +162,7 @@ fn unresolved_reds() {
 
 #[test]
 fn compacted() {
-    // req:ledger/verified-record@844d746f
+    // req:ledger/verified-record@e728354d
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let b = clone_with_origin(dir.path(), "b", "B");

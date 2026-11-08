@@ -88,7 +88,7 @@ fn vars(home: &Path) -> Vec<(&'static str, String)> {
 #[test]
 fn signed_and_appended() {
     // req:ledger/record-signing@12908fe7
-    // req:ledger/append@58df8447
+    // req:ledger/append@d894aff0
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let clone = clone_with_origin(home, "a", "Ann");

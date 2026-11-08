@@ -9,7 +9,7 @@ use crate::{Body, Error, Record, Signed, branch};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Appended {
     pub record: Record,
-    /// False with `host = "none"`, or when `origin` couldn't be reached: the record is
+    /// False when `origin` couldn't be reached: the record is
     /// committed locally, and `clm reconnect` pushes it later.
     pub pushed: bool,
 }
@@ -94,7 +94,7 @@ pub fn append_all(
         content.extend_from_slice(&lines);
         Some(content)
     })?;
-    let pushed = branch::push(root, &name, env)?;
+    let pushed = branch::push(root, &name)?;
     Ok(records
         .into_iter()
         .map(|record| Appended { record, pushed })

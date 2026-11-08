@@ -112,18 +112,12 @@ fn run_git(
     Ok(String::from_utf8_lossy(&out).trim().to_string())
 }
 
-/// Pushes the branch to `origin` without force, unless `host` is `none`. Nobody else writes
+/// Pushes the branch to `origin` without force, on every host, `none` included, whose
+/// `origin` is the clone's own remote (`host/none-keeps-a-remote`). Nobody else writes
 /// the branch, so a refusal is a network or lock failure, or a hook declining it, and it is
 /// tried a few times. Returns whether it was pushed: a push still refused, for any reason,
 /// leaves the commit local and unpushed (`ledger/append-refused-push`).
-pub(crate) fn push(
-    root: &Path,
-    name: &str,
-    env: &dyn Fn(&str) -> Option<String>,
-) -> Result<bool, Error> {
-    if clm_config::load(Some(root), env)?.host.value == clm_config::Host::None {
-        return Ok(false);
-    }
+pub(crate) fn push(root: &Path, name: &str) -> Result<bool, Error> {
     let spec = format!("{name}:{name}");
     for attempt in 1..=3u64 {
         if clm_git::git(root, &["push", "--quiet", clm_git::REMOTE, &spec]).is_ok() {
