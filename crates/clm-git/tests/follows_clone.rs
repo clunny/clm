@@ -146,6 +146,18 @@ fn commands_follow_their_own_clone() {
     assert_eq!(std::fs::read(g.join("index")).unwrap(), g_index);
     assert_eq!(std::fs::read(g.join("worktrees/t/index")).unwrap(), t_index);
 
+    // run_within follows the rule too; a plain subdirectory of the clone is inside it.
+    let limit = std::time::Duration::from_secs(10);
+    let err = clm_git::run_within(&c, "git", &["ls-files"], Options::default(), limit)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("not a git repository"), "{err}");
+    std::fs::create_dir(w.join("sub")).unwrap();
+    assert_eq!(
+        git(&w.join("sub"), &["rev-parse", "--show-prefix"]).unwrap(),
+        "sub/"
+    );
+
     // A program other than git sees the environment as the process has it.
     let out = run(&c, "sh", &["-c", "echo $GIT_DIR"], Options::default()).unwrap();
     assert_eq!(String::from_utf8(out).unwrap().trim(), g.to_str().unwrap());
