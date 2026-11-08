@@ -1,7 +1,7 @@
 ---
 title: "Projects upgrading past the lifted pre-land check lock aren't told their tests must now run side by side"
 kind: bug
-priority: P1
+priority: P2
 components: [upgrade]
 ---
 
