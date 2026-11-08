@@ -46,9 +46,8 @@ impl State {
     }
 
     fn passed(&self, commit: &str) -> Option<bool> {
-        self.newest(commit).map(|r| {
-            matches!(r.body, Body::Verified { passed: true, .. })
-        })
+        self.newest(commit)
+            .map(|r| matches!(r.body, Body::Verified { passed: true, .. }))
     }
 
     /// The position in the chain of `commit`, a full ID.

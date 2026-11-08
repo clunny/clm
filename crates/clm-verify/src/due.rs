@@ -54,7 +54,9 @@ fn trigger(
     if wants(VerifyTrigger::ChangeDone) && finishes_a_change(ctx, lands)? {
         return Ok(Some("change-done"));
     }
-    if wants(VerifyTrigger::QueueDrained) && queue_drained(ctx, &state.chain[state.chain.len() - 1])? {
+    if wants(VerifyTrigger::QueueDrained)
+        && queue_drained(ctx, &state.chain[state.chain.len() - 1])?
+    {
         return Ok(Some("queue-drained"));
     }
     // Settings allow the trigger only in `local` mode.
@@ -84,14 +86,9 @@ fn finishes_a_change(ctx: &Ctx, lands: &[String]) -> Result<bool, Error> {
     for land in lands {
         let parents = ctx.git(&["rev-list", "--parents", "-n", "1", land])?;
         let added = match parents.split_whitespace().nth(1) {
-            Some(parent) => ctx.git(&[
-                "diff",
-                "--name-only",
-                "--diff-filter=A",
-                "-z",
-                parent,
-                land,
-            ])?,
+            Some(parent) => {
+                ctx.git(&["diff", "--name-only", "--diff-filter=A", "-z", parent, land])?
+            }
             None => ctx.git(&[
                 "diff-tree",
                 "--root",

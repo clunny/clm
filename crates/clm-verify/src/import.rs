@@ -64,16 +64,10 @@ fn import(
     let (_, covered) = state.unverified(at);
     // One covered land is the culprit of a red result; several leave the search to
     // `clm verify --bisect`.
+    let passed = result.conclusion == "success";
     let culprit = match covered {
-        [only] => Some(only.clone()),
+        [only] if !passed => Some(only.clone()),
         _ => None,
     };
-    run::record(
-        ctx,
-        state,
-        at,
-        culprit,
-        result.conclusion == "success",
-        Some(result.url),
-    )
+    run::record(ctx, state, at, culprit, passed, Some(result.url))
 }

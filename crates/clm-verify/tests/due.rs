@@ -35,7 +35,10 @@ fn nothing_finished() {
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
     f.land(&[("a.txt", "2\n")], "two");
-    f.land(&[("changes/x/change.md", CHANGE)], "a live change, not an archived one");
+    f.land(
+        &[("changes/x/change.md", CHANGE)],
+        "a live change, not an archived one",
+    );
     let before = f.records().len();
     let out = f.due();
     assert!(out.line.starts_with("verify not-due"), "{}", out.line);
@@ -169,7 +172,10 @@ fn nothing_landed() {
         dry_run: false,
     });
     let short = f.git(&f.work(), &["rev-parse", "--short", &head]);
-    assert_eq!(out.line, format!("verify not-due nothing landed since {short}"));
+    assert_eq!(
+        out.line,
+        format!("verify not-due nothing landed since {short}")
+    );
     assert_eq!(out.code, 0);
 }
 

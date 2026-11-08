@@ -666,7 +666,6 @@ dependencies = [
  "clm-land",
  "clm-ledger",
  "clm-model",
- "serde_json",
  "tempfile",
 ]
 

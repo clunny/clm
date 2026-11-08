@@ -198,9 +198,31 @@ impl Fixture {
             since: None,
             lands: vec![commit.to_string()],
             culprit: None,
-            components: if passed { vec![] } else { vec!["b".to_string()] },
+            components: if passed {
+                vec![]
+            } else {
+                vec!["b".to_string()]
+            },
             mode: VerifyMode::Local,
             run: None,
+        };
+        clm_ledger::append(&self.work(), body, &self.env())
+            .unwrap()
+            .record
+    }
+
+    /// A red `verified` record for `commit` that names no culprit, covering `lands`, in
+    /// `mode`.
+    pub fn red(&self, commit: &str, lands: &[&str], mode: VerifyMode) -> Record {
+        let body = Body::Verified {
+            commit: commit.to_string(),
+            passed: false,
+            since: None,
+            lands: lands.iter().map(|l| l.to_string()).collect(),
+            culprit: None,
+            components: vec!["a".to_string(), "b".to_string()],
+            mode,
+            run: Some("https://host/run/1".to_string()),
         };
         clm_ledger::append(&self.work(), body, &self.env())
             .unwrap()
@@ -217,6 +239,8 @@ impl Fixture {
     }
 
     pub fn verify_tree(&self) -> PathBuf {
-        fs::canonicalize(self.work()).unwrap().join(".clm/verify-tree")
+        fs::canonicalize(self.work())
+            .unwrap()
+            .join(".clm/verify-tree")
     }
 }

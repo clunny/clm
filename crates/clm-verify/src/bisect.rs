@@ -63,14 +63,7 @@ pub(crate) fn components(
 fn changed_files(ctx: &Ctx, land: &str) -> Result<Vec<String>, Error> {
     let parents = ctx.git(&["rev-list", "--parents", "-n", "1", land])?;
     let out = match parents.split_whitespace().nth(1) {
-        Some(parent) => ctx.git(&[
-            "diff",
-            "--name-only",
-            "-z",
-            "--no-renames",
-            parent,
-            land,
-        ])?,
+        Some(parent) => ctx.git(&["diff", "--name-only", "-z", "--no-renames", parent, land])?,
         None => ctx.git(&[
             "diff-tree",
             "--root",
@@ -97,7 +90,10 @@ fn graph_at(ctx: &Ctx, commit: &str) -> Result<clm_model::Graph, Error> {
     let files: clm_model::Files = blobs
         .into_iter()
         .filter_map(|(path, bytes)| {
-            Some((PathBuf::from(path.strip_prefix(ctx.prefix.as_str())?), bytes))
+            Some((
+                PathBuf::from(path.strip_prefix(ctx.prefix.as_str())?),
+                bytes,
+            ))
         })
         .collect();
     Ok(clm_model::load_files(&files).0)

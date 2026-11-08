@@ -107,7 +107,9 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
     };
     let mut outcome = record(ctx, state, end, Some(culprit), false, None)?;
     if let Some(log) = run.log {
-        outcome.notes.push(format!("output is at {}", log.display()));
+        outcome
+            .notes
+            .push(format!("output is at {}", log.display()));
     }
     Ok(outcome)
 }
@@ -140,7 +142,14 @@ pub(crate) fn record(
         run,
     };
     let appended = clm_ledger::append(&ctx.root, body, ctx.env)?;
-    let mut outcome = report(ctx, &commit, passed, lands.len(), culprit.as_deref(), &components)?;
+    let mut outcome = report(
+        ctx,
+        &commit,
+        passed,
+        lands.len(),
+        culprit.as_deref(),
+        &components,
+    )?;
     if !appended.pushed {
         outcome
             .notes
@@ -168,7 +177,10 @@ pub(crate) fn report(
 ) -> Result<Outcome, Error> {
     let short = ctx.short(commit)?;
     if passed {
-        return Ok(Outcome::new(format!("verify passed {short} {lands} lands"), 0));
+        return Ok(Outcome::new(
+            format!("verify passed {short} {lands} lands"),
+            0,
+        ));
     }
     let culprit = match culprit {
         Some(c) => ctx.short(c)?,
@@ -187,17 +199,22 @@ pub(crate) fn report(
 /// else the verification of it as `verify-run` or `verify-import` verifies the head.
 pub(crate) fn commit(ctx: &Ctx, state: &State, sha: &str) -> Result<Outcome, Error> {
     let (full, end) = state.resolve(ctx, sha)?;
-    if let Some(record) = state.newest(&full) {
-        if let Body::Verified {
-            passed,
-            lands,
-            culprit,
+    if let Some(Body::Verified {
+        passed,
+        lands,
+        culprit,
+        components,
+        ..
+    }) = state.newest(&full).map(|r| &r.body)
+    {
+        return report(
+            ctx,
+            &full,
+            *passed,
+            lands.len(),
+            culprit.as_deref(),
             components,
-            ..
-        } = &record.body
-        {
-            return report(ctx, &full, *passed, lands.len(), culprit.as_deref(), components);
-        }
+        );
     }
     match ctx.verify.mode {
         VerifyMode::Import => import::import_commit(ctx, state, end),
