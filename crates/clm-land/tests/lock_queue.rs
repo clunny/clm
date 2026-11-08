@@ -34,7 +34,7 @@ fn tickets(root: &Path) -> usize {
                 .filter(|e| {
                     let name = e.file_name();
                     let name = name.to_string_lossy();
-                    name.ends_with("-ordinary") || name.ends_with("-priority")
+                    name.contains("-ordinary-p") || name.contains("-priority-p")
                 })
                 .count()
         })
@@ -58,7 +58,7 @@ fn starts(f: &Fixture) -> Vec<String> {
 
 #[test]
 fn turns_in_arrival_order() {
-    // req:land/lock-queue@ea656239
+    // req:land/lock-queue@7af00d95
     let f = Fixture::new("");
     logging_check(&f);
     let names = ["wa", "wb", "wc"];
@@ -96,7 +96,7 @@ fn turns_in_arrival_order() {
 
 #[test]
 fn a_checked_land_goes_first() {
-    // req:land/lock-queue@ea656239
+    // req:land/lock-queue@7af00d95
     let f = Fixture::new("");
     logging_check(&f);
     f.write("readers-out", "file crates/a/tests/r.rs\n");
@@ -110,6 +110,68 @@ fn a_checked_land_goes_first() {
         let waiting = s.spawn(|| clm_land::check_only(&only, None, &env));
         wait_for_tickets(&f.work(), 1);
         let land = s.spawn(|| clm_land::land(&f.work(), Some("spec/x"), &env));
+        wait_for_tickets(&f.work(), 2);
+        drop(held);
+        let landed = land.join().unwrap().unwrap();
+        assert!(landed.lines[0].starts_with("landed "), "{:?}", landed.lines);
+        waiting.join().unwrap().unwrap();
+    });
+    let starts = starts(&f);
+    assert_eq!(starts.len(), 2, "{starts:?}");
+    assert!(starts[0].contains("land-tree"), "{starts:?}");
+    assert_eq!(tickets(&f.work()), 0);
+}
+
+/// Puts `a`, a component with an unbuilt requirement from an applied change of priority
+/// `P1`, on `origin/main`, so a land of `impl/a` carries `P1` (`orchestrator/land-priority`).
+fn a_is_p1(f: &Fixture) {
+    let node = |reqs: &[&str]| {
+        let mut s = String::from(
+            "---\ntitle: T\nstatus: specd\nowners: []\ndepends_on: []\n---\n\n\
+             ## Contract\nc\n\n## Design\nd\n\n## Requirements\n",
+        );
+        for r in reqs {
+            s.push_str(&format!(
+                "\n### Requirement: {r}\nIt SHALL.\n\n#### Scenario: s\n- ok\n"
+            ));
+        }
+        s
+    };
+    f.commit_files(
+        &[
+            ("ARCHITECTURE.md", "# Arch\n"),
+            ("specs/SPEC.md", &node(&[])),
+            ("specs/a/SPEC.md", &node(&["p"])),
+            (
+                "changes/x/change.md",
+                "---\nstatus: applied\npriority: P1\n---\n",
+            ),
+            (
+                "changes/x/deltas/a.md",
+                "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: p\n\
+                 It SHALL.\n\n#### Scenario: s\n- ok\n\n",
+            ),
+        ],
+        "a is P1",
+    );
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+}
+
+#[test]
+fn a_p1_land() {
+    // req:land/lock-queue@7af00d95
+    let f = Fixture::new("");
+    a_is_p1(&f);
+    logging_check(&f);
+    f.branch("impl/wa", &[("wa.txt", "x\n")]);
+    f.branch("impl/a", &[("a.txt", "changed\n")]);
+    let only = f.linked("wa", "impl/wa");
+    let held = hold(&f);
+    let env = f.env(&[]);
+    std::thread::scope(|s| {
+        let waiting = s.spawn(|| clm_land::check_only(&only, None, &env));
+        wait_for_tickets(&f.work(), 1);
+        let land = s.spawn(|| clm_land::land(&f.work(), Some("impl/a"), &env));
         wait_for_tickets(&f.work(), 2);
         drop(held);
         let landed = land.join().unwrap().unwrap();

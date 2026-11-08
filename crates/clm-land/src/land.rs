@@ -8,11 +8,12 @@ use clm_ledger::{Body, Entry, LandKind};
 
 use crate::exe::Exe;
 use crate::lock;
-use crate::lock::Lane;
+use crate::lock::{Lane, Rank};
 use crate::scratch::Scratch;
 use crate::{CheckHow, Selected};
 use crate::{Env, Error, Output, Repo, Verdict, is_claim};
 use clm_approval::{Approvals, Policy};
+use clm_model::Priority;
 
 const ATTEMPTS: usize = 10;
 
@@ -152,13 +153,20 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     let mut temp: Option<Scratch> = None;
     for attempt in 1..=ATTEMPTS {
         let mut p = prepare()?;
+        // The priority this land's tickets carry, worked out once, before its first wait
+        // of the attempt (`land/lock-queue`).
+        let mut priority: Option<Priority> = None;
         let mut lock = None;
         if let Some((target, true)) = &target
             && check_runs(&p)
         {
             // Unchecked code: the check runs every test the branch can break, so an ordinary
             // ticket (`land/lock-queue`).
-            let held = lock::land(target, Lane::Ordinary)?;
+            let rank = Rank {
+                lane: Lane::Ordinary,
+                priority: land_priority(&repo, &branch, &p, &mut priority, &mut out),
+            };
+            let held = lock::land(target, rank)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
             if held.waited {
                 p = prepare()?;
@@ -284,12 +292,22 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         } else {
             Lane::Ordinary
         };
+        let check_rank = Rank {
+            lane: check_lane,
+            priority: match priority {
+                Some(priority) => priority,
+                None if runs => {
+                    land_priority_at(&repo, &branch, &base, &head, &mut priority, &mut out)
+                }
+                None => Priority::P5,
+            },
+        };
         let land_tree_for_readers;
         let dir: &Scratch = match &target {
             Some((target, true)) if checked && runs => {
                 // A readers' selection that ran takes the priority lane; one that failed, so
                 // that every test runs, the ordinary (`land/lock-queue`).
-                lock = Some(lock::land(target, check_lane)?);
+                lock = Some(lock::land(target, check_rank)?);
                 drop(temp.take());
                 land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
                 &land_tree_for_readers
@@ -324,7 +342,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 CheckHow {
                     log: Some(&log),
                     slot,
-                    lane: Some(check_lane),
+                    rank: Some(check_rank),
                 },
             )?;
         }
@@ -730,4 +748,40 @@ fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mu
     {
         warnings.push(format!("kept the local `{branch}`: {e}"));
     }
+}
+
+/// The priority a land of `branch` carries, `orchestrator`'s `land_priority` for its head on
+/// the fetched base, kept in `cache` for the rest of the attempt; `P5` with a warning when
+/// it can't be worked out, since the order is never worth failing a land for.
+fn land_priority(
+    repo: &Repo,
+    branch: &str,
+    p: &Prepared,
+    cache: &mut Option<Priority>,
+    out: &mut Output,
+) -> Priority {
+    land_priority_at(repo, branch, &p.base, &p.head, cache, out)
+}
+
+fn land_priority_at(
+    repo: &Repo,
+    branch: &str,
+    base: &str,
+    head: &str,
+    cache: &mut Option<Priority>,
+    out: &mut Output,
+) -> Priority {
+    *cache.get_or_insert_with(|| {
+        clm_orchestrator::land_priority(&repo.root, branch, base, head).unwrap_or_else(|e| {
+            let why = match e {
+                clm_orchestrator::Error::Refused(why) | clm_orchestrator::Error::Git(why) => why,
+                clm_orchestrator::Error::Spec(_) => "the specs don't load".into(),
+            };
+            let warning = format!("land priority not worked out, queueing at P5: {why}");
+            if !out.warnings.contains(&warning) {
+                out.warnings.push(warning);
+            }
+            Priority::P5
+        })
+    })
 }

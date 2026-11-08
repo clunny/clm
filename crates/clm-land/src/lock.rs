@@ -9,13 +9,15 @@ use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use clm_model::Priority;
+
 use crate::Error;
 
 /// How long a waiter leaves between two reads of the queue.
 const POLL: Duration = Duration::from_millis(250);
 
-/// How many priority runs in a row may pass an ordinary one that waits.
-const STREAK: u32 = 3;
+/// How many priority-lane runs in a row below `P1` may pass an ordinary one that waits.
+const STREAK: u32 = 6;
 
 /// Which ticket a run takes: a priority one goes before every ordinary one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,6 +33,21 @@ impl Lane {
             Lane::Ordinary => "ordinary",
         }
     }
+}
+
+/// What a ticket carries: its lane and its priority (`land/lock-queue`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Rank {
+    pub(crate) lane: Lane,
+    pub(crate) priority: Priority,
+}
+
+impl Rank {
+    /// The rank of every run that isn't a land with a priority of its own.
+    pub(crate) const ORDINARY: Rank = Rank {
+        lane: Lane::Ordinary,
+        priority: Priority::P5,
+    };
 }
 
 /// A held lock. Dropping it removes the run's ticket, if it has one, and releases the lock.
@@ -51,56 +68,98 @@ impl Drop for Held {
     }
 }
 
-/// A live ticket: its file name, `<20 digits>-<lane>`.
+/// A live ticket: its file name, `<20 digits>-<lane>-p<n>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Ticket {
     name: String,
-    priority: bool,
+    rank: Rank,
+}
+
+impl Ticket {
+    fn priority_lane(&self) -> bool {
+        self.rank.lane == Lane::Priority
+    }
 }
 
 fn parse(name: &str) -> Option<Ticket> {
-    let (digits, lane) = name.split_once('-')?;
-    if digits.len() != 20 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+    let mut parts = name.split('-');
+    let (digits, lane, priority) = (parts.next()?, parts.next()?, parts.next()?);
+    if parts.next().is_some() || digits.len() != 20 || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    let priority = match lane {
-        "priority" => true,
-        "ordinary" => false,
+    let lane = match lane {
+        "priority" => Lane::Priority,
+        "ordinary" => Lane::Ordinary,
+        _ => return None,
+    };
+    let priority = match priority {
+        "p1" => Priority::P1,
+        "p2" => Priority::P2,
+        "p3" => Priority::P3,
+        "p4" => Priority::P4,
+        "p5" => Priority::P5,
         _ => return None,
     };
     Some(Ticket {
         name: name.to_string(),
-        priority,
+        rank: Rank { lane, priority },
     })
 }
 
-/// The tickets in the order their turns come, given the queue's `streak`: the oldest
-/// priority ticket, else the oldest ordinary one, except that after `STREAK` priority runs
-/// in a row an ordinary ticket that waits goes first.
+fn ticket_name(counter: u64, rank: Rank) -> String {
+    format!(
+        "{counter:020}-{}-p{}",
+        rank.lane.name(),
+        rank.priority.to_string().trim_start_matches('P')
+    )
+}
+
+/// The index in `left` of the ticket whose turn comes first among `pool`: a priority-lane
+/// one before an ordinary one, then the highest priority, then the oldest.
+fn best(pool: &[usize], left: &[Ticket]) -> Option<usize> {
+    pool.iter().copied().min_by_key(|&i| {
+        let t = &left[i];
+        (!t.priority_lane(), t.rank.priority, i)
+    })
+}
+
+/// The tickets in the order their turns come, given the queue's `streak`: the `P1` tickets
+/// first, a priority-lane one before an ordinary one and otherwise the oldest; then the
+/// other priority-lane tickets, the highest priority first and then the oldest; then the
+/// ordinary ones the same way. After `STREAK` priority-lane runs in a row below `P1`, an
+/// ordinary ticket that waits goes first, unless a `P1` ticket waits.
 fn turn_order(waiting: &[Ticket], mut streak: u32) -> Vec<Ticket> {
     let mut left = waiting.to_vec();
     left.sort_by(|a, b| a.name.cmp(&b.name));
     let mut order = Vec::new();
     while !left.is_empty() {
-        let ordinary = left.iter().position(|t| !t.priority);
-        let priority = left.iter().position(|t| t.priority);
-        let at = match (priority, ordinary) {
-            (Some(p), Some(o)) => {
-                if streak >= STREAK {
-                    o
-                } else {
-                    p
-                }
-            }
-            (Some(i), None) | (None, Some(i)) => i,
-            (None, None) => unreachable!("left is not empty"),
-        };
-        let taken = left.remove(at);
-        streak = if taken.priority && left.iter().any(|t| !t.priority) {
-            streak + 1
+        let all: Vec<usize> = (0..left.len()).collect();
+        let ones: Vec<usize> = all
+            .iter()
+            .copied()
+            .filter(|&i| left[i].rank.priority == Priority::P1)
+            .collect();
+        let ordinary: Vec<usize> = all
+            .iter()
+            .copied()
+            .filter(|&i| !left[i].priority_lane())
+            .collect();
+        let at = if !ones.is_empty() {
+            best(&ones, &left)
+        } else if streak >= STREAK && !ordinary.is_empty() {
+            best(&ordinary, &left)
         } else {
-            0
-        };
+            best(&all, &left)
+        }
+        .expect("left is not empty");
+        let taken = left.remove(at);
+        if taken.rank.priority != Priority::P1 {
+            streak = if taken.priority_lane() && left.iter().any(|t| !t.priority_lane()) {
+                streak + 1
+            } else {
+                0
+            };
+        }
         order.push(taken);
     }
     order
@@ -169,12 +228,12 @@ impl Queue {
 
 /// Takes the lock at `path` (creating it and its directory when missing) in the order the
 /// queue sets. A run that finds the lock free and no live ticket takes it at once, saying
-/// nothing; otherwise it takes a ticket of `lane` and, while it waits, passes
+/// nothing; otherwise it takes a ticket of `rank` and, while it waits, passes
 /// `<prefix>: <n> ahead` to `say` when it begins to wait and each time `<n>` changes. Waits
 /// without a time limit.
 pub(crate) fn take(
     path: &Path,
-    lane: Lane,
+    rank: Rank,
     prefix: &str,
     mut say: impl FnMut(&str),
 ) -> Result<Held, Error> {
@@ -210,11 +269,12 @@ pub(crate) fn take(
         // A lost counter must not hand out a live ticket's name: skip names that exist.
         let mut counter: u64 = queue.read("next").trim().parse().unwrap_or(0);
         let (name, ticket_path, file) = loop {
-            let name = format!("{counter:020}-{}", lane.name());
+            let name = ticket_name(counter, rank);
             let ticket_path = queue.dir.join(&name);
-            let taken = ["priority", "ordinary"]
-                .iter()
-                .any(|l| queue.dir.join(format!("{counter:020}-{l}")).exists());
+            let digits = format!("{counter:020}-");
+            let taken = std::fs::read_dir(&queue.dir)?
+                .filter_map(Result::ok)
+                .any(|e| e.file_name().to_string_lossy().starts_with(&digits));
             counter += 1;
             if taken {
                 continue;
@@ -257,7 +317,9 @@ pub(crate) fn take(
                 Err(TryLockError::Error(e)) => return Err(e.into()),
             };
             if free && before == 0 {
-                let streak = if lane == Lane::Priority && order.iter().any(|t| !t.priority) {
+                let streak = if rank.priority == Priority::P1 {
+                    queue.streak()
+                } else if rank.lane == Lane::Priority && order.iter().any(|t| !t.priority_lane()) {
                     queue.streak() + 1
                 } else {
                     0
@@ -281,18 +343,18 @@ pub(crate) fn take(
 }
 
 /// Locks `<target>.lock`, the land lock.
-pub(crate) fn land(target: &Path, lane: Lane) -> Result<Held, Error> {
+pub(crate) fn land(target: &Path, rank: Rank) -> Result<Held, Error> {
     let mut path = target.as_os_str().to_owned();
     path.push(".lock");
     let prefix = format!("waiting for another land's check on {}", target.display());
-    take(Path::new(&path), lane, &prefix, |line| eprintln!("{line}"))
+    take(Path::new(&path), rank, &prefix, |line| eprintln!("{line}"))
 }
 
 /// Locks `check.lock` in `places`, the check lock, passing each waiting line to `say`.
-pub(crate) fn check(places: &Path, lane: Lane, say: impl FnMut(&str)) -> Result<Held, Error> {
+pub(crate) fn check(places: &Path, rank: Rank, say: impl FnMut(&str)) -> Result<Held, Error> {
     let path = places.join("check.lock");
     let prefix = format!("waiting for another check on {}", path.display());
-    take(&path, lane, &prefix, say)
+    take(&path, rank, &prefix, say)
 }
 
 #[cfg(test)]
@@ -315,10 +377,10 @@ mod tests {
 
     #[test]
     fn a_free_lock_is_taken_at_once_and_leaves_no_ticket() {
-        // req:land/lock-queue@ea656239
+        // req:land/lock-queue@7af00d95
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
-        let held = take(&path, Lane::Ordinary, "p", |_| panic!("said")).unwrap();
+        let held = take(&path, Rank::ORDINARY, "p", |_| panic!("said")).unwrap();
         assert!(!held.waited);
         drop(held);
         let tickets = std::fs::read_dir(path.with_extension("queue"))
@@ -331,7 +393,7 @@ mod tests {
     #[test]
     fn a_run_outside_the_queue_counts_one_ahead_and_is_waited_for() {
         // req:land/check-lock@a6608578
-        // req:land/lock-queue@ea656239
+        // req:land/lock-queue@7af00d95
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let held = outsider(&path);
@@ -341,7 +403,7 @@ mod tests {
         });
         let mut said = Vec::new();
         let start = Instant::now();
-        let got = take(&path, Lane::Ordinary, "waiting", |l| {
+        let got = take(&path, Rank::ORDINARY, "waiting", |l| {
             said.push(l.to_string())
         })
         .unwrap();
@@ -359,18 +421,22 @@ mod tests {
 
     type Lines = mpsc::Sender<(&'static str, String)>;
 
-    /// Starts a waiter on `path` with `lane` that sends `id` once it holds the lock, and
+    fn rank(lane: Lane, priority: Priority) -> Rank {
+        Rank { lane, priority }
+    }
+
+    /// Starts a waiter on `path` with `rank` that sends `id` once it holds the lock, and
     /// then releases it.
     fn waiter(
         path: &Path,
-        lane: Lane,
+        rank: Rank,
         id: &'static str,
         order: &mpsc::Sender<&'static str>,
         lines: &Lines,
     ) -> std::thread::JoinHandle<()> {
         let (path, order, lines) = (path.to_path_buf(), order.clone(), lines.clone());
         std::thread::spawn(move || {
-            let held = take(&path, lane, "w", |l| {
+            let held = take(&path, rank, "w", |l| {
                 lines.send((id, l.to_string())).unwrap();
             })
             .unwrap();
@@ -380,18 +446,26 @@ mod tests {
     }
 
     /// Starts the waiters one after another, each once its first line is said, behind a lock
-    /// held outside the queue, releases that lock and returns the order they held it in and
-    /// their first lines.
-    fn run_in_order(ids: &[(&'static str, Lane)]) -> (Vec<&'static str>, Vec<String>) {
+    /// held outside the queue (and a `streak` already in the queue, if given), releases that
+    /// lock and returns the order they held it in and their first lines.
+    fn run_in_order_after(
+        ids: &[(&'static str, Rank)],
+        streak: Option<u32>,
+    ) -> (Vec<&'static str>, Vec<String>) {
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let outside = outsider(&path);
+        if let Some(streak) = streak {
+            let queue = path.with_extension("queue");
+            std::fs::create_dir_all(&queue).unwrap();
+            std::fs::write(queue.join("streak"), streak.to_string()).unwrap();
+        }
         let (order_tx, order_rx) = mpsc::channel();
         let (lines_tx, lines_rx) = mpsc::channel();
         let mut handles = Vec::new();
         let mut first = Vec::new();
-        for (id, lane) in ids {
-            handles.push(waiter(&path, *lane, id, &order_tx, &lines_tx));
+        for (id, rank) in ids {
+            handles.push(waiter(&path, *rank, id, &order_tx, &lines_tx));
             let (who, line) = lines_rx.recv_timeout(Duration::from_secs(10)).unwrap();
             assert_eq!(who, *id);
             first.push(line);
@@ -399,7 +473,7 @@ mod tests {
         drop(outside);
         let got = ids
             .iter()
-            .map(|_| order_rx.recv_timeout(Duration::from_secs(20)).unwrap())
+            .map(|_| order_rx.recv_timeout(Duration::from_secs(30)).unwrap())
             .collect();
         for h in handles {
             h.join().unwrap();
@@ -407,35 +481,105 @@ mod tests {
         (got, first)
     }
 
+    fn run_in_order(ids: &[(&'static str, Rank)]) -> (Vec<&'static str>, Vec<String>) {
+        run_in_order_after(ids, None)
+    }
+
     #[test]
     fn turns_go_in_arrival_order_and_each_line_counts_the_runs_ahead() {
-        // req:land/lock-queue@ea656239
+        // req:land/lock-queue@7af00d95
         let (got, first) = run_in_order(&[
-            ("a", Lane::Ordinary),
-            ("b", Lane::Ordinary),
-            ("c", Lane::Ordinary),
+            ("a", Rank::ORDINARY),
+            ("b", Rank::ORDINARY),
+            ("c", Rank::ORDINARY),
         ]);
         assert_eq!(got, ["a", "b", "c"]);
         assert_eq!(first, ["w: 1 ahead", "w: 2 ahead", "w: 3 ahead"]);
     }
 
     #[test]
-    fn a_priority_run_goes_first_but_cannot_starve_the_rest() {
-        // req:land/lock-queue@ea656239
+    fn priority_lane_runs_go_first_but_cannot_starve_the_rest() {
+        // req:land/lock-queue@7af00d95
+        let p = rank(Lane::Priority, Priority::P5);
         let (got, _) = run_in_order(&[
-            ("o", Lane::Ordinary),
-            ("p1", Lane::Priority),
-            ("p2", Lane::Priority),
-            ("p3", Lane::Priority),
-            ("p4", Lane::Priority),
-            ("p5", Lane::Priority),
+            ("o", Rank::ORDINARY),
+            ("p1", p),
+            ("p2", p),
+            ("p3", p),
+            ("p4", p),
+            ("p5", p),
+            ("p6", p),
+            ("p7", p),
+            ("p8", p),
         ]);
-        assert_eq!(got, ["p1", "p2", "p3", "o", "p4", "p5"]);
+        assert_eq!(got, ["p1", "p2", "p3", "p4", "p5", "p6", "o", "p7", "p8"]);
+    }
+
+    #[test]
+    fn p1_goes_first_priority_lane_before_ordinary() {
+        // req:land/lock-queue@7af00d95
+        let (got, _) = run_in_order(&[
+            ("pri5", rank(Lane::Priority, Priority::P5)),
+            ("ord1", rank(Lane::Ordinary, Priority::P1)),
+            ("pri1", rank(Lane::Priority, Priority::P1)),
+        ]);
+        assert_eq!(got, ["pri1", "ord1", "pri5"]);
+    }
+
+    #[test]
+    fn below_p1_the_priority_lane_goes_first_then_the_highest_priority() {
+        // req:land/lock-queue@7af00d95
+        let (got, _) = run_in_order(&[
+            ("ord2", rank(Lane::Ordinary, Priority::P2)),
+            ("pri4", rank(Lane::Priority, Priority::P4)),
+            ("ord3", rank(Lane::Ordinary, Priority::P3)),
+            ("pri3", rank(Lane::Priority, Priority::P3)),
+        ]);
+        assert_eq!(got, ["pri3", "pri4", "ord2", "ord3"]);
+    }
+
+    #[test]
+    fn p1_does_not_wait_for_the_cap() {
+        // req:land/lock-queue@7af00d95
+        let (got, _) = run_in_order_after(
+            &[
+                ("ord5", Rank::ORDINARY),
+                ("ord1", rank(Lane::Ordinary, Priority::P1)),
+            ],
+            Some(STREAK),
+        );
+        assert_eq!(got, ["ord1", "ord5"]);
+    }
+
+    #[test]
+    fn a_priority_lane_p1_run_goes_before_the_cap_runs() {
+        // req:land/lock-queue@7af00d95
+        let (got, _) = run_in_order_after(
+            &[
+                ("ord5", Rank::ORDINARY),
+                ("pri1", rank(Lane::Priority, Priority::P1)),
+            ],
+            Some(STREAK),
+        );
+        assert_eq!(got, ["pri1", "ord5"]);
+    }
+
+    #[test]
+    fn the_cap_lets_an_ordinary_run_pass_after_six_below_p1() {
+        // req:land/lock-queue@7af00d95
+        let (got, _) = run_in_order_after(
+            &[
+                ("ord5", Rank::ORDINARY),
+                ("pri5", rank(Lane::Priority, Priority::P5)),
+            ],
+            Some(STREAK),
+        );
+        assert_eq!(got, ["ord5", "pri5"]);
     }
 
     #[test]
     fn the_ticket_of_an_ended_run_holds_no_turn() {
-        // req:land/lock-queue@ea656239
+        // req:land/lock-queue@7af00d95
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let outside = outsider(&path);
@@ -443,12 +587,12 @@ mod tests {
         let queue = path.with_extension("queue");
         std::fs::create_dir_all(&queue).unwrap();
         std::fs::write(queue.join("next"), "1").unwrap();
-        let dead_name = queue.join(format!("{:020}-ordinary", 0));
+        let dead_name = queue.join(ticket_name(0, Rank::ORDINARY));
         let dead = File::create(&dead_name).unwrap();
         dead.lock().unwrap();
         let (order_tx, order_rx) = mpsc::channel();
         let (lines_tx, lines_rx) = mpsc::channel();
-        let handle = waiter(&path, Lane::Ordinary, "b", &order_tx, &lines_tx);
+        let handle = waiter(&path, Rank::ORDINARY, "b", &order_tx, &lines_tx);
         let (_, line) = lines_rx.recv_timeout(Duration::from_secs(10)).unwrap();
         assert_eq!(line, "w: 2 ahead");
         drop(dead);
@@ -458,6 +602,6 @@ mod tests {
         order_rx.recv_timeout(Duration::from_secs(10)).unwrap();
         handle.join().unwrap();
         assert!(!dead_name.exists());
-        assert!(!queue.join(format!("{:020}-ordinary", 1)).exists());
+        assert!(!queue.join(ticket_name(1, Rank::ORDINARY)).exists());
     }
 }
