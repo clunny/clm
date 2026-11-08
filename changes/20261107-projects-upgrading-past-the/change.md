@@ -8,7 +8,7 @@ resolves: [projects-upgrading-past-the-check-lock-lift-aren-t-told-their-tests-m
 
 ## Intent
 
-Tell a project upgrading `clm` past the lifted pre-land check lock that its tests must now run side by side. `upgrade/migration-tests-overlap` adds an advised note migration, `20261107-projects-upgrading-past-the`, that `clm upgrade`, the session-start reminder and `/clm:upgrade` show to every project set up before it. Its note says that builds' pre-land checks no longer wait for each other, that the project's tests must pass while other runs overlap (`tests-run-concurrently`) with the ports and paths they must know in advance keyed on `CLM_SLOT`, how to look for fixed ports, paths and shared servers and file each as a bug, and what to do meanwhile: replace the constraint when the project keeps its runs apart another way, or run one build at a time. The note asks for no file edit, so its `done` reads the upgrade stamp (decision `stamp-taken-notes`), and `upgrade/upgrade-apply` is modified to print a note before the stamp it writes takes it. Resolves `backlog/projects-upgrading-past-the-check-lock-lift-aren-t-told-their-tests-must-overlap`.
+Tell a project upgrading `clm` past the lifted pre-land check lock that its tests must now run side by side. `upgrade/migration-tests-overlap` adds an advised note migration, `20261107-projects-upgrading-past-the`, that `clm upgrade`, the session-start reminder and `/clm:upgrade` show to every project set up before it. Its note says that builds' pre-land checks no longer wait for each other, that the project's tests must pass while other runs overlap (`tests-run-concurrently`) with the ports and paths they must know in advance keyed on `CLM_SLOT`, how to look for fixed ports, paths and shared servers and file each as a bug, and what to do meanwhile: replace the constraint when the project keeps its runs apart another way, or run one build at a time. The note asks for no file edit, so its `done` reads the upgrade stamp (decision `stamp-taken-notes`), and `upgrade/upgrade-apply` is modified to print a note before the stamp it writes takes it. `plugin/upgrade-skill-notes-without-edit` has `/clm:upgrade` show such a note, offer to do what it advises, and decline nothing; the glossary's *Migration* entry and decision `upgrade-migrations` say a note may ask for no edit. Resolves `backlog/projects-upgrading-past-the-check-lock-lift-aren-t-told-their-tests-must-overlap`.
 
 ## The human's answers
 
@@ -26,30 +26,32 @@ On backlog/projects-upgrading-past-the-check-lock-lift-aren-t-told-their-tests-m
 - **A note whose `done` is never true, taken by declining.** Rejected: "decline" would mean "read", and the reminder would name it in every project, `clm init`'s own included, which `migration-list`'s *a fresh project is done* forbids.
 - **A marker in `clm.toml` or the check script, written by `clm init` and by hand.** Rejected: a template change every older project must migrate, to record that someone read a note. `scripts/clm-check.sh` is in the corpus, which is why `20261107-parallel-builds-test-runs` dropped a comment there.
 - **An advised apply migration that changes nothing,** with `/clm:upgrade` reacting to it as it does to `migration-offer-verify`. Rejected: an apply migration has no note `clm upgrade --note` prints.
-- **Also have `/clm:upgrade` search the project and file the collisions as bugs, as `/clm:init` does (`plugin/init-skill-concurrent-tests`).** Rejected for now (`yagni`): the skill already shows each note to the human, and the note itself says how to search and to file each collision as a `bug` item, which a session running `/clm:upgrade` can follow. A skill rule waits for a project that upgraded and didn't.
+- **Have `/clm:upgrade` always search the project and file the collisions as bugs, as `/clm:init` does (`plugin/init-skill-concurrent-tests`).** Not taken as a rule of its own: the skill's step for notes would otherwise propose an edit and a decline this note doesn't have (architecture audit), so `plugin/upgrade-skill-notes-without-edit` covers a note asking for no edit generally, offering to do what the note advises, the search and the bug items here, on the human's yes.
 
 ## Outcome
 
-- `upgrade/migration-tests-overlap` (added): the note migration, with `file` `clm.toml`, no `old`/`new`, `done` reading the stamp, and the note's first line `Builds' checks now overlap: your tests must pass side by side`. It needs `land/check-lock`, so no release ships the note before the lift it describes.
+- `upgrade/migration-tests-overlap` (added): the note migration, with `file` `clm.toml`, no `old`/`new`, `done` reading the stamp, and the note's first line `Builds' checks now overlap: your tests must pass side by side`. It needs `land/check-lock`, `land/check-slot` and `orchestrator.run/prompt-slot`, so no release ships the note before the lift it describes and the `CLM_SLOT` it names. Its `done` is true too when `clm.toml` doesn't exist, as `migration-offer-verify`'s is, and `shipped_tests.rs`'s `project()` is stamped with `latest()`.
+- `plugin/upgrade-skill-notes-without-edit` (added): `/clm:upgrade` shows a note that edits no file, offers to do what it advises, and runs no `--decline` for it.
 - `upgrade/upgrade-apply` (modified): `note <id>` lines are judged after the rewrites and before the stamp is written.
 - `upgrade`'s Design says how a stamp-taken note works.
-- Decision `stamp-taken-notes`, refining `upgrade-migrations`.
+- Decision `stamp-taken-notes`; `upgrade-migrations` amended to point at it; the glossary's *Migration* entry covers a note that asks for no edit.
 
 ## Constraints
 
 - `upgrades-carry-migrations`: the change in what an existing project's tests must do ships its migration.
 - `shipped-migrations-frozen`: the note's text is frozen once a release ships it.
 - `tests-run-concurrently`, `carried-constraints`: the note points at the constraint and at replacing it, never copies its text into a project file.
-- `yagni`: no skill rule, setting or file marker.
+- `yagni`: no setting or file marker.
+- `method-in-the-plugin`: the skill and the glossary say how such a note is taken.
 
 ## Edge cases and workarounds
 
-- A project with no `upgraded`, or a `clm.toml` that doesn't parse, has the note pending until `--apply` stamps it, as an apply migration would be.
+- A project with a `clm.toml` that sets no `upgraded`, or doesn't parse, has the note pending until `--apply` stamps it, as an apply migration would be.
 - Existing notes' `done` read their files and are unchanged by `--apply`'s stamp, so printing their `note` lines before the stamp prints the same lines as before.
 - `--decline` after `--apply` has stamped the project fails, since the note is no longer pending; nothing is left to decline.
-- The tests whose fixtures stand for an up-to-date project stamp it with `latest()`, so the note is done in them; a fixture stamped with an older ID, or with none, lists it, and its build updates such a test's expected output.
+- Fixtures standing for an up-to-date project: `crates/clm/tests/hooks.rs`'s `clm_repo(None)` writes no `clm.toml`, so the note is done there; `shipped_tests.rs`'s `project()` writes one with no `upgraded`, which the requirement has stamped with `latest()`. The corpus test and the capability test *skipping releases* run `--apply`, whose stamp takes the note (builder check).
 - No workarounds are known.
 
 ## Open questions
 
-None yet.
+None. The builder check found every requirement this change adds relies only on `land/check-lock`, `land/check-slot` and `orchestrator.run/prompt-slot` (pending, now in `#### Needs`) and, for the skill rule, `upgrade/migration-tests-overlap`; no capability test observes a difference, since each runs `--apply` before expecting `up to date`.

@@ -36,6 +36,8 @@ The alternative was no stamp, deriving everything from the files on every comman
 
 **`init-next-steps`' upgrade steps go.** They covered projects set up before `20261025-forge-adapters`. That change landed before `v0.14.0`, the first published release, so no released project needs them. Keeping them would also leave a second upgrade mechanism beside migrations.
 
+**Amended 2026-11-07.** A note may also be advice that asks for no edit, such as telling a project its tests must now overlap; its `done` reads the stamp, so the upgrade that shows it marks it taken (`stamp-taken-notes`).
+
 **Not yet:**
 - *Rewriting `specs/`, `changes/` or test markers.* That needs a generated change, as `clm rename` makes, so `specs/` stays derived (`regenerate-dont-merge`). The first migration that needs it designs it (`yagni`).
 - *The gate replaying an upgrade branch,* as it replays a rename. It waits for the same need.
