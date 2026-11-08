@@ -35,9 +35,10 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?}: {out:?}");
 }
 
-/// A fresh repository at `dir` on `branch`.
+/// A fresh repository at `dir` on `branch`, under CLM (it holds `specs/SPEC.md`).
 fn checkout_on(dir: &Path, branch: &str) {
-    fs::create_dir_all(dir).unwrap();
+    fs::create_dir_all(dir.join("specs")).unwrap();
+    fs::write(dir.join("specs/SPEC.md"), "").unwrap();
     git(dir, &["init", "-q", "-b", branch]);
 }
 
@@ -465,7 +466,7 @@ fn a_cd_in_a_body_stays_in_its_shell() {
 
 #[test]
 fn cd_that_does_not_move_the_push() {
-    // req:plugin.hooks.guard.shell/guard-checkout@9d64e7bf
+    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
     // cd that doesn't move the push
     let dir = main_with_w();
     for command in [
@@ -547,7 +548,7 @@ fn here_strings_fed_to_a_shell() {
 
 #[test]
 fn guard_follows_cd_into_a_worktree() {
-    // req:plugin.hooks.guard.shell/guard-checkout@9d64e7bf
+    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
     // cd into a worktree
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -591,7 +592,7 @@ fn guard_follows_cd_into_a_worktree() {
 
 #[test]
 fn guard_follows_cd_into_main() {
-    // req:plugin.hooks.guard.shell/guard-checkout@9d64e7bf
+    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
     // cd into main
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
@@ -601,7 +602,7 @@ fn guard_follows_cd_into_main() {
 
 #[test]
 fn guard_resets_on_a_cd_it_cannot_follow() {
-    // req:plugin.hooks.guard.shell/guard-checkout@9d64e7bf
+    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
     // cd it can't follow
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -616,6 +617,23 @@ fn guard_resets_on_a_cd_it_cannot_follow() {
     ] {
         blocks_push(&bash_in_opt(command, Some(dir.path())));
     }
+}
+
+#[test]
+fn guard_keeps_a_cd_it_could_not_follow_until_an_absolute_one() {
+    // req:plugin.hooks.guard.shell/guard-checkout@b692c0b1
+    // an absolute cd after one it can't follow
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    checkout_on(&dir.path().join("m"), "main");
+    let absolute = dir.path().join("m");
+    let why = blocks_push(&bash_in_opt(
+        &format!("cd gone; cd {} && git push", absolute.display()),
+        Some(dir.path()),
+    ));
+    assert!(!why.contains("cd gone"), "{why}");
+    let why = blocks_push(&bash_in_opt("cd gone; cd m && git push", Some(dir.path())));
+    assert!(why.contains("cd gone"), "{why}");
 }
 
 #[test]
