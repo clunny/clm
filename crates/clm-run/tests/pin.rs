@@ -56,7 +56,7 @@ fn one_pin() {
 
 #[test]
 fn no_eval_in_the_crate() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     for file in files(&crate_dir.join("src")) {
         let text = fs::read_to_string(&file).unwrap();

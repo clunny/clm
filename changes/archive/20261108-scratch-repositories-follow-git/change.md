@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [scratch-repositories-follow-git-dir-to-the-clone]
 ---
 
