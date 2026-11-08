@@ -208,14 +208,20 @@ fn prompt_for(slugs: &[&str], claimed: &[&str]) -> String {
 
 #[test]
 fn scenario_draft_code_fix_written_rule() {
-    // req:orchestrator.triage/draft-code-fix-written-rule@f48e9442
+    // req:orchestrator.triage/draft-code-fix-written-rule@de203a9e
     // Said in the paragraph that already describes code-only bugs, not in a new one.
     let p = prompt_for(&["a"], &[]);
-    let para = paragraph(&p, "`code-fix-resolves-bug`");
+    let para = paragraph(&p, "`code-fix-needs-a-written-rule`");
+    assert!(para.contains("`code-fix-resolves-bug`"), "{para}");
     for needle in [
         "`code-fix-needs-a-written-rule`",
         "as written",
         "harness-only",
+        "test plumbing",
+        "own test suite",
+        "only an architecture entry states",
+        "no claim",
+        "citing no requirement",
         "`human-layer-proof`",
         "`Resolves: backlog/<slug>`",
         "`clm branch delete <branch>`",

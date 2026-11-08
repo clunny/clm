@@ -396,12 +396,19 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `clm hashes <component>`. A bug whose behaviour no requirement states changes `specs/`: it \
          goes into the change, as a requirement or scenario the change adds, stays in \
          `resolves`, and its code is fixed when the component is built \
-         (`code-fix-needs-a-written-rule`). A `bug` or `deferred` item whose work is \
-         harness-only, changing only the plumbing of the capability suite and nothing a \
-         capability test observes, is never a requirement of any component \
-         (`human-layer-proof`). When the Design that holds the harness stays true as written, \
+         (`code-fix-needs-a-written-rule`). An `ARCHITECTURE.md` entry, carried or the \
+         project's own, is not such a requirement, since a test never cites an entry \
+         (`human-layer-proof`): a bug whose behaviour only an architecture entry states is a \
+         bug no requirement states, unless its work is test plumbing. A `bug` or `deferred` \
+         item whose work is test plumbing only is never a requirement of any component: \
+         test plumbing is harness-only work, changing only the plumbing of the capability \
+         suite and nothing a capability test observes, or the plumbing of a component's \
+         own test suite (its runner settings, the ports and servers its tests start, the \
+         paths they write), changing nothing any of its tests asserts. When the Design that \
+         holds that plumbing, if any, stays true as written, \
          fix it in this draft on a branch of your own from `origin/main`, named outside \
-         `impl/`, `spec/`, `propose/` and `autosync/`: delete the item in a commit whose \
+         `impl/`, `spec/`, `propose/` and `autosync/`, with no claim and any test it adds \
+         citing no requirement: delete the item in a commit whose \
          trailer block holds `Resolves: backlog/<slug>`, land it with `clm land <branch>` \
          once `clm gate --base origin/main` prints `code`, delete the pushed branch with \
          `clm branch delete <branch>`, and take the item out of `resolves` \
