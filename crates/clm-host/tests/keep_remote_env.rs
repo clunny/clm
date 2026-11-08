@@ -45,22 +45,24 @@ fn a_clone_the_environment_names() {
     git(&w, &["add", "a.txt"]);
     git(&w, &["commit", "-q", "-m", "first"]);
 
+    // No gitfile in `w`: only the environment leads to `g`.
+    std::fs::remove_file(w.join(".git")).unwrap();
+
     // SAFETY: this binary holds one test, so nothing else reads the environment meanwhile.
     unsafe {
         std::env::set_var("GIT_DIR", &g);
         std::env::set_var("GIT_WORK_TREE", &w);
     }
     let got = keep_remote(&w, Host::None).unwrap();
-    unsafe {
-        std::env::remove_var("GIT_DIR");
-        std::env::remove_var("GIT_WORK_TREE");
-    }
-
     let bare = g.join("clm").join("remote.git");
     assert_eq!(got, Some(bare.clone()));
-    assert_eq!(git(&bare, &["rev-parse", "--is-bare-repository"]), "true");
     assert_eq!(
         git(&w, &["remote", "get-url", "origin"]),
         bare.to_str().unwrap()
     );
+    unsafe {
+        std::env::remove_var("GIT_DIR");
+        std::env::remove_var("GIT_WORK_TREE");
+    }
+    assert_eq!(git(&bare, &["rev-parse", "--is-bare-repository"]), "true");
 }
