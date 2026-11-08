@@ -220,6 +220,11 @@ fn scenario_draft_code_fix_written_rule() {
         "`Resolves: backlog/<slug>`",
         "`clm branch delete <branch>`",
         "`kind: deferred`",
+        "in this draft on a branch of your own from `origin/main`, named outside `impl/`, \
+         `spec/`, `propose/` and `autosync/`",
+        "once `clm gate --base origin/main` prints `code`",
+        "take the item out of `resolves`",
+        "keeps the item in `resolves`",
     ] {
         assert!(para.contains(needle), "{needle} missing from {para}");
     }
