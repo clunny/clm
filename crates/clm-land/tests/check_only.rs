@@ -184,6 +184,29 @@ fn a_file_made_by_the_check_is_an_uncommitted_change() {
 }
 
 #[test]
+fn an_edit_the_check_undoes_still_counted() {
+    // req:land/check-only@938e24c2
+    // The tree was dirty when the check started, so what it checked isn't `HEAD`'s.
+    let f = Fixture::new("");
+    let undoes = f.path("bin/undoes");
+    write_exec(&undoes, "#!/bin/sh\ngit checkout -q -- a.txt\n");
+    let toml = format!("[land]\ncheck = \"{}\"\n", undoes.display());
+    f.commit_files(&[("clm.toml", &toml)], "undoes");
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    std::fs::write(f.work().join("a.txt"), "edited\n").unwrap();
+    let lines = lines(&f);
+    assert_eq!(
+        lines,
+        [
+            "not recorded: the working tree has uncommitted changes",
+            "checks pass"
+        ]
+    );
+    assert!(f.checked().is_empty());
+}
+
+#[test]
 fn check_command_fails() {
     // req:land/check-only@938e24c2
     let f = Fixture::new("");
