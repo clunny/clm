@@ -1,6 +1,6 @@
 ---
 status: proposed
-from: [backlog/slow-land-checks-go-unnoticed]
+from: slow-land-checks-go-unnoticed
 ---
 
 ## Intent
