@@ -5430,6 +5430,24 @@ fn upgrade_skill() {
     assert_reports(&gaps, "upgrade", "clm upgrade --decline");
     let gaps = upgrade_skill_gaps(&body.replace("skip_migrations", "elided"));
     assert_reports(&gaps, "upgrade", "skip_migrations");
+    // `[verify]` settings are a change outside spec paths: they go on the
+    // first branch, never the notes branch, which the gate would refuse as
+    // `mixed` beside a note's spec edit.
+    let verify = body
+        .lines()
+        .find(|l| l.contains("applied 20261107-slow-tests-after-land"))
+        .expect("the [verify] step");
+    assert!(!verify.contains("notes branch"), "{verify}");
+    for needle in [
+        "outside spec paths",
+        "first branch",
+        "before committing the first branch",
+        "a code branch of its own",
+    ] {
+        assert!(verify.contains(needle), "{needle}: {verify}");
+    }
+    let split = sentence_with(&body, "split `clm.toml`'s edit");
+    assert!(split.contains("`upgraded`"), "{split}");
 }
 
 #[test]
