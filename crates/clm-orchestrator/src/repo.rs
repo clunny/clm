@@ -127,11 +127,11 @@ pub fn refusal(node: &str, state: Option<&State>) -> Option<String> {
     })
 }
 
-pub fn claim_node(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
+fn claim_node(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
     claim_component(root, node, expiry_hours, false)
 }
 
-/// [`claim_node`] for `clm run`, which records the local branch `impl/<node>` before it
+/// A component claim for `clm run`, which records the local branch `impl/<node>` before it
 /// pushes (`claim-local`).
 pub fn claim_local(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
     claim_component(root, node, expiry_hours, true)
