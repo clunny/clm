@@ -87,13 +87,13 @@ fn skipping_releases() {
         &serde_json::json!({ "permissions": { "allow": rules } }).to_string(),
     );
     let spec = fs::read_to_string(repo.root.join("specs/SPEC.md")).unwrap();
-    let spec = spec.replacen(
+    let edited = spec.replacen(
         "\"scripts/clm-check.sh\"]",
         "\"scripts/clm-check.sh\", \".claude/settings.json\"]",
         1,
     );
-    assert!(spec.contains(".claude/settings.json"), "{spec}");
-    repo.write("specs/SPEC.md", &spec);
+    assert_ne!(edited, spec, "the root's paths line has changed shape");
+    repo.write("specs/SPEC.md", &edited);
     repo.commit("take the allow rules by hand");
 
     let after = repo.clm(&["upgrade"]);

@@ -296,7 +296,8 @@ fn check_rule_is_offered(dir: &Path, rule: &str) -> Result<(), String> {
     allow.retain(|r| r != rule);
     fs::write(&path, json.to_string()).unwrap();
     let listing = clm(dir, &["upgrade"]);
-    if String::from_utf8_lossy(&listing.stdout) == "up to date\n" {
+    let listed = String::from_utf8_lossy(&listing.stdout);
+    if !listing.status.success() || listed == "up to date\n" || listed.is_empty() {
         return Err(format!(
             "{rule}: no migration offers it to an older project"
         ));

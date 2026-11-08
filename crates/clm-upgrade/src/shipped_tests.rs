@@ -301,4 +301,6 @@ fn the_rules_note_lists_the_rules_and_the_ways_out() {
         "{note}"
     );
     assert!(note.contains("`paths`"), "{note}");
+    assert!(note.contains("by hand"), "{note}");
+    assert!(note.contains("spec change"), "{note}");
 }
