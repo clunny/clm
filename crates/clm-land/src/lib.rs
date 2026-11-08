@@ -245,7 +245,7 @@ impl<'a> Repo<'a> {
         vars: &[(&str, &Path)],
         fails: &str,
         how: CheckHow,
-    ) -> Result<(), Error> {
+    ) -> Result<Timing, Error> {
         let CheckHow { log, slot, rank } = how;
         // The runner `verify` shares: one check at a time on the clone, whatever the target
         // (`land/check-lock`, `land/shared-check-runner`), except a `--check-only` run in a
@@ -283,11 +283,11 @@ impl<'a> Repo<'a> {
             if !run.passed {
                 return Err(Error::Refused(format!("`{check}` {fails}")));
             }
-            return Ok(());
+            return Ok(Timing::of(run));
         };
         if run.passed {
             let _ = std::fs::remove_file(log);
-            return Ok(());
+            return Ok(Timing::of(run));
         }
         let mut why = format!("last {} lines of `{check}`:\n", check_log::TAIL);
         for line in &run.tail {
@@ -372,6 +372,21 @@ impl<'a> Repo<'a> {
         entries: Vec<clm_ledger::Entry>,
     ) -> Result<Vec<clm_ledger::Appended>, Error> {
         Ok(clm_ledger::append_all(&self.root, entries, self.env)?)
+    }
+}
+
+/// The times a passing `[land] check` took, for the `landed` record (`land/step-times`).
+pub(crate) struct Timing {
+    pub(crate) seconds: u64,
+    pub(crate) steps: Vec<clm_ledger::TimedStep>,
+}
+
+impl Timing {
+    fn of(run: runner::CheckRun) -> Self {
+        Timing {
+            seconds: run.seconds,
+            steps: run.steps,
+        }
     }
 }
 

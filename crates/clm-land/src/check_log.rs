@@ -7,6 +7,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, ExitStatus};
+use std::time::Instant;
+
+use clm_ledger::TimedStep;
 
 use crate::Error;
 
@@ -31,6 +34,10 @@ pub(crate) struct Logged {
     pub(crate) logged: bool,
     /// The step open as the output ended, if any.
     pub(crate) step: Option<Step>,
+    /// The command's wall-clock seconds, from its spawn to its exit (`land/step-times`).
+    pub(crate) seconds: u64,
+    /// The steps the check marked, in order, with their seconds and selecting paths.
+    pub(crate) steps: Vec<TimedStep>,
 }
 
 /// Runs `command` with its stdout and stderr on one pipe, copying what arrives to stderr and
@@ -54,6 +61,7 @@ pub(crate) fn run(mut command: Command, log: Option<&Path>) -> Result<Logged, Er
     });
     let (mut reader, writer) = std::io::pipe()?;
     command.stdout(writer.try_clone()?).stderr(writer);
+    let started = Instant::now();
     let mut child = command.spawn()?;
     // The command holds the pipe's writing ends; the pipe closes only once they are gone.
     drop(command);
@@ -80,15 +88,19 @@ pub(crate) fn run(mut command: Command, log: Option<&Path>) -> Result<Logged, Er
             warn(log, e);
             file = None;
         }
-        scan.push(&buf[..n]);
+        scan.push(&buf[..n], Instant::now());
     }
+    let closed = Instant::now();
     let status = child.wait()?;
-    let (tail, step) = scan.finish();
+    let seconds = secs(started, Instant::now());
+    let (tail, step, steps) = scan.finish(closed);
     Ok(Logged {
         status,
         tail,
         logged: file.is_some(),
         step,
+        seconds,
+        steps,
     })
 }
 
@@ -103,29 +115,68 @@ struct Scan {
     /// Lines seen whole so far.
     count: usize,
     /// The step open now: its name and the line that started it.
-    open: Option<(String, usize)>,
+    open: Option<Open>,
+    /// The steps that have ended.
+    done: Vec<TimedStep>,
+}
+
+/// The step open now: its name, the line that started it, when that line was read and the
+/// paths its `::clm-selected::` lines named (`land/step-times`).
+struct Open {
+    name: String,
+    first: usize,
+    at: Instant,
+    selected_by: Vec<String>,
+}
+
+/// Whole seconds from `from` to `to`, rounded down.
+fn secs(from: Instant, to: Instant) -> u64 {
+    to.saturating_duration_since(from).as_secs()
 }
 
 impl Scan {
-    fn push(&mut self, bytes: &[u8]) {
+    /// Takes `bytes`, read at `at`: the lines they complete are read then.
+    fn push(&mut self, bytes: &[u8], at: Instant) {
         for &b in bytes {
             if b == b'\n' {
                 let line = std::mem::take(&mut self.partial);
-                self.line(line);
+                self.line(line, at);
             } else {
                 self.partial.push(b);
             }
         }
     }
 
-    fn line(&mut self, line: Vec<u8>) {
+    /// Ends the open step, if any, at `at`.
+    fn end(&mut self, at: Instant) {
+        if let Some(open) = self.open.take() {
+            self.done.push(TimedStep {
+                name: open.name,
+                seconds: secs(open.at, at),
+                selected_by: open.selected_by,
+            });
+        }
+    }
+
+    fn line(&mut self, line: Vec<u8>, at: Instant) {
         self.count += 1;
         let text = String::from_utf8_lossy(&line).into_owned();
         let marker = text.trim_end();
         if let Some(name) = marker.strip_prefix("::group::") {
-            self.open = Some((name.trim().to_string(), self.count));
+            self.end(at);
+            self.open = Some(Open {
+                name: name.trim().to_string(),
+                first: self.count,
+                at,
+                selected_by: Vec::new(),
+            });
         } else if marker == "::endgroup::" {
-            self.open = None;
+            self.end(at);
+        } else if let Some(path) = marker.strip_prefix("::clm-selected::")
+            && let Some(open) = &mut self.open
+            && !open.selected_by.iter().any(|p| p == path)
+        {
+            open.selected_by.push(path.to_string());
         }
         if self.lines.len() == TAIL {
             self.lines.pop_front();
@@ -133,15 +184,21 @@ impl Scan {
         self.lines.push_back(text);
     }
 
-    /// The tail and the open step, a final unterminated line counting as one.
-    fn finish(mut self) -> (Vec<String>, Option<Step>) {
+    /// The tail, the open step and every step with its time, a final unterminated line
+    /// counting as one; the pipe closed at `closed`, which ends the open step's time.
+    fn finish(mut self, closed: Instant) -> (Vec<String>, Option<Step>, Vec<TimedStep>) {
         if !self.partial.is_empty() {
             let line = std::mem::take(&mut self.partial);
-            self.line(line);
+            self.line(line, closed);
         }
         let last = self.count;
-        let step = self.open.map(|(name, first)| Step { name, first, last });
-        (self.lines.into(), step)
+        let step = self.open.as_ref().map(|o| Step {
+            name: o.name.clone(),
+            first: o.first,
+            last,
+        });
+        self.end(closed);
+        (self.lines.into(), step, self.done)
     }
 }
 
@@ -151,10 +208,58 @@ mod tests {
 
     fn scan(text: &str, chunk: usize) -> (Vec<String>, Option<Step>) {
         let mut scan = Scan::default();
+        let now = Instant::now();
         for chunk in text.as_bytes().chunks(chunk) {
-            scan.push(chunk);
+            scan.push(chunk, now);
         }
-        scan.finish()
+        let (tail, step, _) = scan.finish(now);
+        (tail, step)
+    }
+
+    #[test]
+    fn steps_take_their_seconds_between_their_lines() {
+        // req:land/step-times@d247dda8
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + std::time::Duration::from_millis(s);
+        let mut scan = Scan::default();
+        scan.push(
+            b"::clm-selected::stray
+::group::a
+",
+            at(0),
+        );
+        scan.push(
+            b"::clm-selected::p
+::clm-selected::q 
+",
+            at(500),
+        );
+        scan.push(
+            b"::clm-selected::p
+::endgroup::
+",
+            at(2900),
+        );
+        scan.push(
+            b"::group::b
+::group::a
+last",
+            at(3000),
+        );
+        let (_, open, steps) = scan.finish(at(5999));
+        let got: Vec<_> = steps
+            .iter()
+            .map(|s| (s.name.as_str(), s.seconds, s.selected_by.clone()))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("a", 2, vec!["p".to_string(), "q".to_string()]),
+                ("b", 0, vec![]),
+                ("a", 2, vec![]),
+            ]
+        );
+        assert_eq!(open.unwrap().name, "a");
     }
 
     #[test]
