@@ -118,6 +118,23 @@ fn the_fix_lands() {
 }
 
 #[test]
+fn deleting_the_item_without_its_trailer_is_not_the_fix() {
+    // req:land/verify-stop@493381b7
+    let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
+    std::fs::create_dir_all(work.join("crates/b/src")).unwrap();
+    std::fs::write(work.join("crates/b/src/lib.rs"), "b\n").unwrap();
+    f.git(&work, &["rm", "-q", "backlog/b-broke.md"]);
+    f.git(&work, &["add", "-A"]);
+    f.git(&work, &["commit", "-q", "-m", "Quietly drop the item"]);
+    f.git(&work, &["push", "-q", "origin", "impl/b"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let why = refused(clm_land::land(&work, Some("impl/b"), &f.env(&[])));
+    assert!(why.contains("land/verify-stop"), "{why}");
+}
+
+#[test]
 fn another_items_trailer_is_not_the_fix() {
     // req:land/verify-stop@493381b7
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
