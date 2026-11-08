@@ -163,10 +163,11 @@ fn collect(root: &Path, dir: &Path, into: &mut BTreeMap<String, Vec<u8>>) {
     }
 }
 
-/// `clm.toml` as parsed TOML, its `upgraded` key aside.
+/// `clm.toml` as parsed TOML, its `upgraded` and `declined_migrations` keys aside.
 fn settings(bytes: &[u8]) -> Option<toml::Table> {
     let mut table: toml::Table = std::str::from_utf8(bytes).ok()?.parse().ok()?;
     table.remove("upgraded");
+    table.remove("declined_migrations");
     Some(table)
 }
 
@@ -202,6 +203,11 @@ fn check_entry(entry: &Path, expected: &BTreeMap<String, Vec<u8>>) -> Result<(),
     if !apply.status.success() {
         return Err(format!("{name}: clm upgrade --apply failed: {apply:?}"));
     }
+    // The allow-rules migration is a hand edit, so the entry declines it.
+    let decline = clm(dir.path(), &["upgrade", "--decline", ALLOW_RULES_ID]);
+    if !decline.status.success() {
+        return Err(format!("{name}: clm upgrade --decline failed: {decline:?}"));
+    }
     let listing = clm(dir.path(), &["upgrade"]);
     if String::from_utf8_lossy(&listing.stdout) != "up to date\n" {
         return Err(format!("{name}: not up to date: {listing:?}"));
@@ -227,6 +233,9 @@ fn check_entry(entry: &Path, expected: &BTreeMap<String, Vec<u8>>) -> Result<(),
     Ok(())
 }
 
+/// The note migration that offers the allow rules `clm init` seeds on a first run.
+const ALLOW_RULES_ID: &str = "20261107-projects-set-up-before";
+
 fn entries() -> Vec<PathBuf> {
     let corpus = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-upgrade/corpus");
     let mut entries: Vec<PathBuf> = fs::read_dir(corpus)
@@ -238,7 +247,7 @@ fn entries() -> Vec<PathBuf> {
     entries
 }
 
-// req:clm/upgrade-corpus@d9ae7ae2
+// req:clm/upgrade-corpus@dfc50a6d
 #[test]
 fn every_corpus_entry_upgrades_to_what_init_writes() {
     let expected = init_files();
@@ -255,7 +264,7 @@ fn every_corpus_entry_upgrades_to_what_init_writes() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-// req:clm/upgrade-corpus@d9ae7ae2
+// req:clm/upgrade-corpus@dfc50a6d
 #[test]
 fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
     let mut expected = init_files();
@@ -271,4 +280,52 @@ fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
         err.contains(&entry.file_name().unwrap().to_string_lossy().to_string()),
         "{err}"
     );
+}
+
+/// Removes `rule` from the `.claude/settings.json` of the repository at `dir`, which `clm init`
+/// has just set up, and checks that `clm upgrade` then lists a pending migration, giving the rule
+/// as the error when none does.
+fn check_rule_is_offered(dir: &Path, rule: &str) -> Result<(), String> {
+    let path = dir.join(".claude/settings.json");
+    let mut json: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap())
+        .map_err(|e| format!("{rule}: settings.json isn't JSON ({e})"))?;
+    let allow = json
+        .pointer_mut("/permissions/allow")
+        .and_then(|a| a.as_array_mut())
+        .ok_or_else(|| format!("{rule}: settings.json holds no permissions.allow"))?;
+    allow.retain(|r| r != rule);
+    fs::write(&path, json.to_string()).unwrap();
+    let listing = clm(dir, &["upgrade"]);
+    if String::from_utf8_lossy(&listing.stdout) == "up to date\n" {
+        return Err(format!(
+            "{rule}: no migration offers it to an older project"
+        ));
+    }
+    Ok(())
+}
+
+// req:clm/upgrade-covers-allow-rules@bca597ec
+#[test]
+fn every_seeded_rule_is_offered_to_older_projects() {
+    let failures: Vec<String> = clm_init::UNATTENDED_RULES
+        .iter()
+        .filter_map(|rule| check_rule_is_offered(initialised().path(), rule).err())
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+// req:clm/upgrade-covers-allow-rules@bca597ec
+#[test]
+fn a_rule_no_migration_offers_fails_naming_it() {
+    let dir = initialised();
+    let path = dir.path().join(".claude/settings.json");
+    let mut json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+    json["permissions"]["allow"]
+        .as_array_mut()
+        .unwrap()
+        .push("Bash(clm example)".into());
+    fs::write(&path, json.to_string()).unwrap();
+    let err = check_rule_is_offered(dir.path(), "Bash(clm example)").unwrap_err();
+    assert!(err.contains("Bash(clm example)"), "{err}");
 }
