@@ -1,6 +1,6 @@
 ---
-status: applied
 priority: P1
+status: done
 resolves: [clm-upgrade-apply-writes-upgraded-between-a-table-s-comment-and]
 ---
 
