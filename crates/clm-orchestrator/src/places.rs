@@ -27,6 +27,9 @@ pub struct PlaceFile {
     pub kind: PlaceKind,
     /// When the place was taken, in Unix seconds.
     pub taken: u64,
+    /// The slot a build and its checks key their host resources on (`place-slots`), from 1
+    /// up; none for a file written before slots.
+    pub slot: Option<u64>,
     /// `impl/<node>` for a build; `spec/<id>` then each `propose/<slug>` for a draft.
     pub branches: Vec<String>,
 }
@@ -75,17 +78,22 @@ pub fn take_place(
     let dirs = Dirs::of(root)?;
     let _lock = dirs.lock()?;
     let mut held = 0;
-    let mut own = false;
+    let mut own = None;
+    let mut used = Vec::new();
     for place in read(&dirs, root, expiry_hours)? {
         if !place.counts {
             remove(&place.path)?;
-        } else if place.name == name {
-            own = true;
+            continue;
+        }
+        let slot = place.file.as_ref().ok().and_then(|f| f.slot);
+        if place.name == name {
+            own = Some(slot);
         } else {
             held += 1;
+            used.extend(slot);
         }
     }
-    let placed = if own {
+    let placed = if own.is_some() {
         Placed::Reused
     } else if (held as u64) < max_builds {
         Placed::New
@@ -95,10 +103,37 @@ pub fn take_place(
     let file = PlaceFile {
         kind,
         taken: now(),
+        // A reused place keeps its slot; otherwise the lowest no other place holds.
+        slot: Some(
+            own.flatten()
+                .unwrap_or_else(|| (1..).find(|n| !used.contains(n)).unwrap()),
+        ),
         branches: branches.to_vec(),
     };
     dirs.write(name, &format(&file))?;
     Ok(placed)
+}
+
+/// The slot of the place whose `branch` lines name `branch` (the first by name when
+/// several do), or 0 when none does or it holds no slot. Never fetches, takes no lock and
+/// doesn't judge whether the place counts.
+pub fn place_slot(root: &Path, branch: &str) -> Result<u64, Error> {
+    let dirs = Dirs::of(root)?;
+    let Ok(entries) = fs::read_dir(&dirs.builds) else {
+        return Ok(0);
+    };
+    let mut found: Vec<(String, Option<u64>)> = entries
+        .filter_map(|e| {
+            let e = e.ok()?;
+            let file = parse(&fs::read_to_string(e.path()).ok()?).ok()?;
+            file.branches
+                .iter()
+                .any(|b| b == branch)
+                .then(|| (e.file_name().to_string_lossy().into_owned(), file.slot))
+        })
+        .collect();
+    found.sort();
+    Ok(found.first().and_then(|(_, slot)| *slot).unwrap_or(0))
 }
 
 /// Renames place `from` to `to`, refusing when `to` exists or `from` doesn't.
@@ -382,6 +417,9 @@ fn format(f: &PlaceFile) -> String {
         PlaceKind::Draft => "draft",
     };
     let mut text = format!("kind {kind}\ntaken {}\n", rfc3339(f.taken));
+    if let Some(n) = f.slot {
+        text.push_str(&format!("slot {n}\n"));
+    }
     for b in &f.branches {
         text.push_str(&format!("branch {b}\n"));
     }
@@ -389,7 +427,7 @@ fn format(f: &PlaceFile) -> String {
 }
 
 fn parse(text: &str) -> Result<PlaceFile, String> {
-    let (mut kind, mut taken, mut branches) = (None, None, Vec::new());
+    let (mut kind, mut taken, mut slot, mut branches) = (None, None, None, Vec::new());
     for line in text.lines().map(str::trim_end).filter(|l| !l.is_empty()) {
         let (key, value) = line
             .split_once(' ')
@@ -403,6 +441,13 @@ fn parse(text: &str) -> Result<PlaceFile, String> {
                 })
             }
             "taken" => taken = Some(unix_time(value).ok_or_else(|| format!("bad time `{value}`"))?),
+            "slot" => {
+                slot = Some(
+                    value
+                        .parse::<u64>()
+                        .map_err(|_| format!("bad slot `{value}`"))?,
+                )
+            }
             "branch" => branches.push(value.to_string()),
             _ => return Err(format!("unknown key `{key}`")),
         }
@@ -410,6 +455,7 @@ fn parse(text: &str) -> Result<PlaceFile, String> {
     Ok(PlaceFile {
         kind: kind.ok_or("no `kind` line")?,
         taken: taken.ok_or("no `taken` line")?,
+        slot,
         branches,
     })
 }
@@ -521,11 +567,12 @@ mod tests {
         let f = PlaceFile {
             kind: PlaceKind::Draft,
             taken: 1_793_059_200,
+            slot: Some(2),
             branches: vec!["spec/x".into(), "propose/q".into()],
         };
         assert_eq!(
             format(&f),
-            "kind draft\ntaken 2026-10-27T00:00:00Z\nbranch spec/x\nbranch propose/q\n"
+            "kind draft\ntaken 2026-10-27T00:00:00Z\nslot 2\nbranch spec/x\nbranch propose/q\n"
         );
         assert_eq!(parse(&format(&f)), Ok(f.clone()));
         assert_eq!(parse(&format(&f).replace('\n', "\r\n")), Ok(f));

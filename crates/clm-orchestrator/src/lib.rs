@@ -18,7 +18,7 @@ mod taken;
 #[cfg(feature = "git")]
 pub use places::{
     Place, PlaceFile, PlaceKind, Placed, SweepOutcome, Swept, free_place, free_stale_places,
-    places, rename_place, take_place,
+    place_slot, places, rename_place, take_place,
 };
 #[cfg(feature = "git")]
 pub use propose::{Proposals, proposals, taken_items};
