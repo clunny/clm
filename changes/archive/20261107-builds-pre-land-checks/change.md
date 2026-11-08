@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P1
 resolves: [builds-pre-land-checks-queue-behind-lands-and-run-again-at-land]
 ---
