@@ -19,7 +19,7 @@ A proposing session claims a backlog item before designing its fix (`propose-cla
 
 An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change on any `impl/*` branch (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the `build` skill to archive.
 
-`queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
+`queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. `land_priority(root, branch, base, head)` gives `land` the priority a land of `branch` carries, which orders the clone's land queue (`land-priority`, `land/lock-queue`). With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
 
 ## Design
 The queue holds every component of the graph. For each component:
@@ -766,3 +766,31 @@ Each place SHALL hold a slot. When `take_place` takes a new place it SHALL write
 #### Serves
 - architecture/tests-run-concurrently
 - capability/work-concurrently
+
+### Requirement: land-priority
+`clm-orchestrator` SHALL offer, with its `git` feature, the library call `land_priority(root, branch, base, head)`, the priority a land of `branch`, whose head is the commit `head`, carries onto the base commit `base`: the highest of the effective priority (`priority-orders-components`) of the component `<component>` when `branch` is `impl/<component>`, as the queue of the graph and markers at `base` gives it, whatever the component's claim; the `priority` of each change whose `changes/<id>/change.md` `head` holds and `base` doesn't, as that file in `head` gives it; and the `priority` of each backlog item `backlog/<slug>.md` that `base` holds and `head` doesn't, as that file in `base` gives it. A change `base` already holds, edited by `head`, gives nothing: its work already counts through the effective priority of the components it touches. A `<component>` the graph at `base` doesn't hold gives nothing. It SHALL be `P5` when none of these gives a priority. It SHALL read only git objects, never a working tree, and fail with the reason when the specs at `base` don't load.
+
+#### Scenario: a build's land
+- GIVEN component `a` pending on `base` with a requirement from a live change with `priority: P2`, and `impl/a`'s head adding tests and no change
+- WHEN `land_priority` runs for `impl/a`
+- THEN it returns `P2`
+
+#### Scenario: a spec branch
+- GIVEN a head that adds `changes/x/change.md` with `priority: P1` onto a base that lacks it
+- WHEN `land_priority` runs for `spec/x`
+- THEN it returns `P1`
+
+#### Scenario: a fix that resolves an item
+- GIVEN a base holding `backlog/b.md` with `priority: P3`, and a head of `impl/a` that deletes it, where `a` has nothing pending on the base
+- WHEN `land_priority` runs for `impl/a`
+- THEN it returns `P3`
+
+#### Scenario: nothing to give priority
+- GIVEN a head of `fix-typo` that only edits `docs/guide/index.md`
+- WHEN `land_priority` runs
+- THEN it returns `P5`
+
+#### Scenario: specs that don't load
+- GIVEN a base whose `specs/SPEC.md` doesn't parse
+- WHEN `land_priority` runs
+- THEN it fails naming the reason
