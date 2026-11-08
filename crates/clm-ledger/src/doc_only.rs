@@ -16,18 +16,9 @@ const DOC_ONLY: [&str; 8] = [
     "CLAUDE.md",
 ];
 
-/// Under `docs/`, but code: `clm guide` compiles the guide and the spec format in, and
-/// `clm-init`'s tests read the list of pages (`spec-format-in-the-guide`).
-const CODE_UNDER_DOCS: [&str; 2] = ["docs/guide/", "docs/spec-format.md"];
-
 /// Whether `path`, relative to the repository root, is doc-only: `code_key` leaves it out.
 pub fn doc_only(path: &str) -> bool {
-    !listed(&CODE_UNDER_DOCS, path) && listed(&DOC_ONLY, path)
-}
-
-/// Whether an entry of `list` names `path`.
-fn listed(list: &[&str], path: &str) -> bool {
-    list.iter().any(|entry| match entry.strip_suffix('/') {
+    DOC_ONLY.iter().any(|entry| match entry.strip_suffix('/') {
         Some(_) => path.starts_with(entry),
         None => path == *entry,
     })
