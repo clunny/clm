@@ -1,4 +1,5 @@
-//! `clm intake`: the host's open issues, pull requests and dependency alerts matched to the
+//! `clm intake`: the host's open issues, pull requests and dependency alerts, and the red
+//! `verified` results on `main` (`verify-after-land`), matched to the
 //! backlog (`issues-enter-through-the-backlog`, `dependency-alerts-through-intake`). Every
 //! line carries numbers, slugs, change IDs, commits, logins and an alert's one-word fields
 //! only, never a title or body (`untrusted-text-read-only-verifier`).
@@ -47,14 +48,15 @@ impl Matches {
         };
         let by = match changes.get(slug) {
             Some(id) => id.clone(),
-            None => git(root, &["rev-parse", "--short", commit])?,
+            None => short(root, commit)?,
         };
         Ok(Some(format!("resolved {slug} {by}")))
     }
 }
 
 /// `clm intake`: one line per open issue or pull request of `host`, sorted by number, then
-/// one per open dependency alert, sorted by number, or `alerts unavailable` in their place.
+/// one per open dependency alert, sorted by number, or `alerts unavailable` in their place,
+/// then one per red `verified` result on `main` no green one has followed.
 pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
     fetch(root)?;
     let mut open = host.list(root).map_err(|e| match e {
@@ -68,7 +70,8 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
         a.sort_by_key(|a| a.number);
         a
     });
-    if open.is_empty() && alerts.as_ref().is_some_and(Vec::is_empty) {
+    let reds = unresolved_reds(root)?;
+    if open.is_empty() && alerts.as_ref().is_some_and(Vec::is_empty) && reds.is_empty() {
         return Ok(Vec::new());
     }
     let graph = main_graph(root)?;
@@ -115,7 +118,76 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
             }
         }
     }
+    for red in &reds {
+        let slugs: BTreeSet<&str> = graph
+            .backlog
+            .values()
+            .filter(|i| i.frontmatter.verify_failures.contains(&red.commit))
+            .map(|i| i.slug.as_str())
+            .collect();
+        let tail = if slugs.is_empty() {
+            let culprit = match &red.culprit {
+                Some(c) => short(root, c)?,
+                None => "unknown".to_string(),
+            };
+            let components: BTreeSet<&str> = red.components.iter().map(String::as_str).collect();
+            let mut words = vec!["new", culprit.as_str()];
+            words.extend(components);
+            words.join(" ")
+        } else {
+            format!("imported {}", Vec::from_iter(slugs).join(" "))
+        };
+        lines.push(format!("verify {} {tail}", short(root, &red.commit)?));
+    }
     Ok(lines)
+}
+
+/// A red `verified` result that no green one on `main` has followed.
+struct Red {
+    commit: String,
+    culprit: Option<String>,
+    components: Vec<String>,
+}
+
+/// The fold's red results over `origin/main`'s first-parent chain, in chain order
+/// (`ledger/verified-record`).
+fn unresolved_reds(root: &Path) -> Result<Vec<Red>, Error> {
+    let fold = clm_ledger::fold(root).map_err(|e| Error::Git(e.to_string()))?;
+    if fold.verifications.is_empty() {
+        return Ok(Vec::new());
+    }
+    let chain = git(
+        root,
+        &[
+            "rev-list",
+            "--first-parent",
+            "--reverse",
+            &format!("{REMOTE}/main"),
+        ],
+    )?;
+    let chain: Vec<String> = chain.lines().map(str::to_string).collect();
+    Ok(fold
+        .unresolved_reds(&chain)
+        .into_iter()
+        .filter_map(|r| match r.body {
+            clm_ledger::Body::Verified {
+                commit,
+                culprit,
+                components,
+                ..
+            } => Some(Red {
+                commit,
+                culprit,
+                components,
+            }),
+            _ => None,
+        })
+        .collect())
+}
+
+/// `commit` abbreviated as `git rev-parse --short` abbreviates it.
+fn short(root: &Path, commit: &str) -> Result<String, Error> {
+    Ok(git(root, &["rev-parse", "--short", commit])?)
 }
 
 /// The items that took in each of `numbers` (by `taken`), and for the numbers no item takes

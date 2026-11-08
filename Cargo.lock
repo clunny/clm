@@ -619,6 +619,7 @@ dependencies = [
  "clm-check",
  "clm-git",
  "clm-host",
+ "clm-ledger",
  "clm-model",
  "clm-orchestrator",
  "serde_yaml",
