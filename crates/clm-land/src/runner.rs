@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use crate::Error;
 use crate::check_log;
 pub use crate::check_log::Step;
-use crate::lock::Lane;
+use crate::lock::Rank;
 
 /// The environment a check runs in, beyond the caller's own: what to set and what to remove.
 /// `CLM_SELECTION` is never inherited: it is set from the selection given, else removed.
@@ -52,7 +52,7 @@ pub fn run_check(
         selection,
         env,
         log,
-        Some(Lane::Ordinary),
+        Some(Rank::ORDINARY),
         |l| eprintln!("{l}"),
     )
 }
@@ -69,7 +69,7 @@ pub(crate) fn places_of(root: &Path) -> Result<PathBuf, Error> {
 }
 
 /// `run_check` with the clone's `places` known and the waiting line passed to `say`, taking
-/// the check lock, with a ticket of `lane`, unless it is `None`: a `--check-only` run in a
+/// the check lock, with a ticket of `rank`, unless it is `None`: a `--check-only` run in a
 /// build place takes none (`land/check-lock`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_in(
@@ -79,13 +79,13 @@ pub(crate) fn run_in(
     selection: Option<&Path>,
     env: &CheckEnv,
     log: Option<&Path>,
-    lane: Option<Lane>,
+    rank: Option<Rank>,
     say: impl FnMut(&str),
 ) -> Result<CheckRun, Error> {
     // One check at a time on the clone, whatever the target, held until the command ends
     // (`land/check-lock`).
-    let _lock = lane
-        .map(|lane| crate::lock::check(places, lane, say))
+    let _lock = rank
+        .map(|rank| crate::lock::check(places, rank, say))
         .transpose()?;
     let logged = check_log::run(shell(command, dir, selection, env), log)?;
     Ok(CheckRun {
@@ -172,7 +172,7 @@ mod tests {
             None,
             &CheckEnv::default(),
             Some(&log),
-            Some(Lane::Ordinary),
+            Some(Rank::ORDINARY),
             |l| said.push(l.to_string()),
         )
         .unwrap();
