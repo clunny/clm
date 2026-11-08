@@ -88,7 +88,20 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         if let Some(why) = clm_approval::held(&fold, &branch, &fingerprint) {
             return Err(Error::Refused(why));
         }
-        let merged = match unconflicted_tree(&repo, &base, &head)? {
+        // A head behind in `specs/` lands on the merge git writes without regard to its
+        // `specs/` conflicts, its `specs/` regenerated (`land/regenerates-behind-specs`).
+        let direct = unconflicted_tree(&repo, &base, &head)?;
+        let merge_base = repo.git(&["merge-base", &base, &head])?;
+        let behind = specs_changed_on_both(&repo, &merge_base, &base, &head)?
+            && crate::derived::adds_or_applies(&repo, &merge_base, &head)?;
+        let tree = match direct {
+            Some(tree) => Some(tree),
+            None if behind => specs_agreed_tree(&repo, &base, &head)?,
+            None => None,
+        };
+        // A conflict outside `specs/` is refused as any conflict is.
+        let behind = behind && tree.is_some();
+        let merged = match tree {
             Some(tree) => {
                 let key = clm_ledger::code_key(&repo.root, &tree)?;
                 Some((tree, key))
@@ -104,6 +117,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fingerprint,
             fold,
             merged,
+            behind,
         })
     };
     // The check runs when the merge is clean and its code key wasn't checked; a conflicting
@@ -142,6 +156,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fingerprint,
             fold,
             merged,
+            behind,
         } = p;
         // Under the lock, the clone's land tree, so cargo sees one workspace path land after
         // land; else a temporary worktree, since another land may hold the land tree.
@@ -170,17 +185,31 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         let approved = approvals.accepted;
         let hint = approval_hint(&approvals, &branch, &policy);
 
-        // 3. The gate on the head.
-        let verdict = repo.gate(exe, dir.path(), approved, &hint)?;
+        // 3. The gate on the head; a head behind in `specs/` is gated on its merge commit,
+        // which contains the base, once that is made.
+        let head_verdict = if behind {
+            None
+        } else {
+            Some(repo.gate(exe, dir.path(), approved, &hint)?)
+        };
 
         // 4. The merged tree.
-        let (tree, key) = merged_tree(&repo, &base, &head, merged)?;
+        let (tree, key) = merged_tree(&repo, &base, &head, merged, behind)?;
         // Read whatever the head gates as, since the merge's gate can make it a spec land.
         let changes = repo.approval.changes(&head)?;
+        // A head behind in `specs/` has its own `specs/` proved derived and the merged one
+        // regenerated onto the base (`land/regenerates-behind-specs`).
+        let tree = if behind {
+            crate::derived::behind_tree(&repo, &base, &head, &tree, dir)?
+        } else {
+            tree
+        };
 
-        // 5. The merge commit, checked out.
+        // 5. The merge commit, checked out. A head behind in `specs/` adds or applies a
+        // change, so it lands as a spec land.
         let mut message = format!("Merge {branch} into main");
-        if let (Verdict::Spec { .. }, Some(id)) = (verdict, changes.first()) {
+        let spec_land = head_verdict.is_none_or(|v| matches!(v, Verdict::Spec { .. }));
+        if let (true, Some(id)) = (spec_land, changes.first()) {
             message.push_str(&format!("\n\nChange: {id}"));
         }
         let merge = repo.git(&[
@@ -194,8 +223,14 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             &message,
         ])?;
         dir.checkout(&merge)?;
-        // Before any check: on a head that adds a change, `specs/` must be derived.
-        crate::derived::check(&repo, &base, &head, dir.path())?;
+        // Before any check: on a head that adds a change, `specs/` must be derived. A head
+        // behind in `specs/` was regenerated, so it holds by construction, and its gate runs
+        // here, on the merge commit.
+        if head_verdict.is_some() {
+            crate::derived::check(&repo, &base, &head, dir.path())?;
+        } else {
+            repo.gate(exe, dir.path(), approved, &hint)?;
+        }
 
         // 6. The checks, unless the code was checked, and the gate again. The merge commit's
         // code key is its tree's.
@@ -406,6 +441,74 @@ fn unconflicted_tree(repo: &Repo, base: &str, head: &str) -> Result<Option<Strin
     }
 }
 
+/// For a `head` whose merge conflicts: the tree `git merge-tree` writes for the merge of
+/// `base` with a commit like `head` but for `specs/`, which it takes from `base`, so that
+/// only a conflict outside `specs/` remains; none when there is one
+/// (`land/regenerates-behind-specs`). Its `specs/` is `base`'s, to be regenerated.
+fn specs_agreed_tree(repo: &Repo, base: &str, head: &str) -> Result<Option<String>, Error> {
+    let dir = tempfile::Builder::new()
+        .prefix("land-index-")
+        .tempdir_in(crate::temp_parent(repo.env)?)?;
+    let index = dir.path().join("index");
+    let env = [("GIT_INDEX_FILE", index.as_os_str())];
+    let git = |args: &[&str]| -> Result<String, Error> {
+        let out = clm_git::run(
+            &repo.root,
+            "git",
+            args,
+            clm_git::Options {
+                stdin: None,
+                env: &env,
+            },
+        )?;
+        Ok(String::from_utf8_lossy(&out).trim().to_string())
+    };
+    // Paths of the CLM root's `specs/` from the top of the repository.
+    let prefix = repo.git(&["rev-parse", "--show-prefix"])?;
+    let specs = format!("{prefix}specs");
+    git(&["read-tree", head])?;
+    git(&[
+        "rm",
+        "-r",
+        "-f",
+        "--cached",
+        "--quiet",
+        "--ignore-unmatch",
+        "--",
+        &format!(":(top){specs}"),
+    ])?;
+    let at_base = format!("{base}:{specs}");
+    if repo.git(&["cat-file", "-e", &at_base]).is_ok() {
+        git(&["read-tree", &format!("--prefix={specs}/"), &at_base])?;
+    }
+    let tree = git(&["write-tree"])?;
+    let agreed = repo.git(&[
+        "commit-tree",
+        &tree,
+        "-p",
+        head,
+        "-m",
+        "head with the base's specs",
+    ])?;
+    unconflicted_tree(repo, base, &agreed)
+}
+
+/// Whether a file of `specs/` changed both between the merge base and `base` and between it
+/// and `head`.
+fn specs_changed_on_both(
+    repo: &Repo,
+    merge_base: &str,
+    base: &str,
+    head: &str,
+) -> Result<bool, Error> {
+    let specs = |tip: &str| -> Result<Vec<String>, Error> {
+        let names = repo.git(&["diff", "--name-only", merge_base, tip, "--", "specs/"])?;
+        Ok(names.lines().map(str::to_string).collect())
+    };
+    let ours = specs(base)?;
+    Ok(specs(head)?.iter().any(|p| ours.contains(p)))
+}
+
 /// What step 1 gathers for an attempt.
 struct Prepared {
     head: String,
@@ -420,15 +523,19 @@ struct Prepared {
     fold: clm_ledger::Fold,
     /// The tree of `head` merged into `base` and its code key, or none when they conflict.
     merged: Option<(String, String)>,
+    /// Whether `head` is behind in `specs/`: it adds or applies a change and `specs/` changed
+    /// on both sides, with no conflict outside it (`land/regenerates-behind-specs`).
+    behind: bool,
 }
 
 /// The merged tree and its code key, refused when the merge conflicts or both sides changed
-/// `specs/`.
+/// `specs/` (unless the head is `behind` in it, whose `specs/` is regenerated).
 fn merged_tree(
     repo: &Repo,
     base: &str,
     head: &str,
     merged: Option<(String, String)>,
+    behind: bool,
 ) -> Result<(String, String), Error> {
     let rebase = |what: &str| {
         Error::Refused(format!(
@@ -437,12 +544,7 @@ fn merged_tree(
     };
     let merged = merged.ok_or_else(|| rebase("the branch conflicts with main"))?;
     let merge_base = repo.git(&["merge-base", base, head])?;
-    let specs = |tip: &str| -> Result<Vec<String>, Error> {
-        let names = repo.git(&["diff", "--name-only", &merge_base, tip, "--", "specs/"])?;
-        Ok(names.lines().map(str::to_string).collect())
-    };
-    let ours = specs(base)?;
-    if specs(head)?.iter().any(|p| ours.contains(p)) {
+    if !behind && specs_changed_on_both(repo, &merge_base, base, head)? {
         return Err(rebase("`specs/` changed on both the branch and main"));
     }
     Ok(merged)
