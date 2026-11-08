@@ -128,11 +128,11 @@ exit 0
 
 #[test]
 fn no_host_no_ledger_warning() {
-    // Without a remote every record stays local, and that is no cause for a warning.
+    // The clone's own remote takes every record, so there is no warning.
     let f = Fixture::local();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    assert!(out.lines[0].ends_with("(local)"), "{:?}", out.lines);
+    assert!(!out.lines[0].contains("(local)"), "{:?}", out.lines);
     assert!(
         !out.warnings.iter().any(|w| w.contains("isn't on origin")),
         "{:?}",

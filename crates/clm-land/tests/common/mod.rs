@@ -110,8 +110,6 @@ if [ -e "$lock" ] && ! flock -n "$lock" true; then echo held; else echo free; fi
 
 pub struct Fixture {
     dir: TempDir,
-    /// Whether `work` has an `origin`.
-    pub remote: bool,
     /// Whether the CLM repository is `proj/` in the git repository `work`.
     nested: bool,
 }
@@ -120,23 +118,23 @@ impl Fixture {
     /// A clone `work` (git user `Christopher Lunny`) of a bare `origin`, on `main`, whose
     /// `clm.toml` holds `settings` and `[land] check` naming the fake check.
     pub fn new(settings: &str) -> Self {
-        Self::make(settings, true, false)
+        Self::make(settings, false, false)
     }
 
     /// As `new`, with the CLM repository in `work/proj/`.
     pub fn nested() -> Self {
-        Self::make("", true, true)
+        Self::make("", false, true)
     }
 
-    /// A repository `work` with no `origin` and `host = "none"`.
+    /// A repository `work` with `host = "none"` whose `origin` is the bare repository
+    /// `keep_remote` made, reached as `origin.git` like the others.
     pub fn local() -> Self {
-        Self::make("host = \"none\"\n", false, false)
+        Self::make("host = \"none\"\n", true, false)
     }
 
-    fn make(settings: &str, remote: bool, nested: bool) -> Self {
+    fn make(settings: &str, kept: bool, nested: bool) -> Self {
         let f = Fixture {
             dir: TempDir::new().unwrap(),
-            remote,
             nested,
         };
         let d = f.dir.path();
@@ -168,18 +166,24 @@ impl Fixture {
             (".gitignore", "clm.local.toml\n.clm/\n.claude/worktrees/\n"),
         ];
         f.commit_files(&files, "init");
-        if remote {
-            let bare = f.path("origin.git");
+        let bare = f.path("origin.git");
+        if kept {
+            let made = clm_host::keep_remote(&work, clm_config::Host::None)
+                .unwrap()
+                .expect("a clone with no origin gets one");
+            std::os::unix::fs::symlink(made, &bare).unwrap();
+            f.git(&bare, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+        } else {
             f.git(
                 d,
                 &["init", "-q", "--bare", "-b", "main", bare.to_str().unwrap()],
             );
             f.git(&work, &["remote", "add", "origin", bare.to_str().unwrap()]);
-            f.git(&work, &["push", "-q", "origin", "main"]);
-            f.git(&work, &["fetch", "-q", "origin"]);
-            f.git(d, &["clone", "-q", bare.to_str().unwrap(), "other"]);
-            f.user(&f.path("other"), "Other");
         }
+        f.git(&work, &["push", "-q", "origin", "main"]);
+        f.git(&work, &["fetch", "-q", "origin"]);
+        f.git(d, &["clone", "-q", bare.to_str().unwrap(), "other"]);
+        f.user(&f.path("other"), "Other");
         f
     }
 
@@ -188,9 +192,7 @@ impl Fixture {
         let path = self.work().join("clm.toml");
         let text = fs::read_to_string(&path).unwrap();
         self.commit_files(&[("clm.toml", &format!("{text}{line}\n"))], "land setting");
-        if self.remote {
-            self.git(&self.work(), &["push", "-q", "origin", "main"]);
-        }
+        self.git(&self.work(), &["push", "-q", "origin", "main"]);
     }
 
     /// The `TMPDIR` `env` gives, where `clm land` makes its temporary worktrees.
@@ -259,9 +261,7 @@ impl Fixture {
         let work = self.work();
         self.git(&work, &["checkout", "-q", "-b", name, "main"]);
         let head = self.commit_files(files, name);
-        if self.remote {
-            self.git(&work, &["push", "-q", "origin", name]);
-        }
+        self.git(&work, &["push", "-q", "origin", name]);
         self.git(&work, &["checkout", "-q", "main"]);
         head
     }
@@ -367,7 +367,7 @@ impl Fixture {
     pub fn fingerprint(&self, branch: &str) -> String {
         let work = self.work();
         self.git(&work, &["checkout", "-q", branch]);
-        let base = if self.remote { "origin/main" } else { "main" };
+        let base = "origin/main";
         let fp = clm_gate::fingerprint(&work, base).unwrap();
         self.git(&work, &["checkout", "-q", "main"]);
         fp
@@ -411,9 +411,7 @@ impl Fixture {
 
     /// Every record the work clone sees, after fetching.
     pub fn records(&self) -> Vec<Record> {
-        if self.remote {
-            self.git(&self.work(), &["fetch", "-q", "origin"]);
-        }
+        self.git(&self.work(), &["fetch", "-q", "origin"]);
         clm_ledger::fold(&self.work()).unwrap().records
     }
 

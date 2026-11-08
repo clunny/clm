@@ -1,4 +1,4 @@
-//! `clm reconnect` (`land/offline-land`): a repository that landed with no remote gains one.
+//! `clm reconnect` (`land/offline-land`): a repository whose `origin` is newly set gets its `main` and ledgers pushed.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -18,7 +18,8 @@ pub fn reconnect(root: &Path, env: &Env) -> Result<Output, Error> {
             "no `origin`: add the remote, then reconnect".into(),
         ));
     }
-    if clm_git::fetch(&repo.root).is_err() {
+    // Pruned, so a remote-tracking ref the old remote left stands for no branch of the new one.
+    if repo.git(&["fetch", "--quiet", "--prune", REMOTE]).is_err() {
         return Err(Error::Refused(crate::OFFLINE.into()));
     }
     let main = repo

@@ -341,14 +341,10 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         };
 
         // 7. The push.
-        if repo.remote {
-            if push_main(&repo, &merge, &base, &branch)? == Pushed::Moved {
-                out.warnings
-                    .push(format!("main moved during attempt {attempt}; trying again"));
-                continue;
-            }
-        } else {
-            advance_local_main(&repo, &merge, &base)?;
+        if push_main(&repo, &merge, &base, &branch)? == Pushed::Moved {
+            out.warnings
+                .push(format!("main moved during attempt {attempt}; trying again"));
+            continue;
         }
         // The lock covered the gate on the merge commit, `clm check` and the push, so no other
         // land checked its commit out before this one was on `main`. The cap on the shared
@@ -372,7 +368,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
 
         // The push to `main` went through, so the land stands; the push named, or this
         // clone's next append, sends the record.
-        if repo.remote && !appended.pushed {
+        if !appended.pushed {
             out.warnings.push(format!(
                 "the landed record isn't on origin yet: git push origin clm/ledger/{}",
                 appended.record.writer
@@ -381,13 +377,12 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         cleanup(&repo, &branch, &head, on_origin, &mut out.warnings);
 
         // 9. What landed.
-        let local = if repo.remote { "" } else { " (local)" };
         out.lines.push(match verdict {
-            Verdict::Code => format!("landed {merge} code{local}"),
-            Verdict::Spec { review: false } => format!("landed {merge} spec{local}"),
-            Verdict::Spec { review: true } => format!("landed {merge} spec review{local}"),
+            Verdict::Code => format!("landed {merge} code"),
+            Verdict::Spec { review: false } => format!("landed {merge} spec"),
+            Verdict::Spec { review: true } => format!("landed {merge} spec review"),
         });
-        if repo.remote && branch.starts_with("impl/") {
+        if branch.starts_with("impl/") {
             free_build_target(&repo, &branch, &mut out);
         }
         return Ok(out);
@@ -640,33 +635,10 @@ fn push_main(repo: &Repo, merge: &str, base: &str, branch: &str) -> Result<Pushe
     }
 }
 
-/// Moves the local `main` from `base` to `merge`: a fast-forward in the worktree that has it
-/// checked out, else the ref alone.
-fn advance_local_main(repo: &Repo, merge: &str, base: &str) -> Result<(), Error> {
-    if repo.rev("refs/heads/main")?.as_deref() != Some(base) {
-        return Err(Error::Refused(
-            "the local `main` moved during the land: land again".into(),
-        ));
-    }
-    let worktrees = clm_git::worktrees(&repo.root)?;
-    match worktrees
-        .iter()
-        .find(|w| w.branch.as_deref() == Some("main"))
-    {
-        Some(w) => clm_git::git(&w.path, &["merge", "--quiet", "--ff-only", merge]).map(drop)?,
-        None => repo
-            .git(&["update-ref", "refs/heads/main", merge, base])
-            .map(drop)?,
-    }
-    Ok(())
-}
-
 /// Deletes a landed claim branch from `origin`, leased on `head`, and the local branch when
 /// it is checked out nowhere and holds nothing the land didn't; a failure warns.
 fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mut Vec<String>) {
-    // Without a remote the local branch is the only copy, which `clm reconnect` may yet ask
-    // to land again, so it stays.
-    if !is_claim(branch) || !repo.remote {
+    if !is_claim(branch) {
         return;
     }
     if on_origin {

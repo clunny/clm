@@ -3,18 +3,21 @@ mod common;
 use clm_ledger::Body;
 use common::{Fixture, refused};
 
-/// A `host = "none"` repository with `impl/a` landed locally.
-fn landed_locally() -> (Fixture, clm_land::Output) {
+/// A `host = "none"` repository with `impl/a` landed through the `origin` `keep_remote` made,
+/// and the local `main` brought up to `origin/main`, as a pull does.
+fn landed_through_remote() -> (Fixture, clm_land::Output) {
     let f = Fixture::local();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    f.git(&f.work(), &["pull", "-q", "--ff-only", "origin", "main"]);
     (f, out)
 }
 
-/// A bare `origin.git` added as the work clone's `origin`; with `main`, holding an
-/// unrelated `main`.
-fn add_origin(f: &Fixture, main: bool) {
-    let bare = f.path("origin.git");
+/// Points the work clone's `origin` at a new bare repository `origin2.git`, as
+/// `git remote set-url` does, leaving the remote-tracking refs of the old one; with `main`,
+/// the new one holds an unrelated `main`.
+fn repoint_origin(f: &Fixture, main: bool) {
+    let bare = f.path("origin2.git");
     let d = bare.parent().unwrap();
     f.git(
         d,
@@ -43,13 +46,18 @@ fn add_origin(f: &Fixture, main: bool) {
     }
     f.git(
         &f.work(),
-        &["remote", "add", "origin", bare.to_str().unwrap()],
+        &["remote", "set-url", "origin", bare.to_str().unwrap()],
     );
 }
 
-fn ledger_on_origin(f: &Fixture) -> bool {
+/// `rev` in the repository `repoint_origin` made.
+fn new_origin(f: &Fixture, rev: &str) -> String {
+    f.git(&f.path("origin2.git"), &["rev-parse", rev])
+}
+
+fn ledger_on_new_origin(f: &Fixture) -> bool {
     let refs = f.git(
-        &f.path("origin.git"),
+        &f.path("origin2.git"),
         &[
             "for-each-ref",
             "--format=%(refname)",
@@ -60,39 +68,45 @@ fn ledger_on_origin(f: &Fixture) -> bool {
 }
 
 #[test]
-fn no_remote_lands_locally() {
-    // req:land/offline-land@98b44467
+fn no_host_lands_through_the_clones_own_remote() {
+    // req:land/offline-land@795d1e93
     let f = Fixture::local();
-    let old = f.rev("main");
+    let old = f.remote("main");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    let main = f.rev("main");
-    assert_eq!(f.parents(&f.work(), &main), [old, head]);
-    assert_eq!(out.lines, [format!("landed {main} code (local)")]);
+    let main = f.remote("main");
+    assert_eq!(f.parents(&f.path("origin.git"), &main), [old, head]);
+    assert_eq!(out.lines, [format!("landed {main} code")]);
     assert!(
         f.landed()
             .iter()
             .any(|b| matches!(b, Body::Landed { commit, .. } if *commit == main))
     );
-    // The checkout on `main` moved with it, clean.
-    assert_eq!(f.git(&f.work(), &["status", "--porcelain"]), "");
-    // The same gate and checks ran, against the local `main`.
-    assert_eq!(f.lines("check.log"), [f.tree(&f.work(), &main)]);
-    assert_eq!(f.lines("clm-check.log").len(), 1);
+    // The ledger branch is on `origin`, the remote `keep_remote` made.
+    let refs = f.git(
+        &f.path("origin.git"),
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/clm/ledger/",
+        ],
+    );
+    assert!(!refs.is_empty());
+    // The land was made on `origin/main`; the local `main` was left alone.
     assert!(
         f.lines("gate.log")
             .iter()
-            .all(|l| l.ends_with("--base main")),
+            .all(|l| l.ends_with("--base origin/main")),
         "{:?}",
         f.lines("gate.log")
     );
-    // The branch is its only copy, kept for `clm reconnect`'s `land again`.
-    assert_eq!(f.rev("impl/a"), f.parents(&f.work(), &main)[1]);
+    assert_ne!(f.rev("main"), main);
+    assert_eq!(f.lines("check.log"), [f.tree(&f.path("origin.git"), &main)]);
 }
 
 #[test]
 fn offline_with_a_remote_refuses() {
-    // req:land/offline-land@98b44467
+    // req:land/offline-land@795d1e93
     let f = Fixture::new("host = \"github\"");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let work = f.work();
@@ -110,37 +124,63 @@ fn offline_with_a_remote_refuses() {
 }
 
 #[test]
+fn offline_with_no_host_refuses_too() {
+    // req:land/offline-land@795d1e93
+    let f = Fixture::local();
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let work = f.work();
+    let main = f.rev("main");
+    let remote_main = f.remote("main");
+    f.git(
+        &work,
+        &["remote", "set-url", "origin", "/nowhere/at/all.git"],
+    );
+    let why = refused(clm_land::land(&work, Some("impl/a"), &f.env(&[])));
+    assert!(why.contains("offline"), "{why}");
+    assert_eq!(f.rev("main"), main);
+    assert_eq!(f.remote("main"), remote_main);
+    assert!(f.lines("check.log").is_empty());
+}
+
+#[test]
 fn first_push_after_adding_a_remote() {
-    // req:land/offline-land@98b44467
-    let (f, _) = landed_locally();
-    add_origin(&f, false);
+    // req:land/offline-land@795d1e93
+    let (f, _) = landed_through_remote();
+    let landed = f.remote("main");
+    repoint_origin(&f, false);
     let out = clm_land::reconnect(&f.work(), &f.env(&[])).unwrap();
     assert_eq!(out.lines, ["reconnected 1 lands"]);
-    assert_eq!(f.remote("main"), f.rev("main"));
-    assert!(ledger_on_origin(&f));
+    assert_eq!(new_origin(&f, "main"), landed);
+    assert!(ledger_on_new_origin(&f));
+    // The old remote's tracking refs were pruned, not kept for the new one's branches.
+    assert!(
+        f.git(&f.work(), &["for-each-ref", "refs/remotes/origin/impl"])
+            .is_empty()
+    );
 }
 
 #[test]
 fn origin_main_behind_local() {
-    // req:land/offline-land@98b44467
-    let (f, _) = landed_locally();
-    add_origin(&f, false);
-    // `origin` already has the `main` the local land started from.
-    let first = f.parents(&f.work(), "main")[0].clone();
+    // req:land/offline-land@795d1e93
+    let (f, _) = landed_through_remote();
+    let landed = f.remote("main");
+    let first = f.parents(&f.path("origin.git"), &landed)[0].clone();
+    repoint_origin(&f, false);
+    // The new `origin` already has the `main` the land started from.
     f.git(
         &f.work(),
         &["push", "-q", "origin", &format!("{first}:refs/heads/main")],
     );
     let out = clm_land::reconnect(&f.work(), &f.env(&[])).unwrap();
     assert_eq!(out.lines, ["reconnected 1 lands"]);
-    assert_eq!(f.remote("main"), f.rev("main"));
+    assert_eq!(new_origin(&f, "main"), landed);
 }
 
 #[test]
 fn reconnect_names_rebase() {
     // req:land/reconnect-names-rebase@92d58f31
-    let (f, _) = landed_locally();
-    add_origin(&f, true);
+    let (f, _) = landed_through_remote();
+    repoint_origin(&f, true);
     let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
     assert!(why.starts_with("origin's `main` has moved"), "{why}");
     assert!(
@@ -178,20 +218,21 @@ fn reconnect_names_rebase() {
 
 #[test]
 fn origin_moved() {
-    // req:land/offline-land@98b44467
-    let (f, _) = landed_locally();
-    add_origin(&f, true);
-    let theirs = f.remote("main");
+    // req:land/offline-land@795d1e93
+    let (f, _) = landed_through_remote();
+    repoint_origin(&f, true);
+    let theirs = new_origin(&f, "main");
     let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
     assert!(why.contains("land again impl/a"), "{why}");
-    assert_eq!(f.remote("main"), theirs);
-    assert!(ledger_on_origin(&f));
+    assert_eq!(new_origin(&f, "main"), theirs);
+    assert!(ledger_on_new_origin(&f));
 }
 
 #[test]
 fn reconnect_without_origin_refuses() {
-    // req:land/offline-land@98b44467
-    let (f, _) = landed_locally();
+    // req:land/offline-land@795d1e93
+    let (f, _) = landed_through_remote();
+    f.git(&f.work(), &["remote", "remove", "origin"]);
     let why = refused(clm_land::reconnect(&f.work(), &f.env(&[])));
     assert!(why.contains("origin"), "{why}");
 }

@@ -103,8 +103,8 @@ pub(crate) struct Repo<'a> {
     root: PathBuf,
     env: &'a Env,
     settings: clm_config::Settings,
-    /// False with `host = "none"`: no `origin`, and `main` is the local branch.
-    remote: bool,
+    /// `origin/main`, the ref every land is made on, whatever the host (`land/offline-land`).
+    base: String,
     /// What `clm-approval` judges a branch's approval with, given the same root and settings.
     approval: clm_approval::Repo<'a>,
 }
@@ -113,29 +113,32 @@ impl<'a> Repo<'a> {
     fn open(root: &Path, env: &'a Env) -> Result<Self, Error> {
         let root = std::fs::canonicalize(root)?;
         let settings = clm_config::load(Some(&root), env)?;
-        let remote = settings.host.value != clm_config::Host::None;
+        let base = format!("{}/main", clm_git::REMOTE);
         let approval = clm_approval::Repo::new(&root, env, &settings);
         Ok(Repo {
             root,
             env,
             settings,
-            remote,
+            base,
             approval,
         })
     }
 
-    /// The ref `main` is landed on: `origin/main`, or the local `main` without a remote.
+    /// The ref `main` is landed on: `origin/main`.
     fn base(&self) -> &str {
-        self.approval.base()
+        &self.base
     }
 
     fn git(&self, args: &[&str]) -> Result<String, Error> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, unless there is no remote; a failure is being offline.
+    /// `git fetch origin`; a failure is being offline.
     fn fetch(&self) -> Result<(), Error> {
-        Ok(self.approval.fetch()?)
+        if clm_git::fetch(&self.root).is_err() {
+            return Err(Error::Refused(OFFLINE.into()));
+        }
+        Ok(())
     }
 
     /// The commit `rev` names, or `None` when it names none.
