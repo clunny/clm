@@ -17,7 +17,7 @@ A requirement that says only "full 40-hex" leaves open whether an uppercase ID i
 
 ## Approaches
 
-- **Lowercase required** (the human's choice): the fold skips an uppercase ID with a warning, as it does any malformed ID. This matches the code as built. The writers (`verify`, imports) take IDs from git, which writes them in lowercase.
+- **Lowercase required** (the human's choice): the fold skips an uppercase ID with a warning, as it does any malformed ID. This matches the code as built. `verify` takes IDs from git, which writes them in lowercase. An import takes its run's commit from the host's data, so an uppercase ID there is skipped with a warning, never held without a word.
 - **Accept uppercase and lowercase it on read**: more lenient, but it adds a normalisation step nothing needs (`yagni`), since no writer produces uppercase IDs.
 
 ## Outcome
