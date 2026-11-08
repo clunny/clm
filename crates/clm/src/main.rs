@@ -545,6 +545,9 @@ enum Command {
         /// Print only the `file` lines of the tests that read what changed, doc-only paths included.
         #[arg(long)]
         readers: bool,
+        /// Print why the change selects this path: the chain from it to a changed file.
+        #[arg(long, value_name = "PATH")]
+        why: Option<String>,
     },
     /// Print one advisory report of the repository's health; exits 0 whatever it finds.
     Health {
@@ -1567,7 +1570,8 @@ fn dispatch() -> ExitCode {
             base,
             root,
             readers,
-        } => affected(&repo_root(root), &base, readers),
+            why,
+        } => affected(&repo_root(root), &base, readers, why.as_deref()),
         Command::Health { expiry, root } => health(&repo_root(root), expiry),
         Command::Workaround {
             requirement,
@@ -2138,8 +2142,12 @@ fn health(root: &Path, expiry: u64) -> ExitCode {
     }
 }
 
-/// `clm affected`: its lines on stdout, with `config`'s `[affected] all` globs.
-fn affected(root: &Path, base: &str, readers: bool) -> ExitCode {
+/// `clm affected`: its lines on stdout (`--why` prints the chain for one path instead), with `config`'s `[affected] all` globs.
+fn affected(root: &Path, base: &str, readers: bool, why: Option<&str>) -> ExitCode {
+    if readers && why.is_some() {
+        eprintln!("clm affected: --readers and --why can't be given together");
+        return ExitCode::FAILURE;
+    }
     if readers {
         return match clm_affected::affected_readers(root, base) {
             Ok(files) => {
@@ -2162,6 +2170,20 @@ fn affected(root: &Path, base: &str, readers: bool) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if let Some(path) = why {
+        return match clm_affected::why(root, base, path, &all) {
+            Ok(lines) => {
+                for line in lines {
+                    println!("{line}");
+                }
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("clm affected: {e}");
+                ExitCode::from(e.exit_code())
+            }
+        };
+    }
     match clm_affected::affected(root, base, &all) {
         Ok(clm_affected::Selection::All(path)) => println!("all {path}"),
         Ok(clm_affected::Selection::Nodes { nodes, files }) => {

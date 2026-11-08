@@ -522,3 +522,80 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(stdout(&out), "file crates/e/tests/u.rs\n");
 }
+
+#[test]
+fn why_prints_the_chain_through_a_dependency() {
+    // req:check.affected/why-chain@7e236f82
+    let dir = repo("");
+    let root = dir.path();
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "a");
+    let out = clm_affected_with(root, "main", &["--why", "crates/b/src/lib.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "crates/b/src/lib.rs owned by b\nb depends on a\na owns crates/a/src/lib.rs (changed)\n"
+    );
+    let out = clm_affected_with(root, "main", &["--why", "crates/a/src/lib.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "crates/a/src/lib.rs (changed)\n");
+}
+
+#[test]
+fn why_says_not_selected_and_all() {
+    // req:check.affected/why-chain@7e236f82
+    let dir = repo("");
+    let root = dir.path();
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "a");
+    let out = clm_affected_with(root, "main", &["--why", "crates/d/src/lib.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "crates/d/src/lib.rs not selected\n");
+    write(root, "tools/build.sh", "false\n");
+    commit_all(root, "tool");
+    let out = clm_affected_with(root, "main", &["--why", "crates/b/src/lib.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "all: tools/build.sh\n");
+}
+
+#[test]
+fn why_with_readers_exits_1_naming_both_flags() {
+    // req:check.affected/why-chain@7e236f82
+    let dir = repo("");
+    let out = clm_affected_with(
+        dir.path(),
+        "main",
+        &["--readers", "--why", "crates/a/src/lib.rs"],
+    );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let err = String::from_utf8(out.stderr.clone()).unwrap();
+    assert!(err.contains("--readers") && err.contains("--why"), "{err}");
+    assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
+    // req:check.affected/why-chain@7e236f82
+    let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
+    let root = dir.path();
+    write(root, "Cargo.lock", "lock 2\n");
+    commit_all(root, "lock");
+    let out = clm_affected_with(root, "main", &["--why", "crates/b/src/lib.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "all: Cargo.lock\n");
+    let out = clm_affected_with(root, "nope", &["--why", "crates/b/src/lib.rs"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+}
+
+#[test]
+fn why_reads_the_scan_for_readers_and_citations() {
+    // req:check.affected/why-chain@7e236f82
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "ARCHITECTURE.md", "# B\n");
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "both");
+    let out = clm_affected_with(root, "main", &["--why", "crates/e/tests/r.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "crates/e/tests/r.rs reads ARCHITECTURE.md\n");
+}
