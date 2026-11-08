@@ -28,7 +28,7 @@ fn land(repo: &Repo, branch: &str) -> String {
 
 #[test]
 fn a_slow_test_breaks_after_the_land() {
-    // req:capability/slow-tests-after-land@a6d32596
+    // req:capability/slow-tests-after-land@4b30a5dc
     let repo = Repo::init();
     repo.write("specs/b/SPEC.md", COMPONENT_B);
     repo.write("lib/b.sh", "b() { :; }\n");
@@ -152,4 +152,52 @@ fn a_slow_test_breaks_after_the_land() {
     repo.write("lib/again.sh", "g() { :; }\n");
     repo.push_branch("impl/b-again", "b again");
     land(&repo, "impl/b-again");
+}
+
+#[test]
+fn a_land_over_its_target() {
+    // req:capability/slow-tests-after-land@4b30a5dc
+    let repo = Repo::init();
+    repo.write("specs/b/SPEC.md", COMPONENT_B);
+    repo.write("lib/b.sh", "b() { :; }\n");
+    repo.write(
+        "check.sh",
+        "echo '::group::fmt'\necho '::group::slow tests'\necho '::clm-selected::lib/b.sh'\nsleep 2\n",
+    );
+    repo.write(
+        "clm.toml",
+        "host = \"git\"\n\n[land]\ncheck = \"sh check.sh\"\ncheck_target_seconds = 1\n",
+    );
+    repo.commit("component b and a check that marks its steps");
+    repo.git(&["push", "-q", "origin", "main"]);
+
+    repo.write("lib/first.sh", "f() { :; }\n");
+    repo.push_branch("impl/b-first", "b first");
+    land(&repo, "impl/b-first");
+
+    repo.write("lib/more.sh", "m() { :; }\n");
+    repo.push_branch("impl/b-more", "b more");
+    let text = land(&repo, "impl/b-more");
+
+    // It lands, and the output names the costliest step, what selected it and how lands fared.
+    let lines: Vec<&str> = text.lines().collect();
+    let at = |needle: &str| {
+        lines
+            .iter()
+            .position(|l| l.contains(needle))
+            .unwrap_or_else(|| panic!("no `{needle}` in {text}"))
+    };
+    assert!(lines[at("target 1s")].contains("check "), "{text}");
+    let slow = at("slow tests ");
+    assert!(lines[slow].trim_end().ends_with('s'), "{text}");
+    // The chain runs from the step's selected file to the file the branch changed.
+    assert!(lines[slow + 1].contains("lib/b.sh"), "{text}");
+    assert!(lines[slow + 2].contains("lib/more.sh"), "{text}");
+    assert!(slow < at("fmt "), "{text}");
+    assert!(lines[at("fmt ")].ends_with("selected by no file"), "{text}");
+    // An earlier land also went over, and the report counts it.
+    assert!(
+        lines[at("timed lands")].contains("last 2 timed lands: 2 over target"),
+        "{text}"
+    );
 }
