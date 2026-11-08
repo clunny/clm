@@ -15,7 +15,7 @@ const MAY_CALL_GH: [&str; 3] = ["clm-git", "clm-host", "clm-guard"];
 
 #[test]
 fn runs_processes_only_through_the_layer() {
-    // req:host/git-through-layer@0d871c32
+    // req:host/git-through-layer@3a18542f
     let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest: toml::Table = std::fs::read_to_string(krate.join("Cargo.toml"))
         .unwrap()
@@ -45,7 +45,7 @@ const AZ: &str = concat!("\"a", "z\"");
 
 #[test]
 fn no_other_crate_holds_az() {
-    // req:host/git-through-layer@0d871c32
+    // req:host/git-through-layer@3a18542f
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -76,7 +76,7 @@ fn holds_az(text: &str) -> bool {
 
 #[test]
 fn the_az_matcher_sees_every_use() {
-    // req:host/git-through-layer@0d871c32
+    // req:host/git-through-layer@3a18542f
     assert!(holds_az(concat!(
         "clm_git::run(&dir, \"a",
         "z\", &args, o)"
@@ -88,7 +88,7 @@ fn the_az_matcher_sees_every_use() {
 
 #[test]
 fn no_other_crate_calls_gh() {
-    // req:host/git-through-layer@0d871c32
+    // req:host/git-through-layer@3a18542f
     let crates = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let (mut expected, mut scanned) = (0, 0);
     let mut found = Vec::new();
@@ -227,7 +227,7 @@ fn names_gh(text: &str) -> bool {
 
 #[test]
 fn the_release_guard_lookup_only() {
-    // req:host/git-through-layer@0d871c32
+    // req:host/git-through-layer@3a18542f
     let hooks = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
@@ -246,7 +246,7 @@ fn the_release_guard_lookup_only() {
 
 #[test]
 fn a_run_of_gh_is_caught() {
-    // req:host/git-through-layer@0d871c32
+    // req:host/git-through-layer@3a18542f
     let one_line = concat!("clm_git::run(&dir, \"g", "h\", &args, options)");
     let split = concat!(
         "let _ = tx.send(clm_git::run(\n",
