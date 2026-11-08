@@ -6,6 +6,8 @@
 // clm:reads CAPABILITIES.md
 // clm:reads CLAUDE.md
 // clm:reads README.md
+// clm:reads docs/guide/**
+// clm:reads docs/spec-format.md
 
 use std::fs;
 use std::path::{Path, PathBuf};
