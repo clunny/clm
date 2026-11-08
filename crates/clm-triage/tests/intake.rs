@@ -375,3 +375,145 @@ fn alerts_without_issues_and_a_refusal_without_issues() {
         ["alerts unavailable"]
     );
 }
+
+/// A `verified` record's line for `commit`, the `n`th written, as a ledger holds it.
+fn verified(
+    n: u32,
+    commit: &str,
+    passed: bool,
+    culprit: Option<&str>,
+    components: &[&str],
+) -> String {
+    let culprit = culprit.map_or("null".to_string(), |c| format!("\"{c}\""));
+    let components: Vec<String> = components.iter().map(|c| format!("\"{c}\"")).collect();
+    format!(
+        r#"{{"id":"v{n}","kind":"verified","writer":"alice/1","at":"2026-01-0{n}T00:00:00.000Z","commit":"{commit}","passed":{passed},"since":null,"lands":["{commit}"],"culprit":{culprit},"components":[{}],"mode":"local","run":null}}"#,
+        components.join(",")
+    )
+}
+
+/// Pushes `records` to `origin` as writer `alice/1`'s ledger branch.
+fn push_ledger(r: &Repo, records: &[String]) {
+    let file = r.work.join(".git/records.jsonl");
+    fs::write(&file, records.join("\n") + "\n").unwrap();
+    let blob = git(&r.work, &["hash-object", "-w", file.to_str().unwrap()]);
+    let index = r.work.join(".git/ledger-index");
+    let env = [("GIT_INDEX_FILE", index.to_str().unwrap())];
+    let info = format!("100644,{},records.jsonl", blob.trim());
+    git_env(
+        &r.work,
+        &["update-index", "--add", "--cacheinfo", &info],
+        &env,
+    );
+    let tree = git_env(&r.work, &["write-tree"], &env);
+    let commit = git(&r.work, &["commit-tree", tree.trim(), "-m", "ledger"]);
+    let refspec = format!("+{}:refs/heads/clm/ledger/alice/1", commit.trim());
+    git(&r.work, &["push", "-q", "origin", &refspec]);
+}
+
+/// Two more lands on `origin/main`, and `main~2`, `main~1` and `main` as full IDs.
+fn three_commits(r: &Repo) -> [String; 3] {
+    for n in 1..=2 {
+        write(&r.work, &format!("f{n}"), "x\n");
+        push_main(&r.work, &format!("land {n}"));
+    }
+    ["HEAD~2", "HEAD~1", "HEAD"].map(|rev| git(&r.work, &["rev-parse", rev]).trim().to_string())
+}
+
+fn short(r: &Repo, commit: &str) -> String {
+    git(&r.work, &["rev-parse", "--short", commit])
+        .trim()
+        .to_string()
+}
+
+#[test]
+fn scenario_a_new_failure() {
+    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    let r = repo();
+    let [c0, c1, c2] = three_commits(&r);
+    push_ledger(
+        &r,
+        &[
+            verified(1, &c0, true, None, &[]),
+            verified(2, &c2, false, Some(&c1), &["b", "a"]),
+        ],
+    );
+    assert_eq!(
+        lines(&r, vec![]),
+        [format!(
+            "verify {} new {} a b",
+            short(&r, &c2),
+            short(&r, &c1)
+        )]
+    );
+}
+
+#[test]
+fn scenario_taken_in() {
+    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    let r = repo();
+    let [c0, c1, c2] = three_commits(&r);
+    push_ledger(
+        &r,
+        &[
+            verified(1, &c0, true, None, &[]),
+            verified(2, &c2, false, Some(&c1), &["b", "a"]),
+        ],
+    );
+    for slug in ["b-broke", "a-also"] {
+        write(
+            &r.work,
+            &format!("backlog/{slug}.md"),
+            &format!("---\ntitle: T\nkind: bug\nverify_failures: [\"{c2}\"]\n---\n"),
+        );
+    }
+    write(
+        &r.work,
+        "backlog/other.md",
+        &format!("---\ntitle: T\nkind: bug\nverify_failures: [\"{c1}\"]\n---\n"),
+    );
+    push_main(&r.work, "take it in");
+    assert_eq!(
+        lines(&r, vec![]),
+        [format!("verify {} imported a-also b-broke", short(&r, &c2))]
+    );
+}
+
+#[test]
+fn scenario_fixed_since() {
+    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    let r = repo();
+    let [_, c1, c2] = three_commits(&r);
+    push_ledger(
+        &r,
+        &[
+            verified(1, &c1, false, None, &["a"]),
+            verified(2, &c2, true, None, &[]),
+        ],
+    );
+    assert!(lines(&r, vec![]).is_empty());
+}
+
+#[test]
+fn reds_follow_the_hosts_lines_in_first_parent_order() {
+    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    let r = repo();
+    let [_, c1, c2] = three_commits(&r);
+    // Recorded newest commit first: the lines follow the chain, not the records.
+    push_ledger(
+        &r,
+        &[
+            verified(1, &c2, false, None, &[]),
+            verified(2, &c1, false, Some(&c1), &["c"]),
+        ],
+    );
+    assert_eq!(
+        with_alerts(&r, vec![issue(92)], Err("gh: 403".into())),
+        [
+            "issue 92 new".to_string(),
+            "alerts unavailable".to_string(),
+            format!("verify {0} new {0} c", short(&r, &c1)),
+            format!("verify {} new unknown", short(&r, &c2)),
+        ]
+    );
+}

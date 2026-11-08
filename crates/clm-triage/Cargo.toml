@@ -10,6 +10,7 @@ clm-model.workspace = true
 clm-git.workspace = true
 clm-orchestrator.workspace = true
 clm-host.workspace = true
+clm-ledger.workspace = true
 serde_yaml.workspace = true
 
 [dev-dependencies]
