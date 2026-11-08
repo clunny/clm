@@ -394,3 +394,89 @@ fn alerts_without_a_host_run_no_gh() {
         assert_eq!(calls(dir), "");
     });
 }
+
+const SHA_C: &str = "cccccccccccccccccccccccccccccccccccccccc";
+
+#[test]
+fn runs_are_listed() {
+    // req:host/list-runs@008f0107
+    let out = format!(
+        r#"[{{"databaseId":12,"headSha":"{SHA_C}","status":"in_progress","conclusion":"","url":"https://h/12"}},{{"databaseId":11,"headSha":"{SHA_C}","status":"completed","conclusion":"failure","url":"https://h/11"}},{{"databaseId":10,"headSha":"short","status":"completed","conclusion":"success","url":"https://h/10"}},{{"databaseId":9,"headSha":"abc123","status":"completed","conclusion":"success","url":"https://h/9"}},{{"databaseId":8,"headSha":"gggggggggggggggggggggggggggggggggggggggg","status":"completed","conclusion":"success","url":"https://h/8"}}]"#
+    );
+    with_gh(&[("run list", &out)], |root, dir| {
+        let runs = clm_host::adapter(Setting::Github)
+            .runs(root, "slow")
+            .unwrap();
+        assert_eq!(
+            runs,
+            vec![
+                clm_host::Run {
+                    id: 12,
+                    head: SHA_C.into(),
+                    completed: false,
+                    conclusion: "unknown".into(),
+                    url: "https://h/12".into(),
+                },
+                clm_host::Run {
+                    id: 11,
+                    head: SHA_C.into(),
+                    completed: true,
+                    conclusion: "failure".into(),
+                    url: "https://h/11".into(),
+                },
+            ]
+        );
+        let seen = calls(dir);
+        for want in [
+            "run list",
+            "--workflow slow",
+            "--branch main",
+            "--event push",
+            "--limit 100",
+            "databaseId,headSha,status,conclusion,url",
+        ] {
+            assert!(seen.contains(want), "{want}: {seen}");
+        }
+    });
+}
+
+#[test]
+fn an_odd_conclusion_is_unknown() {
+    // req:host/list-runs@008f0107
+    let out = format!(
+        r#"[{{"databaseId":1,"headSha":"{SHA_C}","status":"completed","conclusion":"Fail ure","url":"u"}},{{"databaseId":2,"headSha":"{SHA_C}","status":"completed","conclusion":"timed_out","url":"u"}},{{"databaseId":4,"headSha":"{SHA_C}","status":"completed","conclusion":"Failure","url":"u"}},{{"databaseId":3,"headSha":"{SHA_C}","status":"completed","url":"u"}}]"#
+    );
+    with_gh(&[("run list", &out)], |root, _| {
+        let runs = clm_host::adapter(Setting::Github)
+            .runs(root, "slow")
+            .unwrap();
+        let conclusions: Vec<_> = runs.iter().map(|r| r.conclusion.as_str()).collect();
+        assert_eq!(conclusions, ["unknown", "timed_out", "unknown", "unknown"]);
+    });
+}
+
+#[test]
+fn a_failing_run_list_is_an_error() {
+    // req:host/list-runs@008f0107
+    with_gh(&[("run list", "FAIL:HTTP 404")], |root, _| {
+        let err = clm_host::adapter(Setting::Github)
+            .runs(root, "slow")
+            .unwrap_err();
+        assert!(format!("{err:?}").contains("HTTP 404"), "{err:?}");
+    });
+}
+
+#[test]
+fn other_hosts_list_no_runs() {
+    // req:host/list-runs@008f0107
+    for setting in [Setting::Azure, Setting::Git, Setting::None] {
+        with_gh(&[], |root, dir| {
+            let err = clm_host::adapter(setting).runs(root, "slow").unwrap_err();
+            assert!(
+                format!("{err:?}").contains("lists no pipeline runs"),
+                "{err:?}"
+            );
+            assert_eq!(calls(dir), "");
+        });
+    }
+}
