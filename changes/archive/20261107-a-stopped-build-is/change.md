@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-stopped-build-is-always-restarted-from-scratch-even-when]
 ---
 
