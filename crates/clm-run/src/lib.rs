@@ -16,7 +16,9 @@ use clm_check::{Pending, State as ReqState};
 use clm_git::git;
 use clm_model::{Files, Graph};
 pub use clm_orchestrator::Error;
-use clm_orchestrator::{PlaceKind, Placed, REMOTE, claim_local, free_place, take_place};
+use clm_orchestrator::{
+    PlaceKind, Placed, REMOTE, claim_local, free_place, place_slot, take_place,
+};
 
 /// The branch a node's claim and build live on is `impl/<node>`.
 const BRANCH_PREFIX: &str = "impl/";
@@ -155,11 +157,22 @@ pub struct Job {
     /// Whether the lists were read from `origin/main`'s tree because the branch conflicts
     /// with it (`pending-prompt`).
     pub read_from_main: bool,
+    /// The build's slot, `place_slot` of `impl/<node>` once its place is taken
+    /// (`prompt-slot`).
+    pub slot: u64,
 }
 
 /// The prompt for `job`.
 pub fn prompt(job: &Job) -> String {
     let node = &job.node;
+    let slot = job.slot;
+    // Only a repository with a `[land] check` has `clm land --check-only` to name.
+    let check_slot = if job.check.is_some() {
+        ", while `clm land --check-only` sets `CLM_SLOT` itself and is still run as the checks \
+         step says, with no variable"
+    } else {
+        ""
+    };
     let branch = format!("{BRANCH_PREFIX}{node}");
     let skills = {
         let each: Vec<String> = job
@@ -415,6 +428,16 @@ pub fn prompt(job: &Job) -> String {
          checks run; and end with `git status` showing no change to a tracked file. List \
          each mutant, with the test that failed or the test you added, under `## Review` in \
          the pull request body.\n\n\
+         Your build's slot is {slot}. The project's tests run beside other builds' tests on this \
+         host (`tests-run-concurrently`), so every test command you run by hand, a \
+         spot-check's runs of a mutant included, runs with `CLM_SLOT={slot}` set before the \
+         command{check_slot}. A test you write binds no fixed port, writes no \
+         fixed path outside its checkout and the system's temporary directory, and starts no \
+         server another run could share; a port or path it must know in advance is keyed on \
+         `CLM_SLOT`. A test of the project that fails because another run holds a port or a \
+         path is a defect of the project's tests: don't retry it, and when the fix lies outside \
+         your component, report it as a `bug` backlog item whose body names \
+         `tests-run-concurrently`.\n\n\
          After each step of your step plan, commit, {sync}, then push with \
          `clm branch push`, which also keeps your claim alive. When the remote \
          rejects a push as `remote rejected` with `(failure)`, or with `remote: fatal error`, \
@@ -705,6 +728,7 @@ fn build(
     job.skills = skills;
     job.check = check;
     job.review_model = review_model.map(str::to_string);
+    job.slot = place_slot(root, branch)?;
     // A write that fails leaves the claim, which the next `clm run` resumes.
     let file = prompts.join(format!("{node}.md"));
     fs::write(&file, prompt(&job)).map_err(|e| {
@@ -1042,6 +1066,7 @@ fn job(
         review_model: None,
         capability_tests: graph.capability_tests_node() == node,
         read_from_main: false,
+        slot: 0,
     })
 }
 

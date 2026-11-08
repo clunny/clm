@@ -46,6 +46,7 @@ fn job() -> Job {
         review_model: None,
         capability_tests: false,
         read_from_main: false,
+        slot: 2,
     }
 }
 
@@ -902,4 +903,39 @@ fn scenario_recorded_check_needs_a_check_command() {
     let p = prompt(&job());
     assert!(!p.contains("not recorded:"), "{p}");
     assert!(!p.contains("formatter"), "{p}");
+}
+
+#[test]
+fn scenario_prompt_slot() {
+    // req:orchestrator.run/prompt-slot@c8307c1b
+    for resumed in [false, true] {
+        let mut j = job();
+        j.resumed = resumed;
+        j.check = Some("scripts/check.sh".into());
+        let p = prompt(&j);
+        for needle in [
+            "CLM_SLOT=2",
+            "tests-run-concurrently",
+            "fixed port",
+            "`bug` backlog item",
+        ] {
+            assert!(p.contains(needle), "{needle} missing from {p}");
+        }
+        // The slot's paragraph is its own: the ones that govern `clm land --check-only`
+        // hold no `CLM_SLOT=` (`prompt-check-command`).
+        for para in p.split("\n\n").filter(|q| q.contains("one plain command")) {
+            assert!(!para.contains("CLM_SLOT="), "{para}");
+        }
+        // Wording the component's other requirements forbid.
+        let slot_para = p
+            .split("\n\n")
+            .find(|q| q.contains("CLM_SLOT="))
+            .expect("a paragraph names the slot");
+        for banned in ["`cd`", "exit code", "clm watch", "exits 0", "exits 2"] {
+            assert!(!slot_para.contains(banned), "{banned}: {slot_para}");
+        }
+    }
+    let mut j = job();
+    j.slot = 7;
+    assert!(prompt(&j).contains("CLM_SLOT=7"));
 }
