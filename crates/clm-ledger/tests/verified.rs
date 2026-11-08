@@ -63,6 +63,15 @@ fn uppercase_commit() {
     let fold = fold_records(&[("one", &upper)]);
     assert!(fold.verifications.is_empty());
     assert_eq!(fold.warnings.len(), 1, "{:?}", fold.warnings);
+    assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
+    // The same rule holds for `culprit`.
+    let culprit = line(2, 'b', "false", "2026-01-01T00:00:00.000Z", Some('a')).replace(
+        &format!("\"culprit\":\"{}\"", id('a')),
+        &format!("\"culprit\":\"{}\"", "A".repeat(40)),
+    );
+    let fold = fold_records(&[("one", &culprit)]);
+    assert!(fold.verifications.is_empty());
+    assert_eq!(fold.warnings.len(), 1, "{:?}", fold.warnings);
 }
 
 #[test]
