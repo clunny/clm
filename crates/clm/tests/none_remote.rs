@@ -126,7 +126,7 @@ fn a_repository_set_up_before_gets_its_remote_and_reconnects() {
         "{}",
         err(&reconnect)
     );
-    assert!(!err(&reconnect).contains("origin: "), "{}", err(&reconnect));
+    assert_eq!(err(&reconnect), "", "the remote is already the clone's own");
     assert_eq!(
         git(&work, &["ls-remote", "origin", "refs/heads/main"])
             .split_whitespace()
@@ -249,6 +249,12 @@ fn other_hosts_and_other_directories_create_nothing() {
     git(&plain, &["rm", "-q", "-r", "specs"]);
     git(&plain, &["commit", "-q", "-m", "no specs"]);
     clm(&plain, &["check"]);
+    assert_eq!(remotes(&plain), "");
+    let elsewhere = TempDir::new().unwrap();
+    clm(
+        elsewhere.path(),
+        &["next", "--root", plain.to_str().unwrap()],
+    );
     assert_eq!(remotes(&plain), "");
 }
 
