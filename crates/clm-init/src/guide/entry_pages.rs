@@ -1,3 +1,4 @@
+// clm:reads docs/guide/**
 //! The guide's entry pages stay written for a newcomer (`guide-entry-pages`): they name the
 //! workflow skills and link the pages that say how it works, and name no `clm` command.
 
