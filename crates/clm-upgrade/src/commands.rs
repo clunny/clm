@@ -171,8 +171,9 @@ fn bracket_depth(line: &str) -> i32 {
 }
 
 /// `text` with the top-level `key = value` line replaced (with the lines of a multi-line array it
-/// began), or else added before the first table header, or at the end when there is none. Every
-/// other line is left as it is.
+/// began), or else added above the first table header's lead-in (its directly preceding comment
+/// lines and the blank lines above them), or at the end when there is none. Every other line is
+/// left as it is.
 pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
     let new_line = format!("{key} = {value}\n");
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
@@ -195,11 +196,20 @@ pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
     }
     match first_header {
         Some(header) => {
+            // The header's lead-in: the comment lines directly above it, then the blank lines
+            // above those.
             let mut at = header;
+            while at > 0 && lines[at - 1].trim_start().starts_with('#') {
+                at -= 1;
+            }
             while at > 0 && lines[at - 1].trim().is_empty() {
                 at -= 1;
             }
-            let blank = if at == header { "\n" } else { "" };
+            let blank = if lines[at].trim().is_empty() {
+                ""
+            } else {
+                "\n"
+            };
             [&lines[..at], &[new_line.as_str(), blank], &lines[at..]]
                 .concat()
                 .concat()
