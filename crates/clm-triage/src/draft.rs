@@ -402,9 +402,9 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          (`human-layer-proof`). When the Design that holds the harness stays true as written, \
          fix it here on a branch of your own from `origin/main`, named outside `impl/`, \
          `spec/`, `propose/` and `autosync/`: delete the item in a commit whose trailer block \
-         holds `Resolves: backlog/<slug>`, land it with `clm land` once \
+         holds `Resolves: backlog/<slug>`, land it with `clm land <branch>` once \
          `clm gate --base origin/main` prints `code`, delete the pushed branch with \
-         `clm branch delete`, and take the item out of `resolves` (`small-change-no-claim`). \
+         `clm branch delete <branch>`, and take the item out of `resolves` (`small-change-no-claim`). \
          When that Design must change, the change edits the Design, keeps the item in \
          `resolves` and adds a `kind: deferred` item for the code. The bugs whose fix is code-only and lies in one \
          of the bug's `components` are fixed by component (`code-fix-resolves-bug`): run \

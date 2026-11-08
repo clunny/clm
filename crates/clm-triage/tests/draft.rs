@@ -216,6 +216,10 @@ fn scenario_draft_code_fix_written_rule() {
         "`code-fix-needs-a-written-rule`",
         "as written",
         "harness-only",
+        "`human-layer-proof`",
+        "`Resolves: backlog/<slug>`",
+        "`clm branch delete <branch>`",
+        "`kind: deferred`",
     ] {
         assert!(para.contains(needle), "{needle} missing from {para}");
     }
