@@ -209,7 +209,7 @@ The `clm run` prompt SHALL tell the session that when the work needs a fact only
 - model/parse-backlog
 
 ### Requirement: superpowers-path
-`clm superpowers <skill>` SHALL print the absolute path of `skills/<skill>/SKILL.md` in the pinned superpowers directory builds follow: `$CLM_SUPERPOWERS_DIR` when it is set and not empty, otherwise the pinned commit's cache directory, fetched first when absent. It SHALL exit 1, naming the skill, when that file doesn't exist, and 2 with the reason when fetching the pin fails. No word SHALL be reserved: `upgrade` and `eval` are resolved as skills like any other, and `clm-run` SHALL NOT read, run or name anything under `plugin/evals/` (`cut-evals`).
+`clm superpowers <skill>` SHALL print the absolute path of `skills/<skill>/SKILL.md` in the pinned superpowers directory builds follow: `$CLM_SUPERPOWERS_DIR` when it is set and not empty, otherwise the pinned commit's cache directory, fetched first when absent. It SHALL exit 1, naming the skill, when that file doesn't exist, and 2 with the reason when fetching the pin fails. No word SHALL be reserved: `upgrade` and `eval` are resolved as skills like any other, and `clm-run` SHALL NOT read, run or name anything under `plugin/evals/` (`cut-evals`). It SHALL fetch the pin into a repository of its own in a temporary directory, running every git command there (`init`, `fetch`, `checkout`) through `clm-git`'s `git_isolated`, so a `GIT_DIR` or `GIT_WORK_TREE` the environment sets, naming a clone, as in a git hook, never makes the clone's git directory reinitialized, fetched into or checked out in.
 
 #### Scenario: pinned copy
 - GIVEN `XDG_CACHE_HOME` holding `clm/superpowers/<pinned commit>/skills/brainstorming/SKILL.md`
@@ -236,8 +236,16 @@ The `clm run` prompt SHALL tell the session that when the work needs a fact only
 - WHEN the tests read it
 - THEN no file under its `src/` names `plugin/evals`
 
+#### Scenario: a clone the environment names
+- GIVEN an empty `XDG_CACHE_HOME`, `GIT_ALLOW_PROTOCOL=file` so git refuses the pin's https fetch, and a work tree `w` with a commit whose git directory `g` is elsewhere, with `GIT_DIR=g` and `GIT_WORK_TREE=w` set
+- WHEN `clm superpowers brainstorming` runs
+- THEN it exits 2 as when fetching the pin fails, every file under `g` is byte for byte as it was, no file is added there, and `w` is unchanged
+
 #### Serves
 - capability/pin-working-method
+
+#### Needs
+- vcs/git-isolated
 
 ### Requirement: delete-fixed-items
 The `clm run` prompt SHALL tell the session that when its work fixes an item in a live change's `resolves`, it deletes `backlog/<slug>.md` on its own branch, so the requirements the item blocked are released when that branch lands. It SHALL also tell the session that when its branch does the work of a `deferred` item whose `components` name its component, such as removing code a build kept for another component that no longer uses it, it deletes `backlog/<slug>.md` on its own branch in a commit whose trailer block holds `Resolves: backlog/<slug>` (`deferred-work-resolves-in-code`), and that a `question`, `human-task` or `idea` item it can't delete that way goes under `## Backlog` in its pull request body, as any other backlog edit it can't make.
