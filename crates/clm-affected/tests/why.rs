@@ -24,6 +24,8 @@ fn graph() -> Graph {
         ("specs/y/SPEC.md", spec("[\"y/**\"]", "[w]")),
         ("specs/z/SPEC.md", spec("[\"z/**\"]", "[w]")),
         ("specs/w/SPEC.md", spec("[\"w/**\"]", "[]")),
+        ("specs/m/SPEC.md", spec("[\"m/**\"]", "[n, w]")),
+        ("specs/n/SPEC.md", spec("[\"n/**\"]", "[w]")),
     ]
     .into_iter()
     .map(|(p, t)| (p.into(), t))
@@ -227,4 +229,49 @@ fn a_doc_only_reader_reads_itself_rather_than_being_changed() {
         "docs/r.txt",
     );
     assert_eq!(lines, ["docs/r.txt reads docs/r.txt"]);
+}
+
+#[test]
+fn only_affected_components_can_be_cited() {
+    // req:check.affected/why-chain@7e236f82
+    let lines = why(
+        &[("w/lib.rs", true)],
+        &[("c/tests/t.rs", &["c/none", "y/q"])],
+        &[],
+        "c/tests/t.rs",
+    );
+    assert_eq!(
+        lines,
+        [
+            "c/tests/t.rs cites y",
+            "y depends on w",
+            "w owns w/lib.rs (changed)"
+        ]
+    );
+}
+
+#[test]
+fn a_citation_beats_ownership() {
+    // req:check.affected/why-chain@7e236f82
+    let lines = why(
+        &[("w/lib.rs", true)],
+        &[("x/tests/t.rs", &["w/q"])],
+        &[],
+        "x/tests/t.rs",
+    );
+    assert_eq!(lines, ["x/tests/t.rs cites w", "w owns w/lib.rs (changed)"]);
+}
+
+#[test]
+fn a_shorter_route_beats_an_earlier_id() {
+    // req:check.affected/why-chain@7e236f82
+    let lines = why(&[("w/lib.rs", true)], &[("m/lib.rs", &[])], &[], "m/lib.rs");
+    assert_eq!(
+        lines,
+        [
+            "m/lib.rs owned by m",
+            "m depends on w",
+            "w owns w/lib.rs (changed)"
+        ]
+    );
 }
