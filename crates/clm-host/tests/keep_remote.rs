@@ -23,23 +23,14 @@ fn git(dir: &Path, args: &[&str]) -> String {
 /// A clone with a commit on `main` and no remote, in a temporary directory.
 fn clone() -> (tempfile::TempDir, PathBuf) {
     let tmp = tempfile::tempdir().unwrap();
-    let dir = tmp.path().join("clone").canonicalize_or_create();
+    let dir = tmp.path().join("clone");
+    std::fs::create_dir_all(&dir).unwrap();
+    let dir = dir.canonicalize().unwrap();
     git(&dir, &["init", "-q", "-b", "main"]);
     std::fs::write(dir.join("a.txt"), "a").unwrap();
     git(&dir, &["add", "a.txt"]);
     git(&dir, &["commit", "-q", "-m", "first"]);
     (tmp, dir)
-}
-
-trait CanonicalOrCreate {
-    fn canonicalize_or_create(self) -> PathBuf;
-}
-
-impl CanonicalOrCreate for PathBuf {
-    fn canonicalize_or_create(self) -> PathBuf {
-        std::fs::create_dir_all(&self).unwrap();
-        self.canonicalize().unwrap()
-    }
 }
 
 fn kept(dir: &Path) -> PathBuf {
@@ -96,7 +87,7 @@ fn from_a_linked_worktree() {
         git(&dir, &["remote", "get-url", "origin"]),
         bare.to_str().unwrap()
     );
-    assert!(!linked.join(".git").is_dir());
+    assert_eq!(git(&linked, &["status", "--porcelain"]), "");
 }
 
 #[test]
@@ -136,8 +127,10 @@ fn nothing_to_do() {
     );
     assert!(!kept(&dir).exists());
 
-    let (_tmp2, dir2) = clone();
-    assert_eq!(keep_remote(&dir2, Host::Git).unwrap(), None);
-    assert_eq!(git(&dir2, &["remote"]), "");
-    assert!(!kept(&dir2).exists());
+    for host in [Host::Git, Host::Github, Host::Azure] {
+        let (_tmp2, dir2) = clone();
+        assert_eq!(keep_remote(&dir2, host).unwrap(), None);
+        assert_eq!(git(&dir2, &["remote"]), "");
+        assert!(!kept(&dir2).exists());
+    }
 }
