@@ -36,6 +36,8 @@ During a triage session several drafts land spec branches at once, and each rege
 ## Edge cases and workarounds
 
 - The merged tree `git merge-tree` writes can hold conflict markers under `specs/`; the regenerate reads `specs/` only from `onto`, so they don't matter, and they are replaced.
+- `git merge-tree --write-tree` exits 1 on a conflict but still prints the tree; the land reads it, and the conflicted paths from `--name-only`, through `clm-git` rather than dropping a failed run's output.
+- `derived.rs` reads the applied changes against the fetched base and the merged checkout; the head-side regenerate needs the same reading against the merge base and the head's checkout.
 - A land can still lose the push to a faster one; its next attempt regenerates again, within the ten attempts `land` allows.
 
 ## Open questions
