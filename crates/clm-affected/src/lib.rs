@@ -2,37 +2,69 @@
 
 mod readers;
 mod select;
+mod why;
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
 use clm_git::{Error, Failure, Options};
+use clm_model::Graph;
 
 pub use readers::{readers, reads_in};
 pub use select::{Changed, Selection, select};
+pub use why::why_chain;
 
 /// The selection for the working tree of `root` against the merge base of `base` and `HEAD`,
 /// with `all` the `[affected] all` globs. Refused when the graph can't be loaded, `base`
 /// doesn't resolve to a commit or has no merge base with `HEAD`; `Git` when git fails
 /// otherwise. The readers (`readers`) join the files.
 pub fn affected(root: &Path, base: &str, all: &[String]) -> Result<Selection, Failure> {
-    let (graph, violations) = clm_model::load(root);
-    if !violations.is_empty() {
-        let lines: Vec<String> = violations.iter().map(clm_check::format).collect();
-        return Err(Failure::Refused(lines.join("\n")));
-    }
-    let differing = differing(root, base)?;
-    let scan = scanned(root)?;
-    Ok(match select(&graph, &differing, &scan.cited, all) {
+    let (graph, differing, scan) = inputs(root, base)?;
+    Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
+}
+
+/// The lines saying why the change selects `path` (`why_chain`), with `all` the
+/// `[affected] all` globs as for `affected`. Refused as `affected` is.
+pub fn why(root: &Path, base: &str, path: &str, all: &[String]) -> Result<Vec<String>, Failure> {
+    let (graph, differing, scan) = inputs(root, base)?;
+    Ok(why_chain(
+        &graph,
+        &differing,
+        &scan.cited,
+        &scan.reads,
+        all,
+        path,
+    ))
+}
+
+/// The selection with the readers (`readers`) joined to its files.
+fn combined(
+    graph: &Graph,
+    differing: &[Changed],
+    cited: &BTreeMap<String, Vec<String>>,
+    reads: &BTreeMap<String, Vec<String>>,
+    all: &[String],
+) -> Selection {
+    match select(graph, differing, cited, all) {
         Selection::Nodes { nodes, mut files } => {
-            files.extend(readers(&differing, &scan.reads));
+            files.extend(readers(differing, reads));
             files.sort();
             files.dedup();
             Selection::Nodes { nodes, files }
         }
         everything => everything,
-    })
+    }
+}
+
+/// The graph, the differing paths and the scan, all refused as `affected` is.
+fn inputs(root: &Path, base: &str) -> Result<(Graph, Vec<Changed>, Scan), Failure> {
+    let (graph, violations) = clm_model::load(root);
+    if !violations.is_empty() {
+        let lines: Vec<String> = violations.iter().map(clm_check::format).collect();
+        return Err(Failure::Refused(lines.join("\n")));
+    }
+    Ok((graph, differing(root, base)?, scanned(root)?))
 }
 
 /// The readers alone: the files whose reads markers match a path that differs between the
