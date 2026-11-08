@@ -20,7 +20,7 @@ fn graph() -> Graph {
         ("specs/a/SPEC.md", spec("[\"a/**\"]", "[b]")),
         ("specs/b/SPEC.md", spec("[\"b/**\"]", "[]")),
         ("specs/c/SPEC.md", spec("[\"c/**\"]", "[]")),
-        ("specs/x/SPEC.md", spec("[\"x/**\"]", "[y, z]")),
+        ("specs/x/SPEC.md", spec("[\"x/**\"]", "[z, y]")),
         ("specs/y/SPEC.md", spec("[\"y/**\"]", "[w]")),
         ("specs/z/SPEC.md", spec("[\"z/**\"]", "[w]")),
         ("specs/w/SPEC.md", spec("[\"w/**\"]", "[]")),
@@ -215,4 +215,16 @@ fn the_shortest_path_wins_and_ties_go_to_the_first_id() {
             "w owns w/lib.rs (changed)"
         ]
     );
+}
+
+#[test]
+fn a_doc_only_reader_reads_itself_rather_than_being_changed() {
+    // req:check.affected/why-chain@7e236f82
+    let lines = why(
+        &[("docs/r.txt", true)],
+        &[],
+        &[("docs/r.txt", &["docs/**"])],
+        "docs/r.txt",
+    );
+    assert_eq!(lines, ["docs/r.txt reads docs/r.txt"]);
 }

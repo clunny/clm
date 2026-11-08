@@ -40,7 +40,7 @@ pub fn why_chain(
         .collect();
     if differing
         .iter()
-        .any(|c| c.exists && c.path == path && !clm_ledger::doc_only(&c.path))
+        .any(|c| c.path == path && !clm_ledger::doc_only(&c.path))
     {
         return vec![format!("{path} (changed)")];
     }
