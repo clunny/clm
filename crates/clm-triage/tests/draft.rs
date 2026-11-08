@@ -256,6 +256,9 @@ fn scenario_background_work_stopped() {
             "`one-report-per-run`",
             "is never called for the message ending such a turn",
             "is called once, with the final message",
+            "since the triage session may receive it",
+            "which you end as plain text",
+            "uses up the run's one report",
         ] {
             assert!(para.contains(needle), "{needle} missing from {para}");
         }
