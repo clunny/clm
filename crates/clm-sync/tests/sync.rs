@@ -2430,6 +2430,45 @@ fn flagged(branch: &str, id: &str, flags: usize) -> Repo {
 }
 
 #[test]
+fn a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed() {
+    // req:sync/judged-by-check@bfefb55e
+    // Filing an item moves the temporary worktree with `git checkout`, the one git command
+    // that writes there: it must not follow the variables to the clone.
+    if let Ok(work) = std::env::var("CLM_SYNC_TEST_FILED_WORK") {
+        let report = sync(Path::new(&work)).unwrap();
+        assert!(report.ok, "{:?}", report.lines);
+        assert_eq!(report.lines, ["filed backlog/reconsider-a-x.md"]);
+        return;
+    }
+    let r = flagged("impl/a", "a/x", 3);
+    let (w, g) = (r.work.clone(), r._dirs.1.path().join("g"));
+    fs::rename(w.join(".git"), &g).unwrap();
+    let head = git_env(&w, &g, &["rev-parse", "HEAD"]);
+
+    let name = "a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed";
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env("CLM_SYNC_TEST_FILED_WORK", &w)
+        .env("GIT_DIR", &g)
+        .env("GIT_WORK_TREE", &w)
+        .output()
+        .unwrap();
+
+    assert!(out.status.success(), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
+    assert_eq!(git_env(&w, &g, &["rev-parse", "HEAD^"]), head);
+    assert_eq!(
+        git_env(&w, &g, &["log", "-1", "--format=%s"]),
+        "File reconsider-a-x"
+    );
+    assert_eq!(git_env(&w, &g, &["status", "--porcelain"]), "");
+    assert_eq!(
+        git_env(&w, &g, &["symbolic-ref", "HEAD"]),
+        "refs/heads/impl/a"
+    );
+}
+
+#[test]
 fn a_requirement_at_the_threshold_gets_a_reconsider_item() {
     // req:sync/file-reconsider-item@1f67b16b
     let r = flagged("impl/a", "a/x", 3);
