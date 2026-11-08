@@ -206,9 +206,17 @@ After a rebase that completes and any regeneration, `clm rebase` SHALL load the 
 - WHEN `clm rebase` runs
 - THEN it prints the violation and exits 1, `TMPDIR` is empty again, and `git worktree list` names only the repository's own worktrees
 
+#### Scenario: a clone the environment names
+- GIVEN branch `spec/x` up to date with `origin/main`, whose committed tree passes `clm check`, with an untracked, unignored `tests/new.rs` citing `req:a/missing`, in a work tree `w` whose git directory `g` is elsewhere, with `GIT_DIR=g` and `GIT_WORK_TREE=w` set in the environment `clm rebase` runs in
+- WHEN `clm rebase` runs
+- THEN it prints no violation, its last line is `rebase ok`, it exits 0, and, run with those variables, `git rev-parse HEAD` names the commit it named before and `git status --porcelain` prints only `?? tests/new.rs`
+
 #### Serves
 - capability/catch-drift
 - architecture/no-silent-drift
+
+#### Needs
+- vcs/git-follows-its-clone
 
 ### Requirement: autosync
 On a branch named `spec/*`, `clm autosync` SHALL push to `refs/heads/autosync/<branch>` on `origin` a commit whose parent is `HEAD` and whose tree is `HEAD`'s with the spec paths taken from the working tree, untracked files included, leaving the working tree, the index and the branch unchanged. It SHALL include no file outside the spec paths. It SHALL push nothing on any other branch, or when the snapshot's tree equals that of `origin/<branch>` or `origin/autosync/<branch>`.
