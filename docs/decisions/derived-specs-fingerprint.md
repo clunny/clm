@@ -17,5 +17,5 @@ What it costs: every spec branch's fingerprint changes once, so an approval reco
 Alternatives considered:
 - **Fingerprint `specs/` by element** (the changed requirement's old and new hashes), which an unrelated requirement landing in the same file leaves alone. It needs both sides' contents and a parser inside the fingerprint; the Worker would fetch blobs it has no need of today.
 - **Carry the approval forward in `clm sync`** when only regenerated files changed. The record would be the author's clone's, which `approval = "other"` refuses, and nobody confirmed it at the guard's prompt.
-- **Regenerate at land instead of refusing.** The landed tree would differ from the head the gate rated and the author pushed; `gate/up-to-date` already sends the author to `clm sync`, and this does the same.
+- **Regenerate at land instead of refusing.** The landed tree would differ from the head the gate rated and the author pushed; `gate/up-to-date` already sends the author to `clm sync`, and this does the same. Taken later for a head behind `main` in `specs/` alone, once concurrent spec lands starved each other (`land-regenerates-behind-specs`).
 - **Pin the approval to the deltas' hashes alone**, ignoring the other authored files. Decisions, backlog edits and `change.md` are what the human reads; they stay in.
