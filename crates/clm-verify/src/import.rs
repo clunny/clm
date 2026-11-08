@@ -19,9 +19,6 @@ pub(crate) fn import_all(ctx: &Ctx, state: &State) -> Result<Outcome, Error> {
 /// none.
 pub(crate) fn import_head(ctx: &Ctx, state: &State) -> Result<Outcome, Error> {
     let (_, lands) = state.unverified_lands();
-    if lands.is_empty() {
-        return Ok(Outcome::new("verify nothing to import", 0));
-    }
     let landed = |run: &Run| lands.contains(&run.head);
     import(ctx, state, state.chain.len() - 1, landed)
 }

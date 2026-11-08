@@ -89,8 +89,9 @@ impl From<clm_ledger::Error> for Error {
 }
 
 impl From<clm_config::Error> for Error {
+    /// Settings that can't be used are a reason, not a git failure.
     fn from(e: clm_config::Error) -> Self {
-        Error::Git(e.to_string())
+        Error::Refused(e.to_string())
     }
 }
 
