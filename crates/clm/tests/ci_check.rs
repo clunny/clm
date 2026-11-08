@@ -47,6 +47,8 @@ echo "$run" >> "$CI_LOG"
 [ "$run" != "${CI_FAIL:-}" ]
 "#;
 
+const NEXTEST_ALL: &str = "cargo nextest run --workspace --no-tests=pass";
+const DOC_TESTS: &str = "cargo test --doc --workspace";
 const WASM: &str = "cargo build --target wasm32-unknown-unknown";
 /// The crates built for wasm only with their default features disabled (ci/web-checks).
 const NO_DEFAULTS: [&str; 4] = ["clm-check", "clm-orchestrator", "clm-view", "clm-ledger"];
@@ -103,7 +105,7 @@ impl Tree {
             fs::create_dir_all(work.join(dir)).unwrap();
             fs::write(work.join(dir).join("package.json"), "{}").unwrap();
         }
-        for name in ["ci-check.sh", "detector-tools.sh"] {
+        for name in ["ci-check.sh", "detector-tools.sh", "test-tools.sh"] {
             executable(&work.join(".github/scripts").join(name), &script(name));
         }
         // `clm` has a binary, `clm-check` and `clm-land` a library, and `git` both and
@@ -237,6 +239,24 @@ impl Tree {
         selection: Option<&std::ffi::OsStr>,
         path: &std::ffi::OsStr,
     ) -> (bool, Vec<String>, String) {
+        let out = self.output(ci, fail, selection, path);
+        let log = fs::read_to_string(self.dir.path().join("log")).unwrap_or_default();
+        (
+            out.status.success(),
+            log.lines().map(str::to_owned).collect(),
+            String::from_utf8_lossy(&out.stderr).into_owned(),
+        )
+    }
+
+    /// Runs the script with `path` as `PATH` and returns its whole output, the commands it ran
+    /// being in `log` beside the tree.
+    fn output(
+        &self,
+        ci: Option<&str>,
+        fail: &str,
+        selection: Option<&std::ffi::OsStr>,
+        path: &std::ffi::OsStr,
+    ) -> std::process::Output {
         let log = self.dir.path().join("log");
         let _ = fs::remove_file(&log);
         let mut c = Command::new(Path::new(".github/scripts").join(self.script));
@@ -252,13 +272,7 @@ impl Tree {
         if let Some(selection) = selection {
             c.env("CLM_SELECTION", selection);
         }
-        let out = c.output().unwrap();
-        let log = fs::read_to_string(log).unwrap_or_default();
-        (
-            out.status.success(),
-            log.lines().map(str::to_owned).collect(),
-            String::from_utf8_lossy(&out.stderr).into_owned(),
-        )
+        c.output().unwrap()
     }
 }
 
@@ -273,12 +287,17 @@ fn every_check() {
         log[0].starts_with("cargo install ") && log[0].ends_with(" cargo-machete"),
         "{log:?}"
     );
+    assert!(
+        log[1].starts_with("cargo install ") && log[1].ends_with(" cargo-nextest"),
+        "{log:?}"
+    );
     // `clm-ledger` without its `git` feature (ledger/ledger-builds-for-wasm).
     let no_defaults = NO_DEFAULTS.map(|k| format!("{WASM} --no-default-features -p {k}"));
     for cmd in [
         "cargo fmt --all --check".to_owned(),
         "cargo clippy --all-targets -- -D warnings".to_owned(),
-        "cargo test --all".to_owned(),
+        NEXTEST_ALL.to_owned(),
+        DOC_TESTS.to_owned(),
         format!("{WASM} -p clm-model -p clm-context"),
         format!("{WASM} -p clm-web"),
         "plugin-panel$ npm ci --ignore-scripts".to_owned(),
@@ -744,11 +763,11 @@ fn check_script_installs_the_tools() {
     );
 }
 
-/// The `cargo test` commands a run ran, in order.
+/// The commands a run ran to run Rust tests, `cargo nextest run` or `cargo test`, in order.
 fn tests_run(log: &[String]) -> Vec<&str> {
     log.iter()
         .map(String::as_str)
-        .filter(|l| l.starts_with("cargo test"))
+        .filter(|l| l.starts_with("cargo nextest run") || l.starts_with("cargo test"))
         .collect()
 }
 
@@ -769,6 +788,7 @@ const WEB_SUITE: [&str; 2] = ["web$ npm ci --ignore-scripts", "web$ npm test"];
 /// fmt, clippy, the detector tools and every wasm build ran, whatever the selection.
 fn assert_whole_tree_checks(log: &[String]) {
     assert!(log[0].starts_with("cargo install "), "{log:?}");
+    assert!(log[1].starts_with("cargo install "), "{log:?}");
     for cmd in [
         "cargo fmt --all --check".to_owned(),
         "cargo clippy --all-targets -- -D warnings".to_owned(),
@@ -784,18 +804,21 @@ fn assert_whole_tree_checks(log: &[String]) {
 
 #[test]
 fn one_integration_test() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let (ok, log) =
         Tree::new().run_selecting("node orchestrator.run\nfile crates/clm/tests/run.rs\n");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
-    assert_eq!(tests_run(&log), ["cargo test -p clm --test run"]);
+    assert_eq!(
+        tests_run(&log),
+        ["cargo nextest run --no-tests=pass -p clm --test run"]
+    );
     assert_eq!(npm_run(&log), Vec::<&str>::new());
 }
 
 #[test]
 fn helper_and_source_files() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let (ok, log) = Tree::new().run_selecting(
         "file crates/clm-land/tests/common/mod.rs\nfile crates/clm-check/src/lib.rs\n",
     );
@@ -803,15 +826,15 @@ fn helper_and_source_files() {
     assert_eq!(
         tests_run(&log),
         [
-            "cargo test -p clm-check --lib",
-            "cargo test -p clm-land --tests"
+            "cargo nextest run --no-tests=pass -p clm-check --lib",
+            "cargo nextest run --no-tests=pass -p clm-land --tests"
         ]
     );
 }
 
 #[test]
 fn web_file() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let (ok, log) = Tree::new().run_selecting("file web/src/app.ts\n");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
@@ -839,7 +862,7 @@ fn web_file() {
 
 #[test]
 fn capability_package_file() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let (ok, log) = Tree::new().run_selecting(
         "file capabilities/panel/watch-beside-chat.test.ts\n\
          file capabilities/web/follow-from-browser.spec.ts\n\
@@ -983,7 +1006,7 @@ fn plugin_not_selected_runs_no_plugin_validation() {
 
 #[test]
 fn everything() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let tree = Tree::new();
     let all_line = tree.run_selecting("all Cargo.lock\nfile crates/clm/tests/run.rs\n");
     let unset = tree.run(None, "");
@@ -999,7 +1022,7 @@ fn everything() {
     ] {
         assert!(ok, "{what}: {log:?}");
         assert_whole_tree_checks(&log);
-        assert_eq!(tests_run(&log), ["cargo test --all"], "{what}");
+        assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS], "{what}");
         // req:ci/panel-validate@82219e3e
         assert!(log.contains(&PANEL_VALIDATE.to_owned()), "{what}: {log:?}");
         let all: Vec<_> = PANEL_SUITE
@@ -1016,7 +1039,7 @@ fn everything() {
 
 #[test]
 fn empty_selection() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let (ok, log) = Tree::new().run_selecting("");
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
@@ -1026,7 +1049,7 @@ fn empty_selection() {
 
 #[test]
 fn one_cargo_test_per_package_in_package_order() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let (ok, log) = Tree::new().run_selecting(
         "file crates/git/tests/b.rs\n\
          node clm\n\
@@ -1046,9 +1069,9 @@ fn one_cargo_test_per_package_in_package_order() {
     assert_eq!(
         tests_run(&log),
         [
-            "cargo test -p clm --tests --bins",
-            "cargo test -p clm-check --tests",
-            "cargo test -p clm-git --test b --lib --bins --test a",
+            "cargo nextest run --no-tests=pass -p clm --tests --bins",
+            "cargo nextest run --no-tests=pass -p clm-check --tests",
+            "cargo nextest run --no-tests=pass -p clm-git --test b --lib --bins --test a",
         ]
     );
     assert_eq!(npm_run(&log), Vec::<&str>::new());
@@ -1056,7 +1079,7 @@ fn one_cargo_test_per_package_in_package_order() {
 
 #[test]
 fn only_file_lines_select() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     // Lines that would select something if their path were read without the `file ` word.
     let (ok, log) = Tree::new().run_selecting(
         "node crates/clm/tests/run.rs\n\
@@ -1066,13 +1089,16 @@ fn only_file_lines_select() {
          file crates/clm-land/src/lib.rs\n",
     );
     assert!(ok, "{log:?}");
-    assert_eq!(tests_run(&log), ["cargo test -p clm-land --lib"]);
+    assert_eq!(
+        tests_run(&log),
+        ["cargo nextest run --no-tests=pass -p clm-land --lib"]
+    );
     assert_eq!(npm_run(&log), Vec::<&str>::new());
 }
 
 #[test]
 fn web_not_selected_installs_no_browser() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     // req:ci/browser-install@6f2b09cf
     let (ok, log) = Tree::new().run_selecting("file web/index.html\n");
     assert!(ok, "{log:?}");
@@ -1087,7 +1113,7 @@ fn web_not_selected_installs_no_browser() {
 
 #[test]
 fn a_failing_selected_test_fails() {
-    // req:ci/selected-tests@ba3fcebe
+    // req:ci/selected-tests@bf58d446
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(
@@ -1095,7 +1121,7 @@ fn a_failing_selected_test_fails() {
         "file crates/clm-check/src/lib.rs\nfile crates/clm-land/src/lib.rs\n",
     )
     .unwrap();
-    let fail = "cargo test -p clm-check --lib";
+    let fail = "cargo nextest run --no-tests=pass -p clm-check --lib";
     let (ok, log) = tree.run_env(None, fail, Some(file.as_os_str()));
     assert!(!ok, "{log:?}");
     assert_eq!(log.last().map(String::as_str), Some(fail), "{log:?}");
@@ -1111,7 +1137,10 @@ fn the_pin_changing_runs_its_crate_s_tests() {
     // req:ci/no-model-steps@00759a81
     let (ok, log) = Tree::new().run_selecting("file crates/clm-run/superpowers.pin\n");
     assert!(ok, "{log:?}");
-    assert_eq!(tests_run(&log), ["cargo test -p clm-run --tests"]);
+    assert_eq!(
+        tests_run(&log),
+        ["cargo nextest run --no-tests=pass -p clm-run --tests"]
+    );
     for prefix in ["cargo run", "clm ", "claude "] {
         assert!(!ran(&log, prefix), "{prefix}: {log:?}");
     }
@@ -1124,7 +1153,8 @@ fn a_deleted_eval_file_only_validates_the_plugin() {
     assert!(ok, "{log:?}");
     let claude: Vec<_> = log.iter().filter(|l| l.starts_with("claude ")).collect();
     assert_eq!(claude, [PLUGIN_VALIDATE], "{log:?}");
-    for prefix in ["cargo run", "cargo test", "clm "] {
+    assert_eq!(tests_run(&log), Vec::<&str>::new(), "{log:?}");
+    for prefix in ["cargo run", "clm "] {
         assert!(!ran(&log, prefix), "{prefix}: {log:?}");
     }
 }
@@ -1347,4 +1377,194 @@ fn coverage_tools_are_pinned() {
         .permissions()
         .mode();
     assert!(mode & 0o111 != 0, "coverage.sh isn't executable");
+}
+
+#[test]
+fn nextest_replaces_cargo_test_but_for_doctests() {
+    // req:ci/nextest-runner@dd9030d0
+    let (ok, log) = Tree::new().run(None, "");
+    assert!(ok, "{log:?}");
+    assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS]);
+    // The doctests follow nextest, never the other way round.
+    assert!(runs_before(&log, NEXTEST_ALL, DOC_TESTS), "{log:?}");
+    // A failing nextest run fails the script before the doctests.
+    let (ok, log) = Tree::new().run(None, NEXTEST_ALL);
+    assert!(!ok, "{log:?}");
+    assert_eq!(log.last().map(String::as_str), Some(NEXTEST_ALL));
+}
+
+#[test]
+fn test_tools_installs_only_nextest_pinned() {
+    // req:ci/test-tools@b136de2a
+    let lines = script_lines("test-tools.sh");
+    let installs: Vec<_> = lines
+        .iter()
+        .filter(|l| l.contains("cargo install"))
+        .collect();
+    assert_eq!(installs.len(), 1, "{lines:?}");
+    let words: Vec<&str> = installs[0].split_whitespace().collect();
+    assert!(
+        words.starts_with(&["cargo", "install"]) && words.last() == Some(&"cargo-nextest"),
+        "{}",
+        installs[0]
+    );
+    assert!(words.contains(&"--locked"), "{}", installs[0]);
+    let version = words
+        .iter()
+        .position(|w| *w == "--version")
+        .and_then(|i| words.get(i + 1))
+        .unwrap_or_else(|| panic!("no --version: {}", installs[0]));
+    let parts: Vec<&str> = version.split('.').collect();
+    assert!(
+        parts.len() == 3
+            && parts
+                .iter()
+                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
+        "not an exact x.y.z version: {version}"
+    );
+    let mode = fs::metadata(script_path("test-tools.sh"))
+        .unwrap()
+        .permissions()
+        .mode();
+    assert!(mode & 0o111 != 0, "test-tools.sh isn't executable");
+}
+
+#[test]
+fn test_tools_run_between_the_detector_tools_and_cargo() {
+    // req:ci/test-tools@b136de2a
+    let lines = script_lines("ci-check.sh");
+    let at = |line: &str| {
+        lines
+            .iter()
+            .position(|l| l == line)
+            .unwrap_or_else(|| panic!("ci-check.sh doesn't run {line}: {lines:?}"))
+    };
+    let detectors = at(".github/scripts/detector-tools.sh");
+    let tests = at(".github/scripts/test-tools.sh");
+    let cargo = lines
+        .iter()
+        .position(|l| l.split_whitespace().any(|w| w == "cargo"))
+        .unwrap();
+    assert!(detectors < tests && tests < cargo, "{lines:?}");
+    // And nothing else runs it or installs `cargo-nextest`.
+    let github = repo().join(".github");
+    for dir in ["workflows", "scripts"] {
+        for entry in fs::read_dir(github.join(dir)).unwrap() {
+            let path = entry.unwrap().path();
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            let text = fs::read_to_string(&path).unwrap();
+            for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
+                assert!(
+                    !line.contains("test-tools.sh") || name == "ci-check.sh",
+                    "{name} runs test-tools.sh: {line}"
+                );
+                assert!(
+                    !(line.contains("cargo install") && line.contains("cargo-nextest"))
+                        || name == "test-tools.sh",
+                    "{name} installs cargo-nextest: {line}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_release_builds_no_nextest() {
+    // req:ci/test-tools@b136de2a
+    for path in [
+        repo().join(".github/workflows/release.yml"),
+        script_path("release-prepare.sh"),
+    ] {
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            !text.contains("test-tools.sh") && !text.contains("nextest"),
+            "{}",
+            path.display()
+        );
+    }
+}
+
+/// The lines of `text` starting `ci-check: `.
+fn phase_lines(text: &str) -> Vec<&str> {
+    text.lines()
+        .filter(|l| l.starts_with("ci-check: "))
+        .collect()
+}
+
+#[test]
+fn a_passing_run_prints_its_phase_times() {
+    // req:ci/phase-times@e8375a0b
+    let tree = Tree::new();
+    let file = tree.dir.path().join("selection");
+    fs::write(&file, "").unwrap();
+    let out = tree.output(None, "", Some(file.as_os_str()), &tree.path());
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(phase_lines(&stdout).is_empty(), "{stdout}");
+    let lines: Vec<&str> = stderr.lines().collect();
+    let secs = |l: &str, suffix: &str| {
+        l.strip_suffix(suffix)
+            .and_then(|l| l.strip_suffix('s'))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    };
+    // `ci-check: <phase> <n>s` after each phase, in order.
+    let each: Vec<&str> = lines
+        .iter()
+        .copied()
+        .take_while(|l| *l != "ci-check: phases")
+        .filter(|l| l.starts_with("ci-check: "))
+        .collect();
+    for (line, phase) in each.iter().zip(["tools", "fmt", "clippy", "wasm"]) {
+        let rest = line.strip_prefix("ci-check: ").unwrap();
+        let (name, n) = rest.rsplit_once(' ').unwrap();
+        assert!(name == phase && secs(n, ""), "{line}");
+    }
+    assert_eq!(each.len(), 5, "{stderr}");
+    // The summary: one `<n>s <phase>` line per phase, then the total, last.
+    let summary = lines.iter().position(|l| *l == "ci-check: phases").unwrap();
+    for (line, phase) in lines[summary + 1..]
+        .iter()
+        .zip(["tools", "fmt", "clippy", "wasm"])
+    {
+        assert!(secs(line, &format!(" {phase}")), "{line}");
+    }
+    assert!(secs(lines.last().unwrap(), " total"), "{stderr}");
+    assert_eq!(lines.len() - summary, 1 + 5 + 1, "{stderr}");
+}
+
+#[test]
+fn a_failing_phase_prints_only_where_it_failed() {
+    // req:ci/phase-times@e8375a0b
+    let tree = Tree::new();
+    tree.fake(
+        "cargo",
+        "#!/usr/bin/env bash\necho \"cargo $*\" >> \"$CI_LOG\"\n[ \"$1\" != clippy ] || exit 3\n",
+    );
+    let file = tree.dir.path().join("selection");
+    fs::write(&file, "").unwrap();
+    let out = tree.output(None, "", Some(file.as_os_str()), &tree.path());
+    assert_eq!(out.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let lines: Vec<&str> = stderr.lines().collect();
+    let last = lines.last().unwrap();
+    let rest = last
+        .strip_prefix("ci-check: failed in clippy after ")
+        .unwrap_or_else(|| panic!("{stderr}"));
+    let (took, total) = rest.split_once("s, ").unwrap();
+    assert!(took.bytes().all(|b| b.is_ascii_digit()), "{last}");
+    assert!(
+        total
+            .strip_suffix("s total")
+            .is_some_and(|n| n.bytes().all(|b| b.is_ascii_digit())),
+        "{last}"
+    );
+    assert!(!stderr.contains("ci-check: phases"), "{stderr}");
+    let phases = phase_lines(&stderr);
+    assert!(
+        !phases
+            .iter()
+            .any(|l| l.contains("wasm") || l.contains("tests")),
+        "{stderr}"
+    );
 }

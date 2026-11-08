@@ -3,6 +3,40 @@
 # runs it on the merged tree, and then runs `clm check` itself. Run from the repo root.
 set -euo pipefail
 
+# Phase times (ci/phase-times). `timed <phase> <command...>` runs a command as one phase and
+# prints `ci-check: <phase> <n>s` to stderr after it. The EXIT trap keeps the exit status: a
+# pass prints every phase and the total, a failure only the phase it failed in, so `clm land`'s
+# last 40 lines of a failed check still hold the failure's own output.
+phase_log=()
+phase_name=
+phase_start=0
+on_exit() {
+  local status=$? total=$SECONDS p
+  trap - EXIT
+  if [ "$status" -ne 0 ]; then
+    echo "ci-check: failed in ${phase_name:-setup} after $((total - phase_start))s, ${total}s total" >&2
+  else
+    {
+      echo "ci-check: phases"
+      for p in ${phase_log[@]+"${phase_log[@]}"}; do echo "$p"; done
+      echo "${total}s total"
+    } >&2
+  fi
+  exit "$status"
+}
+trap on_exit EXIT
+timed() {
+  local took
+  phase_name=$1
+  phase_start=$SECONDS
+  shift
+  "$@"
+  took=$((SECONDS - phase_start))
+  echo "ci-check: $phase_name ${took}s" >&2
+  phase_log+=("${took}s $phase_name")
+  phase_name=
+}
+
 # Which tests run (ci/selected-tests). With `CLM_SELECTION` naming a file, as `clm land` sets
 # it, only those its `file <path>` lines call for; unset, empty, missing or starting with an
 # `all` line, every test. The file is read with builtins only, so selecting costs no build.
@@ -31,7 +65,7 @@ package_name() {
   done <"$1"
 }
 
-# Selects the `cargo test` target flag $2 of the package in `crates/$1`. A deleted crate
+# Selects the `cargo nextest run` target flag $2 of the package in `crates/$1`. A deleted crate
 # selects nothing.
 add() {
   local manifest=crates/$1/Cargo.toml package
@@ -88,43 +122,57 @@ if $full; then
   plugin=true
 fi
 
-# `cargo test` runs `clm check`, detectors and all (`this_repository_is_clean`), so their tools
-# go first (ci/detector-tools).
-.github/scripts/detector-tools.sh
+# The tests run `clm check`, detectors and all (`this_repository_is_clean`), so the detectors'
+# tools go first (ci/detector-tools), then `cargo-nextest` (ci/test-tools).
+install_tools() {
+  .github/scripts/detector-tools.sh
+  .github/scripts/test-tools.sh
+}
+timed tools install_tools
 
-cargo fmt --all --check
-cargo clippy --all-targets -- -D warnings
+timed fmt cargo fmt --all --check
+timed clippy cargo clippy --all-targets -- -D warnings
 
 # The crates the `web` Worker links build for wasm (ci/web-checks). Before the tests, because
 # they fail faster. Each `--no-default-features` crate builds on its own: built with a crate
 # that depends on it with its default features, cargo would turn them back on.
-cargo build --target wasm32-unknown-unknown -p clm-model -p clm-context
-cargo build --target wasm32-unknown-unknown --no-default-features -p clm-check
-cargo build --target wasm32-unknown-unknown --no-default-features -p clm-orchestrator
-cargo build --target wasm32-unknown-unknown --no-default-features -p clm-view
-# Without its `git` feature (ledger/ledger-builds-for-wasm).
-cargo build --target wasm32-unknown-unknown --no-default-features -p clm-ledger
-cargo build --target wasm32-unknown-unknown -p clm-web
+wasm_builds() {
+  cargo build --target wasm32-unknown-unknown -p clm-model -p clm-context
+  cargo build --target wasm32-unknown-unknown --no-default-features -p clm-check
+  cargo build --target wasm32-unknown-unknown --no-default-features -p clm-orchestrator
+  cargo build --target wasm32-unknown-unknown --no-default-features -p clm-view
+  # Without its `git` feature (ledger/ledger-builds-for-wasm).
+  cargo build --target wasm32-unknown-unknown --no-default-features -p clm-ledger
+  cargo build --target wasm32-unknown-unknown -p clm-web
+}
+timed wasm wasm_builds
 
-if $full; then
-  cargo test --all
-else
-  # One run per package, in package order, so a `--test` flag never meets a package without
-  # that target. A selected run leaves out doctests: `--doc` can't join other targets.
-  packages=$(for entry in ${selected[@]+"${selected[@]}"}; do echo "${entry%%	*}"; done | LC_ALL=C sort -u)
-  for package in $packages; do
-    flags=
-    for entry in "${selected[@]}"; do
-      [ "${entry%%	*}" = "$package" ] || continue
-      case " $flags " in
-        *" ${entry#*	} "*) ;;
-        *) flags="$flags ${entry#*	}" ;;
-      esac
+# The Rust tests run under `cargo-nextest` (ci/nextest-runner), which never runs doctests, so a
+# full run follows it with `cargo test --doc`. `--no-tests=pass`: a package may have none.
+rust_tests() {
+  if $full; then
+    cargo nextest run --workspace --no-tests=pass
+    cargo test --doc --workspace
+  else
+    # One run per package, in package order, so a `--test` flag never meets a package without
+    # that target. A selected run leaves out doctests, which `nextest` can't run.
+    local packages package flags entry
+    packages=$(for entry in ${selected[@]+"${selected[@]}"}; do echo "${entry%%	*}"; done | LC_ALL=C sort -u)
+    for package in $packages; do
+      flags=
+      for entry in "${selected[@]}"; do
+        [ "${entry%%	*}" = "$package" ] || continue
+        case " $flags " in
+          *" ${entry#*	} "*) ;;
+          *) flags="$flags ${entry#*	}" ;;
+        esac
+      done
+      # shellcheck disable=SC2086 # the flags split into words
+      cargo nextest run --no-tests=pass -p "$package" $flags
     done
-    # shellcheck disable=SC2086 # the flags split into words
-    cargo test -p "$package" $flags
-  done
-fi
+  fi
+}
+timed tests rust_tests
 
 # A plugin directory as Claude Code loads it, with whatever `claude` this machine has. No
 # `--strict` or `--profile`: only what the engine would refuse fails, not warnings or the plugin
@@ -155,37 +203,19 @@ has_package() {
   [ -f "capabilities/$1/package.json" ]
 }
 
-# `plugin-panel/`'s and `web/`'s tests, each followed by its capability package
-# (ci/web-checks): the panel's first, since they're quick.
-if $panel; then
-  (cd plugin-panel && npm ci --ignore-scripts && npm test)
-  # Its tests strip types and never load the module as the engine does (ci/panel-validate).
-  validate plugin-panel
-fi
-if { $panel || $cap_panel; } && has_package panel; then
-  (cd capabilities/panel && npm ci --ignore-scripts && npm test)
-fi
-# The `clm` plugin's manifest, hooks, skills, agents and command (ci/plugin-validate), which its
-# tests read only as text.
-if $plugin; then
-  validate plugin
-fi
-if $web; then
-  (
-    cd web
-    npm ci --ignore-scripts
-    browser_install
-    npm test
-  )
-fi
-# `web/site/`'s package (`web.site`) follows `web/`'s suite, once it has a `package.json`
-# (ci/web-checks).
-if $web && [ -f web/site/package.json ]; then
-  (cd web/site && npm ci --ignore-scripts && npm test)
-fi
+# Each suite is a subshell function, so its `cd` stays in it and `timed` can run it as a phase.
+panel_suite() (cd plugin-panel && npm ci --ignore-scripts && npm test)
+cap_panel_suite() (cd capabilities/panel && npm ci --ignore-scripts && npm test)
+web_suite() (
+  cd web
+  npm ci --ignore-scripts
+  browser_install
+  npm test
+)
+site_suite() (cd web/site && npm ci --ignore-scripts && npm test)
 # `capabilities/web/`'s tests build the app with `web/`'s own dependencies, so `web/`'s `npm ci`
 # goes first, once.
-if { $web || $cap_web; } && has_package web; then
+cap_web_suite() {
   $web || (cd web && npm ci --ignore-scripts)
   (
     cd capabilities/web
@@ -195,4 +225,31 @@ if { $web || $cap_web; } && has_package web; then
     # package fails only when a test fails twice (ci/capability-web-retries).
     npm test -- --retries=1
   )
+}
+
+# `plugin-panel/`'s and `web/`'s tests, each followed by its capability package
+# (ci/web-checks): the panel's first, since they're quick.
+if $panel; then
+  timed plugin-panel panel_suite
+  # Its tests strip types and never load the module as the engine does (ci/panel-validate).
+  timed "validate plugin-panel" validate plugin-panel
+fi
+if { $panel || $cap_panel; } && has_package panel; then
+  timed capabilities/panel cap_panel_suite
+fi
+# The `clm` plugin's manifest, hooks, skills, agents and command (ci/plugin-validate), which its
+# tests read only as text.
+if $plugin; then
+  timed "validate plugin" validate plugin
+fi
+if $web; then
+  timed web web_suite
+fi
+# `web/site/`'s package (`web.site`) follows `web/`'s suite, once it has a `package.json`
+# (ci/web-checks).
+if $web && [ -f web/site/package.json ]; then
+  timed web/site site_suite
+fi
+if { $web || $cap_web; } && has_package web; then
+  timed capabilities/web cap_web_suite
 fi
