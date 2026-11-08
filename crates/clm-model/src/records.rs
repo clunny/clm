@@ -109,6 +109,9 @@ pub struct BacklogFrontmatter {
     /// The host's dependency alerts the item was taken in from, positive whole numbers
     /// (`dependency-alerts-through-intake`).
     pub alerts: Vec<u64>,
+    /// The red `verified` results on `main` the item was taken in from, as commit IDs of
+    /// 40 lower-case hex digits (`verify-after-land`).
+    pub verify_failures: Vec<String>,
 }
 
 /// A backlog item's frontmatter as written, before `components` and its old key
@@ -134,6 +137,8 @@ struct RawBacklogFrontmatter {
     issues: Vec<u64>,
     #[serde(default)]
     alerts: Vec<u64>,
+    #[serde(default)]
+    verify_failures: Vec<String>,
 }
 
 /// A key's value when the key is written at all, a null included.
@@ -162,6 +167,15 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
         if raw.alerts.contains(&0) {
             return Err("`alerts` entries must be positive whole numbers, not 0".into());
         }
+        if let Some(bad) = raw
+            .verify_failures
+            .iter()
+            .find(|c| c.len() != 40 || !c.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        {
+            return Err(format!(
+                "`verify_failures` entries must be 40 lower-case hex digits, not `{bad}`"
+            ));
+        }
         Ok(BacklogFrontmatter {
             title: raw.title,
             kind: raw.kind,
@@ -172,6 +186,7 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
             requirement: raw.requirement,
             issues: raw.issues,
             alerts: raw.alerts,
+            verify_failures: raw.verify_failures,
         })
     }
 }
