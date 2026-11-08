@@ -35,7 +35,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 
 ## How work is built and proven
 
-- **Marker:** the text `req:<component>/<slug>@<version>` in a test, saying which requirement the test proves, at which version. *Usually:* requirement traceability in tests.
+- **Marker:** the text `req:<component>/<slug>@<version>` in a test, saying which requirement the test proves, at which version. Two other markers use the word too: `clm:remove-by <change-id>` on code a contract change will remove (see Expand-contract), and `clm:reads <glob>` in a test that reads the project's own specs or docs, so a land that changes only them still runs it. *Usually:* requirement traceability in tests.
 - **Version:** the first 8 hex digits of a requirement's hash; rewording the requirement changes it.
 - **Requirement states:** `current` (a passing test cites it at its current version), `behind` (cited only at an older version), `unbuilt` (specified, but no test cites it yet) and `obsolete` (a test cites it, but a change removed it). **Pending** means any state but `current`: work the code still owes the spec (`clm pending`, `clm coverage`).
 - **Component status:** `unbuilt` (specified, not built yet), `active` (built and kept current) and `deprecated`.

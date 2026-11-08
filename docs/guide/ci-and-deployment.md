@@ -10,6 +10,12 @@ The checks run on the machine that runs `clm land`. If your team wants a control
 
 When the check fails, `clm land` repeats its last 40 lines and keeps its whole output at `.clm/land-logs/<branch>.log`. If your check script runs several steps, print `::group::<name>` as each one starts and `::endgroup::` as it ends, as GitHub Actions does. The refusal then names the step that was running when the check failed and the lines of the log it spans, so a session reads the failure even when it lies more than 40 lines back.
 
+### Tests that read your specs and docs
+
+Your specs and other prose don't count as code for a land. When a branch changes only files under `specs/`, `changes/`, `backlog/` or `docs/` (outside `docs/guide/` and `docs/spec-format.md`), or `ARCHITECTURE.md`, `CAPABILITIES.md`, `README.md` or `CLAUDE.md`, and the code it lands on was already checked, `clm land` doesn't run your whole `[land] check`: it runs `clm check` and only the tests that say they read a file the branch changes. A test says so with a `clm:reads <glob>` marker anywhere in its file, usually a comment, whose glob matches each such path it reads, as a component's `paths` do: `clm:reads ARCHITECTURE.md`, `clm:reads specs/**`. A file may hold several.
+
+So when a test reads one of those files of your project's own tree, such as a test that checks your specs for a retired term, give it the marker. Without one, a branch that changes only that file lands without running the test, and can leave `main` failing it until a later land happens to run it. `clm affected --readers` prints the test files whose markers match what the current branch changes, and `clm land` runs `[land] check` with the environment variable `CLM_SELECTION` naming a file that lists them, as it names the selected tests of a code land. A test that reads only fixtures it writes itself, or only code, needs no marker. Markdown files are never readers.
+
 ## Deployment is yours
 
 Every commit on `main` is checked, so every commit is deployable. Whether and when you deploy is your choice:
