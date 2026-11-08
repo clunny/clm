@@ -1,11 +1,11 @@
 //! The one place CLM runs `git` and `gh` (specs/vcs/SPEC.md).
 
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
-use std::sync::mpsc;
+use std::sync::{Mutex, OnceLock, mpsc};
 use std::time::{Duration, Instant};
 
 /// What `run` feeds the command besides its arguments.
@@ -75,7 +75,8 @@ impl std::error::Error for Error {
 /// Runs `program` (`git`, `gh`, found on `PATH`) in `root` and returns its stdout
 /// untrimmed, waiting however long it takes.
 pub fn run(root: &Path, program: &str, args: &[&str], options: Options) -> Result<Vec<u8>, Error> {
-    run_bounded(root, program, args, options, None, &[])
+    let unset = follow_clone(root, program, &options);
+    run_bounded(root, program, args, options, None, &unset)
 }
 
 /// As [`run`], but a command still running once `limit` has passed is killed, reaped and
@@ -87,7 +88,8 @@ pub fn run_within(
     options: Options,
     limit: Duration,
 ) -> Result<Vec<u8>, Error> {
-    run_bounded(root, program, args, options, Some(limit), &[])
+    let unset = follow_clone(root, program, &options);
+    run_bounded(root, program, args, options, Some(limit), &unset)
 }
 
 fn run_bounded(
@@ -216,9 +218,99 @@ pub fn git(root: &Path, args: &[&str]) -> Result<String, Error> {
 /// `git <args>` in `dir` as though the environment named no repository: every variable
 /// `git rev-parse --local-env-vars` lists is removed from the command's environment.
 pub fn git_isolated(dir: &Path, args: &[&str]) -> Result<String, Error> {
-    let listed = git(dir, &["rev-parse", "--local-env-vars"])?;
-    let unset: Vec<String> = listed.split_whitespace().map(str::to_string).collect();
+    let unset = local_env_vars(dir)?;
     run_bounded(dir, "git", args, Options::default(), None, &unset).map(trimmed)
+}
+
+/// The variables `git rev-parse --local-env-vars` prints, which name a repository.
+fn local_env_vars(dir: &Path) -> Result<Vec<String>, Error> {
+    static LISTED: OnceLock<Vec<String>> = OnceLock::new();
+    if let Some(listed) = LISTED.get() {
+        return Ok(listed.clone());
+    }
+    let out = run_bounded(
+        dir,
+        "git",
+        &["rev-parse", "--local-env-vars"],
+        Options::default(),
+        None,
+        &[],
+    )?;
+    let listed: Vec<String> = String::from_utf8_lossy(&out)
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
+    Ok(LISTED.get_or_init(|| listed).clone())
+}
+
+/// The variables to remove from a `git` command run in `root` (`git-follows-its-clone`):
+/// all of git's repository variables when `root` lies outside the work tree the process's
+/// environment names, less any the caller sets itself; none otherwise, or for another program.
+fn follow_clone(root: &Path, program: &str, options: &Options) -> Vec<String> {
+    if program != "git" {
+        return Vec::new();
+    }
+    let Some(work_tree) = environment_work_tree() else {
+        return Vec::new();
+    };
+    if !lies_outside(root, &work_tree) {
+        return Vec::new();
+    }
+    let Ok(mut unset) = local_env_vars(root) else {
+        return Vec::new();
+    };
+    unset.retain(|name| !options.env.iter().any(|(set, _)| set == name));
+    unset
+}
+
+/// The work tree `GIT_DIR` and `GIT_WORK_TREE` name, found with the environment as the
+/// process has it and kept while neither value changes. `None` when neither is set or git
+/// names no work tree.
+fn environment_work_tree() -> Option<PathBuf> {
+    type Key = (Option<OsString>, Option<OsString>);
+    static FOUND: Mutex<Option<(Key, Option<PathBuf>)>> = Mutex::new(None);
+    let key = (
+        std::env::var_os("GIT_DIR"),
+        std::env::var_os("GIT_WORK_TREE"),
+    );
+    if key.0.is_none() && key.1.is_none() {
+        return None;
+    }
+    let mut found = FOUND.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((was, tree)) = found.as_ref()
+        && *was == key
+    {
+        return tree.clone();
+    }
+    let tree = Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim_end().to_string())
+        .filter(|top| !top.is_empty())
+        .map(|top| std::fs::canonicalize(&top).unwrap_or_else(|_| PathBuf::from(top)));
+    *found = Some((key, tree.clone()));
+    tree
+}
+
+/// Whether `root` is neither `work_tree` nor under it, or has a `.git` entry itself or in a
+/// directory between it and `work_tree`: a linked worktree or another repository.
+fn lies_outside(root: &Path, work_tree: &Path) -> bool {
+    let Ok(root) = std::fs::canonicalize(root) else {
+        return false;
+    };
+    if root == work_tree {
+        return false;
+    }
+    if !root.starts_with(work_tree) {
+        return true;
+    }
+    root.ancestors()
+        .take_while(|dir| *dir != work_tree)
+        .any(|dir| dir.join(".git").exists())
 }
 
 /// The clone's common git directory, absolute: the main checkout's `.git` from any worktree.
