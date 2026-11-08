@@ -101,6 +101,23 @@ fn only_the_five_costliest_steps_and_the_three_commonest_paths() {
 }
 
 #[test]
+fn the_target_is_not_over_and_the_median_is_the_lower_middle() {
+    // req:check.health/land-time-signal@ba4f73a6
+    let (dir, root) = clone();
+    land(&root, dir.path(), "c1", vec![step("s", 60, &["z", "a"])]);
+    land(&root, dir.path(), "c2", vec![step("s", 61, &["z"])]);
+    let out = report(&root);
+    assert_eq!(
+        section(&out, "land-time"),
+        [
+            "health/land-time: 1 of 2 timed lands over 60s",
+            "z: health/land-time: s: 2 runs, median 60s, total 121s, selected by z, a",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_no_timings() {
     // req:check.health/land-time-signal@ba4f73a6
     let (_dir, root) = clone();
