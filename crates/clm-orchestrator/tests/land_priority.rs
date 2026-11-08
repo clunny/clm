@@ -104,6 +104,25 @@ fn an_edited_change_and_an_unknown_component_give_nothing() {
 }
 
 #[test]
+fn reads_git_objects_not_the_working_tree() {
+    // req:orchestrator/land-priority@5393b0de
+    let r = repo();
+    write(&r.work, "changes/x/change.md", &x_priority("P2"));
+    push_main(&r.work, "x is P2");
+    let (base, head) = branch(&r.work, "impl/a", &[("src/t.rs", Some("// t\n"))]);
+    write(&r.work, "changes/x/change.md", &x_priority("P1"));
+    write(
+        &r.work,
+        "changes/y/change.md",
+        &change_md("proposed", "priority: P1\n"),
+    );
+    assert_eq!(
+        land_priority(&r.work, "impl/a", &base, &head).unwrap(),
+        Priority::P2
+    );
+}
+
+#[test]
 fn scenario_specs_that_dont_load() {
     // req:orchestrator/land-priority@5393b0de
     let r = repo();
