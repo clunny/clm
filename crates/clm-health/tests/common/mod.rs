@@ -81,6 +81,7 @@ pub fn settings(spec: u64, code: u64) -> Settings {
         exceptions: 4,
         stale_days: 30,
         lcov: None,
+        land_check_target_seconds: 120,
         component_size: Budgets {
             spec_tokens: spec,
             code_tokens: code,

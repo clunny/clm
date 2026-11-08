@@ -3,7 +3,7 @@ mod common;
 use common::{git, repo, report, report_with, section, settings, spec, write};
 
 /// The signals in the order of the Contract's table.
-const SIGNALS: [&str; 18] = [
+const SIGNALS: [&str; 19] = [
     "check",
     "pending",
     "oversized",
@@ -19,6 +19,7 @@ const SIGNALS: [&str; 18] = [
     "workaround",
     "rewritten",
     "churn",
+    "land-time",
     "many-scenarios",
     "many-exceptions",
     "reconsider",
