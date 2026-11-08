@@ -543,7 +543,7 @@ fn approval_has_no_variable() {
 
 #[test]
 fn land_defaults_to_no_command() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     for repo in [None, Some("defects = \"off\"\n")] {
         let s = Fixture::new(None, repo).load(&[]).unwrap();
         assert_eq!(s.land.value, None);
@@ -556,14 +556,15 @@ fn land_defaults_to_no_command() {
 
 #[test]
 fn land_check_from_the_repository() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let f = Fixture::new(None, Some("[land]\ncheck = \"scripts/clm-check.sh\"\n"));
     let s = f.load(&[]).unwrap();
     assert_eq!(
         s.land.value,
         Some(Land {
             check: "scripts/clm-check.sh".into(),
-            target_cap_gb: None
+            target_cap_gb: None,
+            check_target_seconds: None
         })
     );
     assert_eq!(s.land.layer, Layer::File(f.repo_file()));
@@ -574,7 +575,7 @@ fn land_check_from_the_repository() {
 
 #[test]
 fn land_cap_set_prints_and_loads() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let f = Fixture::new(
         None,
         Some("[land]\ncheck = \"scripts/clm-check.sh\"\ntarget_cap_gb = 4\n"),
@@ -588,15 +589,49 @@ fn land_cap_set_prints_and_loads() {
 
 #[test]
 fn land_cap_defaults_to_fifteen() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let f = Fixture::new(None, Some("[land]\ncheck = \"scripts/clm-check.sh\"\n"));
     let s = f.load(&[]).unwrap();
     assert_eq!(s.land.value.unwrap().cap_gb(), 15);
 }
 
 #[test]
+fn land_target_set_prints_and_loads() {
+    // req:config/land-check-setting@1baa537e
+    let f = Fixture::new(
+        None,
+        Some("[land]\ncheck = \"scripts/clm-check.sh\"\ncheck_target_seconds = 90\n"),
+    );
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.land.value.as_ref().unwrap().target_seconds(), 90);
+    let (value, layer) = s.get("land").unwrap();
+    assert_eq!(value, "check=scripts/clm-check.sh,check_target_seconds=90");
+    assert_eq!(*layer, Layer::File(f.repo_file()));
+}
+
+#[test]
+fn land_cap_and_target_print_in_order() {
+    // req:config/land-check-setting@1baa537e
+    let f = Fixture::new(
+        None,
+        Some("[land]\ncheck_target_seconds = 90\ncheck = \"c\"\ntarget_cap_gb = 4\n"),
+    );
+    let s = f.load(&[]).unwrap();
+    let (value, _) = s.get("land").unwrap();
+    assert_eq!(value, "check=c,target_cap_gb=4,check_target_seconds=90");
+}
+
+#[test]
+fn land_target_defaults_to_120_seconds() {
+    // req:config/land-check-setting@1baa537e
+    let f = Fixture::new(None, Some("[land]\ncheck = \"scripts/clm-check.sh\"\n"));
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.land.value.unwrap().target_seconds(), 120);
+}
+
+#[test]
 fn bad_land_fails() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     for bad in [
         "[land]\ncheck = \"\"\n",
         "[land]\n",
@@ -608,6 +643,10 @@ fn bad_land_fails() {
         "[land]\ncheck = \"a\"\ntarget_cap_gb = -1\n",
         "[land]\ncheck = \"a\"\ntarget_cap_gb = \"4\"\n",
         "[land]\ncheck = \"a\"\ntarget_cap_gb = 1.5\n",
+        "[land]\ncheck = \"a\"\ncheck_target_seconds = 0\n",
+        "[land]\ncheck = \"a\"\ncheck_target_seconds = -5\n",
+        "[land]\ncheck = \"a\"\ncheck_target_seconds = \"90\"\n",
+        "[land]\ncheck = \"a\"\ncheck_target_seconds = 1.5\n",
         "[land]\ntarget_cap_gb = 4\n",
     ] {
         let f = Fixture::new(None, Some(bad));
@@ -619,7 +658,7 @@ fn bad_land_fails() {
 
 #[test]
 fn land_in_the_user_file_fails() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let e = error(&Fixture::new(Some("[land]\ncheck = \"true\"\n"), None), &[]);
     assert!(e.contains("config.toml"), "{e}");
     assert!(e.contains("unknown field `land`"), "{e}");
@@ -627,7 +666,7 @@ fn land_in_the_user_file_fails() {
 
 #[test]
 fn land_has_no_variable() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let s = Fixture::new(None, None)
         .load(&[("CLM_LAND", "true")])
         .unwrap();
@@ -838,7 +877,7 @@ fn no_local_file_adds_no_layer() {
 fn repository_only_keys_set_locally_fail_naming_the_local_file() {
     // req:config/host-setting@cbcd8366
     // req:config/approval-setting@ee7ad72c
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     // req:config/component-size-setting@8f8238ab
     // req:config/repository-only@d2cdaefd
     for (text, key) in [

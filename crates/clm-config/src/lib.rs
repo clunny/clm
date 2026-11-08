@@ -224,15 +224,26 @@ pub struct Land {
     pub check: String,
     /// The size in gigabytes above which a land removes the shared target, when the table sets it.
     pub target_cap_gb: Option<u64>,
+    /// The seconds a land's check aims to stay within, when the table sets it.
+    pub check_target_seconds: Option<u64>,
 }
 
 /// The cap a land applies when `[land]` doesn't set `target_cap_gb`.
 const DEFAULT_TARGET_CAP_GB: u64 = 15;
 
+/// The check target a land applies when `[land]` doesn't set `check_target_seconds`.
+const DEFAULT_CHECK_TARGET_SECONDS: u64 = 120;
+
 impl Land {
     /// The target cap in gigabytes: the table's `target_cap_gb`, else 15.
     pub fn cap_gb(&self) -> u64 {
         self.target_cap_gb.unwrap_or(DEFAULT_TARGET_CAP_GB)
+    }
+
+    /// The check target in seconds: the table's `check_target_seconds`, else 120.
+    pub fn target_seconds(&self) -> u64 {
+        self.check_target_seconds
+            .unwrap_or(DEFAULT_CHECK_TARGET_SECONDS)
     }
 }
 
@@ -411,10 +422,16 @@ impl Settings {
             "approval" => Ok((self.approval.value.to_string(), &self.approval.layer)),
             "land" => {
                 let value = match &self.land.value {
-                    Some(land) => match land.target_cap_gb {
-                        Some(cap) => format!("check={},target_cap_gb={cap}", land.check),
-                        None => format!("check={}", land.check),
-                    },
+                    Some(land) => {
+                        let mut text = format!("check={}", land.check);
+                        if let Some(cap) = land.target_cap_gb {
+                            text.push_str(&format!(",target_cap_gb={cap}"));
+                        }
+                        if let Some(seconds) = land.check_target_seconds {
+                            text.push_str(&format!(",check_target_seconds={seconds}"));
+                        }
+                        text
+                    }
                     None => String::new(),
                 };
                 Ok((value, &self.land.layer))
@@ -908,33 +925,36 @@ fn at_least_one(n: Option<i64>) -> Option<u64> {
 }
 
 /// Reads `[land]`: a table with a non-empty string `check` and an optional positive integer
-/// `target_cap_gb`.
+/// `target_cap_gb` and `check_target_seconds`.
 fn land(value: toml::Value, path: &Path) -> Result<Land, Error> {
     let fail = |problem: String| Error::file(path, format!("`land`: {problem}"));
     let toml::Value::Table(table) = value else {
         return Err(fail(format!("must be a table, not {value}")));
     };
-    if let Some(key) = table
-        .keys()
-        .find(|k| !matches!(k.as_str(), "check" | "target_cap_gb"))
-    {
+    if let Some(key) = table.keys().find(|k| {
+        !matches!(
+            k.as_str(),
+            "check" | "target_cap_gb" | "check_target_seconds"
+        )
+    }) {
         return Err(fail(format!(
-            "unknown key `{key}`, expected `check` or `target_cap_gb`"
+            "unknown key `{key}`, expected `check`, `target_cap_gb` or `check_target_seconds`"
         )));
     }
-    let target_cap_gb = match table.get("target_cap_gb") {
-        None => None,
-        Some(toml::Value::Integer(n)) if *n >= 1 => Some(*n as u64),
-        Some(other) => {
-            return Err(fail(format!(
-                "`target_cap_gb` must be a positive integer, not {other}"
-            )));
-        }
+    let positive = |name: &str| match table.get(name) {
+        None => Ok(None),
+        Some(toml::Value::Integer(n)) if *n >= 1 => Ok(Some(*n as u64)),
+        Some(other) => Err(fail(format!(
+            "`{name}` must be a positive integer, not {other}"
+        ))),
     };
+    let target_cap_gb = positive("target_cap_gb")?;
+    let check_target_seconds = positive("check_target_seconds")?;
     match table.get("check") {
         Some(toml::Value::String(check)) if !check.is_empty() => Ok(Land {
             check: check.clone(),
             target_cap_gb,
+            check_target_seconds,
         }),
         Some(other) => Err(fail(format!(
             "`check` must be a non-empty string, not {other}"
