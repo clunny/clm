@@ -208,11 +208,15 @@ fn prompt_for(slugs: &[&str], claimed: &[&str]) -> String {
 
 #[test]
 fn scenario_draft_code_fix_written_rule() {
-    // req:orchestrator.triage/draft-code-fix-written-rule@fb76285c
+    // req:orchestrator.triage/draft-code-fix-written-rule@f48e9442
     // Said in the paragraph that already describes code-only bugs, not in a new one.
     let p = prompt_for(&["a"], &[]);
     let para = paragraph(&p, "`code-fix-resolves-bug`");
-    for needle in ["`code-fix-needs-a-written-rule`", "as written"] {
+    for needle in [
+        "`code-fix-needs-a-written-rule`",
+        "as written",
+        "harness-only",
+    ] {
         assert!(para.contains(needle), "{needle} missing from {para}");
     }
 }

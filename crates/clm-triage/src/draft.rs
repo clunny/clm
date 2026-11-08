@@ -396,7 +396,17 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `clm hashes <component>`. A bug whose behaviour no requirement states changes `specs/`: it \
          goes into the change, as a requirement or scenario the change adds, stays in \
          `resolves`, and its code is fixed when the component is built \
-         (`code-fix-needs-a-written-rule`). The bugs whose fix is code-only and lies in one \
+         (`code-fix-needs-a-written-rule`). A `bug` or `deferred` item whose work is \
+         harness-only, changing only the plumbing of the capability suite and nothing a \
+         capability test observes, is never a requirement of any component \
+         (`human-layer-proof`). When the Design that holds the harness stays true as written, \
+         fix it here on a branch of your own from `origin/main`, named outside `impl/`, \
+         `spec/`, `propose/` and `autosync/`: delete the item in a commit whose trailer block \
+         holds `Resolves: backlog/<slug>`, land it with `clm land` once \
+         `clm gate --base origin/main` prints `code`, delete the pushed branch with \
+         `clm branch delete`, and take the item out of `resolves` (`small-change-no-claim`). \
+         When that Design must change, the change edits the Design, keeps the item in \
+         `resolves` and adds a `kind: deferred` item for the code. The bugs whose fix is code-only and lies in one \
          of the bug's `components` are fixed by component (`code-fix-resolves-bug`): run \
          `clm claim <component> --fix backlog/<slug>` for the component's first such bug, then, on that \
          `impl/<component>` branch, fix each of the component's code-only bugs test first and delete its \
