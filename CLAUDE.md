@@ -2,7 +2,7 @@
 
 CLM is built with CLM. Read `ARCHITECTURE.md` first; its architectural constraints apply to work in this repo. Then run `clm status` (`cargo run -q -p clm -- status`) for the current state, and `clm backlog` for what's next. Open `spec/*` and `impl/*` branches, and their pull requests, show work in flight.
 
-- Spec/design edits go in `changes/<YYYYMMDD-slug>/deltas/` and reach `specs/` only through `clm apply`.
+- Spec/design edits go in `changes/<YYYYMMDD-slug>/deltas/` and reach `specs/` only through `clm apply`. `/clm:help` answers questions about working with CLM.
 - Requirement IDs are `<component-id>/<slug>`. Tests reference them as `req:<component-id>/<slug>` (see `docs/spec-format.md`).
 - Record significant choices as `docs/decisions/<name>.md` (one file each). Refer to architectural constraints, decisions and open questions by name (e.g. `proven-by-tests`, `no-stacked-prs`), never by number.
 - Code: Rust (cargo workspace). Run `cargo fmt`, `cargo clippy -- -D warnings` and `cargo test` before claiming work is done. `clm check` runs the detectors in `clm.toml` (`no-dead-code`); install their tools (`cargo install cargo-machete --locked`) or it fails.
