@@ -826,6 +826,8 @@ enum Config {
         /// The key, such as `defects`.
         key: String,
     },
+    /// Print every key with its value and the layer it came from, tab-separated.
+    List,
 }
 
 fn main() -> ExitCode {
@@ -1394,9 +1396,7 @@ fn dispatch() -> ExitCode {
         Command::Reconnect { root } => landed("reconnect", |env| {
             clm_land::reconnect(&repo_root(root), env)
         }),
-        Command::Config {
-            config: Config::Get { key },
-        } => {
+        Command::Config { config } => {
             let cwd = match std::env::current_dir() {
                 Ok(cwd) => cwd,
                 Err(e) => {
@@ -1405,13 +1405,18 @@ fn dispatch() -> ExitCode {
                 }
             };
             let root = clm_hooks::clm_root(&cwd);
-            let line = clm_config::load(root, &clm_config::process_env).and_then(|s| {
-                s.get(&key)
-                    .map(|(value, layer)| format!("{value}\t{layer}"))
-            });
-            match line {
-                Ok(line) => {
-                    println!("{line}");
+            let lines =
+                clm_config::load(root, &clm_config::process_env).and_then(|s| match config {
+                    Config::Get { key } => s
+                        .get(&key)
+                        .map(|(value, layer)| vec![format!("{value}\t{layer}")]),
+                    Config::List => s.list(),
+                });
+            match lines {
+                Ok(lines) => {
+                    for line in lines {
+                        println!("{line}");
+                    }
                     ExitCode::SUCCESS
                 }
                 Err(e) => {

@@ -1753,3 +1753,162 @@ fn local_file_takes_skip_migrations_but_not_the_repository_state_keys() {
         assert!(e.to_string().contains("clm.local.toml"), "{e}");
     }
 }
+
+#[test]
+fn verify_set_prints_its_fields_and_layer() {
+    // req:config/verify-setting@5bf87fcc
+    let f = Fixture::new(
+        None,
+        Some(
+            "[verify]\ncheck = \"scripts/slow.sh\"\nmode = \"local\"\n\
+             triggers = [\"change-done\", \"work-done\"]\n",
+        ),
+    );
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("verify").unwrap();
+    assert_eq!(
+        value,
+        "mode=local,check=scripts/slow.sh,triggers=change-done+work-done"
+    );
+    assert_eq!(*layer, Layer::File(f.repo_file()));
+}
+
+#[test]
+fn verify_every_and_workflow_print_after_the_triggers() {
+    // req:config/verify-setting@5bf87fcc
+    let f = Fixture::new(
+        None,
+        Some(
+            "[verify]\ncheck = \"x\"\nmode = \"import\"\nworkflow = \"slow.yml\"\n\
+             triggers = [\"queue-drained\"]\nevery = { lands = 5, days = 2 }\n",
+        ),
+    );
+    let s = f.load(&[]).unwrap();
+    let (value, _) = s.get("verify").unwrap();
+    assert_eq!(
+        value,
+        "mode=import,check=x,triggers=queue-drained,every.lands=5,every.days=2,workflow=slow.yml"
+    );
+    let f = Fixture::new(
+        None,
+        Some("[verify]\ncheck = \"x\"\nmode = \"pipeline\"\nevery = { days = 1 }\n"),
+    );
+    let s = f.load(&[]).unwrap();
+    let (value, _) = s.get("verify").unwrap();
+    assert_eq!(value, "mode=pipeline,check=x,every.days=1");
+}
+
+#[test]
+fn verify_unset_is_nothing_from_default() {
+    // req:config/verify-setting@5bf87fcc
+    let s = Fixture::new(None, Some("defects = \"off\"\n"))
+        .load(&[])
+        .unwrap();
+    assert_eq!(s.verify.value, None);
+    let (value, layer) = s.get("verify").unwrap();
+    assert_eq!(value, "");
+    assert_eq!(*layer, Layer::Default);
+}
+
+#[test]
+fn verify_local_file_may_set_it() {
+    // req:config/verify-setting@5bf87fcc
+    let f = Fixture::new(None, Some("[verify]\ncheck = \"a\"\nmode = \"local\"\n"))
+        .local("[verify]\ncheck = \"b\"\nmode = \"pipeline\"\n");
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("verify").unwrap();
+    assert_eq!(value, "mode=pipeline,check=b");
+    assert_eq!(*layer, Layer::File(f.local_file()));
+}
+
+#[test]
+fn bad_verify_fails_naming_the_file_and_key() {
+    // req:config/verify-setting@5bf87fcc
+    for bad in [
+        "verify = \"x\"\n",
+        "[verify]\nmode = \"local\"\n",
+        "[verify]\ncheck = \"\"\nmode = \"local\"\n",
+        "[verify]\ncheck = \"x\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"cloud\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nsome = 1\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\ntriggers = [\"later\"]\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\ntriggers = [\"change-done\", \"change-done\"]\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\ntriggers = \"change-done\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"pipeline\"\ntriggers = [\"work-done\"]\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nevery = { lands = 0 }\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nevery = { days = \"1\" }\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nevery = { weeks = 1 }\n",
+        "[verify]\ncheck = \"x\"\nmode = \"import\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"import\"\nworkflow = \"\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nworkflow = \"slow.yml\"\n",
+    ] {
+        let f = Fixture::new(None, Some(bad));
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
+        assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
+        let f = Fixture::new(None, None).local(bad);
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(
+            e.source,
+            Some(f.local_file().display().to_string()),
+            "{bad}"
+        );
+        assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
+    }
+}
+
+#[test]
+fn verify_in_the_user_file_fails() {
+    // req:config/verify-setting@5bf87fcc
+    let e = Fixture::new(Some("[verify]\ncheck = \"x\"\nmode = \"local\"\n"), None)
+        .load(&[])
+        .unwrap_err();
+    assert!(e.to_string().contains("config.toml"), "{e}");
+    assert!(e.to_string().contains("verify"), "{e}");
+}
+
+#[test]
+fn list_has_a_line_for_every_key_in_order() {
+    // req:config/config-list@bde54d36
+    let f = Fixture::new(None, Some("defects = \"backlog\"\n")).local("max_builds = 5\n");
+    let lines = f.load(&[]).unwrap().list().unwrap();
+    let keys: Vec<&str> = lines
+        .iter()
+        .map(|l| l.split('\t').next().unwrap())
+        .collect();
+    assert_eq!(
+        keys,
+        [
+            "autosync",
+            "defects",
+            "max_builds",
+            "writer",
+            "host",
+            "approval",
+            "land",
+            "verify",
+            "affected",
+            "detectors",
+            "component_size",
+            "health",
+            "effort",
+            "upgraded",
+            "declined_migrations",
+            "skip_migrations"
+        ]
+    );
+    assert!(lines.contains(&format!("defects\tbacklog\t{}", f.repo_file().display())));
+    assert!(lines.contains(&format!("max_builds\t5\t{}", f.local_file().display())));
+    assert!(lines.contains(&"autosync\ttrue\tdefault".to_string()));
+}
+
+#[test]
+fn every_listed_key_is_one_get_accepts_and_prints_the_same() {
+    // req:config/config-list@bde54d36
+    let s = Fixture::new(None, None).load(&[]).unwrap();
+    for (key, line) in clm_config::KEYS.iter().zip(s.list().unwrap()) {
+        let (value, layer) = s.get(key).unwrap();
+        assert_eq!(line, format!("{key}\t{value}\t{layer}"));
+    }
+    assert!(s.get("colour").unwrap_err().to_string().contains("colour"));
+}
