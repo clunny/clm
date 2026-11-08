@@ -139,7 +139,7 @@ const PUSH_TO_MAIN_FAILS: &str = "if [ \"$1\" = push ]; then for a in \"$@\"; do
 
 #[test]
 fn refetch_fails() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
@@ -162,7 +162,7 @@ fn refetch_fails() {
 
 #[test]
 fn pushed_though_git_failed() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
     // A `git` that pushes to `main` and then reports a failure whatever happened.
@@ -373,7 +373,7 @@ fn check_only_checks_the_working_tree() {
 
 #[test]
 fn selection_fails_says_why() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -390,7 +390,7 @@ fn selection_fails_says_why() {
 
 #[test]
 fn readers_selection_fails_says_why() {
-    // req:land/selected-tests@3c8754b6
+    // req:land/selected-tests@912a8d72
     let f = Fixture::new("");
     f.write("affected-fails", "");
     f.branch("impl/a", &[("ARCHITECTURE.md", "# x\n")]);

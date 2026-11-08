@@ -36,7 +36,7 @@ fn landed_commits(f: &Fixture) -> Vec<String> {
 
 #[test]
 fn one_transient_refusal() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     f.hook(Some(&main_hook("[ \"$n\" -eq 1 ]")));
     let head = f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -52,7 +52,7 @@ fn one_transient_refusal() {
 
 #[test]
 fn refused_every_time_then_rerun() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     f.hook(Some(&main_hook("true")));
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -91,7 +91,7 @@ fn refused_every_time_then_rerun() {
 
 #[test]
 fn ledger_push_refused() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     let f = Fixture::new("");
     f.hook(Some(
         r#"
@@ -128,7 +128,7 @@ exit 0
 
 #[test]
 fn no_host_no_ledger_warning() {
-    // req:land/land-push-retry@a57a444f
+    // req:land/land-push-retry@94d61d9c
     // Without a remote every record stays local, and that is no cause for a warning.
     let f = Fixture::local();
     f.branch("impl/a", &[("b.txt", "b\n")]);
