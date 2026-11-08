@@ -23,7 +23,7 @@ Make `keep_remote` (`host/none-keeps-a-remote`) work in a clone the environment 
 ## Outcome
 
 - `vcs`: the Contract names `git_isolated`; `vcs/git-isolated` is added.
-- `host`: `host/none-keeps-a-remote` makes the bare repository through `git_isolated`, gains a scenario for a clone the environment names, and needs `vcs/git-isolated`. Reading the remotes, `common_dir` and `git remote add` keep running with the variables, since they work on the clone the variables name.
+- `host`: `host/none-keeps-a-remote` makes the bare repository through `git_isolated`, gains a scenario for a clone the environment names, and needs `vcs/git-isolated`; `host/git-through-layer` lists `git_isolated` among the `clm-git` functions `clm-host` runs git through (from the architecture audit). Reading the remotes, `common_dir` and `git remote add` keep running with the variables, since they work on the clone the variables name.
 - `backlog/scratch-repositories-follow-git-dir-to-the-clone.md` (bug, `sync` and `orchestrator.run`): `clm-sync`'s rename replay and `clm-run`'s superpowers fetch make a repository of their own in a temporary directory through `git` and, with `GIT_DIR` set, would reinitialize, stage in, fetch into or check out the clone instead. Out of this change's components, so filed (`fold-small-defer-large`).
 
 ## Edge cases and workarounds
