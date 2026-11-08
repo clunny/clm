@@ -16,3 +16,5 @@ The gate stays a pure function of two trees and one flag: `clm land` computes `-
 Superseded with this: `gate-without-branch-protection`, `protected-main`, `merge-tested-tree`, `merge-by-push-race`, `ci-logic-in-clm`, `light-ci-for-doc-prs`, `prebuilt-clm-for-doc-prs`, `warm-ci-cache`, `watch-and-resume`, `watch-expects-head`, `watch-reruns-cancelled`, `watch-rerun-grace` and `flaky-failures-rerun`. The release workflow stays on Actions for now (`host-ci-for-releases`).
 
 Rejected: a self-hosted Actions runner (free minutes, no spec change, but the dependency and the decision host stay) and keeping Actions as a supported runner for checks (a team that wants a hosted runner runs `clm land` there; CLM generates no workflow for it).
+
+Refined by `none-keeps-its-own-remote` (2026-11-07): with `host = "none"` the clone keeps a remote of its own, so `clm land` no longer lands on the local `main` alone.

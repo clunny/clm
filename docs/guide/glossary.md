@@ -64,7 +64,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Fingerprint:** a hash of a branch's diff, which an approval is tied to (`clm fingerprint`).
 - **Signed repository:** one whose `docs/allowed_signers` lists the keys whose ledger records count; only a signed approval lets a branch that needs review land there.
 - **Host:** where the remote lives, `github`, `azure` (Azure DevOps), `git` or `none` (`host`); pull requests, issues and branch deletion go through it (`clm pr`, `clm issue`, `clm branch`, `clm contribution` for a fork's pull requests and issues).
-- **Reconnect:** pushing a `main` that was landed with no remote to a newly added `origin` (`clm reconnect`).
+- **Reconnect:** pushing `main` and the ledgers to a newly set `origin`, such as a real remote for a repository that had `host = "none"` (`clm reconnect`).
 - **Verify:** running the tests too slow for every land after it, at moments the project sets in `[verify]` (a change finishing, the queue draining, the end of a build, every N lands or days, a release), on your machine or the host's pipeline, and recording the result in the ledger (`clm verify`). A red result names the land that broke it; once you take it in as a bug, `clm land` holds code lands on that land's components until the fix lands. *Usually:* a nightly or post-merge test stage, as Maven's `verify` phase runs integration tests. Not `clm ledger verify`, which audits `main` against the ledger.
 
 ## The backlog and the project's health

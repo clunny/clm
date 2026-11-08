@@ -9,3 +9,5 @@ Refines `land-locally`. A repository with `host = "none"` has no remote, so `clm
 Why: two people landing locally while offline make two `main`s. Reconciling them later means either re-landing one person's work (wasted, and their `landed` records name commits that never reach the shared `main`) or merging the two `main`s through a merge nobody checked, which breaks `land-locally`'s rule that every tree on `main` was checked by the lander. Refusing costs a person offline only the landing: they still build, commit and `clm sync` on their branch, and land when they're back.
 
 This is what keeps a team in step, together with what already holds: every land, sync, claim and run fetches first; a node claim lapses after four hours without a push; spec work is snapshotted to `autosync/` each turn; `clm checkpoint` won't pass with unpushed work. No `mode` setting is needed: `host = "none"` is the only case with no shared `main`.
+
+Refined by `none-keeps-its-own-remote` (2026-11-07): with `host = "none"` the clone keeps a remote of its own, so `clm land` no longer lands on the local `main` alone.
