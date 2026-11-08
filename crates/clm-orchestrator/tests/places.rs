@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clm_orchestrator::{
-    Error, Place, PlaceKind, Placed, SweepOutcome, Swept, free_place, free_stale_places, places,
-    rename_place, take_place,
+    Error, Place, PlaceKind, Placed, SweepOutcome, Swept, free_place, free_stale_places,
+    place_slot, places, rename_place, take_place,
 };
 use common::*;
 use tempfile::TempDir;
@@ -165,6 +165,7 @@ fn scenario_full() {
 #[test]
 fn taking_writes_the_file_and_reuse_rewrites_taken() {
     // req:orchestrator/places@39abce44
+    // req:orchestrator/place-slots@e7802b3b
     let r = repo();
     write_place(&r.work, "a", "build", 3, &["impl/a"]);
     assert_eq!(
@@ -177,6 +178,11 @@ fn taking_writes_the_file_and_reuse_rewrites_taken() {
     let taken = lines.next().unwrap().strip_prefix("taken ").unwrap();
     let recent = [rfc3339(now()), rfc3339(now() - 1), rfc3339(now() - 2)];
     assert!(recent.iter().any(|t| t == taken), "{taken}");
+    assert_eq!(
+        lines.next(),
+        Some("slot 1"),
+        "a place with no slot gets one"
+    );
     assert_eq!(lines.next(), Some("branch impl/a"));
     assert_eq!(lines.next(), None);
 }
@@ -623,4 +629,114 @@ fn a_failed_delete_is_reported_and_the_sweep_goes_on() {
     }
     assert_eq!(swept[2].outcome, SweepOutcome::Kept);
     assert_eq!(files(&dir), ["a", "b", "c"]);
+}
+
+/// Writes place `name` by hand, taken now, with `slot` (none for a pre-slot file).
+fn write_slotted(work: &Path, name: &str, age: u64, slot: Option<u64>, branches: &[&str]) {
+    let mut text = format!("kind build\ntaken {}\n", rfc3339(now() - age * 3600));
+    if let Some(n) = slot {
+        text.push_str(&format!("slot {n}\n"));
+    }
+    for b in branches {
+        text.push_str(&format!("branch {b}\n"));
+    }
+    write(&builds(work), name, &text);
+}
+
+fn slot_of(work: &Path, name: &str) -> Option<u64> {
+    places(work, 4)
+        .unwrap()
+        .into_iter()
+        .find(|p| p.name == name)
+        .and_then(|p| p.file.ok())
+        .and_then(|f| f.slot)
+}
+
+#[test]
+fn scenario_the_lowest_free_slot() {
+    // req:orchestrator/place-slots@e7802b3b
+    let r = repo();
+    write_slotted(&r.work, "a", 0, Some(1), &["impl/a"]);
+    write_slotted(&r.work, "b", 5, Some(2), &["impl/b"]);
+    write_slotted(&r.work, "c", 0, Some(3), &["impl/c"]);
+    assert_eq!(
+        take_place(&r.work, "d", PlaceKind::Build, &build("d"), 4, 4).unwrap(),
+        Placed::New
+    );
+    let text = fs::read_to_string(builds(&r.work).join("d")).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines[1].split(' ').next(), Some("taken"));
+    assert_eq!(lines[2], "slot 2", "after `taken`, before `branch`");
+    assert_eq!(lines[3], "branch impl/d");
+    assert_eq!(slot_of(&r.work, "d"), Some(2));
+    assert_eq!(files(&builds(&r.work)), ["a", "c", "d"], "no place `b`");
+}
+
+#[test]
+fn scenario_a_reused_place_keeps_its_slot() {
+    // req:orchestrator/place-slots@e7802b3b
+    let r = repo();
+    write_slotted(&r.work, "a", 0, Some(3), &["impl/a"]);
+    assert_eq!(
+        take_place(&r.work, "a", PlaceKind::Build, &build("a"), 4, 4).unwrap(),
+        Placed::Reused
+    );
+    let text = fs::read_to_string(builds(&r.work).join("a")).unwrap();
+    assert!(text.lines().any(|l| l == "slot 3"), "{text}");
+    assert_eq!(slot_of(&r.work, "a"), Some(3));
+}
+
+#[test]
+fn scenario_a_place_written_before_slots() {
+    // req:orchestrator/place-slots@e7802b3b
+    let r = repo();
+    write_slotted(&r.work, "a", 0, None, &["impl/a"]);
+    write_slotted(&r.work, "b", 0, Some(1), &["impl/b"]);
+    assert_eq!(
+        slot_of(&r.work, "a"),
+        None,
+        "it parses as before, with none"
+    );
+    assert_eq!(
+        take_place(&r.work, "a", PlaceKind::Build, &build("a"), 4, 4).unwrap(),
+        Placed::Reused
+    );
+    let text = fs::read_to_string(builds(&r.work).join("a")).unwrap();
+    assert!(text.lines().any(|l| l == "slot 2"), "{text}");
+}
+
+#[test]
+fn drafts_hold_slots_and_a_damaged_file_holds_none() {
+    // req:orchestrator/place-slots@e7802b3b
+    let r = repo();
+    write(&builds(&r.work), "z", "not a place");
+    assert_eq!(
+        take_place(&r.work, "d", PlaceKind::Draft, &["spec/d".into()], 4, 4).unwrap(),
+        Placed::New
+    );
+    assert_eq!(slot_of(&r.work, "d"), Some(1));
+    assert_eq!(slot_of(&r.work, "z"), None);
+}
+
+#[test]
+fn scenario_the_slot_of_a_branch() {
+    // req:orchestrator/place-slots@e7802b3b
+    let r = repo();
+    write_slotted(&r.work, "x", 0, Some(2), &["impl/x"]);
+    assert_eq!(place_slot(&r.work, "impl/x").unwrap(), 2);
+    assert_eq!(place_slot(&r.work, "impl/y").unwrap(), 0);
+}
+
+#[test]
+fn a_slot_is_read_without_judging_the_place() {
+    // req:orchestrator/place-slots@e7802b3b
+    let r = repo();
+    // A place that doesn't count still names its slot, and the first by name wins.
+    write_slotted(&r.work, "m", 9, Some(5), &["impl/x"]);
+    write_slotted(&r.work, "k", 9, Some(4), &["impl/x"]);
+    write_slotted(&r.work, "n", 0, None, &["impl/q"]);
+    assert_eq!(place_slot(&r.work, "impl/x").unwrap(), 4);
+    assert_eq!(place_slot(&r.work, "impl/q").unwrap(), 0, "no slot line");
+    let outside = TempDir::new().unwrap();
+    assert!(place_slot(outside.path(), "impl/x").is_err());
 }
