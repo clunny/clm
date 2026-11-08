@@ -130,12 +130,7 @@ impl Fixture {
 
     /// A repository `work` with no `origin` and `host = "none"`.
     pub fn local() -> Self {
-        Self::local_with("")
-    }
-
-    /// As `local`, its `clm.toml` also holding `settings`.
-    pub fn local_with(settings: &str) -> Self {
-        Self::make(&format!("host = \"none\"\n{settings}"), false, false)
+        Self::make("host = \"none\"\n", false, false)
     }
 
     fn make(settings: &str, remote: bool, nested: bool) -> Self {

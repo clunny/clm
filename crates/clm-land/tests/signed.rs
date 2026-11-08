@@ -108,7 +108,7 @@ fn approve_from(s: &Signed, user: &str, key: Option<&Path>) {
 
 #[test]
 fn unsigned_approval_refused() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("", true);
     let f = &s.f;
     use_key(f, &f.work(), &s.christopher);
@@ -123,7 +123,7 @@ fn unsigned_approval_refused() {
 
 #[test]
 fn forged_name_refused() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("approval = \"other\"", true);
     let f = &s.f;
     use_key(f, &f.work(), &s.christopher);
@@ -138,7 +138,7 @@ fn forged_name_refused() {
 
 #[test]
 fn lander_approved_it_themselves() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("approval = \"other\"", true);
     let f = &s.f;
     use_key(f, &f.work(), &s.christopher);
@@ -154,7 +154,7 @@ fn lander_approved_it_themselves() {
 
 #[test]
 fn signed_land() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("approval = \"other\"", true);
     let f = &s.f;
     use_key(f, &f.work(), &s.christopher);
@@ -179,7 +179,7 @@ fn signed_land() {
 
 #[test]
 fn lander_cant_sign() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("", true);
     let f = &s.f;
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -195,7 +195,7 @@ fn lander_cant_sign() {
 
 #[test]
 fn unsigned_repository_lands_as_before() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("", false);
     let f = &s.f;
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -213,7 +213,7 @@ fn unsigned_repository_lands_as_before() {
 
 #[test]
 fn signing_fails_pushes_nothing() {
-    // req:land.approval/signed-land@b1b71ffc
+    // req:land.approval/signed-land@a7c79d9c
     let s = signed_repo("", true);
     let f = &s.f;
     // A key file that can be read but isn't a key: the check before the land passes, and
