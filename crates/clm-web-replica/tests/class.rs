@@ -30,7 +30,7 @@ fn identifiers(text: &str) -> impl Iterator<Item = &str> {
 #[test]
 fn the_class_is_defined() {
     // req:web.worker.replica/object-class@2ce37c07
-    // The wasm32 build itself is `ci-check.sh`'s; here the class is read from the sources.
+    // The wasm32 build itself is `tests/wasm.rs`'s; here the class is read from the sources.
     let defined = sources()
         .iter()
         .any(|(_, text)| text.contains("#[durable_object]\npub struct Replica {"));
