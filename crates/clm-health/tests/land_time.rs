@@ -118,6 +118,22 @@ fn the_target_is_not_over_and_the_median_is_the_lower_middle() {
 }
 
 #[test]
+fn steps_tied_on_total_go_by_name() {
+    // req:check.health/land-time-signal@ba4f73a6
+    let (dir, root) = clone();
+    land(
+        &root,
+        dir.path(),
+        "c1",
+        vec![step("b", 5, &[]), step("a", 5, &[])],
+    );
+    let out = report(&root);
+    let lines = section(&out, "land-time");
+    assert!(lines[1].contains(": a: "), "{out}");
+    assert!(lines[2].contains(": b: "), "{out}");
+}
+
+#[test]
 fn scenario_no_timings() {
     // req:check.health/land-time-signal@ba4f73a6
     let (_dir, root) = clone();

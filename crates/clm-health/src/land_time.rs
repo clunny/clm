@@ -31,8 +31,7 @@ pub(crate) fn section(root: &Path, target: u64) -> Result<Section, Failure> {
         }
     }
     let mut ranked: Vec<(&str, Step)> = steps.into_iter().collect();
-    // `BTreeMap` iterates by name and the sort is stable, so ties stay by name.
-    ranked.sort_by_key(|(_, s)| std::cmp::Reverse(s.seconds.iter().sum::<u64>()));
+    ranked.sort_by_key(|(name, s)| (std::cmp::Reverse(s.seconds.iter().sum::<u64>()), *name));
     let lines = ranked
         .into_iter()
         .take(STEPS)
@@ -42,7 +41,7 @@ pub(crate) fn section(root: &Path, target: u64) -> Result<Section, Failure> {
             // The lower middle of an even count, as `outlier-size` takes it.
             let median = step.seconds[(step.seconds.len() - 1) / 2];
             let mut paths: Vec<(String, usize)> = step.paths.into_iter().collect();
-            paths.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+            paths.sort_by(|(pa, na), (pb, nb)| nb.cmp(na).then_with(|| pa.cmp(pb)));
             paths.truncate(PATHS);
             let names: Vec<&str> = paths.iter().map(|(p, _)| p.as_str()).collect();
             let selected = if names.is_empty() {
