@@ -31,9 +31,13 @@ Take `claim_node` out of `orchestrator`'s Contract, now that `orchestrator.run` 
 
 ## Constraints
 
-- `unreferenced-allow-then-narrow`: the build that narrows `claim_node` deletes its `--allow` entry and comment in `clm.toml` in the same diff, the exception that decision makes to a build editing only its own component's files.
+- `unreferenced-allow-then-narrow`: the build that narrows `claim_node` deletes its `--allow` entry and comment in `clm.toml` (`config`'s path) in the same diff. It is a forced fix: once the item is private, the entry is stale and `check.unreferenced/allow-list` fails `clm check` until it goes, and the decision makes it an exception to a build editing only its own component's files.
 - `path-ownership`: no other component's code uses `claim_node` (`orchestrator.run` uses `claim_local`, `clm claim` uses `claim`), so no other component needs to move (`contract-removal-needs`).
 
 ## Edge cases and workarounds
 
-None.
+- `claim_local`'s doc comment links to `[claim_node]`; once that is private the link is a `rustdoc::private_intra_doc_links` warning, so the build rewords it.
+
+## Open questions
+
+- The architecture audit noted that `path-ownership`'s text in `ARCHITECTURE.md` lists three exceptions to a build changing only its own `paths`, and the `clm.toml` allow-list deletion that `unreferenced-allow-then-narrow` permits isn't among them; the decision also asks each narrowing item to name `config`, which this item didn't. Left as is: the decision is accepted and every narrowing build so far has edited `clm.toml` under it, and adding the exception to `ARCHITECTURE.md` would put this branch under review for a cross-reference. Add it if the human wants the constraint's text to carry the decision's exception.
