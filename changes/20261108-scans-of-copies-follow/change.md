@@ -37,6 +37,11 @@ No requirement says how `clm-git` treats these variables outside the clone, so t
 - A variable that names a path relative to the process's directory, kept for a `root` inside the work tree but other than the process's directory, resolves against `root` as it does today; unchanged here.
 - `regenerate-renames`' scenario *a clone the environment names* noted that the copy's coverage scan still followed the variables; after this change it walks the copy, and the scenario's outcome doesn't change.
 - `git_isolated` stays: `clm-host` runs `git init --bare <path>` with `root` inside the clone.
+- A worktree CLM keeps inside the work tree, such as `clm land`'s kept tree `<main worktree>/.clm/land-tree`, lies under it by path, so the rule also counts a `root` as outside when it, or a directory between it and the work tree, holds a `.git` entry; otherwise its `whole(top)` check would read the clone's top level and rebuild it every land.
+- `run_bounded` sets `Options::env` and then removes the listed variables; the build removes first, or skips a name the caller set, so a caller's `GIT_INDEX_FILE` survives (*the caller's variables kept outside*).
+- The work tree is found again when `GIT_DIR` or `GIT_WORK_TREE` changes, so the existing single-test binaries that call `set_var` (`clm-git`'s `isolated_env.rs`, `clm-host`'s `keep_remote_env.rs`) see the value they set; the lookup runs its `rev-parse` directly, not through the rule, so it doesn't recurse.
+- `plugin.hooks.guard`'s push query passes a pushed command's own `GIT_DIR` and `GIT_WORK_TREE` through `Options::env`, which are kept; only the process's own are dropped for a checkout outside its work tree.
+- The capability suite's `isolated()` helper removes the variables from every capability test, so no capability test sees a difference.
 
 ## Constraints
 
@@ -45,3 +50,5 @@ No requirement says how `clm-git` treats these variables outside the clone, so t
 - `tests-run-concurrently`: no test changes the process's environment.
 
 ## Open questions
+
+- With only `GIT_DIR` set, the named work tree is the directory `clm` was started in, as git takes it; whether a hook that sets `GIT_DIR` alone and starts `clm` in a subdirectory needs more is left until one does.
