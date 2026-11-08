@@ -146,9 +146,6 @@ if $full; then
   panel=true
   plugin=true
 fi
-# `selected` grows by one entry per target, so a file that selects two (`--lib` and `--bins`)
-# is listed twice; `timed` prints each once.
-
 # The tests run `clm check`, detectors and all (`this_repository_is_clean`), so the detectors'
 # tools go first (ci/detector-tools), then `cargo-nextest` (ci/test-tools).
 install_tools() {
