@@ -351,3 +351,48 @@ fn workarounds_not_counted_when_settings_fail() {
         "{stderr}"
     );
 }
+
+#[test]
+fn land_target_reaches_health() {
+    // req:clm/health-land-target@a8db0736
+    use clm_ledger::{Body, LandKind};
+    let dir = TempDir::new().unwrap();
+    let root = ledger_common::clone_with_origin(dir.path(), "repo", "Ann");
+    write(
+        &root,
+        "specs/SPEC.md",
+        "---\ntitle: T\nstatus: active\nowners: []\n---\n",
+    );
+    write(
+        &root,
+        "clm.toml",
+        "host = \"git\"\n[land]\ncheck = \"true\"\ncheck_target_seconds = 45\n",
+    );
+    let body = Body::Landed {
+        commit: "c1".into(),
+        branch: "impl/a".into(),
+        kind: LandKind::Code,
+        review: false,
+        fingerprint: "f".into(),
+        code_key: None,
+        changes: vec![],
+        check_seconds: Some(50),
+        steps: vec![],
+    };
+    clm_ledger::append(&root, body, &ledger_common::env(dir.path(), &[])).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
+        .args(["health", "--root"])
+        .arg(&root)
+        .env("HOME", dir.path())
+        .env_remove("XDG_CONFIG_HOME")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l == "health/land-time: 1 of 1 timed lands over 45s"),
+        "{stdout}"
+    );
+}
