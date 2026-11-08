@@ -5,6 +5,7 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand, ValueEnum};
 
 mod closed_stdout;
+mod none_remote;
 mod upgrade_command;
 mod upgrade_gate;
 
@@ -869,6 +870,9 @@ fn dispatch() -> ExitCode {
     if let Some(error) = upgrade_gate::blocked(&command, &cwd, clm_upgrade::require_current) {
         eprintln!("{error}");
         return ExitCode::from(4);
+    }
+    for line in none_remote::keep(&command, &cwd) {
+        eprintln!("{line}");
     }
     match command {
         Command::Check { no_detectors, root } => {

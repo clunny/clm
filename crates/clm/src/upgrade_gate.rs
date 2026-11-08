@@ -4,26 +4,33 @@ use std::path::{Path, PathBuf};
 
 use crate::{Architecture, Branch, Capabilities, Command, Contribution, Effort, Ledger, Page};
 
-/// The `--root` a command was given, when the command is blocked while a required migration
-/// is pending: `None` for a command that always runs, `Some(None)` for a blocked command
-/// with no `--root`. Every variant is named, so a command added later doesn't compile until
+/// Where a command works and whether a pending required migration stops it.
+pub(crate) struct Located<'a> {
+    /// The `--root` the command was given: `None` when it has none or was given none, and
+    /// the repository holding the current directory is meant.
+    pub(crate) root: Option<&'a Path>,
+    /// Whether a pending required migration stops the command (`upgrade-blocks-commands`).
+    pub(crate) blocked: bool,
+}
+
+/// Where `command` works, or `None` for the two commands that never look at the project:
+/// `guide` and `hook`. Every variant is named, so a command added later doesn't compile until
 /// someone decides which side of the list it is on.
-fn blocked_root(command: &Command) -> Option<Option<&Path>> {
+pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
     use Command as C;
-    fn given(root: &Option<PathBuf>) -> Option<Option<&Path>> {
-        Some(root.as_deref())
+    fn at(root: Option<&Path>, blocked: bool) -> Option<Located<'_>> {
+        Some(Located { root, blocked })
+    }
+    fn given(root: &Option<PathBuf>) -> Option<Located<'_>> {
+        at(root.as_deref(), true)
     }
     match command {
+        C::Guide { .. } | C::Hook { .. } => None,
         // The commands that run whatever is pending.
-        C::Status { .. }
-        | C::Guide { .. }
-        | C::Defect { .. }
-        | C::Config { .. }
-        | C::Init { .. }
-        | C::Backlog { .. }
-        | C::Hook { .. }
-        | C::Upgrade { .. }
-        | C::View { .. } => None,
+        C::Status { root, .. } | C::Backlog { root, .. } | C::View { root, .. } => {
+            at(root.as_deref(), false)
+        }
+        C::Defect { .. } | C::Config { .. } | C::Init { .. } | C::Upgrade { .. } => at(None, false),
         C::Check { root, .. }
         | C::Coverage { root }
         | C::Pending { root, .. }
@@ -65,7 +72,7 @@ fn blocked_root(command: &Command) -> Option<Option<&Path>> {
             command: Some(Architecture::Decide { root: inner, .. }),
             root,
             ..
-        } => Some(inner.as_deref().or(root.as_deref())),
+        } => at(inner.as_deref().or(root.as_deref()), true),
         C::Capabilities {
             command: None,
             root,
@@ -99,7 +106,7 @@ fn blocked_root(command: &Command) -> Option<Option<&Path>> {
         C::Effort {
             effort: Effort::Record { root, .. },
         } => given(root),
-        C::Superpowers { .. } => Some(None),
+        C::Superpowers { .. } => at(None, true),
     }
 }
 
@@ -111,7 +118,8 @@ pub(crate) fn blocked(
     cwd: &Path,
     require: impl Fn(&Path) -> Result<(), String>,
 ) -> Option<String> {
-    let root = match blocked_root(command)? {
+    let here = located(command).filter(|here| here.blocked)?;
+    let root = match here.root {
         Some(root) => root,
         None => clm_hooks::clm_root(cwd)?,
     };

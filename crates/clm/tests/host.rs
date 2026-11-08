@@ -468,7 +468,7 @@ fn push_prints_the_remotes_lines_and_succeeds_when_origin_has_the_commit() {
 #[test]
 fn push_without_origin_exits_1() {
     // req:host/branch-push@2c314eee
-    let (r, gh) = (checkout("none"), fake_gh());
+    let (r, gh) = (checkout("git"), fake_gh());
     git(&r.work, &["remote", "remove", "origin"]);
     let (code, _, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
     assert_eq!(code, Some(1), "{err}");
