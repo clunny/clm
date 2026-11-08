@@ -1014,6 +1014,22 @@ fn config_get_land_check() {
 }
 
 #[test]
+fn config_get_land_check_target() {
+    // req:config/land-check-setting@1baa537e
+    let (out, path) = config_get_in_repo(
+        Some("[land]\ncheck = \"scripts/clm-check.sh\"\ncheck_target_seconds = 90\n"),
+        "land",
+    );
+    assert_eq!(
+        out,
+        format!(
+            "check=scripts/clm-check.sh,check_target_seconds=90\t{}\n",
+            path.display()
+        )
+    );
+}
+
+#[test]
 fn config_get_land_defaults_to_nothing() {
     // req:config/land-check-setting@1baa537e
     let (out, _) = config_get_in_repo(None, "land");
