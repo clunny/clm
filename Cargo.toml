@@ -33,6 +33,7 @@ clm-ledger = { path = "crates/clm-ledger" }
 clm-effort = { path = "crates/clm-effort" }
 clm-approval = { path = "crates/clm-approval" }
 clm-land = { path = "crates/clm-land" }
+clm-verify = { path = "crates/clm-verify" }
 clm-triage = { path = "crates/clm-triage" }
 clm-unreferenced = { path = "crates/clm-unreferenced" }
 clm-affected = { path = "crates/clm-affected" }

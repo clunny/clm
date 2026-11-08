@@ -259,6 +259,7 @@ dependencies = [
  "clm-triage",
  "clm-unreferenced",
  "clm-upgrade",
+ "clm-verify",
  "clm-view",
  "clm-view-repo",
  "roxmltree",
@@ -651,6 +652,21 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "clm-verify"
+version = "0.20.0"
+dependencies = [
+ "clm-affected",
+ "clm-config",
+ "clm-coverage",
+ "clm-git",
+ "clm-host",
+ "clm-land",
+ "clm-ledger",
+ "clm-model",
+ "tempfile",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 ---
 title: Verify
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: [config, ledger, host, vcs, model, check.coverage, check.affected, land]
 paths: ["crates/clm-verify/**"]

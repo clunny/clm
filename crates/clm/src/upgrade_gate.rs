@@ -47,6 +47,7 @@ fn blocked_root(command: &Command) -> Option<Option<&Path>> {
         | C::Autosync { root }
         | C::Issue { root, .. }
         | C::Land { root, .. }
+        | C::Verify { root, .. }
         | C::Approve { root, .. }
         | C::Reconnect { root }
         | C::Affected { root, .. }
