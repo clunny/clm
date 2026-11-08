@@ -14,6 +14,8 @@ on_exit() {
   local status=$? total=$SECONDS p
   trap - EXIT
   if [ "$status" -ne 0 ]; then
+    # Outside any phase (phase_name empty) the whole run so far is the time.
+    [ -n "$phase_name" ] || phase_start=0
     echo "ci-check: failed in ${phase_name:-setup} after $((total - phase_start))s, ${total}s total" >&2
   else
     {

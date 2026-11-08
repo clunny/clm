@@ -1484,6 +1484,39 @@ fn the_release_builds_no_nextest() {
     }
 }
 
+#[test]
+fn a_full_run_times_every_phase_it_runs() {
+    // req:ci/phase-times@e8375a0b
+    let tree = Tree::new();
+    let out = tree.output(None, "", None, &tree.path());
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let summary = stderr.split("ci-check: phases\n").nth(1).unwrap();
+    let names: Vec<&str> = summary
+        .lines()
+        .filter_map(|l| l.split_once("s ").map(|(_, name)| name))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "tools",
+            "fmt",
+            "clippy",
+            "wasm",
+            "tests",
+            "plugin-panel",
+            "validate plugin-panel",
+            "capabilities/panel",
+            "validate plugin",
+            "web",
+            "web/site",
+            "capabilities/web",
+            "total"
+        ],
+        "{stderr}"
+    );
+}
+
 /// The lines of `text` starting `ci-check: `.
 fn phase_lines(text: &str) -> Vec<&str> {
     text.lines()
