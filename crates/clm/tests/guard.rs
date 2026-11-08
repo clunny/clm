@@ -517,7 +517,7 @@ fn guard_answers_a_hanging_lookup_within_its_budget() {
 
 #[test]
 fn guard_blocks_a_push_git_does_not_answer() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // a push git doesn't answer: the fake `git` writes its process ID to `pids` and then
     // `exec`s its sleep, so the sleep has that ID.
     let fake = TempDir::new().unwrap();
@@ -563,7 +563,7 @@ fn guard_blocks_a_push_git_does_not_answer() {
 
 #[test]
 fn guard_push_queries_share_one_budget() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // Each query takes 4 seconds and answers nothing: a segment's three fit in 20 seconds,
     // two segments' six don't. The fifth query is killed at 20 seconds, and the sixth is
     // never started.
@@ -609,7 +609,7 @@ fn gone(pid: &str) -> bool {
 
 #[test]
 fn guard_command_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "git push origin HEAD:main" },

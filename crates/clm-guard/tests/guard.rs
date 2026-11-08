@@ -34,10 +34,17 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?}: {out:?}");
 }
 
-/// A fresh repository at `dir` on `branch`.
-fn checkout_on(dir: &Path, branch: &str) {
+/// A fresh scratch repository at `dir` on `branch`, holding no `specs/SPEC.md`.
+fn scratch_on(dir: &Path, branch: &str) {
     fs::create_dir_all(dir).unwrap();
     git(dir, &["init", "-q", "-b", branch]);
+}
+
+/// A fresh repository under CLM at `dir` on `branch`: it holds `specs/SPEC.md`.
+fn checkout_on(dir: &Path, branch: &str) {
+    scratch_on(dir, branch);
+    fs::create_dir_all(dir.join("specs")).unwrap();
+    fs::write(dir.join("specs/SPEC.md"), "# Spec\n").unwrap();
 }
 
 /// A repository `work` under `dir` with a remote `origin` holding `main` and `impl/x/b`,
@@ -125,7 +132,7 @@ fn bash_in_opt(command: &str, cwd: Option<&Path>) -> String {
 
 #[test]
 fn a_branch_that_pushes_to_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     let dir = TempDir::new().unwrap();
     let work = tracking(dir.path(), "impl/x/b", Some("main"));
     let why = blocks_push(&bash_in("git -c push.default=upstream push", &work));
@@ -164,7 +171,7 @@ fn a_branch_that_pushes_to_main() {
 
 #[test]
 fn only_push_and_remote_settings_reach_the_queries() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     let dir = TempDir::new().unwrap();
     let work = tracking(&dir.path().join("a"), "impl/x/b", Some("main"));
     // A setting outside `push.`, `remote.` and `branch.` isn't passed to git: one that
@@ -184,7 +191,7 @@ fn only_push_and_remote_settings_reach_the_queries() {
 
 #[test]
 fn another_checkouts_git_directory() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     checkout_on(&dir.path().join("m"), "main");
@@ -201,7 +208,7 @@ fn another_checkouts_git_directory() {
 
 #[test]
 fn pushing_branches_that_do_not_reach_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // pushing other branches
     let dir = TempDir::new().unwrap();
     let own = tracking(&dir.path().join("own"), "impl/x/b", Some("impl/x/b"));
@@ -222,7 +229,7 @@ fn pushing_branches_that_do_not_reach_main() {
 
 #[test]
 fn merging_into_main_through_the_host() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // merging into main through the host
     for command in [
         "git push origin 'refs/heads/*:heads/*'",
@@ -247,7 +254,7 @@ fn merging_into_main_through_the_host() {
 
 #[test]
 fn reading_or_merging_elsewhere_through_the_host() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // reading or merging elsewhere through the host
     for command in [
         "gh api -X POST repos/o/r/merges -f base=impl/x/b -f head=main",
@@ -516,13 +523,13 @@ fn guard_allows_reading_releases_and_runs() {
 
 #[test]
 fn guard_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     blocks_push(&bash("git push origin HEAD:main"));
 }
 
 #[test]
 fn guard_blocks_other_ways_to_reach_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     for command in [
         "git push --force origin main",
         "git push origin +main",
@@ -541,7 +548,7 @@ fn guard_blocks_other_ways_to_reach_main() {
 
 #[test]
 fn guard_blocks_an_implicit_push_from_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
     for command in ["git push", "git push origin HEAD", "git push -u origin"] {
@@ -551,7 +558,7 @@ fn guard_blocks_an_implicit_push_from_main() {
 
 #[test]
 fn guard_allows_pushing_other_branches() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     for command in [
         "git push -u origin impl/x/b",
         "git push --force-with-lease origin impl/x/b",
@@ -591,7 +598,7 @@ fn guard_allows_pushing_other_branches() {
 
 #[test]
 fn guard_names_a_cd_it_cannot_follow() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // cd into a directory the command creates
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -669,7 +676,7 @@ fn guard_names_a_cd_it_cannot_follow() {
 
 #[test]
 fn guard_suggests_an_explicit_branch_for_an_implicit_push() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // implicit push from main
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -691,7 +698,7 @@ fn guard_suggests_an_explicit_branch_for_an_implicit_push() {
 
 #[test]
 fn guard_reads_push_options_and_redirections_as_what_they_are() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     // An option's value isn't the remote or a refspec, wherever the option sits.
     assert_eq!(
         guard(&bash("git push origin --repo main impl/x/b")),
@@ -717,7 +724,7 @@ fn guard_reads_push_options_and_redirections_as_what_they_are() {
 
 #[test]
 fn guard_blocks_matching_and_wildcard_refspecs_that_reach_main() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     for command in [
         "git push origin :",
         "git push --force origin refs/heads/*:refs/heads/*",
@@ -734,7 +741,7 @@ fn guard_blocks_matching_and_wildcard_refspecs_that_reach_main() {
 
 #[test]
 fn guard_allows_an_implicit_push_it_cannot_decide() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     let dir = TempDir::new().unwrap();
     assert_eq!(
         guard(&bash_in_opt("git push", None)),
@@ -748,9 +755,126 @@ fn guard_allows_an_implicit_push_it_cannot_decide() {
     );
 }
 
+/// A repository with a remote `origin`, on `main`, holding no `specs/SPEC.md`.
+fn scratch_tracking(dir: &Path) -> std::path::PathBuf {
+    let work = tracking(dir, "impl/x/b", Some("main"));
+    git(&work, &["checkout", "-q", "main"]);
+    fs::remove_dir_all(work.join("specs")).unwrap();
+    work
+}
+
+#[test]
+fn a_repository_not_under_clm() {
+    // req:plugin.hooks.guard/push-guard@61eecef6
+    let dir = TempDir::new().unwrap();
+    let work = scratch_tracking(dir.path());
+    for command in [
+        "git push -u origin main",
+        "git push",
+        "git push origin HEAD:main",
+        "git push --all origin",
+        "git push --mirror origin",
+    ] {
+        allows(&bash_in(command, &work));
+    }
+    // Only a push a case would block is tested, so the same repository's other pushes are
+    // allowed either way.
+    allows(&bash_in("git push origin impl/x/b", &work));
+    // A directory of it is the same repository.
+    fs::create_dir_all(work.join("sub")).unwrap();
+    allows(&bash_in("git push origin main", &work.join("sub")));
+}
+
+#[test]
+fn a_scratch_repository_inside_a_checkout_under_clm() {
+    // req:plugin.hooks.guard/push-guard@61eecef6
+    let dir = TempDir::new().unwrap();
+    let work = tracking(dir.path(), "impl/x/b", Some("impl/x/b"));
+    scratch_on(&work.join("s"), "main");
+    allows(&bash_in("cd s && git push -u origin main", &work));
+    allows(&bash_in("git -C s push", &work));
+    blocks_push(&bash_in("git push origin main", &work));
+}
+
+#[test]
+fn a_clm_repository_in_a_subdirectory() {
+    // req:plugin.hooks.guard/push-guard@61eecef6
+    let dir = TempDir::new().unwrap();
+    let work = scratch_tracking(dir.path());
+    fs::create_dir_all(work.join("tool/specs")).unwrap();
+    fs::write(work.join("tool/specs/SPEC.md"), "# Spec\n").unwrap();
+    git(&work, &["add", "tool"]);
+    git(
+        &work,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "-m",
+            "tool",
+        ],
+    );
+    blocks_push(&bash_in("git push origin main", &work));
+    blocks_push(&bash_in("git push", &work));
+    blocks_push(&bash_in("git push", &work.join("tool")));
+}
+
+#[test]
+fn a_push_whose_repository_the_guard_cannot_tell() {
+    // req:plugin.hooks.guard/push-guard@61eecef6
+    let dir = TempDir::new().unwrap();
+    let work = scratch_tracking(dir.path());
+    for command in [
+        "cd $W && git push origin main",
+        "GIT_DIR=.git git push origin main",
+        "GIT_COMMON_DIR=.git git push origin main",
+        "GIT_WORK_TREE=. git push origin main",
+        "git --work-tree=. push origin main",
+        "git --git-dir .git push origin main",
+        "git -c core.worktree=. push origin main",
+        "git -c core.bare=false push origin main",
+        "git -C missing push origin main",
+        "cd nowhere && git push origin main",
+    ] {
+        blocks_push(&bash_in(command, &work));
+    }
+    // No `cwd`, and a `cwd` in no git repository.
+    blocks_push(&bash_in_opt("git push origin main", None));
+    let outside = TempDir::new().unwrap();
+    blocks_push(&bash_in("git push origin main", outside.path()));
+    // A `-C` path that is a file.
+    fs::write(work.join("file"), "x").unwrap();
+    blocks_push(&bash_in("git -C file push origin main", &work));
+    // The push's own absolute `-C`, or an absolute `env -C`, sets the checkout outright.
+    let abs = work.to_str().unwrap();
+    allows(&bash_in(
+        &format!("cd $W && git -C {abs} push origin main"),
+        &work,
+    ));
+    allows(&bash_in(
+        &format!("cd $W && env -C {abs} git push origin main"),
+        &work,
+    ));
+}
+
+#[test]
+fn the_hosts_routes_outside_clm() {
+    // req:plugin.hooks.guard/push-guard@61eecef6
+    let dir = TempDir::new().unwrap();
+    let work = scratch_tracking(dir.path());
+    blocks_push(&bash_in("gh pr merge 3 --squash", &work));
+    blocks_push(&bash_in(
+        "gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc",
+        &work,
+    ));
+}
+
 #[test]
 fn guard_blocks_moving_main_through_the_api() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     blocks_push(&bash(
         "gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc",
     ));
@@ -769,7 +893,7 @@ fn guard_blocks_moving_main_through_the_api() {
 
 #[test]
 fn guard_allows_prose_about_pushing() {
-    // req:plugin.hooks.guard/push-guard@c75aa114
+    // req:plugin.hooks.guard/push-guard@61eecef6
     for command in [
         r#"gh pr create --title t --body "never run git push origin main""#,
         r#"git commit -m "explain git push origin main""#,

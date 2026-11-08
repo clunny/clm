@@ -108,6 +108,11 @@ pub fn reach<'a>(
     // decide where a push goes are passed to the queries.
     let mut dirs: Vec<&str> = Vec::new();
     let mut options: Vec<String> = Vec::new();
+    // Whether the segment names another git directory or work tree, so the guard can't tell
+    // which repository it reaches (`push-guard`).
+    let mut elsewhere = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]
+        .iter()
+        .any(|n| command.assigned(n).is_some());
     let mut i = 0;
     while let Some(t) = args.get(i).map(String::as_str) {
         let value = args.get(i + 1).map(String::as_str);
@@ -118,17 +123,20 @@ pub fn reach<'a>(
                 i += 1;
             }
             "-c" => {
+                elsewhere |= value.is_some_and(moves_repository);
                 if let Some(v) = value.filter(|v| decides_push(v)) {
                     options.extend(["-c".to_string(), v.to_string()]);
                 }
                 i += 1;
             }
             "--git-dir" | "--work-tree" => {
+                elsewhere = true;
                 options.extend(value.map(|v| format!("{t}={v}")));
                 i += 1;
             }
             "--namespace" => i += 1,
             _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => {
+                elsewhere = true;
                 options.push(t.to_string())
             }
             _ if t.starts_with("-C") => dirs.push(&t[2..]),
@@ -143,9 +151,30 @@ pub fn reach<'a>(
         return None;
     }
     let push = &args[i + 1..];
-    if push.iter().any(|t| t == "--all" || t == "--mirror") {
-        return Some((Reach::Explicit, None));
-    }
+    let lost = lost.filter(|_| !dirs.iter().any(|d| Path::new(d).is_absolute()));
+    let env: Vec<(&str, &OsStr)> = ["GIT_DIR", "GIT_WORK_TREE"]
+        .into_iter()
+        .filter_map(|n| command.assigned(n).map(|v| (n, OsStr::new(v))))
+        .collect();
+    let query = checkout.map(|checkout| {
+        let mut checkout = checkout.to_path_buf();
+        for dir in &dirs {
+            checkout.push(dir);
+        }
+        Query {
+            checkout,
+            options,
+            env: &env,
+            budget,
+        }
+    });
+    // A push the cases would block goes through when it isn't under CLM; that is asked only
+    // for such a push.
+    let settle = |reach: Reach, reported: Option<&'a str>| {
+        let outside =
+            !elsewhere && lost.is_none() && query.as_ref().is_some_and(Query::outside_clm);
+        (!outside).then_some((reach, reported))
+    };
     let mut positionals = Vec::new();
     let mut j = 0;
     while let Some(t) = push.get(j) {
@@ -157,32 +186,25 @@ pub fn reach<'a>(
         j += 1;
     }
     let refspecs = positionals.get(1..).unwrap_or_default();
-    if refspecs.iter().any(|r| reaches_main(r)) {
-        return Some((Reach::Explicit, None));
+    if push.iter().any(|t| t == "--all" || t == "--mirror")
+        || refspecs.iter().any(|r| reaches_main(r))
+    {
+        return settle(Reach::Explicit, None);
     }
     let bare = refspecs.is_empty();
     if !(bare || matches!(refspecs, ["HEAD" | "@"])) {
         return None;
     }
-    let mut checkout = checkout?.to_path_buf();
-    for dir in &dirs {
-        checkout.push(dir);
-    }
-    let lost = lost.filter(|_| !dirs.iter().any(|d| Path::new(d).is_absolute()));
-    let env: Vec<(&str, &OsStr)> = ["GIT_DIR", "GIT_WORK_TREE"]
-        .into_iter()
-        .filter_map(|n| command.assigned(n).map(|v| (n, OsStr::new(v))))
-        .collect();
-    let query = Query {
-        checkout,
-        options,
-        env: &env,
-        budget,
-    };
-    query
-        .reach(bare)
-        .unwrap_or_else(Some)
-        .map(|reach| (reach, lost))
+    let reach = query.as_ref()?.reach(bare).unwrap_or_else(Some)?;
+    settle(reach, lost)
+}
+
+/// Whether a `-c` setting moves the repository: `core.worktree` or `core.bare`.
+fn moves_repository(setting: &str) -> bool {
+    let name = setting.split('=').next().unwrap_or_default();
+    ["core.worktree", "core.bare"]
+        .iter()
+        .any(|n| name.eq_ignore_ascii_case(n))
 }
 
 /// Whether a `-c` setting may move where a push goes, and so is passed to the queries:
@@ -209,6 +231,24 @@ struct Query<'a> {
 }
 
 impl Query<'_> {
+    /// Whether the push isn't under CLM (`push-guard`): its checkout is an existing
+    /// directory in a git repository with no `specs/SPEC.md` at or above it up to the
+    /// repository's top, and none committed anywhere in the repository. Whatever can't be
+    /// told counts as under CLM.
+    fn outside_clm(&self) -> bool {
+        let Ok(dir) = self.checkout.canonicalize() else {
+            return false;
+        };
+        if !dir.is_dir()
+            || clm_hooks::clm_root(&dir).is_some()
+            || !dir.ancestors().any(|a| a.join(".git").exists())
+        {
+            return false;
+        }
+        let found = self.ask(&["ls-files", "-z", "--", ":(top,glob)**/specs/SPEC.md"]);
+        matches!(found, Ok(Some(out)) if out.is_empty())
+    }
+
     /// How a push with no refspec (`bare`) or only `HEAD` reaches `main`, by asking git;
     /// `Err(Reach::Unanswered)` when a query runs out of the budget.
     fn reach(&self, bare: bool) -> Result<Option<Reach>, Reach> {
