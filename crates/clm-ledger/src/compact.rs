@@ -26,7 +26,8 @@ pub struct Compacted {
 /// land without `code_key` has its commit missing from this clone, so its key can't be
 /// computed, it keeps every `checked` record and warns, since dropping a check is the one
 /// mistake it can't undo; a missing commit of a land that needed review keeps its approval the same way.
-/// An `effort` record goes when the fold holds a later one with its `id`.
+/// An `effort` record goes when the fold holds a later one with its `id`, and a `verified`
+/// record when the fold holds a newer one of the caller's for its commit.
 /// Fetches first, as best it can, so it sees the latest lands; a line that doesn't parse is
 /// kept.
 pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Compacted, Error> {
@@ -123,13 +124,6 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             }
         }
     }
-    // The caller's own records are in `at` order, so the last one for a commit is its newest.
-    let mut newest_verified: std::collections::HashMap<&str, &str> = Default::default();
-    for record in fold.records.iter().filter(|r| r.writer == writer) {
-        if let Body::Verified { commit, .. } = &record.body {
-            newest_verified.insert(commit, &record.id);
-        }
-    }
     let superseded = |record: &Record| match &record.body {
         Body::Approved { fingerprint, .. } => fingerprints.contains(fingerprint.as_str()),
         // The diff they were about is on `main`, whatever their branch.
@@ -145,10 +139,15 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             .efforts
             .get(&record.id)
             .is_some_and(|latest| latest != record),
-        // Only the caller's newest result for each commit stays.
-        Body::Verified { commit, .. } => newest_verified
-            .get(commit.as_str())
-            .is_some_and(|id| *id != record.id),
+        // Only the caller's newest result for each commit stays; one the fold didn't see,
+        // appended since, is newer than all it saw.
+        Body::Verified { commit, .. } => fold.verifications.get(commit).is_some_and(|all| {
+            all.iter().any(|r| r.id == record.id)
+                && all
+                    .iter()
+                    .find(|r| r.writer == writer)
+                    .is_some_and(|newest| newest.id != record.id)
+        }),
         Body::Landed { .. }
         | Body::Subscribed { .. }
         | Body::Unsubscribed { .. }

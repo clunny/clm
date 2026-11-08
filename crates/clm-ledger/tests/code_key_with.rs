@@ -96,3 +96,45 @@ fn another_file_differs_too() {
         code_key(root, &a).unwrap()
     );
 }
+
+#[test]
+fn mode_taken_with_the_entry() {
+    // req:ledger/code-key-with@52cbbafd
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, a) = setup();
+    let root = dir.path();
+    let mode = std::fs::Permissions::from_mode(0o755);
+    std::fs::set_permissions(root.join("clm.toml"), mode).unwrap();
+    let b = commit(root, &[], "mode");
+    assert_ne!(code_key(root, &b).unwrap(), code_key(root, &a).unwrap());
+    assert_eq!(
+        code_key_with(root, &b, "clm.toml", &a).unwrap(),
+        code_key(root, &a).unwrap()
+    );
+    assert_eq!(
+        code_key_with(root, &a, "clm.toml", &b).unwrap(),
+        code_key(root, &b).unwrap()
+    );
+}
+
+#[test]
+fn path_matched_exactly() {
+    // req:ledger/code-key-with@52cbbafd
+    let (dir, a) = setup();
+    let root = dir.path();
+    let b = commit(root, &[("crates/a/src/lib.rs", "fn b() {}\n")], "b");
+    // A directory, a prefix, a glob or pathspec magic names no one file: `rev`'s key stays.
+    for path in [
+        "crates",
+        "crates/a",
+        "crates/a/src/lib",
+        "crates/*",
+        ":(glob)crates/**",
+    ] {
+        assert_eq!(
+            code_key_with(root, &b, path, &a).unwrap(),
+            code_key(root, &b).unwrap(),
+            "{path}"
+        );
+    }
+}

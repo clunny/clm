@@ -16,19 +16,20 @@ pub fn code_key(root: &Path, rev: &str) -> Result<String, Error> {
 
 /// `rev`'s code key with `path`'s entry as `from`'s tree holds it (`ledger/code-key-with`):
 /// `from`'s `ls-tree` line for `path` replaces `rev`'s, or is inserted in byte order of paths
-/// when `rev` has none, or leaves the entry out when `from` has none. Computed from the two
-/// listings, so no git object is written. A path `doc_only` names isn't in the key at all, so
+/// when `rev` has none, or leaves the entry out when `from` has none, `path` matched exactly
+/// against each listing. Computed from the two listings, so no git object is written. A path `doc_only` names isn't in the key at all, so
 /// the key is `rev`'s own.
 pub fn code_key_with(root: &Path, rev: &str, path: &str, from: &str) -> Result<String, Error> {
     if crate::doc_only(path) {
         return code_key(root, rev);
     }
-    let mut entries = listing(root, rev, None)?;
-    let taken = listing(root, from, Some(path))?
-        .into_iter()
-        .find(|e| path_of(e) == path.as_bytes());
-    let at = entries.binary_search_by(|e| path_of(e).cmp(path.as_bytes()));
-    match (at, taken) {
+    // Both listings in full, searched by path, so `path` matches one file exactly and is never
+    // read as a pathspec.
+    let find = |entries: &[Vec<u8>]| entries.binary_search_by(|e| path_of(e).cmp(path.as_bytes()));
+    let mut entries = listing(root, rev)?;
+    let mut base = listing(root, from)?;
+    let taken = find(&base).ok().map(|n| base.swap_remove(n));
+    match (find(&entries), taken) {
         (Ok(n), Some(line)) => entries[n] = line,
         (Ok(n), None) => {
             entries.remove(n);
@@ -46,17 +47,17 @@ pub(crate) fn legacy_code_key(root: &Path, rev: &str) -> Result<String, Error> {
 }
 
 fn key_without(root: &Path, rev: &str, skip: fn(&str) -> bool) -> Result<String, Error> {
-    Ok(hash(&listing(root, rev, None)?, skip))
+    Ok(hash(&listing(root, rev)?, skip))
 }
 
-/// The entries `git ls-tree -r -z <rev>` lists (only those under `pathspec` when given), in
-/// its order.
-fn listing(root: &Path, rev: &str, pathspec: Option<&str>) -> Result<Vec<Vec<u8>>, Error> {
-    let mut args = vec!["ls-tree", "-r", "-z", rev];
-    if let Some(spec) = pathspec {
-        args.extend(["--", spec]);
-    }
-    let tree = clm_git::run(root, "git", &args, clm_git::Options::default())?;
+/// The entries `git ls-tree -r -z <rev>` lists, in its order: byte order of paths.
+fn listing(root: &Path, rev: &str) -> Result<Vec<Vec<u8>>, Error> {
+    let tree = clm_git::run(
+        root,
+        "git",
+        &["ls-tree", "-r", "-z", rev],
+        clm_git::Options::default(),
+    )?;
     Ok(tree
         .split(|b| *b == 0)
         .filter(|e| !e.is_empty())

@@ -131,6 +131,14 @@ fn unresolved_reds() {
     )]);
     let reds = none.unresolved_reds(&chain);
     assert_eq!(reds.iter().map(|r| &r.id).collect::<Vec<_>>(), ["v2"]);
+    // Several reds come back in chain order, whatever order they were recorded in.
+    let text = [
+        line(5, 'd', "false", "2026-01-01T00:00:00.000Z", None),
+        line(2, 'b', "false", "2026-01-02T00:00:00.000Z", None),
+    ]
+    .join("\n");
+    let reds = fold_records(&[("one", &text)]).unresolved_reds(&chain);
+    assert_eq!(reds.iter().map(|r| &r.id).collect::<Vec<_>>(), ["v2", "v5"]);
 }
 
 #[test]
