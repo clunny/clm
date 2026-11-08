@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [keep-remote-fails-when-git-work-tree-is-set]
 ---
 

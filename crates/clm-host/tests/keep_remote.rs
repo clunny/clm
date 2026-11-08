@@ -44,7 +44,7 @@ fn kept(dir: &Path) -> PathBuf {
 
 #[test]
 fn no_remote() {
-    // req:host/none-keeps-a-remote@85ff1b8b
+    // req:host/none-keeps-a-remote@7c60711b
     let (_tmp, dir) = clone();
     let status_before = git(&dir, &["status", "--porcelain"]);
     let got = keep_remote(&dir, Host::None).unwrap();
@@ -61,7 +61,7 @@ fn no_remote() {
 
 #[test]
 fn from_a_linked_worktree() {
-    // req:host/none-keeps-a-remote@85ff1b8b
+    // req:host/none-keeps-a-remote@7c60711b
     let (tmp, dir) = clone();
     let linked = tmp.path().join("linked");
     git(
@@ -92,7 +92,7 @@ fn from_a_linked_worktree() {
 
 #[test]
 fn already_kept() {
-    // req:host/none-keeps-a-remote@85ff1b8b
+    // req:host/none-keeps-a-remote@7c60711b
     let (_tmp, dir) = clone();
     keep_remote(&dir, Host::None).unwrap();
     let bare = kept(&dir);
@@ -112,7 +112,7 @@ fn already_kept() {
 
 #[test]
 fn nothing_to_do() {
-    // req:host/none-keeps-a-remote@85ff1b8b
+    // req:host/none-keeps-a-remote@7c60711b
     let (tmp, dir) = clone();
     let other = tmp.path().join("other.git");
     git(

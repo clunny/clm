@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use clm_config::Host;
-use clm_git::{REMOTE, common_dir, git};
+use clm_git::{REMOTE, common_dir, git, git_isolated};
 
 use crate::Error;
 
@@ -19,7 +19,7 @@ pub fn keep_remote(root: &Path, host: Host) -> Result<Option<PathBuf>, Error> {
         .to_str()
         .ok_or_else(|| Error::Refused(format!("{} isn't valid UTF-8", bare.display())))?;
     // `init` on an existing repository keeps what it holds.
-    git(root, &["init", "--quiet", "--bare", path])?;
+    git_isolated(root, &["init", "--quiet", "--bare", path])?;
     git(root, &["remote", "add", REMOTE, path])?;
     Ok(Some(bare))
 }
