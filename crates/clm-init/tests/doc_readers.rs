@@ -62,7 +62,7 @@ fn rust_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 fn reads(text: &str, doc: &str) -> bool {
     let reads_files = text.contains("read_to_string") || text.contains("read_dir");
     reads_files
-        && (text.contains(&format!("{UP}{doc}"))
+        && (text.contains(&format!("{UP}{}", doc.trim_end_matches('/')))
             || (doc.starts_with("docs/") && text.contains(ROOT) && text.contains(doc)))
 }
 
