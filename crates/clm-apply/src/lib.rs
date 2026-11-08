@@ -218,15 +218,28 @@ fn plan(
     }
     if violations.is_empty() {
         // `answered-questions`: the spec this applies answers the questions it resolves.
-        ops.extend(
-            change
-                .frontmatter
-                .resolves
-                .iter()
-                .filter_map(|slug| graph.backlog.get(slug))
-                .filter(|item| item.frontmatter.kind == clm_model::BacklogKind::Question)
-                .map(|item| FileOp::Remove(item.path.clone())),
-        );
+        let answered = change
+            .frontmatter
+            .resolves
+            .iter()
+            .filter_map(|slug| graph.backlog.get(slug))
+            .filter(|item| item.frontmatter.kind == clm_model::BacklogKind::Question);
+        // `promoted-item`: the item the change was promoted from leaves the backlog with it,
+        // unless it is a human-task, which only the human deletes.
+        let promoted = change
+            .frontmatter
+            .from
+            .as_deref()
+            .and_then(|from| from.strip_prefix("backlog/"))
+            .and_then(|slug| graph.backlog.get(slug))
+            .filter(|item| item.frontmatter.kind != clm_model::BacklogKind::Human);
+        let mut removed: Vec<PathBuf> = Vec::new();
+        for item in answered.chain(promoted) {
+            if !removed.contains(&item.path) {
+                removed.push(item.path.clone());
+            }
+        }
+        ops.extend(removed.into_iter().map(FileOp::Remove));
         ops.push(FileOp::Write(
             change.path.clone(),
             mark_applied(&change.source).into_bytes(),
