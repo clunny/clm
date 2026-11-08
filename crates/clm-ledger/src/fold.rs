@@ -70,12 +70,8 @@ impl Fold {
             .iter()
             .rposition(|c| newest(c).is_some_and(passed))
             .map_or(0, |n| n + 1);
-        chain[from..]
-            .iter()
-            .filter_map(newest)
-            .filter(|r| !passed(r))
-            .cloned()
-            .collect()
+        // Every newest record after the last pass failed.
+        chain[from..].iter().filter_map(newest).cloned().collect()
     }
 }
 
