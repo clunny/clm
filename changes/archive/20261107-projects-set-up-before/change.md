@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [projects-set-up-before-the-unattended-allow-rules-get-no]
 ---
 
