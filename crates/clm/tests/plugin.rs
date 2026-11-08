@@ -1517,7 +1517,7 @@ fn subagent_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn build_launches_subagents() {
-    // req:plugin/build-subagents@2b7cae34
+    // req:plugin/build-subagents@002f1bf4
     let (_, body) = frontmatter(&plugin().join("skills/build/SKILL.md"));
     assert_eq!(subagent_gaps(&body), Vec::<String>::new());
     // build without isolation
@@ -1569,7 +1569,13 @@ fn build_launches_subagents() {
     // A build that stopped without landing is built again the same way, until it lands or
     // stops twice for the same reason.
     let retry = sentence_with(&body, "stopped without landing");
-    for needle in ["same way", "until it lands", "twice", "same reason"] {
+    for needle in [
+        "same way",
+        "until it lands",
+        "twice",
+        "same reason",
+        "isn't one you resume",
+    ] {
         assert!(retry.contains(needle), "{needle}: {retry}");
     }
 }
@@ -1683,7 +1689,7 @@ fn wrap_up_left_lines() {
 
 #[test]
 fn build_finishes_builds() {
-    // req:plugin/build-finishes-builds@841e10ab
+    // req:plugin/build-finishes-builds@6b0cdcd0
     let body = skill_body("build");
     assert_eq!(finish_gaps(&body), Vec::<String>::new());
     // build without finishing
@@ -1720,7 +1726,7 @@ fn build_finishes_builds() {
         "landed or stopped",
         "before retrying or launching",
         "usage or rate limit",
-        "`resume-limited-builds`",
+        "`resume-sound-builds`",
     ] {
         assert!(finish.contains(needle), "{needle}: {finish}");
     }
@@ -2311,6 +2317,7 @@ fn contributions_gaps(body: &str) -> Vec<String> {
             "issues",
             "alerts:",
             "alerts unavailable",
+            "imported",
             "contribution",
         ],
         &[],
@@ -2319,7 +2326,7 @@ fn contributions_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn triage_takes_the_inbox_in() {
-    // req:plugin/triage-contributions@3c8ee1dc
+    // req:plugin/triage-contributions@7a586b6e
     let body = skill_body("triage");
     assert_eq!(contributions_gaps(&body), Vec::<String>::new());
     // triage without the verifier
@@ -2398,6 +2405,15 @@ fn triage_takes_the_inbox_in() {
     }
     let down = sentence_with(step, "On an `alerts unavailable` line");
     assert!(down.contains("go on"), "{down}");
+    let imported = sentence_with(step, "For each `issue <n> imported <slug>...`");
+    for needle in [
+        "already taken in",
+        "for information only",
+        "do nothing for it",
+        "stays open on the host until its item is resolved",
+    ] {
+        assert!(imported.contains(needle), "{needle}: {imported}");
+    }
     let pull = sentence_with(step, "For each `pull <n>` line");
     assert!(pull.contains("`contribution` skill's steps"), "{pull}");
     assert!(step.contains("run `clm triage` again"), "{step}");
@@ -2448,7 +2464,7 @@ fn menu_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn triage_shows_a_menu() {
-    // req:plugin/triage-menu@719df6fe
+    // req:plugin/triage-menu@e683c40d
     let body = skill_body("triage");
     assert_eq!(menu_gaps(&body), Vec::<String>::new());
     // triage without the menu
@@ -2480,6 +2496,7 @@ fn triage_shows_a_menu() {
         "`issue <n> new`",
         "counted together",
         "step 2a says",
+        "imported` lines are not counted",
         "before every other choice but the *Approvals*",
     ] {
         assert!(contributions.contains(needle), "{needle}: {contributions}");
@@ -2957,7 +2974,7 @@ fn elaboration_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn propose_nests_splits() {
-    // req:plugin/propose-nests-splits@8fe34e26
+    // req:plugin/propose-nests-splits@7b381998
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
     for needle in [
         "specs/<component>/<part>/SPEC.md",
@@ -2975,13 +2992,6 @@ fn propose_nests_splits() {
             "propose: SKILL.md must mention {needle}"
         );
     }
-    assert!(
-        !body
-            .replace(GLOSSARY_PATH, "")
-            .replace(SETTINGS_PATH, "")
-            .contains("docs/guide/"),
-        "propose: SKILL.md must not name docs/guide/"
-    );
     // The carved-out part becomes a child of the component it came from.
     let sentence = sentence_with(&body, "specs/<component>/<part>/SPEC.md");
     assert!(
@@ -3122,7 +3132,7 @@ fn unclosed_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn build_unclosed_builds() {
-    // req:plugin/build-unclosed-builds@5ceba149
+    // req:plugin/build-unclosed-builds@7df50a2e
     let body = skill_body("build");
     assert_eq!(unclosed_gaps(&body), Vec::<String>::new());
     // a build skill that counts every unclosed build as a stop
@@ -3130,6 +3140,10 @@ fn build_unclosed_builds() {
     assert_reports(&unclosed_gaps(&bare), "build", "landed impl/<component>");
     let finish = sentence_with(&body, "landed impl/<component>");
     assert!(finish.contains("clm run --finish <component>"), "{finish}");
+    assert!(
+        finish.contains("the resume rule above holds back"),
+        "{finish}"
+    );
     for needle in [
         "tell the human that it landed without its closing line",
         "don't count it as a stop",
@@ -3148,37 +3162,79 @@ fn build_unclosed_builds() {
     );
 }
 
-/// What `build-resumes-limited-builds` asks of a `build` skill.
+/// What `build-resumes-sound-builds` asks of a `build` skill.
 fn resume_gaps(body: &str) -> Vec<String> {
     text_gaps(
         "build",
         body,
         &[
             "usage or rate limit",
+            "full disk",
             "SendMessage",
-            "resume-limited-builds",
+            "at most once",
+            "resume-sound-builds",
         ],
         &[],
     )
 }
 
 #[test]
-fn build_resumes_limited_builds() {
-    // req:plugin/build-resumes-limited-builds@7dbd065a
+fn build_resumes_sound_builds() {
+    // req:plugin/build-resumes-sound-builds@d890ad93
     let body = skill_body("build");
     assert_eq!(resume_gaps(&body), Vec::<String>::new());
     // build without the resume
     let gaps = resume_gaps(&body.replace("SendMessage", "elided"));
     assert_reports(&gaps, "build", "SendMessage");
-    let resume = sentence_with(&body, "resume that same subagent");
-    for needle in ["SendMessage", "deferred", "carry on"] {
-        assert!(resume.contains(needle), "{needle}: {resume}");
+    // build that resumes only limited builds
+    let gaps = resume_gaps(&body.replace("full disk", "elided"));
+    assert_reports(&gaps, "build", "full disk");
+    // The judgement comes first and has criteria.
+    let judge = sentence_with(&body, "judge by why it stopped");
+    for needle in [
+        "`stopped: <reason>`",
+        "resume that same subagent",
+        "build the component again",
+    ] {
+        assert!(judge.contains(needle), "{needle}: {judge}");
     }
-    let limited = sentence_with(&body, "hasn't stopped");
-    let rule = &body[body.find(limited).unwrap()..];
-    let rule = &rule[..rule.find("A subagent that ends without").unwrap()];
-    for needle in ["closing line", "don't run `clm run --finish <component>`"] {
-        assert!(rule.contains(needle), "{needle}: {limited}");
+    let at = |needle: &str| body.find(needle).unwrap_or_else(|| panic!("{needle}"));
+    assert!(at("judge by why it stopped") < at("A subagent that ends without"));
+    assert!(at("judge by why it stopped") < at("is built again the same way"));
+    let sound = sentence_with(&body, "Resume a build whose work is sound");
+    for needle in ["outside the work", "network outage", "host failure"] {
+        assert!(sound.contains(needle), "{needle}: {sound}");
+    }
+    let again = sentence_with(&body, "Build again, with the retry below");
+    for needle in [
+        "approach",
+        "ran out of context",
+        "at most once",
+        "second such stop",
+    ] {
+        assert!(again.contains(needle), "{needle}: {again}");
+    }
+    let blocked = sentence_with(&body, "Neither resume nor build again");
+    assert!(
+        blocked.contains("backlog item or a spec change"),
+        "{blocked}"
+    );
+    // A resumed build is not finished, and counts as running.
+    let counted = sentence_with(&body, "For a build you resume");
+    for needle in [
+        "don't run `clm run --finish <component>`",
+        "still running",
+        "the cap",
+    ] {
+        assert!(counted.contains(needle), "{needle}: {counted}");
+    }
+    let timing = sentence_with(&body, "Resume it once the cause has cleared");
+    assert!(timing.contains("limit has reset"), "{timing}");
+    let tell = sentence_with(&body, "Tell the human why it stopped");
+    assert!(tell.contains("what to clear"), "{tell}");
+    let resume = sentence_with(&body, "Resume it with `SendMessage`");
+    for needle in ["deferred", "carry on", "that one will never report back"] {
+        assert!(resume.contains(needle), "{needle}: {resume}");
     }
     let failed = sentence_with(&body, "no longer exists");
     for needle in [
@@ -3270,10 +3326,10 @@ fn build_stops_landed_builds() {
     assert!(read.contains("landed <sha>"), "{read}");
     let ended = sentence_with(after, "already ended");
     assert!(ended.contains("go on"), "{ended}");
-    // It sits right after the waiting rule and before the limit rule.
+    // It sits right after the waiting rule and before the resume rule.
     let at = |needle: &str| body.find(needle).unwrap_or_else(|| panic!("{needle}"));
     assert!(at("whatever its last line says") < at("leftover task"));
-    assert!(at("leftover task") < at("hasn't stopped"));
+    assert!(at("leftover task") < at("judge by why it stopped"));
 }
 
 /// What `triage-waiting-drafts` asks of a `triage` skill.
@@ -5370,6 +5426,68 @@ fn upgrade_skill() {
     assert_reports(&gaps, "upgrade", "clm upgrade --decline");
     let gaps = upgrade_skill_gaps(&body.replace("skip_migrations", "elided"));
     assert_reports(&gaps, "upgrade", "skip_migrations");
+}
+
+#[test]
+fn upgrade_skill_notes_without_edit() {
+    // req:plugin/upgrade-skill-notes-without-edit@7cb403fe
+    let body = skill_body("upgrade");
+    let must = ["edits no file", "stamp-taken-notes"];
+    assert_eq!(
+        text_gaps("upgrade", &body, &must, &[]),
+        Vec::<String>::new()
+    );
+    for needle in must {
+        let gaps = text_gaps("upgrade", &body.replace(needle, "elided"), &must, &[]);
+        assert_reports(&gaps, "upgrade", needle);
+    }
+    let note = sentence_with(&body, "A note that says it edits no file");
+    for needle in [
+        "asks for no edit",
+        "offer to do what it advises",
+        "`bug` backlog item",
+        "on their yes",
+        "run no `clm upgrade --decline` for it",
+    ] {
+        assert!(note.contains(needle), "{needle}: {note}");
+    }
+}
+
+#[test]
+fn upgrade_skill_settings_by_hand() {
+    // req:plugin/upgrade-skill-settings-by-hand@9902cf03
+    let body = skill_body("upgrade");
+    let must = [
+        ".claude/settings.json",
+        "clm init --check-permissions",
+        "by hand",
+    ];
+    assert_eq!(
+        text_gaps("upgrade", &body, &must, &[]),
+        Vec::<String>::new()
+    );
+    for needle in must {
+        let gaps = text_gaps("upgrade", &body.replace(needle, "elided"), &must, &[]);
+        assert_reports(&gaps, "upgrade", needle);
+    }
+    let never = sentence_with(&body, "never edit that file yourself");
+    for needle in [
+        "protected path",
+        "unattended-steps-run-clm",
+        "add those they want",
+    ] {
+        assert!(never.contains(needle), "{needle}: {never}");
+    }
+    let third = sentence_with(&body, "When the root component's `paths` don't list");
+    for needle in [
+        "`upgrade/<YYYYMMDD>-settings`",
+        "delta for the root's frontmatter",
+        "only after that",
+        "no component's `paths` hold",
+    ] {
+        assert!(third.contains(needle), "{needle}: {third}");
+    }
+    assert!(body.contains("takes the human's settings edit on the first, code, branch"));
 }
 
 /// What `propose-replacing-constraints` asks of the `propose` skill.

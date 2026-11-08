@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - triage-skill-doesn-t-say-what-to-do-with-clm-intake-s-issue
 ---
