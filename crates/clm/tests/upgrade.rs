@@ -203,10 +203,14 @@ fn check_entry(entry: &Path, expected: &BTreeMap<String, Vec<u8>>) -> Result<(),
     if !apply.status.success() {
         return Err(format!("{name}: clm upgrade --apply failed: {apply:?}"));
     }
-    // The allow-rules migration is a hand edit, so the entry declines it.
-    let decline = clm(dir.path(), &["upgrade", "--decline", ALLOW_RULES_ID]);
-    if !decline.status.success() {
-        return Err(format!("{name}: clm upgrade --decline failed: {decline:?}"));
+    // The allow-rules migration is a hand edit, so an entry that has it pending declines it;
+    // `--decline` refuses a migration that isn't pending.
+    let pending = clm(dir.path(), &["upgrade"]);
+    if String::from_utf8_lossy(&pending.stdout).contains(ALLOW_RULES_ID) {
+        let decline = clm(dir.path(), &["upgrade", "--decline", ALLOW_RULES_ID]);
+        if !decline.status.success() {
+            return Err(format!("{name}: clm upgrade --decline failed: {decline:?}"));
+        }
     }
     let listing = clm(dir.path(), &["upgrade"]);
     if String::from_utf8_lossy(&listing.stdout) != "up to date\n" {
@@ -247,7 +251,7 @@ fn entries() -> Vec<PathBuf> {
     entries
 }
 
-// req:clm/upgrade-corpus@dfc50a6d
+// req:clm/upgrade-corpus@ebe78a0a
 #[test]
 fn every_corpus_entry_upgrades_to_what_init_writes() {
     let expected = init_files();
@@ -264,7 +268,39 @@ fn every_corpus_entry_upgrades_to_what_init_writes() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-// req:clm/upgrade-corpus@dfc50a6d
+// req:clm/upgrade-corpus@ebe78a0a
+#[test]
+fn an_entry_set_up_with_the_allow_rules_is_not_declined() {
+    let parent = TempDir::new().unwrap();
+    let project = parent.path().join("project");
+    fs::create_dir(&project).unwrap();
+    git(&project, &["init", "-q", "-b", "main"]);
+    let init = clm(
+        &project,
+        &["init", "--lang", "rust", "--no-detectors", "--host", "none"],
+    );
+    assert!(init.status.success(), "{init:?}");
+    // The allow rules are already there, so the migration isn't pending for this entry.
+    let listing = clm(&project, &["upgrade"]);
+    assert!(
+        !String::from_utf8_lossy(&listing.stdout).contains(ALLOW_RULES_ID),
+        "{listing:?}"
+    );
+    let entry = parent.path().join("fresh.tar.gz");
+    let packed = Command::new("tar")
+        .arg("-czf")
+        .arg(&entry)
+        .arg("--exclude=.git")
+        .arg("-C")
+        .arg(&project)
+        .arg(".")
+        .status()
+        .unwrap();
+    assert!(packed.success());
+    check_entry(&entry, &init_files()).unwrap();
+}
+
+// req:clm/upgrade-corpus@ebe78a0a
 #[test]
 fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
     let mut expected = init_files();

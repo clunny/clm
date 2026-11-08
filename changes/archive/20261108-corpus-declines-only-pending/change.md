@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P1
 ---
 
