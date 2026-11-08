@@ -853,6 +853,7 @@ For every entry under `crates/clm-upgrade/corpus/`, a copy upgraded with the bui
 - upgrade/migration-check-script-from-root
 - upgrade/migration-unattended-allow-rules
 - config/upgrade-settings
+- init/init-stamps-upgraded
 
 #### Serves
 - architecture/upgrades-carry-migrations
