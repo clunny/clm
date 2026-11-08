@@ -32,12 +32,14 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 
 **`clm upgrade`.**
 - *No flag.* One line per pending migration, in list order: `<id> <required|advised> <apply|note> <the note's first line>`, with `skipped` appended for a required one in `skip_migrations`; or `up to date`. Exits 0.
-- *`--apply`.* Runs, in order, each pending apply migration, and rewrites a pending note migration's file to `new` when the file equals one of its `old` texts. It then sets `upgraded` to `latest()`, and prints `applied <id>` per migration it changed and `note <id>` per note migration still pending after its rewrites, judged before it writes `upgraded`, so a note the stamp takes is still shown on the run that takes it. It writes `upgraded` by replacing its line, or else as a new line before `clm.toml`'s first table header (at the end when there is none), so it stays a top-level key. Every other line is left as it is. It never stops early. A run with nothing to change writes nothing.
+- *`--apply`.* Runs, in order, each pending apply migration, and rewrites a pending note migration's file to `new` when the file equals one of its `old` texts. It then sets `upgraded` to `latest()`, and prints `applied <id>` per migration it changed and `note <id>` per note migration still pending after its rewrites, judged before it writes `upgraded`, so a note the stamp takes is still shown on the run that takes it. It writes `upgraded` by replacing its line, or else as a new line above the first table header's lead-in (at the end when there is none), so it stays a top-level key. Every other line is left as it is. It never stops early. A run with nothing to change writes nothing.
 - *`--note <id>`.* Prints the migration's note.
 - *`--decline <id>`.* Adds a pending note migration's ID to `declined_migrations`, the same way `upgraded` is written. The session-start reminder then stops naming it.
 - *`--lock <version>`.* Appends to `migrations.lock` one line per migration the lock doesn't list (**The lock**). Only the release runs it (`ci`).
 
 `--apply`, `--note`, `--decline` and `--lock` on `TooNew` exit 1 and write nothing. So do `--note` or `--decline` naming an ID that isn't a migration, and `--decline` naming one that isn't a pending note migration.
+
+**A new top-level line.** A header's *lead-in* is the run of comment lines directly above it, with no blank line between, and the blank lines directly above that run (only the blank lines when no comment is there). A new top-level line goes above the first table header's lead-in, so a comment that describes a header stays next to it, and is followed by a blank line when no blank line already follows it there. A comment run that reaches the top of the file is part of the lead-in too, so the line then goes first: a file comment written with no blank line before the first header can't be told from that header's own. One function writes it for `upgraded` and `declined_migrations` alike.
 
 **Skips.** `skip_migrations`, only in `clm.local.toml` (`config`), lists required migrations that `require_current` ignores on this clone, for a migration that is itself broken. The human reports it with `clm defect` and skips it until a fixed `clm` ships a fixed migration under a new ID. A skip writes nothing to `clm.toml`.
 
@@ -118,12 +120,17 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 - THEN it prints `r required apply` and `a advised note CLAUDE.md names /clm:help`, in that order, exits 0, and changes no file
 
 ### Requirement: upgrade-apply
-`clm upgrade --apply` SHALL, in list order, run each pending apply migration and rewrite each pending note migration's file to its `new` text when the file equals one of its `old` texts. It SHALL then set `clm.toml`'s top-level `upgraded` to `latest()`, by replacing its line or, failing that, adding it before the first table header, and change no other line of `clm.toml`. It SHALL print `applied <id>` for each migration it changed and `note <id>` for each note migration still pending after its rewrites, judging which are pending before it writes `upgraded`, so a note whose `done` reads the stamp is shown on the run that takes it; and it SHALL commit nothing. Run again, it SHALL change nothing. On `TooNew` it SHALL exit 1 and write nothing.
+`clm upgrade --apply` SHALL, in list order, run each pending apply migration and rewrite each pending note migration's file to its `new` text when the file equals one of its `old` texts. It SHALL then set `clm.toml`'s top-level `upgraded` to `latest()`, by replacing its line or, failing that, adding it above the first table header's lead-in: the comment lines directly above that header, with no blank line between, and the blank lines directly above them. It SHALL follow an added line with a blank line when no blank line already follows it there, and change no other line of `clm.toml`. It SHALL print `applied <id>` for each migration it changed and `note <id>` for each note migration still pending after its rewrites, judging which are pending before it writes `upgraded`, so a note whose `done` reads the stamp is shown on the run that takes it; and it SHALL commit nothing. Run again, it SHALL change nothing. On `TooNew` it SHALL exit 1 and write nothing.
 
 #### Scenario: mechanical, and an edited file
 - GIVEN pending apply migration `m`, and pending note migration `n` with `old`/`new` whose file the project has edited, and a `clm.toml` ending in a `[land]` table
 - WHEN `clm upgrade --apply` runs
 - THEN `m`'s change is made, `upgraded` is a top-level key set to the newest migration, it prints `applied m` and `note n`, and a second run changes nothing and prints `note n`
+
+#### Scenario: a commented header
+- GIVEN a `clm.toml` with no `upgraded` that reads `host = "github"`, a blank line, `# Run before clm check.` and `[land]`
+- WHEN `clm upgrade --apply` runs
+- THEN it reads `host = "github"`, `upgraded = "<newest>"`, a blank line, `# Run before clm check.` and `[land]`, the comment still directly above `[land]`
 
 #### Scenario: unedited file
 - GIVEN pending note migration `n` with `old`/`new`, and its file equal to one of its `old` texts
@@ -139,12 +146,17 @@ A `clm.toml` with no `upgraded`, or one that doesn't parse as TOML, has every mi
 - config/upgrade-settings
 
 ### Requirement: upgrade-note-and-decline
-`clm upgrade --note <id>` SHALL print the migration's note. `clm upgrade --decline <id>` SHALL add `<id>` to `clm.toml`'s top-level `declined_migrations` when it names a pending note migration. Each SHALL exit 1, naming why and writing nothing, for an ID that names no migration, for `--decline` of a migration that isn't a pending note migration, and on `TooNew`.
+`clm upgrade --note <id>` SHALL print the migration's note. `clm upgrade --decline <id>` SHALL add `<id>` to `clm.toml`'s top-level `declined_migrations` when it names a pending note migration, replacing that key's lines or, when it has none, adding the key where `--apply` adds `upgraded`, and change no other line of `clm.toml`. Each SHALL exit 1, naming why and writing nothing, for an ID that names no migration, for `--decline` of a migration that isn't a pending note migration, and on `TooNew`.
 
 #### Scenario: declining advised drift
 - GIVEN a pending note migration `a`
 - WHEN `clm upgrade --decline a` runs
 - THEN `declined_migrations` holds `a`, and `clm upgrade` no longer lists it
+
+#### Scenario: declining under a commented header
+- GIVEN a pending note migration `a`, and a `clm.toml` with no `declined_migrations` whose first table header `[land]` has the comment `# Run before clm check.` directly above it
+- WHEN `clm upgrade --decline a` runs
+- THEN `declined_migrations = ["a"]` is a top-level line above that comment, and the comment is still directly above `[land]`
 
 #### Scenario: declining a required migration
 - GIVEN a pending apply migration `r`
