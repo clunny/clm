@@ -79,6 +79,16 @@ fn other_components_land() {
 }
 
 #[test]
+fn only_a_bug_holds_a_component() {
+    // req:land/verify-stop@493381b7
+    let text = item("b", &format!("\"{COMMIT}\"")).replace("kind: bug", "kind: deferred");
+    let f = repo(&[("backlog/b-broke.md", &text)]);
+    f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
+    let out = clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+}
+
+#[test]
 fn an_item_without_failures_holds_nothing() {
     // req:land/verify-stop@493381b7
     let f = repo(&[("backlog/b-broke.md", &item("b", ""))]);
