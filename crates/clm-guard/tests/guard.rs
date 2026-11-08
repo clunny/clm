@@ -820,6 +820,9 @@ fn a_clm_repository_in_a_subdirectory() {
     blocks_push(&bash_in("git push origin main", &work));
     blocks_push(&bash_in("git push", &work));
     blocks_push(&bash_in("git push", &work.join("tool")));
+    // From a sibling directory the pathspec is still read from the top.
+    fs::create_dir_all(work.join("other")).unwrap();
+    blocks_push(&bash_in("git push origin main", &work.join("other")));
 }
 
 #[test]
@@ -835,6 +838,7 @@ fn a_push_whose_repository_the_guard_cannot_tell() {
         "git --work-tree=. push origin main",
         "git --git-dir .git push origin main",
         "git -c core.worktree=. push origin main",
+        "git -c core.workTree=. push origin main",
         "git -c core.bare=false push origin main",
         "git -C missing push origin main",
         "cd nowhere && git push origin main",
