@@ -9,6 +9,7 @@ use std::process::{Command, Stdio};
 use crate::Error;
 use crate::check_log;
 pub use crate::check_log::Step;
+use crate::lock::Lane;
 
 /// The environment a check runs in, beyond the caller's own: what to set and what to remove.
 /// `CLM_SELECTION` is never inherited: it is set from the selection given, else removed.
@@ -44,9 +45,16 @@ pub fn run_check(
     log: Option<&Path>,
 ) -> Result<CheckRun, Error> {
     let places = places_of(dir)?;
-    run_in(&places, command, dir, selection, env, log, true, |l| {
-        eprintln!("{l}")
-    })
+    run_in(
+        &places,
+        command,
+        dir,
+        selection,
+        env,
+        log,
+        Some(Lane::Ordinary),
+        |l| eprintln!("{l}"),
+    )
 }
 
 /// `<main worktree>/<prefix>/.clm` for the repository `root` is in, `<prefix>` where `root`
@@ -61,8 +69,8 @@ pub(crate) fn places_of(root: &Path) -> Result<PathBuf, Error> {
 }
 
 /// `run_check` with the clone's `places` known and the waiting line passed to `say`, taking
-/// the check lock only when `locked`: a `--check-only` run in a build place takes none
-/// (`land/check-lock`).
+/// the check lock, with a ticket of `lane`, unless it is `None`: a `--check-only` run in a
+/// build place takes none (`land/check-lock`).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_in(
     places: &Path,
@@ -71,13 +79,13 @@ pub(crate) fn run_in(
     selection: Option<&Path>,
     env: &CheckEnv,
     log: Option<&Path>,
-    locked: bool,
-    say: impl FnOnce(&str),
+    lane: Option<Lane>,
+    say: impl FnMut(&str),
 ) -> Result<CheckRun, Error> {
     // One check at a time on the clone, whatever the target, held until the command ends
     // (`land/check-lock`).
-    let _lock = locked
-        .then(|| crate::lock::check(places, say))
+    let _lock = lane
+        .map(|lane| crate::lock::check(places, lane, say))
         .transpose()?;
     let logged = check_log::run(shell(command, dir, selection, env), log)?;
     Ok(CheckRun {
@@ -144,7 +152,7 @@ mod tests {
 
     #[test]
     fn the_waiting_line_is_said_once_and_the_command_runs_after_the_lock() {
-        // req:land/shared-check-runner@46a11d5f
+        // req:land/shared-check-runner@05214b4c
         let dir = tempfile::tempdir().unwrap();
         let places = dir.path().join(".clm");
         std::fs::create_dir_all(&places).unwrap();
@@ -164,7 +172,7 @@ mod tests {
             None,
             &CheckEnv::default(),
             Some(&log),
-            true,
+            Some(Lane::Ordinary),
             |l| said.push(l.to_string()),
         )
         .unwrap();
@@ -172,7 +180,7 @@ mod tests {
         releaser.join().unwrap();
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(
-            said[0].starts_with("waiting for another check on "),
+            said[0].starts_with("waiting for another check on ") && said[0].ends_with(": 1 ahead"),
             "{said:?}"
         );
         assert!(run.passed);

@@ -7,6 +7,7 @@ use std::path::Path;
 use clm_ledger::Body;
 
 use crate::exe::Exe;
+use crate::lock::Lane;
 use crate::{CheckHow, Env, Error, Output, Repo};
 
 /// How `--check-only` reports a failing check.
@@ -49,7 +50,7 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
             CheckHow {
                 log: None,
                 slot,
-                locked: slot == 0,
+                lane: (slot == 0).then_some(Lane::Ordinary),
             },
         )?;
     }
