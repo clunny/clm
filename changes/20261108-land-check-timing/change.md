@@ -30,9 +30,9 @@ Also rejected: a rule that files a backlog item when lands exceed the target oft
 
 **Steps and their selectors** (the check, `ci` in this repository). The check wraps each phase in `::group::<name>` and `::endgroup::`. Inside a step it prints one `::clm-selected::<path>` line for each selected file that made it run the step. A step that runs by the script's own rule, such as `web/site` after `web`, names the files behind that rule, so the reach is attributed to the script, not the graph. A step that runs on every land, such as fmt or clippy, names none. This repository's `ci-check.sh` marks every phase it times today (`phase-times`).
 
-**Timing** (`land`). The runner that reads the check's output already follows its steps. It also takes each step's wall-clock time, from its `::group::` line to its end, and the `::clm-selected::` paths inside it, along with the whole command's time. `clm land` and `clm land --check-only` keep them in the `checked` record they append.
+**Timing** (`land`). The runner that reads the check's output already follows its steps. It also takes each step's wall-clock time, from its `::group::` line to its end, and the `::clm-selected::` paths inside it (`check-selector-lines`), along with the whole command's time. `clm land` keeps them on the `landed` record it appends. Before it leaves the merged checkout, it computes the chains for the costliest steps. It prints the report after appending `landed`.
 
-**The record** (`ledger`). `checked` gains two optional fields: `seconds`, the command's time, and `steps`, a list of `{name, seconds, selected_by}`. A record without them, whether older or from a check that marks no steps, reads as untimed. They're a few dozen bytes on a record every land already writes to its writer's own ledger branch, so they add no write, no contention and no rebase (`per-writer-ledgers`).
+**The record** (`ledger`, `land-times-on-the-landed-record`). `landed` gains two optional fields, present exactly when the land ran the check command: `check_seconds`, the command's time, and `steps`, a list of `{name, seconds, selected_by}`. A land without them reads as untimed. The `checked` record stays a fact about a code key (`graph-test-selection`): what a run did depends on its selection, not its code, so `--check-only` and `verify` record no times. They're a few dozen bytes on a record every land already writes to its writer's own ledger branch, so they add no write, no contention and no rebase (`per-writer-ledgers`).
 
 **The chain** (`check.affected`). `clm affected --why <path> [--base <ref>]` prints why the change selects `<path>`, one link per line. A changed file selects itself. Otherwise the file is selected through the component its `req:` marker cites, or through its owner, and that component is affected either because it owns a changed file or through a `depends_on` path to one, ending at a changed file. A file the change doesn't select is reported as such. `land` runs it as it already runs `clm affected`, against the same base.
 
@@ -53,7 +53,9 @@ Nothing is filed and the land isn't affected. The output itself carries the hint
 
 `docs/guide/settings.md`'s `land` section documents `check_target_seconds`.
 
-**The capability.** `CAPABILITIES.md`'s `slow-tests-after-land` gains what a person learns from a land over the target, with a scenario. `land/check-time-report`'s build adds it to `capability`'s tests.
+**The capability.** `CAPABILITIES.md`'s `slow-tests-after-land` gains what a person learns from a land over the target, with a scenario. `capability`'s own build writes that scenario's test once `land/check-time-report` is current (`capability-tests-follow-rules`).
+
+**The CLI** (`clm`). The root wires `clm affected --why` to `clm-affected`'s `why`, and `clm health`'s settings to `[land] check_target_seconds` (`affected-why-command`, `health-land-target`).
 
 ## Constraints
 
@@ -62,7 +64,11 @@ Nothing is filed and the land isn't affected. The output itself carries the hint
 - A check that marks no steps still records `seconds` and prints the time against the target, with no steps or chains.
 - Times are noisy, since builds share the machine (`build-places`). The per-land output reports that land's times, and `health` uses medians.
 
+## Decisions
+
+- `land-times-on-the-landed-record`: a land's check times go on its `landed` record, not on `checked`.
+- `check-selector-lines`: a check names a step's selecting files with `::clm-selected::` lines.
+
 ## Left to the builder
 
-- How `--why` picks among several chains: the shortest, ties broken by path order.
 - The exact wording of the lines `clm land` prints, within the shape above.
