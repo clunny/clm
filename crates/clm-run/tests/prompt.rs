@@ -582,7 +582,7 @@ fn scenario_blocked_requirement_left_out() {
 
 #[test]
 fn scenario_background_work_stopped() {
-    // req:orchestrator.run/background-work-stopped@46642229
+    // req:orchestrator.run/background-work-stopped@9b902242
     let mut checked = job();
     checked.check = Some("scripts/check.sh".into());
     let mut resumed = job();
@@ -621,7 +621,7 @@ fn scenario_background_work_stopped() {
 
 #[test]
 fn scenario_a_land_still_running() {
-    // req:orchestrator.run/background-work-stopped@46642229
+    // req:orchestrator.run/background-work-stopped@9b902242
     let mut checked = job();
     checked.check = Some("scripts/check.sh".into());
     for p in [prompt(&job()), prompt(&checked)] {
@@ -649,7 +649,7 @@ fn scenario_a_land_still_running() {
 
 #[test]
 fn scenario_a_turn_ends_while_waiting() {
-    // req:orchestrator.run/background-work-stopped@46642229
+    // req:orchestrator.run/background-work-stopped@9b902242
     let mut checked = job();
     checked.check = Some("scripts/check.sh".into());
     let mut resumed = job();
@@ -666,6 +666,32 @@ fn scenario_a_turn_ends_while_waiting() {
             "`waiting: <command>`",
             "not your final message",
             "neither `landed <sha>` nor `stopped: <reason>`",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+    }
+}
+
+#[test]
+fn scenario_a_waiting_turn_sends_no_report() {
+    // req:orchestrator.run/background-work-stopped@9b902242
+    let mut checked = job();
+    checked.check = Some("scripts/check.sh".into());
+    for p in [prompt(&job()), prompt(&checked)] {
+        let paras: Vec<&str> = p
+            .split("\n\n")
+            .filter(|para| para.contains("`stopped: <reason>`"))
+            .collect();
+        let [para] = paras[..] else {
+            panic!("one final-message paragraph: {paras:?}");
+        };
+        for needle in [
+            "one report",
+            "`SubagentHandback`",
+            "`one-report-per-run`",
+            "is never called for the message ending a turn that waits",
+            "is called once, with the final message",
+            "the orchestrating session may receive it as the build's result",
         ] {
             assert!(para.contains(needle), "{needle} missing from {para}");
         }
