@@ -27,6 +27,8 @@
       "Bash(clm pr *)",
       "Bash(clm rebase)",
       "Bash(clm rebase *)",
+      "Bash(clm verify)",
+      "Bash(clm verify *)",
       "Bash(clm workaround)",
       "Bash(clm workaround *)"
     ]
