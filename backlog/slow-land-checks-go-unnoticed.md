@@ -17,6 +17,8 @@ Raised by the human on 2026-11-07.
 - **Per-test timing from a report the project names.** As `[health] lcov` names a coverage file, a setting names a JUnit XML report the check writes (most runners can); `clm health` lists the slowest tests as candidates for `[verify]`. Language-agnostic, specific.
 - **Both** (leaning): whole-check timing as the trigger, the report for the advice.
 
+Once `checked` records hold check times, the land queue's priority lane (`ordered-lock-queue`) could also admit lands whose measured check is short.
+
 ## Open questions
 
 - Which report format(s) to read, and where the setting lives.
