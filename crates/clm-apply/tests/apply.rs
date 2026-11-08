@@ -1918,6 +1918,115 @@ fn already_deleted_question_is_no_violation() {
     );
 }
 
+fn promoted(d: &Path, from: &str, resolves: &[&str]) {
+    write(
+        d,
+        "changes/c/change.md",
+        &format!(
+            "---\nstatus: proposed\nfrom: {from}\nresolves: [{}]\n---\n\n# c\n",
+            resolves.join(", ")
+        ),
+    );
+}
+
+fn removals(ops: &[FileOp], path: &str) -> usize {
+    ops.iter()
+        .filter(|o| **o == FileOp::Remove(path.into()))
+        .count()
+}
+
+#[test]
+fn promoted_idea_is_deleted() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "i", "idea");
+    promoted(d, "backlog/i", &[]);
+    valid_delta(d);
+    let ops = apply(d, "c").unwrap();
+    assert!(!d.join("backlog/i.md").exists());
+    assert_eq!(removals(&ops, "backlog/i.md"), 1);
+}
+
+#[test]
+fn promoted_item_of_any_kind_is_deleted() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "b", "bug");
+    promoted(d, "backlog/b", &[]);
+    valid_delta(d);
+    apply(d, "c").unwrap();
+    assert!(!d.join("backlog/b.md").exists());
+}
+
+#[test]
+fn promoted_human_task_stays() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "h", "human-task");
+    promoted(d, "backlog/h", &[]);
+    valid_delta(d);
+    apply(d, "c").unwrap();
+    assert!(d.join("backlog/h.md").exists());
+}
+
+#[test]
+fn refused_change_keeps_its_promoted_item() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "i", "idea");
+    promoted(d, "backlog/i", &[]);
+    write(
+        d,
+        "changes/c/deltas/clm.md",
+        "---\ncomponent: clm\nbase: { contract: \"0000000000000000\" }\n---\n## MODIFIED Contract\nnew root\n",
+    );
+    apply(d, "c").unwrap_err();
+    assert!(d.join("backlog/i.md").exists());
+}
+
+#[test]
+fn already_deleted_promoted_item_is_no_violation() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    promoted(d, "backlog/i", &[]);
+    valid_delta(d);
+    let ops = apply(d, "c").unwrap();
+    assert!(
+        !ops.iter()
+            .any(|o| matches!(o, FileOp::Remove(p) if p.starts_with("backlog")))
+    );
+}
+
+#[test]
+fn from_without_the_backlog_prefix_deletes_nothing() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "i", "idea");
+    promoted(d, "i", &[]);
+    valid_delta(d);
+    apply(d, "c").unwrap();
+    assert!(d.join("backlog/i.md").exists());
+}
+
+#[test]
+fn item_named_in_from_and_resolves_is_removed_once() {
+    // req:apply/promoted-item@5992a1d8
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "q", "question");
+    promoted(d, "backlog/q", &["q"]);
+    valid_delta(d);
+    let ops = apply(d, "c").unwrap();
+    assert!(!d.join("backlog/q.md").exists());
+    assert_eq!(removals(&ops, "backlog/q.md"), 1);
+}
+
 #[test]
 fn workaround_flag_on_a_rewritten_requirement() {
     // req:apply/resulting-graph@8282f3f1
