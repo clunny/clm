@@ -241,10 +241,9 @@ impl<'a> Repo<'a> {
         target: Option<&Path>,
         vars: &[(&str, &Path)],
         fails: &str,
-        log: Option<&Path>,
-        slot: u64,
-        locked: bool,
+        how: CheckHow,
     ) -> Result<(), Error> {
+        let CheckHow { log, slot, locked } = how;
         // The runner `verify` shares: one check at a time on the clone, whatever the target
         // (`land/check-lock`, `land/shared-check-runner`), except a `--check-only` run in a
         // build place. `--check-only` passes no log, so its refusal repeats no tail and names
@@ -371,6 +370,14 @@ impl<'a> Repo<'a> {
     ) -> Result<Vec<clm_ledger::Appended>, Error> {
         Ok(clm_ledger::append_all(&self.root, entries, self.env)?)
     }
+}
+
+/// How a `[land] check` is run beyond its command: where its output is logged, the slot it
+/// gets (`land/check-slot`) and whether it takes the check lock (`land/check-lock`).
+pub(crate) struct CheckHow<'a> {
+    pub(crate) log: Option<&'a Path>,
+    pub(crate) slot: u64,
+    pub(crate) locked: bool,
 }
 
 /// The directory `clm-land`'s temporary directories go in: `TMPDIR` through the injected

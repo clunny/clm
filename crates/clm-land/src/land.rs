@@ -6,10 +6,10 @@ use std::path::Path;
 use clm_git::REMOTE;
 use clm_ledger::{Body, Entry, LandKind};
 
-use crate::Selected;
 use crate::exe::Exe;
 use crate::lock;
 use crate::scratch::Scratch;
+use crate::{CheckHow, Selected};
 use crate::{Env, Error, Output, Repo, Verdict, is_claim};
 use clm_approval::{Approvals, Policy};
 
@@ -297,9 +297,11 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 Some(target),
                 &vars,
                 ON_MERGE,
-                Some(&log),
-                slot,
-                true,
+                CheckHow {
+                    log: Some(&log),
+                    slot,
+                    locked: true,
+                },
             )?;
         }
         if checked {

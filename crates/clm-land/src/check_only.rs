@@ -7,7 +7,7 @@ use std::path::Path;
 use clm_ledger::Body;
 
 use crate::exe::Exe;
-use crate::{Env, Error, Output, Repo};
+use crate::{CheckHow, Env, Error, Output, Repo};
 
 /// How `--check-only` reports a failing check.
 const FAILS: &str = "fails";
@@ -46,9 +46,11 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
             None,
             &[],
             FAILS,
-            None,
-            slot,
-            slot == 0,
+            CheckHow {
+                log: None,
+                slot,
+                locked: slot == 0,
+            },
         )?;
     }
     repo.clm_check(exe.path(), &repo.root, true, FAILS)?;

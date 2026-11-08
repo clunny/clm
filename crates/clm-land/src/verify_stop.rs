@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use clm_ledger::{Body, Fold};
-use clm_model::BacklogKind;
+use clm_model::{BacklogKind, load_files};
 
 use crate::{Error, Repo};
 
@@ -170,7 +170,7 @@ fn component_paths(
         .into_iter()
         .filter_map(|(path, bytes)| Some((PathBuf::from(path.strip_prefix(prefix)?), bytes)))
         .collect();
-    let (graph, _) = clm_model::load_files(&files);
+    let (graph, _) = load_files(&files);
     Ok(graph
         .nodes
         .into_iter()
