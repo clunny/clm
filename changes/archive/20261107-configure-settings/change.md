@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P2
 resolves: [settings-changed-only-by-hand]
 ---

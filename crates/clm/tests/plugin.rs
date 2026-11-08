@@ -776,8 +776,10 @@ fn guide_pages() -> Vec<String> {
     pages
 }
 
-/// The guide page a `propose` skill names by path (`propose-adds-glossary-terms`).
+/// The guide pages a `propose` skill names by path (`propose-adds-glossary-terms`,
+/// `propose-adds-settings-sections`).
 const GLOSSARY_PATH: &str = "docs/guide/glossary.md";
+const SETTINGS_PATH: &str = "docs/guide/settings.md";
 
 /// What `method-pointers` asks of every skill and agent: no `docs/guide/` path, and every
 /// `clm guide <page>` it names one of `pages`. One line per gap naming the file and text.
@@ -785,7 +787,12 @@ fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
     let mut gaps: Vec<String> = Vec::new();
     // The glossary is the one page a skill names by path (`propose-adds-glossary-terms`):
     // it is a spec path of this repository that a spec branch edits.
-    if text.replace(GLOSSARY_PATH, "").contains("docs/guide/") {
+    let own = if name.contains("propose") {
+        text.replace(GLOSSARY_PATH, "").replace(SETTINGS_PATH, "")
+    } else {
+        text.to_owned()
+    };
+    if own.contains("docs/guide/") {
         gaps.push(format!(
             "{name}: must not name docs/guide/; name `clm guide <page>`"
         ));
@@ -806,7 +813,7 @@ fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
 
 #[test]
 fn skills_point_at_the_guide() {
-    // req:plugin/method-pointers@3db98468
+    // req:plugin/method-pointers@1ae4a996
     let pages = guide_pages();
     assert!(pages.contains(&"shaping-the-graph".to_owned()), "{pages:?}");
     let mut files: Vec<PathBuf> = fs::read_dir(plugin().join("skills"))
@@ -831,6 +838,10 @@ fn skills_point_at_the_guide() {
         gaps.len() == 1 && gaps[0].contains("docs/guide/"),
         "{gaps:?}"
     );
+    // propose names the pages it edits
+    let both = format!("Edit `{GLOSSARY_PATH}` and `{SETTINGS_PATH}`.");
+    assert!(guide_gaps("skills/propose/SKILL.md", &both, &pages).is_empty());
+    assert_eq!(guide_gaps("skills/build/SKILL.md", &both, &pages).len(), 1);
     let gaps = guide_gaps("x", "Run `clm guide no-such-page`.", &pages);
     assert!(
         gaps.len() == 1 && gaps[0].contains("no-such-page"),
@@ -2946,7 +2957,7 @@ fn elaboration_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn propose_nests_splits() {
-    // req:plugin/propose-nests-splits@79979cdd
+    // req:plugin/propose-nests-splits@8fe34e26
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
     for needle in [
         "specs/<component>/<part>/SPEC.md",
@@ -2957,6 +2968,7 @@ fn propose_nests_splits() {
         "clm survey --components",
         "`splits-import-one-way`",
         "outside: [\"**\"]",
+        "## Edges the change removes",
     ] {
         assert!(
             body.contains(needle),
@@ -2964,7 +2976,10 @@ fn propose_nests_splits() {
         );
     }
     assert!(
-        !body.replace(GLOSSARY_PATH, "").contains("docs/guide/"),
+        !body
+            .replace(GLOSSARY_PATH, "")
+            .replace(SETTINGS_PATH, "")
+            .contains("docs/guide/"),
         "propose: SKILL.md must not name docs/guide/"
     );
     // The carved-out part becomes a child of the component it came from.
@@ -2985,6 +3000,19 @@ fn propose_nests_splits() {
     let added = sentence.find("ADDED").expect(sentence);
     let child = sentence.find("to the child").expect(sentence);
     assert!(removed < added && added < child, "{sentence}");
+    // An undeclared edge may stand only when all three hold; a cycle never does.
+    let sentence = sentence_with(&body, "`survey/undeclared-edge`");
+    for needle in [
+        "importing file moves into a crate or package of the child's own",
+        "states the edge's removal",
+        "whose `#### Needs` names the child's",
+        "`## Edges the change removes`",
+    ] {
+        assert!(sentence.contains(needle), "propose: {needle}: {sentence}");
+    }
+    assert!(sentence.contains("stand"), "{sentence}");
+    let sentence = sentence_with(&body, "`survey/cycle`");
+    assert!(sentence.contains("never stands"), "{sentence}");
     // Seams only, never a size budget.
     let sentence = sentence_with(&body, "architectural seams");
     assert!(
@@ -3552,14 +3580,18 @@ fn written_rule_gaps(body: &str) -> Vec<String> {
     text_gaps(
         "propose",
         code_fix_section(body),
-        &["code-fix-needs-a-written-rule", "as written"],
+        &[
+            "code-fix-needs-a-written-rule",
+            "as written",
+            "harness-only",
+        ],
         &[],
     )
 }
 
 #[test]
 fn propose_code_fixes_need_a_written_rule() {
-    // req:plugin/code-fix-needs-a-written-rule@35aca908
+    // req:plugin/code-fix-needs-a-written-rule@ea8812db
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
     assert_eq!(written_rule_gaps(&body), Vec::<String>::new());
     let section = code_fix_section(&body);
@@ -3582,7 +3614,20 @@ fn propose_code_fixes_need_a_written_rule() {
         assert!(otherwise.contains(needle), "{needle}: {otherwise}");
     }
     // skill without the rule: each missing piece is reported, naming the skill.
-    for needle in ["code-fix-needs-a-written-rule", "as written"] {
+    // A bug in the capability suite's harness alone is the exception, never a requirement.
+    let exception = sentence_with(section, "harness-only");
+    for needle in [
+        "harness",
+        "`propose-harness-only-work`",
+        "never gets a requirement",
+    ] {
+        assert!(exception.contains(needle), "{needle}: {exception}");
+    }
+    for needle in [
+        "code-fix-needs-a-written-rule",
+        "as written",
+        "harness-only",
+    ] {
         let gaps = written_rule_gaps(&body.replace(needle, "elided"));
         assert_reports(&gaps, "propose", needle);
     }
@@ -5033,6 +5078,7 @@ fn help_skill_gaps(body: &str) -> Vec<String> {
             "/clm:triage",
             "/clm:health",
             "/clm:contribution",
+            "/clm:configure",
             "/clm:view",
             "`replaceable`",
             "`default`",
@@ -5049,7 +5095,7 @@ fn help_skill_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn help_skill() {
-    // req:plugin/help-skill@67498eaa
+    // req:plugin/help-skill@bc92d819
     let (fm, body) = frontmatter(&plugin().join("skills/help/SKILL.md"));
     assert!(
         fm["description"]
@@ -5063,6 +5109,9 @@ fn help_skill() {
     // help that writes
     let gaps = help_skill_gaps(&body.replace("Help changes no file.", "elided"));
     assert_reports(&gaps, "help", "Help changes no file.");
+    // help on a setting
+    let gaps = help_skill_gaps(&body.replace("/clm:configure", "elided"));
+    assert_reports(&gaps, "help", "/clm:configure");
     // It names the commands that write only to say it runs none of them.
     for command in [
         "clm claim",
@@ -5073,6 +5122,203 @@ fn help_skill() {
     ] {
         assert!(body.contains(command), "{command}");
     }
+}
+
+/// What `configure-skill` asks of a `configure` skill's frontmatter and body.
+fn configure_skill_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
+    let mut gaps = text_gaps(
+        "configure",
+        body,
+        &[
+            "clm config list",
+            "clm guide settings",
+            "clm.local.toml",
+            "config.toml",
+            "/clm:upgrade",
+            "`upgraded`",
+            "`declined_migrations`",
+            "`skip_migrations`",
+            "clm gate --base origin/main",
+            "spec review",
+            "clm approve",
+            "clm land",
+            "clm branch push",
+            "clm pr open",
+            "clm branch delete",
+            "config/<YYYYMMDD>-<slug>",
+            ".claude/worktrees/<YYYYMMDD>-<slug>",
+            "git switch -c",
+            "git switch --detach origin/main",
+            "git worktree remove",
+            "clm wrap-up",
+            "left <path>",
+            "session-worktrees",
+            "small-change-no-claim",
+            "environment variable",
+            LAND_RULE,
+            APPROVE_RULE,
+        ],
+        &["git push"],
+    );
+    let description = fm["description"].as_str().unwrap_or_default();
+    for needle in ["settings", "change one"] {
+        if !description.contains(needle) {
+            gaps.push(format!("configure: description must mention {needle}"));
+        }
+    }
+    gaps
+}
+
+#[test]
+fn configure_skill() {
+    // req:plugin/configure-skill@0cbec06f
+    let (fm, body) = frontmatter(&plugin().join("skills/configure/SKILL.md"));
+    assert_eq!(configure_skill_gaps(&fm, &body), Vec::<String>::new());
+    // a skill that doesn't validate
+    let gaps = configure_skill_gaps(&fm, &body.replace("clm config list", "elided"));
+    assert_reports(&gaps, "configure", "clm config list");
+    // each piece of the landing steps is needed
+    for needle in [
+        "clm branch delete",
+        "git switch --detach origin/main",
+        "spec review",
+    ] {
+        let gaps = configure_skill_gaps(&fm, &body.replace(needle, "elided"));
+        assert_reports(&gaps, "configure", needle);
+    }
+    // The three keys that belong to `/clm:upgrade` are left to it.
+    let sentence = sentence_with(&body, "`declined_migrations`");
+    assert!(sentence.contains("/clm:upgrade"), "{sentence}");
+    // A change to the clone's own or the person's own file commits nothing.
+    let sentence = sentence_with(&body, "Commit nothing");
+    assert!(
+        sentence.contains("clm.local.toml") && sentence.contains("config.toml"),
+        "{sentence}"
+    );
+}
+
+/// What `propose-adds-settings-sections` asks of a `propose` skill: one paragraph (a line of
+/// the skill) holding the settings page's path and the rule.
+fn settings_sections_gaps(body: &str) -> Vec<String> {
+    let must = [
+        "docs/guide/settings.md",
+        "config/settings-guide-covers-keys",
+    ];
+    let paragraph = body
+        .lines()
+        .find(|line| line.contains(must[0]) && line.contains(must[1]));
+    text_gaps("propose", paragraph.unwrap_or(""), &must, &[])
+}
+
+#[test]
+fn propose_adds_settings_sections() {
+    // req:plugin/propose-adds-settings-sections@ae00a3f6
+    let body = skill_body("propose");
+    assert_eq!(settings_sections_gaps(&body), Vec::<String>::new());
+    // a skill without it
+    for word in [
+        "docs/guide/settings.md",
+        "config/settings-guide-covers-keys",
+    ] {
+        let gaps = settings_sections_gaps(&body.replace(word, "elided"));
+        assert!(gaps.iter().any(|g| g.contains(word)), "{word}: {gaps:?}");
+    }
+    // It sits beside the glossary's paragraph, among the design steps.
+    let glossary = body.find("docs/guide/glossary.md").unwrap();
+    let settings = body.find("docs/guide/settings.md").unwrap();
+    let steps_end = body.find("\n## ").unwrap();
+    assert!(settings.abs_diff(glossary) < 1500 && settings < steps_end);
+}
+
+#[test]
+fn propose_harness_only_work() {
+    // req:plugin/propose-harness-only-work@a8431dc3
+    let body = skill_body("propose");
+    assert_eq!(
+        text_gaps(
+            "propose",
+            &body,
+            &[
+                "harness-only",
+                "`small-change-no-claim`",
+                "`code-fix-resolves-bug`",
+                "`archive-in-spec-pr`",
+                "`deferred-work-resolves-in-code`",
+                "`node-reconciliation`",
+                "`human-layer-proof`",
+            ],
+            &[],
+        ),
+        Vec::<String>::new()
+    );
+    // a skill without the harness route
+    let gaps = text_gaps(
+        "propose",
+        &body.replace("harness-only", "elided"),
+        &["harness-only"],
+        &[],
+    );
+    assert_reports(&gaps, "propose", "harness-only");
+    // Harness-only work is never a requirement, takes no claim, and deletes its item with a
+    // trailer rather than `clm claim --fix`.
+    let route = sentence_with(&body, "is never a requirement of any component");
+    assert!(route.contains("harness-only"), "{route}");
+    let claim = sentence_with(&body, "takes the small-change route");
+    assert!(claim.contains("no claim"), "{claim}");
+    let trailer = sentence_with(&body, "never a `clm claim --fix`");
+    assert!(trailer.contains("Resolves: backlog/<slug>"), "{trailer}");
+    // A Design edit alone builds nothing: a deferred item carries the code it owes, done in
+    // the same session on a small-change branch.
+    let design = sentence_with(&body, "a spec branch edits the Design with no requirement");
+    assert!(
+        design.contains("`kind: deferred`") && design.contains("builds nothing"),
+        "{design}"
+    );
+}
+
+/// What `init-skill-concurrent-tests` asks of the `init` skill.
+fn concurrent_tests_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "init",
+        body,
+        &[
+            "CLM_SLOT",
+            "tests-run-concurrently",
+            "fixed port",
+            "fixed path",
+            "shared between",
+            "`bug` backlog item",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn init_skill_concurrent_tests() {
+    // req:plugin/init-skill-concurrent-tests@3def0849
+    let body = skill_body("init");
+    assert_eq!(concurrent_tests_gaps(&body), Vec::<String>::new());
+    for needle in [
+        "CLM_SLOT",
+        "tests-run-concurrently",
+        "fixed port",
+        "shared between",
+    ] {
+        let gaps = concurrent_tests_gaps(&body.replace(needle, "elided"));
+        assert!(
+            gaps.iter().any(|g| g.contains(needle)),
+            "{needle}: {gaps:?}"
+        );
+    }
+    // It tells the human once `clm init` has written the check script, and for a repository
+    // with code looks for each and records it as a bug on the component that holds the fix.
+    let told = sentence_with(&body, "builds several components at once");
+    assert!(told.contains("`scripts/clm-check.sh`"), "{told}");
+    let record = sentence_with(
+        &body,
+        "whose `components` name the component whose `paths` hold the fix",
+    );
+    assert!(record.contains("tests-run-concurrently"), "{record}");
 }
 
 /// What `upgrade-skill` asks of the `upgrade` skill.
