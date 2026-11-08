@@ -96,6 +96,13 @@ pub enum Body {
         code_key: Option<String>,
         /// The live change IDs a spec land added or modified.
         changes: Vec<String>,
+        /// The check command's wall-clock time in whole seconds, when the land ran
+        /// `[land] check`; left out of the line otherwise (`landed-times`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        check_seconds: Option<u64>,
+        /// The steps the check marked, in order; left out of the line when there are none.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        steps: Vec<TimedStep>,
     },
     /// A browser's Web Push subscription for this repo, which `web.worker` notifies
     /// (`push-subscriptions-in-ledger`).
@@ -176,6 +183,16 @@ pub enum Body {
         #[serde(default)]
         run: Option<String>,
     },
+}
+
+/// One step a land's check marked, as a `landed` record holds it (`landed-times`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TimedStep {
+    pub name: String,
+    pub seconds: u64,
+    /// The paths the step's `::clm-selected::` lines named; none when the field is absent.
+    #[serde(default)]
+    pub selected_by: Vec<String>,
 }
 
 /// Where a `verified` record's slow tests ran and who recorded the result.

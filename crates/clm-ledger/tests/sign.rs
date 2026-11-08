@@ -162,6 +162,8 @@ fn signed_message_keeps_the_line_as_written() {
         fingerprint: "f".into(),
         code_key: None,
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     };
     let signed = clm_ledger::sign(&clone, body, "clm-land", &env).unwrap();
     let line = signed.line();

@@ -107,6 +107,8 @@ fn fold_records_is_the_fold() {
             fingerprint: "f".into(),
             code_key: None,
             changes: vec!["x".into()],
+            check_seconds: None,
+            steps: vec![],
         }
     );
 }

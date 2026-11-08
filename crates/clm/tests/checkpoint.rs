@@ -171,6 +171,8 @@ fn landed(commit: &str, branch: &str, tip: &str, review: bool, changes: &[&str])
         fingerprint: format!("fp-{tip}"),
         code_key: None,
         changes: changes.iter().map(|c| c.to_string()).collect(),
+        check_seconds: None,
+        steps: vec![],
     }
 }
 
@@ -1304,6 +1306,8 @@ impl Signed {
             fingerprint: format!("f-{name}"),
             code_key: Some(code_key),
             changes: vec![],
+            check_seconds: None,
+            steps: vec![],
         };
         let signed = clm_ledger::sign(work, land, "clm-land", &env).unwrap();
         clm_ledger::append(work, signed, &env).unwrap();

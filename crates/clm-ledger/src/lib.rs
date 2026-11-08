@@ -6,8 +6,10 @@ mod fold;
 mod record;
 
 pub use doc_only::{doc_only, legacy_doc_only};
-pub use fold::{Fold, fold_records, person, show, slug};
-pub use record::{Body, Decision, LandKind, Rating, Record, Usage, VerifyMode, signed_message};
+pub use fold::{Fold, TimedLand, fold_records, person, show, slug};
+pub use record::{
+    Body, Decision, LandKind, Rating, Record, TimedStep, Usage, VerifyMode, signed_message,
+};
 
 #[cfg(feature = "git")]
 mod append;

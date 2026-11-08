@@ -20,6 +20,8 @@ fn landed(commit: &str) -> Body {
         fingerprint: "g".into(),
         code_key: None,
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     }
 }
 
@@ -130,6 +132,8 @@ fn landed_record_written_flat() {
         fingerprint: "f".into(),
         code_key: Some("k".into()),
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     };
     let appended = clm_ledger::append(&a, body, &env(dir.path(), &[])).unwrap();
     let branch = format!("clm/ledger/{}", appended.record.writer);

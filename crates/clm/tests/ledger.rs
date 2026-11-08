@@ -53,6 +53,8 @@ fn landed(commit: &str, fingerprint: &str, key: Option<&str>) -> Body {
         fingerprint: fingerprint.into(),
         code_key: key.map(str::to_string),
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     }
 }
 
@@ -646,6 +648,8 @@ fn hard_land(dir: &Path, commit: &str, fingerprint: &str) -> Body {
         fingerprint: fingerprint.into(),
         code_key: Some(key),
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     }
 }
 
@@ -870,6 +874,8 @@ fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
         fingerprint: "f".into(),
         code_key: Some("m".into()),
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     };
     clm_ledger::append(root, land, &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "compact"]);
@@ -1033,6 +1039,8 @@ fn land_as(dir: &Path, commit: &str, fingerprint: &str, kind: LandKind, review: 
         fingerprint: fingerprint.into(),
         code_key: Some(key),
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     }
 }
 
