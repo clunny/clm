@@ -20,7 +20,7 @@ Neither requirement as written says anything about the environment, so each gain
 
 For the rename copy:
 
-1. **No repository (chosen).** `clm rename` already reads a root without `.git` by walking it (its `text_files`), which is how `rename/replay` reads the copy the gate checks. Dropping `git init` and `git add -A` makes `clm rebase` produce the tree exactly as the replay it trusts produces it, runs no git in the copy, and removes code (`yagni`, `reuse-first`). Files a `.gitignore` would have kept out of `git add -A` now count, as they already do in the replay, so the two agree where they could differ before.
+1. **No repository (chosen).** `clm rename` already reads a root without `.git` by walking it (its `text_files`), which is how `rename/replay` reads the copy the gate checks. Dropping `git init` and `git add -A` makes `clm rebase` produce the tree exactly as the replay it trusts produces it, runs no git in the copy, and removes code (`yagni`, `reuse-first`). The copy is then read by the same walk as the replay's, so the two agree.
 2. **`git_isolated` for `init` and `add`.** Rejected: it keeps a repository whose only use is a report line `clm rebase` discards, and keeps the copy read differently from the replay's.
 
 For the superpowers fetch:
@@ -40,7 +40,9 @@ Across CLM:
 
 ## Edge cases and workarounds
 
-- A test sets `GIT_DIR` and `GIT_WORK_TREE` on the child process it runs (`clm rebase`, `clm superpowers`), never on the test process with `std::env::set_var`, since every test thread shares it.
+- A test sets `GIT_DIR` and `GIT_WORK_TREE` on the child process it runs (`clm rebase`, `clm superpowers`), never on the test process with `std::env::set_var`, since every test thread shares it. The sync scenario therefore runs the `clm rebase` binary (a test in `crates/clm/tests`, or one in `clm-sync` that runs a child), not `sync()` in process, on a fixture whose git directory sits outside its work tree.
+- `rename`'s walk of a copy runs no git, but `clm-coverage`'s `scan`, which `rename` calls, still runs `git ls-files` there; so the copy holds no repository and `clm-sync` runs no git there itself, while the scan's git is the new item's.
+- Files `git add -A` would have left out can't occur, since `extract_tree` writes only tracked files; the one difference left is that the walk skips any directory named `.git` or `target`, as `rename/replay`'s does, so `clm rebase` and the gate now read the copy alike.
 - The superpowers scenario can't fetch the real pin without the network, so it uses the failing fetch `fetch_fails` uses (`GIT_ALLOW_PROTOCOL=file`) and checks the clone's git directory is untouched: under the fault, `git init` rewrites its config. The fixture puts `g` outside `w` so the reinitialization writes `core.worktree` and shows.
 - In the sync scenario, `clm-coverage`'s scan of the copy still follows the variables (the new item). With an ID-only rename the versions don't move, so its outcome doesn't depend on that scan.
 
