@@ -152,6 +152,64 @@ pub enum Body {
         /// The slugs of the friction items it settles.
         settles: Vec<String>,
     },
+    /// The result of a project's slow tests run after the land on `commit`
+    /// (`verify-after-land`). A report, not a gate: never signed.
+    Verified {
+        /// A commit of `main`, a full 40-hex ID.
+        #[serde(deserialize_with = "commit_id")]
+        commit: String,
+        passed: bool,
+        /// The last commit a `verified` record named before this one.
+        #[serde(default, deserialize_with = "optional_commit_id")]
+        since: Option<String>,
+        /// The first-parent commits of `main` it covers, oldest first.
+        #[serde(default, deserialize_with = "commit_ids")]
+        lands: Vec<String>,
+        /// The land that broke it.
+        #[serde(default, deserialize_with = "optional_commit_id")]
+        culprit: Option<String>,
+        /// The components a red result holds; empty when it passed.
+        #[serde(default)]
+        components: Vec<String>,
+        mode: VerifyMode,
+        /// The host pipeline run's URL.
+        #[serde(default)]
+        run: Option<String>,
+    },
+}
+
+/// Where a `verified` record's slow tests ran and who recorded the result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VerifyMode {
+    Local,
+    Pipeline,
+    Import,
+}
+
+/// `id` if it is a full 40-hex commit ID, in lowercase as git writes it, since records are
+/// looked up by exact string.
+fn full_id<E: serde::de::Error>(id: String) -> Result<String, E> {
+    if id.len() == 40 && id.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f')) {
+        Ok(id)
+    } else {
+        Err(E::custom(format!("`{id}` is not a full commit ID")))
+    }
+}
+
+fn commit_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    full_id(String::deserialize(d)?)
+}
+
+fn optional_commit_id<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    Option::<String>::deserialize(d)?.map(full_id).transpose()
+}
+
+fn commit_ids<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    Vec::<String>::deserialize(d)?
+        .into_iter()
+        .map(full_id)
+        .collect()
 }
 
 /// One model's token counts in an `effort` record.
@@ -229,6 +287,7 @@ impl Body {
             Body::ChangesRequested { .. } => "changes_requested",
             Body::Effort { .. } => "effort",
             Body::Decided { .. } => "decided",
+            Body::Verified { .. } => "verified",
         }
     }
 }

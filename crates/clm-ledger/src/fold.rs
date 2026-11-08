@@ -33,6 +33,8 @@ pub struct Fold {
     pub efforts: BTreeMap<String, Record>,
     /// `decided` by capability.
     pub decisions: BTreeMap<String, Vec<Record>>,
+    /// `verified` by commit, the newest by `at` first.
+    pub verifications: BTreeMap<String, Vec<Record>>,
     /// Each record's line as read, by `id`: its JSON object, `sig` included, so a signature
     /// is checked against the fields the line holds, a field a newer `clm` added included.
     pub lines: BTreeMap<String, Map<String, Value>>,
@@ -55,6 +57,21 @@ impl Fold {
                 .iter()
                 .any(|a| person(&a.writer) == requester && a.at > request.at)
         })
+    }
+
+    /// The red results nothing has since cleared (`ledger/verified-record`): given a
+    /// first-parent chain of commits, oldest first, the newest record of each commit after the
+    /// last one whose newest record passed (every commit when none passed) whose newest record
+    /// failed, in chain order.
+    pub fn unresolved_reds(&self, chain: &[String]) -> Vec<Record> {
+        let newest = |commit: &String| self.verifications.get(commit).and_then(|v| v.first());
+        let passed = |record: &Record| matches!(record.body, Body::Verified { passed: true, .. });
+        let from = chain
+            .iter()
+            .rposition(|c| newest(c).is_some_and(passed))
+            .map_or(0, |n| n + 1);
+        // Every newest record after the last pass failed.
+        chain[from..].iter().filter_map(newest).cloned().collect()
     }
 }
 
@@ -145,6 +162,8 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             Body::Commented { branch, .. } => (&mut fold.comments, branch),
             Body::ChangesRequested { branch, .. } => (&mut fold.change_requests, branch),
             Body::Decided { capability, .. } => (&mut fold.decisions, capability),
+            // Ascending here; the newest comes first once all are in.
+            Body::Verified { commit, .. } => (&mut fold.verifications, commit),
             Body::Effort { .. } => {
                 fold.efforts.insert(record.id.clone(), record.clone());
                 continue;
@@ -164,6 +183,9 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             Body::Unsubscribed { .. } | Body::Withdrawn { .. } => continue,
         };
         index.entry(key.clone()).or_default().push(record.clone());
+    }
+    for records in fold.verifications.values_mut() {
+        records.reverse();
     }
     fold
 }
@@ -256,6 +278,10 @@ pub fn show(fold: &Fold) -> Vec<String> {
                     decision,
                     ..
                 } => format!("{capability} {} {}", value.as_str(), decision.as_str()),
+                Body::Verified { commit, passed, .. } => {
+                    let result = if *passed { "passed" } else { "failed" };
+                    format!("{commit} {result}")
+                }
             };
             format!("{kind} {what} {writer} {at}")
         })
