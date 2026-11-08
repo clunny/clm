@@ -80,15 +80,7 @@ fn doc_only_paths_come_from_the_ledger() {
         .copied()
         .filter(|p| !clm_ledger::doc_only(p))
         .collect();
-    assert_eq!(
-        kept,
-        [
-            "docs/guide/intro.md",
-            "web/README.md",
-            "crates/a/src/lib.rs",
-            "docsy/z.md"
-        ]
-    );
+    assert_eq!(kept, ["web/README.md", "crates/a/src/lib.rs", "docsy/z.md"]);
     let key = code_key(all.iter().map(|p| line(p)));
     assert_eq!(key, code_key(kept.iter().map(|p| line(p))));
     for gone in &kept {
@@ -119,7 +111,7 @@ fn keys_holds_no_copy_of_the_doc_only_list() {
 }
 
 #[test]
-fn the_guides_files_are_code() {
+fn the_guides_files_are_doc_only() {
     // req:web.worker.platform/code-key-as-ledger@1e29d98b
     let dir = repo();
     let d = dir.path();
@@ -161,6 +153,6 @@ fn the_guides_files_are_code() {
         keys.push(ours);
     }
     assert_eq!(keys[0], keys[1], "docs/x.md is doc-only");
-    assert_ne!(keys[0], keys[2], "docs/guide/ is code");
-    assert_ne!(keys[0], keys[3], "docs/spec-format.md is code");
+    assert_eq!(keys[0], keys[2], "docs/guide/ is doc-only");
+    assert_eq!(keys[0], keys[3], "docs/spec-format.md is doc-only");
 }
