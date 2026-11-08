@@ -282,12 +282,12 @@ An `advised` note migration, ID `20261107-projects-set-up-before`, SHALL offer a
 - init/init-check-permissions
 
 ### Requirement: migration-tests-overlap
-An `advised` note migration, ID `20261107-projects-upgrading-past-the`, SHALL tell a project set up before builds' pre-land checks stopped waiting for the clone's check lock (`land/check-lock`) that its tests must now pass while other runs of them overlap (`tests-run-concurrently`). It edits no file: its `file` SHALL be `clm.toml`, where `[land] check` names the check, and it SHALL carry no `old` or `new`. Its `done` SHALL be true when `clm.toml` parses as TOML and its `upgraded` names this migration or one after it in `migrations()`, and false otherwise, so a project `clm init` set up since this migration is done, and an older one is done once `clm upgrade --apply` has stamped it (`stamp-taken-notes`). Its note's first line SHALL read `Builds' checks now overlap: your tests must pass side by side`. The note SHALL say:
+An `advised` note migration, ID `20261107-projects-upgrading-past-the`, SHALL tell a project set up before builds' pre-land checks stopped waiting for the clone's check lock (`land/check-lock`) that its tests must now pass while other runs of them overlap (`tests-run-concurrently`). It edits no file: its `file` SHALL be `clm.toml`, where `[land] check` names the check, and it SHALL carry no `old` or `new`. Its `done` SHALL be true when `clm.toml` doesn't exist, or parses as TOML and its `upgraded` names this migration or one after it in `migrations()`, and false otherwise, so a project `clm init` set up since this migration is done, and an older one is done once `clm upgrade --apply` has stamped it (`stamp-taken-notes`). The test fixture that stands for an up-to-date project and has a `clm.toml` with no `upgraded`, `crates/clm-upgrade/src/shipped_tests.rs`'s `project()` (with `a_declined_rules_migration_is_not_listed`'s rewritten `clm.toml`), SHALL stamp it with `latest()`. Its note's first line SHALL read `Builds' checks now overlap: your tests must pass side by side`. The note SHALL say:
 - that a build's `clm land --check-only` no longer waits for other checks of the clone, so it runs at the same time as other builds' checks, the tests builds run by hand and a land's check, while lands' own checks still run one at a time;
 - that the project's tests and check command must therefore pass while other runs of them overlap on one host (`tests-run-concurrently`, which `clm guide constraints` states): no fixed port, no fixed path outside the checkout and the system's temporary directory, no server or database two runs share; and that a port or path a run must know in advance, such as the port of a server the check starts, is keyed on `CLM_SLOT`, the number CLM gives each build and its checks, 0 when unset;
 - how to check the project: look through the check script and the tests for literal ports and `localhost` or `127.0.0.1` addresses, absolute paths outside the checkout and the temporary directory, and servers or databases the check starts or reaches at a fixed address; then run the check in two checkouts at once with different `CLM_SLOT` values, both of which must pass; and record each collision found as a `bug` backlog item naming `tests-run-concurrently`;
 - what to do meanwhile: a project that keeps its runs apart another way, such as a container per run, replaces the constraint with an entry of its own `ARCHITECTURE.md` holding `#### Replaces` naming `tests-run-concurrently` and keeping its guarantee, a change a human reviews; until its tests are fixed, `max_builds = 1` in the clone's `clm.local.toml` makes overlapping runs rarer, though not impossible;
-- that taking the note edits no file: the upgrade's stamp marks it taken, and `clm upgrade --decline 20261107-projects-upgrading-past-the` hides it the same way.
+- that taking the note edits no file and leaves nothing to decline: the upgrade's stamp marks it taken.
 
 #### Scenario: a project set up before the lift
 - GIVEN a project whose `clm.toml` sets `upgraded = "20261107-projects-set-up-before"`, every other migration done
@@ -306,4 +306,6 @@ An `advised` note migration, ID `20261107-projects-upgrading-past-the`, SHALL te
 
 #### Needs
 - land/check-lock
+- land/check-slot
+- orchestrator.run/prompt-slot
 - clm/upgrade-command
