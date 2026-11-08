@@ -1601,3 +1601,109 @@ fn a_failing_phase_prints_only_where_it_failed() {
         "{stderr}"
     );
 }
+
+/// The stdout lines of a passing run with `selection` (everything selected when `None`).
+fn stdout_of(tree: &Tree, selection: Option<&str>) -> Vec<String> {
+    let file = tree.dir.path().join("selection");
+    if let Some(selection) = selection {
+        fs::write(&file, selection).unwrap();
+    }
+    let out = tree.output(None, "", selection.map(|_| file.as_os_str()), &tree.path());
+    assert!(out.status.success());
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The files marked inside the phase `name`, between its `::group::` and `::endgroup::` lines,
+/// or `None` when the phase has no group.
+fn marked_in<'a>(lines: &'a [String], name: &str) -> Option<Vec<&'a str>> {
+    let start = lines
+        .iter()
+        .position(|l| l == &format!("::group::{name}"))?;
+    let len = lines[start..].iter().position(|l| l == "::endgroup::")?;
+    Some(
+        lines[start + 1..start + len]
+            .iter()
+            .filter_map(|l| l.strip_prefix("::clm-selected::"))
+            .collect(),
+    )
+}
+
+#[test]
+fn a_web_change_marks_the_phases_it_selected() {
+    // req:ci/step-markers@3b509846
+    let tree = Tree::new();
+    let lines = stdout_of(&tree, Some("file web/src/main.ts\n"));
+    // A phase every run has names no file, and nothing sits between its markers.
+    let at = lines.iter().position(|l| l == "::group::fmt").unwrap();
+    assert_eq!(lines[at + 1], "::endgroup::", "{lines:?}");
+    for phase in ["web", "web/site", "capabilities/web"] {
+        assert_eq!(
+            marked_in(&lines, phase).unwrap(),
+            ["web/src/main.ts"],
+            "{phase}: {lines:?}"
+        );
+    }
+    for phase in ["plugin-panel", "capabilities/panel", "validate plugin"] {
+        assert!(marked_in(&lines, phase).is_none(), "{phase}: {lines:?}");
+    }
+    // The Rust tests ran no file's package.
+    assert_eq!(marked_in(&lines, "tests").unwrap(), [] as [&str; 0]);
+}
+
+#[test]
+fn a_full_run_marks_each_phase_and_names_no_file() {
+    // req:ci/step-markers@3b509846
+    let tree = Tree::new();
+    for selection in [None, Some("all Cargo.lock\nfile web/src/main.ts\n")] {
+        let lines = stdout_of(&tree, selection);
+        assert!(!lines.iter().any(|l| l.contains("::clm-selected::")));
+        let groups = lines.iter().filter(|l| l.starts_with("::group::")).count();
+        let ends = lines.iter().filter(|l| *l == "::endgroup::").count();
+        assert_eq!(groups, 12, "{lines:?}");
+        assert_eq!(ends, 12, "{lines:?}");
+    }
+}
+
+#[test]
+fn every_selected_phase_names_the_files_that_made_it_run() {
+    // req:ci/step-markers@3b509846
+    let tree = Tree::new();
+    let lines = stdout_of(
+        &tree,
+        Some(
+            "component clm\nfile crates/clm/tests/run.rs\nfile crates/clm/tests/run.rs\n\
+             file crates/clm-check/src/lib.rs\nfile crates/gone/src/lib.rs\n\
+             file plugin-panel/src/a.ts\nfile capabilities/panel/x.test.ts\n\
+             file plugin/skills/x/SKILL.md\nfile capabilities/web/y.spec.ts\n\
+             file docs/guide/x.md\n",
+        ),
+    );
+    let expect: [(&str, &[&str]); 8] = [
+        (
+            "tests",
+            &["crates/clm/tests/run.rs", "crates/clm-check/src/lib.rs"],
+        ),
+        ("plugin-panel", &["plugin-panel/src/a.ts"]),
+        ("validate plugin-panel", &["plugin-panel/src/a.ts"]),
+        (
+            "capabilities/panel",
+            &["plugin-panel/src/a.ts", "capabilities/panel/x.test.ts"],
+        ),
+        ("validate plugin", &["plugin/skills/x/SKILL.md"]),
+        ("capabilities/web", &["capabilities/web/y.spec.ts"]),
+        ("fmt", &[]),
+        ("wasm", &[]),
+    ];
+    for (phase, files) in expect {
+        assert_eq!(
+            marked_in(&lines, phase).unwrap(),
+            files,
+            "{phase}: {lines:?}"
+        );
+    }
+    assert!(marked_in(&lines, "web").is_none(), "{lines:?}");
+    assert!(marked_in(&lines, "web/site").is_none(), "{lines:?}");
+}

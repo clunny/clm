@@ -27,12 +27,23 @@ on_exit() {
   exit "$status"
 }
 trap on_exit EXIT
+# Step markers (ci/step-markers). A phase is bracketed on stdout by `::group::<phase>` and
+# `::endgroup::`; inside it, `::clm-selected::<path>` names each selected file that made the
+# phase run, each once. The caller sets `marks` (newline-separated paths) before `timed`; a
+# phase every run has, and any phase of a full run, leaves it empty.
+marks=
 timed() {
-  local took
+  local took path
   phase_name=$1
   phase_start=$SECONDS
   shift
+  echo "::group::$phase_name"
+  while IFS= read -r path; do
+    if [ -n "$path" ]; then echo "::clm-selected::$path"; fi
+  done < <(printf '%s\n' "$marks" | awk '!seen[$0]++')
+  marks=
   "$@"
+  echo "::endgroup::"
   took=$((SECONDS - phase_start))
   echo "ci-check: $phase_name ${took}s" >&2
   phase_log+=("${took}s $phase_name")
@@ -53,6 +64,16 @@ cap_panel=false
 # Each selected `<package> <target flag>`, tab-separated, in selection order. A plain array,
 # not an associative one, so the script runs on macOS's bash 3.2 too.
 selected=()
+# The selected files behind each phase, newline-separated, for the step markers
+# (ci/step-markers): per directory that turns a suite on, and the files that selected a package.
+nl='
+'
+files_rust=
+files_web=
+files_panel=
+files_cap_web=
+files_cap_panel=
+files_plugin=
 
 # The package `crates/<dir>/Cargo.toml` names: the `name` of its `[package]` section.
 package_name() {
@@ -78,13 +99,13 @@ add() {
 }
 
 select_file() {
-  local path=$1 dir rest name
+  local path=$1 dir rest name before=${#selected[@]}
   case $path in
-    web/*) web=true ;;
-    plugin-panel/*) panel=true ;;
-    capabilities/web/*) cap_web=true ;;
-    capabilities/panel/*) cap_panel=true ;;
-    plugin/*) plugin=true ;;
+    web/*) web=true files_web+="$path$nl" ;;
+    plugin-panel/*) panel=true files_panel+="$path$nl" ;;
+    capabilities/web/*) cap_web=true files_cap_web+="$path$nl" ;;
+    capabilities/panel/*) cap_panel=true files_cap_panel+="$path$nl" ;;
+    plugin/*) plugin=true files_plugin+="$path$nl" ;;
     crates/*/*)
       rest=${path#crates/}
       dir=${rest%%/*}
@@ -103,6 +124,8 @@ select_file() {
           ;;
         *) add "$dir" --tests ;;
       esac
+      # A file that selected no package (a deleted crate) made no test run.
+      if [ "${#selected[@]}" -gt "$before" ]; then files_rust+="$path$nl"; fi
       ;;
   esac
 }
@@ -123,6 +146,8 @@ if $full; then
   panel=true
   plugin=true
 fi
+# `selected` grows by one entry per target, so a file that selects two (`--lib` and `--bins`)
+# is listed twice; `timed` prints each once.
 
 # The tests run `clm check`, detectors and all (`this_repository_is_clean`), so the detectors'
 # tools go first (ci/detector-tools), then `cargo-nextest` (ci/test-tools).
@@ -174,6 +199,7 @@ rust_tests() {
     done
   fi
 }
+marks=$files_rust
 timed tests rust_tests
 
 # A plugin directory as Claude Code loads it, with whatever `claude` this machine has. No
@@ -232,26 +258,33 @@ cap_web_suite() {
 # `plugin-panel/`'s and `web/`'s tests, each followed by its capability package
 # (ci/web-checks): the panel's first, since they're quick.
 if $panel; then
+  marks=$files_panel
   timed plugin-panel panel_suite
   # Its tests strip types and never load the module as the engine does (ci/panel-validate).
+  marks=$files_panel
   timed "validate plugin-panel" validate plugin-panel
 fi
 if { $panel || $cap_panel; } && has_package panel; then
+  marks=$files_panel$files_cap_panel
   timed capabilities/panel cap_panel_suite
 fi
 # The `clm` plugin's manifest, hooks, skills, agents and command (ci/plugin-validate), which its
 # tests read only as text.
 if $plugin; then
+  marks=$files_plugin
   timed "validate plugin" validate plugin
 fi
 if $web; then
+  marks=$files_web
   timed web web_suite
 fi
 # `web/site/`'s package (`web.site`) follows `web/`'s suite, once it has a `package.json`
 # (ci/web-checks).
 if $web && [ -f web/site/package.json ]; then
+  marks=$files_web
   timed web/site site_suite
 fi
 if { $web || $cap_web; } && has_package web; then
+  marks=$files_web$files_cap_web
   timed capabilities/web cap_web_suite
 fi
