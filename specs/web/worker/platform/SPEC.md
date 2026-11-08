@@ -59,7 +59,7 @@ It answers no route of its own, and decides nothing a route answers.
 #### Scenario: doc-only paths from the ledger
 - GIVEN a tree listing of `blob` entries (any mode and sha) at `docs/x.md`, `docs/guide/intro.md`, `backlog/y.md`, `CLAUDE.md`, `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`
 - WHEN `keys::code_key` runs on it
-- THEN it equals `keys::code_key` over only `docs/guide/intro.md`, `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`, the entries `clm_ledger::doc_only` answers false for, and differs from the key of the listing with any one of those four removed
+- THEN it equals `keys::code_key` over only `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`, the entries `clm_ledger::doc_only` answers false for, and differs from the key of the listing with any one of those three removed
 
 #### Scenario: no copy of the list
 - GIVEN the text of `crates/clm-web-platform/src/keys.rs`, read by a test outside it with `include_str!`
@@ -70,8 +70,11 @@ It answers no route of its own, and decides nothing a route answers.
 - architecture/reuse-first
 - architecture/no-silent-drift
 
+#### Needs
+- ledger/doc-only
+
 ### Requirement: code-key-as-ledger
-`keys::code_key` SHALL give, for a tree listing, the key `clm_ledger::code_key` gives for the same tree, leaving out exactly the paths `ledger`'s `doc_only` names: a tree that differs from another only in `docs/x.md` gets the same key, and one that differs only in `docs/guide/intro.md` or only in `docs/spec-format.md` gets a different key.
+`keys::code_key` SHALL give, for a tree listing, the key `clm_ledger::code_key` gives for the same tree, leaving out exactly the paths `ledger`'s `doc_only` names: a tree that differs from another only in `docs/x.md`, only in `docs/guide/intro.md` or only in `docs/spec-format.md` gets the same key, and one that differs only in `crates/a/src/lib.rs` gets a different key.
 
 #### Serves
 - architecture/reuse-first
@@ -80,10 +83,10 @@ It answers no route of its own, and decides nothing a route answers.
 #### Needs
 - ledger/doc-only
 
-#### Scenario: the guide's files are code
-- GIVEN a repository whose commits `a`, `b` changing only `docs/x.md`, `c` changing only `docs/guide/start.md` and `d` changing only `docs/spec-format.md`, each listed as the Trees API lists it
+#### Scenario: the guide's files are doc-only
+- GIVEN a repository whose commits `a`, `b` changing only `docs/x.md`, `c` changing only `docs/guide/start.md`, `d` changing only `docs/spec-format.md` and `e` changing only `crates/a/src/lib.rs`, each listed as the Trees API lists it
 - WHEN `keys::code_key` runs on each listing
-- THEN each key equals `clm_ledger::code_key` of the same commit, `a` and `b` share one, and `c` and `d` each differ from `a`'s
+- THEN each key equals `clm_ledger::code_key` of the same commit, `a`, `b`, `c` and `d` share one, and `e`'s differs from it
 
 ### Requirement: fresh-replaces-plain
 When `live::cached` fetches a live-state item for an `Access` that carries a `fresh` delivery, it SHALL store the value under the plain key `live:<o>/<r>:<what>` as well as under the delivery's key, each for 60 seconds, so a later read of that item without `fresh` answers from it; a value it reads from the delivery's key SHALL be stored under no other key.

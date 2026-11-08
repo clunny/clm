@@ -18,3 +18,5 @@ Rejected:
 **Amended 2026-11-04** (`20261104-help-and-carried-constraints`). One page, `constraints`, is generated from the carried entries of CLM's `ARCHITECTURE.md` rather than read from `docs/guide/` (`carried-constraints`).
 
 **Amended 2026-10-29** (`20261029-refounding`). `web` no longer bundles the guide (`guide-from-docs`, amended); `clm guide` is the one way the pages are served, and `ledger` counts `docs/guide/` as code because the binary compiles it in.
+
+**Amended 2026-11-08** (`20261108-a-guide-page-edit`). `ledger` counts `docs/guide/` as doc-only: the tests that read the pages, from the tree or through `clm guide`, hold `clm:reads` markers instead (`guide-pages-are-doc-only`).
