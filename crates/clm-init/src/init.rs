@@ -158,7 +158,7 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         clm_host::Error::Refused(m) | clm_host::Error::Nowhere(m) | clm_host::Error::Git(m) => m,
     })?;
     if let Some(bare) = kept {
-        out.push_str(&format!("added remote {REMOTE} {}\n", bare.display()));
+        out.push_str(&format!("created remote {REMOTE} at {}\n", bare.display()));
     }
     if !steps.is_empty() {
         out.push_str("\nNext steps (yours):\n");

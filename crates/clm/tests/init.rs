@@ -732,9 +732,12 @@ fn next_steps_skip_what_is_done() {
     let steps = next_steps(&init(&dir, &[], &hosts));
     assert_eq!(steps.lines().count(), 1, "{steps}");
     commit_all(&dir);
-    // With no remote, committing is all there is to do.
+    // With no remote, committing is all there is to do. (`clm init` on host `none` keeps a
+    // remote of its own, which this test removes to see the case.)
+    git(&dir, &["remote", "remove", "origin"]);
     let out = init(&dir, &[], &hosts);
     assert!(!out.contains("Next steps (yours):"), "{out}");
+    git(&dir, &["remote", "remove", "origin"]);
     // Once a remote is added, the push is left; the kept `clm.toml` still says `none`, so
     // no protection step.
     git(&dir, &["remote", "add", "origin", "/nowhere.git"]);
@@ -1140,7 +1143,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
     let out = {
         let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
         Command::new(env!("CARGO_BIN_EXE_clm"))
-            .arg("init")
+            .args(["init", "--host", "git"])
             .current_dir(&tree)
             .env("PATH", path_with(&hosts))
             .env("XDG_CONFIG_HOME", config.path())
