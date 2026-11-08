@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [stamp-this-repository-upgraded]
 ---
 
