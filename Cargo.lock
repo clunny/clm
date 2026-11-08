@@ -659,8 +659,8 @@ name = "clm-verify"
 version = "0.20.0"
 dependencies = [
  "clm-affected",
- "clm-check",
  "clm-config",
+ "clm-coverage",
  "clm-git",
  "clm-host",
  "clm-land",

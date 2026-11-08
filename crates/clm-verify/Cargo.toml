@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 clm-affected.workspace = true
-clm-check.workspace = true
+clm-coverage.workspace = true
 clm-config.workspace = true
 clm-git.workspace = true
 clm-host.workspace = true

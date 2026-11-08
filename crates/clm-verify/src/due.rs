@@ -116,12 +116,10 @@ fn finishes_a_change(ctx: &Ctx, lands: &[String]) -> Result<bool, Error> {
 fn queue_drained(ctx: &Ctx, head: &str) -> Result<bool, Error> {
     let tree = tree::Tree::at(ctx, head)?;
     let (graph, violations) = clm_model::load(&tree.dir);
-    if let Some(first) = violations.first() {
-        return Err(Error::Refused(format!(
-            "the specs of {head} don't load: {}",
-            clm_check::format(first)
-        )));
+    // Specs that do not load leave the queue unknown, not drained.
+    if !violations.is_empty() {
+        return Ok(false);
     }
-    let markers = clm_check::scan(&tree.dir).req;
-    Ok(clm_check::pending(&graph, &markers).is_empty())
+    let markers = clm_coverage::scan(&tree.dir).req;
+    Ok(clm_coverage::pending(&graph, &markers).is_empty())
 }

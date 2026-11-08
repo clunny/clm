@@ -51,7 +51,7 @@ pub(crate) fn components(
     let graph = graph_at(ctx, commit)?;
     let owners: BTreeSet<String> = files
         .iter()
-        .filter_map(|f| clm_check::owner(&graph, Path::new(f)).map(str::to_string))
+        .filter_map(|f| clm_coverage::owner(&graph, Path::new(f)).map(str::to_string))
         .collect();
     Ok(match owners.is_empty() {
         true => vec![clm_model::ROOT_ID.to_string()],
