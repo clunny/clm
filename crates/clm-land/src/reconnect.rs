@@ -1,4 +1,5 @@
-//! `clm reconnect` (`land/offline-land`): a repository whose `origin` is newly set gets its `main` and ledgers pushed.
+//! `clm reconnect` (`land/offline-land`): a repository whose `origin` is newly set gets its
+//! `main` and ledgers pushed.
 
 use std::collections::HashSet;
 use std::path::Path;
