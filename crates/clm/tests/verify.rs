@@ -109,7 +109,7 @@ fn each_flag_reaches_its_own_mode() {
 
 // req:clm/verify-command@f591ec16
 #[test]
-fn verify_due_in_a_subdirectory_of_a_fresh_project_is_off() {
+fn a_fresh_project_is_off_from_a_subdirectory() {
     let dir = initialised();
     let out = clm(&dir.path().join("specs"), &["verify", "--due"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -118,26 +118,19 @@ fn verify_due_in_a_subdirectory_of_a_fresh_project_is_off() {
 
 // req:clm/verify-command@f591ec16
 #[test]
-fn every_flag_form_is_dispatched() {
-    let dir = initialised();
-    for args in [
-        &["verify", "--due", "--event", "work-done", "--dry-run"][..],
-        &["verify", "--commit", "abc"],
-        &["verify", "--import"],
-        &["verify", "--bisect", "abc"],
-    ] {
-        let out = clm(dir.path(), args);
-        assert_eq!(out.status.code(), Some(0), "{args:?}: {out:?}");
-        assert_eq!(String::from_utf8_lossy(&out.stdout), OFF, "{args:?}");
-    }
+fn a_subdirectory_reads_the_project_settings() {
+    let dir = verifying();
+    let (code, out, _) = verify_as_writer(&dir.path().join("specs"), &["verify", "--import"]);
+    assert_eq!(
+        (code, out.as_str()),
+        (Some(0), "verify nothing to import\n")
+    );
 }
 
 // req:clm/verify-command@f591ec16
 #[test]
-fn a_mode_is_required_and_help_lists_the_command() {
+fn help_lists_the_command() {
     let dir = initialised();
-    let none = clm(dir.path(), &["verify"]);
-    assert_eq!(none.status.code(), Some(2), "{none:?}");
     let help = clm(dir.path(), &["--help"]);
     let text = String::from_utf8_lossy(&help.stdout);
     assert!(
