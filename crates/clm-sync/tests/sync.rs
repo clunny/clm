@@ -2797,6 +2797,7 @@ fn a_clone_the_environment_names() {
     assert_eq!(git_env(&w, &g, &["log", "-1", "--format=%s"]), "Rename r");
     assert_eq!(git_env(&w, &g, &["status", "--porcelain"]), "");
     assert_eq!(fs::read(g.join("config")).unwrap(), config);
+    assert_eq!(origin_main(&r), main, "never pushes");
 }
 
 #[test]
