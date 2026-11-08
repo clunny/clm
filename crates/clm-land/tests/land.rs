@@ -931,6 +931,10 @@ fn callers_target_untouched_by_the_cap() {
 fn branch_warnings(out: &clm_land::Output) -> Vec<&String> {
     out.warnings
         .iter()
-        .filter(|w| !w.starts_with("effort: ") && !w.starts_with("effort not recorded: "))
+        .filter(|w| {
+            !w.starts_with("effort: ")
+                && !w.starts_with("effort not recorded: ")
+                && !w.starts_with("land priority not worked out")
+        })
         .collect()
 }
