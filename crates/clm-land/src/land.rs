@@ -111,6 +111,18 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             }
             None => None,
         };
+        // No record names the merged key: a `clm.toml` that differs only in what
+        // `settings_unchanged` sets aside is looked up by the key without it, here, before
+        // the lock is decided on (`land/settings-unchanged-is-checked`).
+        let via_settings = match &merged {
+            Some((tree, key)) if !checked_with(&fold, key) => {
+                match settings_key(&repo, tree, &base)? {
+                    Some(settings_key) => checked_with(&fold, &settings_key),
+                    None => false,
+                }
+            }
+            _ => false,
+        };
         Ok(Prepared {
             head,
             on_origin,
@@ -120,6 +132,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fingerprint,
             fold,
             merged,
+            via_settings,
             behind,
             warnings,
         })
@@ -129,7 +142,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     let check_runs = |p: &Prepared| {
         p.merged
             .as_ref()
-            .is_some_and(|(_, key)| !checked_with(&p.fold, key))
+            .is_some_and(|(_, key)| !p.via_settings && !checked_with(&p.fold, key))
     };
     let mut out = Output {
         warnings: effort_warnings,
@@ -160,6 +173,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fingerprint,
             fold,
             merged,
+            via_settings,
             behind,
             warnings,
         } = p;
@@ -244,7 +258,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
 
         // 6. The checks, unless the code was checked, and the gate again. The merge commit's
         // code key is its tree's.
-        let checked = checked_with(&fold, &key);
+        let checked = via_settings || checked_with(&fold, &key);
         // Whether `[land] check` runs, and the selection it gets: on unchecked code the tests
         // the branch can break, on checked code only the readers of what differs
         // (`land/selected-tests`).
@@ -306,6 +320,14 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         }
         if checked {
             repo.clm_check(exe, dir.path(), false, ON_MERGE)?;
+            // The tree's own key is checked now, so the `landed` record names a checked key
+            // and a retry finds it (`land/settings-unchanged-is-checked`).
+            if !checked_with(&fold, &key) {
+                repo.append(Body::Checked {
+                    code_key: key.clone(),
+                    command: command.clone(),
+                })?;
+            }
         } else {
             repo.clm_check(exe, dir.path(), true, ON_MERGE)?;
             repo.append(Body::Checked {
@@ -529,6 +551,35 @@ fn specs_changed_on_both(
     Ok(specs(head)?.iter().any(|p| ours.contains(p)))
 }
 
+/// The code key of `tree` with the CLM root's `clm.toml` as it is at `base`, when the two
+/// differ in their bytes and `clm-gate`'s `settings_unchanged` holds of them; none otherwise
+/// (`land/settings-unchanged-is-checked`).
+fn settings_key(repo: &Repo, tree: &str, base: &str) -> Result<Option<String>, Error> {
+    let prefix = repo.git(&["rev-parse", "--show-prefix"])?;
+    let path = format!("{prefix}clm.toml");
+    // A missing file reads as none.
+    let read = |rev: &str| -> Result<Option<Vec<u8>>, Error> {
+        let spec = format!("{rev}:{path}");
+        if repo.git(&["cat-file", "-e", &spec]).is_err() {
+            return Ok(None);
+        }
+        let blob = clm_git::run(
+            &repo.root,
+            "git",
+            &["cat-file", "blob", &spec],
+            clm_git::Options::default(),
+        )?;
+        Ok(Some(blob))
+    };
+    let (before, after) = (read(base)?, read(tree)?);
+    if before == after || !clm_gate::settings_unchanged(before.as_deref(), after.as_deref()) {
+        return Ok(None);
+    }
+    Ok(Some(clm_ledger::code_key_with(
+        &repo.root, tree, &path, base,
+    )?))
+}
+
 /// What step 1 gathers for an attempt.
 struct Prepared {
     head: String,
@@ -543,6 +594,9 @@ struct Prepared {
     fold: clm_ledger::Fold,
     /// The tree of `head` merged into `base` and its code key, or none when they conflict.
     merged: Option<(String, String)>,
+    /// Whether the merged tree counts as checked through its settings-free key, though no
+    /// `checked` record names its own (`land/settings-unchanged-is-checked`).
+    via_settings: bool,
     /// Whether `head` is behind in `specs/`: it adds or applies a change and `specs/` changed
     /// on both sides, with no conflict outside it (`land/regenerates-behind-specs`).
     behind: bool,
