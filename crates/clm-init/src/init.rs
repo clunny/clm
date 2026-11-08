@@ -526,7 +526,7 @@ const VERIFY_COMMENT: &str = "\n\
 # Slow tests that run after the land instead of in `[land] check`:\n\
 # [verify]\n\
 # # See `clm guide ci-and-deployment`.\n\
-# # The slow-test command `clm verify` runs.\n\
+# # The slow-test command `clm verify` runs (a script you write).\n\
 # check = \"scripts/clm-slow-tests.sh\"\n\
 # # Where it runs: `local` (this machine), `pipeline` (the host's pipeline records the result)\n\
 # # or `import` (`clm verify --import` reads the runs of `workflow`).\n\

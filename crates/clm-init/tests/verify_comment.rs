@@ -58,9 +58,12 @@ fn written_commented() {
         "work-done",
         "every",
         "workflow",
-        "ci-and-deployment",
     ] {
         assert!(joined.contains(word), "section lacks {word}");
+    }
+    for key in ["check", "mode", "triggers", "every"] {
+        let line = format!("# {key} = ");
+        assert!(section.iter().any(|l| l.starts_with(&line)), "no {line}");
     }
     assert!(!has_verify_setting(dir.path()));
 }
