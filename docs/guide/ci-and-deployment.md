@@ -10,11 +10,54 @@ The checks run on the machine that runs `clm land`. If your team wants a control
 
 When the check fails, `clm land` repeats its last 40 lines and keeps its whole output at `.clm/land-logs/<branch>.log`. If your check script runs several steps, print `::group::<name>` as each one starts and `::endgroup::` as it ends, as GitHub Actions does. The refusal then names the step that was running when the check failed and the lines of the log it spans, so a session reads the failure even when it lies more than 40 lines back.
 
+### Running only the tests a branch can break
+
+`clm land` tells your check which tests the branch can break, through the environment variable `CLM_SELECTION`. A check that ignores it runs everything, which is always safe, only slower. To use it, have your check script read the file the variable names.
+
+**When it is set.** Every land that runs `[land] check` sets `CLM_SELECTION` to the path of a file it writes for that run, and so does `clm verify` for `[verify] check` once a run of it has passed. What the file holds:
+
+- on a land that checks code: `clm affected --base <sha>`'s output exactly as it prints it, `<sha>` being the `main` the branch merges into;
+- on a land whose code was already checked (see the next section): `clm affected --base <sha> --readers`'s output, `file` lines only;
+- for `clm verify`: `clm affected`'s output since the last commit whose slow tests passed.
+
+**When it is unset.** Your check must then run every test. That happens:
+
+- when `clm affected` fails: `clm land` prints `clm affected failed: <reason>; the check runs every test` and runs the check without the variable, so a failed selection costs time, never a skipped test;
+- under `clm land --check-only`, a build's own check before its land, which runs the whole suite;
+- for `clm verify` before any run of it has passed;
+- whenever someone runs the script by hand or another pipeline runs it.
+
+**What the file holds.** One item per line, in one of three forms:
+
+- `all <path>`: the only line in the file. The branch changes a file that no component's `paths` hold, or one that matches `[affected] all`, so every test must run;
+- `node <id>`: a component the branch affects, directly or through `depends_on`. The word is `node` rather than component, since programs read these lines. Useful when your suites map to components rather than files;
+- `file <path>`: a file whose tests should run: a changed file that still exists, a test that cites a requirement of an affected component, a file of an affected component that cites none, or a test whose `clm:reads` marker matches what changed (next section). Paths are relative to the repository root.
+
+The `node` lines come first, then the `file` lines, each group sorted. An empty file means the branch changes nothing a test depends on, so no test needs to run. Run `clm affected` on a branch to see what a land would hand over.
+
+**An example.** A script for a Rust workspace whose `crates/<name>/` directories hold packages of the same name. It runs everything when the variable is unset, empty or says `all`, and otherwise tests each package a `file` line falls in:
+
+```sh
+#!/bin/sh
+set -eu
+
+if [ -z "${CLM_SELECTION:-}" ] || grep -q '^all ' "$CLM_SELECTION"; then
+  cargo test --workspace
+  exit 0
+fi
+
+for package in $(sed -n 's|^file crates/\([^/]*\)/.*|\1|p' "$CLM_SELECTION" | sort -u); do
+  cargo test -p "$package"
+done
+```
+
+Map the lines to your own runner the same way: a path to a package, a test file or a suite. Decide what a `file` line your mapping doesn't recognise should do: this script runs nothing for it, which suits files no test exercises, and running everything is the safe choice when you aren't sure. Steps that check the whole tree quickly, such as formatting and lint, can run on every land whatever the selection.
+
 ### Tests that read your specs and docs
 
 Your specs and other prose don't count as code for a land. When a branch changes only files under `specs/`, `changes/`, `backlog/` or `docs/` (outside `docs/guide/` and `docs/spec-format.md`), or `ARCHITECTURE.md`, `CAPABILITIES.md`, `README.md` or `CLAUDE.md`, and the code it lands on was already checked, `clm land` doesn't run your whole `[land] check`: it runs `clm check` and only the tests that say they read a file the branch changes. A test says so with a `clm:reads <glob>` marker anywhere in its file, usually a comment, whose glob matches each such path it reads, as a component's `paths` do: `clm:reads ARCHITECTURE.md`, `clm:reads specs/**`. A file may hold several.
 
-So when a test reads one of those files of your project's own tree, such as a test that checks your specs for a retired term, give it the marker. Without one, a branch that changes only that file lands without running the test, and can leave `main` failing it until a later land happens to run it. `clm affected --readers` prints the test files whose markers match what the current branch changes, and `clm land` runs `[land] check` with the environment variable `CLM_SELECTION` naming a file that lists them, as it names the selected tests of a code land. A test that reads only fixtures it writes itself, or only code, needs no marker. Markdown files are never readers.
+So when a test reads one of those files of your project's own tree, such as a test that checks your specs for a retired term, give it the marker. Without one, a branch that changes only that file lands without running the test, and can leave `main` failing it until a later land happens to run it. `clm affected --readers` prints the test files whose markers match what the current branch changes, and `clm land` runs `[land] check` with `CLM_SELECTION` naming a file that lists them, as it names the selected tests of a code land. When it lists none, the land runs only `clm check`. A test that reads only fixtures it writes itself, or only code, needs no marker. Markdown files are never readers.
 
 ### A build's own check counts for its land
 
