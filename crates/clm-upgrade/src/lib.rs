@@ -43,8 +43,9 @@ pub struct Note {
 /// What a migration does.
 #[derive(Debug)]
 pub enum Kind {
-    /// Code `clm upgrade --apply` runs. Every `Required` migration is one.
-    Apply(fn(&Path) -> Result<(), String>),
+    /// Code `clm upgrade --apply` runs, and its description, whose first line `clm upgrade`
+    /// lists (empty for none). Every `Required` migration is one.
+    Apply(fn(&Path) -> Result<(), String>, &'static str),
     /// Advice, always `Advised`.
     Note(Note),
 }

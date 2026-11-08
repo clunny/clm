@@ -30,7 +30,7 @@ fn apply_m() -> Migration {
         id: "m",
         level: Level::Required,
         done: done_m,
-        kind: Kind::Apply(make_m),
+        kind: Kind::Apply(make_m, ""),
     }
 }
 fn required_r() -> Migration {
@@ -38,7 +38,7 @@ fn required_r() -> Migration {
         id: "r",
         level: Level::Required,
         done: never,
-        kind: Kind::Apply(|_| Ok(())),
+        kind: Kind::Apply(|_| Ok(()), ""),
     }
 }
 fn note_n() -> Migration {
@@ -271,7 +271,7 @@ fn a_failing_migration_does_not_stop_the_others_or_stamp() {
         id: "bad",
         level: Level::Required,
         done: never,
-        kind: Kind::Apply(|_| Err("boom".to_string())),
+        kind: Kind::Apply(|_| Err("boom".to_string()), ""),
     };
     let list = [bad, apply_m()];
     let dir = project("");
@@ -295,7 +295,7 @@ fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
         id: "a",
         level: Level::Required,
         done: never,
-        kind: Kind::Apply(|_| Ok(())),
+        kind: Kind::Apply(|_| Ok(()), ""),
     };
     let s = Migration {
         id: "s",

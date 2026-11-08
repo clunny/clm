@@ -48,7 +48,13 @@ pub(crate) fn list_in(list: &[Migration], root: &Path) -> Result<String, String>
         out.push(' ');
         out.push_str(level);
         match &m.kind {
-            Kind::Apply(_) => out.push_str(" apply"),
+            Kind::Apply(_, description) => {
+                out.push_str(" apply");
+                if let Some(first) = description.lines().next() {
+                    out.push(' ');
+                    out.push_str(first);
+                }
+            }
             Kind::Note(n) => {
                 out.push_str(" note ");
                 out.push_str(n.text.lines().next().unwrap_or(""));
@@ -68,7 +74,7 @@ pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String
     let mut failures = String::new();
     for m in &pending {
         match &m.kind {
-            Kind::Apply(run) => match run(root) {
+            Kind::Apply(run, _) => match run(root) {
                 Ok(()) => out.push_str(&format!("applied {}\n", m.id)),
                 Err(e) => failures.push_str(&format!("migration `{}` failed: {e}\n", m.id)),
             },
@@ -103,7 +109,7 @@ pub(crate) fn note_in(list: &[Migration], root: &Path, id: &str) -> Result<Strin
     pending_or_refuse(list, root)?;
     match list.iter().find(|m| m.id == id).map(|m| &m.kind) {
         None => Err(format!("`{id}` is not a migration")),
-        Some(Kind::Apply(_)) => Err(format!("`{id}` is an apply migration and has no note")),
+        Some(Kind::Apply(..)) => Err(format!("`{id}` is an apply migration and has no note")),
         Some(Kind::Note(n)) => Ok(format!("{}\n", n.text.trim_end())),
     }
 }

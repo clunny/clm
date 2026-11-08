@@ -31,7 +31,7 @@ fn apply(id: &'static str, level: Level, done: fn(&Path) -> bool) -> Migration {
         id,
         level,
         done,
-        kind: Kind::Apply(nothing),
+        kind: Kind::Apply(nothing, ""),
     }
 }
 

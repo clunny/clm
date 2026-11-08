@@ -5,7 +5,7 @@ use std::fs;
 
 use tempfile::TempDir;
 
-use crate::{apply, list};
+use crate::{apply, latest, list};
 
 const OLD_ARCHITECTURE: &str = include_str!("migrations/20261105-clm-upgrade/old.md");
 const NEW_ARCHITECTURE: &str = include_str!("../../clm-init/templates/architecture.md");
@@ -15,9 +15,14 @@ const NEW_CLAUDE: &str = include_str!("../../clm-init/templates/claude.md");
 const CONSTRAINTS_ID: &str = "20261105-clm-upgrade";
 const HELP_ID: &str = "20261105-clm-upgrade-2";
 
+/// `text` with the stamp `clm init` writes, so the project stands for an up-to-date one.
+fn stamped(text: &str) -> String {
+    format!("{text}upgraded = \"{}\"\n", latest().unwrap())
+}
+
 fn project(architecture: &str, claude: &str) -> TempDir {
     let dir = TempDir::new().unwrap();
-    fs::write(dir.path().join("clm.toml"), "defects = \"ask\"\n").unwrap();
+    fs::write(dir.path().join("clm.toml"), stamped("defects = \"ask\"\n")).unwrap();
     fs::write(dir.path().join("ARCHITECTURE.md"), architecture).unwrap();
     fs::write(dir.path().join("CLAUDE.md"), claude).unwrap();
     write_settings(dir.path(), "settings.json", &all_rules());
@@ -280,7 +285,7 @@ fn a_declined_rules_migration_is_not_listed() {
     fs::remove_dir_all(dir.path().join(".claude")).unwrap();
     fs::write(
         dir.path().join("clm.toml"),
-        format!("declined_migrations = [\"{RULES_ID}\"]\n"),
+        stamped(&format!("declined_migrations = [\"{RULES_ID}\"]\n")),
     )
     .unwrap();
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
@@ -303,4 +308,168 @@ fn the_rules_note_lists_the_rules_and_the_ways_out() {
     assert!(note.contains("`paths`"), "{note}");
     assert!(note.contains("by hand"), "{note}");
     assert!(note.contains("spec change"), "{note}");
+}
+
+const VERIFY_ID: &str = "20261107-slow-tests-after-land";
+const VERIFY_LINE: &str = "advised apply Slow tests can run after the land: offer [verify]";
+const OVERLAP_ID: &str = "20261107-projects-upgrading-past-the";
+const OVERLAP_LINE: &str =
+    "advised note Builds' checks now overlap: your tests must pass side by side";
+
+fn read_toml(dir: &TempDir) -> String {
+    fs::read_to_string(dir.path().join("clm.toml")).unwrap()
+}
+
+// req:upgrade/migration-offer-verify@8280ddab
+#[test]
+fn an_older_project_is_offered_the_commented_verify_section() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("defects = \"ask\"\nupgraded = \"{RULES_ID}\"\n\n[land]\ncheck = \"true\"\n"),
+    )
+    .unwrap();
+    assert!(
+        list(dir.path())
+            .unwrap()
+            .contains(&format!("{VERIFY_ID} {VERIFY_LINE}\n"))
+    );
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("applied {VERIFY_ID}\n")), "{out}");
+    let text = read_toml(&dir);
+    let section = include_str!("migrations/20261107-slow-tests-after-land/verify.toml");
+    assert!(
+        text.ends_with(&format!("check = \"true\"\n\n{section}")),
+        "{text}"
+    );
+    let parsed: toml::Table = text.parse().unwrap();
+    assert!(!parsed.contains_key("verify"), "{text}");
+    // Every line of the section is a comment, and removing the `# ` leaves a valid table.
+    assert!(section.lines().all(|l| l.starts_with("# ")));
+    let uncommented: String = section
+        .lines()
+        .skip(1)
+        .map(|l| format!("{}\n", l.strip_prefix("# ").unwrap()))
+        .collect();
+    let table: toml::Table = uncommented.parse().unwrap();
+    assert!(table.contains_key("verify"));
+    // Run again, it changes nothing.
+    let before = read_toml(&dir);
+    apply(dir.path()).unwrap();
+    assert_eq!(read_toml(&dir), before);
+}
+
+// req:upgrade/migration-offer-verify@8280ddab
+#[test]
+fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{RULES_ID}\""),
+    )
+    .unwrap();
+    apply(dir.path()).unwrap();
+    assert!(
+        read_toml(&dir).starts_with(&format!(
+            "upgraded = \"{}\"\n\n# Slow tests",
+            latest().unwrap()
+        )),
+        "{}",
+        read_toml(&dir)
+    );
+}
+
+// req:upgrade/migration-offer-verify@8280ddab
+#[test]
+fn the_verify_migration_is_done_once_set_or_commented_or_without_a_clm_toml() {
+    for line in ["# [verify]", "[verify]", "  # [verify]  "] {
+        let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+        fs::write(
+            dir.path().join("clm.toml"),
+            format!("upgraded = \"{RULES_ID}\"\n{line}\n"),
+        )
+        .unwrap();
+        assert!(
+            !list(dir.path()).unwrap().contains(VERIFY_ID),
+            "{line:?} should count"
+        );
+    }
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::remove_file(dir.path().join("clm.toml")).unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    // A lookalike is not the section.
+    fs::write(dir.path().join("clm.toml"), "# [verifying]\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(VERIFY_ID));
+}
+
+// req:upgrade/migration-tests-overlap@a2b3fa99
+#[test]
+fn a_project_stamped_before_the_lift_is_told_and_then_up_to_date() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{RULES_ID}\"\n\n[land]\ncheck = \"true\"\n# [verify]\n"),
+    )
+    .unwrap();
+    assert_eq!(
+        list(dir.path()).unwrap(),
+        format!("{OVERLAP_ID} {OVERLAP_LINE}\n")
+    );
+    let out = apply(dir.path()).unwrap();
+    assert_eq!(out, format!("note {OVERLAP_ID}\n"));
+    assert_eq!(
+        read_toml(&dir),
+        format!(
+            "upgraded = \"{}\"\n\n[land]\ncheck = \"true\"\n# [verify]\n",
+            latest().unwrap()
+        )
+    );
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    assert_eq!(apply(dir.path()).unwrap(), "");
+}
+
+// req:upgrade/migration-tests-overlap@a2b3fa99
+#[test]
+fn a_never_stamped_or_unparseable_project_is_told_but_a_missing_one_is_not() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(OVERLAP_ID));
+    fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(OVERLAP_ID));
+    fs::remove_file(dir.path().join("clm.toml")).unwrap();
+    assert!(!list(dir.path()).unwrap().contains(OVERLAP_ID));
+}
+
+// req:upgrade/migration-tests-overlap@a2b3fa99
+#[test]
+fn a_project_stamped_with_the_migration_itself_is_done() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{OVERLAP_ID}\"\n"),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-tests-overlap@a2b3fa99
+#[test]
+fn the_overlap_note_names_what_a_project_needs_to_know() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join("clm.toml"), "").unwrap();
+    let note = crate::note(dir.path(), OVERLAP_ID).unwrap();
+    for needle in [
+        "CLM_SLOT",
+        "tests-run-concurrently",
+        "clm guide constraints",
+        "#### Replaces",
+        "max_builds",
+        "`bug`",
+        "localhost",
+        "127.0.0.1",
+        "different `CLM_SLOT` values",
+        "one at a time",
+    ] {
+        assert!(note.contains(needle), "{needle}: {note}");
+    }
 }

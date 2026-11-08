@@ -1,0 +1,14 @@
+# Slow tests that run after the land instead of in `[land] check`:
+# [verify]
+# # See `clm guide ci-and-deployment`.
+# # The slow-test command `clm verify` runs (a script you write).
+# check = "scripts/clm-slow-tests.sh"
+# # Where it runs: `local` (this machine), `pipeline` (the host's pipeline records the result)
+# # or `import` (`clm verify --import` reads the runs of `workflow`).
+# mode = "local"
+# # When it runs: `change-done`, `queue-drained` or `work-done` (the last only with `local`).
+# triggers = ["change-done", "queue-drained"]
+# # Also run after this many lands or days.
+# every = { lands = 20, days = 7 }
+# # With `mode = "import"`, `workflow` names the host pipeline whose runs are read:
+# # workflow = "slow-tests"
