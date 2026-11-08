@@ -17,7 +17,7 @@ const HELP_ID: &str = "20261105-clm-upgrade-2";
 
 /// `text` with the stamp `clm init` writes, so the project stands for an up-to-date one.
 fn stamped(text: &str) -> String {
-    format!("{text}upgraded = \"{}\"\n", latest().unwrap())
+    format!("upgraded = \"{}\"\n{text}", latest().unwrap())
 }
 
 fn project(architecture: &str, claude: &str) -> TempDir {
