@@ -128,7 +128,6 @@ exit 0
 
 #[test]
 fn no_host_no_ledger_warning() {
-    // req:land/land-push-retry@94d61d9c
     // Without a remote every record stays local, and that is no cause for a warning.
     let f = Fixture::local();
     f.branch("impl/a", &[("b.txt", "b\n")]);

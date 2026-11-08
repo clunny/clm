@@ -120,7 +120,10 @@ fn main_moved_after_the_record() {
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(out.lines[0].ends_with(" code"), "{:?}", out.lines);
     // The check ran again, on the merge's tree.
-    assert_eq!(f.lines("check.log").len(), 2);
+    let log = f.lines("check.log");
+    assert_eq!(log.len(), 2);
+    let main = f.remote("main");
+    assert_eq!(log[1], f.tree(&f.path("origin.git"), &main));
 }
 
 #[test]

@@ -45,11 +45,7 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
                 .lines
                 .push(format!("recorded {} as checked", after.head)),
             // A land then runs its own check, so a failed append only warns.
-            Err(e) => {
-                out.lines
-                    .push("not recorded: the record could not be appended".into());
-                out.warnings.push(format!("checked not recorded: {e}"));
-            }
+            Err(e) => out.warnings.push(format!("checked not recorded: {e}")),
         },
     }
     out.lines.push("checks pass".into());
