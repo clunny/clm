@@ -943,10 +943,9 @@ fn land(value: toml::Value, path: &Path) -> Result<Land, Error> {
     }
     let positive = |name: &str| match table.get(name) {
         None => Ok(None),
-        Some(toml::Value::Integer(n)) if *n >= 1 => Ok(Some(*n as u64)),
-        Some(other) => Err(fail(format!(
-            "`{name}` must be a positive integer, not {other}"
-        ))),
+        Some(value) => at_least_one(value.as_integer())
+            .map(Some)
+            .ok_or_else(|| fail(format!("`{name}` must be a positive integer, not {value}"))),
     };
     let target_cap_gb = positive("target_cap_gb")?;
     let check_target_seconds = positive("check_target_seconds")?;
