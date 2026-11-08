@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [propose-nests-splits-forbids-the-guide-pages-propose-names]
 ---
 
