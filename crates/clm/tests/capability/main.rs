@@ -21,6 +21,7 @@ mod prove_by_tests;
 mod report_defects;
 mod right_model_per_task;
 mod see_project_state;
+mod slow_tests_after_land;
 mod triage_unattended;
 mod unattended_runner;
 mod upgrade_clm;
