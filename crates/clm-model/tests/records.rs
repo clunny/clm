@@ -589,6 +589,11 @@ fn taken_in_from_a_red_run() {
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
     assert_eq!(graph.backlog["x"].frontmatter.verify_failures, vec![commit]);
+
+    let dir = repo(&[("backlog/y.md", "---\ntitle: T\nkind: bug\n---\n")]);
+    let (graph, violations) = load(dir.path());
+    assert!(violations.is_empty(), "{violations:?}");
+    assert!(graph.backlog["y"].frontmatter.verify_failures.is_empty());
 }
 
 #[test]
