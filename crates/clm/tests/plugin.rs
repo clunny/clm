@@ -3640,6 +3640,8 @@ fn written_rule_gaps(body: &str) -> Vec<String> {
             "code-fix-needs-a-written-rule",
             "as written",
             "harness-only",
+            "own test suite",
+            "only an architecture entry states",
         ],
         &[],
     )
@@ -3647,7 +3649,7 @@ fn written_rule_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn propose_code_fixes_need_a_written_rule() {
-    // req:plugin/code-fix-needs-a-written-rule@ea8812db
+    // req:plugin/code-fix-needs-a-written-rule@00b46bab
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
     assert_eq!(written_rule_gaps(&body), Vec::<String>::new());
     let section = code_fix_section(&body);
@@ -3683,6 +3685,8 @@ fn propose_code_fixes_need_a_written_rule() {
         "code-fix-needs-a-written-rule",
         "as written",
         "harness-only",
+        "own test suite",
+        "only an architecture entry states",
     ] {
         let gaps = written_rule_gaps(&body.replace(needle, "elided"));
         assert_reports(&gaps, "propose", needle);
