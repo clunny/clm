@@ -1,3 +1,5 @@
+// clm:reads docs/guide/**
+// clm:reads docs/spec-format.md
 //! `clm guide`: CLM's guide, the pages of `docs/guide/` and the spec format compiled into
 //! the binary (`guide-in-the-binary`, `spec-format-in-the-guide`), so it reads offline and
 //! matches the version that runs.
