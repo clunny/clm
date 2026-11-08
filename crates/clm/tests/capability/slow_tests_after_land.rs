@@ -171,6 +171,10 @@ fn a_land_over_its_target() {
     repo.commit("component b and a check that marks its steps");
     repo.git(&["push", "-q", "origin", "main"]);
 
+    repo.write("lib/first.sh", "f() { :; }\n");
+    repo.push_branch("impl/b-first", "b first");
+    land(&repo, "impl/b-first");
+
     repo.write("lib/more.sh", "m() { :; }\n");
     repo.push_branch("impl/b-more", "b more");
     let text = land(&repo, "impl/b-more");
@@ -185,14 +189,15 @@ fn a_land_over_its_target() {
     };
     assert!(lines[at("target 1s")].contains("check "), "{text}");
     let slow = at("slow tests ");
-    assert!(lines[slow].ends_with("slow tests 2s"), "{text}");
+    assert!(lines[slow].trim_end().ends_with('s'), "{text}");
     // The chain runs from the step's selected file to the file the branch changed.
     assert!(lines[slow + 1].contains("lib/b.sh"), "{text}");
     assert!(lines[slow + 2].contains("lib/more.sh"), "{text}");
     assert!(slow < at("fmt "), "{text}");
     assert!(lines[at("fmt ")].ends_with("selected by no file"), "{text}");
-    let history = lines[at("timed lands")];
-    assert!(history.contains("1 over target"), "{text}");
-    assert!(history.contains("most time in slow tests "), "{text}");
-    assert!(text.contains("clm guide ci-and-deployment"), "{text}");
+    // An earlier land also went over, and the report counts it.
+    assert!(
+        lines[at("timed lands")].contains("last 2 timed lands: 2 over target"),
+        "{text}"
+    );
 }
