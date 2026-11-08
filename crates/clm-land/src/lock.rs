@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn a_held_lock_is_waited_for_and_named_once() {
-        // req:land/check-lock@069468cd
+        // req:land/check-lock@4322253a
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(".clm/check.lock");
         let (held, waited) = lock(&path, "unsaid", |_| panic!("said")).unwrap();

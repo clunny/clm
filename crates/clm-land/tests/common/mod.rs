@@ -52,6 +52,7 @@ basename "$PWD" >> "$DIR/check-dir.log"
 pwd -P >> "$DIR/check-pwd.log"
 echo "CI=${CI-unset} CARGO_TARGET_DIR=${CARGO_TARGET_DIR-unset}" >> "$DIR/check-env.log"
 echo "CARGO_INCREMENTAL=${CARGO_INCREMENTAL-unset}" >> "$DIR/check-incremental.log"
+echo "${CLM_SLOT-unset}" >> "$DIR/check-slot.log"
 echo "CLM_SELECTION=${CLM_SELECTION-unset}" >> "$DIR/check-selection.log"
 if [ -n "${CLM_SELECTION-}" ]; then cp "$CLM_SELECTION" "$DIR/selection-copy"; fi
 if [ -e "$DIR/move-main" ] && { [ ! -e "$DIR/moved" ] || grep -q always "$DIR/move-main"; }; then
@@ -289,6 +290,16 @@ impl Fixture {
         let at = path.to_str().unwrap();
         self.git(&self.work(), &["worktree", "add", "-q", at, branch]);
         path
+    }
+
+    /// A build place `name` of the clone with `slot`, naming `branch`: the file
+    /// `orchestrator`'s `place_slot` reads, in the clone's git common directory.
+    pub fn place(&self, name: &str, slot: u64, branch: &str) {
+        let builds = self.path("work/.git/clm/builds");
+        fs::create_dir_all(&builds).unwrap();
+        let text =
+            format!("kind build\ntaken 2030-01-01T00:00:00Z\nslot {slot}\nbranch {branch}\n");
+        fs::write(builds.join(name), text).unwrap();
     }
 
     /// Gives `origin` a `pre-receive` hook running `body` (bash, with `DIR` the fixture's

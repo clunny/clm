@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 clm-approval.workspace = true
+clm-check.workspace = true
 clm-config.workspace = true
 clm-effort.workspace = true
 clm-gate.workspace = true
@@ -14,6 +15,7 @@ clm-git.workspace = true
 clm-host.workspace = true
 clm-ledger.workspace = true
 clm-model.workspace = true
+clm-orchestrator.workspace = true
 clm-regenerate.workspace = true
 tempfile.workspace = true
 

@@ -475,6 +475,7 @@ version = "0.20.0"
 dependencies = [
  "clm-apply",
  "clm-approval",
+ "clm-check",
  "clm-config",
  "clm-effort",
  "clm-gate",
@@ -482,6 +483,7 @@ dependencies = [
  "clm-host",
  "clm-ledger",
  "clm-model",
+ "clm-orchestrator",
  "clm-regenerate",
  "serde_json",
  "tempfile",
