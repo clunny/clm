@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-build-s-waiting-message-uses-up-its-one-hand-back-so-its-final]
 ---
 
