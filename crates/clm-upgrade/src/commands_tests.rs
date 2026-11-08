@@ -127,7 +127,7 @@ fn marks_a_skipped_required_migration() {
     );
 }
 
-// req:upgrade/upgrade-apply@6939e42f
+// req:upgrade/upgrade-apply@f30eac0c
 #[test]
 fn applies_stamps_and_leaves_an_edited_file() {
     let list = [apply_m(), note_n()];
@@ -145,7 +145,7 @@ fn applies_stamps_and_leaves_an_edited_file() {
     assert_eq!(read(&dir, "clm.toml"), after);
 }
 
-// req:upgrade/upgrade-apply@6939e42f
+// req:upgrade/upgrade-apply@f30eac0c
 #[test]
 fn rewrites_an_unedited_note_file() {
     let list = [note_n()];
@@ -158,7 +158,7 @@ fn rewrites_an_unedited_note_file() {
     }
 }
 
-// req:upgrade/upgrade-apply@6939e42f
+// req:upgrade/upgrade-apply@f30eac0c
 #[test]
 fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     let list = [apply_m(), note_n()];
@@ -177,7 +177,7 @@ fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     assert_eq!(read(&settled, "clm.toml"), "upgraded = \"n\"\n");
 }
 
-// req:upgrade/upgrade-apply@6939e42f
+// req:upgrade/upgrade-apply@f30eac0c
 #[test]
 fn apply_refuses_too_new_and_writes_nothing() {
     let dir = project("upgraded = \"z\"\n");
@@ -187,7 +187,7 @@ fn apply_refuses_too_new_and_writes_nothing() {
     assert_eq!(read(&dir, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@6939e42f
+// req:upgrade/upgrade-apply@f30eac0c
 #[test]
 fn the_stamp_goes_in_as_a_top_level_key() {
     assert_eq!(set_top_level("", "k", "1"), "k = 1\n");
@@ -264,7 +264,7 @@ fn decline_refuses_what_it_may_not_decline() {
     assert_eq!(read(&stamped, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@6939e42f
+// req:upgrade/upgrade-apply@f30eac0c
 #[test]
 fn a_failing_migration_does_not_stop_the_others_or_stamp() {
     let bad = Migration {
@@ -282,6 +282,38 @@ fn a_failing_migration_does_not_stop_the_others_or_stamp() {
     );
     assert!(dir.path().join("m").exists());
     assert_eq!(read(&dir, "clm.toml"), "");
+}
+
+fn done_by_stamp(root: &Path) -> bool {
+    fs::read_to_string(root.join("clm.toml")).is_ok_and(|t| t.contains("upgraded = \"s\""))
+}
+
+// req:upgrade/upgrade-apply@f30eac0c
+#[test]
+fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
+    let a = Migration {
+        id: "a",
+        level: Level::Required,
+        done: never,
+        kind: Kind::Apply(|_| Ok(())),
+    };
+    let s = Migration {
+        id: "s",
+        level: Level::Advised,
+        done: done_by_stamp,
+        kind: Kind::Note(Note {
+            text: "read me",
+            file: "clm.toml",
+            old: &[],
+            new: None,
+        }),
+    };
+    let list = [a, s];
+    let dir = project("upgraded = \"a\"\n");
+    assert_eq!(apply_in(&list, dir.path()).unwrap(), "note s\n");
+    assert_eq!(read(&dir, "clm.toml"), "upgraded = \"s\"\n");
+    assert_eq!(apply_in(&list, dir.path()).unwrap(), "");
+    assert_eq!(list_in(&list, dir.path()).unwrap(), "up to date\n");
 }
 
 // req:upgrade/upgrade-list@97f2a710

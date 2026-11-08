@@ -86,13 +86,15 @@ pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String
         // Never stop early, but never stamp a project a migration failed on.
         return Err(format!("{out}{failures}"));
     }
-    if let Some(latest) = list.last() {
-        set_key(root, "upgraded", &quote(latest.id))?;
-    }
+    // Judged before the stamp is written, so a note the stamp takes is shown on the run that
+    // takes it.
     for m in pending {
         if matches!(m.kind, Kind::Note(_)) && !(m.done)(root) {
             out.push_str(&format!("note {}\n", m.id));
         }
+    }
+    if let Some(latest) = list.last() {
+        set_key(root, "upgraded", &quote(latest.id))?;
     }
     Ok(out)
 }
