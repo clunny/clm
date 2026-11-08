@@ -5834,7 +5834,7 @@ fn skills_run_verify() {
         let wrap = body.rfind("`clm wrap-up`").unwrap();
         assert!(at < wrap, "{name}: verify must precede the last wrap-up");
     }
-    assert!(triage.find("clm verify --import") < triage.find("`clm intake`"));
+    assert!(triage.find("clm verify --import").unwrap() < triage.find("`clm intake`").unwrap());
     let gaps = lacks(
         "triage",
         &triage.replace("verify_failures", "x"),
