@@ -24,6 +24,11 @@ Drop the sentence "It SHALL NOT name `docs/guide/`" from `plugin/propose-nests-s
 
 None.
 
+## Settled by the builder check and the audit
+
+- The builder check found no requirement this one relies on that isn't current, and no capability test that sees a difference; `skills/propose/SKILL.md` stays as it is.
+- The audit noted that `plugin`'s Design ("**The method**") said a skill names `docs/guide/...` never, which `method-pointers` already contradicted. The change rewords it to name the two pages `method-pointers` allows.
+
 ## The human's answers
 
 > propose-nests-splits-forbids-the-guide-pages-propose-names — Human's answer: "Drop the sentence (Recommended)" — Remove 'It SHALL NOT name docs/guide/' and the matching scenario clause. method-pointers stays the only rule about guide paths.
