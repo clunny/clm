@@ -128,3 +128,47 @@ fn migration_pending_refuses_check_but_not_status_or_defect() {
     let defect = repo.clm(&["defect", "--title", "T", "--component", "a"]);
     assert_ne!(defect.status.code(), Some(4), "{}", printed(&defect));
 }
+
+/// The ID `clm init` stamps: the last migration this `clm` holds, named by its directory.
+fn latest_migration() -> String {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../clm-upgrade/src/migrations");
+    let mut ids: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .filter(|n| n.starts_with(|c: char| c.is_ascii_digit()))
+        .collect();
+    ids.sort();
+    ids.pop().expect("a migration")
+}
+
+#[test]
+fn a_stamp_only_land_runs_no_check() {
+    // req:land/settings-unchanged-is-checked@d27ea07f
+    // The land that takes an upgrade changes `clm.toml` only by its `upgraded` stamp, and the
+    // check it would run was already run on the same code.
+    let repo = Repo::init();
+    let log = repo.root.parent().unwrap().join("check-runs");
+    repo.land_on_origin(&format!("echo ran >> {}", log.display()));
+    repo.write("src/lib.sh", "greet() { echo hi; }\n");
+    repo.push_branch("impl/greet", "greet");
+    let first = repo.clm(&["land", "impl/greet"]);
+    assert!(first.status.success(), "{}", printed(&first));
+    assert_eq!(fs::read_to_string(&log).unwrap().lines().count(), 1);
+
+    repo.git(&["pull", "-q", "--ff-only", "origin", "main"]);
+    let toml = fs::read_to_string(repo.root.join("clm.toml")).unwrap();
+    repo.write(
+        "clm.toml",
+        &format!("upgraded = \"{}\"\n{toml}", latest_migration()),
+    );
+    repo.push_branch("impl/stamp", "take the upgrade");
+    let stamp = repo.clm(&["land", "impl/stamp"]);
+    assert!(stamp.status.success(), "{}", printed(&stamp));
+    assert_eq!(
+        fs::read_to_string(&log).unwrap().lines().count(),
+        1,
+        "the stamp's land ran the check: {}",
+        printed(&stamp)
+    );
+    assert_eq!(repo.origin_main(), crate::landed(&stamp));
+}
