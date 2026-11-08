@@ -15,6 +15,8 @@ status: accepted
 
 **Why a fixed cap of three.** No project has asked to tune it (`yagni`). Three keeps a burst of spec lands moving while a waiting build lands within a few short checks.
 
+**Why our own queue** (`reuse-first`). No standard tool offers an ordered lock between processes. `flock(2)` and `fcntl` locks, and Rust's `File::lock`, which the clone's locks already use, promise no order among waiters. The lock crates (`fs4`, `fd-lock`, `file-lock`, `named-lock`) wrap those same calls and promise none either. POSIX named semaphores and System V semaphores have no stated order and outlive a killed holder unless it cleans up. The queue keeps the platform's lock for exclusion and adds only the ordering: a counter, ticket files and polling, a few dozen lines in `lock.rs`.
+
 **Alternatives.**
 - *Tickets judged live by process ID.* Rejected: IDs are reused, and a check of another process's liveness differs by platform.
 - *One queue for both locks.* Rejected: `--check-only` and `verify` take only the check lock, and a land takes the land lock first, so each lock needs its own order.

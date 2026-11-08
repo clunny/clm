@@ -20,7 +20,7 @@ Runs waiting for a clone's land lock or check lock take their turns in the order
 
 ## Outcome
 
-`land` gains `lock-queue`. `check-lock` now points its waiting line and its waiting order at `lock-queue`. The Contract names the queues among what a land keeps in `.clm/`, and states the order. The Design adds **The queue** (tickets, turns, lanes, the cap and liveness) and updates the two waiting lines. `verify` runs `[verify] check` through `land`'s shared runner, so it waits in the queue with an ordinary ticket and needs no change of its own.
+`land` gains `lock-queue`. `check-lock` and `shared-check-runner` now point its waiting line and its waiting order at `lock-queue`. The Contract names the queues among what a land keeps in `.clm/`, and states the order. The Design adds **The queue** (tickets, turns, lanes, the cap and liveness) and updates the two waiting lines. `shared-check-runner` takes the lane as a parameter and prints its waiting line as `lock-queue` says. `verify` runs `[verify] check` through that runner, so it waits in the queue with an ordinary ticket. Its call site gains the `ordinary` lane argument, a forced fix the build of `shared-check-runner` makes and names in its pull request (`forced-fixes-cover-additions`), since no behaviour of `verify` changes.
 
 ## Constraints
 
