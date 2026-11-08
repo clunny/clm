@@ -13,6 +13,7 @@ mod lock;
 mod reconnect;
 mod runner;
 mod scratch;
+mod time_report;
 mod verify_stop;
 
 use std::fmt;
@@ -344,6 +345,32 @@ impl<'a> Repo<'a> {
             eprintln!("clm affected failed: {why}; the check runs every test");
             Selected::Failed
         })
+    }
+
+    /// Why the change selects `path`, as `clm affected --why <path> --base <base>` prints it in
+    /// `dir`, run as `selection` runs `clm affected`; the reason when it fails
+    /// (`land/check-time-report`).
+    fn why(&self, exe: &Path, dir: &Path, base: &str, path: &str) -> Result<Vec<String>, String> {
+        let out = self
+            .command(
+                exe,
+                "CLM_AFFECTED",
+                "affected",
+                &["--why", path, "--base", base],
+                dir,
+            )
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let first = stderr.lines().map(str::trim).find(|l| !l.is_empty());
+            return Err(first.map_or_else(|| out.status.to_string(), str::to_string));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect())
     }
 
     /// The command `var` names, split on whitespace, else `exe`'s `sub`; with `args`, run in

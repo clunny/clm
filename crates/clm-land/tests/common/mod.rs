@@ -23,7 +23,10 @@ if [ -e "$DIR/affected-fails" ]; then
   printf '\n   \n  no graph here  \nmore\n' >&2
   exit 1
 fi
-if [[ " $* " == *" --readers "* ]]; then
+if [[ " $* " == *" --why "* ]]; then
+  if [ -e "$DIR/why-fails" ]; then echo "no chain here" >&2; exit 1; fi
+  if [ -e "$DIR/why-out" ]; then cat "$DIR/why-out"; fi
+elif [[ " $* " == *" --readers "* ]]; then
   if [ -e "$DIR/readers-out" ]; then cat "$DIR/readers-out"; fi
 elif [ -e "$DIR/affected-out" ]; then cat "$DIR/affected-out"; fi
 "#;

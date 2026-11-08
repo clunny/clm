@@ -347,6 +347,23 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 },
             )?);
         }
+        // A check over its target explains where the time went, while the merged checkout and
+        // the lock are held (`land/check-time-report`).
+        let target_seconds = repo
+            .settings
+            .land
+            .value
+            .as_ref()
+            .map(|l| l.target_seconds());
+        let slow = match (&timing, target_seconds) {
+            (Some(t), Some(target)) if t.seconds > target => {
+                Some(crate::time_report::slowest(&t.steps, |path| {
+                    repo.why(exe, dir.path(), &base, path)
+                }))
+            }
+            _ => None,
+        };
+        let timed = timing.as_ref().map(|t| (t.seconds, t.steps.clone()));
         if checked {
             repo.clm_check(exe, dir.path(), false, ON_MERGE)?;
             // The tree's own key is checked now, so the `landed` record names a checked key
@@ -428,6 +445,12 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             ));
         }
         cleanup(&repo, &branch, &head, on_origin, &mut out.warnings);
+        if let (Some((seconds, steps)), Some(target)) = (&timed, target_seconds) {
+            let past = fold.timed_lands(crate::time_report::LANDS);
+            let over = slow.as_deref().map(|s| (s, steps.as_slice()));
+            out.warnings
+                .extend(crate::time_report::lines(*seconds, target, over, &past));
+        }
 
         // 9. What landed.
         out.lines.push(match verdict {

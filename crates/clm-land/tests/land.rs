@@ -935,6 +935,7 @@ fn branch_warnings(out: &clm_land::Output) -> Vec<&String> {
             !w.starts_with("effort: ")
                 && !w.starts_with("effort not recorded: ")
                 && !w.starts_with("land priority not worked out")
+                && !w.starts_with("check ")
         })
         .collect()
 }
