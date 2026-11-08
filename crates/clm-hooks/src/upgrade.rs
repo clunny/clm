@@ -60,7 +60,7 @@ mod tests {
             id,
             level,
             done: |_| false,
-            kind: Kind::Apply(|_: &Path| Ok(())),
+            kind: Kind::Apply(|_: &Path| Ok(()), ""),
         }
     }
 

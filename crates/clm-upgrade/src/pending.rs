@@ -47,7 +47,7 @@ pub(crate) fn pending_in<'a>(
         .filter(|(i, m)| {
             !(m.done)(root)
                 && match m.kind {
-                    Kind::Apply(_) => *i >= stamped.unwrap_or(0),
+                    Kind::Apply(..) => *i >= stamped.unwrap_or(0),
                     Kind::Note(_) => !declined.iter().any(|d| d == m.id),
                 }
         })

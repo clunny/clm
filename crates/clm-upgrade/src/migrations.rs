@@ -10,6 +10,10 @@ mod check_script_from_root;
 mod claude_md_names_help;
 #[path = "migrations/20261105-clm-upgrade/mod.rs"]
 mod constraints_copy;
+#[path = "migrations/20261107-slow-tests-after-land/mod.rs"]
+mod offer_verify;
+#[path = "migrations/20261107-projects-upgrading-past-the/mod.rs"]
+mod tests_overlap;
 #[path = "migrations/20261107-projects-set-up-before/mod.rs"]
 mod unattended_allow_rules;
 
@@ -19,4 +23,6 @@ pub(crate) static LIST: &[Migration] = &[
     claude_md_names_help::MIGRATION,
     check_script_from_root::MIGRATION,
     unattended_allow_rules::MIGRATION,
+    offer_verify::MIGRATION,
+    tests_overlap::MIGRATION,
 ];
