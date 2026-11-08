@@ -163,6 +163,27 @@ fn a_commit_during_the_check() {
 }
 
 #[test]
+fn a_file_made_by_the_check_is_an_uncommitted_change() {
+    // req:land/check-only@938e24c2
+    let f = Fixture::new("");
+    let makes = f.path("bin/makes");
+    write_exec(&makes, "#!/bin/sh\necho x > made.txt\n");
+    let toml = format!("[land]\ncheck = \"{}\"\n", makes.display());
+    f.commit_files(&[("clm.toml", &toml)], "makes");
+    f.git(&f.work(), &["push", "-q", "origin", "main"]);
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    let lines = lines(&f);
+    assert_eq!(
+        lines,
+        [
+            "not recorded: the working tree has uncommitted changes",
+            "checks pass"
+        ]
+    );
+    assert!(f.checked().is_empty());
+}
+
+#[test]
 fn check_command_fails() {
     // req:land/check-only@938e24c2
     let f = Fixture::new("");
