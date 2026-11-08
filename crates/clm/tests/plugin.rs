@@ -5772,3 +5772,82 @@ fn builder_check_asks_capability_tests() {
     let gaps = capability_test_gaps(&step.replace("capability-tests-follow-rules", "elided"));
     assert_reports(&gaps, "propose", "capability-tests-follow-rules");
 }
+
+fn skill_text(name: &str) -> String {
+    fs::read_to_string(plugin().join("skills").join(name).join("SKILL.md")).unwrap()
+}
+
+/// One gap per needle the text lacks.
+fn lacks(skill: &str, body: &str, needles: &[&str]) -> Vec<String> {
+    needles
+        .iter()
+        .filter(|n| !body.contains(*n))
+        .map(|n| format!("{skill}: must name {n}"))
+        .collect()
+}
+
+const INIT_VERIFY: &[&str] = &[
+    "[verify]",
+    "local",
+    "pipeline",
+    "import",
+    "change-done",
+    "work-done",
+    "ci-and-deployment",
+    "verify-after-land",
+];
+
+#[test]
+fn init_skill_asks_verify() {
+    // req:plugin/init-skill-asks-verify@e80fbfc7
+    let body = skill_text("init");
+    assert_eq!(lacks("init", &body, INIT_VERIFY), Vec::<String>::new());
+    for needle in INIT_VERIFY {
+        let gaps = lacks("init", &body.replace(needle, "elided"), INIT_VERIFY);
+        assert!(!gaps.is_empty(), "{needle}");
+    }
+}
+
+#[test]
+fn skills_run_verify() {
+    // req:plugin/skills-run-verify@b8bb7c23
+    let run = "clm verify --due --event work-done";
+    let build = skill_text("build");
+    let triage = skill_text("triage");
+    assert_eq!(lacks("build", &build, &[run]), Vec::<String>::new());
+    let triage_needles = [
+        run,
+        "clm verify --import",
+        "verify <sha> new",
+        "verify_failures",
+        "verify-after-land",
+        "git rev-parse <sha>",
+        "verify failed",
+    ];
+    assert_eq!(
+        lacks("triage", &triage, &triage_needles),
+        Vec::<String>::new()
+    );
+    // Verify comes before the last wrap-up, in both.
+    for (name, body) in [("build", &build), ("triage", &triage)] {
+        let at = body.find(run).unwrap();
+        let wrap = body.rfind("`clm wrap-up`").unwrap();
+        assert!(at < wrap, "{name}: verify must precede the last wrap-up");
+    }
+    assert!(triage.find("clm verify --import").unwrap() < triage.find("`clm intake`").unwrap());
+    let gaps = lacks(
+        "triage",
+        &triage.replace("verify_failures", "x"),
+        &triage_needles,
+    );
+    assert_eq!(gaps, vec!["triage: must name verify_failures".to_string()]);
+}
+
+#[test]
+fn upgrade_skill_offers_verify() {
+    // req:plugin/upgrade-skill-offers-verify@4e293808
+    let body = skill_text("upgrade");
+    let needles = ["[verify]", "Slow tests can run after the land"];
+    assert_eq!(lacks("upgrade", &body, &needles), Vec::<String>::new());
+    assert!(!lacks("upgrade", &body.replace("[verify]", "x"), &needles).is_empty());
+}
