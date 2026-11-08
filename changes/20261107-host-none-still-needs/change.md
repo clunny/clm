@@ -22,18 +22,26 @@ Make the whole propose, build and land loop run in a repository with `host = "no
 ## Outcome
 
 - `host/none-keeps-a-remote`: `clm-host`'s `keep_remote(root, host)` creates the bare repository and the `origin` remote when `host` is `none` and the clone has no `origin`, and pushes nothing.
-- `clm/none-remote-before-commands`: `clm` calls it before every command but `--version`, `help`, `guide` and `hook`, and when it created the remote and the clone has a `main`, runs `clm reconnect`'s push of `main` and the ledgers, so `main` still moves only through `land` (`land-locally`).
+- `clm/none-remote-before-commands`: `clm` calls it before every command but `--version`, `help`, `guide` and `hook`, after the upgrade check; when it created the remote and the clone has a `main`, it says to run `clm reconnect`, and pushes nothing itself, so `main` moves only through `clm land` and `clm reconnect` (`land-locally`, `guard-blocks-push-to-main`). It warns when `host = "none"` has an `origin` other than the clone's own, naming `host = "git"`.
 - `init/init-keeps-a-remote`: `clm init` calls it after writing a `clm.toml` with `host = "none"`, so the bootstrap commit's push (`init-next-steps`) has an `origin`.
 - `land/offline-land`: `clm land` lands through `origin` on every host; `(local)` lands go. `clm reconnect` stays, for moving onto a newly set remote, and now prunes stale remote-tracking refs when it fetches. `land/selected-tests` loses its no-remote parenthetical, and `land`'s Contract and Design their offline wording.
 - `land.approval/approval-from-base` and `signed-land`: the base is always the fetched `origin/main`; the `no remote` scenario goes.
-- `ledger/append`: pushes on every host, `none` included.
+- `ledger/append` and `ledger`'s Design: `append` pushes and `compact` fetches on every host, `none` included.
+- The remaining `host = "none"` wording goes: `land`'s step 7 and `land/land-push-retry` (the unpushed-record warning now holds on every host), `land.approval`'s Held paragraph, `sync`'s Design (the fold), and the `host` Contract's opening.
 - `ARCHITECTURE.md`'s `host-adapters` scenario covers building as well as proposing and landing, and names `host/none-keeps-a-remote` among its enforcers; `docs/guide/settings.md` and the glossary say what `none` now does.
 
 ## Constraints and edge cases
 
-- **A `host = "none"` repository with a real `origin`** (a person who chose `none` to avoid pull requests): its lands now push `main` to that `origin`, where today they stay local. `no-local-land-with-remote` already reads `none` as "no remote"; such a repository should say `git`. Accepted.
+- **A `host = "none"` repository with a real `origin`** (a person who chose `none` to avoid pull requests): its lands now push `main` to that `origin`, where today they stay local. `no-local-land-with-remote` already reads `none` as "no remote"; such a repository should say `git`, and every `clm` command warns so (`clm/none-remote-before-commands`) rather than a migration, since a migration writes only files and the case is a clone's remote, not a file (`upgrades-carry-migrations`).
 - **Moving the repository directory** leaves `origin`'s absolute path pointing at the old place, and every fetch fails until `git remote set-url origin <new path>`. Git resolves a relative local path against the directory a command runs in, which differs per worktree, so the path must be absolute. Accepted; the settings guide says so.
 - **Moving to a real remote**: `git remote set-url origin <url>`, set `host`, then `clm reconnect`, which pushes `main` and the ledgers. Claim and spec branches in flight stay on the old private remote and reach the new one with their next `clm branch push`.
 - **Disk**: the private remote holds a second copy of what is pushed to it. Accepted: the same as any remote on the same disk, and bounded by the repository's size.
-- **Repositories with lands made locally by an older `clm`**: their local `main` and ledgers are pushed by the reconnect that follows the remote's creation, so their history is kept.
+- **Repositories with lands made locally by an older `clm`**: the first command creates the remote and says to run `clm reconnect`, which pushes their `main` and ledgers, so their history is kept. Until then `clm rebase` and `clm next` fail on the missing `origin/main`, as on any host before its first push.
 - **`clm init` in a repository with no commit**: the remote is created empty, and the human's push of the bootstrap commit (`init-next-steps`) gives it `main`, as on any host.
+
+## Open questions
+
+- **The approach.** The item proposed the clone being its own remote (local refs, `git update-ref` claims). This change instead gives the clone a private bare remote; the human may prefer the item's design. See `## Approaches`.
+- **`plugin/skills/init/SKILL.md`** steps 5 and 6 still branch on "with no `origin`", which `clm init` no longer leaves; `crates/clm/tests/plugin.rs` asserts that sentence. Harmless dead wording, left for a later edit rather than adding a plugin requirement here.
+- **`land/reconnect-names-rebase`**'s scenario describes a `main` landed locally while offline, which only an older `clm` can now produce; its build builds that state by hand. Left as written.
+

@@ -11,3 +11,5 @@ Everything host-specific is one adapter, the `host` node, picked by the `host` s
 `git-is-truth` loses its "and GitHub" carve-out: no check, gate or approval reads anything but git. `web` keeps its GitHub App because that is how it signs people in and reads a repository it doesn't have on disk, and it reads the same ledgers everyone else does.
 
 Rejected: an abstraction over hosted CI (the point is not to need one) and keeping labels as a mirror of the ledger on GitHub (two sources of the same fact, one of which someone will read).
+
+Refined by `none-keeps-its-own-remote` (2026-11-07): with `host = "none"` the clone keeps a remote of its own, so `clm land` no longer lands on the local `main` alone.
