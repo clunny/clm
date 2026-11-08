@@ -75,7 +75,7 @@ impl std::error::Error for Error {
 /// Runs `program` (`git`, `gh`, found on `PATH`) in `root` and returns its stdout
 /// untrimmed, waiting however long it takes.
 pub fn run(root: &Path, program: &str, args: &[&str], options: Options) -> Result<Vec<u8>, Error> {
-    run_bounded(root, program, args, options, None)
+    run_bounded(root, program, args, options, None, &[])
 }
 
 /// As [`run`], but a command still running once `limit` has passed is killed, reaped and
@@ -87,7 +87,7 @@ pub fn run_within(
     options: Options,
     limit: Duration,
 ) -> Result<Vec<u8>, Error> {
-    run_bounded(root, program, args, options, Some(limit))
+    run_bounded(root, program, args, options, Some(limit), &[])
 }
 
 fn run_bounded(
@@ -96,6 +96,7 @@ fn run_bounded(
     args: &[&str],
     options: Options,
     limit: Option<Duration>,
+    unset: &[String],
 ) -> Result<Vec<u8>, Error> {
     let command = std::iter::once(program)
         .chain(args.iter().copied())
@@ -109,10 +110,15 @@ fn run_bounded(
         command: command.clone(),
         source,
     };
-    let mut child = Command::new(program)
+    let mut process = Command::new(program);
+    process
         .args(args)
         .current_dir(root)
-        .envs(options.env.iter().copied())
+        .envs(options.env.iter().copied());
+    for name in unset {
+        process.env_remove(name);
+    }
+    let mut child = process
         .stdin(if options.stdin.is_some() {
             Stdio::piped()
         } else {
@@ -205,6 +211,14 @@ fn drain(pipe: Option<impl Read + Send + 'static>) -> Reader {
 /// `git <args>` in `root`, its stdout with trailing whitespace trimmed.
 pub fn git(root: &Path, args: &[&str]) -> Result<String, Error> {
     run(root, "git", args, Options::default()).map(trimmed)
+}
+
+/// `git <args>` in `dir` as though the environment named no repository: every variable
+/// `git rev-parse --local-env-vars` lists is removed from the command's environment.
+pub fn git_isolated(dir: &Path, args: &[&str]) -> Result<String, Error> {
+    let listed = git(dir, &["rev-parse", "--local-env-vars"])?;
+    let unset: Vec<String> = listed.split_whitespace().map(str::to_string).collect();
+    run_bounded(dir, "git", args, Options::default(), None, &unset).map(trimmed)
 }
 
 /// The clone's common git directory, absolute: the main checkout's `.git` from any worktree.
