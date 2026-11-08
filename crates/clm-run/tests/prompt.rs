@@ -918,6 +918,13 @@ fn scenario_prompt_slot() {
             "tests-run-concurrently",
             "fixed port",
             "`bug` backlog item",
+            "a spot-check's runs of a mutant included",
+            "sets `CLM_SLOT` itself",
+            "no fixed path outside its checkout and the system's temporary directory",
+            "starts no server another run could share",
+            "keyed on `CLM_SLOT`",
+            "don't retry it",
+            "when the fix lies outside your component",
         ] {
             assert!(p.contains(needle), "{needle} missing from {p}");
         }
