@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [capability-build-not-held-by-a-behind-serving-rule]
 ---
 
