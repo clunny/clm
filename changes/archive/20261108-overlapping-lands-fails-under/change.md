@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - overlapping-lands-fails-under-the-full-suite-s-load-but-passes
 ---
