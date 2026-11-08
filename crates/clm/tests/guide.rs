@@ -1,5 +1,7 @@
 //! `clm guide`: the guide compiled into the binary, readable outside any repository.
 // clm:reads ARCHITECTURE.md
+// clm:reads docs/guide/**
+// clm:reads docs/spec-format.md
 
 use std::path::Path;
 use std::process::{Command, Output};

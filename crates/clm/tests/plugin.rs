@@ -1,4 +1,7 @@
 //! The plugin under `plugin/`: its package, hooks, skills, agent and `bin/clm` shim.
+// clm:reads docs/guide/**
+// clm:reads CLAUDE.md
+// clm:reads README.md
 
 use std::fs;
 use std::path::{Path, PathBuf};

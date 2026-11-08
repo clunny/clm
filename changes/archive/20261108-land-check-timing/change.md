@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/slow-land-checks-go-unnoticed
 ---
 

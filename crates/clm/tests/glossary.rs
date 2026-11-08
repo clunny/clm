@@ -1,5 +1,6 @@
 //! The guide's glossary defines every term CLM's commands and files use
 //! (clm/glossary-covers-terms).
+// clm:reads docs/guide/glossary.md
 
 use std::collections::BTreeSet;
 use std::fs;
