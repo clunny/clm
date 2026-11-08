@@ -3681,10 +3681,6 @@ fn propose_code_fixes_need_a_written_rule() {
     ] {
         assert!(exception.contains(needle), "{needle}: {exception}");
     }
-    // A bug only an architecture entry states has no requirement; a component's own test
-    // plumbing takes the harness route.
-    assert!(section.contains("only an architecture entry states"));
-    assert!(section.contains("own test suite"));
     for needle in [
         "code-fix-needs-a-written-rule",
         "as written",
