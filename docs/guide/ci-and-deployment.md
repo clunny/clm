@@ -44,6 +44,17 @@ Tests too slow for every land have three places to go:
 - **after the land, with `clm verify`**: set `[verify]` in `clm.toml` and take the tests out of `[land] check`. Lands then wait only for the fast checks;
 - **before a release**: a release or deploy step runs `clm verify --commit <sha>`, which passes at once when that commit already passed, and otherwise runs or reads the slow tests for it.
 
+### When a land runs over its target
+
+`[land] check_target_seconds` (default 120) is how long a land's check should take. To see where the time goes, the check marks its steps with `::group::<name>` and `::endgroup::` lines, and inside a step it prints `::clm-selected::<path>` for each selected file that made it run that step. `clm land` times each step and records the times in the ledger. A land over the target prints its three costliest steps, each with the chain that selected it (the same chain `clm affected --why <path>` prints: the file, the component that owns or cites it, the `depends_on` path, the changed file), and how many of the last 20 timed lands also went over. `clm health`'s `land-time` signal shows the trend over the last 50.
+
+Nothing is filed and nothing is decided for you. Read it like this:
+
+- **one land over the target**, from a large shared change or a machine busy with other builds, needs nothing;
+- **a step reached through a long chain**, or through a rule of the check script's rather than the graph, such as a suite that always runs after another one, means the selection reaches too far. Fix the selection: a `depends_on` edge that shouldn't be there, a component whose `paths` take in files its dependents' changes can't break, or the script's mapping from files to suites;
+- **a step that costs the time however it's reached** belongs after the land: move it to `[verify]`;
+- **when lands keep going over** and you judge it needs work, file a backlog item naming the steps and their chains, so the fix gets designed rather than lost.
+
 ### When they run
 
 `clm verify --due` runs them only when one of the project's triggers has fired since the last verified commit of `main`, and otherwise exits in seconds:
