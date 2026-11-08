@@ -314,6 +314,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             }
             _ => dir,
         };
+        let mut timing = None;
         if runs && let (Some(check), Some((target, shared))) = (&check, &target) {
             let mut vars: Vec<(&str, &Path)> = selection
                 .iter()
@@ -333,7 +334,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             // paths apart from other builds' (`land/check-slot`); a land always takes the
             // check lock (`land/check-lock`).
             let slot = repo.slot(&branch)?;
-            repo.project_check(
+            timing = Some(repo.project_check(
                 dir.path(),
                 check,
                 Some(target),
@@ -344,7 +345,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                     slot,
                     rank: Some(check_rank),
                 },
-            )?;
+            )?);
         }
         if checked {
             repo.clm_check(exe, dir.path(), false, ON_MERGE)?;
@@ -382,8 +383,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fingerprint,
             code_key: Some(key),
             changes: changes.clone(),
-            check_seconds: None,
-            steps: vec![],
+            check_seconds: timing.as_ref().map(|t| t.seconds),
+            steps: timing.map(|t| t.steps).unwrap_or_default(),
         };
         // Signed before the push, so a land that can't sign pushes nothing; the pushes of
         // this merge commit share the record.

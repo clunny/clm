@@ -29,6 +29,10 @@ pub struct CheckRun {
     pub logged: bool,
     /// The step open as its output ended, if any.
     pub step: Option<Step>,
+    /// The command's wall-clock seconds, rounded down (`land/step-times`).
+    pub seconds: u64,
+    /// The steps it marked, in order, with their seconds and selecting paths.
+    pub steps: Vec<clm_ledger::TimedStep>,
 }
 
 /// Runs `command` through `sh -c` in `dir`, under the check lock of the clone `dir` belongs
@@ -93,6 +97,8 @@ pub(crate) fn run_in(
         tail: logged.tail,
         logged: logged.logged,
         step: logged.step,
+        seconds: logged.seconds,
+        steps: logged.steps,
     })
 }
 
