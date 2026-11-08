@@ -15,7 +15,10 @@ export default function setup(): () => void {
   run(join(root, 'web'), 'npm', 'run', 'build')
 
   // The site is no part of `web`'s build (`web/app-at-app-path`): build it here, and the harness
-  // serves it at `/` beside the app, as the zone does.
+  // serves it at `/` beside the app, as the zone does. The site is built from this repository's
+  // guide, so an edit to it selects these tests (`doc-readers-marked`):
+  // clm:reads docs/guide/**
+  // clm:reads docs/spec-format.md
   const site = mkdtempSync(join(tmpdir(), 'clm-web-capability-site-'))
   run(join(root, 'web', 'site'), 'npm', 'ci', '--ignore-scripts')
   execFileSync('npm', ['run', 'build'], { cwd: join(root, 'web', 'site'), stdio: 'inherit', env: { ...process.env, SITE_OUT: site } })
