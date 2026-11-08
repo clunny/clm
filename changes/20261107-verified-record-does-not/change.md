@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [verified-record-does-not-say-commit-ids-are-lowercase]
 ---
 
