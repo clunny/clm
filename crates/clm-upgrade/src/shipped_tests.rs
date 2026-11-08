@@ -221,6 +221,21 @@ fn a_project_lacking_only_the_newest_rules_keeps_its_settings() {
 
 // req:upgrade/migration-unattended-allow-rules@49231d4a
 #[test]
+fn each_subcommand_needs_both_its_bare_and_its_argument_rule() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    for keep in [
+        |r: &String| !r.ends_with(" *)"),
+        |r: &String| r.ends_with(" *)"),
+        |r: &String| !r.contains("verify"),
+    ] {
+        let rules: Vec<String> = all_rules().into_iter().filter(keep).collect();
+        write_settings(dir.path(), "settings.json", &rules);
+        assert!(list(dir.path()).unwrap().contains(RULES_ID));
+    }
+}
+
+// req:upgrade/migration-unattended-allow-rules@49231d4a
+#[test]
 fn the_rules_may_be_split_across_the_two_settings_files() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     let (land, rest): (Vec<_>, Vec<_>) =
