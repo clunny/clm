@@ -27,15 +27,11 @@ pub(crate) fn check(
 ) -> Result<Probe, Error> {
     let tree = tree::Tree::at(ctx, commit)?;
     let selection = green.and_then(|green| selection(ctx, &tree.dir, green));
-    let env = clm_land::CheckEnv {
-        set: Vec::new(),
-        unset: vec!["CI".to_string()],
-    };
     let run = clm_land::run_check(
         &ctx.verify.check,
         &tree.dir,
         selection.as_ref().map(|s| s.path.as_path()),
-        &env,
+        &clm_land::CheckEnv::default(),
         log,
     )?;
     Ok(Probe {

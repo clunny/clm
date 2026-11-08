@@ -42,7 +42,9 @@ else
   echo unset >> "$DIR/check-selection.log"
 fi
 echo "start" >> "$DIR/check-order.log"
+echo "start $(git rev-parse HEAD)" >> "$DIR/check-trees.log"
 if [ -e "$DIR/sleep" ]; then sleep "$(cat "$DIR/sleep")"; fi
+echo "end $(git rev-parse HEAD)" >> "$DIR/check-trees.log"
 echo "end" >> "$DIR/check-order.log"
 if [ -e "$DIR/fail-path" ] && [ -e "$(cat "$DIR/fail-path")" ]; then exit 1; fi
 [ ! -e "$DIR/check-fails" ]

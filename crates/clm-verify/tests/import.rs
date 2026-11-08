@@ -211,6 +211,18 @@ fn a_run_on_an_already_verified_commit_is_no_result() {
 }
 
 #[test]
+fn a_run_not_completed_is_no_result_whatever_it_says() {
+    // req:verify/verify-import@dd2aac1d
+    let f = Fixture::new(Some(IMPORT));
+    let l = f.land(&[("crates/a/x.rs", "1\n")], "l");
+    let out = with_gh(&f, &[run(&l, "in_progress", "success", 7)], || {
+        import(&f, &Request::Import)
+    });
+    assert_eq!(out.line, format!("verify pending {}", &l[..7]));
+    assert!(f.records().is_empty());
+}
+
+#[test]
 fn nothing_to_import_elsewhere() {
     // req:verify/verify-import@dd2aac1d
     let f = Fixture::new(Some(

@@ -146,6 +146,41 @@ fn a_land_waits_for_the_slow_check() {
 }
 
 #[test]
+fn two_runs_never_move_the_tree_under_each_other() {
+    // req:verify/verify-run@005554c5
+    let f = every_land();
+    let old = f.land(&[("a.txt", "1\n")], "old");
+    let new = f.land(&[("a.txt", "2\n")], "new");
+    f.write("sleep", "1");
+    std::thread::scope(|s| {
+        let one = s.spawn(|| f.run(&clm_verify::Request::Commit(old.clone())));
+        let two = s.spawn(|| f.run(&clm_verify::Request::Commit(new.clone())));
+        assert_eq!(one.join().unwrap().code, 0);
+        assert_eq!(two.join().unwrap().code, 0);
+    });
+    // Each run's tree is the same at its end as at its start.
+    let trees = f.lines("check-trees.log");
+    assert_eq!(trees.len(), 4, "{trees:?}");
+    for pair in trees.chunks(2) {
+        let start = pair[0].strip_prefix("start ").expect("start");
+        assert_eq!(pair[1], format!("end {start}"), "{trees:?}");
+    }
+}
+
+#[test]
+fn a_selection_that_cannot_be_made_runs_every_test() {
+    // req:verify/verify-run@005554c5
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    // A spec that doesn't load: `clm affected` fails, and the check runs without a selection.
+    f.land(&[("specs/b/SPEC.md", "not a spec\n")], "break b");
+    let out = f.due();
+    assert_eq!(out.code, 0, "{}", out.line);
+    assert_eq!(f.lines("check-selection.log"), ["unset"]);
+}
+
+#[test]
 fn one_at_a_time() {
     // req:verify/verify-run@005554c5
     let f = every_land();
