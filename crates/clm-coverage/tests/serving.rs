@@ -215,6 +215,8 @@ fn changed_serving_rule_released() {
     markers.push(current(&g, "b/z", "tests/t.rs", 9));
     let list = pending(&g, &markers);
     let v = g.requirement("capability/c").unwrap().version();
-    let c = list.iter().find(|p| p.id == "capability/c").unwrap();
-    assert_eq!(c.to_string(), format!("capability/c {v} behind 00000000"));
+    assert_eq!(
+        line(&list, "capability/c"),
+        format!("capability/c {v} behind 00000000")
+    );
 }
