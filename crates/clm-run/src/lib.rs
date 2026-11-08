@@ -13,7 +13,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clm_check::{Pending, State as ReqState};
-use clm_git::git;
+use clm_git::{git, git_isolated};
 use clm_model::{Files, Graph};
 pub use clm_orchestrator::Error;
 use clm_orchestrator::{
@@ -1195,7 +1195,7 @@ fn superpowers_dir() -> Result<PathBuf, Error> {
         ],
         &["checkout", "-q", "FETCH_HEAD"],
     ] {
-        git(&repo, args)?;
+        git_isolated(&repo, args)?;
     }
     if fs::rename(&repo, &dir).is_err() && !dir.is_dir() {
         return Err(Error::Refused(format!(

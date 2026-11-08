@@ -49,7 +49,7 @@ fn stderr(o: &Output) -> String {
 
 #[test]
 fn pinned_copy() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let (cache, skill) = pinned_cache();
     // No git on PATH: any attempt to fetch would fail.
     let empty = TempDir::new().unwrap();
@@ -66,7 +66,7 @@ fn pinned_copy() {
 
 #[test]
 fn override_dir() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let dir = TempDir::new().unwrap();
     let skill = with_skill(dir.path());
     let o = clm_superpowers(
@@ -79,7 +79,7 @@ fn override_dir() {
 
 #[test]
 fn relative_override_prints_an_absolute_path() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let dir = TempDir::new().unwrap();
     let skill = with_skill(&dir.path().canonicalize().unwrap().join("sp"));
     let o = Command::new(env!("CARGO_BIN_EXE_clm"))
@@ -94,7 +94,7 @@ fn relative_override_prints_an_absolute_path() {
 
 #[test]
 fn empty_override_counts_as_unset() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let (cache, skill) = pinned_cache();
     let o = clm_superpowers(
         "brainstorming",
@@ -109,7 +109,7 @@ fn empty_override_counts_as_unset() {
 
 #[test]
 fn unknown_skill() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let dir = TempDir::new().unwrap();
     with_skill(dir.path());
     // Only the name check keeps `skills/brainstorming` and `../brainstorming` from
@@ -134,7 +134,7 @@ fn unknown_skill() {
 
 #[test]
 fn skill_dir_without_skill_md() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join("skills/brainstorming")).unwrap();
     let o = clm_superpowers(
@@ -148,7 +148,7 @@ fn skill_dir_without_skill_md() {
 
 #[test]
 fn bad_name_is_refused_before_fetching() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let cache = TempDir::new().unwrap();
     let o = clm_superpowers(
         "../brainstorming",
@@ -163,7 +163,7 @@ fn bad_name_is_refused_before_fetching() {
 
 #[test]
 fn symlinked_cache_prints_the_path_run_loads() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let (cache, _) = pinned_cache();
     let links = TempDir::new().unwrap();
     let link = links.path().join("cache");
@@ -184,7 +184,7 @@ fn symlinked_cache_prints_the_path_run_loads() {
 
 #[test]
 fn fetch_fails() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let cache = TempDir::new().unwrap();
     // Git refuses the https fetch, so this needs no network.
     let o = clm_superpowers(
@@ -208,7 +208,7 @@ fn fetch_fails() {
 
 #[test]
 fn no_reserved_words() {
-    // req:orchestrator.run/superpowers-path@24230501
+    // req:orchestrator.run/superpowers-path@411708d0
     let dir = TempDir::new().unwrap();
     with_skill(dir.path());
     // `claude` and `git` that leave a mark when they run, and nothing else on `PATH`.
@@ -242,4 +242,69 @@ fn no_reserved_words() {
     assert!(stderr(&o).contains("unexpected argument"), "{}", stderr(&o));
     assert_eq!(stdout(&o), "");
     assert!(!ran.exists(), "{}", fs::read_to_string(&ran).unwrap());
+}
+
+/// Every file under `dir` with its bytes, keyed by relative path.
+fn snapshot(dir: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    fn walk(base: &Path, dir: &Path, out: &mut std::collections::BTreeMap<PathBuf, Vec<u8>>) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                walk(base, &path, out);
+            } else {
+                out.insert(
+                    path.strip_prefix(base).unwrap().to_path_buf(),
+                    fs::read(&path).unwrap(),
+                );
+            }
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(dir, dir, &mut out);
+    out
+}
+
+#[test]
+fn a_clone_the_environment_names_is_left_alone() {
+    // req:orchestrator.run/superpowers-path@411708d0
+    let cache = TempDir::new().unwrap();
+    let root = TempDir::new().unwrap();
+    let (w, g) = (root.path().join("w"), root.path().join("g"));
+    fs::create_dir(&w).unwrap();
+    let git = |args: &[&str]| {
+        let o = Command::new("git")
+            .args(args)
+            .current_dir(&w)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", stderr(&o));
+    };
+    git(&["init", "-q", "--separate-git-dir", g.to_str().unwrap()]);
+    fs::write(w.join("f"), "x").unwrap();
+    git(&["add", "f"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "-m",
+        "c",
+    ]);
+    let (before_g, before_w) = (snapshot(&g), snapshot(&w));
+    let o = clm_superpowers(
+        "brainstorming",
+        &[
+            ("XDG_CACHE_HOME", cache.path().as_os_str()),
+            ("GIT_ALLOW_PROTOCOL", "file".as_ref()),
+            ("GIT_DIR", g.as_os_str()),
+            ("GIT_WORK_TREE", w.as_os_str()),
+        ],
+    );
+    assert_eq!(o.status.code(), Some(2), "{}", stderr(&o));
+    assert_eq!(snapshot(&g), before_g);
+    assert_eq!(snapshot(&w), before_w);
 }
