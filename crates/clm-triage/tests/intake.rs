@@ -74,7 +74,7 @@ fn lines(r: &Repo, open: Vec<Listed>) -> Vec<String> {
 
 #[test]
 fn scenario_new_imported_and_a_pull_request() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -94,7 +94,7 @@ fn scenario_new_imported_and_a_pull_request() {
 
 #[test]
 fn imported_names_every_item_sorted() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     for slug in ["zeta", "alpha"] {
         write(
@@ -109,7 +109,7 @@ fn imported_names_every_item_sorted() {
 
 #[test]
 fn scenario_resolved_by_a_change() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -142,7 +142,7 @@ fn scenario_resolved_by_a_change() {
 
 #[test]
 fn resolved_by_a_live_change_naming_it_in_resolves_only() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -165,7 +165,7 @@ fn resolved_by_a_live_change_naming_it_in_resolves_only() {
 
 #[test]
 fn scenario_resolved_by_a_code_fix() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -184,7 +184,7 @@ fn scenario_resolved_by_a_code_fix() {
 
 #[test]
 fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     for (slug, text) in [
         ("old", "---\ntitle: T\nkind: bug\nissues: [9]\n---\n"),
@@ -203,7 +203,7 @@ fn most_recent_deletion_wins_and_unparsable_ones_are_skipped() {
 
 #[test]
 fn scenario_no_strangers_text() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     // `Listed` holds a number, a kind and a login: a stranger's title or body has nowhere
     // to go, and the lines are built from those fields alone.
@@ -213,7 +213,7 @@ fn scenario_no_strangers_text() {
 
 #[test]
 fn scenario_no_host() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     let out = lines(&r, vec![]);
     assert!(out.is_empty());
@@ -221,7 +221,7 @@ fn scenario_no_host() {
 
 #[test]
 fn a_failing_list_is_refused_with_its_reason() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     let fake = Fake {
         open: Err("gh: not logged in".into()),
@@ -235,7 +235,7 @@ fn a_failing_list_is_refused_with_its_reason() {
 
 #[test]
 fn git_failure_is_a_git_error() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let dir = TempDir::new().unwrap();
     assert!(matches!(
         intake(dir.path(), &host(vec![issue(1)])),
@@ -253,7 +253,7 @@ fn with_alerts(r: &Repo, open: Vec<Listed>, alerts: Result<Vec<Alert>, String>) 
 
 #[test]
 fn scenario_alerts_after_the_inbox() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -273,7 +273,7 @@ fn scenario_alerts_after_the_inbox() {
 
 #[test]
 fn scenario_alert_resolved_by_a_code_fix() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -292,7 +292,7 @@ fn scenario_alert_resolved_by_a_code_fix() {
 
 #[test]
 fn an_alert_resolved_by_a_change_names_that_change() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -315,7 +315,7 @@ fn an_alert_resolved_by_a_change_names_that_change() {
 
 #[test]
 fn issue_and_alert_numbers_never_match_each_others_items() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     write(
         &r.work,
@@ -354,7 +354,7 @@ fn issue_and_alert_numbers_never_match_each_others_items() {
 
 #[test]
 fn scenario_alerts_refused() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     assert_eq!(
         with_alerts(&r, vec![issue(92)], Err("gh: 403".into())),
@@ -364,7 +364,7 @@ fn scenario_alerts_refused() {
 
 #[test]
 fn alerts_without_issues_and_a_refusal_without_issues() {
-    // req:orchestrator.triage/intake@9f6e86d5
+    // req:orchestrator.triage/intake@5fda2cc9
     let r = repo();
     assert_eq!(
         with_alerts(&r, vec![], Ok(vec![alert(1)])),
