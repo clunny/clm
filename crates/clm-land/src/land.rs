@@ -382,6 +382,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fingerprint,
             code_key: Some(key),
             changes: changes.clone(),
+            check_seconds: None,
+            steps: vec![],
         };
         // Signed before the push, so a land that can't sign pushes nothing; the pushes of
         // this merge commit share the record.

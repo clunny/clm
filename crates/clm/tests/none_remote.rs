@@ -98,6 +98,8 @@ fn a_repository_set_up_before_gets_its_remote_and_reconnects() {
         fingerprint: "f".into(),
         code_key: None,
         changes: vec![],
+        check_seconds: None,
+        steps: vec![],
     };
     clm_ledger::append(&work, body, &|_| None).unwrap();
     assert_eq!(remotes(&work), "");

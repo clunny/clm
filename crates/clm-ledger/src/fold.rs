@@ -6,7 +6,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::{Body, LandKind, Record};
+use crate::{Body, LandKind, Record, TimedStep};
+
+/// A `landed` record that carries its check's times (`landed-times`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimedLand {
+    pub commit: String,
+    pub at: String,
+    pub check_seconds: u64,
+    pub steps: Vec<TimedStep>,
+}
 
 /// The state the ledgers say. Each index lists its records in `at` order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -57,6 +66,31 @@ impl Fold {
                 .iter()
                 .any(|a| person(&a.writer) == requester && a.at > request.at)
         })
+    }
+
+    /// The last `n` `landed` records that carry `check_seconds`, oldest first (`landed-times`).
+    pub fn timed_lands(&self, n: usize) -> Vec<TimedLand> {
+        let mut timed: Vec<TimedLand> = self
+            .records
+            .iter()
+            .filter_map(|r| match &r.body {
+                Body::Landed {
+                    commit,
+                    check_seconds: Some(check_seconds),
+                    steps,
+                    ..
+                } => Some(TimedLand {
+                    commit: commit.clone(),
+                    at: r.at.clone(),
+                    check_seconds: *check_seconds,
+                    steps: steps.clone(),
+                }),
+                _ => None,
+            })
+            .collect();
+        // `records` is in `at` order, so the last `n` are the tail.
+        timed.drain(..timed.len().saturating_sub(n));
+        timed
     }
 
     /// The red results nothing has since cleared (`ledger/verified-record`): given a
