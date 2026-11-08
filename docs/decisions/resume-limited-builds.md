@@ -1,7 +1,8 @@
 ---
 title: "A build cut off by a usage or rate limit is resumed, not rebuilt"
 date: 2026-10-31
-status: accepted
+status: superseded
+superseded_by: resume-sound-builds
 ---
 
 `builds-in-subagents` has `implement` treat a build subagent that ends without a closing line as a stop: run `clm run --finish <node>`, then build the node again with `clm run <node>` and a new subagent. That fits a build that gave up or ran out of context. It doesn't fit one that an API usage or rate limit cut off: there the build's claim, worktree and context are all intact, and nothing about the work went wrong. In one session every build ended at once on the limit; rebuilding them would have thrown six builds' context away and restarted each from its last push. The session instead resumed each subagent with `SendMessage` once the limit reset, and all six landed. One had to be told that its own review subagent, killed by the same limit, would never report back.
