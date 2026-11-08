@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [concurrent-spec-lands-starve-each-other-on-gate-up-to-date-for]
 ---
 
