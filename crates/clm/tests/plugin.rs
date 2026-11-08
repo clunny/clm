@@ -787,11 +787,12 @@ fn guide_gaps(name: &str, text: &str, pages: &[String]) -> Vec<String> {
     let mut gaps: Vec<String> = Vec::new();
     // The glossary is the one page a skill names by path (`propose-adds-glossary-terms`):
     // it is a spec path of this repository that a spec branch edits.
-    if text
-        .replace(GLOSSARY_PATH, "")
-        .replace(SETTINGS_PATH, "")
-        .contains("docs/guide/")
-    {
+    let own = if name.contains("propose") {
+        text.replace(GLOSSARY_PATH, "").replace(SETTINGS_PATH, "")
+    } else {
+        text.to_owned()
+    };
+    if own.contains("docs/guide/") {
         gaps.push(format!(
             "{name}: must not name docs/guide/; name `clm guide <page>`"
         ));
@@ -839,7 +840,8 @@ fn skills_point_at_the_guide() {
     );
     // propose names the pages it edits
     let both = format!("Edit `{GLOSSARY_PATH}` and `{SETTINGS_PATH}`.");
-    assert!(guide_gaps("x", &both, &pages).is_empty());
+    assert!(guide_gaps("skills/propose/SKILL.md", &both, &pages).is_empty());
+    assert_eq!(guide_gaps("skills/build/SKILL.md", &both, &pages).len(), 1);
     let gaps = guide_gaps("x", "Run `clm guide no-such-page`.", &pages);
     assert!(
         gaps.len() == 1 && gaps[0].contains("no-such-page"),
@@ -3006,7 +3008,7 @@ fn propose_nests_splits() {
         "whose `#### Needs` names the child's",
         "`## Edges the change removes`",
     ] {
-        assert!(body.contains(needle), "propose: {needle}");
+        assert!(sentence.contains(needle), "propose: {needle}: {sentence}");
     }
     assert!(sentence.contains("stand"), "{sentence}");
     let sentence = sentence_with(&body, "`survey/cycle`");
