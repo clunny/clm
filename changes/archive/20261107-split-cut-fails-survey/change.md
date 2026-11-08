@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [split-cut-fails-survey-on-an-edge-the-change-removes]
 ---
 
