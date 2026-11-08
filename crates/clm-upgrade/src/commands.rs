@@ -171,8 +171,9 @@ fn bracket_depth(line: &str) -> i32 {
 }
 
 /// `text` with the top-level `key = value` line replaced (with the lines of a multi-line array it
-/// began), or else added above the first table header's lead-in, or at the end when there is none. Every
-/// other line is left as it is.
+/// began), or else added above the first table header's lead-in (its directly preceding comment
+/// lines and the blank lines above them), or at the end when there is none. Every other line is
+/// left as it is.
 pub(crate) fn set_top_level(text: &str, key: &str, value: &str) -> String {
     let new_line = format!("{key} = {value}\n");
     let lines: Vec<&str> = text.split_inclusive('\n').collect();
