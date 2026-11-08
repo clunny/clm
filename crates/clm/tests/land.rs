@@ -323,7 +323,7 @@ fn checked_code_takes_no_lock() {
 
 #[test]
 fn check_only_checks_the_working_tree() {
-    // req:land/check-only@57b7e93c
+    // req:land/check-only@938e24c2
     let f = Fixture::new("");
     let work = f.work();
     // An uncommitted edit: the check runs on the working tree as it stands.
@@ -336,7 +336,14 @@ fn check_only_checks_the_working_tree() {
         .unwrap();
     let stderr = text(&out.stderr);
     assert!(out.status.success(), "{stderr}");
-    assert_eq!(text(&out.stdout).trim(), "checks pass");
+    // The edit keeps the check from counting for a land, and it is said before the verdict.
+    assert_eq!(
+        text(&out.stdout).lines().collect::<Vec<_>>(),
+        [
+            "not recorded: the working tree has uncommitted changes",
+            "checks pass"
+        ]
+    );
     // In the working tree, outside CI, building where the caller's environment says.
     let pwd = fs::canonicalize(&work).unwrap();
     assert_eq!(f.lines("check-pwd.log"), [pwd.display().to_string()]);
