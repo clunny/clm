@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [harness-only-capability-work-has-no-stated-route]
 ---
 
