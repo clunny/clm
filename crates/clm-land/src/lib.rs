@@ -13,6 +13,7 @@ mod lock;
 mod reconnect;
 mod runner;
 mod scratch;
+mod verify_stop;
 
 use std::fmt;
 use std::path::{Path, PathBuf};

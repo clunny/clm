@@ -82,6 +82,9 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 )));
             }
         }
+        // A component whose slow tests broke after a land waits for its fix; the components
+        // of a red result nobody took in yet only warn (`land/verify-stop`).
+        let warnings = crate::verify_stop::check(&repo, &base, &head, &fold)?;
         // 2. The fingerprint, and a request for changes that holds it, before the gate, the
         // lock, the merge and the checks (`land/changes-requested-holds`).
         let fingerprint = repo.approval.fingerprint(&base, &head)?;
@@ -118,6 +121,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fold,
             merged,
             behind,
+            warnings,
         })
     };
     // The check runs when the merge is clean and its code key wasn't checked; a conflicting
@@ -157,7 +161,13 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fold,
             merged,
             behind,
+            warnings,
         } = p;
+        for warning in warnings {
+            if !out.warnings.contains(&warning) {
+                out.warnings.push(warning);
+            }
+        }
         // Under the lock, the clone's land tree, so cargo sees one workspace path land after
         // land; else a temporary worktree, since another land may hold the land tree.
         // The temporary one is kept across attempts and checked out afresh.
@@ -539,6 +549,8 @@ struct Prepared {
     /// Whether `head` is behind in `specs/`: it adds or applies a change and `specs/` changed
     /// on both sides, with no conflict outside it (`land/regenerates-behind-specs`).
     behind: bool,
+    /// What `land/verify-stop` warns of.
+    warnings: Vec<String>,
 }
 
 /// The merged tree and its code key, refused when the merge conflicts or both sides changed
