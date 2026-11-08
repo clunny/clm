@@ -2,15 +2,20 @@
 status: applied
 resolves:
   - host-none-still-needs-a-remote-for-rebase-next-claims-and-skills
+  - a-trunk-not-named-main-cannot-land
 ---
 
 ## Intent
 
 Make the whole propose, build and land loop run in a repository with `host = "none"` and no remote, by giving such a clone a remote of its own: a bare repository inside its git directory, which CLM creates and adds as `origin`. Every command and skill then reads, fetches, claims and pushes exactly as on any other host, and the special local-land paths that `host = "none"` needed in `land`, `land.approval` and `ledger` go.
 
+It also makes `main` the only trunk CLM supports (`trunk-named-main`, `trunk-is-main`) rather than adding a setting for another branch name, and has `clm init` say so up front, with the rename command, in a repository without a `main` (`init/init-names-missing-main`), so the first `clm land` no longer finds it. That resolves `a-trunk-not-named-main-cannot-land` by its warning half and declines its configurable-trunk half, whose cost every later change would pay.
+
 ## Problem
 
 `land/offline-land` lets a repository with `host = "none"` land on its local `main`, but nothing else in the loop has a no-remote path: `clm rebase` fetches `origin` and rebases onto `origin/main`, ending `rebase failed`; `clm next` and `clm proposals` fetch first and exit 2, so `/clm:build` and `clm runner` never start; claims take their lock by pushing a branch (`lease-claims`); and the init, propose, build and triage skills, and the prompts `clm draft` and `clm run` write, cut their worktrees from `origin/main` and run `clm gate --base origin/main`. The `host-adapters` constraint promises that a repository works with no host at all, and its scenario covers only proposing, approving and landing. Reported in GitHub issues #285 and #283.
+
+Separately, CLM assumes the trunk is named `main` everywhere, and in a repository on `master` `clm init` succeeds and tells the human to push to `main`; nothing says the branch is missing until the first `clm land` refuses with "no `main` to land on" (#283).
 
 ## Approaches
 
@@ -18,6 +23,12 @@ Make the whole propose, build and land loop run in a repository with `host = "no
 - **The clone is its own remote: every read of `origin/<branch>` reads the local branch, nothing fetches or pushes, and claims lock with `git update-ref <ref> <new> <old>`.** What the item proposed. Rejected: it is a mode switch through every command that reads `origin/main` (about 30 source files across `sync`, `orchestrator`, `orchestrator.run`, `orchestrator.triage`, `orchestrator.checkpoint`, `orchestrator.runner`, `land`, `land.approval`, `view` and `host`), a second claim mechanism beside `lease-claims`, and a conditional base in every skill and prompt that names `origin/main` (nine plugin files and the generated draft and build prompts), each a place for the two modes to drift (`redesign-before-workaround`).
 - **Accept: `host = "none"` lands only; a person who wants to build adds a bare repository as `origin` and sets `host = "git"`.** Rejected: `host-adapters` promises the loop works with no host, and the only route left would be a manual setup that `clm init` could do itself.
 - **Create the remote only in `clm init`, and have `clm land` refuse with a pointer to it.** Rejected: a repository set up before this would fail at `clm rebase` or `clm next` with git's own error, long before any message of CLM's; creating it before each command covers both with one rule.
+
+For the trunk's name:
+
+- **`main` is the only trunk, and `clm init` says so up front (chosen, `trunk-is-main`).** A new constraint `trunk-named-main` states it, and `init/init-names-missing-main` prints the rename as the first next step when the repository has no `main`. One requirement, no change to any other command.
+- **A `trunk` setting in `clm.toml`, read everywhere in place of `main`.** What #283 asked for. Rejected: `main` and `origin/main` are written in about 800 places across specs, code, skills and prompts, and every later change would have to use the setting; a missed literal shows only in a repository on another branch name. The adopter's cost it saves is one rename.
+- **Detect the trunk from `origin/HEAD`.** Rejected: absent with `host = "none"`, and may be unset or differ per clone.
 
 ## Outcome
 
@@ -28,6 +39,8 @@ Make the whole propose, build and land loop run in a repository with `host = "no
 - `land.approval/approval-from-base` and `signed-land`: the base is always the fetched `origin/main`; the `no remote` scenario goes.
 - `ledger/append` and `ledger`'s Design: `append` pushes and `compact` fetches on every host, `none` included.
 - The remaining `host = "none"` wording goes: `land`'s step 7 and `land/land-push-retry` (the unpushed-record warning now holds on every host), `land.approval`'s Held paragraph, `sync`'s Design (the fold), and the `host` Contract's opening.
+- `init/init-names-missing-main`: in a repository whose current branch isn't `main` and that has no `main` locally or on its remote, `clm init` writes its files and prints, first among its next steps, that CLM lands only on `main` and the `git branch -m <current> main` that renames to it.
+- `ARCHITECTURE.md` gains the constraint `trunk-named-main`, enforced by that requirement, and `docs/decisions/trunk-is-main.md` records why.
 - `ARCHITECTURE.md`'s `host-adapters` scenario covers building as well as proposing and landing, and names `host/none-keeps-a-remote` among its enforcers; `docs/guide/settings.md` and the glossary say what `none` now does.
 
 ## Constraints and edge cases
@@ -41,7 +54,14 @@ Make the whole propose, build and land loop run in a repository with `host = "no
 
 ## Open questions
 
-- **The approach.** The item proposed the clone being its own remote (local refs, `git update-ref` claims). This change instead gives the clone a private bare remote; the human may prefer the item's design. See `## Approaches`.
 - **`plugin/skills/init/SKILL.md`** steps 5 and 6 still branch on "with no `origin`", which `clm init` no longer leaves; `crates/clm/tests/plugin.rs` asserts that sentence. Harmless dead wording, left for a later edit rather than adding a plugin requirement here.
 - **`land/reconnect-names-rebase`**'s scenario describes a `main` landed locally while offline, which only an older `clm` can now produce; its build builds that state by hand. Left as written.
+
+## The human's answers
+
+On #283's item, at intake: "should we allow the project to define its own 'main' branch, eg in clm.toml"
+
+On this change's first design, the private bare remote: "would it make more sense to allow local (host="none") setups use local git main instead of origin main?", then "can we take them both now?"
+
+Then: "I'm reconsidering. If this change adds complexity and creates maintenance burdon, maybe we should keep it as origin/main (only support that as an opinionated constraint) and use the origin/main in .clm as the solution chose. What is the correct and what is the maintainable solution?" After the recommendation to keep the private bare remote and require a trunk named `main`, with `clm init` saying so up front, asked whether to fold that into this change: "folded in"
 

@@ -512,6 +512,20 @@ Only a human SHALL approve a change that needs review, through the command the g
 #### Untested
 That the conversation alone never counts rests on Claude Code's confirmation prompt, which CLM doesn't test.
 
+### Constraint: trunk-named-main
+A CLM repository's trunk SHALL be a branch named `main`: every command, skill and prompt names it so, and no setting names another branch. `clm init` SHALL say so up front in a repository without one, with the command that renames its branch, rather than leave the first `clm land` to find it (`trunk-is-main`).
+
+#### Scenario: a repository on master
+- GIVEN a repository whose only branch is `master`
+- WHEN `clm init` runs
+- THEN its first next step names renaming `master` to `main`
+
+#### Carries
+- method
+
+#### Enforced by
+- init/init-names-missing-main
+
 ### Constraint: land-locally
 A branch SHALL land on `main` only through `clm land`, which runs the checks on the merged tree on the machine that runs it and pushes `main`. No hosted CI, host or script pushes `main` or decides a land.
 
