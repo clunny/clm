@@ -4,7 +4,7 @@ use crate::{Repo, bash_event, printed};
 
 #[test]
 fn push_to_main() {
-    // req:capability/guard-sessions@a8ff6a52
+    // req:capability/guard-sessions@a7684686
     let repo = Repo::init();
     let event = bash_event("git push", &repo.root);
 
