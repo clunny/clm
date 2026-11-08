@@ -515,8 +515,28 @@ fn clm_toml(host: Host, newest_migration: Option<&str>, langs: &[&Lang]) -> Stri
             lang.detector, lang.command, lang.hint, lang.manifest
         ));
     }
+    text.push_str(VERIFY_COMMENT);
     text
 }
+
+/// The commented-out `[verify]` section that ends `clm.toml` (`init-verify-comment`). Every
+/// line starts `# `, and its prose is a TOML comment of its own (`# # ...`), so removing the
+/// leading `# ` from each line leaves a valid `[verify]` table.
+const VERIFY_COMMENT: &str = "\n\
+# Slow tests that run after the land instead of in `[land] check`:\n\
+# [verify]\n\
+# # See `clm guide ci-and-deployment`.\n\
+# # The slow-test command `clm verify` runs.\n\
+# check = \"scripts/clm-slow-tests.sh\"\n\
+# # Where it runs: `local` (this machine), `pipeline` (the host's pipeline records the result)\n\
+# # or `import` (`clm verify --import` reads the runs of `workflow`).\n\
+# mode = \"local\"\n\
+# # When it runs: `change-done`, `queue-drained` or `work-done` (the last only with `local`).\n\
+# triggers = [\"change-done\", \"queue-drained\"]\n\
+# # Also run after this many lands or days.\n\
+# every = { lands = 20, days = 7 }\n\
+# # With `mode = \"import\"`, `workflow` names the host pipeline whose runs are read:\n\
+# # workflow = \"slow-tests\"\n";
 
 fn check_script(langs: &[&Lang]) -> String {
     let mut text = String::from(
