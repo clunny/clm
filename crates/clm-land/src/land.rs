@@ -691,7 +691,7 @@ enum Pushed {
 
 /// The waits, in seconds, before each push of the same merge commit after a refusal that
 /// left `main` at the base (`land/land-push-retry`): fixed, as `clm claim`'s are.
-const PUSH_RETRY_WAITS: [u64; 2] = [1, 2];
+pub(crate) const PUSH_RETRY_WAITS: [u64; 2] = [1, 2];
 
 /// Pushes `merge` to `origin`'s `main`, leased on `base`, and judges a refusal by fetching
 /// `main` again: the merge commit is a push that went through, another commit is `main`

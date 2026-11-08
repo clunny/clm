@@ -93,9 +93,6 @@ impl From<std::io::Error> for Error {
 /// The branches deleted from `origin` once landed.
 const CLAIM_PREFIXES: [&str; 3] = ["impl/", "spec/", "propose/"];
 
-/// Seconds waited before each retry of a failed fetch of `origin`.
-const FETCH_RETRY_WAITS: [u64; 2] = [1, 2];
-
 const OFFLINE: &str = "offline: origin can't be reached; push and land when it can";
 
 fn is_claim(branch: &str) -> bool {
@@ -147,7 +144,7 @@ impl<'a> Repo<'a> {
     /// remote-tracking ref goes on (`land/offline-land`). When the last try fails it is
     /// offline only if `origin` can't be reached either; otherwise git's message is the reason.
     pub(crate) fn fetch_retrying(&self, args: &[&str]) -> Result<(), Error> {
-        let mut waits = FETCH_RETRY_WAITS.into_iter();
+        let mut waits = land::PUSH_RETRY_WAITS.into_iter();
         loop {
             let failed = match self.git(args) {
                 Ok(_) => return Ok(()),
@@ -157,7 +154,7 @@ impl<'a> Repo<'a> {
                 Some(secs) => std::thread::sleep(std::time::Duration::from_secs(secs)),
                 None => {
                     let reachable = self
-                        .git(&["ls-remote", "--quiet", clm_git::REMOTE, "HEAD"])
+                        .git(&["ls-remote", "--quiet", clm_git::REMOTE, "refs/heads/main"])
                         .is_ok();
                     return Err(Error::Refused(if reachable {
                         failed.to_string()
