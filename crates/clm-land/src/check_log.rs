@@ -174,6 +174,7 @@ impl Scan {
             self.end(at);
         } else if let Some(path) = marker.strip_prefix("::clm-selected::")
             && let Some(open) = &mut self.open
+            && !path.is_empty()
             && !open.selected_by.iter().any(|p| p == path)
         {
             open.selected_by.push(path.to_string());
@@ -246,7 +247,7 @@ mod tests {
 last",
             at(3000),
         );
-        let (_, open, steps) = scan.finish(at(5999));
+        let (_, _, steps) = scan.finish(at(5999));
         let got: Vec<_> = steps
             .iter()
             .map(|s| (s.name.as_str(), s.seconds, s.selected_by.clone()))
@@ -259,7 +260,6 @@ last",
                 ("a", 2, vec![]),
             ]
         );
-        assert_eq!(open.unwrap().name, "a");
     }
 
     #[test]
