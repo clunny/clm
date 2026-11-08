@@ -48,6 +48,16 @@ fn empty_repository_with_no_remote() {
 }
 
 #[test]
+fn a_kept_clm_toml_decides_the_host() {
+    // req:init/init-keeps-a-remote@c228f421
+    let dir = repo();
+    std::fs::write(dir.path().join("clm.toml"), "host = \"git\"\n").unwrap();
+    init(dir.path(), &Options::default()).unwrap();
+    assert!(git(dir.path(), &["remote"]).is_empty());
+    assert!(!bare_path(dir.path()).exists());
+}
+
+#[test]
 fn a_remote_already_there() {
     // req:init/init-keeps-a-remote@c228f421
     let dir = repo();
