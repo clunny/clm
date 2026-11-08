@@ -472,6 +472,34 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+    /// Run the project's slow tests after the land, at the moments `[verify]` names, and
+    /// record the result in the ledger; print one line starting `verify `. Exits 0 when it
+    /// passed, nothing was due or there was nothing to import; 1 when it failed or can't run;
+    /// 2 when git fails; 3 when `--dry-run` finds nothing due; 4 when the result is pending.
+    #[command(group(clap::ArgGroup::new("what").required(true).args(["due", "commit", "import", "bisect"])))]
+    Verify {
+        /// Whether a trigger has fired, and when one has, verify `origin/main`'s head.
+        #[arg(long)]
+        due: bool,
+        /// With `--due`, an event that happened: `work-done`.
+        #[arg(long, requires = "due", value_parser = ["work-done"])]
+        event: Option<String>,
+        /// With `--due`, only say whether a run is due.
+        #[arg(long, requires = "due")]
+        dry_run: bool,
+        /// Verify one commit of `main`, or answer from the ledger.
+        #[arg(long, value_name = "SHA")]
+        commit: Option<String>,
+        /// In `import` mode, record the pipeline's completed runs; run nothing.
+        #[arg(long)]
+        import: bool,
+        /// Find the land that broke a red commit, and record it.
+        #[arg(long, value_name = "SHA")]
+        bisect: Option<String>,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
     /// Record your approval of a branch's current diff in the ledger.
     Approve {
         /// The branch (default: the current one).
@@ -1391,6 +1419,29 @@ fn dispatch() -> ExitCode {
         Command::Land { branch, root, .. } => landed("land", |env| {
             clm_land::land(&repo_root(root), branch.as_deref(), env)
         }),
+        Command::Verify {
+            due,
+            event,
+            dry_run,
+            commit,
+            import,
+            bisect,
+            root,
+        } => {
+            let request = match (commit, bisect) {
+                (Some(sha), _) => clm_verify::Request::Commit(sha),
+                (_, Some(sha)) => clm_verify::Request::Bisect(sha),
+                _ if import => clm_verify::Request::Import,
+                _ => {
+                    debug_assert!(due);
+                    clm_verify::Request::Due {
+                        work_done: event.is_some(),
+                        dry_run,
+                    }
+                }
+            };
+            verify(&repo_root(root), &request)
+        }
         Command::Approve { branch, root } => landed("approve", |env| {
             clm_land::approve(&repo_root(root), branch.as_deref(), env)
         }),
@@ -1923,6 +1974,28 @@ fn landed(
         }
         Err(clm_land::Error::Git(e)) => {
             eprintln!("clm {command}: {e}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+/// `clm verify`: the one `verify ...` line on stdout, notes on stderr, and the outcome's exit
+/// code; 1 with the reason when it can't run, 2 when git fails.
+fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
+    match clm_verify::verify(root, request, &clm_config::process_env) {
+        Ok(outcome) => {
+            for note in outcome.notes {
+                eprintln!("clm verify: {note}");
+            }
+            println!("{}", outcome.line);
+            ExitCode::from(outcome.code)
+        }
+        Err(clm_verify::Error::Refused(why)) => {
+            eprintln!("clm verify: {why}");
+            ExitCode::FAILURE
+        }
+        Err(clm_verify::Error::Git(e)) => {
+            eprintln!("clm verify: {e}");
             ExitCode::from(2)
         }
     }
