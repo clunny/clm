@@ -127,7 +127,7 @@ fn marks_a_skipped_required_migration() {
     );
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn applies_stamps_and_leaves_an_edited_file() {
     let list = [apply_m(), note_n()];
@@ -145,7 +145,7 @@ fn applies_stamps_and_leaves_an_edited_file() {
     assert_eq!(read(&dir, "clm.toml"), after);
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn rewrites_an_unedited_note_file() {
     let list = [note_n()];
@@ -158,7 +158,7 @@ fn rewrites_an_unedited_note_file() {
     }
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     let list = [apply_m(), note_n()];
@@ -177,7 +177,7 @@ fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     assert_eq!(read(&settled, "clm.toml"), "upgraded = \"n\"\n");
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn apply_refuses_too_new_and_writes_nothing() {
     let dir = project("upgraded = \"z\"\n");
@@ -187,7 +187,7 @@ fn apply_refuses_too_new_and_writes_nothing() {
     assert_eq!(read(&dir, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn the_stamp_goes_in_as_a_top_level_key() {
     assert_eq!(set_top_level("", "k", "1"), "k = 1\n");
@@ -207,7 +207,7 @@ fn the_stamp_goes_in_as_a_top_level_key() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@d61ca0b9
+// req:upgrade/upgrade-note-and-decline@727f6913
 #[test]
 fn prints_a_migrations_note() {
     let dir = project("");
@@ -217,7 +217,7 @@ fn prints_a_migrations_note() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@d61ca0b9
+// req:upgrade/upgrade-note-and-decline@727f6913
 #[test]
 fn note_refuses_unknown_ids_and_too_new() {
     let dir = project("");
@@ -230,7 +230,7 @@ fn note_refuses_unknown_ids_and_too_new() {
     assert!(note_in(&[note_n()], stamped.path(), "n").is_err());
 }
 
-// req:upgrade/upgrade-note-and-decline@d61ca0b9
+// req:upgrade/upgrade-note-and-decline@727f6913
 #[test]
 fn declining_a_pending_note_hides_it() {
     let list = [note_a(), note_n()];
@@ -248,7 +248,7 @@ fn declining_a_pending_note_hides_it() {
     assert!(read(&dir, "clm.toml").contains("declined_migrations = [\"a\", \"n\"]\n"));
 }
 
-// req:upgrade/upgrade-note-and-decline@d61ca0b9
+// req:upgrade/upgrade-note-and-decline@727f6913
 #[test]
 fn decline_refuses_what_it_may_not_decline() {
     let list = [required_r(), note_a()];
@@ -264,7 +264,7 @@ fn decline_refuses_what_it_may_not_decline() {
     assert_eq!(read(&stamped, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn a_failing_migration_does_not_stop_the_others_or_stamp() {
     let bad = Migration {
@@ -288,7 +288,7 @@ fn done_by_stamp(root: &Path) -> bool {
     fs::read_to_string(root.join("clm.toml")).is_ok_and(|t| t.contains("upgraded = \"s\""))
 }
 
-// req:upgrade/upgrade-apply@f30eac0c
+// req:upgrade/upgrade-apply@cfe8e2bf
 #[test]
 fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
     let a = Migration {
@@ -337,7 +337,7 @@ fn an_advised_migration_is_never_marked_skipped() {
     );
 }
 
-// req:upgrade/upgrade-note-and-decline@d61ca0b9
+// req:upgrade/upgrade-note-and-decline@727f6913
 #[test]
 fn decline_refuses_a_clm_toml_it_cannot_read() {
     let dir = project("declined_migrations = [\"x\"\n");
@@ -345,4 +345,38 @@ fn decline_refuses_a_clm_toml_it_cannot_read() {
     assert_eq!(read(&dir, "clm.toml"), "declined_migrations = [\"x\"\n");
     fs::remove_file(dir.path().join("clm.toml")).unwrap();
     assert!(decline_in(&[note_a()], dir.path(), "a").is_err());
+}
+
+// req:upgrade/upgrade-apply@cfe8e2bf
+#[test]
+fn the_stamp_goes_above_a_commented_header() {
+    let list = [apply_m()];
+    let dir = project("host = \"github\"\n\n# Run before clm check.\n[land]\ncheck = \"true\"\n");
+    apply_in(&list, dir.path()).unwrap();
+    assert_eq!(
+        read(&dir, "clm.toml"),
+        "host = \"github\"\nupgraded = \"m\"\n\n# Run before clm check.\n[land]\ncheck = \"true\"\n"
+    );
+    // A comment with no blank line before it, and one reaching the top of the file.
+    assert_eq!(
+        set_top_level("a = 1\n# c1\n# c2\n[t]\n", "k", "1"),
+        "a = 1\nk = 1\n\n# c1\n# c2\n[t]\n"
+    );
+    assert_eq!(set_top_level("# c\n[t]\n", "k", "1"), "k = 1\n\n# c\n[t]\n");
+    // Several blank lines belong to the lead-in.
+    assert_eq!(
+        set_top_level("a = 1\n\n\n# c\n[t]\n", "k", "1"),
+        "a = 1\nk = 1\n\n\n# c\n[t]\n"
+    );
+}
+
+// req:upgrade/upgrade-note-and-decline@727f6913
+#[test]
+fn declining_goes_above_a_commented_header() {
+    let dir = project("# Run before clm check.\n[land]\ncheck = \"true\"\n");
+    decline_in(&[note_a()], dir.path(), "a").unwrap();
+    assert_eq!(
+        read(&dir, "clm.toml"),
+        "declined_migrations = [\"a\"]\n\n# Run before clm check.\n[land]\ncheck = \"true\"\n"
+    );
 }
