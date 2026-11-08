@@ -2098,7 +2098,14 @@ fn settings_violation(e: clm_config::Error, rule: &'static str) -> clm_check::Vi
 /// `config`'s `health` and `node_size`, as `clm-health` takes them.
 fn health_settings(settings: clm_config::Settings) -> clm_health::Settings {
     let (health, size) = (settings.health.value, settings.node_size.value);
+    // `config`'s default for a `[land]` that sets no `check_target_seconds` (or no `[land]`).
+    let land_target = settings
+        .land
+        .value
+        .as_ref()
+        .map_or(120, clm_config::Land::target_seconds);
     clm_health::Settings {
+        land_check_target_seconds: land_target,
         reconsider: health.reconsider,
         scenarios: health.scenarios,
         exceptions: health.exceptions,

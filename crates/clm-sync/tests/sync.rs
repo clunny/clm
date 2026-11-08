@@ -20,6 +20,7 @@ fn health() -> clm_health::Settings {
         exceptions: 4,
         stale_days: 30,
         lcov: None,
+        land_check_target_seconds: 120,
         component_size: clm_check::Budgets {
             spec_tokens: 12000,
             code_tokens: 40000,

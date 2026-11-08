@@ -3,6 +3,7 @@
 
 mod churn;
 mod flag;
+mod land_time;
 mod lcov;
 mod requirements;
 mod spec;
@@ -30,6 +31,8 @@ pub struct Settings {
     pub stale_days: u64,
     /// The lcov file to read, relative to the repository root.
     pub lcov: Option<String>,
+    /// The seconds a land's check aims to stay within, which the `land-time` summary names.
+    pub land_check_target_seconds: u64,
     /// The size budgets of a node whose `size_budget` doesn't set them.
     pub component_size: clm_check::Budgets,
 }
@@ -156,6 +159,7 @@ pub fn report(root: &Path, settings: &Settings, expiry: u64) -> Result<Report, F
             requirements::workaround(&graph),
             requirements::rewritten(&graph),
             churn::section(root, &graph)?,
+            land_time::section(root, settings.land_check_target_seconds)?,
             requirements::many_scenarios(&graph, settings.scenarios),
             requirements::many_exceptions(&graph, settings.exceptions),
             requirements::reconsider_section(root, &graph, settings),
