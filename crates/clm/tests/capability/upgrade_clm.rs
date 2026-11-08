@@ -92,6 +92,7 @@ fn skipping_releases() {
         "\"scripts/clm-check.sh\", \".claude/settings.json\"]",
         1,
     );
+    assert!(spec.contains(".claude/settings.json"), "{spec}");
     repo.write("specs/SPEC.md", &spec);
     repo.commit("take the allow rules by hand");
 
