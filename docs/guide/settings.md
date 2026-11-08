@@ -69,7 +69,8 @@ Where: `clm.toml` or `clm.local.toml`.
 Where the repository's remote lives, which decides how pull requests are opened: `github` (the default, through `gh`), `azure` (Azure DevOps, through `az`), `git` (a plain git server) or `none`.
 
 - **`github`** and **`azure`** give each branch a pull request to read its diff in, and need that host's CLI signed in.
-- **`git`** and **`none`** need no account or CLI, and open no pull requests. Branches are still pushed and deleted when there's an `origin`.
+- **`git`** and **`none`** need no account or CLI, and open no pull requests. Branches are still pushed and deleted on `origin`.
+- **`none`** is for a repository with no remote. `clm` gives the clone one of its own, a bare repository at `clm/remote.git` in its git directory, added as `origin`, so claims, builds and lands run as on any host. Its path is absolute: after moving the repository, run `git remote set-url origin <new path>`. To move onto a real remote, run `git remote set-url origin <url>`, set `host`, and run `clm reconnect`.
 
 Where: `clm.toml` or `clm.local.toml`.
 

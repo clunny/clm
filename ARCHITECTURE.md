@@ -742,8 +742,8 @@ The order in which a reader lands, is installed and its key is set is a sequence
 Everything host-specific SHALL go through the `host` adapter, and a repository SHALL work with no host at all.
 
 #### Scenario: no host configured
-- GIVEN a repository with `host = "none"`
-- WHEN a change is proposed, approved and landed
+- GIVEN a repository with `host = "none"` and no remote
+- WHEN a change is proposed, approved, built and landed
 - THEN every step works, with no pull requests
 
 #### Enforced by
@@ -751,6 +751,8 @@ Everything host-specific SHALL go through the `host` adapter, and a repository S
 - vcs/one-git-layer
 - config/host-setting
 - host/pr-open
+- host/none-keeps-a-remote
+- clm/none-remote-before-commands
 - land/offline-land
 
 ### Constraint: incremental-adoption
