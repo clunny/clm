@@ -10,7 +10,7 @@ status: accepted
 
 **Why it records nothing.** A `checked` record names a committed tree's code key, and a land checks the merge with `origin/main`, which may have moved. The working tree a session checks may hold uncommitted edits and isn't that merge, so a passing `--check-only` never lets a land skip its own check.
 
-**Amended 2026-11-07.** A run on a clean working tree whose committed `HEAD` contains `origin/main` checks exactly the tree a land of it makes while `main` stays there, so `--check-only` now records such a run as `checked`, and hands the check the tests `clm affected` selects, as a land does (`worktree-check-counts`). A run on any other tree still records nothing.
+**Amended 2026-11-07.** A run on a clean working tree whose committed `HEAD` contains `origin/main` checks exactly the tree a land of it makes while `main` stays there, so `--check-only` now records such a run as `checked` (`worktree-check-counts`). A run on any other tree still records nothing.
 
 **Alternatives.**
 - *Move the script out of `.github/`* (to `scripts/ci-check.sh`, like `clm init`'s `scripts/clm-check.sh`). Rejected: the guard's rule isn't documented, so another path may be refused too, and adopters' paths vary; the move also touches `ci`'s requirements, `clm.toml`, the allowlist and their tests for no gain over a `clm` command.

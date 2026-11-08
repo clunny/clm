@@ -20,3 +20,5 @@ Every `clm land` attempt that takes the lock on `<main>/target/land.lock` checks
 - *A target directory per scratch tree.* Correct but cold every time, and the directories pile up: the problem `build-places` solved.
 - *Make cargo rebuild when the path changes* (`CARGO_INCREMENTAL=0`, touching sources). Never warm, and leaves the old paths' outputs in place.
 - *Prune stale artifacts.* Cargo offers nothing between leaving them and `cargo clean`.
+
+**Amended 2026-11-07.** A land whose merged tree's code key a build's passing `clm land --check-only` recorded runs no check of its own (`worktree-check-counts`), so that verdict rests on the build's worktree, beside its own `target/` and other ignored files, not on this cleaned tree. That is the one exception, accepted there: a check that passes only through an ignored file it doesn't make itself is the project check's defect.

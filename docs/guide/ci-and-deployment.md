@@ -16,6 +16,10 @@ Your specs and other prose don't count as code for a land. When a branch changes
 
 So when a test reads one of those files of your project's own tree, such as a test that checks your specs for a retired term, give it the marker. Without one, a branch that changes only that file lands without running the test, and can leave `main` failing it until a later land happens to run it. `clm affected --readers` prints the test files whose markers match what the current branch changes, and `clm land` runs `[land] check` with the environment variable `CLM_SELECTION` naming a file that lists them, as it names the selected tests of a code land. A test that reads only fixtures it writes itself, or only code, needs no marker. Markdown files are never readers.
 
+### A build's own check counts for its land
+
+Before it lands, a build runs `clm land --check-only` in its own worktree: your whole `[land] check`, every test, and `clm check`. When that passes on a committed branch with no uncommitted change that already contains `origin/main`, it is recorded, and a land of the branch made before `main` moves runs no check of its own. So the check must pass from a clean checkout: one that passes only because of a file git ignores and the check doesn't make itself, such as a build output left from earlier work, can pass in the build and fail at a later land.
+
 ## Deployment is yours
 
 Every commit on `main` is checked, so every commit is deployable. Whether and when you deploy is your choice:
