@@ -6,7 +6,9 @@ status: accepted
 
 A change's `from: backlog/<slug>` names the item it was promoted from, and `docs/spec-format.md` said the item is deleted in the same spec PR. Nothing did it. The propose skill's numbered steps say to write `from` or `resolves` and to delete an item only when design finds it already fixed; only its "Elaborating an idea" section says to delete a promoted idea. `clm check` and the gate test only the shape of `from` (`bare-resolves-slugs`), and archiving deletes only the items `resolves` names (`archive-on-sync`). On 2026-11-08 a spec branch proposed from an idea landed with the idea still in `backlog/`, listed as open work, and a follow-up branch was needed to retire it.
 
-Now `clm apply` deletes the item `from` names, whatever its kind, as one of the writes it holds back until the change validates (`apply/promoted-item`). Every route that lands a change runs `clm apply` on its spec branch (`propose`, a triage draft, the human), so the item leaves the backlog when the branch lands, with no step for an author to remember. A branch that already deleted the item by hand applies as before.
+Now `clm apply` deletes the item `from` names, whatever its kind except `human-task`, as one of the writes it holds back until the change validates (`apply/promoted-item`). Every route that lands a change runs `clm apply` on its spec branch (`propose`, a triage draft, the human), so the item leaves the backlog when the branch lands, with no step for an author to remember. A branch that already deleted the item by hand applies as before.
+
+A `human-task` item stays, for the reason `apply-deletes-answered-questions` keeps one: it is a step only the human takes outside the spec, and deleting it releases the requirements it `blocks` before the human took the step (`requirement-blocks`).
 
 Extends `apply-deletes-answered-questions` from questions in `resolves` to the `from` item, for the same reason: the command can do what every author would otherwise do by hand.
 

@@ -27,7 +27,7 @@ So a change proposed from an idea landed on 2026-11-08 with the idea still in `b
 
 ## Outcome
 
-- `apply` gains `promoted-item`: `clm apply` deletes `backlog/<slug>.md` for the change's `from`, whatever the item's kind, printing `removed backlog/<slug>.md`, held back when the change has a violation, nothing when the item is already gone, once when `resolves` names it too, and nothing on `clm rebase`'s re-apply. Its Contract names the deletion.
+- `apply` gains `promoted-item`: `clm apply` deletes `backlog/<slug>.md` for the change's `from`, whatever the item's kind except `human-task`, printing `removed backlog/<slug>.md`, held back when the change has a violation, nothing when the item is already gone, once when `resolves` names it too, and nothing on `clm rebase`'s re-apply. Its Contract names the deletion.
 - `docs/spec-format.md` says `clm apply` deletes the promoted item.
 - Decision: `apply-deletes-promoted-items`.
 
@@ -35,4 +35,5 @@ So a change proposed from an idea landed on 2026-11-08 with the idea still in `b
 
 - An item the branch already deleted by hand is no violation, so existing skill text ("the item deleted on the spec branch") stays true and needs no edit.
 - `clm proposals` reads `from` from the spec branch's `change.md`, not the item, so the item stays held by the change after `clm apply` deletes it and until the branch lands.
-- No `kind` is exempt: `from` means the change took the item over, unlike `resolves`, where `answered-questions` deletes only questions.
+- Every `kind` but `human-task` is deleted: `from` means the change took the item over, unlike `resolves`, where `answered-questions` deletes only questions. A `human-task` item is a step only the human takes, and deleting it releases the requirements it `blocks`, so it stays until the human deletes it, as `apply-deletes-answered-questions` keeps one (the architecture audit's finding).
+- A malformed `from` deletes nothing; `check/backlog-entry-shape` already reports it.

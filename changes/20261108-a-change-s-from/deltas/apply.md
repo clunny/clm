@@ -12,7 +12,7 @@ base: { contract: "5bd13058f69d2ff5" }
 
 ## ADDED Requirements
 ### Requirement: promoted-item
-`clm apply` SHALL delete `backlog/<slug>.md` when the change's `from` is `backlog/<slug>` and that file exists, whatever the item's `kind`, among the files it removes, since `from` names the item the change was promoted from and the change now carries its work, so the item leaves the backlog when the spec branch lands and no later session takes it for open work. A `from` naming no item in `backlog/` SHALL delete nothing and be no violation, so a branch that deleted the item by hand applies as before. The deletion SHALL be one of the writes `atomic` holds back: when the change has a violation, the item stays. It SHALL print the deleted item as `removed backlog/<slug>.md`, as it prints the other files it removes, once even when `resolves` names the same item. The re-apply `clm rebase` runs on a branch's applied change deletes none, as for `answered-questions`.
+`clm apply` SHALL delete `backlog/<slug>.md` when the change's `from` is `backlog/<slug>` and that file exists, whatever the item's `kind` except `human-task`, among the files it removes, since `from` names the item the change was promoted from and the change now carries its work, so the item leaves the backlog when the spec branch lands and no later session takes it for open work. A `human-task` item SHALL stay: it is a step only the human takes outside the spec, and its deletion releases the requirements it `blocks` (`requirement-blocks`), so it stays until the human deletes it, as `answered-questions` keeps one. A `from` naming no item in `backlog/` SHALL delete nothing and be no violation, so a branch that deleted the item by hand applies as before; a `from` that isn't `backlog/<slug>` with a bare slug SHALL delete nothing either, since `check/backlog-entry-shape` reports it. The deletion SHALL be one of the writes `atomic` holds back: when the change has a violation, the item stays. It SHALL print the deleted item as `removed backlog/<slug>.md`, as it prints the other files it removes, once even when `resolves` names the same item. The re-apply `clm rebase` runs on a branch's applied change deletes none, as for `answered-questions`.
 
 #### Scenario: promoted idea
 - GIVEN `backlog/i.md` with `kind: idea`, and change `c` with `from: backlog/i` and a valid delta for `a`
@@ -23,6 +23,11 @@ base: { contract: "5bd13058f69d2ff5" }
 - GIVEN `backlog/b.md` with `kind: bug`, and change `c` with `from: backlog/b` and a valid delta
 - WHEN `clm apply c` runs
 - THEN it exits 0 and `backlog/b.md` no longer exists
+
+#### Scenario: human task stays
+- GIVEN `backlog/h.md` with `kind: human-task` and `blocks: [a/x]`, and change `c` with `from: backlog/h` and a valid delta
+- WHEN `clm apply c` runs
+- THEN it exits 0 and `backlog/h.md` still exists
 
 #### Scenario: refused change keeps its item
 - GIVEN `backlog/i.md` with `kind: idea`, and change `c` with `from: backlog/i` and a stale delta
