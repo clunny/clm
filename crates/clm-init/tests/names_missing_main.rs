@@ -106,6 +106,11 @@ fn main_already_there() {
     let out = init(dir.path(), &Options::default()).unwrap();
     assert!(!out.contains("git branch -m"), "{out}");
 
+    // An empty repository on an unborn `main`, likewise.
+    let unborn = repo("main");
+    let out = init(unborn.path(), &Options::default()).unwrap();
+    assert!(!out.contains("git branch -m"), "{out}");
+
     // With `main` only on the remote, likewise.
     let remote = repo("main");
     commit(remote.path());
