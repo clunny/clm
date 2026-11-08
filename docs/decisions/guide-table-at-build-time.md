@@ -14,3 +14,5 @@ Rejected:
 - **A crate that embeds a directory (`include_dir` or the like).** A dependency for a dozen lines of build script, and no say over the order.
 
 **Amended 2026-10-29** (`20261029-refounding`). `web` no longer bundles the guide, so `web/guide-list-from-files` went with its Guide view; the build's own order is the only one left.
+
+**Amended 2026-11-08** (`20261108-a-guide-page-edit`). The ledger no longer counts `docs/guide/` as code; a new page's land runs `clm-init`'s guide tests through their `clm:reads docs/guide/**` marker instead (`guide-pages-are-doc-only`).

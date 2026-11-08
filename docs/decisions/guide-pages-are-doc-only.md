@@ -14,4 +14,4 @@ Now every path under `docs/` is doc-only. The tests that read the guide's pages,
 - **Give `init` the guide in its `paths`**, as the item suggested. A guide edit would select `init` and its dependants, and `check` and the root depend on `init` and `capability` on the root, so nearly the whole Rust suite and the capability suites would still run. It would also add the guide's roughly 31,000 tokens to `init`'s code size, which is already over budget, though a build of `init` reads none of them.
 - **An `[affected]` mapping from paths to components**, a new setting for one directory, where the marker already does the job (`reuse-first`).
 
-Amends `guide-in-the-binary`, under which `ledger` counted the pages as code.
+Amends `guide-in-the-binary` and `guide-table-at-build-time`, under which `ledger` counted the pages as code.
