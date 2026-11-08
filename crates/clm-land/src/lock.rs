@@ -154,7 +154,8 @@ impl Queue {
             let dead = match File::options().write(true).open(entry.path()) {
                 Ok(file) => file.try_lock().is_ok(),
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.into()),
+                // A ticket we can't open is taken as live: safer than failing every run.
+                Err(_) => false,
             };
             if dead {
                 let _ = std::fs::remove_file(entry.path());
@@ -206,15 +207,25 @@ pub(crate) fn take(
                 Err(TryLockError::Error(e)) => return Err(e.into()),
             }
         }
-        let counter: u64 = queue.read("next").trim().parse().unwrap_or(0);
-        queue.write("next", &(counter + 1).to_string())?;
-        let name = format!("{counter:020}-{}", lane.name());
-        let ticket_path = queue.dir.join(&name);
-        let file = File::options()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(&ticket_path)?;
+        // A lost counter must not hand out a live ticket's name: skip names that exist.
+        let mut counter: u64 = queue.read("next").trim().parse().unwrap_or(0);
+        let (name, ticket_path, file) = loop {
+            let name = format!("{counter:020}-{}", lane.name());
+            let ticket_path = queue.dir.join(&name);
+            let taken = ["priority", "ordinary"]
+                .iter()
+                .any(|l| queue.dir.join(format!("{counter:020}-{l}")).exists());
+            counter += 1;
+            if taken {
+                continue;
+            }
+            let file = File::options()
+                .create_new(true)
+                .write(true)
+                .open(&ticket_path)?;
+            break (name, ticket_path, file);
+        };
+        queue.write("next", &counter.to_string())?;
         file.lock()?;
         (name, ticket_path, file)
     };
