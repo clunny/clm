@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [stopped-build-with-unpushed-commits-blocks-its-retry]
 ---
 
