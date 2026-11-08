@@ -4,7 +4,9 @@
 //! without the `git` feature too, for `check.affected` and wasm.
 
 /// A trailing `/` is a prefix, any other entry a whole path. Safe to skip, not what's code,
-/// so anything new gets a new key.
+/// so anything new gets a new key. The guide's pages and `docs/spec-format.md` are compiled
+/// into `clm`, but the tests that read them hold `clm:reads` markers (`doc-readers-marked`),
+/// so a land that edits them still runs those tests.
 const DOC_ONLY: [&str; 8] = [
     "specs/",
     "changes/",
