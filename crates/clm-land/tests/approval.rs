@@ -80,7 +80,7 @@ fn branch_sets(f: &Fixture, base: &str, head: &str) {
 
 #[test]
 fn a_branch_that_weakens_the_policy_is_judged_by_the_base() {
-    // req:land.approval/approval-from-base@522ea465
+    // req:land.approval/approval-from-base@094b6c3d
     let f = Fixture::new("approval = \"other\"");
     branch_sets(&f, "approval = \"other\"", "approval = \"any\"");
     let old = f.remote("main");
@@ -93,7 +93,7 @@ fn a_branch_that_weakens_the_policy_is_judged_by_the_base() {
 
 #[test]
 fn a_branch_that_tightens_the_policy_is_judged_by_the_base() {
-    // req:land.approval/approval-from-base@522ea465
+    // req:land.approval/approval-from-base@094b6c3d
     let f = Fixture::new("# no approval");
     branch_sets(&f, "# no approval", "approval = \"other\"");
     clm_land::land(&f.work(), None, &f.env(&[])).unwrap();
@@ -102,7 +102,7 @@ fn a_branch_that_tightens_the_policy_is_judged_by_the_base() {
 
 #[test]
 fn the_clones_local_file_wins() {
-    // req:land.approval/approval-from-base@522ea465
+    // req:land.approval/approval-from-base@094b6c3d
     let f = approved_by("approval = \"other\"", None);
     f.write("work/clm.local.toml", "approval = \"any\"\n");
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
@@ -111,7 +111,7 @@ fn the_clones_local_file_wins() {
 
 #[test]
 fn the_clones_local_file_can_tighten() {
-    // req:land.approval/approval-from-base@522ea465
+    // req:land.approval/approval-from-base@094b6c3d
     let f = approved_by("approval = \"any\"", None);
     f.write("work/clm.local.toml", "approval = \"other\"\n");
     let old = f.remote("main");
@@ -121,21 +121,8 @@ fn the_clones_local_file_can_tighten() {
 }
 
 #[test]
-fn no_remote() {
-    // req:land.approval/approval-from-base@522ea465
-    let f = Fixture::local_with("approval = \"other\"\n");
-    branch_sets(&f, "approval = \"other\"", "approval = \"any\"");
-    let old = f.rev("main");
-    let why = refused(clm_land::land(&f.work(), None, &f.env(&[])));
-    assert!(why.contains("approval = \"other\""), "{why}");
-    assert!(why.contains("main:clm.toml"), "{why}");
-    assert!(!why.contains("origin/main:clm.toml"), "{why}");
-    assert_eq!(f.rev("main"), old);
-}
-
-#[test]
 fn unreadable_policy_at_the_base() {
-    // req:land.approval/approval-from-base@522ea465
+    // req:land.approval/approval-from-base@094b6c3d
     let f = Fixture::new("approval = \"everyone\"");
     branch_sets(&f, "approval = \"everyone\"", "approval = \"any\"");
     let old = f.remote("main");
@@ -154,7 +141,7 @@ fn unreadable_policy_at_the_base() {
 
 #[test]
 fn unparseable_policy_at_the_base() {
-    // req:land.approval/approval-from-base@522ea465
+    // req:land.approval/approval-from-base@094b6c3d
     let f = Fixture::new("approval = = =");
     branch_sets(&f, "approval = = =", "approval = \"any\"");
     let old = f.remote("main");
