@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [no-guide-page-documents-clm-selection]
 ---
 
