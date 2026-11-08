@@ -141,7 +141,7 @@ mod tests {
             TimedLand {
                 commit: "c".into(),
                 at: String::new(),
-                check_seconds: 1,
+                check_seconds: 2,
                 steps: vec![step("y", 4, &[])],
             },
             TimedLand {
