@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - host-none-still-needs-a-remote-for-rebase-next-claims-and-skills
   - a-trunk-not-named-main-cannot-land
