@@ -5284,7 +5284,7 @@ fn concurrent_tests_gaps(body: &str) -> Vec<String> {
             "tests-run-concurrently",
             "fixed port",
             "fixed path",
-            "shared",
+            "shared between",
             "`bug` backlog item",
         ],
         &[],
@@ -5296,7 +5296,12 @@ fn init_skill_concurrent_tests() {
     // req:plugin/init-skill-concurrent-tests@3def0849
     let body = skill_body("init");
     assert_eq!(concurrent_tests_gaps(&body), Vec::<String>::new());
-    for needle in ["CLM_SLOT", "tests-run-concurrently", "fixed port", "shared"] {
+    for needle in [
+        "CLM_SLOT",
+        "tests-run-concurrently",
+        "fixed port",
+        "shared between",
+    ] {
         let gaps = concurrent_tests_gaps(&body.replace(needle, "elided"));
         assert!(
             gaps.iter().any(|g| g.contains(needle)),
