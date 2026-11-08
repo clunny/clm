@@ -680,7 +680,7 @@ fn a_branch_without_an_applied_change_never_regenerates() {
 
 #[test]
 fn the_result_is_judged_by_check() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("topic");
     // The marker is built so this file never cites `a/p` itself.
     write(
@@ -1288,7 +1288,7 @@ fn filed(lines: &[String]) -> bool {
 
 #[test]
 fn settings_are_loaded_on_every_branch() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     let mut calls = 0;
@@ -1305,7 +1305,7 @@ fn settings_are_loaded_on_every_branch() {
 
 #[test]
 fn settings_cant_be_loaded() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("impl/a");
     let head = git(&r.work, &["rev-parse", "HEAD"]);
 
@@ -1317,7 +1317,7 @@ fn settings_cant_be_loaded() {
 
 #[test]
 fn the_settings_error_comes_before_the_check() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("topic");
     write(
         &r.work,
@@ -1340,7 +1340,7 @@ fn the_settings_error_comes_before_the_check() {
 
 #[test]
 fn the_settings_are_loaded_from_head_in_a_temporary_worktree() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "notes.txt", "untracked\n");
@@ -1378,7 +1378,7 @@ fn cites_missing() -> String {
 
 #[test]
 fn an_uncommitted_marker_is_not_judged() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "src/lib.rs", &cites_missing());
@@ -1389,7 +1389,7 @@ fn an_uncommitted_marker_is_not_judged() {
 
 #[test]
 fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("spec/x");
     write(&r.work, "src/lib.rs", &cites_missing());
     commit(&r.work, "cite a/missing");
@@ -1408,7 +1408,7 @@ fn a_committed_fault_is_judged_despite_an_uncommitted_fix() {
 
 #[test]
 fn an_untracked_test_file_is_not_judged() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "tests/new.rs", &cites_missing());
@@ -1416,6 +1416,43 @@ fn an_untracked_test_file_is_not_judged() {
     assert_eq!(synced(&r), Vec::<String>::new());
     assert_eq!(read(&r.work, "tests/new.rs"), cites_missing());
     assert_eq!(git(&r.work, &["status", "--porcelain"]), "?? tests/");
+}
+
+#[test]
+fn a_clone_the_environment_names_is_judged_at_head() {
+    // req:sync/judged-by-check@bfefb55e
+    // The child half: the test binary runs itself with the variables set, so no other
+    // test in this process sees them.
+    if let Ok(work) = std::env::var("CLM_SYNC_TEST_JUDGED_WORK") {
+        let report = sync(Path::new(&work)).unwrap();
+        assert!(report.ok, "{:?}", report.lines);
+        assert_eq!(report.lines, Vec::<String>::new());
+        return;
+    }
+    let r = repo("spec/x");
+    write(&r.work, "tests/new.rs", &cites_missing());
+    let (w, g) = (r.work.clone(), r._dirs.1.path().join("g"));
+    fs::rename(w.join(".git"), &g).unwrap();
+    let head = git_env(&w, &g, &["rev-parse", "HEAD"]);
+
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "a_clone_the_environment_names_is_judged_at_head",
+            "--nocapture",
+        ])
+        .env("CLM_SYNC_TEST_JUDGED_WORK", &w)
+        .env("GIT_DIR", &g)
+        .env("GIT_WORK_TREE", &w)
+        .output()
+        .unwrap();
+
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(git_env(&w, &g, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        git_env(&w, &g, &["status", "--porcelain", "--untracked-files=all"]),
+        "?? tests/new.rs"
+    );
 }
 
 fn autosync_tip(r: &Repo, branch: &str) -> Option<String> {
@@ -1587,7 +1624,7 @@ fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
 
 #[test]
 fn an_item_the_change_doesnt_fix_is_judged_by_check() {
-    // req:sync/reapply@01d24eb6 req:sync/judged-by-check@5c30baa7
+    // req:sync/reapply@01d24eb6 req:sync/judged-by-check@bfefb55e
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(
@@ -2390,6 +2427,45 @@ fn flagged(branch: &str, id: &str, flags: usize) -> Repo {
     commit(&r.work, "flags");
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
     r
+}
+
+#[test]
+fn a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed() {
+    // req:sync/judged-by-check@bfefb55e
+    // Filing an item moves the temporary worktree with `git checkout`, the one git command
+    // that writes there: it must not follow the variables to the clone.
+    if let Ok(work) = std::env::var("CLM_SYNC_TEST_FILED_WORK") {
+        let report = sync(Path::new(&work)).unwrap();
+        assert!(report.ok, "{:?}", report.lines);
+        assert_eq!(report.lines, ["filed backlog/reconsider-a-x.md"]);
+        return;
+    }
+    let r = flagged("impl/a", "a/x", 3);
+    let (w, g) = (r.work.clone(), r._dirs.1.path().join("g"));
+    fs::rename(w.join(".git"), &g).unwrap();
+    let head = git_env(&w, &g, &["rev-parse", "HEAD"]);
+
+    let name = "a_clone_the_environment_names_keeps_its_head_when_an_item_is_filed";
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env("CLM_SYNC_TEST_FILED_WORK", &w)
+        .env("GIT_DIR", &g)
+        .env("GIT_WORK_TREE", &w)
+        .output()
+        .unwrap();
+
+    assert!(out.status.success(), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("1 passed"));
+    assert_eq!(git_env(&w, &g, &["rev-parse", "HEAD^"]), head);
+    assert_eq!(
+        git_env(&w, &g, &["log", "-1", "--format=%s"]),
+        "File reconsider-a-x"
+    );
+    assert_eq!(git_env(&w, &g, &["status", "--porcelain"]), "");
+    assert_eq!(
+        git_env(&w, &g, &["symbolic-ref", "HEAD"]),
+        "refs/heads/impl/a"
+    );
 }
 
 #[test]

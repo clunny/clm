@@ -225,7 +225,7 @@ fn rebase_without_user_settings(dir: &Path) -> (Option<i32>, String) {
 
 #[test]
 fn sync_leaves_no_temporary_worktree() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(&work, "src/a/t.rs", concat!("// req", ":a/missing\n"));
@@ -244,7 +244,7 @@ fn sync_leaves_no_temporary_worktree() {
 
 #[test]
 fn sync_ignores_an_uncommitted_settings_edit() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     git(&work, &["checkout", "-q", "main"]);
@@ -264,7 +264,7 @@ fn sync_ignores_an_uncommitted_settings_edit() {
 
 #[test]
 fn sync_with_settings_that_cant_be_loaded() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let (_dir, work) = node_a("[component_size]\nspec_tokens = 0\n");
     let (code, stdout) = rebase_without_user_settings(&work);
     assert_eq!(code, Some(1), "{stdout}");
@@ -278,7 +278,7 @@ fn sync_with_settings_that_cant_be_loaded() {
 
 #[test]
 fn sync_fails_on_settings_main_brought_in_that_cant_be_loaded() {
-    // req:sync/judged-by-check@5c30baa7
+    // req:sync/judged-by-check@bfefb55e
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
     write(&work, "notes.md", "mine\n");
