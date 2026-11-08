@@ -11,7 +11,7 @@ mod policy;
 pub use clm_fingerprint::{
     Entry, added_changes, adds_change, fingerprint, fingerprint_of, parse_ls_tree,
 };
-pub use policy::{approval_changed, needs_review_of, upgrade_stamp_only};
+pub use policy::{approval_changed, needs_review_of, settings_unchanged, upgrade_stamp_only};
 use policy::{change_needs_review, path_needs_review};
 
 const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];

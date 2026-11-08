@@ -46,28 +46,41 @@ pub(crate) fn path_needs_review(path: &str) -> bool {
 /// (`upgrade-stamp-left-out`).
 const UPGRADE_NOTES: [&str; 2] = ["upgraded", "declined_migrations"];
 
-/// Whether `clm.toml`, given its bytes on each side of a diff (`None` where the file doesn't
-/// exist), differs only in `upgraded` and `declined_migrations`, compared as parsed TOML with
-/// a missing file or key counting as unset; false when either side isn't UTF-8 or doesn't
-/// parse, and false when no note differs, so a comment-only edit is some other change
-/// (`upgrade-stamp-left-out`).
-pub fn upgrade_stamp_only(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
+/// `clm.toml`'s tables on each side of a diff, parsed, a missing file counting as empty;
+/// `None` when a side isn't UTF-8 or doesn't parse.
+fn parse_sides(before: Option<&[u8]>, after: Option<&[u8]>) -> Option<(toml::Table, toml::Table)> {
     let parse = |bytes: Option<&[u8]>| -> Option<toml::Table> {
         let Some(bytes) = bytes else {
             return Some(toml::Table::new());
         };
         std::str::from_utf8(bytes).ok()?.parse::<toml::Table>().ok()
     };
-    let rest = |mut table: toml::Table| {
-        for key in UPGRADE_NOTES {
-            table.remove(key);
-        }
-        table
-    };
-    let (Some(before), Some(after)) = (parse(before), parse(after)) else {
-        return false;
-    };
-    before != after && rest(before) == rest(after)
+    Some((parse(before)?, parse(after)?))
+}
+
+/// The table without the upgrade notes.
+fn without_notes(mut table: toml::Table) -> toml::Table {
+    for key in UPGRADE_NOTES {
+        table.remove(key);
+    }
+    table
+}
+
+/// Whether `clm.toml`'s settings are the same on both sides of a diff (`None` where the file
+/// doesn't exist), compared as parsed TOML without `upgraded` and `declined_migrations`, so
+/// comments and formatting don't count; false when either side isn't UTF-8 or doesn't parse
+/// (`settings-unchanged`).
+pub fn settings_unchanged(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
+    parse_sides(before, after)
+        .is_some_and(|(before, after)| without_notes(before) == without_notes(after))
+}
+
+/// Whether `clm.toml` differs only in `upgraded` and `declined_migrations`: its settings are
+/// unchanged and the parsed tables differ, so a comment-only edit is some other change
+/// (`upgrade-stamp-left-out`).
+pub fn upgrade_stamp_only(before: Option<&[u8]>, after: Option<&[u8]>) -> bool {
+    settings_unchanged(before, after)
+        && parse_sides(before, after).is_some_and(|(before, after)| before != after)
 }
 
 /// Whether `approval-setting` counts `clm.toml` as a spec change, given its bytes on each
