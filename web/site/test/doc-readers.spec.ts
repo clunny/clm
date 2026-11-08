@@ -37,7 +37,7 @@ function buildCalls(text: string): string[] {
 /** Whether the test reads the repository's guide: it opens the files, serves the build made from
  * them (the `page` fixture or `mainDist`), or builds with no fixture `GUIDE_DIR`. */
 const readsGuide = (text: string) =>
-  /\brepoDocs\b|\bmainDist\b|\{ page\b/.test(text) ||
+  /\brepoDocs\b|\bmainDist\b|\(\{[^})]*\bpage\b/.test(text) ||
   buildCalls(text).some((call) => !call.includes('GUIDE_DIR'))
 
 test('a test that builds the site from the repository guide holds a marker for its pages', () => {
