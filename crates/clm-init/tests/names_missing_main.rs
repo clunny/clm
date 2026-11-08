@@ -98,6 +98,17 @@ fn a_remote_on_master() {
 }
 
 #[test]
+fn a_remote_branch_ending_in_main_is_not_main() {
+    // req:init/init-names-missing-main@a3a17a23
+    let remote = repo("master");
+    commit(remote.path());
+    git(remote.path(), &["branch", "feature/main"]);
+    let dir = clone_of("master", remote.path());
+    let out = init(dir.path(), &git_host()).unwrap();
+    assert!(first_step(&out).unwrap().contains(RENAME), "{out}");
+}
+
+#[test]
 fn main_already_there() {
     // req:init/init-names-missing-main@a3a17a23
     let dir = repo("main");

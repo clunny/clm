@@ -502,7 +502,7 @@ fn missing_main(root: &Path) -> Option<String> {
     if has_remote {
         // Ask the remote; when it can't be reached, go by what was last fetched.
         let tracked = format!("refs/remotes/{REMOTE}/main");
-        let exists = match git(root, &["ls-remote", "--heads", REMOTE, "main"]) {
+        let exists = match git(root, &["ls-remote", "--heads", REMOTE, "refs/heads/main"]) {
             Ok(out) => !out.trim().is_empty(),
             Err(_) => git(root, &["rev-parse", "--verify", "--quiet", &tracked]).is_ok(),
         };
