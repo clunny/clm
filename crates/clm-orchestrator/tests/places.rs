@@ -165,6 +165,7 @@ fn scenario_full() {
 #[test]
 fn taking_writes_the_file_and_reuse_rewrites_taken() {
     // req:orchestrator/places@39abce44
+    // req:orchestrator/place-slots@e7802b3b
     let r = repo();
     write_place(&r.work, "a", "build", 3, &["impl/a"]);
     assert_eq!(

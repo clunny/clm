@@ -445,7 +445,9 @@ fn parse(text: &str) -> Result<PlaceFile, String> {
                 slot = Some(
                     value
                         .parse::<u64>()
-                        .map_err(|_| format!("bad slot `{value}`"))?,
+                        .ok()
+                        .filter(|n| *n >= 1)
+                        .ok_or_else(|| format!("bad slot `{value}`"))?,
                 )
             }
             "branch" => branches.push(value.to_string()),
@@ -564,6 +566,7 @@ mod tests {
 
     #[test]
     fn file_round_trips() {
+        // req:orchestrator/place-slots@e7802b3b
         let f = PlaceFile {
             kind: PlaceKind::Draft,
             taken: 1_793_059_200,
