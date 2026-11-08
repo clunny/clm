@@ -39,6 +39,10 @@ fn nothing_finished() {
         &[("changes/x/change.md", CHANGE)],
         "a live change, not an archived one",
     );
+    f.land(
+        &[("changes/archive/y/notes.md", CHANGE)],
+        "a file in the archive that is no change",
+    );
     let before = f.records().len();
     let out = f.due();
     assert!(out.line.starts_with("verify not-due"), "{}", out.line);

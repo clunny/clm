@@ -37,6 +37,7 @@ fn a_passing_run() {
         selection.contains("file crates/a/src/lib.rs"),
         "{selection}"
     );
+    assert!(selection.contains("node a\n"), "{selection}");
     let records = f.records();
     let Body::Verified {
         commit,
