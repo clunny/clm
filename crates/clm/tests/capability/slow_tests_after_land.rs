@@ -96,9 +96,10 @@ fn a_slow_test_breaks_after_the_land() {
     // Triage offers the failure, as a new bug on b.
     let intake = printed(&repo.clm(&["intake"]));
     assert!(
-        intake
-            .lines()
-            .any(|l| l.starts_with("verify ") && l.contains(" new ") && l.ends_with(" b")),
+        intake.lines().any(|l| l.starts_with("verify ")
+            && l.contains(" new ")
+            && l.contains(short)
+            && l.ends_with(" b")),
         "{intake}"
     );
 
@@ -142,4 +143,13 @@ fn a_slow_test_breaks_after_the_land() {
     land(&repo, "impl/b-fix");
     let fixed = repo.clm(&["verify", "--commit", "origin/main"]);
     assert!(fixed.status.success(), "{}", printed(&fixed));
+    assert!(
+        printed(&fixed).contains("verify passed"),
+        "{}",
+        printed(&fixed)
+    );
+    // The hold is gone: code lands on b go through again.
+    repo.write("lib/again.sh", "g() { :; }\n");
+    repo.push_branch("impl/b-again", "b again");
+    land(&repo, "impl/b-again");
 }
