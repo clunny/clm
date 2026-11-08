@@ -1,4 +1,4 @@
-//! A pending capability waits on the `unbuilt` rules that serve it
+//! A pending capability waits on the `unbuilt` rules that serve it, and on the `behind` ones that an item or a wait blocks
 //! (`serving-rules-order-capabilities`).
 
 mod common;
