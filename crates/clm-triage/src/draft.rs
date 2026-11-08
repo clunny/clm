@@ -586,11 +586,17 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          and then frees its place and removes its worktree. When your turn ends while a \
          command you started in the background still runs, because waiting for its \
          completion notice is all that is left, the message ending that turn is not your \
-         final message, since the triage session receives it as the draft's result: it \
+         final message, since the triage session may receive it as the draft's result: it \
          carries no closing line, neither `landed <sha>`, `proposed <id> review` nor \
          `stopped: <reason>`, and ends with the line `waiting: <command>`, naming the \
          command you wait for; your final message comes in a later turn, once the command \
-         has ended. Before you write your final message, landed, proposed or stopped, \
+         has ended. You hand back one report, your final message \
+         (`one-report-per-run`): a tool that delivers your report to the triage session and \
+         accepts one report per run, such as Claude Code's `SubagentHandback`, is never \
+         called for the message ending such a turn, which you end as plain text, and is \
+         called once, with the final message, since a report sent while waiting uses up \
+         the run's one report and the final message would then never reach the triage \
+         session. Before you write your final message, landed, proposed or stopped, \
          stop every background task you started that is still running (background shells, \
          monitors, watches) and wait for every subagent you launched, the builder check \
          among them, to return, so that no task of a finished draft wakes the triage \

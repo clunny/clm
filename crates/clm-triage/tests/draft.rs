@@ -232,7 +232,7 @@ fn scenario_draft_code_fix_written_rule() {
 
 #[test]
 fn scenario_background_work_stopped() {
-    // req:orchestrator.triage/background-work-stopped@7151c40d
+    // req:orchestrator.triage/background-work-stopped@2a9589a7
     for p in [prompt_for(&["a"], &[]), prompt_for(&["a", "b"], &["b"])] {
         let para = paragraph(&p, "`stopped: <reason>`");
         for needle in [
@@ -251,6 +251,11 @@ fn scenario_background_work_stopped() {
             "is not your final message",
             "neither `landed <sha>`, `proposed <id> review` nor `stopped: <reason>`",
             "until its completion notice arrives, however long that takes",
+            "one report",
+            "`SubagentHandback`",
+            "`one-report-per-run`",
+            "is never called for the message ending such a turn",
+            "is called once, with the final message",
         ] {
             assert!(para.contains(needle), "{needle} missing from {para}");
         }
