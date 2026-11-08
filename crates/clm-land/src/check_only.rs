@@ -33,7 +33,23 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
     let exe = Exe::new(&repo)?;
     let before = Tree::read(&repo)?;
     if let Some(land) = &repo.settings.land.value {
-        repo.project_check(&repo.root, &land.check, None, &[], FAILS, None)?;
+        // The slot of the place that names the checked-out branch, 0 when `HEAD` is detached
+        // (`land/check-slot`); a run in a build place, slot not 0, takes no check lock
+        // (`land/check-lock`).
+        let slot = match clm_git::current_branch(&repo.root)? {
+            Some(branch) => repo.slot(&branch)?,
+            None => 0,
+        };
+        repo.project_check(
+            &repo.root,
+            &land.check,
+            None,
+            &[],
+            FAILS,
+            None,
+            slot,
+            slot == 0,
+        )?;
     }
     repo.clm_check(exe.path(), &repo.root, true, FAILS)?;
     let after = Tree::read(&repo)?;

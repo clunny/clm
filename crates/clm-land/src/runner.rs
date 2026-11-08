@@ -44,7 +44,7 @@ pub fn run_check(
     log: Option<&Path>,
 ) -> Result<CheckRun, Error> {
     let places = places_of(dir)?;
-    run_in(&places, command, dir, selection, env, log, |l| {
+    run_in(&places, command, dir, selection, env, log, true, |l| {
         eprintln!("{l}")
     })
 }
@@ -60,7 +60,10 @@ pub(crate) fn places_of(root: &Path) -> Result<PathBuf, Error> {
     Ok(main.join(prefix).join(".clm"))
 }
 
-/// `run_check` with the clone's `places` known and the waiting line passed to `say`.
+/// `run_check` with the clone's `places` known and the waiting line passed to `say`, taking
+/// the check lock only when `locked`: a `--check-only` run in a build place takes none
+/// (`land/check-lock`).
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_in(
     places: &Path,
     command: &str,
@@ -68,11 +71,14 @@ pub(crate) fn run_in(
     selection: Option<&Path>,
     env: &CheckEnv,
     log: Option<&Path>,
+    locked: bool,
     say: impl FnOnce(&str),
 ) -> Result<CheckRun, Error> {
     // One check at a time on the clone, whatever the target, held until the command ends
     // (`land/check-lock`).
-    let _lock = crate::lock::check(places, say)?;
+    let _lock = locked
+        .then(|| crate::lock::check(places, say))
+        .transpose()?;
     let logged = check_log::run(shell(command, dir, selection, env), log)?;
     Ok(CheckRun {
         passed: logged.status.success(),
@@ -158,6 +164,7 @@ mod tests {
             None,
             &CheckEnv::default(),
             Some(&log),
+            true,
             |l| said.push(l.to_string()),
         )
         .unwrap();

@@ -40,7 +40,7 @@ fn assert_unlocked(f: &Fixture) {
 
 #[test]
 fn overlapping_check_only_runs() {
-    // req:land/check-lock@069468cd
+    // req:land/check-lock@4322253a
     let f = Fixture::new("");
     logging_check(&f);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -60,7 +60,7 @@ fn overlapping_check_only_runs() {
 
 #[test]
 fn a_check_only_run_beside_a_land() {
-    // req:land/check-lock@069468cd
+    // req:land/check-lock@4322253a
     let f = Fixture::new("");
     logging_check(&f);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -82,7 +82,7 @@ fn a_check_only_run_beside_a_land() {
 
 #[test]
 fn a_land_with_the_callers_target() {
-    // req:land/check-lock@069468cd
+    // req:land/check-lock@4322253a
     let f = Fixture::new("");
     logging_check(&f);
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -105,7 +105,7 @@ fn a_land_with_the_callers_target() {
 
 #[test]
 fn released_after_a_failing_check() {
-    // req:land/check-lock@069468cd
+    // req:land/check-lock@4322253a
     let f = Fixture::new("");
     f.write("check-fails", "");
     for _ in 0..2 {
@@ -118,7 +118,7 @@ fn released_after_a_failing_check() {
 
 #[test]
 fn checked_code_takes_no_check_lock() {
-    // req:land/check-lock@069468cd
+    // req:land/check-lock@4322253a
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     f.mark_checked("origin/main");
@@ -128,4 +128,26 @@ fn checked_code_takes_no_check_lock() {
     let out = clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
     assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     assert!(f.lines("check.log").is_empty());
+}
+
+#[test]
+fn a_check_only_run_in_a_build_place() {
+    // req:land/check-lock@4322253a
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    f.place("a", 1, "impl/a");
+    let linked = f.linked("wa", "impl/a");
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm/check.lock")).unwrap();
+    held.lock().unwrap();
+    let env = f.env(&[]);
+    let (tx, rx) = std::sync::mpsc::channel();
+    // Not a scoped thread: a run that waited on the lock must fail the test, not hang it.
+    std::thread::spawn(move || tx.send(clm_land::check_only(&linked, None, &env)));
+    let out = rx
+        .recv_timeout(Duration::from_secs(20))
+        .expect("the run waited for the check lock")
+        .unwrap();
+    assert_eq!(out.lines.last().unwrap(), "checks pass");
+    drop(held);
 }

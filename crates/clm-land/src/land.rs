@@ -277,7 +277,20 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             }
             // Kept for a failing check, by branch, beside `.clm/land`.
             let log = places.join("land-logs").join(format!("{branch}.log"));
-            repo.project_check(dir.path(), check, Some(target), &vars, ON_MERGE, Some(&log))?;
+            // The slot of the place that names the branch, so the tests key their ports and
+            // paths apart from other builds' (`land/check-slot`); a land always takes the
+            // check lock (`land/check-lock`).
+            let slot = repo.slot(&branch)?;
+            repo.project_check(
+                dir.path(),
+                check,
+                Some(target),
+                &vars,
+                ON_MERGE,
+                Some(&log),
+                slot,
+                true,
+            )?;
         }
         if checked {
             repo.clm_check(exe, dir.path(), false, ON_MERGE)?;

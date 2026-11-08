@@ -217,8 +217,20 @@ impl<'a> Repo<'a> {
             .unwrap_or_else(|| "0".into())
     }
 
+    /// The slot of the build place that names `branch`, 0 outside one (`land/check-slot`),
+    /// for `CLM_SLOT`; exit 2 with `place_slot`'s error when it fails.
+    fn slot(&self, branch: &str) -> Result<u64, Error> {
+        clm_orchestrator::place_slot(&self.root, branch).map_err(|e| match e {
+            clm_orchestrator::Error::Refused(why) | clm_orchestrator::Error::Git(why) => {
+                Error::Git(why)
+            }
+            clm_orchestrator::Error::Spec(_) => Error::Git("the specs don't load".into()),
+        })
+    }
+
     /// `[land] check` in `dir` through `sh -c`, outside CI, building into `target` when
-    /// given, with `vars` set; refused as `` `<check>` <fails> `` when it fails. With `log`
+    /// given, with `vars` set and `CLM_SLOT` set to `slot`, under the clone's check lock when
+    /// `locked`; refused as `` `<check>` <fails> `` when it fails. With `log`
     /// (a land's), its output also goes to that log and a failure repeats its last lines and
     /// names the log, which a pass removes (`land/check-log`).
     fn project_check(
@@ -229,10 +241,13 @@ impl<'a> Repo<'a> {
         vars: &[(&str, &Path)],
         fails: &str,
         log: Option<&Path>,
+        slot: u64,
+        locked: bool,
     ) -> Result<(), Error> {
         // The runner `verify` shares: one check at a time on the clone, whatever the target
-        // (`land/check-lock`, `land/shared-check-runner`). `--check-only` passes no log, so its
-        // refusal repeats no tail and names no step.
+        // (`land/check-lock`, `land/shared-check-runner`), except a `--check-only` run in a
+        // build place. `--check-only` passes no log, so its refusal repeats no tail and names
+        // no step.
         let mut env = runner::CheckEnv {
             set: vars
                 .iter()
@@ -245,13 +260,22 @@ impl<'a> Repo<'a> {
             env.set
                 .push(("CARGO_TARGET_DIR".into(), target.as_os_str().to_owned()));
         }
+        // Replacing the caller's own (`land/check-slot`).
+        env.set.push(("CLM_SLOT".into(), slot.to_string().into()));
         let selection = vars
             .iter()
             .find(|(name, _)| *name == "CLM_SELECTION")
             .map(|(_, path)| *path);
-        let run = runner::run_in(&self.places()?, check, dir, selection, &env, log, |line| {
-            eprintln!("{line}")
-        })?;
+        let run = runner::run_in(
+            &self.places()?,
+            check,
+            dir,
+            selection,
+            &env,
+            log,
+            locked,
+            |line| eprintln!("{line}"),
+        )?;
         let Some(log) = log else {
             if !run.passed {
                 return Err(Error::Refused(format!("`{check}` {fails}")));
