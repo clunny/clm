@@ -90,9 +90,7 @@ pub struct Approvals {
 pub struct Repo<'a> {
     root: PathBuf,
     env: &'a Env,
-    /// False with `host = "none"`: no `origin`, and `main` is the local branch.
-    remote: bool,
-    /// The ref `main` is landed on: `origin/main`, or the local `main` without a remote.
+    /// The ref `main` is landed on: `origin/main`, on every host (`approval-from-base`).
     base: String,
     /// `approval`, and the layer the clone's `clm.local.toml` may set it in.
     approval: clm_config::Setting<clm_config::Approval>,
@@ -101,21 +99,15 @@ pub struct Repo<'a> {
 impl<'a> Repo<'a> {
     /// The repository at `root` (the CLM root, canonical), with its loaded `settings`.
     pub fn new(root: &Path, env: &'a Env, settings: &clm_config::Settings) -> Self {
-        let remote = settings.host.value != clm_config::Host::None;
-        let base = match remote {
-            true => format!("{REMOTE}/main"),
-            false => "main".to_string(),
-        };
         Repo {
             root: root.to_path_buf(),
             env,
-            remote,
-            base,
+            base: format!("{REMOTE}/main"),
             approval: settings.approval.clone(),
         }
     }
 
-    /// The ref `main` is landed on: `origin/main`, or the local `main` without a remote.
+    /// The ref `main` is landed on: `origin/main`.
     pub fn base(&self) -> &str {
         &self.base
     }
@@ -124,9 +116,9 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, unless there is no remote; a failure is being offline.
+    /// `git fetch origin`; a failure is being offline.
     pub fn fetch(&self) -> Result<(), Error> {
-        if self.remote && clm_git::fetch(&self.root).is_err() {
+        if clm_git::fetch(&self.root).is_err() {
             return Err(Error::Refused(OFFLINE.into()));
         }
         Ok(())
@@ -161,10 +153,7 @@ impl<'a> Repo<'a> {
     /// commits `origin` lacks is refused. Also says whether the head is `origin`'s tip.
     pub fn head(&self, branch: &str, refuse_unpushed: bool) -> Result<(String, bool), Error> {
         let local = self.rev(&format!("refs/heads/{branch}"))?;
-        let remote = match self.remote {
-            true => self.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?,
-            false => None,
-        };
+        let remote = self.rev(&format!("refs/remotes/{REMOTE}/{branch}"))?;
         let unpushed = || {
             Error::Refused(format!(
                 "`{branch}` has commits origin lacks: push it, then land it"
@@ -173,9 +162,7 @@ impl<'a> Repo<'a> {
         match (local, remote) {
             (Some(l), Some(r)) if clm_git::is_ancestor(&self.root, &l, &r)? => Ok((r, true)),
             (None, Some(r)) => Ok((r, true)),
-            (Some(_), _) if self.remote && refuse_unpushed && is_pushed_deliberately(branch) => {
-                Err(unpushed())
-            }
+            (Some(_), _) if refuse_unpushed && is_pushed_deliberately(branch) => Err(unpushed()),
             (Some(l), _) => Ok((l, false)),
             (None, None) => Err(Error::Refused(format!("no branch `{branch}`"))),
         }

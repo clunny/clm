@@ -129,7 +129,12 @@ impl Fixture {
     /// A repository `work` with `host = "none"` whose `origin` is the bare repository
     /// `keep_remote` made, reached as `origin.git` like the others.
     pub fn local() -> Self {
-        Self::make("host = \"none\"\n", true, false)
+        Self::local_with("")
+    }
+
+    /// As `local`, with `settings` in `clm.toml` too.
+    pub fn local_with(settings: &str) -> Self {
+        Self::make(&format!("host = \"none\"\n{settings}"), true, false)
     }
 
     fn make(settings: &str, kept: bool, nested: bool) -> Self {

@@ -92,6 +92,25 @@ fn a_branch_that_weakens_the_policy_is_judged_by_the_base() {
 }
 
 #[test]
+fn a_host_none_clone_is_judged_by_origin_main() {
+    // req:land.approval/approval-from-base@094b6c3d
+    let f = Fixture::local_with("approval = \"other\"");
+    branch_sets(&f, "approval = \"other\"", "approval = \"any\"");
+    // The local `main` says `any` and `spec/x` is on `origin` alone: neither is the base.
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "main"]);
+    f.git(&work, &["branch", "-q", "-D", "spec/x"]);
+    let toml = std::fs::read_to_string(work.join("clm.toml")).unwrap();
+    let toml = toml.replacen("approval = \"other\"", "approval = \"any\"", 1);
+    f.commit_files(&[("clm.toml", &toml)], "local only");
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&work, Some("spec/x"), &f.env(&[])));
+    assert!(why.contains("gate/approval"), "{why}");
+    assert_eq!(why.matches("origin/main:clm.toml").count(), 1, "{why}");
+    assert_eq!(f.remote("main"), old);
+}
+
+#[test]
 fn a_branch_that_tightens_the_policy_is_judged_by_the_base() {
     // req:land.approval/approval-from-base@094b6c3d
     let f = Fixture::new("# no approval");
