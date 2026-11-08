@@ -1004,7 +1004,7 @@ fn config_get_approval_from_the_repository() {
 
 #[test]
 fn config_get_land_check() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let (out, path) =
         config_get_in_repo(Some("[land]\ncheck = \"scripts/clm-check.sh\"\n"), "land");
     assert_eq!(
@@ -1014,15 +1014,31 @@ fn config_get_land_check() {
 }
 
 #[test]
+fn config_get_land_check_target() {
+    // req:config/land-check-setting@1baa537e
+    let (out, path) = config_get_in_repo(
+        Some("[land]\ncheck = \"scripts/clm-check.sh\"\ncheck_target_seconds = 90\n"),
+        "land",
+    );
+    assert_eq!(
+        out,
+        format!(
+            "check=scripts/clm-check.sh,check_target_seconds=90\t{}\n",
+            path.display()
+        )
+    );
+}
+
+#[test]
 fn config_get_land_defaults_to_nothing() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     let (out, _) = config_get_in_repo(None, "land");
     assert_eq!(out, "\tdefault\n");
 }
 
 #[test]
 fn this_repositorys_clm_toml() {
-    // req:config/land-check-setting@9a71815d
+    // req:config/land-check-setting@1baa537e
     // req:config/host-setting@cbcd8366
     // req:config/affected-setting@7b51c4ec
     // req:config/health-lcov-here@1b784026
