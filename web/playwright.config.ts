@@ -22,7 +22,9 @@ export default defineConfig({
   webServer: {
     command: `npm run build && npm run preview -- --port ${port} --strictPort`,
     url,
-    reuseExistingServer: !process.env.CI,
+    // A server already answering on the port is another run's, serving another checkout's
+    // build: fail rather than test it (`test/playwright-config.test.ts`).
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

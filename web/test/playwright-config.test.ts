@@ -13,4 +13,13 @@ describe('playwright config', () => {
   it('gives a test room for more than one slow assertion', () => {
     expect(config.timeout).toBeGreaterThanOrEqual(2 * config.expect!.timeout!);
   });
+
+  // Two runs on one host can be handed the same `CLM_WEB_PORT`, or one can take the port the
+  // other probed as free. Reusing a server already answering there would test the other
+  // checkout's build, so the run fails instead (`tests-run-concurrently`).
+  it('never tests a preview server another run started', () => {
+    const servers = [config.webServer].flat();
+    expect(servers).toHaveLength(1);
+    expect(servers[0]?.reuseExistingServer).toBe(false);
+  });
 });
