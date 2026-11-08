@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-push-guard-blocks-pushes-to-main-in-repositories-that-aren-t]
 ---
 
