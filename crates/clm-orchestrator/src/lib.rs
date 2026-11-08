@@ -7,6 +7,8 @@
 //! `wasm32-unknown-unknown` (`orchestrator-builds-for-wasm`).
 
 #[cfg(feature = "git")]
+mod land_priority;
+#[cfg(feature = "git")]
 mod places;
 #[cfg(feature = "git")]
 mod propose;
@@ -15,6 +17,8 @@ mod queue;
 mod repo;
 mod taken;
 
+#[cfg(feature = "git")]
+pub use land_priority::land_priority;
 #[cfg(feature = "git")]
 pub use places::{
     Place, PlaceFile, PlaceKind, Placed, SweepOutcome, Swept, free_place, free_stale_places,

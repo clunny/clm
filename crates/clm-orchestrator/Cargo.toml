@@ -15,6 +15,10 @@ name = "claim_unique"
 required-features = ["git"]
 
 [[test]]
+name = "land_priority"
+required-features = ["git"]
+
+[[test]]
 name = "orchestrator"
 required-features = ["git"]
 
