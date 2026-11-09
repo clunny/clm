@@ -125,6 +125,7 @@ fn the_exit_code_returned() {
 /// Set in the child the scenario below re-runs itself in.
 const CHILD: &str = "CLM_TEST_STDERR_FULL";
 
+#[cfg(target_os = "linux")]
 #[test]
 fn a_failing_stderr_ends_nothing() {
     // req:land/shared-check-runner@54ccc864
@@ -145,6 +146,8 @@ fn a_failing_stderr_ends_nothing() {
             "{}",
             String::from_utf8_lossy(&out.stdout)
         );
+        let said = String::from_utf8_lossy(&out.stdout);
+        assert!(said.contains("1 passed"), "{said}");
         return;
     }
     let f = Fixture::new("");
