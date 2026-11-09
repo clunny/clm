@@ -615,8 +615,14 @@ fn propose_fix_runs_setup() {
         Vec::<String>::new()
     );
     // It runs before any test in the checkout, and again after dependency changes.
-    let rule = sentence_with(section, "`clm setup`");
-    for needle in ["before", "any test", "again", "`clm rebase`", "dependency"] {
+    let rule = sentence_with(section, "When `clm.toml` sets `[build] setup`");
+    for needle in [
+        "in this checkout",
+        "before you run any test",
+        "and again after",
+        "`clm rebase`",
+        "dependency declarations",
+    ] {
         assert!(rule.contains(needle), "{needle}: {rule}");
     }
     // a skill without the rule
