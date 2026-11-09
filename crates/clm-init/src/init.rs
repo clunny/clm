@@ -74,6 +74,8 @@ struct Lang {
     /// The shell test the build line runs under (`init-without-manifest`).
     present: &'static str,
     build: &'static str,
+    /// Lines run before the build line, each already indented (`starter-check-land-dir`).
+    before_build: &'static str,
 }
 
 const LANGS: [Lang; 3] = [
@@ -85,6 +87,7 @@ const LANGS: [Lang; 3] = [
         manifest: "Cargo.toml",
         present: "[ -f Cargo.toml ]",
         build: "cargo test",
+        before_build: "    # A land hands its check the place its build lasts in; a build's own check gets none.\n    if [ -n \"${CLM_LAND_DIR:-}\" ]; then\n        export CARGO_TARGET_DIR=\"$CLM_LAND_DIR\" CARGO_INCREMENTAL=0\n    fi\n",
     },
     Lang {
         name: "typescript",
@@ -94,6 +97,7 @@ const LANGS: [Lang; 3] = [
         manifest: "package.json",
         present: "[ -f package.json ]",
         build: "npm ci && npm test",
+        before_build: "",
     },
     Lang {
         name: "python",
@@ -103,6 +107,7 @@ const LANGS: [Lang; 3] = [
         manifest: "pyproject.toml",
         present: "[ -f pyproject.toml ] || [ -f setup.py ]",
         build: "pytest",
+        before_build: "",
     },
 ];
 
@@ -594,8 +599,8 @@ fn check_script(langs: &[&Lang]) -> String {
     // passes.
     for lang in langs {
         text.push_str(&format!(
-            "if {}; then\n    {}\nfi\n",
-            lang.present, lang.build
+            "if {}; then\n{}    {}\nfi\n",
+            lang.present, lang.before_build, lang.build
         ));
     }
     text

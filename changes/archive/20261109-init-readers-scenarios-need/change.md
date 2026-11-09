@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [init-readers-scenarios-need-check-affected]
 ---
 

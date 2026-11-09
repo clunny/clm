@@ -142,7 +142,7 @@ fn with_script(text: &str) -> TempDir {
     dir
 }
 
-// req:upgrade/migration-check-script-from-root@0f7f933f
+// req:upgrade/migration-check-script-from-root@46e5be99
 #[test]
 fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
     assert!(!OLD_SCRIPT.contains("BASH_SOURCE"));
@@ -151,7 +151,8 @@ fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
     let out = apply(dir.path()).unwrap();
     assert!(out.contains(&format!("applied {SCRIPT_ID}\n")), "{out}");
     let text = fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap();
-    assert_eq!(text, NEW_SCRIPT);
+    // `migration-starter-land-dir` then brings it to the text written today.
+    assert_eq!(text, NEW_RUST_SCRIPT);
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
@@ -174,9 +175,9 @@ fn an_edited_check_script_is_left_and_noted() {
 fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
-    let dir = with_script(NEW_SCRIPT);
+    let dir = with_script(NEW_RUST_SCRIPT);
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
-    let dir = with_script(&format!("{NEW_SCRIPT}echo mine\n"));
+    let dir = with_script(&format!("{NEW_RUST_SCRIPT}echo mine\n"));
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
@@ -536,6 +537,79 @@ fn the_land_dir_note_names_what_a_project_needs_to_know() {
         "clm guide constraints",
         "clm:reads",
         "[verify]",
+    ] {
+        assert!(note.contains(needle), "{needle}: {note}");
+    }
+}
+
+const STARTER_ID: &str = "20261109-land-still-sets-cargo";
+const OLD_RUST_SCRIPT: &str = include_str!("migrations/20261109-land-still-sets-cargo/old.sh");
+const NEW_RUST_SCRIPT: &str = include_str!("migrations/20261109-land-still-sets-cargo/new.sh");
+
+// req:upgrade/migration-starter-land-dir@131020e2
+#[test]
+fn an_unedited_v0_23_script_is_rewritten_with_the_land_dir_lines() {
+    assert_eq!(OLD_RUST_SCRIPT, NEW_SCRIPT);
+    let dir = with_script(OLD_RUST_SCRIPT);
+    assert!(list(dir.path()).unwrap().contains(STARTER_ID));
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("applied {STARTER_ID}\n")), "{out}");
+    let text = fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap();
+    assert_eq!(text, NEW_RUST_SCRIPT);
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-starter-land-dir@131020e2
+#[test]
+fn an_unedited_v0_14_script_is_rewritten_by_both_migrations() {
+    let dir = with_script(OLD_SCRIPT);
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("applied {STARTER_ID}\n")), "{out}");
+    let text = fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap();
+    assert_eq!(text, NEW_RUST_SCRIPT);
+}
+
+// req:upgrade/migration-starter-land-dir@131020e2
+#[test]
+fn an_edited_v0_23_script_is_left_and_noted() {
+    let edited = format!("{OLD_RUST_SCRIPT}echo mine\n");
+    let dir = with_script(&edited);
+    let out = apply(dir.path()).unwrap();
+    assert_eq!(
+        fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap(),
+        edited
+    );
+    assert!(out.contains(&format!("note {STARTER_ID}\n")), "{out}");
+}
+
+// req:upgrade/migration-starter-land-dir@131020e2
+#[test]
+fn the_starter_migration_is_done_without_a_script_a_land_dir_or_cargo() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    assert!(!list(dir.path()).unwrap().contains(STARTER_ID));
+    let dir = with_script(NEW_RUST_SCRIPT);
+    assert!(!list(dir.path()).unwrap().contains(STARTER_ID));
+    let typescript = "#!/usr/bin/env bash\nset -euo pipefail\ncd \"$(dirname \"${BASH_SOURCE[0]}\")/..\"\nif [ -f package.json ]; then\n    npm ci && npm test\nfi\n";
+    let dir = with_script(typescript);
+    assert!(!list(dir.path()).unwrap().contains(STARTER_ID));
+}
+
+// req:upgrade/migration-starter-land-dir@131020e2
+#[test]
+fn the_starter_note_names_what_a_project_needs_to_know() {
+    let dir = with_script(&format!("{OLD_RUST_SCRIPT}echo mine\n"));
+    let note = crate::note(dir.path(), STARTER_ID).unwrap();
+    assert!(
+        note.starts_with(
+            "Lands no longer set CARGO_TARGET_DIR: point cargo at CLM_LAND_DIR in your check\n"
+        ),
+        "{note}"
+    );
+    for needle in [
+        "CLM_LAND_DIR",
+        "CARGO_TARGET_DIR",
+        "CARGO_INCREMENTAL",
+        "--decline",
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }
