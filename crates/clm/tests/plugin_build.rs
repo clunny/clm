@@ -152,7 +152,7 @@ fn build_launches_subagents() {
     // build watching
     let gaps = subagent_gaps(&format!("{body}\nRun `clm watch <pr>`.\n"));
     assert_eq!(gaps, ["build: SKILL.md must not mention clm watch"]);
-    for old in ["clm next --interactive", "PR #<number>"] {
+    for old in ["clm next --interactive", ".clm/logs", "PR #<number>"] {
         let gaps = subagent_gaps(&format!("{body}\n`{old}`\n"));
         assert_eq!(gaps, [format!("build: SKILL.md must not mention {old}")]);
     }
@@ -717,6 +717,11 @@ fn build_skill_is_named_build() {
     assert_eq!(
         old_skill_name_gaps(&stale),
         ["docs/guide/using-clm.md:2: names the old skill `/clm:implement`"]
+    );
+    let stale = [("x.md".to_owned(), "see skills/implement/ here\n".to_owned())];
+    assert_eq!(
+        old_skill_name_gaps(&stale),
+        ["x.md:1: names the old skill `skills/implement/`"]
     );
     // The shipped plugin, guide, CLAUDE.md and README say none.
     let mut files = Vec::new();
