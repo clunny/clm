@@ -1017,3 +1017,21 @@ fn a_prompt_that_cant_be_written_frees_the_place() {
     assert!(ran.stderr.contains("-a.md"), "{}", ran.stderr);
     assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
 }
+
+#[test]
+fn clm_draft_passes_the_declared_setup_into_the_prompt() {
+    // req:orchestrator.triage/draft-prompt-setup@53070272
+    let r = with_items();
+    let ran = clm_draft(&r, &fake(), &["b"]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(!prompt_of(&r, &ran).contains("clm setup"));
+    let r = with_items();
+    write(
+        &r.work,
+        "clm.toml",
+        "[build]\nsetup = \"scripts/setup.sh\"\n",
+    );
+    let ran = clm_draft(&r, &fake(), &["b"]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert!(prompt_of(&r, &ran).contains("clm setup"));
+}
