@@ -206,5 +206,9 @@ fn upgrade_skill_offers_verify() {
     for needle in ["`init-skill-asks-verify`", "recommending `change-done`"] {
         assert!(offer.contains(needle), "{needle}: {offer}");
     }
+    assert!(
+        body.contains("When `clm upgrade --apply` prints `applied 20261107-slow-tests-after-land`")
+    );
+    assert!(body.contains("On a yes, replace the commented section with those settings"));
     assert!(body.contains("On a no, leave the section commented."));
 }
