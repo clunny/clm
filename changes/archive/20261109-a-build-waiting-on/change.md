@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-build-waiting-on-a-hung-background-command-waits-forever]
 ---
 
