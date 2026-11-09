@@ -227,7 +227,7 @@ fn the_verdict_outlives_a_failing_stderr() {
     let green = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&green, true);
     let first = f.land(&[("crates/a/src/lib.rs", "x\n")], "first");
-    let head = f.land(&[("crates/b/src/lib.rs", "y\n")], "second");
+    let head = f.land(&[("specs/b/SPEC.md", "not a spec\n")], "second");
     f.write("check-prints", "");
     f.write("fail-path", "crates/a/src/lib.rs");
     // Another process holds the check lock for a second, so the runner has a line to say.
