@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/health-history-words-flags-no-longer-when-it-describes-a-present
 resolves:
   - health-history-words-flags-no-longer-when-it-describes-a-present
