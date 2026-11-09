@@ -74,19 +74,23 @@ fn reaches_main(refspec: &str) -> bool {
         })
 }
 
-/// The time one command's push queries share, counted from its first: even after the
-/// release lookups' 30 seconds, the guard answers before Claude Code's 60-second hook
-/// timeout, which would let the command through (`bounded-runs`).
-const PUSH_BUDGET: Duration = Duration::from_secs(20);
-
-/// The push queries' shared budget, which starts with the first query.
-#[derive(Default)]
-pub(crate) struct Budget(OnceCell<Instant>);
+/// The push queries' shared budget (`hook-budgets`), which starts with the first query.
+pub(crate) struct Budget {
+    total: Duration,
+    start: OnceCell<Instant>,
+}
 
 impl Budget {
+    pub(crate) fn new(total: Duration) -> Budget {
+        Budget {
+            total,
+            start: OnceCell::new(),
+        }
+    }
+
     /// What is left of the budget, starting it on the first call.
     fn remaining(&self) -> Duration {
-        let deadline = *self.0.get_or_init(|| Instant::now() + PUSH_BUDGET);
+        let deadline = *self.start.get_or_init(|| Instant::now() + self.total);
         deadline.saturating_duration_since(Instant::now())
     }
 }

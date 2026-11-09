@@ -7,6 +7,7 @@ mod release;
 mod shell;
 
 use std::path::Path;
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -38,10 +39,33 @@ pub fn ask_json(reason: &str) -> String {
     .to_string()
 }
 
+/// The time the guard's `git` queries and `gh` lookups may spend (`hook-budgets`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Budgets {
+    /// What one command's push queries share, counted from its first.
+    pub push: Duration,
+    /// What one command's re-run lookups share.
+    pub lookup: Duration,
+}
+
+impl Budgets {
+    /// The hook's: together they stay under Claude Code's 60-second hook timeout, which
+    /// lets the command through.
+    pub const HOOK: Budgets = Budgets {
+        push: Duration::from_secs(20),
+        lookup: Duration::from_secs(30),
+    };
+}
+
+/// `PreToolUse`, judged with the hook's budgets (`hook-budgets`).
+pub fn guard(event: &str) -> Decision {
+    guard_within(event, &Budgets::HOOK)
+}
+
 /// `PreToolUse`: refuses a `Bash` command that would cut a release or move `main`, and
 /// has the human confirm one that runs `clm approve` (`approve-in-session`), or files a CLM
-/// defect as an issue. A block wins over an ask.
-pub fn guard(event: &str) -> Decision {
+/// defect as an issue. A block wins over an ask. Git queries and `gh` lookups spend `budgets`.
+pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
     let Ok(event) = serde_json::from_str::<Value>(event) else {
         return Decision::Allow;
     };
@@ -60,14 +84,16 @@ pub fn guard(event: &str) -> Decision {
         .iter()
         .filter_map(|j| release::rerun(&j.tokens, &j.command(), j.checkout.as_deref()))
         .collect();
-    if judged.iter().any(|j| release::cuts_release(&j.tokens)) || release::reruns_release(&reruns) {
+    if judged.iter().any(|j| release::cuts_release(&j.tokens))
+        || release::reruns_release(&reruns, budgets.lookup)
+    {
         reasons.push(
             "clm: only a human cuts a release (`humans-cut-releases`). Ask the user to \
              dispatch the Release or Site workflow."
                 .to_string(),
         );
     }
-    let budget = push::Budget::default();
+    let budget = push::Budget::new(budgets.push);
     let mut reaches: Vec<(Reach, Option<&str>)> = judged
         .iter()
         .filter_map(|j| {

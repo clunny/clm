@@ -168,14 +168,10 @@ fn repo_value(value: &str) -> Repo {
     }
 }
 
-/// The time the guard's lookups share, under Claude Code's default 60-second hook
-/// timeout: a hook that times out is treated as allowing.
-const LOOKUP_BUDGET: Duration = Duration::from_secs(30);
-
 /// Whether any of `reruns` re-runs a release run or one that can't be looked up, within
-/// `LOOKUP_BUDGET`, stopping at the first.
-pub(crate) fn reruns_release(reruns: &[Rerun]) -> bool {
-    let deadline = Instant::now() + LOOKUP_BUDGET;
+/// `budget` (`hook-budgets`), stopping at the first.
+pub(crate) fn reruns_release(reruns: &[Rerun], budget: Duration) -> bool {
+    let deadline = Instant::now() + budget;
     reruns.iter().any(|rerun| rerun.releases(deadline))
 }
 
