@@ -49,7 +49,7 @@ References re-pointed to the moved IDs:
 
 Decisions under `docs/decisions/` that cite the old IDs record history and are left as written.
 
-Expected sizes, in spec tokens: `plugin` from 45,580 to about 17,500, still over its budget, since its shared rules and their summaries come to about 14,000; `plugin.propose` about 9,000, `plugin.triage` about 8,000, `plugin.build` about 6,500, `plugin.init` about 3,000, `plugin.agents` about 3,400, `plugin.upgrade` about 1,600. In code tokens each child counts its skill file and its own test file; `plugin` counts what stays in `plugin.rs`.
+Expected sizes, in spec tokens: `plugin` from 45,580 to about 16,500, still over its budget, since its shared rules and their summaries come to about 14,000; `plugin.propose` about 8,800, `plugin.triage` about 8,100, `plugin.build` about 6,400, `plugin.init` about 3,100, `plugin.agents` about 3,400, `plugin.upgrade` about 1,600. In code tokens each child counts its skill file and its own test file; `plugin` counts what stays in `plugin.rs`.
 
 ## Constraints
 
