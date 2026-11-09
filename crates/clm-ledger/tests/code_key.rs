@@ -4,7 +4,7 @@ use common::{commit, repo, sh};
 
 #[test]
 fn doc_only_difference() {
-    // req:ledger/code-key@f3b40344
+    // req:ledger/code-key@b3dc8cf8
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     repo(root, "T");
@@ -40,7 +40,7 @@ fn doc_only_difference() {
     // A file named like a doc-only one, but not at the root, is code.
     let named = commit(root, &[("crates/a/README.md", "readme\n")], "named");
     sh(root, &["reset", "-q", "--hard", &b]);
-    // `clm guide` compiles the spec format in, so it is code too.
+    // The guide's pages and the spec format are doc-only too.
     let f = commit(root, &[("docs/spec-format.md", "format 2\n")], "f");
 
     let key = |rev: &str| clm_ledger::code_key(root, rev).unwrap();
@@ -49,7 +49,9 @@ fn doc_only_difference() {
     assert!(ka.chars().all(|ch| ch.is_ascii_hexdigit()), "{ka}");
     assert_eq!(key(&b), ka);
     assert_eq!(key(&b2), ka);
-    let others = [key(&c), key(&d), key(&e), key(&f), key(&named)];
+    assert_eq!(key(&e), ka);
+    assert_eq!(key(&f), ka);
+    let others = [key(&c), key(&d), key(&named)];
     for (i, k) in others.iter().enumerate() {
         assert_ne!(*k, ka, "commit {i} has a's key");
         for other in &others[i + 1..] {

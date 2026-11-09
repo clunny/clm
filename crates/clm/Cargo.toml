@@ -39,6 +39,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+sha2.workspace = true
 roxmltree = "0.21"
 serde_yaml.workspace = true
 toml.workspace = true

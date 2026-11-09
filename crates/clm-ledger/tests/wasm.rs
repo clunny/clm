@@ -81,7 +81,7 @@ fn test_without_default_features(test: &str) {
 
 #[test]
 fn doc_only_without_default_features() {
-    // req:ledger/doc-only@4dc00eb4
+    // req:ledger/doc-only@780e373b
     test_without_default_features("doc_only");
 }
 

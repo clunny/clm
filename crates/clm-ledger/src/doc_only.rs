@@ -4,7 +4,9 @@
 //! without the `git` feature too, for `check.affected` and wasm.
 
 /// A trailing `/` is a prefix, any other entry a whole path. Safe to skip, not what's code,
-/// so anything new gets a new key.
+/// so anything new gets a new key. The guide's pages and `docs/spec-format.md` are compiled
+/// into `clm`, but the tests that read them hold `clm:reads` markers (`doc-readers-marked`),
+/// so a land that edits them still runs those tests.
 const DOC_ONLY: [&str; 8] = [
     "specs/",
     "changes/",
@@ -16,18 +18,9 @@ const DOC_ONLY: [&str; 8] = [
     "CLAUDE.md",
 ];
 
-/// Under `docs/`, but code: `clm guide` compiles the guide and the spec format in, and
-/// `clm-init`'s tests read the list of pages (`spec-format-in-the-guide`).
-const CODE_UNDER_DOCS: [&str; 2] = ["docs/guide/", "docs/spec-format.md"];
-
 /// Whether `path`, relative to the repository root, is doc-only: `code_key` leaves it out.
 pub fn doc_only(path: &str) -> bool {
-    !listed(&CODE_UNDER_DOCS, path) && listed(&DOC_ONLY, path)
-}
-
-/// Whether an entry of `list` names `path`.
-fn listed(list: &[&str], path: &str) -> bool {
-    list.iter().any(|entry| match entry.strip_suffix('/') {
+    DOC_ONLY.iter().any(|entry| match entry.strip_suffix('/') {
         Some(_) => path.starts_with(entry),
         None => path == *entry,
     })

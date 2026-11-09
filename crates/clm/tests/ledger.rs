@@ -234,7 +234,7 @@ fn compact_keeps_a_lands_check() {
 fn compact_keeps_an_older_lands_check() {
     // req:ledger/compact@cf9d661f
     let dir = tempfile::tempdir().unwrap();
-    let merges = history_holding(dir.path(), &[SPEC_FORMAT], &["Merge b0", "Merge b1"]);
+    let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0", "Merge b1"]);
     let env = env(dir.path(), &[]);
     let key = legacy_key(dir.path(), &merges[0]);
     clm_ledger::append(dir.path(), checked(&key), &env).unwrap();
@@ -299,19 +299,37 @@ fn history_holding(dir: &Path, files: &[(&str, &str)], merges: &[&str]) -> Vec<S
     out
 }
 
-/// The spec format, code since `clm guide` compiles it in, doc-only when the `landed` records
-/// without a `code_key` were written.
-const SPEC_FORMAT: (&str, &str) = ("docs/spec-format.md", "format\n");
+/// A guide page, code when the `landed` records without a `code_key` were written, doc-only now.
+const GUIDE_PAGE: (&str, &str) = ("docs/guide/intro.md", "intro\n");
 
-/// `commit`'s legacy key (`legacy-code-key`): the code key of its tree without
-/// `docs/spec-format.md`, the one path the two lists disagree on.
+/// `commit`'s legacy key (`legacy-code-key`): SHA-256 over `git ls-tree -r -z` without the
+/// entries the list as it was named, which kept `docs/guide/` as code. The live key leaves the
+/// guide page out, so the two differ.
 fn legacy_key(dir: &Path, commit: &str) -> String {
-    let branch = sh(dir, &["branch", "--show-current"]);
-    sh(dir, &["switch", "-q", "--detach", commit]);
-    sh(dir, &["rm", "-q", SPEC_FORMAT.0]);
-    sh(dir, &["commit", "-q", "-m", "without the spec format"]);
-    let key = clm_ledger::code_key(dir, "HEAD").unwrap();
-    sh(dir, &["switch", "-q", &branch]);
+    use sha2::{Digest, Sha256};
+    let out = Command::new("git")
+        .args(["ls-tree", "-r", "-z", commit])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    let mut hasher = Sha256::new();
+    for entry in out.stdout.split_inclusive(|b| *b == 0) {
+        let line = String::from_utf8_lossy(entry);
+        let path = line.split_once('\t').unwrap().1.trim_end_matches('\0');
+        let doc = ["specs/", "changes/", "backlog/", "docs/"]
+            .iter()
+            .any(|p| path.starts_with(p))
+            && !path.starts_with("docs/guide/")
+            || ["ARCHITECTURE.md", "README.md", "CLAUDE.md"].contains(&path);
+        if !doc {
+            hasher.update(entry);
+        }
+    }
+    let key: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     assert_ne!(key, clm_ledger::code_key(dir, commit).unwrap());
     key
 }
@@ -357,7 +375,7 @@ fn verify_reads_the_recorded_key() {
 fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
     // req:ledger/verify@ff314001
     let dir = tempfile::tempdir().unwrap();
-    let merges = history_holding(dir.path(), &[SPEC_FORMAT], &["Merge b0"]);
+    let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
     let legacy = legacy_key(dir.path(), &merges[0]);
     clm_ledger::append(dir.path(), checked(&legacy), &vars).unwrap();
@@ -367,7 +385,7 @@ fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
 
     // Only today's key checked: the land is unchecked.
     let dir = tempfile::tempdir().unwrap();
-    let merges = history_holding(dir.path(), &[SPEC_FORMAT], &["Merge b0"]);
+    let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
     let live = clm_ledger::code_key(dir.path(), &merges[0]).unwrap();
     clm_ledger::append(dir.path(), checked(&live), &vars).unwrap();

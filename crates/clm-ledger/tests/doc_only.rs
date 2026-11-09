@@ -3,11 +3,11 @@
 
 #[test]
 fn paths() {
-    // req:ledger/doc-only@4dc00eb4
+    // req:ledger/doc-only@780e373b
     for (path, want) in [
         ("docs/x.md", true),
-        ("docs/guide/intro.md", false),
-        ("docs/spec-format.md", false),
+        ("docs/guide/intro.md", true),
+        ("docs/spec-format.md", true),
         ("backlog/y.md", true),
         ("CLAUDE.md", true),
         ("crates/a/src/lib.rs", false),
