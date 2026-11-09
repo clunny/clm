@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [two-propose-requirements-name-the-test-file-their-tests-left]
 ---
 
