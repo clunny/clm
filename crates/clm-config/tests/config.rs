@@ -1102,6 +1102,21 @@ fn this_repository_ignores_local_and_session_files() {
 }
 
 #[test]
+fn this_repository_verifies_the_whole_suite_after_lands() {
+    // req:config/verify-here@b11aa284
+    let text =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
+    let f = Fixture::new(None, Some(&text));
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("verify").unwrap();
+    assert_eq!(
+        value,
+        "mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20"
+    );
+    assert_eq!(layer, &Layer::File(f.repo_file()));
+}
+
+#[test]
 fn relative_gitdir_finds_the_main_worktree() {
     // req:config/local-settings@6ef008e6
     let (_dir, main, linked) = worktrees();
