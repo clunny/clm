@@ -375,7 +375,7 @@ On a branch `impl/*`, `clm rebase` SHALL, after rebasing and regenerating, set t
 - architecture/spec-is-current
 
 ### Requirement: git-through-layer
-`clm-sync` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `gh` or repo queries, or through `clm-regenerate`'s `git` and `run`, which retry a held `index.lock` (`git-plumbing-layer`, `sync.regenerate/retry-index-lock`), so every `git` command `clm rebase` runs in the repository is retried, and its own wrapper is gone (`no-dead-code`).
+`clm-sync` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `gh` or its repo queries (`fetch`, `current_branch`, `extract_tree`, which take no index lock or use a temporary index), or through `clm-regenerate`'s `git` and `run`, which retry a held `index.lock` (`git-plumbing-layer`, `sync.regenerate/retry-index-lock`), and its own wrapper is gone (`no-dead-code`).
 
 #### Scenario: covered by the scan
 - GIVEN the workspace
