@@ -23,6 +23,8 @@ pub struct CheckEnv {
 #[derive(Debug, Clone)]
 pub struct CheckRun {
     pub passed: bool,
+    /// The command's exit code, none when a signal ended it.
+    pub code: Option<i32>,
     /// The last 40 lines of its output.
     pub tail: Vec<String>,
     /// Whether the log was created and written whole.
@@ -94,6 +96,7 @@ pub(crate) fn run_in(
     let logged = check_log::run(shell(command, dir, selection, env), log)?;
     Ok(CheckRun {
         passed: logged.status.success(),
+        code: logged.status.code(),
         tail: logged.tail,
         logged: logged.logged,
         step: logged.step,
@@ -158,7 +161,7 @@ mod tests {
 
     #[test]
     fn the_waiting_line_is_said_once_and_the_command_runs_after_the_lock() {
-        // req:land/shared-check-runner@05214b4c
+        // req:land/shared-check-runner@235e2519
         let dir = tempfile::tempdir().unwrap();
         let places = dir.path().join(".clm");
         std::fs::create_dir_all(&places).unwrap();
