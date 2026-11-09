@@ -264,7 +264,9 @@ impl<'a> Repo<'a> {
                 .filter(|(name, _)| *name != "CLM_SELECTION")
                 .map(|(name, value)| (name.to_string(), value.as_os_str().to_owned()))
                 .collect(),
-            unset: vec!["CI".to_string()],
+            // `CLM_LAND_DIR` is set only by a land holding the land lock, through `vars`; any
+            // other run has the caller's removed (`land/land-dir-env`).
+            unset: vec!["CI".to_string(), "CLM_LAND_DIR".to_string()],
         };
         if let Some(target) = target {
             env.set

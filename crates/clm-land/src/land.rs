@@ -325,6 +325,9 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             // (`land/shared-land-target`).
             let incremental;
             if *shared {
+                // The land tree's `.clm/land`, for a check of any toolchain
+                // (`land/land-dir-env`).
+                vars.push(("CLM_LAND_DIR", target.as_path()));
                 incremental = repo.incremental();
                 vars.push(("CARGO_INCREMENTAL", Path::new(&incremental)));
             }
