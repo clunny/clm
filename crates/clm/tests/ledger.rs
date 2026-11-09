@@ -1806,7 +1806,7 @@ fn compact_keeps_the_basis_of_a_composed_check() {
 
 #[test]
 fn compact_still_prunes_a_check_no_land_or_basis_names() {
-    // req:ledger/composed-check@af377cb9
+    // req:ledger/compact@cf9d661f
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
@@ -1819,4 +1819,43 @@ fn compact_still_prunes_a_check_no_land_or_basis_names() {
     assert_eq!(out.trim(), "removed 1");
     let fold = clm_ledger::fold(dir.path()).unwrap();
     assert!(!fold.checks.contains_key("old") && fold.checks.contains_key("m"));
+}
+
+#[test]
+fn compact_keeps_chains_of_bases() {
+    // req:ledger/composed-check@af377cb9
+    let dir = tempfile::tempdir().unwrap();
+    let merges = history(dir.path(), &["Merge b0"]);
+    let env = env(dir.path(), &[]);
+    // `deep` and `b2` are the basis of composed `h`; `h` and `b` of composed `m`, a land's key.
+    clm_ledger::append(dir.path(), checked_by("deep", "x"), &env).unwrap();
+    clm_ledger::append(dir.path(), checked_by("b2", "x"), &env).unwrap();
+    clm_ledger::append(dir.path(), composed("h", "x", "deep", "b2"), &env).unwrap();
+    clm_ledger::append(dir.path(), checked_by("b", "x"), &env).unwrap();
+    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    tick();
+    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    let fold = clm_ledger::fold(dir.path()).unwrap();
+    for key in ["deep", "b2", "h", "b", "m"] {
+        assert!(fold.checks.contains_key(key), "{key} was pruned");
+    }
+}
+
+#[test]
+fn compact_keeps_the_basis_of_a_composed_check_newer_than_every_land() {
+    // req:ledger/composed-check@af377cb9
+    let dir = tempfile::tempdir().unwrap();
+    let merges = history(dir.path(), &["Merge b0"]);
+    let env = env(dir.path(), &[]);
+    clm_ledger::append(dir.path(), checked_by("n1", "x"), &env).unwrap();
+    clm_ledger::append(dir.path(), checked_by("n2", "x"), &env).unwrap();
+    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("k")), &env).unwrap();
+    tick();
+    clm_ledger::append(dir.path(), composed("later", "x", "n1", "n2"), &env).unwrap();
+    let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    let fold = clm_ledger::fold(dir.path()).unwrap();
+    assert!(fold.checks.contains_key("n1") && fold.checks.contains_key("n2"));
 }

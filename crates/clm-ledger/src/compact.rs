@@ -63,7 +63,6 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
     // Every fingerprint a land names: `fingerprints` loses the ones whose approval stays.
     let landed_fingerprints = fingerprints.clone();
     let mut warnings = Vec::new();
-    keep_bases(&fold, &mut land_keys);
     // `verify` reads the approval that cleared a land that needed review whose first parent is signed, so
     // it stays. Checked only for the caller's own approvals a land names.
     let mine: HashSet<&str> = fold
@@ -113,7 +112,6 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         for commit in keyless {
             if present(root, commit) {
                 land_keys.insert(crate::code_key::legacy_code_key(root, commit)?);
-                keep_bases(&fold, &mut land_keys);
             } else {
                 prune_checks = false;
                 warnings.push(format!(
@@ -123,6 +121,8 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             }
         }
     }
+    // The legacy keys are in now: a composed check compaction keeps keeps its basis.
+    keep_bases(&fold, &mut land_keys, newest);
     let superseded = |record: &Record| match &record.body {
         Body::Approved { fingerprint, .. } => fingerprints.contains(fingerprint.as_str()),
         // The diff they were about is on `main`, whatever their branch.
@@ -182,10 +182,10 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
     Ok(Compacted { removed, warnings })
 }
 
-/// Adds to `keys` the code keys of the basis of every composed `checked` record whose own key
-/// is in it, and theirs in turn: `verify` audits a composed check by its basis
-/// (`composed-check`).
-fn keep_bases(fold: &crate::Fold, keys: &mut HashSet<String>) {
+/// Adds to `keys` the code keys of the basis of every composed `checked` record compaction
+/// keeps (its key is in `keys`, or it is not older than `newest`, the newest land's time), and
+/// theirs in turn: `verify` audits a composed check by its basis (`composed-check`).
+fn keep_bases(fold: &crate::Fold, keys: &mut HashSet<String>, newest: Option<&str>) {
     loop {
         let before = keys.len();
         for record in fold.checks.values().flatten() {
@@ -194,7 +194,7 @@ fn keep_bases(fold: &crate::Fold, keys: &mut HashSet<String>) {
                 basis: Some(basis),
                 ..
             } = &record.body
-                && keys.contains(code_key)
+                && (keys.contains(code_key) || newest.is_none_or(|n| record.at.as_str() >= n))
             {
                 keys.insert(basis.head.clone());
                 keys.insert(basis.base.clone());
