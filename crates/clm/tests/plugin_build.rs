@@ -771,7 +771,7 @@ fn build_defect_fixes_run_setup() {
         "dependency declarations",
         "`clm rebase`",
         "fix nothing there that needs a test",
-        "summary",
+        "say so in the summary",
     ] {
         assert!(step.contains(needle), "{needle}");
     }
