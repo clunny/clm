@@ -121,6 +121,8 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
             }
         }
     }
+    // The legacy keys are in now: a composed check compaction keeps keeps its basis.
+    keep_bases(&fold, &mut land_keys, newest);
     let superseded = |record: &Record| match &record.body {
         Body::Approved { fingerprint, .. } => fingerprints.contains(fingerprint.as_str()),
         // The diff they were about is on `main`, whatever their branch.
@@ -178,6 +180,30 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         ));
     }
     Ok(Compacted { removed, warnings })
+}
+
+/// Adds to `keys` the code keys of the basis of every composed `checked` record compaction
+/// keeps (its key is in `keys`, or it is not older than `newest`, the newest land's time), and
+/// theirs in turn: `verify` audits a composed check by its basis (`composed-check`).
+fn keep_bases(fold: &crate::Fold, keys: &mut HashSet<String>, newest: Option<&str>) {
+    loop {
+        let before = keys.len();
+        for record in fold.checks.values().flatten() {
+            if let Body::Checked {
+                code_key,
+                basis: Some(basis),
+                ..
+            } = &record.body
+                && (keys.contains(code_key) || newest.is_none_or(|n| record.at.as_str() >= n))
+            {
+                keys.insert(basis.head.clone());
+                keys.insert(basis.base.clone());
+            }
+        }
+        if keys.len() == before {
+            return;
+        }
+    }
 }
 
 /// Whether `commit` is in this clone.

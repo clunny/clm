@@ -143,12 +143,16 @@ mod tests {
                 at: String::new(),
                 check_seconds: 2,
                 steps: vec![step("y", 4, &[])],
+                recheck: None,
+                recheck_files: None,
             },
             TimedLand {
                 commit: "d".into(),
                 at: String::new(),
                 check_seconds: 9,
                 steps: vec![step("y", 4, &[])],
+                recheck: None,
+                recheck_files: None,
             },
         ];
         let got = lines(3, 2, Some((&slow, &steps)), &past);

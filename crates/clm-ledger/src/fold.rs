@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-use crate::{Body, LandKind, Record, TimedStep};
+use crate::{Body, LandKind, Recheck, Record, TimedStep};
 
 /// A `landed` record that carries its check's times (`landed-times`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,6 +15,9 @@ pub struct TimedLand {
     pub at: String,
     pub check_seconds: u64,
     pub steps: Vec<TimedStep>,
+    /// How the land checked its merged tree, when the record says (`landed-recheck`).
+    pub recheck: Option<Recheck>,
+    pub recheck_files: Option<u64>,
 }
 
 /// The state the ledgers say. Each index lists its records in `at` order.
@@ -78,12 +81,16 @@ impl Fold {
                     commit,
                     check_seconds: Some(check_seconds),
                     steps,
+                    recheck,
+                    recheck_files,
                     ..
                 } => Some(TimedLand {
                     commit: commit.clone(),
                     at: r.at.clone(),
                     check_seconds: *check_seconds,
                     steps: steps.clone(),
+                    recheck: *recheck,
+                    recheck_files: *recheck_files,
                 }),
                 _ => None,
             })

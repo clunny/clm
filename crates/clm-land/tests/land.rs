@@ -71,6 +71,7 @@ fn already_checked_code() {
         Body::Checked {
             code_key: key,
             command: f.check_command(),
+            basis: None,
         },
     );
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
@@ -300,6 +301,7 @@ fn checked_with_another_command() {
         Body::Checked {
             code_key: key,
             command: "some other check".into(),
+            basis: None,
         },
     );
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
@@ -731,6 +733,7 @@ fn a_land_that_compiles_nothing_uses_a_temporary_worktree() {
         Body::Checked {
             code_key: key,
             command: f.check_command(),
+            basis: None,
         },
     );
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();

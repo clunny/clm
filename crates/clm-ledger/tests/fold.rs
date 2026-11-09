@@ -22,6 +22,8 @@ fn landed(commit: &str) -> Body {
         changes: vec![],
         check_seconds: None,
         steps: vec![],
+        recheck: None,
+        recheck_files: None,
     }
 }
 
@@ -134,6 +136,8 @@ fn landed_record_written_flat() {
         changes: vec![],
         check_seconds: None,
         steps: vec![],
+        recheck: None,
+        recheck_files: None,
     };
     let appended = clm_ledger::append(&a, body, &env(dir.path(), &[])).unwrap();
     let branch = format!("clm/ledger/{}", appended.record.writer);

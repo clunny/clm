@@ -482,6 +482,7 @@ impl Fixture {
             Body::Checked {
                 code_key: key.clone(),
                 command: self.check_command(),
+                basis: None,
             },
         );
         key

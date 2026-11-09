@@ -90,7 +90,7 @@ pub fn verify(
                 keys.insert(crate::code_key::legacy_code_key(root, sha)?);
             }
             let keys: Vec<String> = keys.into_iter().collect();
-            if !keys.iter().any(|key| fold.checks.contains_key(key)) {
+            if !keys.iter().any(|key| is_checked(&fold, key)) {
                 findings.push(Finding {
                     rule: "ledger/unchecked-land",
                     commit: sha.to_string(),
@@ -113,6 +113,30 @@ pub fn verify(
         }
     }
     Ok(findings)
+}
+
+/// Whether some `checked` record counts for `key`: one that checked the tree whole, or a
+/// composed one whose `head` and `base` keys each have a `checked` record with its command
+/// (`composed-check`).
+fn is_checked(fold: &Fold, key: &str) -> bool {
+    let ran = |key: &str, command: &str| {
+        fold.checks.get(key).is_some_and(|records| {
+            records
+                .iter()
+                .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if c == command))
+        })
+    };
+    fold.checks.get(key).is_some_and(|records| {
+        records.iter().any(|r| match &r.body {
+            Body::Checked {
+                command,
+                basis: Some(basis),
+                ..
+            } => ran(&basis.head, command) && ran(&basis.base, command),
+            Body::Checked { basis: None, .. } => true,
+            _ => false,
+        })
+    })
 }
 
 /// Whether a commit whose `Clm-By-Hand` trailers are `by_hand` is exempt: one names an
