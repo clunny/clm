@@ -190,6 +190,8 @@ export const register: Register = on => {
   // The build skill opens the pane on Flight when it isn't open; the prompt is left as it came.
   on('skill.prompt', async ($, e, next) => {
     const prompt = await next(e)
+    // Other skills cost no lookup.
+    if (!opensForSkill({ skill: e.skill, pluginName: e.pluginName, panes: [], inRepo: true })) return prompt
     try {
       const inRepo = (await clmRoot($, await $.session.cwd())) !== undefined
       if (opensForSkill({ skill: e.skill, pluginName: e.pluginName, panes: await $.ui.panes(), inRepo })) {

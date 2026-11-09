@@ -235,7 +235,7 @@ export async function command($: Host, args: string, cwd: string): Promise<Answe
 
 /**
  * Whether a skill's prompt being expanded opens the pane: the `clm` plugin's `build` skill, in
- * a CLM repository, with no pane of the panel's listed (`build-opens-panel`).
+ * a CLM repository, with the panel's pane not listed (placed or not) (`build-opens-panel`).
  */
 export function opensForSkill(i: {
   skill: string
