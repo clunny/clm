@@ -81,7 +81,7 @@ fn verify_as_writer(dir: &Path, args: &[&str]) -> (Option<i32>, String, String) 
     )
 }
 
-// req:clm/verify-command@f591ec16
+// req:clm/verify-command@af752fb6
 #[test]
 fn each_flag_reaches_its_own_mode() {
     let dir = verifying();
@@ -109,7 +109,7 @@ fn each_flag_reaches_its_own_mode() {
     assert!(err.contains("nothing to bisect"), "{err}");
 }
 
-// req:clm/verify-command@f591ec16
+// req:clm/verify-command@af752fb6
 #[test]
 fn a_fresh_project_is_off_from_a_subdirectory() {
     let dir = initialised();
@@ -118,7 +118,7 @@ fn a_fresh_project_is_off_from_a_subdirectory() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), OFF);
 }
 
-// req:clm/verify-command@f591ec16
+// req:clm/verify-command@af752fb6
 #[test]
 fn a_subdirectory_reads_the_project_settings() {
     let dir = verifying();
@@ -129,7 +129,7 @@ fn a_subdirectory_reads_the_project_settings() {
     );
 }
 
-// req:clm/verify-command@f591ec16
+// req:clm/verify-command@af752fb6
 #[test]
 fn help_lists_the_command() {
     let dir = initialised();
