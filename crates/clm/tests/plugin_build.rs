@@ -736,3 +736,43 @@ fn build_skill_is_named_build() {
     let gaps = old_skill_name_gaps(&files);
     assert!(gaps.is_empty(), "{gaps:#?}");
 }
+
+/// What the defect-fix paragraph lacks of the build-setup rule.
+fn defect_setup_gaps(body: &str) -> Vec<String> {
+    let Some(step) = body.lines().find(|p| p.contains("fix reported defects")) else {
+        return vec!["no paragraph holds `fix reported defects`".to_owned()];
+    };
+    ["clm setup", "tests-run-in-their-own-tree", "[build] setup"]
+        .iter()
+        .filter(|n| !step.contains(*n))
+        .map(|n| format!("the defect-fix paragraph lacks `{n}`"))
+        .collect()
+}
+
+#[test]
+fn build_defect_fixes_run_setup() {
+    // req:plugin.build/build-defect-fixes-run-setup@d705d976
+    let body = skill_body("build");
+    assert_eq!(defect_setup_gaps(&body), Vec::<String>::new());
+    for needle in ["clm setup", "tests-run-in-their-own-tree", "[build] setup"] {
+        let gaps = defect_setup_gaps(&body.replace(needle, "elided"));
+        assert!(
+            gaps.iter().any(|g| g.contains(needle)),
+            "{needle}: {gaps:?}"
+        );
+    }
+    // It runs before any test, again when dependencies change, and a failure fixes nothing.
+    let step = body
+        .lines()
+        .find(|p| p.contains("fix reported defects"))
+        .unwrap();
+    for needle in [
+        "before you run any test there",
+        "dependency declarations",
+        "`clm rebase`",
+        "fix nothing there that needs a test",
+        "summary",
+    ] {
+        assert!(step.contains(needle), "{needle}");
+    }
+}
