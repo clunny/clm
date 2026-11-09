@@ -1,7 +1,4 @@
 //! The `triage` skill, `plugin/skills/triage/SKILL.md`: what its text tells Claude to do.
-// clm:reads docs/guide/**
-// clm:reads CLAUDE.md
-// clm:reads README.md
 
 use std::fs;
 use std::path::{Path, PathBuf};
