@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-guide-page-edit-selects-every-test
 ---
