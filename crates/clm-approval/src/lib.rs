@@ -116,12 +116,14 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`; a failure is being offline.
+    /// `git fetch origin`, tried again after a failure (`approve-retries-fetch`): offline when
+    /// `origin` can't be reached, else refused with git's message from the last fetch.
     pub fn fetch(&self) -> Result<(), Error> {
-        if clm_git::fetch(&self.root).is_err() {
-            return Err(Error::Refused(OFFLINE.into()));
+        match clm_git::fetch_retrying(&self.root, &["fetch", REMOTE]) {
+            Ok(()) => Ok(()),
+            Err(clm_git::FetchError::Offline) => Err(Error::Refused(OFFLINE.into())),
+            Err(clm_git::FetchError::Git(e)) => Err(Error::Refused(e.to_string())),
         }
-        Ok(())
     }
 
     /// The commit `rev` names, or `None` when it names none.
