@@ -893,9 +893,10 @@ fn scenario_setup_declared() {
         "tests-run-in-their-own-tree",
         "setup failed",
         "left <slug>: setup failed",
-        "clm rebase",
+        "again after a `clm rebase` or an edit of your own",
         "clm defect",
         "dependency declarations",
+        "to be trusted. Run the repository's checks",
     ] {
         assert!(para.contains(needle), "{needle} missing from {para}");
     }
