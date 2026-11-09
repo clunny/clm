@@ -15,10 +15,12 @@ serves: [architecture/method-in-the-plugin]
 ```
 
 ## Contract
-The skill `upgrade`, `plugin/skills/upgrade/SKILL.md`, which brings a project up to date with the `clm` it runs: it takes the migrations `clm upgrade` lists and lands them (`upgrades-carry-migrations`). The rules it shares with other skills are `plugin`'s.
+The skill `upgrade`, `plugin/skills/upgrade/SKILL.md`, which brings a project up to date with the `clm` it runs: it takes the migrations `clm upgrade` lists and lands them (`upgrades-carry-migrations`). The rules it shares with other skills are `plugin`'s; `plugin`'s Contract says what each asks of this file.
 
 ## Design
 The skill only runs `clm upgrade`; which migrations exist, what each checks and what each writes are `upgrade`'s (`hook-logic-in-clm`).
+
+**Tests** (`tests-count-where-cited`). The tests of this component's requirements sit in `crates/clm/tests/plugin_upgrade.rs`, a test file of its own beside `plugin.rs`: its build moves each test that cites one of its requirements out of `plugin.rs` into that file, with copies of the helpers those tests use and the `clm:reads` markers for the files they read (`doc-readers-marked`), so its code count holds its own tests rather than the whole of `plugin.rs`. `plugin`'s tests of the shared rules read this component's file too; a build that changes the file keeps them passing.
 
 ## ADDED Requirements
 ### Requirement: upgrade-skill
