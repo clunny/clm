@@ -639,6 +639,32 @@ fn scenario_pr_open_a_branch_without_a_change() {
 }
 
 #[test]
+fn pr_open_describes_the_branch_it_is_given() {
+    // req:host/pr-open-defaults@aa76a931
+    let r = spec_branch("Skills fail. They name a bare command.\n");
+    git(&r.work, &["checkout", "-q", "-b", "fix/y", "origin/main"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "other"]);
+    git(&r.work, &["checkout", "-q", "--detach"]);
+    let gh = fake_gh();
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open", "spec/x"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--head spec/x --title Skills fail. --body-file "));
+    assert_eq!(body(&gh), "Skills fail. They name a bare command.");
+}
+
+#[test]
+fn pr_open_spec_branch_without_a_change_uses_commits() {
+    // req:host/pr-open-defaults@aa76a931
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["checkout", "-q", "-b", "spec/nochange"]);
+    git(&r.work, &["commit", "-q", "--allow-empty", "-m", "only"]);
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(creates(&gh)[0].contains("--head spec/nochange --title only --body-file "));
+    assert_eq!(body(&gh), "- only\n");
+}
+
+#[test]
 fn scenario_pr_open_given_arguments_override() {
     // req:host/pr-open-defaults@aa76a931
     let r = spec_branch("Skills fail. They name a bare command.\n");
