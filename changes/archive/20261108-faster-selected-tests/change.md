@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P3
 resolves:
   - web-site-suite-runs-when-web-site-is-unaffected
