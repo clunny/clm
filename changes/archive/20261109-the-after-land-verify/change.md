@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-after-land-verify-reads-a-stale-checkout-s-settings-and]
 ---
 
