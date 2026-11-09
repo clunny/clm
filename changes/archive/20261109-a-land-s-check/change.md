@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-land-s-check-fails-once-on-a-clm-land-test-waiting-for-another]
 ---
 
