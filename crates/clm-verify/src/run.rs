@@ -7,7 +7,7 @@ use clm_config::VerifyMode;
 use clm_ledger::Body;
 
 use crate::chain::State;
-use crate::{Ctx, Error, Outcome, bisect, import, tree};
+use crate::{Ctx, Error, Outcome, bisect, import, say, tree};
 
 /// What a check run on one commit came to.
 pub(crate) struct Probe {
@@ -77,7 +77,11 @@ fn selection(ctx: &Ctx, dir: &Path, green: &str) -> Option<Selection> {
         Ok(Selection { _dir: dir, path })
     };
     write()
-        .map_err(|why| eprintln!("clm affected failed: {why}; the check runs every test"))
+        .map_err(|why| {
+            say(&format!(
+                "clm affected failed: {why}; the check runs every test"
+            ))
+        })
         .ok()
 }
 

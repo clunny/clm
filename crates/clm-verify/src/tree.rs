@@ -5,7 +5,7 @@
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 
-use crate::{Ctx, Error};
+use crate::{Ctx, Error, say};
 
 /// `<main worktree>/<prefix>/.clm`: where a land keeps what it keeps, and so does a
 /// verification (`land/land-tree`).
@@ -52,7 +52,7 @@ fn lock(path: &Path) -> Result<File, Error> {
     match file.try_lock() {
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => {
-            eprintln!("waiting for another check on {}", path.display());
+            say(&format!("waiting for another check on {}", path.display()));
             file.lock()?;
         }
         Err(TryLockError::Error(e)) => return Err(e.into()),
