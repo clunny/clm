@@ -50,9 +50,17 @@ struct TempBody(PathBuf);
 impl TempBody {
     fn write(body: &str) -> Result<Self, Error> {
         let path = std::env::temp_dir().join(format!("clm-pr-body-{}.md", std::process::id()));
-        std::fs::write(&path, body)
-            .map_err(|e| Error::Refused(format!("{}: {e}", path.display())))?;
-        Ok(TempBody(path))
+        let refuse = |e: std::io::Error| Error::Refused(format!("{}: {e}", path.display()));
+        // `create_new` refuses a file or symlink already at the path.
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .map_err(refuse)?;
+        let body = std::io::Write::write_all(&mut file, body.as_bytes());
+        let guard = TempBody(path.clone());
+        body.map_err(|e| Error::Refused(format!("{}: {e}", path.display())))?;
+        Ok(guard)
     }
 }
 
