@@ -1555,6 +1555,15 @@ fn every_key_config_list_prints_is_one_config_get_accepts() {
 }
 
 #[test]
+fn config_get_build_prints_the_setup_and_the_file() {
+    // req:config/build-setup-setting@f43d20f0
+    let (out, file) = config_get_in_repo(Some("[build]\nsetup = \"scripts/setup.sh\"\n"), "build");
+    assert_eq!(out, format!("setup=scripts/setup.sh\t{}\n", file.display()));
+    let (out, _) = config_get_in_repo(None, "build");
+    assert_eq!(out, "\tdefault\n");
+}
+
+#[test]
 fn config_get_verify_prints_the_table_and_the_file() {
     // req:config/verify-setting@5bf87fcc
     let (out, file) = config_get_in_repo(

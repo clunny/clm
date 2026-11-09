@@ -2078,4 +2078,7 @@ fn an_error_in_committed_text_names_the_source_and_key() {
     assert!(e.to_string().contains("max_builds"), "{e}");
     let e = load_committed_from(&f, Some("writer = \"x\"\n")).unwrap_err();
     assert!(e.to_string().contains("writer"), "{e}");
+    assert_eq!(e.source.as_deref(), Some("origin/main:clm.toml"));
+    let e = load_committed_from(&f, Some("defect = \"off\"\n")).unwrap_err();
+    assert!(e.to_string().contains("defect"), "{e}");
 }
