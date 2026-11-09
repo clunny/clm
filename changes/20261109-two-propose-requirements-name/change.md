@@ -22,6 +22,7 @@ resolves: [two-propose-requirements-name-the-test-file-their-tests-left]
 
 - Each requirement says "A test, a function over the skill's text, SHALL read the skill and fail naming the missing text." The rest of each requirement, and every scenario, is unchanged.
 - The build re-cites the two existing tests in `crates/clm/tests/plugin_propose.rs` at the new versions; no test's assertions change, and no capability test sees anything different.
+- The `workaround` flag `backlog/workaround-plugin-propose-adds-glossary-terms-1.md` (two older skill tests exempt the glossary path) still applies to the reworded text, which asks the same of the skill, so it is re-recorded at the new version rather than deleted.
 
 ## Constraints
 
