@@ -27,9 +27,10 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
     match command {
         C::Guide { .. } | C::Hook { .. } => None,
         // The commands that run whatever is pending.
-        C::Status { root, .. } | C::Backlog { root, .. } | C::View { root, .. } => {
-            at(root.as_deref(), false)
-        }
+        C::Status { root, .. }
+        | C::Backlog { root, .. }
+        | C::View { root, .. }
+        | C::Setup { root } => at(root.as_deref(), false),
         C::Defect { .. } | C::Config { .. } | C::Init { .. } | C::Upgrade { .. } => at(None, false),
         C::Check { root, .. }
         | C::Coverage { root }
@@ -44,7 +45,6 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Next { root, .. }
         | C::Claim { root, .. }
         | C::Run { root, .. }
-        | C::Setup { root }
         | C::Proposals { root, .. }
         | C::Triage { root, .. }
         | C::Intake { root, .. }
