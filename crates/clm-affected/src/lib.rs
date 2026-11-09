@@ -107,6 +107,9 @@ fn differing(root: &Path, base: &str) -> Result<Vec<Changed>, Failure> {
 
 /// `rev` as a commit, or `Refused(unknown)`.
 fn resolve(root: &Path, rev: &str, unknown: &str) -> Result<(), Failure> {
+    if rev.starts_with('-') {
+        return Err(Failure::Refused(unknown.to_string()));
+    }
     let commit = format!("{rev}^{{commit}}");
     match git(root, &["rev-parse", "--verify", "--quiet", &commit]) {
         // `--quiet` makes a ref that resolves to no commit exit 1, and nothing else does.
@@ -227,8 +230,9 @@ pub fn affected_between(
             path: path.clone(),
         })
         .collect();
-    let specs = clm_git::extract_paths(root, to, &["specs"])?;
-    let graph = load_graph(specs.path())?;
+    // The whole tree, since the graph also reads `changes/`, `backlog/` and the human layer.
+    let tree = clm_git::extract_tree(root, to)?;
+    let graph = load_graph(tree.path())?;
     Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
 }
 

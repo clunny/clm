@@ -718,6 +718,8 @@ fn a_reader_on_one_side_meets_its_owner_on_the_other() {
         },
         &|r| touch(r, "crates/a/src/lib.rs"),
     );
+    // The reader is read from the commits, not the checkout.
+    fs::remove_file(dir.path().join("crates/a/tests/spec.rs")).unwrap();
     let out = clm_affected_args(dir.path(), &["--overlap", "x", "y"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(
@@ -784,4 +786,49 @@ fn overlap_has_no_file_line_for_a_deleted_file() {
     let out = clm_affected_args(dir.path(), &["--overlap", "x", "y"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(stdout(&out), "node c\nfile crates/c/tests/t.rs\n");
+}
+
+#[test]
+fn overlap_with_shared_components_but_no_shared_file_prints_nothing() {
+    // req:check.affected/overlap-selection@2171c658
+    let dir = overlap_repo(
+        "",
+        "[]",
+        &|r| fs::remove_file(r.join("crates/c/src/lib.rs")).unwrap(),
+        &|r| fs::remove_file(r.join("crates/c/tests/t.rs")).unwrap(),
+    );
+    let out = clm_affected_args(dir.path(), &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
+}
+
+#[test]
+fn overlap_reads_the_graph_whole_from_the_commits() {
+    // req:check.affected/overlap-selection@2171c658
+    let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
+        touch(r, "crates/b/src/lib.rs")
+    });
+    let root = dir.path();
+    // A component serving an architecture entry loads only with `ARCHITECTURE.md` present.
+    git(root, &["switch", "-q", "main"]);
+    write(
+        root,
+        "ARCHITECTURE.md",
+        "# A\n\n## Constraints\n\n### Constraint: local-rule\nThe tests SHALL pass.\n\n#### Scenario: s\n- GIVEN a\n- WHEN b\n- THEN c\n\n#### Untested\nx\n",
+    );
+    write(
+        root,
+        "specs/a/SPEC.md",
+        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"crates/a/**\"]\ndepends_on: []\nserves: [architecture/local-rule]\n---\n",
+    );
+    commit_all(root, "serves");
+    git(root, &["switch", "-q", "-c", "x2", "main"]);
+    touch(root, "crates/a/src/lib.rs");
+    commit_all(root, "x2");
+    git(root, &["switch", "-q", "-c", "y2", "main"]);
+    touch(root, "crates/b/src/lib.rs");
+    commit_all(root, "y2");
+    let out = clm_affected_args(root, &["--overlap", "x2", "y2"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(stdout(&out).starts_with("node c\n"), "{out:?}");
 }

@@ -108,10 +108,14 @@ pub fn overlap(a: Selection, b: Selection) -> Selection {
             let both = |x: Vec<String>, y: &[String]| -> Vec<String> {
                 x.into_iter().filter(|v| y.contains(v)).collect()
             };
-            Selection::Nodes {
-                nodes: both(nodes, &more_nodes),
-                files: both(files, &more_files),
-            }
+            let files = both(files, &more_files);
+            // Components alone, with no file in both, are nothing to run.
+            let nodes = if files.is_empty() {
+                Vec::new()
+            } else {
+                both(nodes, &more_nodes)
+            };
+            Selection::Nodes { nodes, files }
         }
     }
 }
