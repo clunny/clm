@@ -23,8 +23,9 @@ Five skills say to open the pull request with a bare `clm pr open`: `upgrade` (i
 ## Constraints
 
 - The derivation lives in `clm-host`, and runs git only through `clm-git` (`git-through-layer`); `clm-host` gains no dependency on `model`, so it reads `## Intent` as text.
-- The `Host` trait's `page_open` is unchanged: the CLI fills the arguments before calling it, so the Azure and GitHub adapters and the fakes in other crates' tests are untouched.
-- Edge cases known: a detached `HEAD`, and a branch with no change and no commit beyond `origin/main`, each exit 1 before any host call; an empty `## Intent` falls back to the commits; on `git` and `none` nothing is derived.
+- The defaults are filled by one `clm-host` library call, `pr_open`, so `crates/clm/src/main.rs` stays dispatch only (`path-ownership`, from the architecture audit). The `Host` trait's `page_open` is unchanged, so the Azure and GitHub adapters and the fakes in other crates' tests are untouched.
+- The derived body goes to a file in `std::env::temp_dir()`, so `clm-host` gains no runtime dependency.
+- Edge cases known: on `git` and `none` the setting is checked first and nothing is derived or refused; a detached `HEAD`, a missing `origin/main`, and a branch with no change and no commit beyond `origin/main` each exit 1 before any host call; a whitespace-only `## Intent`, or a `spec/<id>` branch without `changes/<id>/change.md`, falls back to the commits.
 
 ## Open questions
 
