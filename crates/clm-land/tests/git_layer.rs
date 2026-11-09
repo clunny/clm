@@ -37,6 +37,26 @@ fn covered_by_the_scan() {
     assert!(found.is_empty(), "git or gh run outside clm-git: {found:?}");
 }
 
+#[test]
+fn fetches_retry_in_the_layer() {
+    // req:land/fetch-retry-in-layer@ab7d5670
+    let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let files = rust_files(&krate.join("src"));
+    let calls = concat!("clm_git::", "fetch_retrying(");
+    let defines = concat!("fn ", "fetch_retrying");
+    let mut called = false;
+    for file in files {
+        let text = std::fs::read_to_string(&file).unwrap();
+        called |= text.contains(calls);
+        assert!(
+            !text.contains(defines),
+            "{} defines {defines}",
+            file.display()
+        );
+    }
+    assert!(called, "no file calls clm_git::fetch_retrying");
+}
+
 /// Every `.rs` file under `dir`, recursively.
 fn rust_files(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();

@@ -134,36 +134,18 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`, tried again after a failure (`fetch_retrying`).
+    /// `git fetch origin`, tried again after a failure (`land/fetch-retry-in-layer`).
     fn fetch(&self) -> Result<(), Error> {
-        self.fetch_retrying(&["fetch", clm_git::REMOTE])
+        self.fetch_with(&["fetch", clm_git::REMOTE])
     }
 
-    /// Runs the fetch `args`, and on a failure tries it again, at most twice more, after 1
-    /// and 2 seconds, so a fetch that lost a race with another land of the clone over a
-    /// remote-tracking ref goes on (`land/offline-land`). When the last try fails it is
-    /// offline only if `origin` can't be reached either; otherwise git's message is the reason.
-    pub(crate) fn fetch_retrying(&self, args: &[&str]) -> Result<(), Error> {
-        let mut waits = land::PUSH_RETRY_WAITS.into_iter();
-        loop {
-            let failed = match self.git(args) {
-                Ok(_) => return Ok(()),
-                Err(e) => e,
-            };
-            match waits.next() {
-                Some(secs) => std::thread::sleep(std::time::Duration::from_secs(secs)),
-                None => {
-                    let reachable = self
-                        .git(&["ls-remote", "--quiet", clm_git::REMOTE, "refs/heads/main"])
-                        .is_ok();
-                    return Err(Error::Refused(if reachable {
-                        failed.to_string()
-                    } else {
-                        OFFLINE.into()
-                    }));
-                }
-            }
-        }
+    /// The fetch `args` through the layer's retrying fetch: `Offline` is the offline refusal,
+    /// and a fetch git refused keeps git's message (`land/offline-land`).
+    pub(crate) fn fetch_with(&self, args: &[&str]) -> Result<(), Error> {
+        clm_git::fetch_retrying(&self.root, args).map_err(|e| match e {
+            clm_git::FetchError::Offline => Error::Refused(OFFLINE.into()),
+            clm_git::FetchError::Git(e) => Error::Refused(e.to_string()),
+        })
     }
 
     /// The commit `rev` names, or `None` when it names none.
