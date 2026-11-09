@@ -364,19 +364,16 @@ fn init_skill_concurrent_tests() {
     assert!(record.contains("tests-run-concurrently"), "{record}");
 }
 
+const BUILD_SETUP: &[&str] = &[
+    "tests-run-in-their-own-tree",
+    "[build] setup",
+    "clm setup",
+    "fresh worktree",
+];
+
 /// What `init-skill-build-setup` asks of the `init` skill.
 fn build_setup_gaps(body: &str) -> Vec<String> {
-    text_gaps(
-        "init",
-        body,
-        &[
-            "tests-run-in-their-own-tree",
-            "[build] setup",
-            "clm setup",
-            "fresh worktree",
-        ],
-        &[],
-    )
+    text_gaps("init", body, BUILD_SETUP, &[])
 }
 
 #[test]
@@ -384,12 +381,7 @@ fn init_skill_build_setup() {
     // req:plugin.init/init-skill-build-setup@a7cb5fa5
     let body = skill_body("init");
     assert_eq!(build_setup_gaps(&body), Vec::<String>::new());
-    for needle in [
-        "tests-run-in-their-own-tree",
-        "[build] setup",
-        "clm setup",
-        "fresh worktree",
-    ] {
+    for needle in BUILD_SETUP {
         let gaps = build_setup_gaps(&body.replace(needle, "elided"));
         assert!(
             gaps.iter().any(|g| g.contains(needle)),
