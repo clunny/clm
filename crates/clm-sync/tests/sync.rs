@@ -2836,6 +2836,8 @@ fn another_changes_delta_is_merged() {
         synced(&r),
         ["merged design of a into changes/o/deltas/a.md"]
     );
+    let delta = read(&r.work, "changes/o/deltas/a.md");
+    assert!(delta.contains("ONE\ntwo\nTHREE"), "{delta}");
     assert_eq!(
         git(&r.work, &["log", "-1", "--format=%s"]),
         "Merge x into o"
