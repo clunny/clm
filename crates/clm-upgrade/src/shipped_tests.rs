@@ -411,12 +411,14 @@ fn a_project_stamped_before_the_lift_is_told_and_then_up_to_date() {
         format!("upgraded = \"{RULES_ID}\"\n\n[land]\ncheck = \"true\"\n# [verify]\n"),
     )
     .unwrap();
-    assert_eq!(
-        list(dir.path()).unwrap(),
-        format!("{OVERLAP_ID} {OVERLAP_LINE}\n")
+    // Later notes may follow it; the overlap note comes first.
+    assert!(
+        list(dir.path())
+            .unwrap()
+            .starts_with(&format!("{OVERLAP_ID} {OVERLAP_LINE}\n"))
     );
     let out = apply(dir.path()).unwrap();
-    assert_eq!(out, format!("note {OVERLAP_ID}\n"));
+    assert!(out.starts_with(&format!("note {OVERLAP_ID}\n")), "{out}");
     assert_eq!(
         read_toml(&dir),
         format!(
@@ -449,7 +451,7 @@ fn a_project_stamped_with_the_migration_itself_is_done() {
         format!("upgraded = \"{OVERLAP_ID}\"\n"),
     )
     .unwrap();
-    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    assert!(!list(dir.path()).unwrap().contains(OVERLAP_ID));
 }
 
 // req:upgrade/migration-tests-overlap@a2b3fa99
@@ -469,6 +471,71 @@ fn the_overlap_note_names_what_a_project_needs_to_know() {
         "127.0.0.1",
         "different `CLM_SLOT` values",
         "one at a time",
+    ] {
+        assert!(note.contains(needle), "{needle}: {note}");
+    }
+}
+
+const LAND_DIR_ID: &str = "20261108-toolchain-neutral-land-builds";
+const LAND_DIR_LINE: &str =
+    "advised note Lands hand your check CLM_LAND_DIR and re-check only the overlap";
+
+// req:upgrade/migration-land-dir@7f47023b
+#[test]
+fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{OVERLAP_ID}\"\n\n[land]\ncheck = \"true\"\n# [verify]\n"),
+    )
+    .unwrap();
+    assert_eq!(
+        list(dir.path()).unwrap(),
+        format!("{LAND_DIR_ID} {LAND_DIR_LINE}\n")
+    );
+    let out = apply(dir.path()).unwrap();
+    assert_eq!(out, format!("note {LAND_DIR_ID}\n"));
+    assert_eq!(
+        read_toml(&dir),
+        format!(
+            "upgraded = \"{}\"\n\n[land]\ncheck = \"true\"\n# [verify]\n",
+            latest().unwrap()
+        )
+    );
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-land-dir@7f47023b
+#[test]
+fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{LAND_DIR_ID}\"\n"),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(LAND_DIR_ID));
+    fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(LAND_DIR_ID));
+    fs::remove_file(dir.path().join("clm.toml")).unwrap();
+    assert!(!list(dir.path()).unwrap().contains(LAND_DIR_ID));
+}
+
+// req:upgrade/migration-land-dir@7f47023b
+#[test]
+fn the_land_dir_note_names_what_a_project_needs_to_know() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join("clm.toml"), "").unwrap();
+    let note = crate::note(dir.path(), LAND_DIR_ID).unwrap();
+    for needle in [
+        "CLM_LAND_DIR",
+        "CARGO_TARGET_DIR",
+        "land-checks-stay-fast",
+        "clm guide constraints",
+        "clm:reads",
+        "[verify]",
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }
