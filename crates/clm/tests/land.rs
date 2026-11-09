@@ -235,7 +235,7 @@ fn both_landed(f: &Fixture, first: Child, second: Child) -> String {
 
 #[test]
 fn overlapping_lands() {
-    // req:land/land-target-lock@ca751f80
+    // req:land/land-target-lock@66ccebd0
     let f = Fixture::new("");
     f.write("hold", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -264,8 +264,51 @@ fn overlapping_lands() {
 }
 
 #[test]
+fn a_callers_target_takes_the_lock_too() {
+    // req:land/land-target-lock@66ccebd0
+    let f = Fixture::new("");
+    f.write("hold", "");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    f.branch("impl/b", &[("c.txt", "c\n")]);
+    let a = f.linked("a", "impl/a");
+    let b = f.linked("b", "impl/b");
+    let spawn = |dir: &Path, err: &str, target: &str| {
+        let err = File::create(f.path(err)).unwrap();
+        let target = f.path(target);
+        land(
+            &f,
+            bin(),
+            dir,
+            &[],
+            &[("CARGO_TARGET_DIR", target.to_str().unwrap())],
+        )
+        .stdout(Stdio::piped())
+        .stderr(err)
+        .spawn()
+        .unwrap()
+    };
+    let first = spawn(&a, "a.err", "ta");
+    wait_for(&f.path("check-order.log"), "start");
+    let second = spawn(&b, "b.err", "tb");
+    wait_for(&f.path("b.err"), "waiting");
+    f.write("release", "");
+    let b_err = both_landed(&f, first, second);
+    let waiting = format!(
+        "waiting for another land's check on {}",
+        f.work().join(".clm/land").display()
+    );
+    assert_eq!(b_err.matches(&waiting).count(), 1, "{b_err}");
+    let order = f.lines("check-order.log");
+    assert_eq!(order.len(), 4, "{order:?}");
+    for pair in order.chunks(2) {
+        let start = pair[0].strip_prefix("start ").unwrap();
+        assert_eq!(pair[1], format!("end {start}"), "{order:?}");
+    }
+}
+
+#[test]
 fn held_through_the_gate_on_the_merge() {
-    // req:land/land-target-lock@ca751f80
+    // req:land/land-target-lock@66ccebd0
     let f = Fixture::new("");
     f.write("check-sleeps", "2");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -293,7 +336,7 @@ fn held_through_the_gate_on_the_merge() {
 
 #[test]
 fn checked_code_takes_no_lock() {
-    // req:land/land-target-lock@ca751f80
+    // req:land/land-target-lock@66ccebd0
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -345,13 +388,10 @@ fn check_only_checks_the_working_tree() {
             "checks pass"
         ]
     );
-    // In the working tree, outside CI, building where the caller's environment says.
+    // In the working tree, outside CI, with no `CLM_LAND_DIR`.
     let pwd = fs::canonicalize(&work).unwrap();
     assert_eq!(f.lines("check-pwd.log"), [pwd.display().to_string()]);
-    assert_eq!(
-        f.lines("check-env.log"),
-        ["CI=unset CARGO_TARGET_DIR=unset"]
-    );
+    assert_eq!(f.lines("check-env.log"), ["CI=unset CLM_LAND_DIR=unset"]);
     // Then `clm check`, with its detectors.
     let clm_check = f.lines("clm-check.log");
     assert_eq!(clm_check.len(), 1, "{clm_check:?}");

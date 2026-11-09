@@ -14,8 +14,8 @@ use crate::{CheckHow, Env, Error, Output, Repo};
 const FAILS: &str = "fails";
 
 /// Runs `[land] check`, when `clm.toml` sets it, and then `clm check` in `root`'s working
-/// tree, as a land runs them on its merge, but with `CARGO_TARGET_DIR` left as the caller's
-/// environment has it and every test selected. Fetches, commits and pushes nothing; the one
+/// tree, as a land runs them on its merge, but with `CLM_LAND_DIR` removed and every
+/// test selected. Fetches, commits and pushes nothing; the one
 /// thing it appends is the `checked` record of a clean committed `HEAD` that contains
 /// `origin/main`. `branch` is refused: it lands nothing, so it takes none.
 pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
@@ -44,7 +44,6 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
         repo.project_check(
             &repo.root,
             &land.check,
-            None,
             &[],
             FAILS,
             CheckHow {
