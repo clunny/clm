@@ -634,14 +634,14 @@ enum Page {
     /// Open the branch's pull request against `main` on the host, or find the open one, and
     /// print its URL, or `none` without a host.
     Open {
-        /// The branch, such as `spec/x`.
-        branch: String,
-        /// The pull request's title.
+        /// The branch, such as `spec/x` (default: the checked-out one).
+        branch: Option<String>,
+        /// The pull request's title (default: drawn from the branch).
         #[arg(long)]
-        title: String,
-        /// The file holding the pull request's body.
+        title: Option<String>,
+        /// The file holding the pull request's body (default: drawn from the branch).
         #[arg(long)]
-        body_file: PathBuf,
+        body_file: Option<PathBuf>,
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -1646,8 +1646,14 @@ fn pr(page: Page) -> ExitCode {
             title,
             body_file,
             root,
-        } => hosted("pr open", root, |host, root| {
-            let url = host.page_open(root, &branch, &title, &body_file)?;
+        } => hosted_setting("pr open", root, |setting, root| {
+            let url = clm_host::pr_open(
+                setting,
+                root,
+                branch.as_deref(),
+                title.as_deref(),
+                body_file.as_deref(),
+            )?;
             Ok(Some(url.unwrap_or_else(|| "none".into())))
         }),
         Page::Body { file, root } => {
@@ -1811,6 +1817,17 @@ fn hosted(
     root: Option<PathBuf>,
     op: impl FnOnce(&dyn clm_host::Host, &Path) -> Result<Option<String>, clm_host::Error>,
 ) -> ExitCode {
+    hosted_setting(command, root, |setting, root| {
+        op(&*clm_host::adapter(setting), root)
+    })
+}
+
+/// [`hosted`] for an operation that takes the `host` setting itself.
+fn hosted_setting(
+    command: &str,
+    root: Option<PathBuf>,
+    op: impl FnOnce(clm_config::Host, &Path) -> Result<Option<String>, clm_host::Error>,
+) -> ExitCode {
     let root = repo_root(root);
     let host = match clm_config::load(Some(&root), &clm_config::process_env) {
         Ok(settings) => settings.host.value,
@@ -1819,7 +1836,7 @@ fn hosted(
             return ExitCode::from(2);
         }
     };
-    match op(&*clm_host::adapter(host), &root) {
+    match op(host, &root) {
         Ok(line) => {
             if let Some(line) = line {
                 println!("{line}");
