@@ -341,7 +341,7 @@ Two runs of the project's tests on one host, from different build places of a cl
 - orchestrator/place-slots
 - land/check-slot
 - orchestrator.run/prompt-slot
-- plugin/init-skill-concurrent-tests
+- plugin.init/init-skill-concurrent-tests
 
 #### Untested
 Whether a project's tests take a host resource another run shares is something CLM can't see; a collision shows as a test that fails beside another build and passes alone. Runs outside a build place (the human's own checkout, `clm verify`'s local run, a draft's code fix) all have slot 0, so two of them can still collide on a port keyed on it; the check lock keeps their `[land] check` and `[verify] check` runs apart, but not their tests run by hand.

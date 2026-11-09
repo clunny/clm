@@ -562,7 +562,7 @@ The `CLAUDE.md` that `clm init` writes SHALL name `/clm:propose`, `/clm:build` a
 - THEN its `CLAUDE.md` holds `/clm:propose`, `/clm:build` and `/clm:help`, and not `/clm:implement`
 
 #### Needs
-- plugin/skill-named-build
+- plugin.build/skill-named-build
 - plugin/help-skill
 
 ### Requirement: doc-readers-marked
