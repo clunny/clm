@@ -1,6 +1,6 @@
 ---
 title: Init skill
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: []
 paths: ["plugin/skills/init/**"]
