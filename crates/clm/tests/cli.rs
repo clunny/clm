@@ -1511,12 +1511,12 @@ fn config_list_in_repo(clm_toml: &str, local: &str) -> (Output, PathBuf) {
 
 #[test]
 fn config_list_prints_every_key_with_its_layer() {
-    // req:config/config-list@bde54d36
+    // req:config/config-list@a0b1d174
     let (out, root) = config_list_in_repo("defects = \"backlog\"\n", "max_builds = 5\n");
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8(out.stdout).unwrap();
     let lines: Vec<&str> = stdout.lines().collect();
-    assert_eq!(lines.len(), 16, "{stdout}");
+    assert_eq!(lines.len(), 17, "{stdout}");
     let keys: Vec<&str> = lines
         .iter()
         .map(|l| l.split('\t').next().unwrap())
@@ -1535,7 +1535,7 @@ fn config_list_prints_every_key_with_its_layer() {
 
 #[test]
 fn config_list_of_an_invalid_edit_prints_nothing_and_fails() {
-    // req:config/config-list@bde54d36
+    // req:config/config-list@a0b1d174
     let (out, _) = config_list_in_repo("", "max_builds = 0\n");
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
@@ -1546,7 +1546,7 @@ fn config_list_of_an_invalid_edit_prints_nothing_and_fails() {
 
 #[test]
 fn every_key_config_list_prints_is_one_config_get_accepts() {
-    // req:config/config-list@bde54d36
+    // req:config/config-list@a0b1d174
     let dir = TempDir::new().unwrap();
     for key in clm_config::KEYS {
         let out = clm_config_get(dir.path(), key);

@@ -3,7 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use clm_config::{
-    Affected, Approval, Defects, Detector, Health, Host, Land, Layer, NodeSize, Settings, load,
+    Affected, Approval, Build, Defects, Detector, Health, Host, Land, Layer, NodeSize, Settings,
+    load, load_committed,
 };
 use tempfile::TempDir;
 
@@ -1923,7 +1924,7 @@ fn verify_in_the_user_file_fails() {
 
 #[test]
 fn list_has_a_line_for_every_key_in_order() {
-    // req:config/config-list@bde54d36
+    // req:config/config-list@a0b1d174
     let f = Fixture::new(None, Some("defects = \"backlog\"\n")).local("max_builds = 5\n");
     let lines = f.load(&[]).unwrap().list().unwrap();
     let keys: Vec<&str> = lines
@@ -1940,6 +1941,7 @@ fn list_has_a_line_for_every_key_in_order() {
             "host",
             "approval",
             "land",
+            "build",
             "verify",
             "affected",
             "detectors",
@@ -1958,11 +1960,122 @@ fn list_has_a_line_for_every_key_in_order() {
 
 #[test]
 fn every_listed_key_is_one_get_accepts_and_prints_the_same() {
-    // req:config/config-list@bde54d36
+    // req:config/config-list@a0b1d174
     let s = Fixture::new(None, None).load(&[]).unwrap();
     for (key, line) in clm_config::KEYS.iter().zip(s.list().unwrap()) {
         let (value, layer) = s.get(key).unwrap();
         assert_eq!(line, format!("{key}\t{value}\t{layer}"));
     }
     assert!(s.get("colour").unwrap_err().to_string().contains("colour"));
+}
+
+#[test]
+fn build_setup_set_prints_and_loads() {
+    // req:config/build-setup-setting@f43d20f0
+    let f = Fixture::new(None, Some("[build]\nsetup = \"scripts/setup.sh\"\n"));
+    let s = f.load(&[]).unwrap();
+    assert_eq!(
+        s.build.value,
+        Some(Build {
+            setup: "scripts/setup.sh".into()
+        })
+    );
+    let (value, layer) = s.get("build").unwrap();
+    assert_eq!(value, "setup=scripts/setup.sh");
+    assert_eq!(layer, &Layer::File(f.repo_file()));
+}
+
+#[test]
+fn build_setup_unset_is_empty_and_default() {
+    // req:config/build-setup-setting@f43d20f0
+    let s = Fixture::new(None, Some("")).load(&[]).unwrap();
+    assert_eq!(s.build.value, None);
+    let (value, layer) = s.get("build").unwrap();
+    assert_eq!(value, "");
+    assert_eq!(layer, &Layer::Default);
+}
+
+#[test]
+fn build_setup_that_is_not_valid_fails_naming_the_file() {
+    // req:config/build-setup-setting@f43d20f0
+    for bad in [
+        "[build]\nsetup = \"\"\n",
+        "[build]\n",
+        "[build]\nsetup = 3\n",
+        "[build]\nsetup = \"x\"\ncheck = \"x\"\n",
+        "build = \"x\"\n",
+    ] {
+        let f = Fixture::new(None, Some(bad));
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
+        assert!(e.message.contains("`build`"), "{bad}: {}", e.message);
+        let f = Fixture::new(None, None).local(bad);
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(
+            e.source,
+            Some(f.local_file().display().to_string()),
+            "{bad}"
+        );
+        assert!(e.message.contains("`build`"), "{bad}: {}", e.message);
+    }
+}
+
+#[test]
+fn build_setup_in_the_user_file_fails() {
+    // req:config/build-setup-setting@f43d20f0
+    let e = Fixture::new(Some("[build]\nsetup = \"x\"\n"), None)
+        .load(&[])
+        .unwrap_err();
+    assert!(e.to_string().contains("config.toml"), "{e}");
+    assert!(e.to_string().contains("build"), "{e}");
+}
+
+fn load_committed_from(f: &Fixture, text: Option<&str>) -> Result<Settings, clm_config::Error> {
+    let xdg = f.dir.path().join("xdg").display().to_string();
+    let env = move |k: &str| (k == "XDG_CONFIG_HOME").then(|| xdg.clone());
+    load_committed(&f.root(), text, "origin/main:clm.toml", &env)
+}
+
+const VERIFY_X: &str = "[verify]\ncheck = \"x\"\nmode = \"local\"\n";
+
+#[test]
+fn committed_text_is_read_instead_of_the_working_file() {
+    // req:config/committed-settings@33f3996e
+    let f = Fixture::new(None, Some("defects = \"off\"\n"));
+    let s = load_committed_from(&f, Some(VERIFY_X)).unwrap();
+    assert_eq!(s.verify.value.unwrap().check, "x");
+    assert_eq!(s.verify.layer.to_string(), "origin/main:clm.toml");
+    assert_eq!(s.defects.layer, Layer::Default);
+}
+
+#[test]
+fn no_committed_text_leaves_the_repository_layer_absent() {
+    // req:config/committed-settings@33f3996e
+    let f = Fixture::new(None, Some(VERIFY_X));
+    let s = load_committed_from(&f, None).unwrap();
+    assert_eq!(s.verify.value, None);
+    assert_eq!(s.verify.layer, Layer::Default);
+}
+
+#[test]
+fn the_clones_file_still_wins_over_committed_text() {
+    // req:config/committed-settings@33f3996e
+    let f = Fixture::new(None, None).local("[verify]\ncheck = \"y\"\nmode = \"local\"\n");
+    let s = load_committed_from(&f, Some(VERIFY_X)).unwrap();
+    assert_eq!(s.verify.value.unwrap().check, "y");
+    assert_eq!(s.verify.layer, Layer::File(f.local_file()));
+}
+
+#[test]
+fn an_error_in_committed_text_names_the_source_and_key() {
+    // req:config/committed-settings@33f3996e
+    let f = Fixture::new(None, None);
+    for bad in ["max_builds = 0\n", "defect = \"off\"\n", "= not toml"] {
+        let e = load_committed_from(&f, Some(bad)).unwrap_err();
+        assert_eq!(e.source.as_deref(), Some("origin/main:clm.toml"), "{bad}");
+    }
+    let e = load_committed_from(&f, Some("max_builds = 0\n")).unwrap_err();
+    assert!(e.to_string().contains("max_builds"), "{e}");
+    let e = load_committed_from(&f, Some("writer = \"x\"\n")).unwrap_err();
+    assert!(e.to_string().contains("writer"), "{e}");
 }
