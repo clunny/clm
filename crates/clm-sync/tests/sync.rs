@@ -2879,12 +2879,18 @@ fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
         &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
     );
     pull(&r);
-    let stale = "---\ncomponent: a\nbase: { design: \"00000000\" }\n---\n## MODIFIED Design\nz\n";
+    // `o`'s base is a Design `main` held earlier, so a merge could take it if one ran.
+    let stale = modifies_design(&r, "one\ntwo\nTHREE");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("ONE\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
     main_moves(
         &r,
         &[
             ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
-            ("changes/o/deltas/a.md", stale),
+            ("changes/o/deltas/a.md", &stale),
         ],
     );
     pull(&r);
@@ -2899,7 +2905,9 @@ fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
     let lines = unfinished(&r);
     assert!(!lines.iter().any(|l| l.starts_with("merged")), "{lines:?}");
     assert!(
-        lines.iter().any(|l| l.contains("changes/o/deltas/a.md")),
+        lines
+            .iter()
+            .any(|l| l.contains("changes/o/deltas/a.md") && l.contains("apply/stale-base")),
         "{lines:?}"
     );
     assert_eq!(read(&r.work, "changes/o/deltas/a.md"), stale);
