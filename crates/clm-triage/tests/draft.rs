@@ -239,7 +239,7 @@ fn scenario_draft_code_fix_written_rule() {
 
 #[test]
 fn scenario_background_work_stopped() {
-    // req:orchestrator.triage/background-work-stopped@2a9589a7
+    // req:orchestrator.triage/background-work-stopped@85b88136
     for p in [prompt_for(&["a"], &[]), prompt_for(&["a", "b"], &["b"])] {
         let para = paragraph(&p, "`stopped: <reason>`");
         for needle in [
@@ -590,7 +590,7 @@ fn scenario_draft_contract_step_deferred_prompt() {
 
 #[test]
 fn scenario_draft_architecture_audit_prompt() {
-    // req:orchestrator.triage/draft-architecture-audit@6d8f59a2
+    // req:orchestrator.triage/draft-architecture-audit@4efa5dcb
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     let check = paragraph(&p, "Then the builder check");
