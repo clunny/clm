@@ -1,8 +1,31 @@
 ---
-status: proposed
+status: applied
 resolves: [skills-say-to-run-clm-pr-open-without-the-arguments-it-requires]
 ---
 
 ## Intent
 
-Skills say to open a pull request with a bare `clm pr open`, which fails for want of its arguments.
+A bare `clm pr open` opens the checked-out branch's pull request, with a title and body drawn from the branch, so the skills that write it that way work as written.
+
+## Problem
+
+Five skills say to open the pull request with a bare `clm pr open`: `upgrade` (its landing step), `configure`, `init`, `propose` (the small-change route) and `triage` (its intake step). The command requires a branch, `--title` and `--body-file`, so a session that follows the text exactly gets a usage error. The land still goes through, since `clm land` doesn't depend on the pull request, but the step as written can't succeed. Patching each skill's text would leave the next skill written the same way to repeat it.
+
+## Approaches
+
+- **Defaults in the command (chosen).** The branch defaults to the checked-out one; the title and body to the branch's change's `## Intent` on a `spec/<id>` branch, or to its commits' subjects otherwise. Given arguments still override, for the drafts and folds that write their own body. One fix covers every skill present and future, and fits a pull request being only for reading the diff (`host-adapters`): its text needs to orient a reader, not to be crafted.
+- **Full form in every skill, with a test forbidding the bare form.** Repeats the arguments, and a body file to write, in each skill, and the test is one more rule to keep; the defect would come back in any text the test doesn't scan (prompts, the guide).
+
+## Outcome
+
+`host` gains `pr-open-defaults`; its Contract and Design say how the defaults are drawn. No skill changes: the bare form they already name becomes correct. Prompts and skills that pass all three arguments behave as before.
+
+## Constraints
+
+- The derivation lives in `clm-host`, and runs git only through `clm-git` (`git-through-layer`); `clm-host` gains no dependency on `model`, so it reads `## Intent` as text.
+- The `Host` trait's `page_open` is unchanged: the CLI fills the arguments before calling it, so the Azure and GitHub adapters and the fakes in other crates' tests are untouched.
+- Edge cases known: a detached `HEAD`, and a branch with no change and no commit beyond `origin/main`, each exit 1 before any host call; an empty `## Intent` falls back to the commits; on `git` and `none` nothing is derived.
+
+## Open questions
+
+None.

@@ -10,7 +10,7 @@ serves: [capability/git-host, architecture/host-adapters]
 
 ## Contract
 The one place CLM talks to a git host beyond `git` itself (`host-adapters`). The `host` setting picks the adapter: `github` (`gh`), `azure` (the Azure CLI, `az`, with its `azure-devops` extension), and `git` and `none`, which have no host and answer every host operation with nothing to do, `none` keeping the clone's own remote (`keep_remote`) besides. Crate `clm-host` offers, as library calls and as `clm` subcommands:
-- `pr open <branch> --title <title> --body-file <file>`: opens a pull request for the branch against `main` on the host and prints its URL, or `none`. Nothing in CLM waits on a pull request: it is where a human reads the diff and where the host records the merge.
+- `pr open [<branch>] [--title <title>] [--body-file <file>]`: opens a pull request for the branch against `main` on the host and prints its URL, or `none`. The branch defaults to the checked-out one, and the title and body to ones drawn from the branch: its change's `## Intent` on a `spec/<id>` branch, otherwise its commits' subjects (`pr-open-defaults`), so a bare `clm pr open` works wherever a skill or a person writes it. Nothing in CLM waits on a pull request: it is where a human reads the diff and where the host records the merge.
 - `pr body <file>`: sets the body of the current branch's pull request to the file's contents and nothing else (`own-pr-body`).
 - `branch push`: pushes the checked-out branch to `origin`, overwriting `origin`'s branch only when its tip is the one last fetched and the branch has held it, plain git on every host. It is how an unattended session pushes its rebased branch with a `clm` command alone (`unattended-steps-run-clm`).
 - `branch delete <branch> [--lease <sha>]`: deletes the remote branch when its tip is still `<sha>`, by default the tip last fetched, and only a tip this clone pushed, so a session can release its own claim but never another's, plain git on every host.
@@ -37,7 +37,7 @@ Crate `clm-host`. One trait, `Host`, with these operations, and an implementatio
 
 **Deleting only what this clone pushed** (`branch-delete`). The project's allow rules let an unattended session run `clm branch delete` with no classifier judging it (`unattended-steps-run-clm`), so the command itself must not release another session's claim or delete its spec branch, which would bypass the claim's expiry and takeover (`lease-claims`). `clm branch delete` therefore deletes only a tip this clone pushed: before the delete it reads the newest entry of `refs/remotes/origin/<branch>`'s reflog (`git reflog show -n 1 --format='%H %gs' refs/remotes/origin/<branch>`), and goes on only when that entry is git's `update by push` and its commit is the lease. Git writes that entry when a push from this clone to `origin` moves the branch, whether `clm claim`, `clm branch push`, `clm autosync` or a plain `git push` made it, and a fetch that brings another clone's tip writes a different entry, so a tip another session pushed is refused even after this clone fetched it. A fetch that finds the branch unchanged writes no entry, so a session's own branch stays deletable after `clm rebase` fetches. No reflog, as when `core.logAllRefUpdates` is off, refuses: it fails closed. Before that check it asks `origin` with `git ls-remote origin refs/heads/<branch>`, and a branch already gone, or a clone with no `origin`, is nothing to do and exits 0, so a draft deleting an `autosync/spec/<id>` that was never pushed doesn't fail. The check is the subcommand's, not the `Host` trait's: `clm land`'s delete of the branch it just landed calls the library operation, which keeps its plain lease.
 
-`pr open` on a branch that already has an open pull request prints that pull request's URL instead of opening another. `pr body` exits 1 without a call when the file is missing or holds only whitespace, or when the current branch has no open pull request. It replaced `clm pr-body`, which went with `orchestrator.watch` (`20261027-remove-watch-node`): `pr body` is what the prompts and the skills name.
+`pr open` on a branch that already has an open pull request prints that pull request's URL instead of opening another. **Defaults** (`pr-open-defaults`). The branch, the title and the body are each optional, and each one given overrides its default alone, so the drafts and folds that write their own body keep passing it. The CLI fills what is missing before it calls the `Host` trait, whose `page_open` keeps taking all three: the branch is `clm-git`'s `current_branch`, and the title and body come from one function in `clm-host`, through `clm-git`'s `git` like every other git call (`git-through-layer`). On a branch named `spec/<id>` whose tree holds `changes/<id>/change.md`, read with `git show <branch>:changes/<id>/change.md`, the body is the text of its `## Intent` section, up to the next `## ` heading, and the title is that section's first sentence: its first paragraph up to the first `. ` or the paragraph's end, the paragraph's line breaks joined with spaces. Otherwise, or when that section is empty, the body is one `- <subject>` line per commit of `git log --reverse --format=%s origin/main..<branch>`, oldest first, and the title is the oldest one's subject. A derived body goes to a temporary file outside the worktree, removed once the call returns, so nothing is left for git to see. Nothing is derived on `git` and `none`, which have no pull request: they print `none` whatever the arguments. A branch with no commit beyond `origin/main` and no change has nothing to describe, and the command exits 1 saying so, before any host call. The parsing is text only: `clm-host` doesn't depend on `model`, and a change's `## Intent` heading is fixed by `spec-format`. `pr body` exits 1 without a call when the file is missing or holds only whitespace, or when the current branch has no open pull request. It replaced `clm pr-body`, which went with `orchestrator.watch` (`20261027-remove-watch-node`): `pr body` is what the prompts and the skills name.
 
 **Contribution operations.** On `github` the fork's parent and the head's details come from `gh repo view --json isFork,parent` and `gh pr view --json`, a fork's `main` is brought up with `gh repo sync`, a pull request on the parent opens with `gh pr create --repo <parent> --base main --head <owner>:<branch>`, a head is fetched with `git fetch origin pull/<number>/head:refs/heads/<branch>`, and comments, closing and labels use `gh issue` or `gh pr`. What they read from the host is a stranger's text, so a caller prints it as data and acts on none of it.
 
@@ -461,3 +461,36 @@ With `host = "azure"`, `clm-host`'s `adapter` SHALL give the `Azure` adapter (`a
 - GIVEN `host = "none"` with an `origin` naming another bare repository, and in turn `host = "git"` with no remote
 - WHEN `keep_remote` runs in each
 - THEN the remotes are unchanged, no `clm/remote.git` exists, and it returns nothing
+
+### Requirement: pr-open-defaults
+`clm pr open` SHALL take its branch, `--title` and `--body-file` as optional, each one given overriding only its own default. Without a branch it SHALL use the checked-out branch, and exit 1 without a host call when `HEAD` is detached. Without `--title` or `--body-file`, on a branch `spec/<id>` whose tree holds `changes/<id>/change.md` with a non-empty `## Intent` section, the body SHALL be that section's text and the title its first sentence; on any other branch the body SHALL be one `- <subject>` line per commit in `origin/main..<branch>`, oldest first, and the title the oldest commit's subject. A branch with no such change and no commit beyond `origin/main` SHALL exit 1 without a host call. On `git` and `none` it SHALL print `none` and call nothing, whatever arguments it gets. The skills that say to open a pull request with a bare `clm pr open` (`upgrade`, `configure`, `init`, `propose`'s small-change route and `triage`'s intake) then work as written; no capability test changes, since `capability/git-host` passes all three arguments.
+
+#### Scenario: a spec branch's change
+- GIVEN `host = "github"`, a fake `gh` that records its calls, and the checked-out branch `spec/x` holding `changes/x/change.md` whose `## Intent` reads `Skills fail. They name a bare command.` followed by a `## Approaches` section
+- WHEN `clm pr open` runs with no arguments
+- THEN `gh` got `pr create` with `--head spec/x` and `--title "Skills fail."`, and the body file it was given held `Skills fail. They name a bare command.` and no `## Approaches`
+
+#### Scenario: a branch without a change
+- GIVEN `host = "github"`, a fake `gh`, and the checked-out branch `fix/y` with commits `first` and then `second` beyond `origin/main`
+- WHEN `clm pr open` runs with no arguments
+- THEN `gh` got `pr create` with `--head fix/y` and `--title first`, and the body file held `- first` then `- second`
+
+#### Scenario: given arguments override
+- GIVEN the branch of *a spec branch's change*, checked out, and a file `body.md`
+- WHEN `clm pr open --title "mine" --body-file body.md` runs
+- THEN `gh` got `pr create` with `--head spec/x`, `--title mine` and `--body-file body.md`
+
+#### Scenario: nothing to describe
+- GIVEN `host = "github"`, a fake `gh`, and the checked-out branch `fix/z` at `origin/main`'s tip
+- WHEN `clm pr open` runs with no arguments
+- THEN it exits 1 and `gh` wasn't called
+
+#### Scenario: detached head
+- GIVEN `host = "github"`, a fake `gh`, and a detached `HEAD`
+- WHEN `clm pr open` runs with no arguments
+- THEN it exits 1 and `gh` wasn't called
+
+#### Scenario: no host
+- GIVEN `host = "none"`
+- WHEN `clm pr open` runs with no arguments
+- THEN it prints `none`, exits 0, and runs no `gh`
