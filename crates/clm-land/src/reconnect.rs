@@ -20,9 +20,7 @@ pub fn reconnect(root: &Path, env: &Env) -> Result<Output, Error> {
         ));
     }
     // Pruned, so a remote-tracking ref the old remote left stands for no branch of the new one.
-    if repo.git(&["fetch", "--quiet", "--prune", REMOTE]).is_err() {
-        return Err(Error::Refused(crate::OFFLINE.into()));
-    }
+    repo.fetch_retrying(&["fetch", "--quiet", "--prune", REMOTE])?;
     let main = repo
         .rev("refs/heads/main")?
         .ok_or_else(|| Error::Refused("no local `main` to push".into()))?;

@@ -134,12 +134,36 @@ impl<'a> Repo<'a> {
         Ok(clm_git::git(&self.root, args)?)
     }
 
-    /// `git fetch origin`; a failure is being offline.
+    /// `git fetch origin`, tried again after a failure (`fetch_retrying`).
     fn fetch(&self) -> Result<(), Error> {
-        if clm_git::fetch(&self.root).is_err() {
-            return Err(Error::Refused(OFFLINE.into()));
+        self.fetch_retrying(&["fetch", clm_git::REMOTE])
+    }
+
+    /// Runs the fetch `args`, and on a failure tries it again, at most twice more, after 1
+    /// and 2 seconds, so a fetch that lost a race with another land of the clone over a
+    /// remote-tracking ref goes on (`land/offline-land`). When the last try fails it is
+    /// offline only if `origin` can't be reached either; otherwise git's message is the reason.
+    pub(crate) fn fetch_retrying(&self, args: &[&str]) -> Result<(), Error> {
+        let mut waits = land::PUSH_RETRY_WAITS.into_iter();
+        loop {
+            let failed = match self.git(args) {
+                Ok(_) => return Ok(()),
+                Err(e) => e,
+            };
+            match waits.next() {
+                Some(secs) => std::thread::sleep(std::time::Duration::from_secs(secs)),
+                None => {
+                    let reachable = self
+                        .git(&["ls-remote", "--quiet", clm_git::REMOTE, "refs/heads/main"])
+                        .is_ok();
+                    return Err(Error::Refused(if reachable {
+                        failed.to_string()
+                    } else {
+                        OFFLINE.into()
+                    }));
+                }
+            }
         }
-        Ok(())
     }
 
     /// The commit `rev` names, or `None` when it names none.

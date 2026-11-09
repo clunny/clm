@@ -454,3 +454,57 @@ fn check_output_reaches_stderr_in_order() {
     assert_eq!(numbers, ["1", "2", "3", "4", "5", "6"], "{stderr}");
     assert!(text(&out.stdout).is_empty() || text(&out.stdout).starts_with("landed "));
 }
+
+/// A `PATH` whose `git` fails a `fetch` naming `origin` the way a lost ref race does: every
+/// one when `always`, otherwise the first only (a file `lost-race` remembers it).
+fn fetch_loses_race(f: &Fixture, always: bool) -> String {
+    let mark = f.path("lost-race");
+    let once = if always {
+        String::new()
+    } else {
+        format!(
+            "[ -e '{m}' ] && continue; touch '{m}'; ",
+            m = mark.display()
+        )
+    };
+    let before = format!(
+        "if [ \"$1\" = fetch ]; then for a in \"$@\"; do if [ \"$a\" = origin ]; then {once}\
+         echo \"error: cannot lock ref 'refs/remotes/origin/main'\" >&2; exit 1; fi; done; fi"
+    );
+    fake_git(f, &before, "")
+}
+
+#[test]
+fn fetch_loses_a_ref_race() {
+    // req:land/offline-land@42e20984
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let path = fetch_loses_race(&f, false);
+    let out = land(&f, bin(), &f.work(), &["impl/a"], &[("PATH", &path)])
+        .output()
+        .unwrap();
+    let (stdout, stderr) = (text(&out.stdout), text(&out.stderr));
+    assert!(out.status.success(), "{stdout}{stderr}");
+    let main = f.remote("main");
+    assert_eq!(stdout.lines().next(), Some(&*format!("landed {main} code")));
+    assert!(!stderr.contains("offline"), "{stderr}");
+}
+
+#[test]
+fn fetch_keeps_failing_with_origin_reachable() {
+    // req:land/offline-land@42e20984
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    let old = f.remote("main");
+    let before = f.landed().len();
+    let path = fetch_loses_race(&f, true);
+    let out = land(&f, bin(), &f.work(), &["impl/a"], &[("PATH", &path)])
+        .output()
+        .unwrap();
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("cannot lock ref"), "{stderr}");
+    assert!(!stderr.contains("offline"), "{stderr}");
+    assert_eq!(f.remote("main"), old);
+    assert_eq!(f.landed().len(), before);
+}
