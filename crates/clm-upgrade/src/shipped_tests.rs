@@ -515,7 +515,10 @@ fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_othe
         format!("upgraded = \"{LAND_DIR_ID}\"\n"),
     )
     .unwrap();
-    assert!(!list(dir.path()).unwrap().contains(LAND_DIR_ID));
+    assert_eq!(
+        list(dir.path()).unwrap(),
+        format!("{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n")
+    );
     fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
     assert!(list(dir.path()).unwrap().contains(LAND_DIR_ID));
     fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
@@ -673,6 +676,8 @@ fn the_build_setup_note_names_what_a_project_needs_to_know() {
         "setup",
         "clm setup",
         "[land] check",
+        "npm ci",
+        "leaves nothing to decline",
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }
