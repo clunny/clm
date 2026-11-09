@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use clm_git::{current_branch, git};
+use clm_git::{REMOTE, current_branch, git};
 
 use crate::{Error, adapter};
 
@@ -79,7 +79,7 @@ fn describe(root: &Path, branch: &str) -> Result<(String, String), Error> {
     {
         return Ok((first_sentence(&intent), intent));
     }
-    let range = format!("origin/main..{branch}");
+    let range = format!("{REMOTE}/main..{branch}");
     let log = git(root, &["log", "--reverse", "--format=%s", &range])
         .map_err(|e| Error::Refused(e.to_string()))?;
     let Some(oldest) = log.lines().next() else {
