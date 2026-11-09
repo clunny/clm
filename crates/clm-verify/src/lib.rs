@@ -124,18 +124,12 @@ pub(crate) struct Ctx<'a> {
     pub(crate) prefix: String,
 }
 
-/// What opening a repository came to: its context, or the name of the committed `clm.toml`
-/// whose settings hold no `[verify]`.
-enum Opened<'a> {
-    On(Ctx<'a>),
-    Off(String),
-}
-
 impl<'a> Ctx<'a> {
-    /// The context for `root`. `host` comes from the settings of `root`; every other setting
-    /// from the `clm.toml` committed at `origin/main`, after fetching it
+    /// The context for `root`, or, in `Err(source)`, the name of the committed `clm.toml` whose
+    /// settings hold no `[verify]`. `host` comes from the settings of `root`; every other
+    /// setting from the `clm.toml` committed at `origin/main`, after fetching it
     /// (`settings-from-main`).
-    fn open(root: &Path, env: &'a Env) -> Result<Opened<'a>, Error> {
+    fn open(root: &Path, env: &'a Env) -> Result<Result<Self, String>, Error> {
         let root = std::fs::canonicalize(root)?;
         let host = clm_config::load(Some(&root), env)?.host.value;
         clm_git::fetch(&root)?;
@@ -148,9 +142,9 @@ impl<'a> Ctx<'a> {
         };
         let settings = clm_config::load_committed(&root, text.as_deref(), &source, env)?;
         let Some(verify) = settings.verify.value else {
-            return Ok(Opened::Off(source));
+            return Ok(Err(source));
         };
-        Ok(Opened::On(Ctx {
+        Ok(Ok(Ctx {
             affected_all: settings.affected.value.map(|a| a.all).unwrap_or_default(),
             root,
             env,
@@ -175,8 +169,8 @@ impl<'a> Ctx<'a> {
 /// `config` reads.
 pub fn verify(root: &Path, request: &Request, env: &Env) -> Result<Outcome, Error> {
     let ctx = match Ctx::open(root, env)? {
-        Opened::On(ctx) => ctx,
-        Opened::Off(source) => {
+        Ok(ctx) => ctx,
+        Err(source) => {
             return Ok(Outcome::new(
                 format!("verify off: no [verify] in {source}"),
                 0,
