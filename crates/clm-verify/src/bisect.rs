@@ -179,9 +179,10 @@ pub(crate) fn bisect_red(ctx: &Ctx, state: &State, sha: &str) -> Result<Outcome,
         mode: *mode,
         run: run.clone(),
     };
+    let note = recheck_note(ctx, state, &culprit)?;
     let appended = clm_ledger::append(&ctx.root, body, ctx.env)?;
     let mut outcome = run::report(ctx, &full, false, lands.len(), Some(&culprit), &components)?;
-    outcome.notes.extend(recheck_note(ctx, state, &culprit)?);
+    outcome.notes.extend(note);
     if !appended.pushed {
         outcome
             .notes
