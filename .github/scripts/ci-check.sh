@@ -3,6 +3,12 @@
 # runs it on the merged tree, and then runs `clm check` itself. Run from the repo root.
 set -euo pipefail
 
+# A land's place (ci/land-dir): `clm land` hands the check the directory it keeps its build
+# output in as `CLM_LAND_DIR`. Before the first cargo command, so every one builds there.
+if [ -n "${CLM_LAND_DIR:-}" ]; then
+  export CARGO_TARGET_DIR=$CLM_LAND_DIR CARGO_INCREMENTAL=0
+fi
+
 # Phase times (ci/phase-times). `timed <phase> <command...>` runs a command as one phase and
 # prints `ci-check: <phase> <n>s` to stderr after it. The EXIT trap keeps the exit status: a
 # pass prints every phase and the total, a failure only the phase it failed in, so `clm land`'s
