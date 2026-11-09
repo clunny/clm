@@ -1751,3 +1751,52 @@ fn every_selected_phase_names_the_files_that_made_it_run() {
     assert!(marked_in(&lines, "web").is_none(), "{lines:?}");
     assert!(marked_in(&lines, "web/site").is_none(), "{lines:?}");
 }
+
+/// Runs the script with a `cargo` fake that records the cargo variables it saw, `land_dir`
+/// as `CLM_LAND_DIR` (unset when `None`) and `target` as `CARGO_TARGET_DIR` (unset when
+/// `None`), `CARGO_INCREMENTAL` unset. Returns the fake's records, one line per call.
+fn cargo_variables(land_dir: Option<&str>, target: Option<&str>) -> Vec<String> {
+    let tree = Tree::new();
+    tree.fake(
+        "cargo",
+        "#!/usr/bin/env bash\necho \"${CARGO_TARGET_DIR-unset} ${CARGO_INCREMENTAL-unset}\" >> \"$CI_ENV_LOG\"\n",
+    );
+    let seen = tree.dir.path().join("seen");
+    let mut c = Command::new(Path::new(".github/scripts").join(tree.script));
+    c.current_dir(tree.work())
+        .env("PATH", tree.path())
+        .env("CI_LOG", tree.dir.path().join("log"))
+        .env("CI_ENV_LOG", &seen)
+        .env_remove("CI")
+        .env_remove("CLM_SELECTION")
+        .env_remove("CLM_LAND_DIR")
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_INCREMENTAL");
+    if let Some(dir) = land_dir {
+        c.env("CLM_LAND_DIR", dir);
+    }
+    if let Some(dir) = target {
+        c.env("CARGO_TARGET_DIR", dir);
+    }
+    let out = c.output().unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let seen = fs::read_to_string(seen).unwrap();
+    assert!(!seen.is_empty());
+    seen.lines().map(str::to_owned).collect()
+}
+
+#[test]
+fn a_lands_place_holds_its_cargo_output() {
+    // req:ci/land-dir@23d7af00
+    let calls = cargo_variables(Some("/tmp/x/land"), None);
+    assert!(calls.iter().all(|c| c == "/tmp/x/land 0"), "{calls:?}");
+}
+
+#[test]
+fn without_a_land_place_the_cargo_variables_stay() {
+    // req:ci/land-dir@23d7af00
+    for land_dir in [None, Some("")] {
+        let calls = cargo_variables(land_dir, Some("/tmp/y"));
+        assert!(calls.iter().all(|c| c == "/tmp/y unset"), "{calls:?}");
+    }
+}
