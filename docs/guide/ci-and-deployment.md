@@ -4,7 +4,7 @@ How CLM sits beside a team's pipelines: what it replaces, what it leaves alone, 
 
 ## `clm land` is your CI
 
-Continuous integration means every change joins `main` quickly and `main` always passes its checks. `clm land` does exactly that. It merges the branch with the current `main`, runs the project's check command (`[land] check`, usually `scripts/clm-check.sh`) and `clm check` on the merged result, and pushes `main` only when they pass. Lands go one at a time, so the tree that reaches `main` is the tree that was checked. A pull request pipeline usually tests the branch, not the merge.
+Continuous integration means every change joins `main` quickly and `main` always passes its checks. `clm land` does exactly that. It merges the branch with the current `main`, runs the project's check command (`[land] check`, usually `scripts/clm-check.sh`) and `clm check` on the merged result, and pushes `main` only when they pass. Lands go one at a time, so every tree that reaches `main` was checked, by a check of its own or, when the branch was already checked whole, by checks of its parts (see "Re-checking only the overlap" below). A pull request pipeline usually tests the branch, not the merge.
 
 The checks run on the machine that runs `clm land`. If your team wants a controlled environment, run `clm land` on a shared machine you trust. CLM generates no pipeline for it.
 
@@ -18,6 +18,7 @@ When the check fails, `clm land` repeats its last 40 lines and keeps its whole o
 
 - on a land that checks code: `clm affected --base <sha>`'s output exactly as it prints it, `<sha>` being the `main` the branch merges into;
 - on a land whose code was already checked (see the next section): `clm affected --base <sha> --readers`'s output, `file` lines only;
+- on a land that re-checks only the overlap (see "Re-checking only the overlap"): `clm affected --overlap <head> <base>`'s output, the tests both the branch and what `main` gained since can affect;
 - for `clm verify`: `clm affected`'s output since the last commit whose slow tests passed.
 
 **When it is unset.** Your check must then run every test. That happens:
@@ -59,9 +60,42 @@ Your specs and other prose don't count as code for a land. When a branch changes
 
 So when a test reads one of those files of your project's own tree, such as a test that checks your specs for a retired term, give it the marker. Without one, a branch that changes only that file lands without running the test, and can leave `main` failing it until a later land happens to run it. `clm affected --readers` prints the test files whose markers match what the current branch changes, and `clm land` runs `[land] check` with `CLM_SELECTION` naming a file that lists them, as it names the selected tests of a code land. When it lists none, the land runs only `clm check`. A test that reads only fixtures it writes itself, or only code, needs no marker. Markdown files are never readers.
 
+`clm.toml` counts the same way when only its comments or its upgrade notes (`upgraded`, `declined_migrations`) change, as `clm upgrade --apply` changes them: such a land, on code that was already checked, runs `clm check` and only the tests that read `clm.toml`. Any other change to it, such as a new `[land] check`, makes the land run its check as a land of code does. So a test that reads your project's own `clm.toml`, such as one that checks its `[affected]` settings, holds `clm:reads clm.toml`.
+
 ### A build's own check counts for its land
 
 Before it lands, a build runs `clm land --check-only` in its own worktree: your whole `[land] check`, every test, and `clm check`. When that passes on a committed branch with no uncommitted change that already contains `origin/main`, it is recorded, and a land of the branch made before `main` moves runs no check of its own. So the check must pass from a clean checkout: one that passes only because of a file git ignores and the check doesn't make itself, such as a build output left from earlier work, can pass in the build and fail at a later land.
+
+### Re-checking only the overlap
+
+When `main` has moved since the build's check, a land of the branch doesn't check the merged tree from scratch. If the branch's head was checked whole (by that `clm land --check-only`) and so was `main`'s head (by its own land), both with the same `[land] check`, the land runs only the tests that both the branch and what `main` gained since can affect: `clm affected --overlap <head> <base>`'s selection, which `CLM_SELECTION` then names. When there are none, it runs no `[land] check` at all, only `clm check`, and doesn't wait for the clone's check lock. When the head or `main`'s head wasn't checked whole, or `clm affected --overlap` fails, the land checks its own selection, as "Running only the tests a branch can break" says. Run `clm affected --overlap <head> origin/main` to see what a land would re-check.
+
+The land says on stderr how it re-checked:
+
+- `re-check: none, the branch and main since <merge base> affect no test in common`: no check ran;
+- `re-check: overlap, <n> files`, or `re-check: overlap, every test` when the overlap selects everything: the check ran on that selection.
+
+The `landed` record the land writes to the ledger keeps the same as `recheck`: `checked` for a land whose code was already checked, `none`, `overlap`, or `selected` for a land that ran its own selection, with `recheck_files` the number of `file` lines it handed the check (null when every test ran). When `clm verify` later blames a land that re-checked `none` or `overlap`, it says so beside the culprit. It doesn't say why the land broke: a failure there can come from a fact missing from the graph, from the code or from the test, and that is your judgement.
+
+This rests on your tests, which is what the carried constraint `land-checks-stay-fast` (`clm guide constraints`) asks of them:
+
+- `[land] check` runs the tests `CLM_SELECTION` names, or every test when it is unset, empty or names `all`;
+- those tests are fast, deterministic and able to run beside other runs (`tests-run-concurrently`);
+- every file a test reads is one the spec graph connects it to: a file of the component that owns the test or of one it `depends_on`, or a file a `req:` or `clm:reads` marker in it names.
+
+A test that is slow, gives different results on the same tree, or needs a resource no other run may share belongs in `[verify]`, after the land (see "Slow tests"). A test that reads a file the graph doesn't connect it to can pass at a land that ran nothing and fail later; `[verify]`, or in a project without it the next build's full check, shows it.
+
+### Where a land builds
+
+A land that runs `[land] check` in the clone's land tree, holding the clone's lock on `.clm/land.lock`, sets `CLM_LAND_DIR` to the `.clm/land` directory of the main worktree, a place that lasts from land to land. If your check builds, point your toolchain's output there in your check script, so each land reuses the last one's build. A `clm land --check-only` run, and a land that takes no such lock (as when you set `CARGO_TARGET_DIR` yourself before running `clm land`), run the check with `CLM_LAND_DIR` unset, so the check builds where it usually does. For cargo, set `CARGO_TARGET_DIR` from it and `CARGO_INCREMENTAL=0`, since incremental data in a directory every land shares only grows:
+
+```sh
+if [ -n "${CLM_LAND_DIR:-}" ]; then
+  export CARGO_TARGET_DIR="$CLM_LAND_DIR" CARGO_INCREMENTAL=0
+fi
+```
+
+`clm land` still sets those two cargo variables itself for now, when you haven't set them, but a later `clm` stops, so set them in your script.
 
 ## Deployment is yours
 
@@ -77,7 +111,7 @@ Tests that need a deployed system, such as integration tests on a test cluster, 
 
 **Promotion after `main` (the default).** `main` deploys to the test environment, the integration tests run there, and only a green build goes on to production. Before the land, the checks run everything that proves the requirements with what lies outside stubbed, as CLM's tests are meant to. Lands stay fast, and a failure on the cluster usually points at a missing requirement or a wrong stub.
 
-**`main` itself.** If `main` must be integration-green, make `[land] check` deploy the merged tree to the test environment, run the tests and fail on red. The environment runs the tests; `clm land` reads the result and decides. Spec-only lands skip it, since a tree whose code was already checked runs only `clm check`. The cost is throughput: lands are serial, so a 30-minute run allows two code lands an hour, a land whose push loses the race to another runs again, and a flaky environment blocks every land. A shared test environment also breaks `tests-run-concurrently` (`clm guide constraints`), since builds run their tests at once: the check lock keeps lands' `[land] check` runs apart, but not a build's own run of it before the land, which starts at once in its build place, nor tests a build runs by hand. Such a project keeps the environment out of the tests its builds run, or replaces that constraint with one of its own that keeps its guarantee.
+**`main` itself.** If `main` must be integration-green, make `[land] check` deploy the merged tree to the test environment, run the tests and fail on red. The environment runs the tests; `clm land` reads the result and decides. Spec-only lands skip it, since a tree whose code was already checked runs only `clm check`, and so do lands whose overlap with `main` selects no test (see "Re-checking only the overlap"). The cost is throughput: lands are serial, so a 30-minute run allows two code lands an hour, a land whose push loses the race to another runs again, and a flaky environment blocks every land. A shared test environment also breaks `tests-run-concurrently` (`clm guide constraints`), since builds run their tests at once: the check lock keeps lands' `[land] check` runs apart, but not a build's own run of it before the land, which starts at once in its build place, nor tests a build runs by hand. Such a project keeps the environment out of the tests its builds run, or replaces that constraint with one of its own that keeps its guarantee.
 
 ## Slow tests
 
