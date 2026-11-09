@@ -1678,6 +1678,26 @@ fn a_site_change_marks_the_site_and_the_phases_it_turned_on() {
 }
 
 #[test]
+fn the_site_marks_only_its_own_files() {
+    // req:ci/step-markers@5ed839d2
+    let tree = Tree::new();
+    let lines = stdout_of(
+        &tree,
+        Some("file web/src/main.ts\nfile web/site/guide/index.md\n"),
+    );
+    assert_eq!(
+        marked_in(&lines, "web/site").unwrap(),
+        ["web/site/guide/index.md"],
+        "{lines:?}"
+    );
+    assert_eq!(
+        marked_in(&lines, "web").unwrap(),
+        ["web/src/main.ts", "web/site/guide/index.md"],
+        "{lines:?}"
+    );
+}
+
+#[test]
 fn a_full_run_marks_each_phase_and_names_no_file() {
     // req:ci/step-markers@5ed839d2
     let tree = Tree::new();
