@@ -56,6 +56,17 @@ Where: any file, or `CLM_DEFECTS`.
 
 Where: `clm.toml` or `clm.local.toml`.
 
+### `build`
+
+`[build]` with `setup`: the command that makes a fresh worktree of the repository ready to run its tests, such as one installing its dependencies into it. `clm setup` runs it, and builds, drafts and the skills' code fixes run `clm setup` before their first test run, because each build works in a fresh worktree inside your main checkout, where a toolchain that looks in parent directories, or an environment your checkouts share, would otherwise find the main checkout's packages or source and test the wrong code (`tests-run-in-their-own-tree`). For npm packages, `setup = "test ! -f package.json || npm ci"`.
+
+- **Set `setup`** when a fresh worktree's tests would fail for want of dependencies, or find them outside the worktree. Each build then spends the install's time once, and again when its dependencies change.
+- **Leave it unset** when your tests need nothing installed in a fresh worktree, as a cargo workspace doesn't. Builds then run their tests straight away.
+
+`[land] check` never runs it: keep your check script installing what it needs, since CI and `[verify]` run it in trees no build prepared.
+
+Where: `clm.toml` or `clm.local.toml`.
+
 ### `verify`
 
 `[verify]`: slow tests that run after a land instead of before it, so lands stay fast. `check`: the slow-test command. `mode`: `local` (`clm verify` runs it on this machine), `pipeline` (a host pipeline runs it and records the result) or `import` (`clm verify` reads the runs of the pipeline `workflow` names). Optional `triggers` (`change-done`, `queue-drained`, and `work-done` with `local` only) and `every` (`lands`, `days`): when a run is due.

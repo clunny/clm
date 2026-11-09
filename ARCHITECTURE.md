@@ -346,6 +346,33 @@ Two runs of the project's tests on one host, from different build places of a cl
 #### Untested
 Whether a project's tests take a host resource another run shares is something CLM can't see; a collision shows as a test that fails beside another build and passes alone. Runs outside a build place (the human's own checkout, `clm verify`'s local run, a draft's code fix) all have slot 0, so two of them can still collide on a port keyed on it; the check lock keeps their `[land] check` and `[verify] check` runs apart, but not their tests run by hand.
 
+### Constraint: tests-run-in-their-own-tree
+A build's tests SHALL run against the code and the dependencies of the tree it builds in, never against another checkout's: a toolchain whose lookup reaches a parent directory, or an environment the clone's checkouts share, must not resolve the main checkout's packages or source in its place. A build's tree is a fresh worktree inside the main checkout with nothing installed, so the project declares in `[build] setup` the command that makes such a tree ready to run its tests, such as one installing its dependencies into it, and every session that tests code in such a tree (a `clm run` build, a draft's code fix, a skill's hand-run fix) runs it with `clm setup` before its first test run there; CLM names no toolchain, and the project's command holds what its toolchains need (`build-setup-step`).
+
+#### Scenario: a package lookup that walks up
+- GIVEN a project whose test runner looks for packages in the parent directories of the tree it runs in, a main checkout with its packages installed, and a build in a fresh worktree under it
+- WHEN the build runs its first test
+- THEN `clm setup` has run the project's `[build] setup` in the worktree, and the test runs against the worktree's own packages and code
+
+#### Carries
+- replaceable
+
+#### Guarantee
+A build's red and green test runs exercise the branch's own code with the dependencies its own tree declares, so a test-first build's result means what it says, and what a build saw pass is what its land checks.
+
+#### Enforced by
+- config/build-setup-setting
+- orchestrator.run/setup-command
+- orchestrator.run/prompt-setup
+- orchestrator.triage/draft-prompt-setup
+- init/init-build-setup
+- plugin.init/init-skill-build-setup
+- plugin.build/build-defect-fixes-run-setup
+- plugin.propose/propose-fix-runs-setup
+
+#### Untested
+That a session runs `clm setup` before its first test, and again when its dependencies change, rests on the prompts and skills that tell it to, as `path-ownership`'s rule rests on the build prompt: no program sees a session's test runs. Whether a project's toolchains reach outside the tree they run in, and whether its `[build] setup` installs everything its tests need, are things CLM can't see; a gap shows as a test that passes in a build and fails in a fresh tree, or the reverse. `[land] check` stays a command that needs no setup before it, since CI and `[verify]` run it in trees no build prepared.
+
 ### Constraint: land-checks-stay-fast
 A project's `[land] check` SHALL run the tests `CLM_SELECTION` names, or every test when it is unset, empty or names `all`, and those tests SHALL be fast, deterministic and able to run beside other runs (`tests-run-concurrently`); every file a test reads SHALL be one the spec graph connects it to: a file of the component that owns it or of one it depends on (`depends_on`), or one a `req:` or `clm:reads` marker in it names. A test that is slow, fails or passes from run to run on the same tree, or needs a resource no other run may share belongs in `[verify]`, after the land (`verify-after-land`). CLM builds a land's verdict from checks of its parts: a land whose branch's head was checked whole runs only the tests the branch and what `main` gained since can both affect (`land/overlap-recheck`), so the tests' honesty about what they read is what that verdict rests on.
 
@@ -474,7 +501,7 @@ Every implementation rule SHALL name what it serves: a capability or an architec
 - model/serves
 
 ### Constraint: path-ownership
-A component's build SHALL change only its own `paths`. Three exceptions: a build that removes from or adds to its component's Contract may make the compile-only and test-fixture fixes the removal or addition forces in other components' code, where that code's behaviour doesn't change, or, for a variant added to a type the other component matches exhaustively, the arm that selects the built code a requirement of that component names for that variant, naming each one in its pull request (`forced-fixes-cover-additions`); a build may re-cite, and bring up to the current text, a test in another component's `paths` that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`); and a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`).
+A component's build SHALL change only its own `paths`. Four exceptions: a build that removes from or adds to its component's Contract may make the compile-only and test-fixture fixes the removal or addition forces in other components' code, where that code's behaviour doesn't change, or, for a variant added to a type the other component matches exhaustively, the arm that selects the built code a requirement of that component names for that variant, naming each one in its pull request (`forced-fixes-cover-additions`); a build may re-cite, and bring up to the current text, a test in another component's `paths` that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`); and a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`); and a build whose requirement changes the text of a file `clm init` writes writes the `upgrade` migration that carries the change, as the `upgrade` requirement that needs it states it, brings `upgrade`'s tests that the new migration makes fail to what `upgrade`'s requirements as applied state, and names both in its pull request, since the upgrade corpus test fails a land of either half alone (`template-change-ships-its-migration`).
 
 #### Scenario: removal forces a fix
 - GIVEN a build removing an enum variant that another component's `match` names
@@ -501,6 +528,11 @@ A component's build SHALL change only its own `paths`. Three exceptions: a build
 - WHEN it builds
 - THEN it updates that test to expect the new screen, keeping the capability it cites, and its pull request names the fix
 
+#### Scenario: template change carries its migration
+- GIVEN a build of `init` whose requirement changes the starter check script, and an `upgrade` requirement stating the migration that carries it and needing that requirement
+- WHEN it builds
+- THEN it writes that migration as stated, and its pull request names the fix
+
 #### Carries
 - method
 
@@ -508,6 +540,7 @@ A component's build SHALL change only its own `paths`. Three exceptions: a build
 - orchestrator.run/removal-breaks-dependant
 - orchestrator.run/pending-prompt
 - orchestrator.run/capability-tests-follow-rule
+- orchestrator.run/template-migration-fix
 
 #### Untested
 Accepted: no gate or land check refuses a build's file outside its component's `paths`. The build prompt keeps it there, and the build's review and spec audit read the diff (`path-ownership-by-prompt`).

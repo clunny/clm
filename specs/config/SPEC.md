@@ -38,6 +38,7 @@ Some settings describe the repository rather than the user, and only the reposit
 | `host` | `none`, `git`, `github`, `azure`: where the repository's remote lives and which host adapter `clm` uses for pull requests, branch deletion and issues (`host-adapters`) | `github` |
 | `approval` | `any`: any writer's approval of a diff counts, the author's included; `other`: only an approval by a person other than the branch's commit authors counts (`approval-policy`) | `any` |
 | `land` | a table with `check`, a non-empty string: the shell command `clm land` runs in the tree it lands, before `clm check` (`land-locally`), and optional `target_cap_gb`, a positive integer: the size in gigabytes (10^9 bytes) above which a land removes the shared target `.clm/land` after its push (`land/land-target-cap`), and optional `check_target_seconds`, a positive integer: the time in seconds a land's check aims to stay within, past which the land reports where its time went and what selected it (`land/check-time-report`) | none: `clm check` alone; `target_cap_gb = 15`; `check_target_seconds = 120` |
+| `build` | a table with `setup`, a non-empty string: the shell command that makes a fresh worktree of the repository ready to run its tests, such as one installing its dependencies into it, which `clm setup` runs before a build's first test run (`tests-run-in-their-own-tree`, `build-setup-step`) | none: a build's worktree gets nothing before its tests run |
 | `affected` | a table with `all`, an array of globs written as in a component's `paths`: changed files that make `clm affected` select every test although a component's `paths` hold them, such as a lockfile or the toolchain pin (`graph-test-selection`) | none: no glob |
 | `verify` | a table: `check`, a non-empty string, the slow-test command `clm verify` runs after the land; `mode`, `local`, `pipeline` or `import`: where the slow tests run and who records the result; optional `triggers`, an array of `change-done`, `queue-drained` and `work-done` (the last only with `mode = "local"`); optional `every`, a table with `lands` and `days`, each a positive integer; and `workflow`, a non-empty string, required with `mode = "import"` and refused otherwise: the host pipeline whose runs `clm verify` reads (`verify-after-land`) | none: slow tests stay in `[land] check` |
 | `component_size` | a table with `spec_tokens` and `code_tokens`, each a positive integer: the size in tokens above which a component whose frontmatter sets no `size_budget` is oversized (`node-size-budgets`, `oversized-is-a-state`, `component-size-setting`) | `spec_tokens = 12000`, `code_tokens = 40000` |
@@ -51,7 +52,7 @@ Three settings belong to `upgrade` (`upgrade-migrations`). Each is read from one
 
 The first two record the repository's state rather than a choice, so only the repository's `clm.toml` may set them. The third lets one clone run past a broken required migration, so only the clone's `clm.local.toml` may set it, and a skip never reaches another clone. Any other layer setting one of them is an error. `config` checks their shape and their layer, and offers `local_settings_path(root)`, the path of the clone's `clm.local.toml` as loading finds it. `upgrade` reads all three itself, as plain TOML, so a project whose other settings `config` rejects can still be told which migration fixes them.
 
-A table (`[component_size]`, `[health]`, `[effort]`, `[land]`, `[affected]`, `[[detectors]]`) is one key: the first layer that sets the table supplies all of it, and layers never merge within a table, so a `clm.local.toml` with `[component_size] code_tokens = 60000` gives `spec_tokens` its default, not `clm.toml`'s value.
+A table (`[component_size]`, `[health]`, `[effort]`, `[land]`, `[build]`, `[affected]`, `[[detectors]]`) is one key: the first layer that sets the table supplies all of it, and layers never merge within a table, so a `clm.local.toml` with `[component_size] code_tokens = 60000` gives `spec_tokens` its default, not `clm.toml`'s value.
 
 Loading the settings for a repository root (or none) gives each key's value and the layer it came from, or an error naming the file or variable and the key; an error in a file names the file that set the value, `clm.local.toml` or `clm.toml`. `load_committed(root, text, source, env)` loads them the same way with the repository's layer taken from the text of a `clm.toml` committed somewhere, or none, instead of from the root's file, each value and error from it naming `source` (such as `origin/main:clm.toml`), for a command that judges a commit by the settings committed there (`committed-settings`). `clm config get <key>` prints one, naming the file the value came from, and `clm config list` prints every key the same way, one line each (`config-list`). `docs/guide/settings.md`, the guide's page `settings`, says what each key does, what each choice trades off and where it may be set, and has a section for every key `clm config list` prints (`settings-guide-covers-keys`, `settings-guide-page`).
 
@@ -66,9 +67,9 @@ Crate `clm-config`. Files are TOML, read with the `toml` crate into a struct tha
 
 The repository root is whoever calls it decides: `clm config` uses the CLM repository found from the current directory as `plugin`'s `session-start` does, and none outside one.
 
-`clm config get <key>` prints `<value>` and the layer, tab-separated: `env CLM_DEFECTS`, the file's path, or `default`. It exits 1 with the error on an unknown key or when the settings can't be loaded. For `detectors` it prints the detectors' names, comma-separated, or nothing. For `land` it prints `check=<command>` or nothing. For `affected` it prints `all=<glob>,<glob>`, or nothing. For `health` it prints `reconsider=<n>,scenarios=<n>,exceptions=<n>,stale_days=<n>`, followed by `,lcov=<path>` when it is set. For `effort` it prints `workaround_flag=<n>`.
+`clm config get <key>` prints `<value>` and the layer, tab-separated: `env CLM_DEFECTS`, the file's path, or `default`. It exits 1 with the error on an unknown key or when the settings can't be loaded. For `detectors` it prints the detectors' names, comma-separated, or nothing. For `land` it prints `check=<command>` or nothing. For `build` it prints `setup=<command>` or nothing. The loaded settings hold it as `build: Setting<Option<Build>>`, `Build { setup: String }`, beside `land`, so `orchestrator.run` and `crates/clm` read `settings.build.value`. For `affected` it prints `all=<glob>,<glob>`, or nothing. For `health` it prints `reconsider=<n>,scenarios=<n>,exceptions=<n>,stale_days=<n>`, followed by `,lcov=<path>` when it is set. For `effort` it prints `workaround_flag=<n>`.
 
-`clm config list` loads the settings once and prints, for each key in the crate's one ordered list of keys, `KEYS` (`autosync`, `defects`, `max_builds`, `writer`, `host`, `approval`, `land`, `verify`, `affected`, `detectors`, `component_size`, `health`, `effort`, `upgraded`, `declined_migrations`, `skip_migrations`), `<key>`, then what `clm config get <key>` prints, tab-separated. `get` and `list` both read that list, so a key `get` accepts is one `list` prints. When loading fails it prints the error to stderr, nothing to stdout, and exits 1, so a session validates an edit by running it. Its subcommand is a `Config::List` arm beside `Config::Get` in `crates/clm/src/main.rs`, which this component's build adds, as the build of a component that gains a command edits the root's dispatch; the arm calls a `clm-config` function that formats the lines. `KEYS` holds `verify`, which `get` prints once `verify-setting` is built, so this component builds `verify-setting` before `config-list`. A test of this crate reads `docs/guide/settings.md` (with a `clm:reads` marker, `doc-readers-marked`) and fails naming each key of `KEYS` that no heading `` ### `<key>` `` holds. It doesn't fail on a heading for a key `KEYS` lacks: a change that adds a key writes its section on the spec branch, which lands before the build that parses the key, as the glossary's entries do (`propose-adds-settings-sections`).
+`clm config list` loads the settings once and prints, for each key in the crate's one ordered list of keys, `KEYS` (`autosync`, `defects`, `max_builds`, `writer`, `host`, `approval`, `land`, `build`, `verify`, `affected`, `detectors`, `component_size`, `health`, `effort`, `upgraded`, `declined_migrations`, `skip_migrations`), `<key>`, then what `clm config get <key>` prints, tab-separated. `get` and `list` both read that list, so a key `get` accepts is one `list` prints. When loading fails it prints the error to stderr, nothing to stdout, and exits 1, so a session validates an edit by running it. Its subcommand is a `Config::List` arm beside `Config::Get` in `crates/clm/src/main.rs`, which this component's build adds, as the build of a component that gains a command edits the root's dispatch; the arm calls a `clm-config` function that formats the lines. `KEYS` holds `verify`, which `get` prints once `verify-setting` is built, so this component builds `verify-setting` before `config-list`. A test of this crate reads `docs/guide/settings.md` (with a `clm:reads` marker, `doc-readers-marked`) and fails naming each key of `KEYS` that no heading `` ### `<key>` `` holds. It doesn't fail on a heading for a key `KEYS` lacks: a change that adds a key writes its section on the spec branch, which lands before the build that parses the key, as the glossary's entries do (`propose-adds-settings-sections`).
 
 This repository's `clm.toml` sets `defects = "backlog"`, `host = "github"`, `[land] check = ".github/scripts/ci-check.sh"`, `[verify]` with `check = ".github/scripts/ci-check.sh"`, `mode = "local"`, `triggers = ["queue-drained"]` and `every = { lands = 20 }` (the whole suite after the land, with no selection, the safety net for lands that check only where the branch and `main` overlap: `verify-here`, `land/overlap-recheck`), `[affected] all = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/clm/src/**", ".github/scripts/ci-check.sh"]` (the workspace's manifest and lockfile and the toolchain pin, which every crate builds with; the CLI's dispatch, which every test in `crates/clm/tests/` runs through, though each cites only the components it tests; and the check script, which does the selecting), `[health] lcov = "target/lcov.info"` (the tracefile `.github/scripts/coverage.sh` writes, `ci/coverage-script`, which `clm health`'s `unexercised` signal reads, `lcov-coverage-signal`; `health-lcov-here`) and two detectors: `unused-dependencies`, whose command is `["cargo-machete"]` (run directly, not as `cargo machete`: under `cargo run` or `cargo test` it inherits `CARGO_PKG_NAME` and reads `machete` as a path) with the hint `cargo install --locked --version <x.y.z> cargo-machete`, and `unreferenced-public-items`, whose command is `clm unreferenced` with this repository's allow-list (`public-item-detector`, `unreferenced-allow-then-narrow`) and whose hint is `scripts/dev-install.sh` (`dogfood-from-main`). Its `.gitignore` lists `clm.local.toml`, `.clm/` and `.claude/worktrees/`, as `clm init` writes them in other repositories (`init-ignores-session-files`), each as an exact line with no leading `/` (`local-settings-ignored`).
 
@@ -647,12 +648,12 @@ Loading SHALL take `verify` only from the repository's `clm.toml` or the clone's
 - capability/slow-tests-after-land
 
 ### Requirement: config-list
-`clm config list` SHALL print one line per key, in the order `autosync`, `defects`, `max_builds`, `writer`, `host`, `approval`, `land`, `verify`, `affected`, `detectors`, `component_size`, `health`, `effort`, `upgraded`, `declined_migrations`, `skip_migrations`, each `<key>`, the value `clm config get <key>` prints and its layer, tab-separated, and exit 0. When the settings can't be loaded it SHALL print nothing to stdout and exit 1 with the error, naming the file or variable and the key, on stderr. Every key `clm config get` accepts SHALL be one it prints.
+`clm config list` SHALL print one line per key, in the order `autosync`, `defects`, `max_builds`, `writer`, `host`, `approval`, `land`, `build`, `verify`, `affected`, `detectors`, `component_size`, `health`, `effort`, `upgraded`, `declined_migrations`, `skip_migrations`, each `<key>`, the value `clm config get <key>` prints and its layer, tab-separated, and exit 0. When the settings can't be loaded it SHALL print nothing to stdout and exit 1 with the error, naming the file or variable and the key, on stderr. Every key `clm config get` accepts SHALL be one it prints.
 
 #### Scenario: every key
 - GIVEN a CLM repository whose `clm.toml` sets `defects = "backlog"`, a `clm.local.toml` beside it with `max_builds = 5`, and no user file or variables
 - WHEN `clm config list` runs in it
-- THEN it prints sixteen lines in the stated order, one is `defects`, `backlog` and the path of `clm.toml`, one is `max_builds`, `5` and the path of `clm.local.toml`, one is `autosync`, `true` and `default`, and it exits 0
+- THEN it prints seventeen lines in the stated order, one is `defects`, `backlog` and the path of `clm.toml`, one is `max_builds`, `5` and the path of `clm.local.toml`, one is `autosync`, `true` and `default`, and it exits 0
 
 #### Scenario: an invalid edit
 - GIVEN a CLM repository whose `clm.local.toml` sets `max_builds = 0`
@@ -718,3 +719,34 @@ This repository's `clm.toml` SHALL set `[verify]` with `check = ".github/scripts
 
 #### Serves
 - capability/slow-tests-after-land
+
+### Requirement: build-setup-setting
+Loading SHALL take `build` only from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table whose one key `setup` is a non-empty string, defaulting to no command. It SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `build` for a `build` that isn't a table, for any other key in it, or for a `setup` that is missing or isn't a non-empty string, and SHALL fail naming the user's `config.toml` and the key when that file sets it. `clm config get build` SHALL print `setup=<command>` and the path of the file that sets it, or nothing and `default`.
+
+#### Scenario: set
+- GIVEN a repository `clm.toml` with `[build]` and `setup = "scripts/setup.sh"`
+- WHEN `clm config get build` runs
+- THEN it prints `setup=scripts/setup.sh` and the file's path, and the loaded settings' setup command is `scripts/setup.sh`
+
+#### Scenario: unset
+- GIVEN a repository `clm.toml` with no `[build]` table
+- WHEN `clm config get build` runs
+- THEN it prints an empty value and `default`
+
+#### Scenario: empty command
+- GIVEN a repository `clm.toml` with `[build]` and `setup = ""`
+- WHEN the settings are loaded
+- THEN it fails naming `clm.toml` and `build`
+
+#### Scenario: another key in the table
+- GIVEN a repository `clm.toml` with `[build]`, `setup = "scripts/setup.sh"` and `check = "x"`
+- WHEN the settings are loaded
+- THEN it fails naming `clm.toml` and `build`
+
+#### Scenario: from the user's file
+- GIVEN a user `config.toml` with a `[build]` table
+- WHEN the settings are loaded
+- THEN it fails naming `config.toml` and `build`
+
+#### Serves
+- architecture/tests-run-in-their-own-tree

@@ -23,3 +23,5 @@ Rejected:
 (Amended 2026-11-04, `20261104-clm-run-allows-compile`: the exception covers the fixes an addition forces as well as a removal (`forced-fixes-cover-additions`); the edge cases above are unchanged.)
 
 (Amended 2026-11-05, `20261105-capability-harness-move-has`: the exception also covers a build updating a capability test whose observations its requirement changes (`capability-tests-follow-rules`); the edge cases above are unchanged.)
+
+(Amended 2026-11-09, `20261109-land-still-sets-cargo`: the exception also covers a build that changes a file `clm init` writes writing the `upgrade` migration that carries it, as stated (`template-change-ships-its-migration`); the prompt says so (`orchestrator.run/template-migration-fix`), and the edge cases above are unchanged.)

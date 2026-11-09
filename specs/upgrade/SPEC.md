@@ -228,7 +228,7 @@ An `advised` note migration SHALL bring a `CLAUDE.md` that `clm init` wrote befo
 - clm/upgrade-command
 
 ### Requirement: migration-check-script-from-root
-An `advised` note migration SHALL bring a `scripts/clm-check.sh` that `clm init` wrote before its script ran from the repository's root, as `v0.14.0` and `v0.15.0` wrote it, to the text it writes today. Its `done` SHALL be true when `scripts/clm-check.sh` doesn't exist or holds the line `cd "$(dirname "${BASH_SOURCE[0]}")/.."`. Its `old` SHALL be the script those releases' `clm init --lang rust` wrote, a bare `cargo test` after `set -euo pipefail`, and its `new` the script the current `clm init --lang rust` writes, so an unedited script is rewritten and any other is left to the note. Its note SHALL say what changed for every language: the script changes to the repository's root first, and runs each language's build and tests only when that language's manifest exists.
+An `advised` note migration SHALL bring a `scripts/clm-check.sh` that `clm init` wrote before its script ran from the repository's root, as `v0.14.0` and `v0.15.0` wrote it, to the text `v0.16.0` wrote. Its `done` SHALL be true when `scripts/clm-check.sh` doesn't exist or holds the line `cd "$(dirname "${BASH_SOURCE[0]}")/.."`. Its `old` SHALL be the script those releases' `clm init --lang rust` wrote, a bare `cargo test` after `set -euo pipefail`, and its `new` the script `clm init --lang rust` wrote from `v0.16.0` to `v0.23.0`, which `migration-starter-land-dir` then brings to the text written today, so an unedited script is rewritten and any other is left to the note. Its note SHALL say what changed for every language: the script changes to the repository's root first, and runs each language's build and tests only when that language's manifest exists.
 
 #### Scenario: an unedited 0.14 script
 - GIVEN a `scripts/clm-check.sh` equal to what `clm init --lang rust` `v0.14.0` wrote
@@ -343,3 +343,64 @@ An `advised` note migration, ID `20261108-toolchain-neutral-land-builds`, SHALL 
 - land/land-dir-env
 - land/overlap-recheck
 - clm/upgrade-command
+
+### Requirement: migration-build-setup
+An `advised` note migration, ID `20261109-a-build-s-tests`, SHALL tell a project set up before it that a build's tests must run against its own worktree's code and dependencies, and how to declare the setup that makes them. It edits no file: its `file` SHALL be `clm.toml`, where `[build] setup` goes, and it SHALL carry no `old` or `new`. Its `done` SHALL be true when `clm.toml` doesn't exist, or parses as TOML and its `upgraded` names this migration or one after it in `migrations()`, and false otherwise, as `migration-tests-overlap`'s is. The fixture `migration-tests-overlap` names for an up-to-date project SHALL stay stamped with `latest()`. A test that expects a project stamped before an earlier note to list only that note, such as `migration-land-dir`'s, SHALL expect this one beside it, and `migration-starter-land-dir` (`20261109-land-still-sets-cargo`) too when the fixture holds a `scripts/clm-check.sh` that runs `cargo` and names no `CLM_LAND_DIR`. Its note's first line SHALL read `Builds run your tests in a fresh worktree: declare [build] setup`. The note SHALL say:
+- that each build runs in a fresh worktree inside the main checkout, with nothing installed, so a toolchain whose lookup walks up the parent directories, or an environment the checkouts share, can resolve the main checkout's packages or source instead of the branch's, and a build's red or green test then means nothing (`tests-run-in-their-own-tree`, which `clm guide constraints` states);
+- that the project declares in `clm.toml` `[build] setup`, a shell command that makes a fresh worktree ready to run its tests, such as one installing its dependencies into it, and that `clm setup` runs it, which builds and drafts do before their first test run, while `[land] check` stays a command that needs no setup before it;
+- how to check the project: create a worktree under the main checkout, run its tests there without installing anything, and see whether they fail for want of their dependencies or resolve them from outside the worktree; for example, a project whose tests use npm packages can set `setup = "test ! -f package.json || npm ci"`;
+- that taking the note edits no file and leaves nothing to decline: the upgrade's stamp marks it taken.
+
+#### Scenario: a project set up before
+- GIVEN a project whose `clm.toml` sets `upgraded` to the migration before this one, every other migration done (its fixture holds no `scripts/clm-check.sh`, so `migration-starter-land-dir` is done)
+- WHEN `clm upgrade` runs, then `clm upgrade --apply`, then `clm upgrade`
+- THEN the first lists `20261109-a-build-s-tests advised note Builds run your tests in a fresh worktree: declare [build] setup`, the second prints `note 20261109-a-build-s-tests` and changes no file but `clm.toml`'s `upgraded` line, and the third prints `up to date`
+
+#### Scenario: the note
+- GIVEN the migration
+- WHEN `clm upgrade --note 20261109-a-build-s-tests` runs on a project it is pending in
+- THEN the note names `tests-run-in-their-own-tree`, `clm guide constraints`, `[build] setup`, `clm setup` and `[land] check`
+
+#### Needs
+- clm/upgrade-command
+- config/build-setup-setting
+- orchestrator.run/setup-command
+
+#### Serves
+- architecture/tests-run-in-their-own-tree
+
+### Requirement: migration-starter-land-dir
+An `advised` note migration, ID `20261109-land-still-sets-cargo`, SHALL bring a `scripts/clm-check.sh` that `clm init --lang rust` wrote from `v0.16.0` to `v0.23.0` to the text it writes since `init/starter-check-land-dir`, since `clm land` no longer sets cargo's variables for a project's check (`land/shared-land-target`). Its `file` SHALL be `scripts/clm-check.sh`, its `old` the script those releases' `clm init --lang rust` wrote (one text, the same in each), and its `new` the script the current `clm init --lang rust` writes, so an unedited script is rewritten and any other is left to the note. Its `done` SHALL be true when `scripts/clm-check.sh` doesn't exist, holds `CLM_LAND_DIR`, or doesn't hold `cargo`, and false otherwise. Its note's first line SHALL read `Lands no longer set CARGO_TARGET_DIR: point cargo at CLM_LAND_DIR in your check`. The note SHALL say:
+- that `clm land` no longer sets `CARGO_TARGET_DIR` or `CARGO_INCREMENTAL` for `[land] check`, and hands it `CLM_LAND_DIR` instead, the clone's build place that lasts from land to land, while `clm land --check-only` hands none, so a build's check compiles in its own worktree;
+- that a check script that runs cargo should, before its first cargo command, export `CARGO_TARGET_DIR` from `CLM_LAND_DIR` and `CARGO_INCREMENTAL=0` when `CLM_LAND_DIR` is set and non-empty, giving the lines `clm init` writes for it;
+- that without them a land's cargo build goes to the land tree's own `target/`, which the land cleans before every check, so every land compiles from scratch;
+- that a project whose check keeps its build output elsewhere on purpose declines the note with `clm upgrade --decline 20261109-land-still-sets-cargo`.
+
+#### Scenario: an unedited 0.23 script
+- GIVEN a `scripts/clm-check.sh` equal to what `clm init --lang rust` `v0.23.0` wrote
+- WHEN `clm upgrade --apply` runs
+- THEN it equals what the current `clm init --lang rust` writes, and `clm upgrade` no longer lists the migration
+
+#### Scenario: an unedited 0.14 script
+- GIVEN a `scripts/clm-check.sh` equal to what `clm init --lang rust` `v0.14.0` wrote
+- WHEN `clm upgrade --apply` runs
+- THEN it equals what the current `clm init --lang rust` writes, after `migration-check-script-from-root`'s rewrite and this one's
+
+#### Scenario: an edited one
+- GIVEN the `v0.23.0` script with a line of the project's own added
+- WHEN `clm upgrade --apply` runs
+- THEN the script is unchanged, and it prints `note` and this migration's ID
+
+#### Scenario: a script that runs no cargo
+- GIVEN a `scripts/clm-check.sh` that `clm init --lang typescript` wrote
+- WHEN `clm upgrade` runs
+- THEN it doesn't list the migration
+
+#### Scenario: the note
+- GIVEN the migration
+- WHEN `clm upgrade --note 20261109-land-still-sets-cargo` runs on a project it is pending in
+- THEN the note names `CLM_LAND_DIR`, `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `--decline`
+
+#### Needs
+- clm/upgrade-command
+- init/starter-check-land-dir
