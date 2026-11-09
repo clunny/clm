@@ -636,7 +636,7 @@ fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
     assert_eq!(out, format!("note {BUILD_SETUP_ID}\n"));
     assert_eq!(
         read_toml(&dir),
-        before.replace("20261109-land-still-sets-cargo", &latest().unwrap())
+        before.replace("20261109-land-still-sets-cargo", latest().unwrap())
     );
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
