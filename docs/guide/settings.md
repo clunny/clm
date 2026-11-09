@@ -63,7 +63,7 @@ Where: `clm.toml` or `clm.local.toml`.
 - **Unset** (the default): slow tests, if any, stay in `[land] check`, and every land waits for them.
 - **Set** to keep lands fast: a failing run is reported after the land, `/clm:triage` offers it to you, and once you take it in as a bug, code lands on the components it names wait until its fix lands. You trade catching a break before `main` for lands that don't wait.
 
-Where: `clm.toml` or `clm.local.toml`.
+Where: `clm.toml` or `clm.local.toml`. `clm verify` reads `clm.toml`'s `[verify]` as committed on `origin/main`, never from the checkout it runs in, so an edit takes effect once it lands.
 
 ### `host`
 
