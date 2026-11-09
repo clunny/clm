@@ -10,6 +10,18 @@ The checks run on the machine that runs `clm land`. If your team wants a control
 
 When the check fails, `clm land` repeats its last 40 lines and keeps its whole output at `.clm/land-logs/<branch>.log`. If your check script runs several steps, print `::group::<name>` as each one starts and `::endgroup::` as it ends, as GitHub Actions does. The refusal then names the step that was running when the check failed and the lines of the log it spans, so a session reads the failure even when it lies more than 40 lines back.
 
+### Where your check builds
+
+A land runs your check in one tree per clone, `.clm/land-tree`, checked out afresh and cleaned of everything git ignores before each land. So build output kept inside that tree is gone by the next land. `clm land` hands your check a place that lasts from land to land instead, the clone's `.clm/land`, through the environment variable `CLM_LAND_DIR`, and lands take turns on it. Point your toolchain's output there in your check script; `clm land` sets no toolchain's variables itself. For cargo, the starter `scripts/clm-check.sh` does it:
+
+```sh
+if [ -n "${CLM_LAND_DIR:-}" ]; then
+    export CARGO_TARGET_DIR="$CLM_LAND_DIR" CARGO_INCREMENTAL=0
+fi
+```
+
+`clm land --check-only`, a build's own check, gets no `CLM_LAND_DIR`, so a build compiles in its own worktree as it always does. `[land] target_cap_gb` (default 15) bounds the place: when a land leaves more than that there, it removes it, and the next land builds from scratch.
+
 ### Running only the tests a branch can break
 
 `clm land` tells your check which tests the branch can break, through the environment variable `CLM_SELECTION`. A check that ignores it runs everything, which is always safe, only slower. To use it, have your check script read the file the variable names.
