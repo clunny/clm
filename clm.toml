@@ -5,7 +5,7 @@ defects = "backlog"
 # The remote is on GitHub: pages, branch deletion and issues go through its adapter.
 host = "github"
 
-upgraded = "20261107-projects-upgrading-past-the"
+upgraded = "20261109-a-build-s-tests"
 
 # `clm land` runs this in the tree it lands, before `clm check` (land-locally).
 [land]
