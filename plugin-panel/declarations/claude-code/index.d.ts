@@ -153,6 +153,7 @@ declare module 'claude-code' {
       hook: ($: EngineInterface, e: { surface: Surface; props: { bodyColumns: number } }) => Promise<RenderNode>,
     ): void
     (event: 'ui.close', hook: Hook<{ id: string }, unknown>): void
+    (event: 'skill.prompt', hook: Hook<{ skill: string; pluginName?: string; text: string }, { text: string }>): void
     (event: 'turn.start', hook: Hook<{ agentId?: string }, unknown>): void
     (event: 'turn.complete', hook: Hook<TurnComplete, unknown>): void
   }

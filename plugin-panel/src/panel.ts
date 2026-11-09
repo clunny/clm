@@ -233,6 +233,20 @@ export async function command($: Host, args: string, cwd: string): Promise<Answe
   return { text: run.exitCode === 0 ? fenced(run.stdout) : run.stderr }
 }
 
+/**
+ * Whether a skill's prompt being expanded opens the pane: the `clm` plugin's `build` skill, in
+ * a CLM repository, with no pane of the panel's listed (`build-opens-panel`).
+ */
+export function opensForSkill(i: {
+  skill: string
+  pluginName?: string
+  panes: readonly { id: string; isPlaced?: boolean }[]
+  inRepo: boolean
+}): boolean {
+  const isBuild = i.skill === 'clm:build' || (i.skill === 'build' && i.pluginName === 'clm')
+  return isBuild && i.inRepo && !i.panes.some(p => p.id === PANE_ID)
+}
+
 // `colour-meanings`, named as `ansiLines` names `clm view`'s ANSI colours.
 export const AMBER = 'yellow'
 export const GREEN = 'green'

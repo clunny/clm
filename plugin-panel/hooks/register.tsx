@@ -31,7 +31,9 @@ import {
   type Span,
   type Surface,
   cachedRun,
+  clmRoot,
   isViewTab,
+  opensForSkill,
   command,
   type Fetched,
   fetchIfDue,
@@ -170,15 +172,33 @@ export const register: Register = on => {
     return ran
   })
 
-  on('command.run', { command: 'clm:view' }, async ($, e) => {
-    const answer = await command($, e.args, await $.session.cwd())
-    if ('text' in answer) return { text: answer.text }
+  async function openPane($: EngineInterface) {
     await update($, tab, () => FIRST_TAB)
     await update($, capability, () => null)
     await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
     startTimer($)
     void redraw($)
+  }
+
+  on('command.run', { command: 'clm:view' }, async ($, e) => {
+    const answer = await command($, e.args, await $.session.cwd())
+    if ('text' in answer) return { text: answer.text }
+    await openPane($)
     return { text: 'Opened the CLM panel.' }
+  })
+
+  // The build skill opens the pane on Flight when it isn't open; the prompt is left as it came.
+  on('skill.prompt', async ($, e, next) => {
+    const prompt = await next(e)
+    try {
+      const inRepo = (await clmRoot($, await $.session.cwd())) !== undefined
+      if (opensForSkill({ skill: e.skill, pluginName: e.pluginName, panes: await $.ui.panes(), inRepo })) {
+        await openPane($)
+      }
+    } catch {
+      // A failure while opening leaves the prompt as it was.
+    }
+    return prompt
   })
 
   // The answer's row in the transcript, drawn as a code block.
