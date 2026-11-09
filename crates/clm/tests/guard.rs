@@ -126,7 +126,7 @@ fn guard_command_asks_with_the_reason() {
 
 #[test]
 fn guard_command_blocks_dispatching_a_release() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
+    // req:plugin.hooks.guard/release-guard@1e4ebaea
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "gh workflow run release.yml -f version=0.2.0" },
@@ -204,7 +204,7 @@ fn take_calls(calls: &Path) -> Vec<String> {
 
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
+    // req:plugin.hooks.guard/release-guard@1e4ebaea
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
@@ -318,7 +318,7 @@ fn guard_blocks_rerunning_a_release_run() {
 
 #[test]
 fn guard_looks_a_rerun_up_where_it_runs() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
+    // req:plugin.hooks.guard/release-guard@1e4ebaea
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/p/q");
@@ -412,7 +412,7 @@ fn guard_looks_a_rerun_up_where_it_runs() {
 
 #[test]
 fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
+    // req:plugin.hooks.guard/release-guard@1e4ebaea
     // a repository that can't be resolved: `repo view` fails, or its `url` isn't
     // `<scheme>://<host>/<owner>/<repo>`
     let api_ci = "if [ \"$1\" = api ]; then \
@@ -443,173 +443,8 @@ fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
 }
 
 #[test]
-fn guard_answers_a_hanging_lookup_within_its_budget() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
-    // One never answers `repo view`, one answers it but never `api`. Each writes its process
-    // ID to `pids` and then `exec`s its sleep, so the sleep has that ID.
-    let hanging = TempDir::new().unwrap();
-    let pids = hanging.path().join("pids");
-    let path = path_with_gh(
-        hanging.path(),
-        &format!(
-            "#!/bin/sh\necho $$ >> '{}'\nexec sleep 60\n",
-            pids.display()
-        ),
-    );
-    let hanging_api = TempDir::new().unwrap();
-    let api_pids = hanging_api.path().join("pids");
-    let api_path = path_with_gh(
-        hanging_api.path(),
-        &format!(
-            "#!/bin/sh\nif [ \"$1\" = repo ]; then \
-             echo '{{\"url\":\"https://github.com/o/r\"}}'; exit 0; fi\n\
-             echo $$ >> '{}'\nexec sleep 60\n",
-            api_pids.display()
-        ),
-    );
-    // Each lookup answers a CI job or run within 20 seconds, but two don't fit in one
-    // shared budget.
-    let slow = TempDir::new().unwrap();
-    let slow_path = path_with_gh(
-        slow.path(),
-        "#!/bin/sh\nif [ \"$1\" = repo ]; then \
-         echo '{\"url\":\"https://github.com/o/r\"}'; exit 0; fi\n\
-         sleep 20\nfor last; do :; done\ncase \"$last\" in\n\
-         */jobs/*) echo '{\"run_id\":42}' ;;\n\
-         *) echo '{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}' ;;\nesac\n",
-    );
-    let cwd = TempDir::new().unwrap();
-    let started = std::time::Instant::now();
-    std::thread::scope(|s| {
-        let runs: Vec<_> = [
-            ("gh run rerun 42", path.as_str()),
-            ("gh run rerun --job 900", path.as_str()),
-            ("gh run rerun 42", api_path.as_str()),
-            ("gh run rerun --job 900", api_path.as_str()),
-            ("gh run rerun --job 901", slow_path.as_str()),
-        ]
-        .into_iter()
-        .map(|(command, path)| {
-            let cwd = cwd.path();
-            s.spawn(move || (command, guard_in(cwd, command, &[("PATH", path)])))
-        })
-        .collect();
-        for run in runs {
-            let (command, (code, why)) = run.join().unwrap();
-            assert_eq!(code, Some(2), "{command}: {why}");
-            assert!(why.contains("humans-cut-releases"), "{command}: {why}");
-        }
-    });
-    assert!(started.elapsed().as_secs() < 35, "{:?}", started.elapsed());
-    // Each hung lookup was killed, not left running after its guard exited.
-    for pids in [&pids, &api_pids] {
-        let pids = fs::read_to_string(pids).unwrap();
-        let pids: Vec<&str> = pids.split_whitespace().collect();
-        assert_eq!(pids.len(), 2, "{pids:?}");
-        for pid in pids {
-            assert!(
-                gone(pid),
-                "gh lookup {pid} still running after the guard exited"
-            );
-        }
-    }
-}
-
-#[test]
-fn guard_blocks_a_push_git_does_not_answer() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
-    // a push git doesn't answer: the fake `git` writes its process ID to `pids` and then
-    // `exec`s its sleep, so the sleep has that ID.
-    let fake = TempDir::new().unwrap();
-    let pids = fake.path().join("pids");
-    executable(
-        &fake.path().join("git"),
-        &format!(
-            "#!/bin/sh\necho $$ >> '{}'\nexec sleep 60\n",
-            pids.display()
-        ),
-    );
-    let path = format!(
-        "{}:{}",
-        fake.path().display(),
-        std::env::var("PATH").unwrap()
-    );
-    let cwd = TempDir::new().unwrap();
-    let started = std::time::Instant::now();
-    // After a `cd` the guard couldn't follow, the reason doesn't change.
-    let (code, why) = guard_in(cwd.path(), "cd nowhere && git push", &[("PATH", &path)]);
-    assert_eq!(code, Some(2), "{why}");
-    assert!(started.elapsed().as_secs() < 25, "{:?}", started.elapsed());
-    assert!(
-        why.contains("guard-blocks-push-to-main")
-            && why.contains("didn't answer in time")
-            && why.contains("HEAD:<branch>")
-            && !why.contains("couldn't follow"),
-        "{why}"
-    );
-    let ran = fs::read_to_string(&pids).unwrap();
-    for pid in ran.split_whitespace() {
-        assert!(
-            gone(pid),
-            "git query {pid} still running after the guard exited"
-        );
-    }
-    // An explicit branch needs no query.
-    fs::remove_file(&pids).unwrap();
-    let (code, why) = guard_in(cwd.path(), "git push origin impl/x/b", &[("PATH", &path)]);
-    assert_eq!(code, Some(0), "{why}");
-    assert!(!pids.exists(), "the fake git ran");
-}
-
-#[test]
-fn guard_push_queries_share_one_budget() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
-    // Each query takes 4 seconds and answers nothing: a segment's three fit in 20 seconds,
-    // two segments' six don't. The fifth query is killed at 20 seconds, and the sixth is
-    // never started.
-    let fake = TempDir::new().unwrap();
-    let calls = fake.path().join("calls");
-    executable(
-        &fake.path().join("git"),
-        &format!(
-            "#!/bin/sh\necho \"$*\" >> '{}'\nsleep 4\nexit 1\n",
-            calls.display()
-        ),
-    );
-    let path = format!(
-        "{}:{}",
-        fake.path().display(),
-        std::env::var("PATH").unwrap()
-    );
-    let cwd = TempDir::new().unwrap();
-    let started = std::time::Instant::now();
-    let (code, why) = guard_in(cwd.path(), "git push; git push", &[("PATH", &path)]);
-    assert_eq!(code, Some(2), "{why}");
-    assert!(why.contains("didn't answer in time"), "{why}");
-    assert!(started.elapsed().as_secs() < 25, "{:?}", started.elapsed());
-    let calls = fs::read_to_string(&calls).unwrap();
-    assert_eq!(calls.lines().count(), 5, "{calls}");
-}
-
-/// Whether no live process `pid` exists (a zombie counts as gone), waiting up to two seconds
-/// for one that is exiting.
-fn gone(pid: &str) -> bool {
-    (0..20).any(|_| {
-        let alive = Command::new("sh")
-            .args(["-c", &format!("ps -o stat= -p {pid} | grep -qv Z")])
-            .status()
-            .unwrap()
-            .success();
-        if alive {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        !alive
-    })
-}
-
-#[test]
 fn guard_command_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "git push origin HEAD:main" },

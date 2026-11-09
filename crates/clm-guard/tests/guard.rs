@@ -4,7 +4,9 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use clm_guard::{Decision, guard};
+use std::time::Duration;
+
+use clm_guard::{Budgets, Decision, guard};
 use tempfile::TempDir;
 
 /// A `Bash` event run from `cwd`.
@@ -132,7 +134,7 @@ fn bash_in_opt(command: &str, cwd: Option<&Path>) -> String {
 
 #[test]
 fn a_branch_that_pushes_to_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = tracking(dir.path(), "impl/x/b", Some("main"));
     let why = blocks_push(&bash_in("git -c push.default=upstream push", &work));
@@ -171,7 +173,7 @@ fn a_branch_that_pushes_to_main() {
 
 #[test]
 fn only_push_and_remote_settings_reach_the_queries() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = tracking(&dir.path().join("a"), "impl/x/b", Some("main"));
     // A setting outside `push.`, `remote.` and `branch.` isn't passed to git: one that
@@ -191,7 +193,7 @@ fn only_push_and_remote_settings_reach_the_queries() {
 
 #[test]
 fn another_checkouts_git_directory() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
     checkout_on(&dir.path().join("m"), "main");
@@ -208,7 +210,7 @@ fn another_checkouts_git_directory() {
 
 #[test]
 fn pushing_branches_that_do_not_reach_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     // pushing other branches
     let dir = TempDir::new().unwrap();
     let own = tracking(&dir.path().join("own"), "impl/x/b", Some("impl/x/b"));
@@ -229,7 +231,7 @@ fn pushing_branches_that_do_not_reach_main() {
 
 #[test]
 fn merging_into_main_through_the_host() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     // merging into main through the host
     for command in [
         "git push origin 'refs/heads/*:heads/*'",
@@ -254,7 +256,7 @@ fn merging_into_main_through_the_host() {
 
 #[test]
 fn reading_or_merging_elsewhere_through_the_host() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     // reading or merging elsewhere through the host
     for command in [
         "gh api -X POST repos/o/r/merges -f base=impl/x/b -f head=main",
@@ -437,7 +439,7 @@ fn guard_allows_every_other_event() {
 
 #[test]
 fn guard_blocks_cutting_releases() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
+    // req:plugin.hooks.guard/release-guard@1e4ebaea
     for command in [
         // dispatching a release
         "gh workflow run release.yml -f version=0.2.0",
@@ -493,7 +495,7 @@ fn guard_blocks_cutting_releases() {
 
 #[test]
 fn guard_allows_reading_releases_and_runs() {
-    // req:plugin.hooks.guard/release-guard@e9278dcb
+    // req:plugin.hooks.guard/release-guard@1e4ebaea
     for command in [
         // reading releases
         "gh release list",
@@ -523,13 +525,13 @@ fn guard_allows_reading_releases_and_runs() {
 
 #[test]
 fn guard_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     blocks_push(&bash("git push origin HEAD:main"));
 }
 
 #[test]
 fn guard_blocks_other_ways_to_reach_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     for command in [
         "git push --force origin main",
         "git push origin +main",
@@ -548,7 +550,7 @@ fn guard_blocks_other_ways_to_reach_main() {
 
 #[test]
 fn guard_blocks_an_implicit_push_from_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
     for command in ["git push", "git push origin HEAD", "git push -u origin"] {
@@ -558,7 +560,7 @@ fn guard_blocks_an_implicit_push_from_main() {
 
 #[test]
 fn guard_allows_pushing_other_branches() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     for command in [
         "git push -u origin impl/x/b",
         "git push --force-with-lease origin impl/x/b",
@@ -598,7 +600,7 @@ fn guard_allows_pushing_other_branches() {
 
 #[test]
 fn guard_names_a_cd_it_cannot_follow() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     // cd into a directory the command creates
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -676,7 +678,7 @@ fn guard_names_a_cd_it_cannot_follow() {
 
 #[test]
 fn guard_suggests_an_explicit_branch_for_an_implicit_push() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     // implicit push from main
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "main");
@@ -698,7 +700,7 @@ fn guard_suggests_an_explicit_branch_for_an_implicit_push() {
 
 #[test]
 fn guard_reads_push_options_and_redirections_as_what_they_are() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     // An option's value isn't the remote or a refspec, wherever the option sits.
     assert_eq!(
         guard(&bash("git push origin --repo main impl/x/b")),
@@ -724,7 +726,7 @@ fn guard_reads_push_options_and_redirections_as_what_they_are() {
 
 #[test]
 fn guard_blocks_matching_and_wildcard_refspecs_that_reach_main() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     for command in [
         "git push origin :",
         "git push --force origin refs/heads/*:refs/heads/*",
@@ -741,7 +743,7 @@ fn guard_blocks_matching_and_wildcard_refspecs_that_reach_main() {
 
 #[test]
 fn guard_allows_an_implicit_push_it_cannot_decide() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     assert_eq!(
         guard(&bash_in_opt("git push", None)),
@@ -765,7 +767,7 @@ fn scratch_tracking(dir: &Path) -> std::path::PathBuf {
 
 #[test]
 fn a_repository_not_under_clm() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     for command in [
@@ -787,7 +789,7 @@ fn a_repository_not_under_clm() {
 
 #[test]
 fn a_scratch_repository_inside_a_checkout_under_clm() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = tracking(dir.path(), "impl/x/b", Some("impl/x/b"));
     scratch_on(&work.join("s"), "main");
@@ -798,7 +800,7 @@ fn a_scratch_repository_inside_a_checkout_under_clm() {
 
 #[test]
 fn a_clm_repository_in_a_subdirectory() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     fs::create_dir_all(work.join("tool/specs")).unwrap();
@@ -827,7 +829,7 @@ fn a_clm_repository_in_a_subdirectory() {
 
 #[test]
 fn a_push_whose_repository_the_guard_cannot_tell() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     for command in [
@@ -866,7 +868,7 @@ fn a_push_whose_repository_the_guard_cannot_tell() {
 
 #[test]
 fn the_hosts_routes_outside_clm() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     let dir = TempDir::new().unwrap();
     let work = scratch_tracking(dir.path());
     blocks_push(&bash_in("gh pr merge 3 --squash", &work));
@@ -878,7 +880,7 @@ fn the_hosts_routes_outside_clm() {
 
 #[test]
 fn guard_blocks_moving_main_through_the_api() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     blocks_push(&bash(
         "gh api -X PATCH repos/o/r/git/refs/heads/main -f sha=abc",
     ));
@@ -897,7 +899,7 @@ fn guard_blocks_moving_main_through_the_api() {
 
 #[test]
 fn guard_allows_prose_about_pushing() {
-    // req:plugin.hooks.guard/push-guard@61eecef6
+    // req:plugin.hooks.guard/push-guard@dff5755b
     for command in [
         r#"gh pr create --title t --body "never run git push origin main""#,
         r#"git commit -m "explain git push origin main""#,
@@ -1061,4 +1063,78 @@ fn other_pipes_are_allowed() {
     ] {
         allows(&bash(command));
     }
+}
+
+#[test]
+fn the_hooks_budgets_are_twenty_and_thirty_seconds() {
+    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    assert_eq!(Budgets::HOOK.push, Duration::from_secs(20));
+    assert_eq!(Budgets::HOOK.lookup, Duration::from_secs(30));
+}
+
+/// Every `.rs` file under `dir`, with its text.
+fn sources(dir: &Path) -> Vec<(std::path::PathBuf, String)> {
+    let mut found = Vec::new();
+    for entry in fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            found.extend(sources(&path));
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            let text = fs::read_to_string(&path).unwrap();
+            found.push((path, text));
+        }
+    }
+    found
+}
+
+#[test]
+fn nothing_shortens_the_hooks_budgets() {
+    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // The guard's own names, not `clm-check`'s `Budgets`, which `main.rs` also uses.
+    let clm = sources(&krate.parent().unwrap().join("clm/src"));
+    assert!(
+        clm.iter().any(|(p, _)| p.ends_with("main.rs")),
+        "main.rs wasn't read"
+    );
+    for (path, text) in &clm {
+        for (n, line) in text.lines().enumerate() {
+            let names_guards = line.contains("guard_within")
+                || (line.contains("clm_guard") && line.contains("Budgets"));
+            assert!(
+                !names_guards,
+                "{}:{} names the guard's budgets",
+                path.display(),
+                n + 1
+            );
+        }
+    }
+    let own = sources(&krate.join("src"));
+    assert!(
+        own.iter().any(|(p, _)| p.ends_with("lib.rs")),
+        "lib.rs wasn't read"
+    );
+    for (path, text) in &own {
+        for (n, line) in text.lines().enumerate() {
+            let code = line.split("//").next().unwrap();
+            let reads_env = code.contains("env::var") || code.contains("var_os");
+            assert!(
+                !(reads_env && code.contains("BUDGET")),
+                "{}:{} reads a budget from the environment",
+                path.display(),
+                n + 1
+            );
+        }
+    }
+}
+
+#[test]
+fn the_hook_judges_with_the_hooks_budgets() {
+    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    let lib = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).unwrap();
+    let start = lib.find("pub fn guard(event: &str) -> Decision {").unwrap();
+    let rest = &lib[start..];
+    let body = &rest[rest.find('{').unwrap() + 1..rest.find("\n}").unwrap()];
+    let words: Vec<&str> = body.split_whitespace().collect();
+    assert_eq!(words.join(" "), "guard_within(event, &Budgets::HOOK)");
 }
