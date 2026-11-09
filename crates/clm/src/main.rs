@@ -1996,10 +1996,10 @@ fn landed(
 fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
     match clm_verify::verify(root, request, &clm_config::process_env) {
         Ok(outcome) => {
+            println!("{}", outcome.line);
             for note in outcome.notes {
                 eprintln!("clm verify: {note}");
             }
-            println!("{}", outcome.line);
             ExitCode::from(outcome.code)
         }
         Err(clm_verify::Error::Refused(why)) => {

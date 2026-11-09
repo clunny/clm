@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use clm_ledger::Body;
+use clm_ledger::{Body, Recheck};
 
 use crate::chain::State;
 use crate::{Ctx, Error, Outcome, run};
@@ -57,6 +57,56 @@ pub(crate) fn components(
         true => vec![clm_model::ROOT_ID.to_string()],
         false => owners.into_iter().collect(),
     })
+}
+
+/// What to say on stderr of how the `culprit` land checked its merged tree, when its `landed`
+/// record says it ran no check or only the overlap (`culprit-recheck`): the keys are those of
+/// the composed `checked` record for the land's code key, or `unknown`. Nothing of the
+/// failure's cause.
+pub(crate) fn recheck_note(
+    ctx: &Ctx,
+    state: &State,
+    culprit: &str,
+) -> Result<Option<String>, Error> {
+    let landed = state
+        .fold
+        .lands
+        .get(culprit)
+        .and_then(|records| records.last());
+    let Some(Body::Landed {
+        code_key,
+        recheck: Some(recheck),
+        recheck_files,
+        ..
+    }) = landed.map(|r| &r.body)
+    else {
+        return Ok(None);
+    };
+    let how = match (recheck, recheck_files) {
+        (Recheck::None, _) => "nothing".to_string(),
+        (Recheck::Overlap, Some(n)) => format!("the overlap, {n} files"),
+        (Recheck::Overlap, None) => "the overlap, every test".to_string(),
+        (Recheck::Checked | Recheck::Selected, _) => return Ok(None),
+    };
+    let basis = code_key
+        .as_ref()
+        .and_then(|key| state.fold.checks.get(key))
+        .and_then(|records| {
+            records.iter().rev().find_map(|r| match &r.body {
+                Body::Checked { basis, .. } => basis.as_ref(),
+                _ => None,
+            })
+        });
+    let short = |key: &str| key.chars().take(12).collect::<String>();
+    let (head, base) = basis.map_or_else(
+        || ("unknown".to_string(), "unknown".to_string()),
+        |b| (short(&b.head), short(&b.base)),
+    );
+    Ok(Some(format!(
+        "culprit {} re-checked {how} at land; its branch's check and main's were composed \
+         from {head} and {base}",
+        ctx.short(culprit)?
+    )))
 }
 
 /// The files `land`'s first-parent diff changes, relative to the CLM root.
@@ -129,8 +179,10 @@ pub(crate) fn bisect_red(ctx: &Ctx, state: &State, sha: &str) -> Result<Outcome,
         mode: *mode,
         run: run.clone(),
     };
+    let note = recheck_note(ctx, state, &culprit)?;
     let appended = clm_ledger::append(&ctx.root, body, ctx.env)?;
     let mut outcome = run::report(ctx, &full, false, lands.len(), Some(&culprit), &components)?;
+    outcome.notes.extend(note);
     if !appended.pushed {
         outcome
             .notes
