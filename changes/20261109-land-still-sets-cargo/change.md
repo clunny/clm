@@ -57,4 +57,7 @@ resolves:
 
 ## Open questions
 
-- None yet.
+- **The marker on the `upgrade` test `init`'s build fixes** (architecture audit). `path-ownership`'s fourth exception lets `init`'s build fix `upgrade`'s existing test `an_unedited_check_script_is_rewritten_to_run_from_the_root`, which cites `migration-check-script-from-root` at the old version. Neither the exception nor `template-migration-fix` says whether the fixed test keeps that marker (leaving the requirement `behind`, for `upgrade`'s build to re-cite, as `hash-based-staleness` intends) or is re-cited by `init`'s build (which would widen the second exception). Left for the human; the intended reading is the first.
+- **`#### Enforced by` symmetry** (architecture audit). `upgrade/migration-build-setup` serves `tests-run-in-their-own-tree` and `orchestrator.run/template-migration-fix` serves `upgrades-carry-migrations`, and neither is in that entry's `#### Enforced by`. Adding them is a change to enforcing rules (`human-layer-proof`), so it is left for the human.
+- **`init`'s Design** still says the starter runs `cargo test` and says nothing of the `CLM_LAND_DIR` export; the requirement `starter-check-land-dir` is authoritative (an omission, not a contradiction).
+- **Build order** (builder check): `init/starter-check-land-dir`'s build also writes `upgrade/migration-starter-land-dir`, and `orchestrator.run/template-migration-fix` is unbuilt until then, so that build needs a hand-written brief; the fixture of `upgrade`'s tests holds no `scripts/clm-check.sh`, so the two new notes do not appear together there.
