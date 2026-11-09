@@ -68,7 +68,7 @@ Claude summarises it and proposes cuts. Act on any of it with `/clm:propose`. [H
 ## See where things stand
 
 - Every Claude Code session starts with the project's status: what's built, what's in flight, what waits on you.
-- `/clm:view` opens a panel beside the chat with the same picture, kept up to date.
+- `/clm:view` opens a panel beside the chat with the same picture, kept up to date. With the `clm-panel` plugin installed, `/clm:build` opens it for you on the Flight tab, where the builds show.
 - The web app at [clm-app.dev/app/](https://clm-app.dev/app/), if you've been invited, shows the design, the work in flight and the backlog, and lets you approve changes and suggest new ones from any browser, a phone included.
 
 ## Decide what's worth keeping
