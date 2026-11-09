@@ -72,6 +72,7 @@ pub fn draft(
     root: &Path,
     slugs: &[String],
     answers: Option<&Path>,
+    setup: Option<&str>,
     max_builds: u64,
     expiry_hours: u64,
     clock: &Clock,
@@ -108,7 +109,7 @@ pub fn draft(
     let drafted = claimed(
         root,
         slugs,
-        &answers,
+        (&answers, setup),
         (max_builds, expiry_hours),
         clock,
         &prompts,
@@ -127,7 +128,7 @@ pub fn draft(
 fn claimed(
     root: &Path,
     slugs: &[String],
-    answers: &str,
+    (answers, setup): (&str, Option<&str>),
     (max_builds, expiry_hours): (u64, u64),
     clock: &Clock,
     prompts: &Path,
@@ -176,7 +177,7 @@ fn claimed(
     let id = name_place(root, &slugs, max_builds, expiry_hours, clock, place)?;
     let file = prompts.join(format!("{id}.md"));
     // A write that fails leaves the claims to lapse, and `draft` frees the place.
-    fs::write(&file, prompt(&items, answers, &id))
+    fs::write(&file, prompt(&items, answers, setup, &id))
         .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
     let launcher = crate::launcher(&file, &format!("drafting `{id}`"));
     Ok(Draft {
@@ -254,7 +255,12 @@ fn held(root: &Path, id: &str, expiry_hours: u64) -> Result<bool, Error> {
 
 /// The prompt for the claimed `items`, each with its body, for the change `id`, with the
 /// human's `answers` when they hold anything (`answers-reach-drafts`).
-fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
+fn prompt(
+    items: &[(&BacklogItem, String)],
+    answers: &str,
+    setup: Option<&str>,
+    id: &str,
+) -> String {
     let list = |v: &[String]| format!("[{}]", v.join(", "));
     let slugs: Vec<String> = items.iter().map(|(i, _)| i.slug.clone()).collect();
     let highest = items
@@ -332,6 +338,21 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          with the spec change's `landed <sha>`. When the branch needs review it stops the \
          draft as any does, and the bug is left to the next triage.\n\n"
             .to_string()
+    };
+    // Only when the project declares a setup: otherwise the prompt names no `clm setup`.
+    let setup_step = if setup.is_some() {
+        "Once you are on the branch you fix code on (the `impl/<component>` branch \
+         `clm claim <component> --fix` switched you to, or a branch of your own for test \
+         plumbing) and before you run any test there, run `clm setup` as one plain command: it \
+         runs the project's `[build] setup`, so that its tests run against your own \
+         worktree's code and dependencies, never the main checkout's \
+         (`tests-run-in-their-own-tree`). Run it again after a `clm rebase` or an edit of \
+         your own that changes the project's dependency declarations. When `clm setup` fails, \
+         or Claude Code refuses or denies it, leave the item you were fixing with \
+         `left <slug>: setup failed`, and report it with `clm defect` when it was refused \
+         or denied, since no test result is then to be trusted. "
+    } else {
+        ""
     };
     p.push_str(&format!(
         "\n## Steps\n\n\
@@ -419,7 +440,7 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          `clm claim <component> --fix backlog/<slug>` for the component's first such bug, then, on that \
          `impl/<component>` branch, fix each of the component's code-only bugs test first and delete its \
          `backlog/<slug>.md` in a commit whose trailer block holds \
-         `Resolves: backlog/<slug>`. Run the repository's checks as `CLAUDE.md` asks, confirm \
+         `Resolves: backlog/<slug>`. {setup_step}Run the repository's checks as `CLAUDE.md` asks, confirm \
          `clm gate --base origin/main` prints `code`, write the pull request body to `{PR_BODY}`, \
          open the pull request with `clm pr open impl/<component> --title <title> --body-file {PR_BODY}` \
          and land the branch with `clm land impl/<component>`, then `git switch spec/<id>` to go \
@@ -586,7 +607,19 @@ fn prompt(items: &[(&BacklogItem, String)], answers: &str, id: &str) -> String {
          monitor that matches processes by name (such as `pgrep -f`): such a match also \
          finds other drafts' and builds' processes and outlives the command it waits for. \
          Running a command in the background is a setting of the tool call, not a change to \
-         the command. Wait for a `clm land` you started until its completion notice \
+         the command. Every test or check command you run yourself, such as the checks of \
+         the code-fix path, other than `clm land` in any form, which you run as written, \
+         ends within a time limit (`bounded-test-runs`): run it in the foreground, where the \
+         tool call's own timeout ends it, or, when you run it in the background, as \
+         `timeout <limit> <command>`, with a limit well past the time the run should take. \
+         The reason: a test that hangs, such as a polling wait with no deadline of its own, \
+         never ends a run started in the background, so its completion notice never comes, \
+         and nothing wakes a session that waits for it, nor the triage session, which counts \
+         a waiting draft as still running, so the draft sits idle with no one told. A run \
+         your limit ends counts as a failing run, whose hanging test you find as for any \
+         failure: fix the test when it is in the files of the component you are fixing, \
+         and otherwise record it as a backlog item and name that item in your pull request \
+         body. Wait for a `clm land` you started until its completion notice \
          arrives, however long that takes, since lands queue behind other drafts' and \
          builds' lands and can take many minutes. Never write your final message while one \
          is still running, since the triage session reads the final line as the draft's end \

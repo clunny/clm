@@ -36,7 +36,7 @@ fn with(slugs: &[&str]) -> Repo {
 /// The ID `draft` chose for `slugs`, with up to 3 places, in UTC.
 fn id(r: &Repo, slugs: &[&str]) -> String {
     let slugs: Vec<String> = slugs.iter().map(|s| s.to_string()).collect();
-    draft(&r.work, &slugs, None, 3, 4, &clock("UTC"))
+    draft(&r.work, &slugs, None, None, 3, 4, &clock("UTC"))
         .unwrap()
         .drafted
         .expect("drafted")
@@ -62,7 +62,7 @@ fn the_date_is_the_given_clock_in_the_given_time_zone() {
     assert_eq!(id(&r, &["a"]), "20261027-a");
     let r = with(&["a"]);
     let slugs = ["a".to_string()];
-    let tokyo = draft(&r.work, &slugs, None, 3, 4, &clock("Asia/Tokyo")).unwrap();
+    let tokyo = draft(&r.work, &slugs, None, None, 3, 4, &clock("Asia/Tokyo")).unwrap();
     let drafted = tokyo.drafted.unwrap();
     assert_eq!(drafted.id, "20261028-a");
     let prompt = fs::read_to_string(&drafted.file).unwrap();
@@ -149,7 +149,7 @@ fn scenario_nothing_claimed_frees_the_place() {
     // req:orchestrator.triage/draft-takes-place@2865c8cd
     let r = with(&["b"]);
     push_propose(&r.work, "b", 1);
-    let d = draft(&r.work, &["b".to_string()], None, 3, 4, &clock("UTC")).unwrap();
+    let d = draft(&r.work, &["b".to_string()], None, None, 3, 4, &clock("UTC")).unwrap();
     assert!(d.drafted.is_none());
     assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
 }
@@ -172,7 +172,7 @@ fn scenario_refused_draft_frees_only_its_own_place() {
     let r = with(&["b"]);
     push_propose(&r.work, "b", 1);
     take_place(&r.work, "draft-1-b", PlaceKind::Draft, &[], 3, 4).unwrap();
-    let d = draft(&r.work, &["b".to_string()], None, 3, 4, &clock("UTC")).unwrap();
+    let d = draft(&r.work, &["b".to_string()], None, None, 3, 4, &clock("UTC")).unwrap();
     assert!(d.drafted.is_none());
     assert_eq!(place_names(&r), ["draft-1-b"]);
 }
@@ -182,7 +182,7 @@ fn a_full_clone_claims_nothing() {
     // req:orchestrator.triage/draft-takes-place@2865c8cd
     let r = with(&["a"]);
     take_place(&r.work, "x", PlaceKind::Build, &[], 1, 4).unwrap();
-    match draft(&r.work, &["a".to_string()], None, 1, 4, &clock("UTC")) {
+    match draft(&r.work, &["a".to_string()], None, None, 1, 4, &clock("UTC")) {
         Err(DraftError::NoPlace(why)) => {
             assert!(why.contains("1 of max_builds = 1 in use"), "{why}")
         }
@@ -199,7 +199,7 @@ fn prompt_for(slugs: &[&str], claimed: &[&str]) -> String {
         push_propose(&r.work, slug, 1);
     }
     let slugs: Vec<String> = slugs.iter().map(|s| s.to_string()).collect();
-    let drafted = draft(&r.work, &slugs, None, 3, 4, &clock("UTC"))
+    let drafted = draft(&r.work, &slugs, None, None, 3, 4, &clock("UTC"))
         .unwrap()
         .drafted
         .expect("drafted");
@@ -363,7 +363,7 @@ fn with_items(items: &[(&str, &str, &str)]) -> Repo {
 /// The prompt `draft` writes for `slugs` in `r`, with its change ID.
 fn drafted_prompt(r: &Repo, slugs: &[&str]) -> (String, String) {
     let slugs: Vec<String> = slugs.iter().map(|s| s.to_string()).collect();
-    let drafted = draft(&r.work, &slugs, None, 3, 4, &clock("UTC"))
+    let drafted = draft(&r.work, &slugs, None, None, 3, 4, &clock("UTC"))
         .unwrap()
         .drafted
         .expect("drafted");
@@ -609,7 +609,7 @@ fn answered_prompt(r: &Repo, slugs: &[&str], answers: &str) -> String {
     let file = r.work.join("answers.md");
     fs::write(&file, answers).unwrap();
     let slugs: Vec<String> = slugs.iter().map(|s| s.to_string()).collect();
-    let drafted = draft(&r.work, &slugs, Some(&file), 3, 4, &clock("UTC"))
+    let drafted = draft(&r.work, &slugs, Some(&file), None, 3, 4, &clock("UTC"))
         .unwrap()
         .drafted
         .expect("drafted");
@@ -713,7 +713,7 @@ fn scenario_unreadable_answers() {
         (not_utf8, "not-utf8.md"),
     ] {
         let slugs = ["a".to_string()];
-        match draft(&r.work, &slugs, Some(&file), 3, 4, &clock("UTC")) {
+        match draft(&r.work, &slugs, Some(&file), None, 3, 4, &clock("UTC")) {
             Err(DraftError::Failed(clm_triage::Error::Refused(why))) => {
                 assert!(why.contains(name), "{why}")
             }
@@ -735,6 +735,7 @@ fn answers_are_read_before_fetching() {
         &r.work,
         &["a".to_string()],
         Some(&file),
+        None,
         3,
         4,
         &clock("UTC"),
@@ -861,5 +862,75 @@ fn scenario_prompts_push_through_clm_draft_prompt() {
     }
     for absent in ["git push", "--force-with-lease"] {
         assert!(!p.contains(absent), "{absent} in {p}");
+    }
+}
+
+/// The prompt `draft` writes for item `a` when the repository's `[build] setup` is `setup`.
+fn prompt_with_setup(r: &Repo, setup: Option<&str>) -> String {
+    let drafted = draft(
+        &r.work,
+        &["a".to_string()],
+        None,
+        setup,
+        3,
+        4,
+        &clock("UTC"),
+    )
+    .unwrap()
+    .drafted
+    .expect("drafted");
+    fs::read_to_string(&drafted.file).unwrap()
+}
+
+#[test]
+fn scenario_setup_declared() {
+    // req:orchestrator.triage/draft-prompt-setup@53070272
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let p = prompt_with_setup(&r, Some("scripts/setup.sh"));
+    let para = paragraph(&p, "code-fix-needs-a-written-rule");
+    for needle in [
+        "clm setup",
+        "tests-run-in-their-own-tree",
+        "setup failed",
+        "left <slug>: setup failed",
+        "as one plain command",
+        "before you run any test there",
+        "again after a `clm rebase` or an edit of your own",
+        "clm defect",
+        "dependency declarations",
+        "to be trusted. Run the repository's checks",
+    ] {
+        assert!(para.contains(needle), "{needle} missing from {para}");
+    }
+}
+
+#[test]
+fn scenario_nothing_declared() {
+    // req:orchestrator.triage/draft-prompt-setup@53070272
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let p = prompt_with_setup(&r, None);
+    assert!(!p.contains("clm setup"), "{p}");
+}
+
+#[test]
+fn scenario_bounded_test_runs_prompt() {
+    // req:orchestrator.triage/bounded-test-runs@9a53e9d5
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let (_, p) = drafted_prompt(&r, &["a"]);
+    let para = paragraph(&p, "`stopped: <reason>`");
+    for needle in [
+        "timeout <limit> <command>",
+        "foreground",
+        "hangs",
+        "bounded-test-runs",
+        "backlog item",
+        "failing run",
+        "pull request body",
+        "other than `clm land` in any form",
+        "the tool call's own timeout",
+        "well past",
+        "in the files of the component you are fixing",
+    ] {
+        assert!(para.contains(needle), "{needle} missing from {para}");
     }
 }

@@ -1242,6 +1242,7 @@ fn dispatch() -> ExitCode {
                 &root,
                 &slugs,
                 answers.as_deref(),
+                settings.build.value.as_ref().map(|b| b.setup.as_str()),
                 settings.max_builds.value,
                 expiry,
                 &clock,
