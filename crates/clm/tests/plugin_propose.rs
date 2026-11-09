@@ -601,6 +601,41 @@ fn propose_adds_settings_sections() {
 }
 
 #[test]
+fn propose_fix_runs_setup() {
+    // req:plugin.propose/propose-fix-runs-setup@69f20c07
+    let body = skill_body("propose");
+    let section = code_fix_section(&body);
+    assert_eq!(
+        text_gaps(
+            "propose",
+            section,
+            &["clm setup", "tests-run-in-their-own-tree", "[build] setup"],
+            &[],
+        ),
+        Vec::<String>::new()
+    );
+    // It runs before any test in the checkout, and again after dependency changes.
+    let rule = sentence_with(section, "When `clm.toml` sets `[build] setup`");
+    for needle in [
+        "in this checkout",
+        "before you run any test",
+        "and again after",
+        "`clm rebase`",
+        "dependency declarations",
+    ] {
+        assert!(rule.contains(needle), "{needle}: {rule}");
+    }
+    // a skill without the rule
+    let gaps = text_gaps(
+        "propose",
+        &body.replace("clm setup", "elided"),
+        &["clm setup"],
+        &[],
+    );
+    assert_reports(&gaps, "propose", "clm setup");
+}
+
+#[test]
 fn propose_harness_only_work() {
     // req:plugin.propose/propose-harness-only-work@a8431dc3
     let body = skill_body("propose");
