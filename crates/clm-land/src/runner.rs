@@ -59,7 +59,7 @@ pub fn run_check(
         env,
         log,
         Some(Rank::ORDINARY),
-        |l| eprintln!("{l}"),
+        crate::lock::tell,
     )
 }
 
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn the_waiting_line_is_said_once_and_the_command_runs_after_the_lock() {
-        // req:land/shared-check-runner@235e2519
+        // req:land/shared-check-runner@54ccc864
         let dir = tempfile::tempdir().unwrap();
         let places = dir.path().join(".clm");
         std::fs::create_dir_all(&places).unwrap();

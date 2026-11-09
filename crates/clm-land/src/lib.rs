@@ -262,7 +262,7 @@ impl<'a> Repo<'a> {
             &env,
             log,
             rank,
-            |line| eprintln!("{line}"),
+            crate::lock::tell,
         )?;
         let Some(log) = log else {
             if !run.passed {
@@ -304,7 +304,9 @@ impl<'a> Repo<'a> {
         }
         self.affected(exe, dir, &args, readers)
             .unwrap_or_else(|why| {
-                eprintln!("clm affected failed: {why}; the check runs every test");
+                crate::lock::tell(&format!(
+                    "clm affected failed: {why}; the check runs every test"
+                ));
                 Selected::Failed
             })
     }
@@ -316,7 +318,9 @@ impl<'a> Repo<'a> {
     fn overlap(&self, exe: &Path, dir: &Path, head: &str, base: &str) -> Selected {
         let args = ["--overlap", head, base];
         self.affected(exe, dir, &args, true).unwrap_or_else(|why| {
-            eprintln!("clm affected failed: {why}; the land checks its own selection");
+            crate::lock::tell(&format!(
+                "clm affected failed: {why}; the land checks its own selection"
+            ));
             Selected::Failed
         })
     }
