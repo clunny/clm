@@ -30,7 +30,8 @@ pub const UNBUILT: &str = "\n### Requirement: thing\nIt SHALL do the thing.\n\n\
     #### Scenario: doing\n- GIVEN a\n- WHEN b\n- THEN c\n";
 
 /// Logs the directory and head it ran on and what `CLM_SELECTION` held; sleeps for the
-/// seconds in `sleep` when it exists; fails when `check-fails` exists or when the path
+/// seconds in `sleep` when it exists; exits with the code a line `<head> <code>` of `exit-at`
+/// gives for the head it ran on; fails when `check-fails` exists or when the path
 /// `fail-path` names exists in the tree it ran on.
 const CHECK: &str = r#"
 pwd -P >> "$DIR/check-pwd.log"
@@ -46,6 +47,10 @@ echo "start $(git rev-parse HEAD)" >> "$DIR/check-trees.log"
 if [ -e "$DIR/sleep" ]; then sleep "$(cat "$DIR/sleep")"; fi
 echo "end $(git rev-parse HEAD)" >> "$DIR/check-trees.log"
 echo "end" >> "$DIR/check-order.log"
+if [ -e "$DIR/exit-at" ]; then
+  code=$(awk -v h="$(git rev-parse HEAD)" '$1 == h { print $2 }' "$DIR/exit-at")
+  if [ -n "$code" ]; then exit "$code"; fi
+fi
 if [ -e "$DIR/fail-path" ] && [ -e "$(cat "$DIR/fail-path")" ]; then exit 1; fi
 [ ! -e "$DIR/check-fails" ]
 "#;

@@ -12,6 +12,9 @@ use crate::{Ctx, Error, Outcome, bisect, import, tree};
 /// What a check run on one commit came to.
 pub(crate) struct Probe {
     pub(crate) passed: bool,
+    /// Whether the check could not test the commit: it exited 125, 126 or 127
+    /// (`verify-bisect`).
+    pub(crate) untestable: bool,
     /// The log, when the run was given one and wrote it.
     pub(crate) log: Option<PathBuf>,
 }
@@ -36,6 +39,7 @@ pub(crate) fn check(
     )?;
     Ok(Probe {
         passed: run.passed,
+        untestable: matches!(run.code, Some(125..=127)),
         log: log.filter(|_| run.logged).map(Path::to_path_buf),
     })
 }
@@ -94,15 +98,30 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
     )?;
     if run.passed {
         let _ = std::fs::remove_file(&log);
-        return record(ctx, state, end, None, true, None);
+        return record(ctx, state, end, None, None, true, None);
     }
     let (_, lands) = state.unverified(end);
-    let culprit = match lands {
-        [only] => only.clone(),
-        _ => state.chain[bisect::first_red(ctx, state, green, end)?].clone(),
+    let found = match lands {
+        [only] => bisect::Found {
+            culprit: Some(only.clone()),
+            may_hold: None,
+            note: None,
+        },
+        _ => bisect::first_red(ctx, state, green, end)?,
     };
-    let note = bisect::recheck_note(ctx, state, &culprit)?;
-    let mut outcome = record(ctx, state, end, Some(culprit), false, None)?;
+    let note = match &found.culprit {
+        Some(culprit) => bisect::recheck_note(ctx, state, culprit)?,
+        None => found.note,
+    };
+    let mut outcome = record(
+        ctx,
+        state,
+        end,
+        found.culprit,
+        found.may_hold.as_deref(),
+        false,
+        None,
+    )?;
     outcome.notes.extend(note);
     if let Some(log) = run.log {
         outcome
@@ -114,12 +133,14 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
 
 /// Appends the `verified` record for the commit at position `end`, covering the lands since
 /// the last verified commit, and reports it. A red result's components are those the culprit's
-/// diff changes, or those of every covered land when it has none.
+/// diff changes, or, with none, those of the lands that may hold it (`may_hold`) or of every
+/// covered land.
 pub(crate) fn record(
     ctx: &Ctx,
     state: &State,
     end: usize,
     culprit: Option<String>,
+    may_hold: Option<&[String]>,
     passed: bool,
     run: Option<String>,
 ) -> Result<Outcome, Error> {
@@ -127,7 +148,7 @@ pub(crate) fn record(
     let commit = state.chain[end].clone();
     let components = match passed {
         true => Vec::new(),
-        false => bisect::components(ctx, &commit, culprit.as_deref(), lands)?,
+        false => bisect::components(ctx, &commit, culprit.as_deref(), may_hold.unwrap_or(lands))?,
     };
     let body = Body::Verified {
         commit: commit.clone(),

@@ -66,5 +66,5 @@ fn import(
         [only] if !passed => Some(only.clone()),
         _ => None,
     };
-    run::record(ctx, state, at, culprit, passed, Some(result.url))
+    run::record(ctx, state, at, culprit, None, passed, Some(result.url))
 }

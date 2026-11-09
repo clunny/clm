@@ -81,7 +81,10 @@ fn an_invalid_setting_on_main() {
 fn a_fetch_that_fails_is_a_git_failure() {
     // req:verify/settings-from-main@325c67ff
     let f = Fixture::new(Some("mode = \"local\"\ntriggers = [\"work-done\"]"));
-    f.git(&f.work(), &["remote", "set-url", "origin", "/nonexistent/x"]);
+    f.git(
+        &f.work(),
+        &["remote", "set-url", "origin", "/nonexistent/x"],
+    );
     let err = clm_verify::verify(
         &f.work(),
         &Request::Due {
