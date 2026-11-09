@@ -82,7 +82,7 @@ fn scenario_builder_check_order_fold_prompt() {
 
 #[test]
 fn scenario_draft_architecture_audit_fold_prompt() {
-    // req:orchestrator.triage/draft-architecture-audit@6d8f59a2
+    // req:orchestrator.triage/draft-architecture-audit@4efa5dcb
     let p = fold_prompt(&["20261027-a", "20261027-b"]);
     let para = p
         .split("\n\n")
