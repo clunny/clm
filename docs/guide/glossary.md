@@ -35,7 +35,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 
 ## How work is built and proven
 
-- **Marker:** the text `req:<component>/<slug>@<version>` in a test, saying which requirement the test proves, at which version. Two other markers use the word too: `clm:remove-by <change-id>` on code a contract change will remove (see Expand-contract), and `clm:reads <glob>` in a test that reads the project's own specs or docs, so a land that changes only them still runs it. *Usually:* requirement traceability in tests.
+- **Marker:** the text `req:<component>/<slug>@<version>` in a test, saying which requirement the test proves, at which version. Two other markers use the word too: `clm:remove-by <change-id>` on code a contract change will remove (see Expand-contract), and `clm:reads <glob>` in a test that reads the project's own specs, docs or `clm.toml`, so a land that changes only them still runs it. *Usually:* requirement traceability in tests.
 - **Version:** the first 8 hex digits of a requirement's hash; rewording the requirement changes it.
 - **Requirement states:** `current` (a passing test cites it at its current version), `behind` (cited only at an older version), `unbuilt` (specified, but no test cites it yet) and `obsolete` (a test cites it, but a change removed it). **Pending** means any state but `current`: work the code still owes the spec (`clm pending`, `clm coverage`).
 - **Component status:** `unbuilt` (specified, not built yet), `active` (built and kept current) and `deprecated`.
@@ -58,6 +58,8 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Pull request:** a branch's request on the host to merge into `main` (GitLab: merge request), where a human reads the diff; nothing waits on it, and without a host there is none (`clm pr`).
 - **Approve:** a human's recorded yes to a branch that needs review (`clm approve`). *Usually:* an approving review.
 - **Land:** merging a branch into `main` through `clm land`, which runs the checks on the merged result on your machine and pushes `main`. *Usually:* merge, or land.
+- **Overlap re-check:** what a land runs when the branch's head and `main`'s head were each checked whole and `main` has moved since: only the tests both can affect (`clm affected --overlap`), and none when there are none. The land prints a `re-check:` line, and its ledger record keeps `recheck` (`checked`, `none`, `overlap` or `selected`). See `ci-and-deployment`.
+- **`CLM_LAND_DIR`:** the directory, lasting from land to land, that `clm land` gives a check it runs in the clone's land tree, for the check's build output.
 - **Rebase:** `clm rebase`: rebase a branch onto `origin/main`, regenerate `specs/` from its changes and run the checks.
 - **Wrap-up:** `clm wrap-up`: clean up landed work and say whether the session can end.
 - **Ledger:** the record of approvals, checks and lands, kept on one branch per writer (`clm ledger`); `clm ledger verify` audits `main` against it, checking every commit on `main` is a recorded land. *Usually:* an audit log.

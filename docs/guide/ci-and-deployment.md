@@ -75,7 +75,7 @@ The land says on stderr how it re-checked:
 - `re-check: none, the branch and main since <merge base> affect no test in common`: no check ran;
 - `re-check: overlap, <n> files`, or `re-check: overlap, every test` when the overlap selects everything: the check ran on that selection.
 
-The `landed` record the land writes to the ledger keeps the same as `recheck`: `checked` for a land whose code was already checked, `none`, `overlap`, or `selected` for a land that ran its own selection, with `recheck_files` the number of `file` lines it handed the check (null when every test ran). When `clm verify` later blames a land that re-checked `none` or `overlap`, it says so beside the culprit, since a failure there can come from a fact missing from the graph, the code or the test.
+The `landed` record the land writes to the ledger keeps the same as `recheck`: `checked` for a land whose code was already checked, `none`, `overlap`, or `selected` for a land that ran its own selection, with `recheck_files` the number of `file` lines it handed the check (null when every test ran). When `clm verify` later blames a land that re-checked `none` or `overlap`, it says so beside the culprit. It doesn't say why the land broke: a failure there can come from a fact missing from the graph, from the code or from the test, and that is your judgement.
 
 This rests on your tests, which is what the carried constraint `land-checks-stay-fast` (`clm guide constraints`) asks of them:
 
@@ -87,7 +87,7 @@ A test that is slow, gives different results on the same tree, or needs a resour
 
 ### Where a land builds
 
-A land that runs `[land] check` in the clone's land tree, holding the clone's lock on `.clm/land.lock`, sets `CLM_LAND_DIR` to the `.clm/land` directory of the main worktree, a place that lasts from land to land. If your check builds, point your toolchain's output there in your check script, so each land reuses the last one's build. A `clm land --check-only` run, and a land that takes no such lock, run the check with `CLM_LAND_DIR` unset, so the check builds where it usually does. For cargo, set `CARGO_TARGET_DIR` from it and `CARGO_INCREMENTAL=0`, since incremental data in a directory every land shares only grows:
+A land that runs `[land] check` in the clone's land tree, holding the clone's lock on `.clm/land.lock`, sets `CLM_LAND_DIR` to the `.clm/land` directory of the main worktree, a place that lasts from land to land. If your check builds, point your toolchain's output there in your check script, so each land reuses the last one's build. A `clm land --check-only` run, and a land that takes no such lock (as when you set `CARGO_TARGET_DIR` yourself before running `clm land`), run the check with `CLM_LAND_DIR` unset, so the check builds where it usually does. For cargo, set `CARGO_TARGET_DIR` from it and `CARGO_INCREMENTAL=0`, since incremental data in a directory every land shares only grows:
 
 ```sh
 if [ -n "${CLM_LAND_DIR:-}" ]; then
@@ -95,7 +95,7 @@ if [ -n "${CLM_LAND_DIR:-}" ]; then
 fi
 ```
 
-`clm land` still sets those two cargo variables itself for now, but a later `clm` stops, so set them in your script.
+`clm land` still sets those two cargo variables itself for now, when you haven't set them, but a later `clm` stops, so set them in your script.
 
 ## Deployment is yours
 

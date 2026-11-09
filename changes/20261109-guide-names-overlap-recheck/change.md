@@ -38,4 +38,4 @@ None.
 
 ## Open questions
 
-None.
+- Architecture audit: under `plain-terms`, the page used the overlap re-check, the `re-check:` lines, the `recheck` values and `CLM_LAND_DIR` without glossary entries, and the glossary's **Marker** entry limited `clm:reads` to specs and docs. Fixed: the glossary gains **Overlap re-check** and **`CLM_LAND_DIR`**, and **Marker** names `clm.toml`. Builder check: no statement wrong; it asked that the page not read as `clm verify` explaining a culprit's failure (`verify/culprit-recheck` says nothing of the cause), that it name when a land takes no land lock (a caller-set `CARGO_TARGET_DIR`), and that the cargo sentence say `clm land` sets them only when the caller hasn't. All three are reworded. Nothing is left open.
