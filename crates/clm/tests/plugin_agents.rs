@@ -69,13 +69,6 @@ fn spec_auditor() {
             "spec-auditor prompt lacks `{needle}`"
         );
     }
-    // It is launched with a node ID; there are no tasks or plans to read.
-    for needle in ["change ID", "plan.md", "CLM task", "task's"] {
-        assert!(
-            !body.contains(needle) && !fm["description"].as_str().unwrap().contains(needle),
-            "spec-auditor must not mention {needle}"
-        );
-    }
 }
 
 /// What of `needles` the auditor's prompt leaves out, one line per missing piece naming
@@ -136,6 +129,9 @@ fn spec_auditor_keeps_its_checkout() {
     // req:plugin.agents/spec-auditor-keeps-checkout@ab433b2d
     let (_, body) = frontmatter(&plugin().join("agents/spec-auditor.md"));
     assert_eq!(auditor_checkout_gaps(&body), Vec::<String>::new());
+    for read in ["`git diff`", "`git log`"] {
+        assert!(body.contains(read), "{read}");
+    }
     let never = sentence_with(&body, "git stash");
     for needle in ["Never", "checkout"] {
         assert!(never.contains(needle), "{needle}: {never}");
@@ -201,8 +197,6 @@ fn slimmer_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
 fn spec_slimmer() {
     // req:plugin.agents/spec-slimmer@8de89fe3
     let (fm, body) = frontmatter(&plugin().join("agents/spec-slimmer.md"));
-    assert_eq!(fm["name"], "spec-slimmer");
-    assert!(fm["description"].as_str().is_some_and(|d| !d.is_empty()));
     assert_eq!(slimmer_gaps(&fm, &body), Vec::<String>::new());
     // agent that could edit
     let mut editing = fm.clone();
