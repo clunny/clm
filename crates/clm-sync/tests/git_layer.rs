@@ -45,6 +45,7 @@ fn runs_git_and_gh_only_through_the_layer() {
             if import
                 .split(|c: char| !c.is_alphanumeric() && c != '_')
                 .any(|w| w == "git" || w == "run")
+                || import.contains('*')
             {
                 found.push(format!(
                     "{}: imports from clm_git: {import}",
