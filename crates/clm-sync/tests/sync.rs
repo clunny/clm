@@ -2953,3 +2953,41 @@ fn proposals_are_filed_in_slug_order() {
         ["filed backlog/apple.md", "filed backlog/zebra.md"]
     );
 }
+
+#[test]
+fn a_lock_met_at_the_reapply_commit_is_waited_out() {
+    // req:sync/git-through-layer@808d5bc4
+    let r = repo("spec/x");
+    apply_change(&r, "x", "", &adds_x());
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_a("specd", "c", &["p", "y"]))],
+    );
+    // Held from the end of the rebase and released half a second later: no hook runs before
+    // the commit's `git add`, so a timer releases it.
+    let lock = r
+        .work
+        .join(git(&r.work, &["rev-parse", "--git-path", "index.lock"]));
+    let hook = r.work.join(git(
+        &r.work,
+        &["rev-parse", "--git-path", "hooks/post-rewrite"],
+    ));
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    write_exec(
+        &hook,
+        &format!(
+            "#!/bin/sh\ntouch '{0}'\n(sleep 0.5; rm -f '{0}') >/dev/null 2>&1 </dev/null &\n",
+            lock.display()
+        ),
+    );
+
+    let started = std::time::Instant::now();
+    assert_eq!(synced(&r), Vec::<String>::new());
+    assert!(
+        started.elapsed() >= std::time::Duration::from_millis(500),
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(git(&r.work, &["log", "-1", "--format=%s"]), "Re-apply x");
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+}
