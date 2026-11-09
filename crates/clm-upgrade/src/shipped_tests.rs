@@ -320,7 +320,7 @@ fn read_toml(dir: &TempDir) -> String {
     fs::read_to_string(dir.path().join("clm.toml")).unwrap()
 }
 
-// req:upgrade/migration-offer-verify@8280ddab
+// req:upgrade/migration-offer-verify@3243c239
 #[test]
 fn an_older_project_is_offered_the_commented_verify_section() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -359,7 +359,7 @@ fn an_older_project_is_offered_the_commented_verify_section() {
     assert_eq!(read_toml(&dir), before);
 }
 
-// req:upgrade/migration-offer-verify@8280ddab
+// req:upgrade/migration-offer-verify@3243c239
 #[test]
 fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -379,7 +379,7 @@ fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
     );
 }
 
-// req:upgrade/migration-offer-verify@8280ddab
+// req:upgrade/migration-offer-verify@3243c239
 #[test]
 fn the_verify_migration_is_done_once_set_or_commented_or_without_a_clm_toml() {
     for line in ["# [verify]", "[verify]", "  # [verify]  "] {
