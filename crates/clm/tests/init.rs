@@ -543,6 +543,37 @@ fn config(dir: &Path, key: &str) -> String {
 }
 
 #[test]
+fn typescript_project_sets_build_setup() {
+    // req:init/init-build-setup@aeb0d060
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "typescript"], &fake_hosts());
+    let out = clm(&dir, &["config", "get", "build"], "/usr/bin:/bin");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let line = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        line.starts_with("setup=test ! -f package.json || npm ci\t")
+            && line.trim_end().ends_with("clm.toml"),
+        "{line}"
+    );
+    // No package.json yet: the setup passes without calling npm.
+    let failing = stubs(&["npm"], 1);
+    let setup = clm(&dir, &["setup"], &path_with(&failing));
+    assert_eq!(setup.status.code(), Some(0), "{setup:?}");
+    assert_eq!(host_calls(&failing), "", "npm ran");
+    let check = clm(&dir, &["check"], &path_with(&failing));
+    assert_eq!(check.status.code(), Some(0), "{check:?}");
+}
+
+#[test]
+fn rust_project_has_no_build_table() {
+    // req:init/init-build-setup@aeb0d060
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "rust"], &fake_hosts());
+    let toml = read(&dir, "clm.toml");
+    assert!(!toml.contains("[build]"), "{toml}");
+}
+
+#[test]
 fn two_languages() {
     // req:init/init-detectors@f534f33f
     let (_tmp, dir) = repo();

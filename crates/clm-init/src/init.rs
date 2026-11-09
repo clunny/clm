@@ -132,6 +132,7 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     let toml = clm_toml(
         host,
         clm_upgrade::latest(),
+        &langs,
         if opts.detectors { &langs } else { &[] },
     );
     files.write("clm.toml", &toml)?;
@@ -531,7 +532,12 @@ fn missing_main(root: &Path) -> Option<String> {
     Some(step)
 }
 
-fn clm_toml(host: Host, newest_migration: Option<&str>, langs: &[&Lang]) -> String {
+fn clm_toml(
+    host: Host,
+    newest_migration: Option<&str>,
+    langs: &[&Lang],
+    detectors: &[&Lang],
+) -> String {
     // The newest migration this binary holds, so a new repository has none pending
     // (`init-stamps-upgraded`).
     let upgraded = newest_migration.map_or(String::new(), |id| {
@@ -551,13 +557,23 @@ fn clm_toml(host: Host, newest_migration: Option<&str>, langs: &[&Lang]) -> Stri
          [land]\n\
          check = \"{CHECK_SCRIPT}\"\n"
     );
-    if !langs.is_empty() {
+    // A TypeScript build's worktree installs its own packages before its tests run, rather
+    // than finding the main checkout's (`init-build-setup`); Rust needs no setup, and a Python
+    // environment is the project's to choose.
+    if langs.iter().any(|lang| lang.name == "typescript") {
+        text.push_str(
+            "\n# What `clm setup` runs in a fresh worktree before its tests (`clm guide settings`).\n\
+             [build]\n\
+             setup = \"test ! -f package.json || npm ci\"\n",
+        );
+    }
+    if !detectors.is_empty() {
         text.push_str(
             "\n# `clm check` runs these detectors of dead code and unused dependencies \
              (`no-dead-code`).\n",
         );
     }
-    for lang in langs {
+    for lang in detectors {
         text.push_str(&format!(
             "\n[[detectors]]\nname = \"{}\"\ncommand = {}\nhint = \"{}\"\nrequires = \"{}\"\n",
             lang.detector, lang.command, lang.hint, lang.manifest
@@ -656,10 +672,10 @@ mod tests {
     #[test]
     fn clm_toml_is_stamped_with_the_newest_migration() {
         // req:init/init-stamps-upgraded@37a0167c
-        let text = clm_toml(Host::None, Some("20261105-x"), &[]);
+        let text = clm_toml(Host::None, Some("20261105-x"), &[], &[]);
         let table: toml::Table = text.parse().unwrap();
         assert_eq!(table["upgraded"].as_str(), Some("20261105-x"));
-        let bare: toml::Table = clm_toml(Host::None, None, &[]).parse().unwrap();
+        let bare: toml::Table = clm_toml(Host::None, None, &[], &[]).parse().unwrap();
         assert!(!bare.contains_key("upgraded"));
     }
 }
