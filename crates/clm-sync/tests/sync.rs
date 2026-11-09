@@ -452,7 +452,7 @@ fn an_untracked_file_main_adds_fails_naming_it() {
 
 #[test]
 fn applied_specs_are_regenerated_on_the_new_main() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     // `main` adds `a/y` to the same file, so a text merge of `specs/` would conflict.
@@ -490,7 +490,7 @@ fn design_hash(r: &Repo) -> String {
 
 #[test]
 fn a_change_built_on_another_sorts_first() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/x");
     let three = node_a("specd", "c", &["p"]).replace("## Design\nd", "## Design\none\ntwo\nthree");
     main_moves(&r, &[("specs/a/SPEC.md", &three)]);
@@ -528,7 +528,7 @@ fn a_change_built_on_another_sorts_first() {
 
 #[test]
 fn applied_assets_survive_regeneration() {
-    // req:sync/reapply@01d24eb6 req:apply/apply-assets@786adb62
+    // req:sync/reapply@85e68c87 req:apply/apply-assets@786adb62
     let r = repo("spec/y");
     main_moves(&r, &[("specs/a/assets/old.png", "png")]);
     git(&r.work, &["pull", "-q", "--rebase", "origin", "main"]);
@@ -552,7 +552,7 @@ fn applied_assets_survive_regeneration() {
 
 #[test]
 fn a_stale_delta_stops_before_writing_specs() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     let graph = clm_model::load(&r.work).0;
     let base = graph.nodes["a"].hashes.contract.clone();
@@ -578,7 +578,7 @@ fn a_stale_delta_stops_before_writing_specs() {
 
 #[test]
 fn a_finish_branch_keeps_its_status_edit() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("impl/y/finish");
     write(&r.work, "specs/a/SPEC.md", &node_a("active", "c", &["p"]));
     commit(&r.work, "finish");
@@ -596,7 +596,7 @@ fn a_finish_branch_keeps_its_status_edit() {
 
 #[test]
 fn an_applied_change_already_on_main_is_not_regenerated() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -614,7 +614,7 @@ fn an_applied_change_already_on_main_is_not_regenerated() {
 
 #[test]
 fn a_change_main_archived_is_not_reapplied() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -639,7 +639,7 @@ fn a_change_main_archived_is_not_reapplied() {
 
 #[test]
 fn a_change_main_removed_is_not_reapplied() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -660,7 +660,7 @@ fn a_change_main_removed_is_not_reapplied() {
 
 #[test]
 fn a_branch_without_an_applied_change_never_regenerates() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("topic");
     // A proposed change and a hand edit to `specs/`: neither may be regenerated away.
     write(
@@ -1241,7 +1241,7 @@ fn an_untracked_backlog_item_is_left_alone() {
 
 #[test]
 fn regeneration_reads_the_branch_not_untracked_files() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     main_moves(
@@ -1576,7 +1576,7 @@ fn autosync_skips_a_tree_already_on_the_branch() {
 
 #[test]
 fn a_change_with_links_is_regenerated() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     write(
         &r.work,
@@ -1599,7 +1599,7 @@ fn a_change_with_links_is_regenerated() {
 
 #[test]
 fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     // `a/x` is in the branch's `specs/` but not `main`'s, which the regenerate step
@@ -1625,7 +1625,7 @@ fn an_item_blocking_a_requirement_the_change_adds_is_regenerated() {
 
 #[test]
 fn an_item_the_change_doesnt_fix_is_judged_by_check() {
-    // req:sync/reapply@01d24eb6 req:sync/judged-by-check@bfefb55e
+    // req:sync/reapply@85e68c87 req:sync/judged-by-check@bfefb55e
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(
@@ -1648,7 +1648,7 @@ fn an_item_the_change_doesnt_fix_is_judged_by_check() {
 
 #[test]
 fn a_broken_delta_of_the_change_still_stops_it() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     write(&r.work, "changes/y/deltas/b.md", "no frontmatter\n");
@@ -1670,7 +1670,7 @@ fn a_broken_delta_of_the_change_still_stops_it() {
 
 #[test]
 fn a_stale_second_change_writes_nothing() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     apply_change(&r, "y1", "", &adds_x());
     let delta = modifies_contract(&r, "mine");
@@ -1692,7 +1692,7 @@ fn a_stale_second_change_writes_nothing() {
 
 #[test]
 fn a_spec_file_main_deleted_is_regenerated_not_reported() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     applied_spec_branch(&r, &adds_x());
     main_moves(&r, &[("src/other.rs", "other\n")]);
@@ -1712,7 +1712,7 @@ fn a_spec_file_main_deleted_is_regenerated_not_reported() {
 
 #[test]
 fn a_resume_regenerates_against_the_main_it_rebased_onto() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -1746,7 +1746,7 @@ fn a_resume_regenerates_against_the_main_it_rebased_onto() {
 
 #[test]
 fn a_change_set_back_to_proposed_keeps_mains_specs() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     let before = read(&r.work, "specs/a/SPEC.md");
     applied_spec_branch(&r, &adds_x());
@@ -1773,7 +1773,7 @@ fn a_change_set_back_to_proposed_keeps_mains_specs() {
 
 #[test]
 fn a_specs_conflict_beside_a_real_one_is_resolved() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1807,7 +1807,7 @@ fn a_specs_conflict_beside_a_real_one_is_resolved() {
 
 #[test]
 fn a_specs_modify_delete_beside_a_real_conflict_is_settled_first() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1833,7 +1833,7 @@ fn a_specs_modify_delete_beside_a_real_conflict_is_settled_first() {
 
 #[test]
 fn a_branch_adding_no_change_reports_its_specs_conflict() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("topic");
     write(&r.work, "specs/a/SPEC.md", &node_a("specd", "mine", &["p"]));
     commit(&r.work, "edit a's Contract");
@@ -1848,7 +1848,7 @@ fn a_branch_adding_no_change_reports_its_specs_conflict() {
 
 #[test]
 fn a_change_whose_frontmatter_doesnt_parse_still_counts_as_added() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("topic");
     write(
         &r.work,
@@ -1883,7 +1883,7 @@ fn subjects_since_main(r: &Repo) -> Vec<String> {
 
 #[test]
 fn a_resume_keeps_mains_specs_for_a_change_that_isnt_applied() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     write(
@@ -1934,7 +1934,7 @@ fn archive_in(dir: &Path, id: &str, status: &str) {
 
 #[test]
 fn a_change_archived_on_its_spec_branch_is_reapplied() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     archive_in(&r.work, "x", "done");
@@ -1957,7 +1957,7 @@ fn a_change_archived_on_its_spec_branch_is_reapplied() {
 
 #[test]
 fn a_resume_regenerates_a_change_archived_on_the_branch() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/x");
     write(&r.work, "src/lib.rs", "one\nTWO\nthree\n");
     commit(&r.work, "work");
@@ -1985,7 +1985,7 @@ fn a_resume_regenerates_a_change_archived_on_the_branch() {
 
 #[test]
 fn an_archived_change_is_merged() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/x");
     main_moves(
         &r,
@@ -2020,7 +2020,7 @@ fn an_archived_change_is_merged() {
 
 #[test]
 fn an_archived_change_that_isnt_done_keeps_mains_specs() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     archive_in(&r.work, "x", "abandoned");
@@ -2043,7 +2043,7 @@ fn an_archived_change_that_isnt_done_keeps_mains_specs() {
 
 #[test]
 fn live_and_archived_changes_are_reapplied_in_id_order() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/x");
     // The archived change sorts first, the live one after it.
     apply_change(&r, "a1", "", &adds_x());
@@ -2071,7 +2071,7 @@ fn live_and_archived_changes_are_reapplied_in_id_order() {
 
 #[test]
 fn a_branch_archiving_a_change_main_applied_doesnt_reapply_it() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("impl/b");
     let delta = modifies_contract(&r, "mine");
     apply_change(&r, "y", "", &delta);
@@ -2674,7 +2674,7 @@ fn main_holds_proposed_y() -> Repo {
 
 #[test]
 fn a_branch_applies_a_change_main_holds() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = main_holds_proposed_y();
     clm_apply::apply(&r.work, "y").unwrap();
     write(
@@ -2700,7 +2700,7 @@ fn a_branch_applies_a_change_main_holds() {
 
 #[test]
 fn a_branch_applies_and_archives_a_change_main_holds() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = main_holds_proposed_y();
     clm_apply::apply(&r.work, "y").unwrap();
     commit(&r.work, "Apply y");
@@ -2722,7 +2722,7 @@ fn a_branch_applies_and_archives_a_change_main_holds() {
 
 #[test]
 fn a_change_main_holds_applied_is_not_applied_again() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("topic");
     applied_spec_branch(&r, &adds_x());
     git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
@@ -2736,7 +2736,7 @@ fn a_change_main_holds_applied_is_not_applied_again() {
 
 #[test]
 fn a_change_main_holds_proposed_stays_unregenerated_while_proposed() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = main_holds_proposed_y();
     write(&r.work, "specs/a/SPEC.md", &node_a("specd", "c2", &["p"]));
     commit(&r.work, "hand edit");
@@ -2749,7 +2749,7 @@ fn a_change_main_holds_proposed_stays_unregenerated_while_proposed() {
 
 #[test]
 fn a_branch_applies_a_change_main_holds_approved() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = repo("spec/z");
     write(
         &r.work,
@@ -2776,7 +2776,7 @@ fn a_branch_applies_a_change_main_holds_approved() {
 
 #[test]
 fn a_change_archived_abandoned_is_not_applied() {
-    // req:sync/reapply@01d24eb6
+    // req:sync/reapply@85e68c87
     let r = main_holds_proposed_y();
     let md = read(&r.work, "changes/y/change.md").replace("proposed", "applied");
     write(&r.work, "changes/y/change.md", &md);
@@ -2785,6 +2785,132 @@ fn a_change_archived_abandoned_is_not_applied() {
 
     let _ = synced(&r);
     assert!(!read(&r.work, "specs/a/SPEC.md").contains("Requirement: x"));
+}
+
+/// Node `a` with Design `design` and requirements `reqs`.
+fn node_design(design: &str, reqs: &[&str]) -> String {
+    node_a("specd", "c", reqs).replace("## Design\nd\n", &format!("## Design\n{design}\n"))
+}
+
+fn modifies_design(r: &Repo, text: &str) -> String {
+    let base = clm_model::load(&r.work).0.nodes["a"].hashes.design.clone();
+    format!("---\ncomponent: a\nbase: {{ design: \"{base}\" }}\n---\n## MODIFIED Design\n{text}\n")
+}
+
+/// A spec branch `spec/x` applying a delta that rewrites the first line of `a`'s Design, where
+/// `main` holds a `proposed` change `o` whose delta rewrites `a`'s Design to `o_text`, with
+/// `origin/main`'s Design hash as its base, and `main` has since added a requirement.
+fn other_change_on_main(o_text: &str) -> Repo {
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    let o_delta = modifies_design(&r, o_text);
+    main_moves(
+        &r,
+        &[
+            ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
+            ("changes/o/deltas/a.md", &o_delta),
+        ],
+    );
+    pull(&r);
+    let x_delta = modifies_design(&r, "ONE\ntwo\nthree");
+    apply_change(&r, "x", "", &x_delta);
+    main_moves(
+        &r,
+        &[(
+            "specs/a/SPEC.md",
+            &node_design("one\ntwo\nthree", &["p", "w"]),
+        )],
+    );
+    r
+}
+
+#[test]
+fn another_changes_delta_is_merged() {
+    // req:sync/reapply@85e68c87
+    let r = other_change_on_main("one\ntwo\nTHREE");
+    assert_eq!(
+        synced(&r),
+        ["merged design of a into changes/o/deltas/a.md"]
+    );
+    let delta = read(&r.work, "changes/o/deltas/a.md");
+    assert!(delta.contains("ONE\ntwo\nTHREE"), "{delta}");
+    assert_eq!(
+        git(&r.work, &["log", "-1", "--format=%s"]),
+        "Merge x into o"
+    );
+    assert_eq!(
+        git(&r.work, &["log", "-1", "--format=%s", "HEAD~1"]),
+        "Re-apply x"
+    );
+}
+
+#[test]
+fn another_changes_delta_is_left_stale() {
+    // req:sync/reapply@85e68c87
+    let r = other_change_on_main("ONE!\ntwo\nthree");
+    let before = read(&r.work, "changes/o/deltas/a.md");
+    let lines = unfinished(&r);
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("changes/o/deltas/a.md") && l.contains("apply/stale-base")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("x changed design of a since")),
+        "{lines:?}"
+    );
+    assert_eq!(git(&r.work, &["log", "-1", "--format=%s"]), "Re-apply x");
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), before);
+}
+
+#[test]
+fn a_branch_that_regenerates_nothing_merges_no_other_delta() {
+    // req:sync/reapply@85e68c87
+    let r = repo("spec/x");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("one\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    // `o`'s base is a Design `main` held earlier, so a merge could take it if one ran.
+    let stale = modifies_design(&r, "one\ntwo\nTHREE");
+    main_moves(
+        &r,
+        &[("specs/a/SPEC.md", &node_design("ONE\ntwo\nthree", &["p"]))],
+    );
+    pull(&r);
+    main_moves(
+        &r,
+        &[
+            ("changes/o/change.md", "---\nstatus: proposed\n---\n\n# o\n"),
+            ("changes/o/deltas/a.md", &stale),
+        ],
+    );
+    pull(&r);
+    write(
+        &r.work,
+        "changes/x/change.md",
+        "---\nstatus: proposed\n---\n\n# x\n",
+    );
+    commit(&r.work, "Propose x");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+
+    let lines = unfinished(&r);
+    assert!(!lines.iter().any(|l| l.starts_with("merged")), "{lines:?}");
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("changes/o/deltas/a.md") && l.contains("apply/stale-base")),
+        "{lines:?}"
+    );
+    assert_eq!(read(&r.work, "changes/o/deltas/a.md"), stale);
 }
 
 const RENAME_P: &str =

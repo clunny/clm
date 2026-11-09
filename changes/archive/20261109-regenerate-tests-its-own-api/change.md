@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [workaround-sync.regenerate-regenerated-tree-1]
 ---
 
