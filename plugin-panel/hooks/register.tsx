@@ -31,7 +31,9 @@ import {
   type Span,
   type Surface,
   cachedRun,
+  clmRoot,
   isViewTab,
+  opensForSkill,
   command,
   type Fetched,
   fetchIfDue,
@@ -123,6 +125,15 @@ const setNow = async ($: EngineInterface) => {
   return at
 }
 
+// Opens the pane on Flight, as `/clm:view` with no argument does.
+async function openPane($: EngineInterface) {
+  await update($, tab, () => FIRST_TAB)
+  await update($, capability, () => null)
+  await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
+  startTimer($)
+  void redraw($)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // A reload drops the timer, not the pane.
@@ -173,12 +184,24 @@ export const register: Register = on => {
   on('command.run', { command: 'clm:view' }, async ($, e) => {
     const answer = await command($, e.args, await $.session.cwd())
     if ('text' in answer) return { text: answer.text }
-    await update($, tab, () => FIRST_TAB)
-    await update($, capability, () => null)
-    await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
-    startTimer($)
-    void redraw($)
+    await openPane($)
     return { text: 'Opened the CLM panel.' }
+  })
+
+  // The build skill opens the pane on Flight when it isn't open; the prompt is left as it came.
+  on('skill.prompt', async ($, e, next) => {
+    const prompt = await next(e)
+    // Other skills cost no lookup.
+    if (!opensForSkill({ skill: e.skill, pluginName: e.pluginName, panes: [], inRepo: true })) return prompt
+    try {
+      const inRepo = (await clmRoot($, await $.session.cwd())) !== undefined
+      if (opensForSkill({ skill: e.skill, pluginName: e.pluginName, panes: await $.ui.panes(), inRepo })) {
+        await openPane($)
+      }
+    } catch {
+      // A failure while opening leaves the prompt as it was.
+    }
+    return prompt
   })
 
   // The answer's row in the transcript, drawn as a code block.
