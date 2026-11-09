@@ -364,6 +364,38 @@ fn init_skill_concurrent_tests() {
     assert!(record.contains("tests-run-concurrently"), "{record}");
 }
 
+const BUILD_SETUP: &[&str] = &[
+    "tests-run-in-their-own-tree",
+    "[build] setup",
+    "clm setup",
+    "fresh worktree",
+];
+
+/// What `init-skill-build-setup` asks of the `init` skill.
+fn build_setup_gaps(body: &str) -> Vec<String> {
+    text_gaps("init", body, BUILD_SETUP, &[])
+}
+
+#[test]
+fn init_skill_build_setup() {
+    // req:plugin.init/init-skill-build-setup@a7cb5fa5
+    let body = skill_body("init");
+    assert_eq!(build_setup_gaps(&body), Vec::<String>::new());
+    for needle in BUILD_SETUP {
+        let gaps = build_setup_gaps(&body.replace(needle, "elided"));
+        assert!(
+            gaps.iter().any(|g| g.contains(needle)),
+            "{needle}: {gaps:?}"
+        );
+    }
+    // It tells the human once `clm init` has written `clm.toml`, and for a repository with
+    // code proposes the command for the human to confirm.
+    let told = sentence_with(&body, "nothing installed");
+    assert!(told.contains("`clm.toml`"), "{told}");
+    let propose = sentence_with(&body, "whether a fresh worktree needs such a command");
+    assert!(propose.contains("confirm"), "{propose}");
+}
+
 const INIT_VERIFY: &[&str] = &[
     "[verify]",
     "local",
