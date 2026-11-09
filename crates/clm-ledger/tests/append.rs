@@ -15,6 +15,7 @@ fn checked(key: &str) -> Body {
     Body::Checked {
         code_key: key.into(),
         command: "ci-check.sh".into(),
+        basis: None,
     }
 }
 

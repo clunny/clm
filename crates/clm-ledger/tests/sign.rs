@@ -164,6 +164,8 @@ fn signed_message_keeps_the_line_as_written() {
         changes: vec![],
         check_seconds: None,
         steps: vec![],
+        recheck: None,
+        recheck_files: None,
     };
     let signed = clm_ledger::sign(&clone, body, "clm-land", &env).unwrap();
     let line = signed.line();

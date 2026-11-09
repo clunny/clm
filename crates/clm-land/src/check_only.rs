@@ -78,7 +78,11 @@ fn record(repo: &Repo, head: &str) -> Result<(), Error> {
         None => "clm check".into(),
     };
     let code_key = clm_ledger::code_key(&repo.root, head)?;
-    repo.append(Body::Checked { code_key, command })?;
+    repo.append(Body::Checked {
+        code_key,
+        command,
+        basis: None,
+    })?;
     Ok(())
 }
 

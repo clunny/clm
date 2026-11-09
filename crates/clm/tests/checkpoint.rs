@@ -147,6 +147,7 @@ fn land(r: &Repo, branch: &str, tip: &str, review: bool, changes: &[&str]) -> St
         Body::Checked {
             code_key,
             command: "ci".into(),
+            basis: None,
         },
     );
     commit
@@ -173,6 +174,8 @@ fn landed(commit: &str, branch: &str, tip: &str, review: bool, changes: &[&str])
         changes: changes.iter().map(|c| c.to_string()).collect(),
         check_seconds: None,
         steps: vec![],
+        recheck: None,
+        recheck_files: None,
     }
 }
 
@@ -577,6 +580,7 @@ fn checkpoint_reports_no_review() {
         Body::Checked {
             code_key,
             command: "ci".into(),
+            basis: None,
         },
     );
     let (code, out) = checkpoint(&r.work);
@@ -1296,6 +1300,7 @@ impl Signed {
         let checked = Body::Checked {
             code_key: code_key.clone(),
             command: "check".into(),
+            basis: None,
         };
         clm_ledger::append(work, checked, &env).unwrap();
         let land = Body::Landed {
@@ -1308,6 +1313,8 @@ impl Signed {
             changes: vec![],
             check_seconds: None,
             steps: vec![],
+            recheck: None,
+            recheck_files: None,
         };
         let signed = clm_ledger::sign(work, land, "clm-land", &env).unwrap();
         clm_ledger::append(work, signed, &env).unwrap();

@@ -109,6 +109,8 @@ fn fold_records_is_the_fold() {
             changes: vec!["x".into()],
             check_seconds: None,
             steps: vec![],
+            recheck: None,
+            recheck_files: None,
         }
     );
 }

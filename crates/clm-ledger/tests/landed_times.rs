@@ -14,6 +14,8 @@ fn landed(commit: &str, check_seconds: Option<u64>, steps: Vec<TimedStep>) -> Bo
         changes: vec![],
         check_seconds,
         steps,
+        recheck: None,
+        recheck_files: None,
     }
 }
 

@@ -302,6 +302,7 @@ fn checked_code_takes_no_lock() {
         Body::Checked {
             code_key: key,
             command: f.check_command(),
+            basis: None,
         },
     );
     // This process holds the lock, which the `clm land` process can't share.

@@ -63,6 +63,7 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
     // Every fingerprint a land names: `fingerprints` loses the ones whose approval stays.
     let landed_fingerprints = fingerprints.clone();
     let mut warnings = Vec::new();
+    keep_bases(&fold, &mut land_keys);
     // `verify` reads the approval that cleared a land that needed review whose first parent is signed, so
     // it stays. Checked only for the caller's own approvals a land names.
     let mine: HashSet<&str> = fold
@@ -112,6 +113,7 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         for commit in keyless {
             if present(root, commit) {
                 land_keys.insert(crate::code_key::legacy_code_key(root, commit)?);
+                keep_bases(&fold, &mut land_keys);
             } else {
                 prune_checks = false;
                 warnings.push(format!(
@@ -178,6 +180,30 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         ));
     }
     Ok(Compacted { removed, warnings })
+}
+
+/// Adds to `keys` the code keys of the basis of every composed `checked` record whose own key
+/// is in it, and theirs in turn: `verify` audits a composed check by its basis
+/// (`composed-check`).
+fn keep_bases(fold: &crate::Fold, keys: &mut HashSet<String>) {
+    loop {
+        let before = keys.len();
+        for record in fold.checks.values().flatten() {
+            if let Body::Checked {
+                code_key,
+                basis: Some(basis),
+                ..
+            } = &record.body
+                && keys.contains(code_key)
+            {
+                keys.insert(basis.head.clone());
+                keys.insert(basis.base.clone());
+            }
+        }
+        if keys.len() == before {
+            return;
+        }
+    }
 }
 
 /// Whether `commit` is in this clone.

@@ -28,6 +28,8 @@ fn land(root: &Path, home: &Path, commit: &str, steps: Vec<TimedStep>) {
         changes: vec![],
         check_seconds: Some(check_seconds),
         steps,
+        recheck: None,
+        recheck_files: None,
     };
     clm_ledger::append(root, body, &ledger_common::env(home, &[])).unwrap();
 }

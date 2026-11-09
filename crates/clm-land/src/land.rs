@@ -372,6 +372,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 repo.append(Body::Checked {
                     code_key: key.clone(),
                     command: command.clone(),
+                    basis: None,
                 })?;
             }
         } else {
@@ -379,6 +380,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             repo.append(Body::Checked {
                 code_key: key.clone(),
                 command: command.clone(),
+                basis: None,
             })?;
         }
         let verdict = repo.gate(exe, dir.path(), approved, &hint)?;
@@ -402,6 +404,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             changes: changes.clone(),
             check_seconds: timing.as_ref().map(|t| t.seconds),
             steps: timing.map(|t| t.steps).unwrap_or_default(),
+            recheck: None,
+            recheck_files: None,
         };
         // Signed before the push, so a land that can't sign pushes nothing; the pushes of
         // this merge commit share the record.

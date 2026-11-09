@@ -75,8 +75,16 @@ pub enum Body {
         branch: String,
         change: Option<String>,
     },
-    /// A tree whose code key passed the check command.
-    Checked { code_key: String, command: String },
+    /// A tree whose code key passed the check command. A record with a `basis` is a
+    /// composed check (`composed-check`).
+    Checked {
+        code_key: String,
+        command: String,
+        /// The code keys of a branch's head and of `main` whose checks it was composed
+        /// from; left out of the line when the tree was checked whole.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<Basis>,
+    },
     Landed {
         commit: String,
         branch: String,
@@ -103,6 +111,14 @@ pub enum Body {
         /// The steps the check marked, in order; left out of the line when there are none.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         steps: Vec<TimedStep>,
+        /// How the land checked its merged tree; left out of the line when unknown
+        /// (`landed-recheck`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recheck: Option<Recheck>,
+        /// With `overlap` or `selected`, the number of `file` lines the check ran; left out
+        /// when absent or when it ran every test.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        recheck_files: Option<u64>,
     },
     /// A browser's Web Push subscription for this repo, which `web.worker` notifies
     /// (`push-subscriptions-in-ledger`).
@@ -183,6 +199,27 @@ pub enum Body {
         #[serde(default)]
         run: Option<String>,
     },
+}
+
+/// The two code keys a composed `checked` record was built from (`composed-check`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Basis {
+    pub head: String,
+    pub base: String,
+}
+
+/// How a land checked its merged tree (`landed-recheck`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Recheck {
+    /// Its code key was already checked.
+    Checked,
+    /// The overlap selected nothing.
+    None,
+    /// The overlap ran.
+    Overlap,
+    /// The branch's own selection ran.
+    Selected,
 }
 
 /// One step a land's check marked, as a `landed` record holds it (`landed-times`).

@@ -396,6 +396,8 @@ fn land_time_line(clm_toml: &str, expected: &str) {
         changes: vec![],
         check_seconds: Some(50),
         steps: vec![],
+        recheck: None,
+        recheck_files: None,
     };
     clm_ledger::append(&root, body, &ledger_common::env(dir.path(), &[])).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_clm"))

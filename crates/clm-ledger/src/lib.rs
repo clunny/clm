@@ -8,7 +8,8 @@ mod record;
 pub use doc_only::{doc_only, legacy_doc_only};
 pub use fold::{Fold, TimedLand, fold_records, person, show, slug};
 pub use record::{
-    Body, Decision, LandKind, Rating, Record, TimedStep, Usage, VerifyMode, signed_message,
+    Basis, Body, Decision, LandKind, Rating, Recheck, Record, TimedStep, Usage, VerifyMode,
+    signed_message,
 };
 
 #[cfg(feature = "git")]
