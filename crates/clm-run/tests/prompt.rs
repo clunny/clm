@@ -47,6 +47,7 @@ fn job() -> Job {
         capability_tests: false,
         read_from_main: false,
         slot: 2,
+        setup: None,
     }
 }
 
@@ -971,4 +972,134 @@ fn scenario_prompt_slot() {
     let mut j = job();
     j.slot = 7;
     assert!(prompt(&j).contains("CLM_SLOT=7"));
+}
+
+#[test]
+fn scenario_bounded_test_runs() {
+    // req:orchestrator.run/bounded-test-runs@32cf27ea
+    let mut checked = job();
+    checked.check = Some("scripts/check.sh".into());
+    let mut resumed = job();
+    resumed.resumed = true;
+    for (p, with_check) in [
+        (prompt(&job()), false),
+        (prompt(&checked), true),
+        (prompt(&resumed), false),
+    ] {
+        let paras: Vec<&str> = p
+            .split("\n\n")
+            .filter(|para| para.contains("`stopped: <reason>`"))
+            .collect();
+        let [para] = paras[..] else {
+            panic!("one final-message paragraph: {paras:?}");
+        };
+        for needle in [
+            "timeout <limit> <command>",
+            "foreground",
+            "hangs",
+            "bounded-test-runs",
+            "backlog item",
+            "pull request body",
+            "completion notice never comes",
+            "counts as a failing run",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+        for forbidden in ["`cd`", "exit code", "clm watch"] {
+            assert!(!para.contains(forbidden), "{forbidden} in {para}");
+        }
+        // The check command is named only where the repository sets one.
+        assert_eq!(para.contains("clm land --check-only"), with_check, "{para}");
+    }
+}
+
+fn with_setup(resumed: bool) -> Job {
+    let mut j = job();
+    j.resumed = resumed;
+    j.setup = Some("scripts/setup.sh".into());
+    j
+}
+
+#[test]
+fn scenario_setup_declared() {
+    // req:orchestrator.run/prompt-setup@15d55f22
+    for resumed in [false, true] {
+        let p = prompt(&with_setup(resumed));
+        let paras: Vec<&str> = p
+            .split("\n\n")
+            .filter(|para| para.contains("`clm setup`"))
+            .collect();
+        let [para] = paras[..] else {
+            panic!("one setup paragraph: {paras:?}");
+        };
+        for needle in [
+            "tests-run-in-their-own-tree",
+            "clm rebase",
+            "clm defect",
+            "stopped: setup failed",
+            "from the worktree's top level as one plain command",
+            "before you run any test",
+            "never the main checkout's",
+            "dependency declarations",
+            "`origin/main`",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+        for banned in ["`cd`", "exit code", "CARGO_TARGET_DIR", "toolchain"] {
+            assert!(!para.contains(banned), "{banned}: {para}");
+        }
+        // Before the first place the prompt tells the session to run tests by hand.
+        let at = p.find("`clm setup`").unwrap();
+        for later in ["Build each pending requirement", "Your build's slot is"] {
+            assert!(at < p.find(later).unwrap(), "{later}: {p}");
+        }
+    }
+}
+
+#[test]
+fn scenario_setup_nothing_declared() {
+    // req:orchestrator.run/prompt-setup@15d55f22
+    for resumed in [false, true] {
+        let mut j = job();
+        j.resumed = resumed;
+        let p = prompt(&j);
+        assert!(!p.contains("clm setup"), "{p}");
+        let para = p
+            .split("\n\n")
+            .find(|q| q.contains("declares no setup step"))
+            .expect("a paragraph says the repository declares no setup step");
+        for needle in [
+            "tests-run-in-their-own-tree",
+            "`bug` backlog item",
+            "by hand",
+            "parent directory",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+        for banned in ["`cd`", "exit code", "CARGO_TARGET_DIR", "toolchain"] {
+            assert!(!para.contains(banned), "{banned}: {para}");
+        }
+    }
+}
+
+#[test]
+fn scenario_template_migration_fix() {
+    // req:orchestrator.run/template-migration-fix@5a686ffe
+    for resumed in [false, true] {
+        let mut j = job();
+        j.resumed = resumed;
+        let p = prompt(&j);
+        for needle in [
+            "changes the text of a file `clm init` writes",
+            "states the migration that carries that change and needs the requirement you build",
+            "write that migration in your own branch, under `upgrade`'s `paths`",
+            "(its ID, `old`, `new`, `done` and note)",
+            "Add no test citing that `upgrade` requirement",
+            "bring any existing test of `upgrade`'s that the new migration makes fail",
+            "name the migration under `## Fixes in other components`",
+            "template-change-ships-its-migration",
+        ] {
+            assert!(p.contains(needle), "{needle} missing from {p}");
+        }
+    }
 }

@@ -298,6 +298,36 @@ fn scenario_check_command_named() {
 }
 
 #[test]
+fn scenario_prompt_names_setup_only_when_declared() {
+    // req:orchestrator.run/prompt-setup@15d55f22
+    let (r, f) = (repo(), fake());
+    write(
+        &r.work,
+        "clm.toml",
+        "[build]\nsetup = \"scripts/setup.sh\"\n",
+    );
+    let p = prompt(&r, &f, "b", &[]);
+    for needle in [
+        "`clm setup`",
+        "tests-run-in-their-own-tree",
+        "stopped: setup failed",
+    ] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+    assert!(!p.contains("declares no setup step"), "{p}");
+
+    let (r, f) = (repo(), fake());
+    write(&r.work, "clm.toml", "host = \"none\"\n");
+    let p = prompt(&r, &f, "b", &[]);
+    // The bundle's ARCHITECTURE.md names `clm setup`; the prompt's own text doesn't.
+    let (own, _bundle) = p.split_once("\nThe context bundle for").unwrap();
+    assert!(!own.contains("clm setup"), "{own}");
+    for needle in ["declares no setup step", "tests-run-in-their-own-tree"] {
+        assert!(p.contains(needle), "{needle} missing from {p}");
+    }
+}
+
+#[test]
 fn scenario_no_check_command() {
     // req:orchestrator.run/prompt-check-command@6b68f4d5
     let (r, f) = (repo(), fake());
