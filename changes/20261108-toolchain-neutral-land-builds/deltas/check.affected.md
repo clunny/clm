@@ -4,7 +4,7 @@ component: check.affected
 
 ## ADDED Requirements
 ### Requirement: overlap-selection
-`clm affected --overlap <a> <b>` SHALL print what both changes can break. With `<m>` the merge base of the commits `<a>` and `<b>` name, each *side* is the selection, readers included, of the paths that differ between `<m>` and that side's commit, computed as `affected-files`, `affected-all`, `affected-components` and `affected-readers` compute it but from the two commits alone, with no working tree and no untracked file. Its output SHALL be:
+`clm affected --overlap <a> <b>` SHALL print what both changes can break. With `<m>` the merge base of the commits `<a>` and `<b>` name, each *side* is the selection, readers included, of the paths that differ between `<m>` and that side's commit, computed as `affected-files`, `affected-all`, `affected-components` and `affected-readers` compute it but from the two commits alone, with no working tree and no untracked file: each side's changed paths come from `git diff --name-only --no-renames <m> <commit>`, and its markers (`req:` and `clm:reads`) and the files the coverage scan would read are read from that side's commit through `git` (`git-plumbing-layer`), not from any checkout. Its output SHALL be:
 - when both sides are `all`, the first side's `all` line;
 - when one side is `all`, the other side's output unchanged;
 - otherwise the component lines of the components both sides affect, then the `file` lines of the files both sides select, each group sorted as `affected-components` sorts it, and nothing at all when no file is in both.

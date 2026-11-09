@@ -15,3 +15,6 @@ When `--lang rust` is given, the `scripts/clm-check.sh` that `clm init` writes S
 - GIVEN an empty repository
 - WHEN `clm init --lang python` runs
 - THEN `scripts/clm-check.sh` doesn't mention `CARGO_TARGET_DIR`
+
+#### Needs
+- land/land-dir-env

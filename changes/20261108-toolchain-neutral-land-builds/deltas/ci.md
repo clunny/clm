@@ -15,3 +15,6 @@ When `CLM_LAND_DIR` is set and non-empty, `.github/scripts/ci-check.sh` SHALL ex
 - GIVEN the same with `CLM_LAND_DIR` unset and `CARGO_TARGET_DIR=/tmp/y`
 - WHEN the script runs
 - THEN every recorded `cargo` call saw `CARGO_TARGET_DIR=/tmp/y`
+
+#### Needs
+- land/land-dir-env
