@@ -90,6 +90,6 @@ Every `clm` command, by what it's for. `clm help <command>` says more.
 - Seeing the state: `clm status`, `clm view`, `clm backlog`, `clm proposals`, `clm pending`, `clm coverage`, `clm next`, `clm health`, `clm size`, `clm capabilities`, `clm architecture`, `clm effort`, `clm ledger`.
 - Writing specs: `clm context`, `clm hashes`, `clm apply`, `clm archive`, `clm rename`, `clm survey`, `clm guide`.
 - Checking: `clm check`, `clm gate`, `clm affected`, `clm unreferenced`, `clm fingerprint`.
-- Working: `clm claim`, `clm run`, `clm runner`, `clm triage`, `clm draft`, `clm intake`, `clm workaround`, `clm defect`, `clm superpowers`.
+- Working: `clm claim`, `clm run`, `clm setup`, `clm runner`, `clm triage`, `clm draft`, `clm intake`, `clm workaround`, `clm defect`, `clm superpowers`.
 - Landing: `clm rebase`, `clm autosync`, `clm pr`, `clm approve`, `clm land`, `clm verify`, `clm wrap-up`, `clm reconnect`.
 - Setting up: `clm init`, `clm upgrade`, `clm config`, `clm branch`, `clm issue`, `clm contribution`, `clm hook` (run by the plugin's hooks).

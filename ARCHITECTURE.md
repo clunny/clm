@@ -346,6 +346,33 @@ Two runs of the project's tests on one host, from different build places of a cl
 #### Untested
 Whether a project's tests take a host resource another run shares is something CLM can't see; a collision shows as a test that fails beside another build and passes alone. Runs outside a build place (the human's own checkout, `clm verify`'s local run, a draft's code fix) all have slot 0, so two of them can still collide on a port keyed on it; the check lock keeps their `[land] check` and `[verify] check` runs apart, but not their tests run by hand.
 
+### Constraint: tests-run-in-their-own-tree
+A build's tests SHALL run against the code and the dependencies of the tree it builds in, never against another checkout's: a toolchain whose lookup reaches a parent directory, or an environment the clone's checkouts share, must not resolve the main checkout's packages or source in its place. A build's tree is a fresh worktree inside the main checkout with nothing installed, so the project declares in `[build] setup` the command that makes such a tree ready to run its tests, such as one installing its dependencies into it, and every session that tests code in such a tree (a `clm run` build, a draft's code fix, a skill's hand-run fix) runs it with `clm setup` before its first test run there; CLM names no toolchain, and the project's command holds what its toolchains need (`build-setup-step`).
+
+#### Scenario: a package lookup that walks up
+- GIVEN a project whose test runner looks for packages in the parent directories of the tree it runs in, a main checkout with its packages installed, and a build in a fresh worktree under it
+- WHEN the build runs its first test
+- THEN `clm setup` has run the project's `[build] setup` in the worktree, and the test runs against the worktree's own packages and code
+
+#### Carries
+- replaceable
+
+#### Guarantee
+A build's red and green test runs exercise the branch's own code with the dependencies its own tree declares, so a test-first build's result means what it says, and what a build saw pass is what its land checks.
+
+#### Enforced by
+- config/build-setup-setting
+- orchestrator.run/setup-command
+- orchestrator.run/prompt-setup
+- orchestrator.triage/draft-prompt-setup
+- init/init-build-setup
+- plugin.init/init-skill-build-setup
+- plugin.build/build-defect-fixes-run-setup
+- plugin.propose/propose-fix-runs-setup
+
+#### Untested
+That a session runs `clm setup` before its first test, and again when its dependencies change, rests on the prompts and skills that tell it to, as `path-ownership`'s rule rests on the build prompt: no program sees a session's test runs. Whether a project's toolchains reach outside the tree they run in, and whether its `[build] setup` installs everything its tests need, are things CLM can't see; a gap shows as a test that passes in a build and fails in a fresh tree, or the reverse. `[land] check` stays a command that needs no setup before it, since CI and `[verify]` run it in trees no build prepared.
+
 ### Constraint: land-checks-stay-fast
 A project's `[land] check` SHALL run the tests `CLM_SELECTION` names, or every test when it is unset, empty or names `all`, and those tests SHALL be fast, deterministic and able to run beside other runs (`tests-run-concurrently`); every file a test reads SHALL be one the spec graph connects it to: a file of the component that owns it or of one it depends on (`depends_on`), or one a `req:` or `clm:reads` marker in it names. A test that is slow, fails or passes from run to run on the same tree, or needs a resource no other run may share belongs in `[verify]`, after the land (`verify-after-land`). CLM builds a land's verdict from checks of its parts: a land whose branch's head was checked whole runs only the tests the branch and what `main` gained since can both affect (`land/overlap-recheck`), so the tests' honesty about what they read is what that verdict rests on.
 
