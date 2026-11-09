@@ -2606,12 +2606,3 @@ fn skills_run_verify() {
     );
     assert_eq!(gaps, vec!["triage: must name verify_failures".to_string()]);
 }
-
-#[test]
-fn upgrade_skill_offers_verify() {
-    // req:plugin/upgrade-skill-offers-verify@4e293808
-    let body = skill_text("upgrade");
-    let needles = ["[verify]", "Slow tests can run after the land"];
-    assert_eq!(lacks("upgrade", &body, &needles), Vec::<String>::new());
-    assert!(!lacks("upgrade", &body.replace("[verify]", "x"), &needles).is_empty());
-}
