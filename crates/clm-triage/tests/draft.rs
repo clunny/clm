@@ -893,6 +893,8 @@ fn scenario_setup_declared() {
         "tests-run-in-their-own-tree",
         "setup failed",
         "left <slug>: setup failed",
+        "as one plain command",
+        "before you run any test there",
         "again after a `clm rebase` or an edit of your own",
         "clm defect",
         "dependency declarations",
@@ -924,6 +926,10 @@ fn scenario_bounded_test_runs_prompt() {
         "backlog item",
         "failing run",
         "pull request body",
+        "other than `clm land` in any form",
+        "the tool call's own timeout",
+        "well past",
+        "in the files of the component you are fixing",
     ] {
         assert!(para.contains(needle), "{needle} missing from {para}");
     }
