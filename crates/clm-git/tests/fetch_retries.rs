@@ -92,6 +92,8 @@ fn a_fetch_that_loses_a_ref_race_goes_on() {
     let start = Instant::now();
     fetch_retrying(&clone, &["fetch", REMOTE]).unwrap();
     assert!(start.elapsed() >= Duration::from_secs(1));
+    // The first wait is 1 second, not the 2 before the second retry.
+    assert!(start.elapsed() < Duration::from_secs(2));
     assert_eq!(calls(&clone, "fetch"), 2);
 }
 
