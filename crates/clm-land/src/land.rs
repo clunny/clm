@@ -697,7 +697,7 @@ fn settings_key(repo: &Repo, tree: &str, base: &str) -> Result<Option<String>, E
 }
 
 /// The code keys of `head` and `base` when a `checked` record with `command` names each and
-/// `head` doesn't contain `base`: the two checks a composed check stands on
+/// `head` doesn't contain `base` (implied, below): the two checks a composed check stands on
 /// (`land/overlap-recheck`).
 fn overlap_basis(
     repo: &Repo,
@@ -706,9 +706,8 @@ fn overlap_basis(
     base: &str,
     command: &str,
 ) -> Result<Option<Basis>, Error> {
-    if clm_git::is_ancestor(&repo.root, base, head)? {
-        return Ok(None);
-    }
+    // A head that contains `base` merges to its own tree, whose key the caller found unchecked
+    // while the head's is checked: such a head never gets here.
     let checked = |key: &str| {
         fold.checks.get(key).is_some_and(|records| {
             records
