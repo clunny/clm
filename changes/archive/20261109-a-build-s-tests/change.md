@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-build-s-tests-can-run-against-the-main-checkout-s-dependencies
 ---
