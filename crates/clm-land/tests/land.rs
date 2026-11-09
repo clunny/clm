@@ -14,11 +14,11 @@ fn code_branch_lands() {
     let origin = f.path("origin.git");
     assert_eq!(f.parents(&origin, &main), [old, head.clone()]);
     assert_eq!(f.lines("check.log"), [f.tree(&origin, &main)]);
-    // The check runs outside CI, building into the repository's `.clm/land`.
+    // The check runs outside CI, handed the repository's `.clm/land` as `CLM_LAND_DIR`.
     let target = f.work().join(".clm/land");
     assert_eq!(
         f.lines("check-env.log"),
-        [format!("CI=unset CARGO_TARGET_DIR={}", target.display())]
+        [format!("CI=unset CLM_LAND_DIR={}", target.display())]
     );
     // The full `clm check` ran on the merged tree.
     assert_eq!(
@@ -390,16 +390,16 @@ fn clm_in_a_subdirectory() {
 
 #[test]
 fn clm_in_a_subdirectory_builds_under_its_own_clm_directory() {
-    // req:land/shared-land-target@526c3a2a
+    // req:land/shared-land-target@2c8695d7
     let f = Fixture::nested();
     f.branch("impl/a", &[("b.txt", "b\n")]);
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     let target = f.path("work/proj/.clm/land");
     assert_eq!(
         f.lines("check-env.log"),
-        [format!("CI=unset CARGO_TARGET_DIR={}", target.display())]
+        [format!("CI=unset CLM_LAND_DIR={}", target.display())]
     );
-    // The land tree and the lock are under that `.clm/` too (land/land-tree@9bb49b16), and
+    // The land tree and the lock are under that `.clm/` too (land/land-tree@e95a603c), and
     // nothing of the land shows in `git status`.
     let tree = f.land_tree().join("proj").display().to_string();
     assert_eq!(f.lines("check-pwd.log"), [tree]);
@@ -410,7 +410,7 @@ fn clm_in_a_subdirectory_builds_under_its_own_clm_directory() {
 
 #[test]
 fn land_from_a_linked_worktree() {
-    // req:land/shared-land-target@526c3a2a
+    // req:land/shared-land-target@2c8695d7
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let linked = f.path("linked");
@@ -419,11 +419,11 @@ fn land_from_a_linked_worktree() {
         &["worktree", "add", "-q", linked.to_str().unwrap(), "impl/a"],
     );
     let target = f.work().join(".clm/land");
-    let expected = format!("CI=unset CARGO_TARGET_DIR={}", target.display());
+    let expected = format!("CI=unset CLM_LAND_DIR={}", target.display());
     clm_land::land(&linked, None, &f.env(&[])).unwrap();
     assert_eq!(f.lines("check-env.log"), std::slice::from_ref(&expected));
     // In the main worktree's land tree, not one under the linked worktree
-    // (land/land-tree@9bb49b16).
+    // (land/land-tree@e95a603c).
     assert_eq!(
         f.lines("check-pwd.log"),
         [f.land_tree().display().to_string()]
@@ -431,18 +431,23 @@ fn land_from_a_linked_worktree() {
     assert!(!linked.join(".clm").exists());
     // The check ran holding the clone's lock on `.clm/land.lock`.
     assert_eq!(f.lines("check-lock.log"), ["held"]);
-    // And held it through `clm check` (land/land-target-lock@ca751f80).
+    // The land set neither cargo variable: the check saw this process's own.
+    let ambient = |name: &str| std::env::var(name).unwrap_or_else(|_| "unset".into());
+    assert_eq!(
+        f.lines("check-cargo.log"),
+        [format!(
+            "{} {}",
+            ambient("CARGO_TARGET_DIR"),
+            ambient("CARGO_INCREMENTAL")
+        )]
+    );
+    // And held it through `clm check` (land/land-target-lock@66ccebd0).
     assert_eq!(f.lines("clm-check-lock.log"), ["held"]);
-    // An empty `CARGO_TARGET_DIR` counts as unset.
-    f.branch("impl/b", &[("c.txt", "c\n")]);
-    f.git(&linked, &["checkout", "-q", "impl/b"]);
-    clm_land::land(&linked, None, &f.env(&[("CARGO_TARGET_DIR", "")])).unwrap();
-    assert_eq!(f.lines("check-env.log"), [expected.clone(), expected]);
 }
 
 #[test]
 fn lock_held_through_the_gate_on_the_merge_and_the_push() {
-    // req:land/land-target-lock@ca751f80
+    // req:land/land-target-lock@66ccebd0
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // `origin`'s hook logs whether the lock is held when `main` is pushed.
@@ -472,64 +477,29 @@ done"#,
 }
 
 #[test]
-fn caller_target_kept() {
-    // req:land/shared-land-target@526c3a2a
+fn caller_target_changes_nothing() {
+    // req:land/shared-land-target@2c8695d7
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let env = f.env(&[("CARGO_TARGET_DIR", "/elsewhere")]);
     clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
+    // The land neither reads nor sets it: the check holds the lock and gets the same place
+    // (land/land-target-lock@66ccebd0).
+    let target = f.work().join(".clm/land");
     assert_eq!(
         f.lines("check-env.log"),
-        ["CI=unset CARGO_TARGET_DIR=/elsewhere"]
+        [format!("CI=unset CLM_LAND_DIR={}", target.display())]
     );
-    // A caller's own target takes no lock (land/land-target-lock@ca751f80).
-    assert_eq!(f.lines("check-lock.log"), ["free"]);
-}
-
-#[test]
-fn incremental_off_in_the_shared_target() {
-    // req:land/shared-land-target@526c3a2a
-    let f = Fixture::new("");
-    f.branch("impl/a", &[("b.txt", "b\n")]);
-    clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    assert_eq!(f.lines("check-incremental.log"), ["CARGO_INCREMENTAL=0"]);
-}
-
-#[test]
-fn empty_incremental_counts_as_unset() {
-    // req:land/shared-land-target@526c3a2a
-    let f = Fixture::new("");
-    f.branch("impl/a", &[("b.txt", "b\n")]);
-    let env = f.env(&[("CARGO_INCREMENTAL", "")]);
-    clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
-    assert_eq!(f.lines("check-incremental.log"), ["CARGO_INCREMENTAL=0"]);
-}
-
-#[test]
-fn callers_incremental_kept() {
-    // req:land/shared-land-target@526c3a2a
-    let f = Fixture::new("");
-    f.branch("impl/a", &[("b.txt", "b\n")]);
-    f.branch("impl/b", &[("c.txt", "c\n")]);
-    let env = f.env(&[("CARGO_INCREMENTAL", "1")]);
-    clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
-    let env = f.env(&[("CARGO_TARGET_DIR", "/elsewhere")]);
-    clm_land::land(&f.work(), Some("impl/b"), &env).unwrap();
-    // A caller's own target leaves the check this process's environment untouched, which
-    // has `CARGO_INCREMENTAL=0` when `clm land` itself runs this test.
-    let ambient = std::env::var("CARGO_INCREMENTAL").unwrap_or_else(|_| "unset".into());
+    assert_eq!(f.lines("check-lock.log"), ["held"]);
     assert_eq!(
-        f.lines("check-incremental.log"),
-        [
-            "CARGO_INCREMENTAL=1".to_string(),
-            format!("CARGO_INCREMENTAL={ambient}")
-        ]
+        f.lines("check-pwd.log"),
+        [f.land_tree().display().to_string()]
     );
 }
 
 #[test]
 fn lock_released_after_a_failing_check() {
-    // req:land/land-target-lock@ca751f80
+    // req:land/land-target-lock@66ccebd0
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -553,7 +523,7 @@ fn lock_released_after_a_failing_check() {
 
 #[test]
 fn conflict_takes_no_lock() {
-    // req:land/land-target-lock@ca751f80
+    // req:land/land-target-lock@66ccebd0
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.advance_main("b.txt", "other\n");
@@ -756,7 +726,7 @@ fn a_land_that_compiles_nothing_uses_a_temporary_worktree() {
 
 #[test]
 fn one_tree_for_every_land() {
-    // req:land/land-tree@9bb49b16
+    // req:land/land-tree@e95a603c
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -777,7 +747,7 @@ fn one_tree_for_every_land() {
 
 #[test]
 fn leftovers_cleaned() {
-    // req:land/land-tree@9bb49b16
+    // req:land/land-tree@e95a603c
     let f = Fixture::new("");
     // Fails when an earlier check's file is still there, ignored or not.
     f.write(
@@ -799,7 +769,7 @@ fn leftovers_cleaned() {
 
 #[test]
 fn tree_repaired_after_clm_directory_removed() {
-    // req:land/land-tree@9bb49b16
+    // req:land/land-tree@e95a603c
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -813,7 +783,7 @@ fn tree_repaired_after_clm_directory_removed() {
 
 #[test]
 fn stale_directory_replaced() {
-    // req:land/land-tree@9bb49b16
+    // req:land/land-tree@e95a603c
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let stale = f.work().join(".clm/land-tree");
@@ -830,7 +800,7 @@ fn stale_directory_replaced() {
 
 #[test]
 fn nothing_untracked_in_a_project_that_doesnt_ignore_target() {
-    // req:land/land-tree@9bb49b16
+    // req:land/land-tree@e95a603c
     // The fixture's `.gitignore` holds only `clm init`'s lines.
     let f = Fixture::new("");
     let work = f.work();
@@ -852,7 +822,7 @@ fn nothing_untracked_in_a_project_that_doesnt_ignore_target() {
 
 #[test]
 fn broken_tree_repaired_without_touching_the_main_worktree() {
-    // req:land/land-tree@9bb49b16
+    // req:land/land-tree@e95a603c
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.branch("impl/b", &[("c.txt", "c\n")]);
@@ -873,7 +843,7 @@ fn broken_tree_repaired_without_touching_the_main_worktree() {
     assert!(f.land_tree().join(".git").is_file());
 }
 
-/// A fixture whose check leaves a sparse file of `size` bytes in `CARGO_TARGET_DIR`, with
+/// A fixture whose check leaves a sparse file of `size` bytes in `CLM_LAND_DIR`, with
 /// `[land] target_cap_gb = 1` when `cap` is set.
 fn capped(cap: bool, size: &str) -> Fixture {
     let f = Fixture::new("");
@@ -887,7 +857,7 @@ fn capped(cap: bool, size: &str) -> Fixture {
 
 #[test]
 fn target_over_the_cap_cleared() {
-    // req:land/land-target-cap@c57e8306
+    // req:land/land-target-cap@69c8919e
     let f = capped(true, "2000000000");
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(out.lines.last().unwrap().starts_with("landed "), "{out:?}");
@@ -902,7 +872,7 @@ fn target_over_the_cap_cleared() {
 
 #[test]
 fn target_under_the_cap_kept() {
-    // req:land/land-target-cap@c57e8306
+    // req:land/land-target-cap@69c8919e
     let f = capped(false, "10");
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(out.warnings.iter().all(|w| !w.contains("cleared")));
@@ -911,22 +881,11 @@ fn target_under_the_cap_kept() {
 
 #[test]
 fn failed_check_keeps_the_target() {
-    // req:land/land-target-cap@c57e8306
+    // req:land/land-target-cap@69c8919e
     let f = capped(true, "2000000000");
     f.write("check-fails", "");
     refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
     assert!(f.work().join(".clm/land/big").exists());
-}
-
-#[test]
-fn callers_target_untouched_by_the_cap() {
-    // req:land/land-target-cap@c57e8306
-    let f = capped(true, "2000000000");
-    let theirs = f.path("theirs");
-    let env = f.env(&[("CARGO_TARGET_DIR", theirs.to_str().unwrap())]);
-    let out = clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
-    assert!(out.warnings.iter().all(|w| !w.contains("cleared")));
-    assert!(theirs.join("big").exists());
 }
 
 /// The land's warnings but the effort step's (`land/records-effort`), which refuses in this

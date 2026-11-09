@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn measure_follows_no_symlink() {
-        // req:land/land-target-cap@c57e8306
+        // req:land/land-target-cap@69c8919e
         let dir = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         fs::write(outside.path().join("big"), vec![0u8; 1000]).unwrap();

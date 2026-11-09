@@ -15,7 +15,7 @@ fn passes() -> CheckEnv {
 
 #[test]
 fn a_caller_waits_on_the_check_lock() {
-    // req:land/shared-check-runner@05214b4c
+    // req:land/shared-check-runner@235e2519
     let f = Fixture::new("");
     let work = std::fs::canonicalize(f.work()).unwrap();
     let lock_path = work.join(".clm/check.lock");
@@ -40,7 +40,7 @@ fn a_caller_waits_on_the_check_lock() {
 
 #[test]
 fn the_open_step_returned() {
-    // req:land/shared-check-runner@05214b4c
+    // req:land/shared-check-runner@235e2519
     let f = Fixture::new("");
     let script = "echo '::group::a'; echo x; echo '::group::b'; echo y; echo z; exit 1";
     let run = run_check(script, &f.work(), None, &passes(), None).unwrap();
@@ -59,7 +59,7 @@ fn the_open_step_returned() {
 
 #[test]
 fn the_selection_and_the_environment_reach_the_command() {
-    // req:land/shared-check-runner@05214b4c
+    // req:land/shared-check-runner@235e2519
     let f = Fixture::new("");
     let selection = f.path("selection");
     std::fs::write(&selection, "file a\n").unwrap();
@@ -86,7 +86,7 @@ fn the_selection_and_the_environment_reach_the_command() {
 
 #[test]
 fn land_unchanged() {
-    // req:land/shared-check-runner@05214b4c
+    // req:land/shared-check-runner@235e2519
     let f = Fixture::new("");
     f.write("check-prints", "for i in $(seq 50); do echo $i; done\n");
     f.write("check-fails", "");
@@ -105,4 +105,19 @@ fn land_unchanged() {
         "{why}"
     );
     assert_eq!(lines.len(), 42, "{why}");
+}
+
+#[test]
+fn the_exit_code_returned() {
+    // req:land/shared-check-runner@235e2519
+    let f = Fixture::new("");
+    let run = run_check("exit 127", &f.work(), None, &passes(), None).unwrap();
+    assert!(!run.passed);
+    assert_eq!(run.code, Some(127));
+    let run = run_check("true", &f.work(), None, &passes(), None).unwrap();
+    assert_eq!(run.code, Some(0));
+    // A signal ends the command with no exit code.
+    let run = run_check("kill -9 $$", &f.work(), None, &passes(), None).unwrap();
+    assert!(!run.passed);
+    assert_eq!(run.code, None);
 }

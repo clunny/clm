@@ -210,24 +210,6 @@ impl<'a> Repo<'a> {
         runner::places_of(&self.root)
     }
 
-    /// Where `[land] check` builds: the caller's `CARGO_TARGET_DIR`, else `land` in `places`,
-    /// `<home>/.clm/land` (`land/shared-land-target`), with whether it is the latter, which a
-    /// check holds the clone's lock on (`land/land-target-lock`).
-    fn target(&self, places: &Path) -> (PathBuf, bool) {
-        match (self.env)("CARGO_TARGET_DIR").filter(|t| !t.is_empty()) {
-            Some(t) => (PathBuf::from(t), false),
-            None => (places.join("land"), true),
-        }
-    }
-
-    /// `CARGO_INCREMENTAL` for a check in the shared target: the caller's when non-empty,
-    /// else `0` (`land/shared-land-target`).
-    fn incremental(&self) -> String {
-        (self.env)("CARGO_INCREMENTAL")
-            .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| "0".into())
-    }
-
     /// The slot of the build place that names `branch`, 0 outside one (`land/check-slot`),
     /// for `CLM_SLOT`; exit 2 with `place_slot`'s error when it fails.
     fn slot(&self, branch: &str) -> Result<u64, Error> {
@@ -239,8 +221,7 @@ impl<'a> Repo<'a> {
         })
     }
 
-    /// `[land] check` in `dir` through `sh -c`, outside CI, building into `target` when
-    /// given, with `vars` set and `CLM_SLOT` set to `slot`, under the clone's check lock
+    /// `[land] check` in `dir` through `sh -c`, outside CI, with `vars` set and `CLM_SLOT` set to `slot`, under the clone's check lock
     /// with a ticket of `rank`, when it has one; refused as `` `<check>` <fails> `` when it fails. With `log`
     /// (a land's), its output also goes to that log and a failure repeats its last lines and
     /// names the log, which a pass removes (`land/check-log`).
@@ -248,7 +229,6 @@ impl<'a> Repo<'a> {
         &self,
         dir: &Path,
         check: &str,
-        target: Option<&Path>,
         vars: &[(&str, &Path)],
         fails: &str,
         how: CheckHow,
@@ -264,14 +244,10 @@ impl<'a> Repo<'a> {
                 .filter(|(name, _)| *name != "CLM_SELECTION")
                 .map(|(name, value)| (name.to_string(), value.as_os_str().to_owned()))
                 .collect(),
-            // `CLM_LAND_DIR` is set only by a land holding the land lock, through `vars`; any
-            // other run has the caller's removed (`land/land-dir-env`).
+            // `CLM_LAND_DIR` is set only by a land, through `vars`; `--check-only` has the
+            // caller's removed (`land/land-dir-env`).
             unset: vec!["CI".to_string(), "CLM_LAND_DIR".to_string()],
         };
-        if let Some(target) = target {
-            env.set
-                .push(("CARGO_TARGET_DIR".into(), target.as_os_str().to_owned()));
-        }
         // Replacing the caller's own (`land/check-slot`).
         env.set.push(("CLM_SLOT".into(), slot.to_string().into()));
         let selection = vars

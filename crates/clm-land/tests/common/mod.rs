@@ -55,8 +55,8 @@ const FAKE_CHECK: &str = r#"
 git rev-parse 'HEAD^{tree}' >> "$DIR/check.log"
 basename "$PWD" >> "$DIR/check-dir.log"
 pwd -P >> "$DIR/check-pwd.log"
-echo "CI=${CI-unset} CARGO_TARGET_DIR=${CARGO_TARGET_DIR-unset}" >> "$DIR/check-env.log"
-echo "CARGO_INCREMENTAL=${CARGO_INCREMENTAL-unset}" >> "$DIR/check-incremental.log"
+echo "CI=${CI-unset} CLM_LAND_DIR=${CLM_LAND_DIR-unset}" >> "$DIR/check-env.log"
+echo "${CARGO_TARGET_DIR-unset} ${CARGO_INCREMENTAL-unset}" >> "$DIR/check-cargo.log"
 echo "${CLM_SLOT-unset}" >> "$DIR/check-slot.log"
 echo "${CLM_LAND_DIR-}" >> "$DIR/check-land-dir.log"
 echo "CLM_SELECTION=${CLM_SELECTION-unset}" >> "$DIR/check-selection.log"
@@ -100,8 +100,9 @@ echo "end $tree" >> "$DIR/check-order.log"
 echo "check $(git log -1 --format=%s 'HEAD^2')" >> "$DIR/order.log"
 if [ -e "$DIR/check-sleeps" ]; then sleep "$(cat "$DIR/check-sleeps")"; fi
 if [ -e "$DIR/check-prints" ]; then bash "$DIR/check-prints"; fi
-if [ -e "$DIR/check-builds" ]; then mkdir -p "$CARGO_TARGET_DIR" && touch "$CARGO_TARGET_DIR/built"; fi
-if [ -e "$DIR/check-sparse" ]; then mkdir -p "$CARGO_TARGET_DIR" && truncate -s "$(cat "$DIR/check-sparse")" "$CARGO_TARGET_DIR/big"; fi
+if [ -e "$DIR/check-builds" ]; then mkdir -p "$CLM_LAND_DIR" && touch "$CLM_LAND_DIR/built"; fi
+if [ -e "$DIR/check-sparse" ]; then mkdir -p "$CLM_LAND_DIR" && truncate -s "$(cat "$DIR/check-sparse")" "$CLM_LAND_DIR/big"; fi
+if [ -e "$DIR/check-sparse-caller" ]; then mkdir -p "$CARGO_TARGET_DIR" && truncate -s "$(cat "$DIR/check-sparse-caller")" "$CARGO_TARGET_DIR/big"; fi
 [ ! -e "$DIR/check-fails" ]
 "#;
 

@@ -32,8 +32,9 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     let exe = exe.path();
     // Everything the land keeps, under `<home>/.clm`.
     let places = repo.places()?;
-    // Where `[land] check` builds, and whether it is the clone's shared `.clm/land`.
-    let target = check.as_ref().map(|_| repo.target(&places));
+    // Where `[land] check` keeps its build output, the clone's shared `.clm/land`
+    // (`land/shared-land-target`).
+    let target = check.as_ref().map(|_| places.join("land"));
     let checked_with = |fold: &clm_ledger::Fold, key: &str| {
         fold.checks.get(key).is_some_and(|records| {
             records
@@ -167,7 +168,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // of the attempt (`land/lock-queue`).
         let mut priority: Option<Priority> = None;
         let mut lock = None;
-        if let Some((target, true)) = &target
+        if let Some(target) = &target
             && check_runs(&p)
         {
             // Unchecked code: the check runs every test the branch can break, so an ordinary
@@ -359,7 +360,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         };
         let land_tree_for_readers;
         let dir: &Scratch = match &target {
-            Some((target, true)) if late_lock && runs => {
+            Some(target) if late_lock && runs => {
                 // A readers' selection that ran takes the priority lane; one that failed, so
                 // that every test runs, the ordinary (`land/lock-queue`).
                 lock = Some(lock::land(target, check_rank)?);
@@ -370,22 +371,14 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             _ => dir,
         };
         let mut timing = None;
-        if runs && let (Some(check), Some((target, shared))) = (&check, &target) {
+        if runs && let (Some(check), Some(target)) = (&check, &target) {
             let mut vars: Vec<(&str, &Path)> = selection
                 .iter()
                 .map(|s| ("CLM_SELECTION", s.path.as_path()))
                 .collect();
-            // Incremental data in the target every land shares only grows, so a check
-            // that builds there runs without it unless the caller asked for it
-            // (`land/shared-land-target`).
-            let incremental;
-            if *shared {
-                // The land tree's `.clm/land`, for a check of any toolchain
-                // (`land/land-dir-env`).
-                vars.push(("CLM_LAND_DIR", target.as_path()));
-                incremental = repo.incremental();
-                vars.push(("CARGO_INCREMENTAL", Path::new(&incremental)));
-            }
+            // The land tree's `.clm/land`, for a check of any toolchain: the land sets no
+            // toolchain's variables itself (`land/land-dir-env`, `land/shared-land-target`).
+            vars.push(("CLM_LAND_DIR", target.as_path()));
             // Kept for a failing check, by branch, beside `.clm/land`.
             let log = places.join("land-logs").join(format!("{branch}.log"));
             // The slot of the place that names the branch, so the tests key their ports and
@@ -395,7 +388,6 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             timing = Some(repo.project_check(
                 dir.path(),
                 check,
-                Some(target),
                 &vars,
                 ON_MERGE,
                 CheckHow {
@@ -481,7 +473,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // The lock covered the gate on the merge commit, `clm check` and the push, so no other
         // land checked its commit out before this one was on `main`. The cap on the shared
         // target (`land/land-target-cap`) runs under it too; the rest runs outside it.
-        if let (Some(_), Some((target, _)), Some(land)) =
+        if let (Some(_), Some(target), Some(land)) =
             (&lock, &target, repo.settings.land.value.as_ref())
         {
             crate::cap::apply(target, land.cap_gb(), &mut out.warnings);
