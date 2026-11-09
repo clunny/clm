@@ -278,7 +278,7 @@ impl Tree {
 
 #[test]
 fn every_check() {
-    // req:ci/web-checks@7ee79e29
+    // req:ci/web-checks@72a04372
     // req:ci/detector-tools@156131ed
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
@@ -365,7 +365,7 @@ fn every_check() {
 
 #[test]
 fn every_wasm_build_stands_alone() {
-    // req:ci/web-checks@7ee79e29
+    // req:ci/web-checks@72a04372
     // Whole lines, so nothing like `|| true` follows a build. Each `--no-default-features`
     // crate builds on its own: built with a crate that depends on it with its default
     // features, cargo would turn them back on.
@@ -402,7 +402,7 @@ fn every_wasm_build_stands_alone() {
 
 #[test]
 fn broken_wasm_build_fails() {
-    // req:ci/web-checks@7ee79e29
+    // req:ci/web-checks@72a04372
     for build in [
         format!("{WASM} -p clm-model -p clm-context"),
         format!("{WASM} --no-default-features -p clm-ledger"),
@@ -417,7 +417,7 @@ fn broken_wasm_build_fails() {
 
 #[test]
 fn failing_panel_test_fails() {
-    // req:ci/web-checks@7ee79e29
+    // req:ci/web-checks@72a04372
     for step in [
         "plugin-panel$ npm ci --ignore-scripts",
         "plugin-panel$ npm test",
@@ -431,8 +431,27 @@ fn failing_panel_test_fails() {
 }
 
 #[test]
+fn a_web_change_leaves_the_site_out_and_a_site_change_runs_it() {
+    // req:ci/web-checks@72a04372
+    let (ok, log) = Tree::new().run_selecting("file web/src/app.ts\n");
+    assert!(ok, "{log:?}");
+    let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
+    assert_eq!(npm_run(&log), web);
+    assert!(!log.iter().any(|l| l.starts_with("web/site")), "{log:?}");
+    let (ok, log) = Tree::new().run_selecting("file web/site/guide/index.md\n");
+    assert!(ok, "{log:?}");
+    let site: Vec<_> = WEB_SUITE
+        .iter()
+        .chain(&SITE_SUITE)
+        .chain(&CAP_WEB_SUITE)
+        .copied()
+        .collect();
+    assert_eq!(npm_run(&log), site);
+}
+
+#[test]
 fn packages_not_built_yet_run_nothing() {
-    // req:ci/web-checks@7ee79e29
+    // req:ci/web-checks@72a04372
     let (ok, log) = Tree::new().without_packages().run(None, "");
     assert!(ok, "{log:?}");
     let both: Vec<_> = PANEL_SUITE.iter().chain(&WEB_SUITE).copied().collect();
@@ -474,7 +493,7 @@ fn failing_on_both_attempts_fails() {
 
 #[test]
 fn failing_capability_package_fails() {
-    // req:ci/web-checks@7ee79e29
+    // req:ci/web-checks@72a04372
     for step in CAP_PANEL_SUITE
         .iter()
         .chain(&CAP_WEB_SUITE)
@@ -839,12 +858,7 @@ fn web_file() {
     assert!(ok, "{log:?}");
     assert_whole_tree_checks(&log);
     assert_eq!(tests_run(&log), Vec::<&str>::new());
-    let web: Vec<_> = WEB_SUITE
-        .iter()
-        .chain(&SITE_SUITE)
-        .chain(&CAP_WEB_SUITE)
-        .copied()
-        .collect();
+    let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
     assert_eq!(npm_run(&log), web);
     // req:ci/panel-validate@82219e3e
     assert!(!log.iter().any(|l| l.starts_with("claude")), "{log:?}");
@@ -882,12 +896,7 @@ fn capability_package_file() {
     let (ok, log) = Tree::new()
         .run_selecting("file web/src/app.ts\nfile capabilities/web/follow-from-browser.spec.ts\n");
     assert!(ok, "{log:?}");
-    let web: Vec<_> = WEB_SUITE
-        .iter()
-        .chain(&SITE_SUITE)
-        .chain(&CAP_WEB_SUITE)
-        .copied()
-        .collect();
+    let web: Vec<_> = WEB_SUITE.iter().chain(&CAP_WEB_SUITE).copied().collect();
     assert_eq!(npm_run(&log), web);
     // `web/`'s `npm ci` failing before the package alone fails the run.
     let tree = Tree::new();
@@ -1633,19 +1642,20 @@ fn marked_in<'a>(lines: &'a [String], name: &str) -> Option<Vec<&'a str>> {
 
 #[test]
 fn a_web_change_marks_the_phases_it_selected() {
-    // req:ci/step-markers@3b509846
+    // req:ci/step-markers@5ed839d2
     let tree = Tree::new();
     let lines = stdout_of(&tree, Some("file web/src/main.ts\n"));
     // A phase every run has names no file, and nothing sits between its markers.
     let at = lines.iter().position(|l| l == "::group::fmt").unwrap();
     assert_eq!(lines[at + 1], "::endgroup::", "{lines:?}");
-    for phase in ["web", "web/site", "capabilities/web"] {
+    for phase in ["web", "capabilities/web"] {
         assert_eq!(
             marked_in(&lines, phase).unwrap(),
             ["web/src/main.ts"],
             "{phase}: {lines:?}"
         );
     }
+    assert!(marked_in(&lines, "web/site").is_none(), "{lines:?}");
     for phase in ["plugin-panel", "capabilities/panel", "validate plugin"] {
         assert!(marked_in(&lines, phase).is_none(), "{phase}: {lines:?}");
     }
@@ -1654,8 +1664,22 @@ fn a_web_change_marks_the_phases_it_selected() {
 }
 
 #[test]
+fn a_site_change_marks_the_site_and_the_phases_it_turned_on() {
+    // req:ci/step-markers@5ed839d2
+    let tree = Tree::new();
+    let lines = stdout_of(&tree, Some("file web/site/guide/index.md\n"));
+    for phase in ["web", "web/site", "capabilities/web"] {
+        assert_eq!(
+            marked_in(&lines, phase).unwrap(),
+            ["web/site/guide/index.md"],
+            "{phase}: {lines:?}"
+        );
+    }
+}
+
+#[test]
 fn a_full_run_marks_each_phase_and_names_no_file() {
-    // req:ci/step-markers@3b509846
+    // req:ci/step-markers@5ed839d2
     let tree = Tree::new();
     for selection in [None, Some("all Cargo.lock\nfile web/src/main.ts\n")] {
         let lines = stdout_of(&tree, selection);
@@ -1669,7 +1693,7 @@ fn a_full_run_marks_each_phase_and_names_no_file() {
 
 #[test]
 fn every_selected_phase_names_the_files_that_made_it_run() {
-    // req:ci/step-markers@3b509846
+    // req:ci/step-markers@5ed839d2
     let tree = Tree::new();
     let lines = stdout_of(
         &tree,

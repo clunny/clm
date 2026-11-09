@@ -70,6 +70,7 @@ nl='
 '
 files_rust=
 files_web=
+files_site=
 files_panel=
 files_cap_web=
 files_cap_panel=
@@ -101,7 +102,11 @@ add() {
 select_file() {
   local path=$1 dir rest name before=${#selected[@]}
   case $path in
-    web/*) web=true files_web+="$path$nl" ;;
+    web/*)
+      web=true
+      files_web+="$path$nl"
+      case $path in web/site/*) files_site+="$path$nl" ;; esac
+      ;;
     plugin-panel/*) panel=true files_panel+="$path$nl" ;;
     capabilities/web/*) cap_web=true files_cap_web+="$path$nl" ;;
     capabilities/panel/*) cap_panel=true files_cap_panel+="$path$nl" ;;
@@ -275,10 +280,10 @@ if $web; then
   marks=$files_web
   timed web web_suite
 fi
-# `web/site/`'s package (`web.site`) follows `web/`'s suite, once it has a `package.json`
-# (ci/web-checks).
-if $web && [ -f web/site/package.json ]; then
-  marks=$files_web
+# `web/site/`'s package (`web.site`) follows `web/`'s suite, once it has a `package.json`, when
+# every test runs or a selected file is under `web/site/` (ci/web-checks).
+if $web && { $full || [ -n "$files_site" ]; } && [ -f web/site/package.json ]; then
+  marks=$files_site
   timed web/site site_suite
 fi
 if { $web || $cap_web; } && has_package web; then
