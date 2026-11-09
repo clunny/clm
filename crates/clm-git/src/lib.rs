@@ -526,6 +526,46 @@ pub fn fetch(root: &Path) -> Result<(), Error> {
     git(root, &["fetch", REMOTE]).map(drop)
 }
 
+/// Why [`fetch_retrying`] gave up.
+#[derive(Debug)]
+pub enum FetchError {
+    /// The fetch kept failing and `REMOTE` can't be reached either.
+    Offline,
+    /// The fetch kept failing though `REMOTE` answers: the last run's error.
+    Git(Error),
+}
+
+impl fmt::Display for FetchError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FetchError::Offline => write!(f, "{REMOTE} can't be reached"),
+            FetchError::Git(e) => e.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for FetchError {}
+
+/// `git <args>` (a fetch naming [`REMOTE`]) in `root`, run again after a failure, at most twice
+/// more, after 1 and then 2 seconds. When the last run fails, [`FetchError::Offline`] if
+/// `git ls-remote` of `REMOTE` fails too, else [`FetchError::Git`] with the last run's error.
+pub fn fetch_retrying(root: &Path, args: &[&str]) -> Result<(), FetchError> {
+    let mut last = None;
+    for wait in [0, 1, 2] {
+        if wait > 0 {
+            std::thread::sleep(Duration::from_secs(wait));
+        }
+        match git(root, args) {
+            Ok(_) => return Ok(()),
+            Err(e) => last = Some(e),
+        }
+    }
+    match git(root, &["ls-remote", "--quiet", REMOTE, "refs/heads/main"]) {
+        Err(_) => Err(FetchError::Offline),
+        Ok(_) => Err(FetchError::Git(last.expect("three runs failed"))),
+    }
+}
+
 /// Whether `a` is an ancestor of `b` (`git merge-base --is-ancestor a b` exits 0).
 pub fn is_ancestor(root: &Path, a: &str, b: &str) -> Result<bool, Error> {
     match git(root, &["merge-base", "--is-ancestor", a, b]) {
