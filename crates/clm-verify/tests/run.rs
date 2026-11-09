@@ -234,17 +234,17 @@ fn the_verdict_outlives_a_failing_stderr() {
     // The verify tree's own lock is held too, so its waiting line is said as well.
     let places = f.verify_tree().parent().unwrap().to_path_buf();
     std::fs::create_dir_all(&places).unwrap();
-    let locks: Vec<std::fs::File> = ["check.lock", "verify.lock"]
-        .iter()
-        .map(|name| {
-            let lock = std::fs::File::create(places.join(name)).unwrap();
-            lock.lock().unwrap();
-            lock
-        })
-        .collect();
+    let [check, verify]: [std::fs::File; 2] = ["check.lock", "verify.lock"].map(|name| {
+        let lock = std::fs::File::create(places.join(name)).unwrap();
+        lock.lock().unwrap();
+        lock
+    });
+    // `verify.lock` goes first, so the runner then waits on `check.lock` and says so.
     let releaser = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        drop(locks);
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        drop(verify);
+        std::thread::sleep(std::time::Duration::from_millis(700));
+        drop(check);
     });
     let out = f.due();
     releaser.join().unwrap();
