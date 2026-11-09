@@ -16,3 +16,5 @@ A test that reads files of the repository's own tree under doc-only paths now ho
 - **Finding the readers automatically.** Which files a test opens isn't knowable from its text in general without knowing the language and the runner, which `check.affected` doesn't. A reader built without its marker fails as before, on the next full run; the marker requirements of `clm` and `init` cover the readers this repository has.
 
 **Amended 2026-11-08** (`20261108-a-guide-page-edit`). `docs/guide/` and `docs/spec-format.md` are doc-only too now, and the tests that read them hold markers (`guide-pages-are-doc-only`).
+
+**Amended 2026-11-09** (`20261109-init-readers-scenarios-need`). `init`'s marker requirement is folded into `clm`'s, which now covers every crate's tests and is proven on the root through the real `readers` (`doc-readers-one-rule`).
