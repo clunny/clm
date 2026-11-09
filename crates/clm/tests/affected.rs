@@ -771,3 +771,17 @@ fn overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("no merge base between x and z"));
 }
+
+#[test]
+fn overlap_has_no_file_line_for_a_deleted_file() {
+    // req:check.affected/overlap-selection@2171c658
+    let dir = overlap_repo(
+        "",
+        "[]",
+        &|r| fs::remove_file(r.join("crates/c/src/lib.rs")).unwrap(),
+        &|r| touch(r, "crates/c/src/other.rs"),
+    );
+    let out = clm_affected_args(dir.path(), &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "node c\nfile crates/c/tests/t.rs\n");
+}
