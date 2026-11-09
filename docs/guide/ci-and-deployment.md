@@ -99,7 +99,7 @@ A test that is slow, gives different results on the same tree, or needs a resour
 
 ### Where a land builds
 
-A land that runs `[land] check` in the clone's land tree, holding the clone's lock on `.clm/land.lock`, sets `CLM_LAND_DIR` to the `.clm/land` directory of the main worktree, a place that lasts from land to land. If your check builds, point your toolchain's output there in your check script, so each land reuses the last one's build. A `clm land --check-only` run, and a land that takes no such lock (as when you set `CARGO_TARGET_DIR` yourself before running `clm land`), run the check with `CLM_LAND_DIR` unset, so the check builds where it usually does. For cargo, set `CARGO_TARGET_DIR` from it and `CARGO_INCREMENTAL=0`, since incremental data in a directory every land shares only grows:
+A land that runs `[land] check` in the clone's land tree, holding the clone's lock on `.clm/land.lock`, sets `CLM_LAND_DIR` to the `.clm/land` directory of the main worktree, a place that lasts from land to land. If your check builds, point your toolchain's output there in your check script, so each land reuses the last one's build. A `clm land --check-only` run runs the check with `CLM_LAND_DIR` unset, so the check builds where it usually does. For cargo, set `CARGO_TARGET_DIR` from it and `CARGO_INCREMENTAL=0`, since incremental data in a directory every land shares only grows:
 
 ```sh
 if [ -n "${CLM_LAND_DIR:-}" ]; then
@@ -107,7 +107,7 @@ if [ -n "${CLM_LAND_DIR:-}" ]; then
 fi
 ```
 
-`clm land` still sets those two cargo variables itself for now, when you haven't set them, but a later `clm` stops, so set them in your script.
+`clm land` sets no toolchain variable itself, and leaves your `CARGO_TARGET_DIR` and `CARGO_INCREMENTAL` as they are, so set them in your script.
 
 ## Deployment is yours
 

@@ -244,8 +244,8 @@ impl<'a> Repo<'a> {
                 .filter(|(name, _)| *name != "CLM_SELECTION")
                 .map(|(name, value)| (name.to_string(), value.as_os_str().to_owned()))
                 .collect(),
-            // `CLM_LAND_DIR` is set only by a land holding the land lock, through `vars`; any
-            // other run has the caller's removed (`land/land-dir-env`).
+            // `CLM_LAND_DIR` is set only by a land, through `vars`; `--check-only` has the
+            // caller's removed (`land/land-dir-env`).
             unset: vec!["CI".to_string(), "CLM_LAND_DIR".to_string()],
         };
         // Replacing the caller's own (`land/check-slot`).

@@ -431,6 +431,16 @@ fn land_from_a_linked_worktree() {
     assert!(!linked.join(".clm").exists());
     // The check ran holding the clone's lock on `.clm/land.lock`.
     assert_eq!(f.lines("check-lock.log"), ["held"]);
+    // The land set neither cargo variable: the check saw this process's own.
+    let ambient = |name: &str| std::env::var(name).unwrap_or_else(|_| "unset".into());
+    assert_eq!(
+        f.lines("check-cargo.log"),
+        [format!(
+            "{} {}",
+            ambient("CARGO_TARGET_DIR"),
+            ambient("CARGO_INCREMENTAL")
+        )]
+    );
     // And held it through `clm check` (land/land-target-lock@66ccebd0).
     assert_eq!(f.lines("clm-check-lock.log"), ["held"]);
 }
@@ -481,6 +491,10 @@ fn caller_target_changes_nothing() {
         [format!("CI=unset CLM_LAND_DIR={}", target.display())]
     );
     assert_eq!(f.lines("check-lock.log"), ["held"]);
+    assert_eq!(
+        f.lines("check-pwd.log"),
+        [f.land_tree().display().to_string()]
+    );
 }
 
 #[test]
