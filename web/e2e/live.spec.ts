@@ -224,12 +224,18 @@ test.describe('live refresh', () => {
     await page.goto('/app/#/o/a/graph');
     await expect(page.locator('.n[data-node=b]')).toBeVisible();
     await visibility(page, 'hidden');
-    const before = mock.requests.length;
+    // Every refresh asks for the snapshot and the branches, so they count the refreshes. The
+    // first load's other requests (the graph's implementation state, the Notify me switch's
+    // key once the service worker is ready) can still arrive after the page is hidden under a
+    // loaded machine's delays, and are no refresh.
+    const refreshes = () => count(mock.requests, SNAPSHOT) + count(mock.requests, BRANCHES);
+    const before = refreshes();
+    const snapshots = count(mock.requests, SNAPSHOT);
     await page.clock.runFor(3 * 60_000);
     await page.waitForTimeout(200);
-    expect(mock.requests.length).toBe(before);
+    expect(refreshes()).toBe(before);
     await visibility(page, 'visible');
-    await expect.poll(() => count(mock.requests.slice(before), SNAPSHOT)).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => count(mock.requests, SNAPSHOT)).toBeGreaterThan(snapshots);
   });
 
   test("nothing changed: the view's elements are not replaced, whatever the implementation state's now", async ({ page, context }) => {
