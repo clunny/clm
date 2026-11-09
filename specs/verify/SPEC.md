@@ -102,7 +102,7 @@ In `local` and `pipeline` mode, a due `clm verify --due` SHALL check `origin/mai
 #### Scenario: the verdict outlives a failing stderr
 - GIVEN Linux, `mode = "local"`, two lands since a passing record, the first changing a file of component `a`, a `[verify] check` that prints 1000 lines and fails on any tree holding the first land's change, `.clm/check.lock` held by another process that releases it after 1 second, and `clm verify`'s stderr opened on `/dev/full`
 - WHEN `clm verify --due` runs with a trigger holding
-- THEN the ledger holds a `verified` record for the head with `passed: false`, culprit the first land and components `a`, and stdout holds `verify failed <sha> culprit <the first land> components a`
+- THEN the ledger holds a `verified` record for the head with `passed: false`, culprit the first land and components `a`, and stdout holds `verify failed <sha> culprit <the first land> components a`, whatever its exit status
 
 #### Needs
 - config/verify-setting
