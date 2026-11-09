@@ -73,10 +73,18 @@ pub(crate) fn rewrite(
         let person = Some(crate::person(writer))
             .filter(|p| !p.is_empty())
             .unwrap_or("clm");
-        let env = [
+        let mut env = vec![
             ("GIT_AUTHOR_NAME", OsStr::new(person)),
             ("GIT_COMMITTER_NAME", OsStr::new(person)),
         ];
+        // Nor need it have a `user.email`: where git can't find or guess one, as on a CI
+        // runner, the commit carries an empty email.
+        if run_git(root, &["var", "GIT_COMMITTER_IDENT"], None, &env).is_err() {
+            env.extend([
+                ("GIT_AUTHOR_EMAIL", OsStr::new("")),
+                ("GIT_COMMITTER_EMAIL", OsStr::new("")),
+            ]);
+        }
         let commit = run_git(root, &args, None, &env)?;
         // An empty old value means "must not exist yet", whatever the hash's length.
         let expected = old.clone().unwrap_or_default();

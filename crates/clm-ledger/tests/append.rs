@@ -102,6 +102,19 @@ fn offline() {
     assert_eq!(records[0]["id"], out.record.id.as_str());
 }
 
+#[test]
+fn a_clone_with_an_email_keeps_it() {
+    // req:ledger/append@d894aff0
+    let dir = tempfile::tempdir().unwrap();
+    let clone = clone_with_origin(dir.path(), "a", "Ann");
+    let out = clm_ledger::append(&clone, approved("f"), &env(dir.path(), &[])).unwrap();
+    let branch = format!("clm/ledger/{}", out.record.writer);
+    assert_eq!(
+        sh(&clone, &["log", "-1", "--format=%ae|%ce", &branch]),
+        "t@example.com|t@example.com"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn push_refused() {
