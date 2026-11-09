@@ -247,6 +247,14 @@ impl Land {
     }
 }
 
+/// What makes a fresh worktree ready to run its tests (`tests-run-in-their-own-tree`):
+/// `[build]` in `clm.toml`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Build {
+    /// A shell command; never empty.
+    pub setup: String,
+}
+
 /// The changed files that make `clm affected` select every test although a node's `paths` hold
 /// them (`graph-test-selection`): `[affected]` in `clm.toml`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -349,6 +357,9 @@ pub struct Settings {
     pub approval: Setting<Approval>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: `clm check` alone.
     pub land: Setting<Option<Land>>,
+    /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: a build's worktree
+    /// gets nothing before its tests run.
+    pub build: Setting<Option<Build>>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: slow tests stay in
     /// `[land] check`.
     pub verify: Setting<Option<Verify>>,
@@ -370,7 +381,7 @@ pub struct Settings {
 }
 
 /// Every key `Settings::get` accepts, in the order `clm config list` prints them (`config-list`).
-pub const KEYS: [&str; 16] = [
+pub const KEYS: [&str; 17] = [
     "autosync",
     "defects",
     "max_builds",
@@ -378,6 +389,7 @@ pub const KEYS: [&str; 16] = [
     "host",
     "approval",
     "land",
+    "build",
     "verify",
     "affected",
     "detectors",
@@ -435,6 +447,14 @@ impl Settings {
                     None => String::new(),
                 };
                 Ok((value, &self.land.layer))
+            }
+            "build" => {
+                let value = self
+                    .build
+                    .value
+                    .as_ref()
+                    .map(|b| format!("setup={}", b.setup));
+                Ok((value.unwrap_or_default(), &self.build.layer))
             }
             "verify" => {
                 let value = self.verify.value.as_ref().map(Verify::to_string);
@@ -521,6 +541,8 @@ struct RepoFile {
     approval: Option<Approval>,
     land: Option<toml::Value>,
     /// Read raw, as `land` is.
+    build: Option<toml::Value>,
+    /// Read raw, as `land` is.
     verify: Option<toml::Value>,
     component_size: Option<toml::Value>,
     /// The table's old name, read only to refuse it by name.
@@ -548,6 +570,8 @@ struct LocalFile {
     approval: Option<Approval>,
     /// Read raw, as `component_size` is.
     land: Option<toml::Value>,
+    /// Read raw, as `component_size` is.
+    build: Option<toml::Value>,
     /// Read raw, as `component_size` is.
     verify: Option<toml::Value>,
     /// Read raw so every error `component_size` reports names it, which toml's own don't.
@@ -593,6 +617,7 @@ impl From<RepoFile> for LocalFile {
             host: f.host,
             approval: f.approval,
             land: f.land,
+            build: f.build,
             verify: f.verify,
             component_size: f.component_size,
             node_size: f.node_size,
@@ -640,6 +665,7 @@ fn defaults() -> Settings {
         host: default(Host::Github),
         approval: default(Approval::Any),
         land: default(None),
+        build: default(None),
         verify: default(None),
         node_size: default(NodeSize::default()),
         affected: default(None),
@@ -654,6 +680,33 @@ fn defaults() -> Settings {
 /// Loads the settings for the repository at `root` (or none), reading variables, including
 /// `XDG_CONFIG_HOME` and `HOME`, only through `env`.
 pub fn load(root: Option<&Path>, env: &dyn Fn(&str) -> Option<String>) -> Result<Settings, Error> {
+    load_layers(root, None, env)
+}
+
+/// A `clm.toml` committed somewhere: its text, or none, and the name its values and errors carry.
+struct Committed<'a> {
+    text: Option<&'a str>,
+    source: &'a str,
+}
+
+/// Loads the settings as `load(Some(root), env)` does, except that the repository's layer is the
+/// text of a `clm.toml` committed somewhere, or absent when `text` is `None`, never
+/// `<root>/clm.toml`; each value and error from it names `source`, such as `origin/main:clm.toml`
+/// (`committed-settings`).
+pub fn load_committed(
+    root: &Path,
+    text: Option<&str>,
+    source: &str,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Settings, Error> {
+    load_layers(Some(root), Some(Committed { text, source }), env)
+}
+
+fn load_layers(
+    root: Option<&Path>,
+    committed: Option<Committed<'_>>,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<Settings, Error> {
     let mut settings = defaults();
     // Lowest layer first, so each file overrides the ones before it.
     if let Some(path) = user_file(env) {
@@ -661,8 +714,21 @@ pub fn load(root: Option<&Path>, env: &dyn Fn(&str) -> Option<String>) -> Result
         apply(&mut settings, file.into(), &path)?;
     }
     if let Some(root) = root {
-        let path = root.join("clm.toml");
-        let file: RepoFile = read(&path)?;
+        let (path, file): (PathBuf, RepoFile) = match &committed {
+            None => {
+                let path = root.join("clm.toml");
+                let file = read(&path)?;
+                (path, file)
+            }
+            Some(Committed { text, source }) => {
+                let path = PathBuf::from(source);
+                let file = match text {
+                    Some(text) => parse(text, &path)?,
+                    None => RepoFile::default(),
+                };
+                (path, file)
+            }
+        };
         apply(&mut settings, file.into(), &path)?;
         if let Some(path) = local_file(root) {
             let file: LocalFile = read(&path)?;
@@ -745,6 +811,7 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     }
     let max_builds = file.max_builds.map(|v| max_builds(v, path)).transpose()?;
     let land = file.land.map(|v| land(v, path)).transpose()?;
+    let build = file.build.map(|v| build(v, path)).transpose()?;
     let verify = file.verify.map(|v| verify(v, path)).transpose()?;
     if file.node_size.is_some() {
         return Err(Error::file(
@@ -777,6 +844,7 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     set(&mut settings.host, file.host, layer());
     set(&mut settings.approval, file.approval, layer());
     set(&mut settings.land, land.map(Some), layer());
+    set(&mut settings.build, build.map(Some), layer());
     set(&mut settings.verify, verify.map(Some), layer());
     set(&mut settings.node_size, node_size, layer());
     set(&mut settings.affected, affected.map(Some), layer());
@@ -959,6 +1027,26 @@ fn land(value: toml::Value, path: &Path) -> Result<Land, Error> {
             "`check` must be a non-empty string, not {other}"
         ))),
         None => Err(fail("`check` is missing".into())),
+    }
+}
+
+/// Reads `[build]`: a table whose one key, `setup`, is a non-empty string.
+fn build(value: toml::Value, path: &Path) -> Result<Build, Error> {
+    let fail = |problem: String| Error::file(path, format!("`build`: {problem}"));
+    let toml::Value::Table(table) = value else {
+        return Err(fail(format!("must be a table, not {value}")));
+    };
+    if let Some(key) = table.keys().find(|k| *k != "setup") {
+        return Err(fail(format!("unknown key `{key}`, expected `setup`")));
+    }
+    match table.get("setup") {
+        Some(toml::Value::String(setup)) if !setup.is_empty() => Ok(Build {
+            setup: setup.clone(),
+        }),
+        Some(other) => Err(fail(format!(
+            "`setup` must be a non-empty string, not {other}"
+        ))),
+        None => Err(fail("`setup` is missing".into())),
     }
 }
 
