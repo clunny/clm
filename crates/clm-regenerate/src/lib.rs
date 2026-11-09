@@ -36,7 +36,7 @@ impl Tree {
         &self.root
     }
 
-    /// `other-delta-merge`: once the caller has mirrored the tree into `root`'s `specs/` and
+    /// `stale-delta-merge`: once the caller has mirrored the tree into `root`'s `specs/` and
     /// committed it, merges the deltas of the other live `proposed` or `approved` changes
     /// (not `ids`, the changes the tree regenerated) the tree made stale, each committed on
     /// its own as `Merge <movers> into <change>`, against `onto`. Returns the `merged` lines
