@@ -15,7 +15,7 @@ mod exec;
 pub use exec::write_exec;
 
 /// Logs its args and directory, prints `affected-out` when it exists (`readers-out` when
-/// given `--readers`), and fails with a reason on stderr when `affected-fails` exists.
+/// given `--readers`, `overlap-out` when given `--overlap`), and fails with a reason on stderr when `affected-fails` exists.
 const FAKE_AFFECTED: &str = r#"
 echo "$*" >> "$DIR/affected.log"
 pwd -P >> "$DIR/affected-pwd.log"
@@ -26,6 +26,8 @@ fi
 if [[ " $* " == *" --why "* ]]; then
   if [ -e "$DIR/why-fails" ]; then echo "no chain here" >&2; exit 1; fi
   if [ -e "$DIR/why-out" ]; then cat "$DIR/why-out"; fi
+elif [[ " $* " == *" --overlap "* ]]; then
+  if [ -e "$DIR/overlap-out" ]; then cat "$DIR/overlap-out"; fi
 elif [[ " $* " == *" --readers "* ]]; then
   if [ -e "$DIR/readers-out" ]; then cat "$DIR/readers-out"; fi
 elif [ -e "$DIR/affected-out" ]; then cat "$DIR/affected-out"; fi

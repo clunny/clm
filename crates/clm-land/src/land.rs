@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use clm_git::REMOTE;
-use clm_ledger::{Body, Entry, LandKind};
+use clm_ledger::{Basis, Body, Entry, LandKind, Recheck};
 
 use crate::exe::Exe;
 use crate::lock;
@@ -125,6 +125,14 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             }
             _ => false,
         };
+        // Unchecked code whose head and base were each checked whole may be checked only where
+        // the two overlap (`land/overlap-recheck`).
+        let overlap = match &merged {
+            Some((_, key)) if check.is_some() && !via_settings && !checked_with(&fold, key) => {
+                overlap_basis(&repo, &fold, &head, &base, &command)?
+            }
+            _ => None,
+        };
         Ok(Prepared {
             head,
             on_origin,
@@ -135,16 +143,18 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fold,
             merged,
             via_settings,
+            overlap,
             behind,
             warnings,
         })
     };
     // The check runs when the merge is clean and its code key wasn't checked; a conflicting
-    // merge runs none, and steps 3 and 4 report it.
+    // merge runs none, and steps 3 and 4 report it. An attempt that may check only the overlap
+    // takes the lock once the overlap says a check runs.
     let check_runs = |p: &Prepared| {
-        p.merged
-            .as_ref()
-            .is_some_and(|(_, key)| !p.via_settings && !checked_with(&p.fold, key))
+        p.merged.as_ref().is_some_and(|(_, key)| {
+            !p.via_settings && p.overlap.is_none() && !checked_with(&p.fold, key)
+        })
     };
     let mut out = Output {
         warnings: effort_warnings,
@@ -185,6 +195,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             fold,
             merged,
             via_settings,
+            overlap,
             behind,
             warnings,
         } = p;
@@ -275,18 +286,62 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // (`land/selected-tests`).
         let mut runs = !checked && check.is_some();
         let mut selection = None;
-        if check.is_some() {
+        // How the land checks its merged tree, for its `landed` record
+        // (`land/overlap-recheck`), and the basis of a composed `checked` record.
+        let mut recheck = checked.then_some(Recheck::Checked);
+        let mut recheck_files = None;
+        let mut composed = None;
+        // Unchecked code whose head and base were checked whole: only the overlap of what
+        // each can break (`land/overlap-recheck`). A failed overlap goes on as any land does.
+        let mut overlapped = false;
+        if let (Some(basis), Some(_)) = (&overlap, &check) {
+            match repo.overlap(exe, dir.path(), &head, &base) {
+                Selected::Nothing => {
+                    let merge_base = repo.git(&["merge-base", &base, &head])?;
+                    let short = repo.git(&["rev-parse", "--short", &merge_base])?;
+                    out.warnings.push(format!(
+                        "re-check: none, the branch and main since {short} affect no test in common"
+                    ));
+                    runs = false;
+                    overlapped = true;
+                    composed = Some(basis.clone());
+                    recheck = Some(Recheck::None);
+                }
+                Selected::Tests(s) => {
+                    recheck_files = s.files();
+                    out.warnings.push(match recheck_files {
+                        Some(n) => format!("re-check: overlap, {n} files"),
+                        None => "re-check: overlap, every test".to_string(),
+                    });
+                    selection = Some(s);
+                    runs = true;
+                    overlapped = true;
+                    composed = Some(basis.clone());
+                    recheck = Some(Recheck::Overlap);
+                }
+                Selected::Failed => {}
+            }
+        }
+        if check.is_some() && !overlapped {
             match repo.selection(exe, dir.path(), &base, checked) {
                 Selected::Nothing => {}
                 Selected::Tests(s) => {
+                    if !checked {
+                        recheck_files = s.files();
+                    }
                     selection = Some(s);
                     runs = true;
                 }
                 Selected::Failed => runs = true,
             }
+            if !checked {
+                recheck = Some(Recheck::Selected);
+            }
         }
-        // Readers to run on checked code: the check compiles into the shared target, so
-        // under its lock and in the land tree, not the temporary worktree.
+        // Readers to run on checked code, or a selection on code whose overlap was ruled out:
+        // the check compiles into the shared target, so under its lock and in the land tree,
+        // not the temporary worktree.
+        let late_lock = checked || overlap.is_some();
         let check_lane = if checked && selection.is_some() {
             Lane::Priority
         } else {
@@ -304,7 +359,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         };
         let land_tree_for_readers;
         let dir: &Scratch = match &target {
-            Some((target, true)) if checked && runs => {
+            Some((target, true)) if late_lock && runs => {
                 // A readers' selection that ran takes the priority lane; one that failed, so
                 // that every test runs, the ordinary (`land/lock-queue`).
                 lock = Some(lock::land(target, check_rank)?);
@@ -383,7 +438,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             repo.append(Body::Checked {
                 code_key: key.clone(),
                 command: command.clone(),
-                basis: None,
+                basis: composed,
             })?;
         }
         let verdict = repo.gate(exe, dir.path(), approved, &hint)?;
@@ -407,8 +462,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             changes: changes.clone(),
             check_seconds: timing.as_ref().map(|t| t.seconds),
             steps: timing.map(|t| t.steps).unwrap_or_default(),
-            recheck: None,
-            recheck_files: None,
+            recheck,
+            recheck_files,
         };
         // Signed before the push, so a land that can't sign pushes nothing; the pushes of
         // this merge commit share the record.
@@ -641,6 +696,33 @@ fn settings_key(repo: &Repo, tree: &str, base: &str) -> Result<Option<String>, E
     )?))
 }
 
+/// The code keys of `head` and `base` when a `checked` record with `command` names each and
+/// `head` doesn't contain `base`: the two checks a composed check stands on
+/// (`land/overlap-recheck`).
+fn overlap_basis(
+    repo: &Repo,
+    fold: &clm_ledger::Fold,
+    head: &str,
+    base: &str,
+    command: &str,
+) -> Result<Option<Basis>, Error> {
+    if clm_git::is_ancestor(&repo.root, base, head)? {
+        return Ok(None);
+    }
+    let checked = |key: &str| {
+        fold.checks.get(key).is_some_and(|records| {
+            records
+                .iter()
+                .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if c == command))
+        })
+    };
+    let (head, base) = (
+        clm_ledger::code_key(&repo.root, head)?,
+        clm_ledger::code_key(&repo.root, base)?,
+    );
+    Ok((checked(&head) && checked(&base)).then_some(Basis { head, base }))
+}
+
 /// What step 1 gathers for an attempt.
 struct Prepared {
     head: String,
@@ -658,6 +740,9 @@ struct Prepared {
     /// Whether the merged tree counts as checked through its settings-free key, though no
     /// `checked` record names its own (`land/settings-unchanged-is-checked`).
     via_settings: bool,
+    /// The code keys of the head and the base, when both were checked whole and the merged tree
+    /// may be checked only where they overlap (`land/overlap-recheck`).
+    overlap: Option<Basis>,
     /// Whether `head` is behind in `specs/`: it adds or applies a change and `specs/` changed
     /// on both sides, with no conflict outside it (`land/regenerates-behind-specs`).
     behind: bool,

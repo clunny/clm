@@ -322,37 +322,60 @@ impl<'a> Repo<'a> {
     /// (`land/selected-tests`). When it fails it says so on stderr: the check then runs every
     /// test.
     fn selection(&self, exe: &Path, dir: &Path, base: &str, readers: bool) -> Selected {
-        let selected = || -> Result<Selected, String> {
-            let mut args = vec!["--base", base];
-            if readers {
-                args.push("--readers");
-            }
-            let out = self
-                .command(exe, "CLM_AFFECTED", "affected", &args, dir)
-                .stderr(Stdio::piped())
-                .output()
-                .map_err(|e| e.to_string())?;
-            if !out.status.success() {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                let first = stderr.lines().map(str::trim).find(|l| !l.is_empty());
-                return Err(first.map_or_else(|| out.status.to_string(), str::to_string));
-            }
-            if readers && out.stdout.iter().all(u8::is_ascii_whitespace) {
-                return Ok(Selected::Nothing);
-            }
-            let parent = temp_parent(self.env).map_err(|e| e.to_string())?;
-            let dir = tempfile::Builder::new()
-                .prefix("land-sel-")
-                .tempdir_in(parent)
-                .map_err(|e| e.to_string())?;
-            let path = dir.path().join("selection");
-            std::fs::write(&path, &out.stdout).map_err(|e| e.to_string())?;
-            Ok(Selected::Tests(Selection { _dir: dir, path }))
-        };
-        selected().unwrap_or_else(|why| {
-            eprintln!("clm affected failed: {why}; the check runs every test");
+        let mut args = vec!["--base", base];
+        if readers {
+            args.push("--readers");
+        }
+        self.affected(exe, dir, &args, readers)
+            .unwrap_or_else(|why| {
+                eprintln!("clm affected failed: {why}; the check runs every test");
+                Selected::Failed
+            })
+    }
+
+    /// What changing both the branch's head and the fetched base can break, as
+    /// `clm affected --overlap <head> <base>` prints it, with nothing printed as `Nothing`
+    /// (`land/overlap-recheck`). When it fails it says so on stderr, and the land checks its
+    /// own selection.
+    fn overlap(&self, exe: &Path, dir: &Path, head: &str, base: &str) -> Selected {
+        let args = ["--overlap", head, base];
+        self.affected(exe, dir, &args, true).unwrap_or_else(|why| {
+            eprintln!("clm affected failed: {why}; the land checks its own selection");
             Selected::Failed
         })
+    }
+
+    /// `clm affected` with `args` in `dir`, run from `exe` unless `CLM_AFFECTED` names it, its
+    /// output in a `land-sel-*` file; with `empty_is_nothing`, an output with no line is
+    /// `Nothing`. The reason when it fails.
+    fn affected(
+        &self,
+        exe: &Path,
+        dir: &Path,
+        args: &[&str],
+        empty_is_nothing: bool,
+    ) -> Result<Selected, String> {
+        let out = self
+            .command(exe, "CLM_AFFECTED", "affected", args, dir)
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let first = stderr.lines().map(str::trim).find(|l| !l.is_empty());
+            return Err(first.map_or_else(|| out.status.to_string(), str::to_string));
+        }
+        if empty_is_nothing && out.stdout.iter().all(u8::is_ascii_whitespace) {
+            return Ok(Selected::Nothing);
+        }
+        let parent = temp_parent(self.env).map_err(|e| e.to_string())?;
+        let dir = tempfile::Builder::new()
+            .prefix("land-sel-")
+            .tempdir_in(parent)
+            .map_err(|e| e.to_string())?;
+        let path = dir.path().join("selection");
+        std::fs::write(&path, &out.stdout).map_err(|e| e.to_string())?;
+        Ok(Selected::Tests(Selection { _dir: dir, path }))
     }
 
     /// Why the change selects `path`, as `clm affected --why <path> --base <base>` prints it in
@@ -448,6 +471,23 @@ pub(crate) fn temp_parent(env: &Env) -> Result<PathBuf, Error> {
 pub(crate) struct Selection {
     _dir: tempfile::TempDir,
     pub(crate) path: PathBuf,
+}
+
+impl Selection {
+    /// The number of `file` lines the selection holds, none when it holds an `all` line, which
+    /// runs every test (`land/overlap-recheck`).
+    pub(crate) fn files(&self) -> Option<u64> {
+        let text = std::fs::read_to_string(&self.path).ok()?;
+        let mut files = 0;
+        for line in text.lines() {
+            match line.split_whitespace().next() {
+                Some("all") => return None,
+                Some("file") => files += 1,
+                _ => {}
+            }
+        }
+        Some(files)
+    }
 }
 
 /// What `clm affected` made of a land.
