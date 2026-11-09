@@ -59,7 +59,25 @@ fn main_moved_on_an_unrelated_component() {
     std::fs::create_dir_all(f.work().join(".clm")).unwrap();
     let held = std::fs::File::create(f.work().join(".clm/check.lock")).unwrap();
     held.lock().unwrap();
-    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    // The land runs beside a deadline: one that waits for the lock is released after it and
+    // fails the test, rather than hanging on a lock the test itself holds.
+    let env = f.env(&[]);
+    let (done, wait) = std::sync::mpsc::channel();
+    let (out, waited) = std::thread::scope(|s| {
+        let land = s.spawn(|| {
+            let out = clm_land::land(&f.work(), Some("impl/a"), &env);
+            done.send(()).unwrap();
+            out
+        });
+        let waited = wait
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .is_err();
+        if waited {
+            held.unlock().unwrap();
+        }
+        (land.join().unwrap().unwrap(), waited)
+    });
+    assert!(!waited, "the land waited for the check lock");
     assert_eq!(out.lines, [format!("landed {} code", f.remote("main"))]);
     assert!(f.lines("check.log").is_empty(), "the check ran");
     assert_eq!(
