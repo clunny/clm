@@ -565,12 +565,43 @@ fn typescript_project_sets_build_setup() {
 }
 
 #[test]
-fn rust_project_has_no_build_table() {
+fn typescript_without_detectors_still_sets_build_setup() {
     // req:init/init-build-setup@aeb0d060
     let (_tmp, dir) = repo();
-    init(&dir, &["--lang", "rust"], &fake_hosts());
-    let toml = read(&dir, "clm.toml");
-    assert!(!toml.contains("[build]"), "{toml}");
+    init(
+        &dir,
+        &["--lang", "typescript", "--no-detectors"],
+        &fake_hosts(),
+    );
+    assert!(
+        config(&dir, "build").starts_with("setup=test ! -f package.json || npm ci"),
+        "{}",
+        read(&dir, "clm.toml")
+    );
+}
+
+#[test]
+fn setup_installs_when_package_json_exists() {
+    // req:init/init-build-setup@aeb0d060
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "typescript"], &fake_hosts());
+    write(&dir, "package.json", "{}\n");
+    let recorder = stubs(&["npm"], 0);
+    let setup = clm(&dir, &["setup"], &path_with(&recorder));
+    assert_eq!(setup.status.code(), Some(0), "{setup:?}");
+    assert_eq!(host_calls(&recorder), "npm ci\n");
+}
+
+#[test]
+fn other_projects_have_no_build_table() {
+    // req:init/init-build-setup@aeb0d060
+    let hosts = fake_hosts();
+    for langs in [&["--lang", "rust"][..], &["--lang", "python"], &[]] {
+        let (_tmp, dir) = repo();
+        init(&dir, langs, &hosts);
+        let toml = read(&dir, "clm.toml");
+        assert!(!toml.contains("[build]"), "{langs:?}: {toml}");
+    }
 }
 
 #[test]
