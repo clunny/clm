@@ -52,6 +52,9 @@ command = [
     # Kept until `clm upgrade --lock` calls `append_lock` and the lock test's `check_lock`
     # (upgrade/upgrade-list and the rest of the CLI, left pending in the first upgrade build).
     "--allow", "clm_upgrade::check_lock",
+    # Kept: the Contract offers it as the selection between two commits (`overlap-selection`);
+    # `affected_overlap` calls it, and `land` may call it directly in its overlap re-check.
+    "--allow", "clm_affected::affected_between",
 ]
 hint = "scripts/dev-install.sh"
 
