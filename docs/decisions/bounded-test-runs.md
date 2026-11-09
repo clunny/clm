@@ -8,6 +8,8 @@ A build started its component's tests in the background, a test hung on a pollin
 
 So every test or check command a build or draft runs itself, other than `clm land`, ends within a time limit: in the foreground, where the tool call's own timeout ends it, or in the background as `timeout <limit> <command>`, the limit well past the run's expected time and chosen by the session, since a project's test time is not CLM's to know. A run its limit ends is a failing run: the session finds the hanging test as for any failure, fixes it when it is in the component it is working on, and otherwise records it as a backlog item and names it in its pull request body. The `clm run` and `clm draft` prompts say so (`orchestrator.run/bounded-test-runs`, `orchestrator.triage/bounded-test-runs`). The waiting rules stay as they are: once every command a session waits on ends by itself, waiting for its notice is safe.
 
+The bound rests on the prompt, as `background-work-stopped` does and as `path-ownership-by-prompt` accepts for `path-ownership` (`deterministic-enforcement`): no program sees which commands a session runs or how, short of wrapping the agent's shell, and a session that ignores the instruction is no worse off than before this change. Its tests check that each prompt carries the instruction.
+
 `clm land`, and `clm land --check-only`, stay exempt and run as written: a land queues behind other lands with no time limit (`lock-queue`), and the check command is one plain command (`prompt-check-command`). A hang inside a land's check is the land's to bound (`backlog/a-hung-land-check-holds-every-land-of-the-clone`).
 
 Rejected:
