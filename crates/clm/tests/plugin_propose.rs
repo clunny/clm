@@ -565,7 +565,7 @@ fn propose_in_a_fork() {
 
 #[test]
 fn propose_adds_glossary_terms() {
-    // req:plugin.propose/propose-adds-glossary-terms@fd6a2597
+    // req:plugin.propose/propose-adds-glossary-terms@ab62ecc4
     let body = skill_body("propose");
     assert_eq!(glossary_terms_gaps(&body), Vec::<String>::new());
     // a skill without it
@@ -582,7 +582,7 @@ fn propose_adds_glossary_terms() {
 
 #[test]
 fn propose_adds_settings_sections() {
-    // req:plugin.propose/propose-adds-settings-sections@ae00a3f6
+    // req:plugin.propose/propose-adds-settings-sections@93ffbeeb
     let body = skill_body("propose");
     assert_eq!(settings_sections_gaps(&body), Vec::<String>::new());
     // a skill without it
