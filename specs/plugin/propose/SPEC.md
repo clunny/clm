@@ -1,6 +1,6 @@
 ---
 title: Propose skill
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: []
 paths: ["plugin/skills/propose/**"]
