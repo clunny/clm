@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - land-still-sets-cargo-variables
 ---
