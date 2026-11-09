@@ -344,7 +344,7 @@ fn claude_md_points_at_the_guide() {
 
 #[test]
 fn claude_md_names_the_skills() {
-    // req:init/claude-md-names-the-skills@c18c16d7
+    // req:init/claude-md-names-the-skills@d2ecddb8
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     let claude = read(&dir, "CLAUDE.md");
