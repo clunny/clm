@@ -30,11 +30,14 @@ No requirement states the behaviour: `verify-run` says only that a run ending be
 
 - `clm/closed-stdout` stays as it is: a stdout whose reader has gone still ends the command with 141, and a full disk on stdout still panics with its reason, both only after the record.
 - A failed write before the check exits ends nothing either: ending then would leave the check running, unwatched, in the verify tree.
-- `land`'s own callers of the runner (`clm land`, `--check-only`) share the runner's rule, so a land's check no longer panics on a failing stderr either; their outcome is otherwise unchanged.
+- `land`'s own callers of the runner (`clm land`, `--check-only`) share the runner's rule, so the runner's own writes no longer panic for them either; `clm land`'s other lines (the land lock's waiting line among them) are untouched, since a land that ends early loses nothing it can't redo by running again.
 
 ## Edge cases and workarounds
 
 - The scenarios open stderr on `/dev/full`, so they hold on Linux only, as `clm/closed-stdout`'s full-disk scenario does.
+- The runner's scenario needs a subprocess (a helper binary or a re-exec of the test) with fd 2 on `/dev/full`, since libtest captures an in-process test's `eprintln!`.
+- After the record, `clm verify`'s notes still go out with `eprintln!` (`crates/clm/src/main.rs`), so on a failing stderr a red run still exits 101 once its verdict is recorded; the verify scenario asserts no exit status. Keeping exit 1 there would touch the root component's dispatch for no gain the rule needs.
+- The verify tree's own waiting line and the `clm affected failed` note are covered by the rule but not by a scenario; the build mutation-checks them.
 
 ## Open questions
 
