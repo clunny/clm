@@ -56,7 +56,7 @@ fn differing(paths: &[&str]) -> Vec<Changed> {
 
 #[test]
 fn the_retired_terms_test_reads_the_specs() {
-    // req:clm/doc-readers-marked@055977ee
+    // req:clm/doc-readers-marked@3125f2de
     let selected = readers(&differing(&["specs/SPEC.md"]), &markers());
     assert!(
         selected.contains(&"crates/clm/tests/retired_terms.rs".to_string()),
@@ -66,7 +66,7 @@ fn the_retired_terms_test_reads_the_specs() {
 
 #[test]
 fn the_root_documents_have_readers() {
-    // req:clm/doc-readers-marked@055977ee
+    // req:clm/doc-readers-marked@3125f2de
     let all = markers();
     for doc in [
         "ARCHITECTURE.md",
@@ -89,7 +89,7 @@ fn the_root_documents_have_readers() {
 
 #[test]
 fn the_readers_of_clm_toml() {
-    // req:clm/doc-readers-marked@055977ee
+    // req:clm/doc-readers-marked@3125f2de
     let selected = readers(&differing(&["clm.toml"]), &markers());
     for file in ["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"] {
         assert!(selected.contains(&file.to_string()), "{selected:?}");
@@ -98,7 +98,7 @@ fn the_readers_of_clm_toml() {
 
 #[test]
 fn the_guides_readers() {
-    // req:clm/doc-readers-marked@055977ee
+    // req:clm/doc-readers-marked@3125f2de
     let selected = readers(&differing(&["docs/guide/glossary.md"]), &markers());
     for file in [
         "crates/clm/tests/glossary.rs",
@@ -111,12 +111,48 @@ fn the_guides_readers() {
 
 #[test]
 fn the_spec_formats_readers() {
-    // req:clm/doc-readers-marked@055977ee
+    // req:clm/doc-readers-marked@3125f2de
     let selected = readers(&differing(&["docs/spec-format.md"]), &markers());
     for file in [
         "crates/clm/tests/guide.rs",
         "crates/clm/tests/retired_terms.rs",
+        "crates/clm-init/src/guide.rs",
     ] {
         assert!(selected.contains(&file.to_string()), "{selected:?}");
     }
+}
+
+#[test]
+fn other_crates_read_architecture_md() {
+    // req:clm/doc-readers-marked@3125f2de
+    let selected = readers(&differing(&["ARCHITECTURE.md"]), &markers());
+    for file in [
+        "crates/clm-init/tests/says_component.rs",
+        "crates/clm-model/tests/carried.rs",
+        "crates/clm-context/tests/carried.rs",
+    ] {
+        assert!(selected.contains(&file.to_string()), "{selected:?}");
+    }
+}
+
+#[test]
+fn the_guides_readers_in_other_crates() {
+    // req:clm/doc-readers-marked@3125f2de
+    let selected = readers(&differing(&["docs/guide/quickstart.md"]), &markers());
+    for file in [
+        "crates/clm-init/src/guide.rs",
+        "crates/clm-init/src/guide/entry_pages.rs",
+    ] {
+        assert!(selected.contains(&file.to_string()), "{selected:?}");
+    }
+}
+
+#[test]
+fn the_settings_pages_reader() {
+    // req:clm/doc-readers-marked@3125f2de
+    let selected = readers(&differing(&["docs/guide/settings.md"]), &markers());
+    assert!(
+        selected.contains(&"crates/clm-config/tests/settings_guide.rs".to_string()),
+        "{selected:?}"
+    );
 }
