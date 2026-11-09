@@ -56,6 +56,7 @@ pwd -P >> "$DIR/check-pwd.log"
 echo "CI=${CI-unset} CARGO_TARGET_DIR=${CARGO_TARGET_DIR-unset}" >> "$DIR/check-env.log"
 echo "CARGO_INCREMENTAL=${CARGO_INCREMENTAL-unset}" >> "$DIR/check-incremental.log"
 echo "${CLM_SLOT-unset}" >> "$DIR/check-slot.log"
+echo "${CLM_LAND_DIR-}" >> "$DIR/check-land-dir.log"
 echo "CLM_SELECTION=${CLM_SELECTION-unset}" >> "$DIR/check-selection.log"
 if [ -n "${CLM_SELECTION-}" ]; then cp "$CLM_SELECTION" "$DIR/selection-copy"; fi
 if [ -e "$DIR/move-main" ] && { [ ! -e "$DIR/moved" ] || grep -q always "$DIR/move-main"; }; then
