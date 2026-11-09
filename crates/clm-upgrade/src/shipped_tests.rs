@@ -142,7 +142,7 @@ fn with_script(text: &str) -> TempDir {
     dir
 }
 
-// req:upgrade/migration-check-script-from-root@0f7f933f
+// req:upgrade/migration-check-script-from-root@46e5be99
 #[test]
 fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
     assert!(!OLD_SCRIPT.contains("BASH_SOURCE"));

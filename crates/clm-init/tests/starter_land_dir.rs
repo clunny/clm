@@ -105,4 +105,13 @@ fn a_repository_without_cargo_toml_still_passes() {
         .output()
         .unwrap();
     assert!(out.status.success(), "{out:?}");
+    // The lines sit inside the manifest test, before `cargo test`.
+    let script = fs::read_to_string(dir.path().join("scripts/clm-check.sh")).unwrap();
+    let at = |needle: &str| {
+        script
+            .find(needle)
+            .unwrap_or_else(|| panic!("{needle}: {script}"))
+    };
+    assert!(at("if [ -f Cargo.toml ]") < at("export CARGO_TARGET_DIR"));
+    assert!(at("export CARGO_TARGET_DIR") < at("cargo test"));
 }
