@@ -125,6 +125,15 @@ const setNow = async ($: EngineInterface) => {
   return at
 }
 
+// Opens the pane on Flight, as `/clm:view` with no argument does.
+async function openPane($: EngineInterface) {
+  await update($, tab, () => FIRST_TAB)
+  await update($, capability, () => null)
+  await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
+  startTimer($)
+  void redraw($)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     // A reload drops the timer, not the pane.
@@ -171,14 +180,6 @@ export const register: Register = on => {
     if (e.agentId) await update($, agents, list => onToolCall(list, e, ran))
     return ran
   })
-
-  async function openPane($: EngineInterface) {
-    await update($, tab, () => FIRST_TAB)
-    await update($, capability, () => null)
-    await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
-    startTimer($)
-    void redraw($)
-  }
 
   on('command.run', { command: 'clm:view' }, async ($, e) => {
     const answer = await command($, e.args, await $.session.cwd())
