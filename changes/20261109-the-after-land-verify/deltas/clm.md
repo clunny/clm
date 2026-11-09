@@ -10,7 +10,7 @@ component: clm
 #### Scenario: dispatch
 - GIVEN a repository `clm init` has just set up
 - WHEN `clm verify --due` runs in a subdirectory of it
-- THEN it prints `verify off: no [verify] in <base>:clm.toml`, `<base>` being the base `verify/settings-from-main` reads, and exits 0
+- THEN it prints `verify off: no [verify] in origin/main:clm.toml` and exits 0
 
 #### Needs
 - verify/verify-due
