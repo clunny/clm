@@ -6,6 +6,7 @@
 //! the lock keeps the exclusion, the queue decides who tries it next.
 
 use std::fs::{File, TryLockError};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -342,12 +343,18 @@ pub(crate) fn take(
     }
 }
 
+/// Says `line` on stderr. A stderr that fails is no reason to end a run, so the write's
+/// result is dropped (`land/shared-check-runner`).
+pub(crate) fn tell(line: &str) {
+    let _ = writeln!(std::io::stderr(), "{line}");
+}
+
 /// Locks `<target>.lock`, the land lock.
 pub(crate) fn land(target: &Path, rank: Rank) -> Result<Held, Error> {
     let mut path = target.as_os_str().to_owned();
     path.push(".lock");
     let prefix = format!("waiting for another land's check on {}", target.display());
-    take(Path::new(&path), rank, &prefix, |line| eprintln!("{line}"))
+    take(Path::new(&path), rank, &prefix, tell)
 }
 
 /// Locks `check.lock` in `places`, the check lock, passing each waiting line to `say`.

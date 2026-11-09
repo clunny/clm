@@ -46,11 +46,11 @@ pub(crate) struct Logged {
 /// the pipe closes, so a check must end what it starts.
 pub(crate) fn run(mut command: Command, log: Option<&Path>) -> Result<Logged, Error> {
     let warn = |log: &Path, e: std::io::Error| {
-        eprintln!(
+        crate::lock::tell(&format!(
             "clm land: warning: can't write the check's log at {}: {e}; its output goes to \
              stderr alone",
             log.display()
-        );
+        ));
     };
     let mut file = log.and_then(|log| {
         log.parent()

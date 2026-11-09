@@ -15,7 +15,7 @@ fn passes() -> CheckEnv {
 
 #[test]
 fn a_caller_waits_on_the_check_lock() {
-    // req:land/shared-check-runner@235e2519
+    // req:land/shared-check-runner@54ccc864
     let f = Fixture::new("");
     let work = std::fs::canonicalize(f.work()).unwrap();
     let lock_path = work.join(".clm/check.lock");
@@ -40,7 +40,7 @@ fn a_caller_waits_on_the_check_lock() {
 
 #[test]
 fn the_open_step_returned() {
-    // req:land/shared-check-runner@235e2519
+    // req:land/shared-check-runner@54ccc864
     let f = Fixture::new("");
     let script = "echo '::group::a'; echo x; echo '::group::b'; echo y; echo z; exit 1";
     let run = run_check(script, &f.work(), None, &passes(), None).unwrap();
@@ -59,7 +59,7 @@ fn the_open_step_returned() {
 
 #[test]
 fn the_selection_and_the_environment_reach_the_command() {
-    // req:land/shared-check-runner@235e2519
+    // req:land/shared-check-runner@54ccc864
     let f = Fixture::new("");
     let selection = f.path("selection");
     std::fs::write(&selection, "file a\n").unwrap();
@@ -86,7 +86,7 @@ fn the_selection_and_the_environment_reach_the_command() {
 
 #[test]
 fn land_unchanged() {
-    // req:land/shared-check-runner@235e2519
+    // req:land/shared-check-runner@54ccc864
     let f = Fixture::new("");
     f.write("check-prints", "for i in $(seq 50); do echo $i; done\n");
     f.write("check-fails", "");
@@ -109,7 +109,7 @@ fn land_unchanged() {
 
 #[test]
 fn the_exit_code_returned() {
-    // req:land/shared-check-runner@235e2519
+    // req:land/shared-check-runner@54ccc864
     let f = Fixture::new("");
     let run = run_check("exit 127", &f.work(), None, &passes(), None).unwrap();
     assert!(!run.passed);
@@ -120,4 +120,58 @@ fn the_exit_code_returned() {
     let run = run_check("kill -9 $$", &f.work(), None, &passes(), None).unwrap();
     assert!(!run.passed);
     assert_eq!(run.code, None);
+}
+
+/// Set in the child the scenario below re-runs itself in.
+const CHILD: &str = "CLM_TEST_STDERR_FULL";
+
+#[test]
+fn a_failing_stderr_ends_nothing() {
+    // req:land/shared-check-runner@54ccc864
+    if std::env::var_os(CHILD).is_none() {
+        // The scenario runs in a child whose stderr is `/dev/full`.
+        let full = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/full")
+            .unwrap();
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "a_failing_stderr_ends_nothing", "--nocapture"])
+            .env(CHILD, "1")
+            .stderr(full)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+        return;
+    }
+    let f = Fixture::new("");
+    let work = std::fs::canonicalize(f.work()).unwrap();
+    let lock_path = work.join(".clm/check.lock");
+    std::fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
+    let lock = std::fs::File::create(&lock_path).unwrap();
+    lock.lock().unwrap();
+    let releaser = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(1));
+        drop(lock);
+    });
+    // A log whose directory can't be created: its parent is a file.
+    let blocker = f.path("blocker");
+    std::fs::write(&blocker, "").unwrap();
+    let log = blocker.join("run.log");
+    let run = run_check(
+        "for i in $(seq 1000); do echo $i; done; exit 1",
+        &work,
+        None,
+        &passes(),
+        Some(&log),
+    )
+    .unwrap();
+    releaser.join().unwrap();
+    assert!(!run.passed);
+    assert_eq!(run.code, Some(1));
+    let tail: Vec<String> = (961..=1000).map(|i| i.to_string()).collect();
+    assert_eq!(run.tail, tail);
 }
