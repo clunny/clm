@@ -45,7 +45,13 @@ fn approve_fetches_through_fetch_retrying() {
     let out = clm_approval::approve(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
     assert_eq!(out.lines, [format!("approved {fp} spec/x")]);
     fs::remove_file(f.work().join(".git/fake-mode")).unwrap();
-    assert_eq!(f.records().len(), 1);
+    assert!(out.warnings.is_empty(), "{:?}", out.warnings);
+    match &f.records()[..] {
+        [r] => assert!(
+            matches!(&r.body, clm_ledger::Body::Approved { fingerprint, .. } if *fingerprint == fp)
+        ),
+        other => panic!("{other:?}"),
+    }
 
     // A fetch that keeps failing with origin reachable is git's message, not offline.
     let g = Fixture::new("");
@@ -60,4 +66,29 @@ fn approve_fetches_through_fetch_retrying() {
     assert!(!why.contains("offline"), "{why}");
     fs::remove_file(g.work().join(".git/fake-mode")).unwrap();
     assert!(g.records().is_empty());
+
+    // An unreachable origin is offline, and nothing is appended.
+    let h = Fixture::new("");
+    h.branch("spec/x", &[("changes/x/change.md", "x\n")]);
+    let gone = h.path("missing");
+    h.git(
+        &h.work(),
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+    let why = common::refused(clm_approval::approve(
+        &h.work(),
+        Some("spec/x"),
+        &h.env(&[]),
+    ));
+    assert!(why.contains("offline"), "{why}");
+    h.git(
+        &h.work(),
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            h.path("origin.git").to_str().unwrap(),
+        ],
+    );
+    assert!(h.records().is_empty());
 }
