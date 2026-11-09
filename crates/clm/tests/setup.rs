@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use tempfile::TempDir;
 
@@ -67,13 +67,27 @@ fn a_setup_killed_by_a_signal_says_so() {
 #[test]
 fn setup_passes_output_through_and_closes_stdin() {
     // req:orchestrator.run/setup-command@44d5d292
-    let r = repo("[build]\nsetup = \"echo installed; echo warned >&2; cat > got\"\n");
-    let out = clm_setup(r.path());
+    let r = repo(
+        "[build]\nsetup = \"echo installed; echo warned >&2; timeout 10 cat > got; echo $? > ended\"\n",
+    );
+    // The caller's standard input stays open, so only a closed one ends `cat` at once.
+    let mut child = Command::new(env!("CARGO_BIN_EXE_clm"))
+        .arg("setup")
+        .current_dir(r.path())
+        .env("XDG_CONFIG_HOME", r.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let held = child.stdin.take();
+    let out = child.wait_with_output().unwrap();
+    drop(held);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
     assert!(text(&out.stdout).contains("installed"));
     assert!(text(&out.stderr).contains("warned"));
-    // `cat` saw end of input at once.
     assert_eq!(fs::read_to_string(r.path().join("got")).unwrap(), "");
+    assert_eq!(fs::read_to_string(r.path().join("ended")).unwrap(), "0\n");
 }
 
 #[test]
