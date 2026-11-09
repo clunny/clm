@@ -208,3 +208,23 @@ fn the_record_and_stdout_are_unchanged() {
     assert_eq!(components, &["b".to_string()]);
     assert_eq!(*run, None);
 }
+
+#[test]
+fn a_whole_check_beside_the_composed_one_is_ignored() {
+    // req:verify/culprit-recheck@ea199b60
+    let (f, [_, l2, _]) = breaking_lands();
+    landed(&f, &l2, Some(Recheck::None), None);
+    composed(&f, "hh", "bb");
+    let whole = Body::Checked {
+        code_key: "codekey-of-the-land".to_string(),
+        command: "check".to_string(),
+        basis: None,
+    };
+    clm_ledger::append(&f.work(), whole, &f.env()).unwrap();
+    let out = f.due();
+    assert!(
+        culprit_notes(&out)[0].ends_with("composed from hh and bb"),
+        "{:?}",
+        out.notes
+    );
+}
