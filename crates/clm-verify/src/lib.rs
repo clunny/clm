@@ -118,51 +118,45 @@ pub(crate) struct Ctx<'a> {
     /// `[affected] all`.
     pub(crate) affected_all: Vec<String>,
     pub(crate) host: clm_config::Host,
-    /// `origin/main`, or the local `main` without a remote.
+    /// `origin/main`.
     pub(crate) base: String,
-    pub(crate) remote: bool,
     /// Where the CLM repository is in its git repository: `rev-parse --show-prefix`.
     pub(crate) prefix: String,
 }
 
 impl<'a> Ctx<'a> {
-    /// The context for `root`, or `None` when its settings hold no `[verify]`.
-    fn open(root: &Path, env: &'a Env) -> Result<Option<Self>, Error> {
+    /// The context for `root`, or, in `Err(source)`, the name of the committed `clm.toml` whose
+    /// settings hold no `[verify]`. `host` comes from the settings of `root`; every other
+    /// setting from the `clm.toml` committed at `origin/main`, after fetching it
+    /// (`settings-from-main`).
+    fn open(root: &Path, env: &'a Env) -> Result<Result<Self, String>, Error> {
         let root = std::fs::canonicalize(root)?;
-        let settings = clm_config::load(Some(&root), env)?;
-        let Some(verify) = settings.verify.value else {
-            return Ok(None);
-        };
-        let host = settings.host.value;
-        let remote = host != clm_config::Host::None;
-        let base = match remote {
-            true => format!("{}/main", clm_git::REMOTE),
-            false => "main".to_string(),
-        };
+        let host = clm_config::load(Some(&root), env)?.host.value;
+        clm_git::fetch(&root)?;
+        let base = format!("{}/main", clm_git::REMOTE);
         let prefix = clm_git::git(&root, &["rev-parse", "--show-prefix"])?;
-        Ok(Some(Ctx {
+        let source = format!("{base}:{prefix}clm.toml");
+        let text = match clm_git::git(&root, &["rev-parse", "--verify", "--quiet", &source]) {
+            Ok(_) => Some(clm_git::git(&root, &["show", &source])?),
+            Err(_) => None,
+        };
+        let settings = clm_config::load_committed(&root, text.as_deref(), &source, env)?;
+        let Some(verify) = settings.verify.value else {
+            return Ok(Err(source));
+        };
+        Ok(Ok(Ctx {
             affected_all: settings.affected.value.map(|a| a.all).unwrap_or_default(),
             root,
             env,
             verify,
             host,
             base,
-            remote,
             prefix,
         }))
     }
 
     pub(crate) fn git(&self, args: &[&str]) -> Result<String, Error> {
         Ok(clm_git::git(&self.root, args)?)
-    }
-
-    /// `git fetch origin`, which brings `origin/main` and the ledger branches; nothing
-    /// without a remote.
-    fn fetch(&self) -> Result<(), Error> {
-        if self.remote {
-            clm_git::fetch(&self.root)?;
-        }
-        Ok(())
     }
 
     /// `commit` as `git rev-parse --short` abbreviates it.
@@ -174,10 +168,15 @@ impl<'a> Ctx<'a> {
 /// Runs one `clm verify` command in the repository at `root`. `env` is the environment
 /// `config` reads.
 pub fn verify(root: &Path, request: &Request, env: &Env) -> Result<Outcome, Error> {
-    let Some(ctx) = Ctx::open(root, env)? else {
-        return Ok(Outcome::new("verify off: no [verify] in clm.toml", 0));
+    let ctx = match Ctx::open(root, env)? {
+        Ok(ctx) => ctx,
+        Err(source) => {
+            return Ok(Outcome::new(
+                format!("verify off: no [verify] in {source}"),
+                0,
+            ));
+        }
     };
-    ctx.fetch()?;
     let state = State::load(&ctx)?;
     match request {
         Request::Due { work_done, dry_run } => due::due(&ctx, &state, *work_done, *dry_run),

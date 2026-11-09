@@ -1,5 +1,6 @@
 //! `verify-bisect`: the land that broke a red commit, and the components it touched.
 
+use std::cmp::Reverse;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -8,27 +9,70 @@ use clm_ledger::{Body, Recheck};
 use crate::chain::State;
 use crate::{Ctx, Error, Outcome, run};
 
-/// The position in the chain of the first land that fails `[verify] check` among those after
-/// the green commit `green` up to `end`, which is known to fail: a binary search, each probe
-/// run as the verification is, under the check lock afresh.
+/// What the search over the lands up to a red one found.
+pub(crate) struct Found {
+    /// The first red land, when the search could tell.
+    pub(crate) culprit: Option<String>,
+    /// With no culprit, the lands that may hold it: those from the last green probe to the first
+    /// red land.
+    pub(crate) may_hold: Option<Vec<String>>,
+    /// What to say on stderr after the outcome line when the culprit is unknown.
+    pub(crate) note: Option<String>,
+}
+
+/// The land in `lo..hi` not set aside that is nearest the middle, the later of two equally near.
+fn nearest(lo: usize, hi: usize, aside: &BTreeSet<usize>) -> Option<usize> {
+    let target = lo + (hi - lo) / 2;
+    (lo..hi)
+        .filter(|p| !aside.contains(p))
+        .min_by_key(|p| (p.abs_diff(target), Reverse(*p)))
+}
+
+/// The first land that fails `[verify] check` among those after the green commit `green` up to
+/// `end`, which is known to fail: a binary search, each probe run as the verification is, under
+/// the check lock afresh. A land whose check could not run (`run::Probe::untestable`) is set
+/// aside, and another of the range left is probed; when only such lands lie between the last
+/// green probe and the first red land, the culprit is unknown.
 pub(crate) fn first_red(
     ctx: &Ctx,
     state: &State,
     green: Option<usize>,
     end: usize,
-) -> Result<usize, Error> {
-    let first = green.map_or(0, |g| g + 1);
-    let (mut lo, mut hi) = (first, end);
+) -> Result<Found, Error> {
+    let (mut lo, mut hi) = (green.map_or(0, |g| g + 1), end);
     let green = green.map(|g| state.chain[g].as_str());
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        if run::check(ctx, &state.chain[mid], green, None)?.passed {
+    let mut aside = BTreeSet::new();
+    while let Some(mid) = nearest(lo, hi, &aside) {
+        let probe = run::check(ctx, &state.chain[mid], green, None)?;
+        if probe.untestable {
+            aside.insert(mid);
+        } else if probe.passed {
             lo = mid + 1;
         } else {
             hi = mid;
         }
     }
-    Ok(lo)
+    if lo == hi {
+        return Ok(Found {
+            culprit: Some(state.chain[hi].clone()),
+            may_hold: None,
+            note: None,
+        });
+    }
+    let short = |p: usize| ctx.short(&state.chain[p]);
+    let note = format!(
+        "culprit unknown: [verify] check could not run on {} lands, {} to {}, before the first \
+         red one, {}",
+        hi - lo,
+        short(lo)?,
+        short(hi - 1)?,
+        short(hi)?
+    );
+    Ok(Found {
+        culprit: None,
+        may_hold: Some(state.chain[lo..=hi].to_vec()),
+        note: Some(note),
+    })
 }
 
 /// The components whose `paths` hold a file the culprit's first-parent diff changes, or, with
@@ -167,21 +211,37 @@ pub(crate) fn bisect_red(ctx: &Ctx, state: &State, sha: &str) -> Result<Outcome,
         )));
     };
     let green = state.last_green(end);
-    let culprit = state.chain[first_red(ctx, state, green, end)?].clone();
-    let components = components(ctx, &full, Some(&culprit), lands)?;
+    let found = first_red(ctx, state, green, end)?;
+    let culprit = found.culprit;
+    let components = components(
+        ctx,
+        &full,
+        culprit.as_deref(),
+        found.may_hold.as_deref().unwrap_or(lands),
+    )?;
     let body = Body::Verified {
         commit: full.clone(),
         passed: false,
         since: since.clone(),
         lands: lands.clone(),
-        culprit: Some(culprit.clone()),
+        culprit: culprit.clone(),
         components: components.clone(),
         mode: *mode,
         run: run.clone(),
     };
-    let note = recheck_note(ctx, state, &culprit)?;
+    let note = match &culprit {
+        Some(c) => recheck_note(ctx, state, c)?,
+        None => found.note,
+    };
     let appended = clm_ledger::append(&ctx.root, body, ctx.env)?;
-    let mut outcome = run::report(ctx, &full, false, lands.len(), Some(&culprit), &components)?;
+    let mut outcome = run::report(
+        ctx,
+        &full,
+        false,
+        lands.len(),
+        culprit.as_deref(),
+        &components,
+    )?;
     outcome.notes.extend(note);
     if !appended.pushed {
         outcome

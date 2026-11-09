@@ -38,7 +38,7 @@ fn initialised() -> TempDir {
     dir
 }
 
-const OFF: &str = "verify off: no [verify] in clm.toml\n";
+const OFF: &str = "verify off: no [verify] in origin/main:clm.toml\n";
 
 /// A set-up repository with `[verify]` on, so each flag reaches its own mode.
 fn verifying() -> TempDir {
@@ -60,6 +60,8 @@ fn verifying() -> TempDir {
             "i",
         ],
     );
+    // `clm verify` reads its settings from `origin/main`.
+    git(dir.path(), &["push", "-q", "origin", "main"]);
     dir
 }
 
