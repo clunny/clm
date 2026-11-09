@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [verify-bisect-blames-commits-it-could-not-test]
 ---
 
