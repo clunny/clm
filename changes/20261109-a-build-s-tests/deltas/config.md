@@ -1,6 +1,6 @@
 ---
 component: config
-base: { contract: "46051478ee5becce", design: "c1ef3ccb036dc149" }
+base: { contract: "bf89602b247102f3", design: "c1ef3ccb036dc149" }
 ---
 
 ## MODIFIED Contract
@@ -49,7 +49,7 @@ The first two record the repository's state rather than a choice, so only the re
 
 A table (`[component_size]`, `[health]`, `[effort]`, `[land]`, `[build]`, `[affected]`, `[[detectors]]`) is one key: the first layer that sets the table supplies all of it, and layers never merge within a table, so a `clm.local.toml` with `[component_size] code_tokens = 60000` gives `spec_tokens` its default, not `clm.toml`'s value.
 
-Loading the settings for a repository root (or none) gives each key's value and the layer it came from, or an error naming the file or variable and the key; an error in a file names the file that set the value, `clm.local.toml` or `clm.toml`. `clm config get <key>` prints one, naming the file the value came from, and `clm config list` prints every key the same way, one line each (`config-list`). `docs/guide/settings.md`, the guide's page `settings`, says what each key does, what each choice trades off and where it may be set, and has a section for every key `clm config list` prints (`settings-guide-covers-keys`, `settings-guide-page`).
+Loading the settings for a repository root (or none) gives each key's value and the layer it came from, or an error naming the file or variable and the key; an error in a file names the file that set the value, `clm.local.toml` or `clm.toml`. `load_committed(root, text, source, env)` loads them the same way with the repository's layer taken from the text of a `clm.toml` committed somewhere, or none, instead of from the root's file, each value and error from it naming `source` (such as `origin/main:clm.toml`), for a command that judges a commit by the settings committed there (`committed-settings`). `clm config get <key>` prints one, naming the file the value came from, and `clm config list` prints every key the same way, one line each (`config-list`). `docs/guide/settings.md`, the guide's page `settings`, says what each key does, what each choice trades off and where it may be set, and has a section for every key `clm config list` prints (`settings-guide-covers-keys`, `settings-guide-page`).
 
 ## MODIFIED Design
 Crate `clm-config`. Files are TOML, read with the `toml` crate into a struct that denies unknown fields. The user's file is read into a struct without the repository-only keys, the repository's into one without `writer`, and `clm.local.toml` into one with every key, so setting a key in the wrong file is an unknown-key error naming that file and the key. A missing file is skipped, a file that can't be parsed is an error naming it. A variable is read only when set: `CLM_AUTOSYNC` accepts `0`, `false`, `1` and `true` (any other value is an error, which leaves autosync off for that turn), `CLM_DEFECTS` the key's values, `CLM_WRITER` a slug (lowercase letters, digits and `-`), and `CLM_MAX_BUILDS` a whole number of at least `1` written in decimal digits. The environment and `XDG_CONFIG_HOME`/`HOME` are passed in, not read globally, so tests don't touch the process environment. Tests of commands and hooks that load settings set `XDG_CONFIG_HOME` to an empty directory, so the developer's own file never leaks in.
