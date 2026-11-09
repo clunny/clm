@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-land-check-that-builds-nothing-still-waits-for-one-that-does
   - only-cargo-projects-get-a-shared-land-build-and-its-lock
