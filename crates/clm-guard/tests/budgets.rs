@@ -102,6 +102,16 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
         "{why}"
     );
     all_gone(&pids, 1);
+    // After a `cd` the guard couldn't follow, the reason for a query that ran out of time
+    // doesn't change.
+    let (decision, _) = judge(cwd.path(), "cd nowhere && git push", &one_second);
+    let Decision::Block(why) = decision else {
+        panic!("not blocked: {decision:?}")
+    };
+    assert!(
+        why.contains("didn't answer in time") && !why.contains("couldn't follow"),
+        "{why}"
+    );
     // An explicit branch needs no query.
     fs::remove_file(&pids).unwrap();
     let (decision, _) = judge(cwd.path(), "git push origin impl/x/b", &one_second);
@@ -130,7 +140,28 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
     assert!(why.contains("didn't answer in time"), "{why}");
     assert!(took.as_secs() < 5, "{took:?}");
     let calls = fs::read_to_string(&calls).unwrap();
-    assert_eq!(calls.lines().count(), 5, "{calls}");
+    // Spawn overhead may delay the fifth past the deadline; a sixth never starts.
+    assert!((4..=5).contains(&calls.lines().count()), "{calls}");
+
+    // The lookups of a command share one budget: `repo view` and `api` each answer in 0.6
+    // seconds, but the two don't fit in 1.
+    let slow = TempDir::new().unwrap();
+    fake_first(
+        slow.path(),
+        "gh",
+        "#!/bin/sh\nsleep 0.6\nif [ \"$1\" = repo ]; then \
+         echo '{\"url\":\"https://github.com/o/r\"}'; exit 0; fi\n\
+         echo '{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}'\n",
+        &original,
+    );
+    let (decision, _) = judge(cwd.path(), "gh run rerun 42", &one_second);
+    assert!(matches!(decision, Decision::Block(_)), "{decision:?}");
+    let two_lookups = Budgets {
+        lookup: Duration::from_secs(3),
+        ..one_second
+    };
+    let (decision, _) = judge(cwd.path(), "gh run rerun 42", &two_lookups);
+    assert_eq!(decision, Decision::Allow);
 
     // A lookup that never answers: one never answers `repo view`, one answers it but never
     // `api`. Each writes its process ID to `pids` and then `exec`s its sleep.
