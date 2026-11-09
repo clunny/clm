@@ -51,7 +51,7 @@ fn reports(violations: &[Violation], path: &str, wanted: &[&[&str]]) {
 
 #[test]
 fn the_source() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let a = entry("a", "#### Carries\n- method\n\n");
     let b = entry(
         "b",
@@ -76,7 +76,7 @@ fn the_source() {
 
 #[test]
 fn a_project() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let x = entry("x", "#### Replaces\n- expand-contract\n- yagni\n\n");
     let (graph, violations) = load(Some(&arch(&[x])), None);
     assert!(violations.is_empty(), "{violations:?}");
@@ -95,7 +95,7 @@ fn a_project() {
 
 #[test]
 fn no_architecture_file() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let (graph, violations) = load(None, None);
     assert!(violations.is_empty(), "{violations:?}");
     assert!(!graph.carried.source);
@@ -106,7 +106,7 @@ fn no_architecture_file() {
 
 #[test]
 fn the_compiled_copy_is_this_repositorys_file() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let own = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"),
     )
@@ -127,7 +127,7 @@ fn the_compiled_copy_is_this_repositorys_file() {
 
 #[test]
 fn bad_replaces() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let x = entry("x", "#### Replaces\n- proven-by-tests\n- no-such-entry\n\n");
     let own = entry("yagni", "");
     let (_, violations) = load(Some(&arch(&[x, own])), None);
@@ -144,7 +144,7 @@ fn bad_replaces() {
 
 #[test]
 fn malformed_replaces() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let empty = entry("e", "#### Replaces\n\n");
     let junk = entry("j", "#### Replaces\n- yagni\nreuse-first\n\n");
     let two = entry(
@@ -166,7 +166,7 @@ fn malformed_replaces() {
 
 #[test]
 fn bad_carries() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let a = entry("a", "#### Carries\n- optional\n\n");
     let b = entry("b", "#### Carries\n- replaceable\n\n");
     let c = entry(
@@ -189,7 +189,7 @@ fn bad_carries() {
 
 #[test]
 fn duplicate_and_two_line_carries() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let twice = entry("a", "#### Carries\n- method\n\n#### Carries\n- default\n\n");
     let lines = entry("b", "#### Carries\n- method\n- default\n\n");
     let (_, violations) = load(Some(&arch(&[twice, lines])), None);
@@ -202,7 +202,7 @@ fn duplicate_and_two_line_carries() {
 
 #[test]
 fn capabilities_hold_none_of_the_blocks() {
-    // req:model/carried-constraints@73ac8146
+    // req:model/carried-constraints@7b7f8a74
     let cap = |extra: &str| {
         format!(
             "# Capabilities\n\n## Capabilities\n\n### Capability: c\nA person can.\n\n#### Why\nw\n\n{extra}#### Scenario: s\n- GIVEN a\n- THEN b\n"
