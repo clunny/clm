@@ -21,10 +21,10 @@ Merging `other-delta-merge` into `stale-delta-merge`: both rules were the same t
 
 ## Outcome
 
-- `sync.regenerate`: a Contract listing the crate's API; a Design without the paragraphs that restated the rules or narrated the split; `regenerated-tree`, `stale-delta-diff`, `stale-delta-merge` and `retry-index-lock` stated on the API; `other-delta-merge` removed. Its build rewrites `crates/clm-regenerate/tests/regenerate.rs` on the API, deletes the stand-in (`sync`, `mirror`, `Report`), and deletes the backlog item.
+- `sync.regenerate`: a Contract listing the crate's API; a Design without the paragraphs that restated the rules or narrated the split; `regenerated-tree`, `stale-delta-diff`, `stale-delta-merge` and `retry-index-lock` stated on the API; `other-delta-merge` removed. Its build rewrites `crates/clm-regenerate/tests/regenerate.rs` on the API, deletes the stand-in (`sync`, `mirror`, `Report`), moves the `other-delta-merge` markers to `stale-delta-merge`, and rewords the code comments that name `other-delta-merge`. This branch deletes the workaround item.
 - `sync`: `reapply` and `git-through-layer` modified as above, and the Contract and Design name `stale-delta-merge` where they named `other-delta-merge`. Its build adds the new scenarios' tests to `crates/clm-sync/tests/` and extends the scan.
 
 ## Constraints
 
-- No behaviour of `clm rebase` changes: every scenario that left `sync.regenerate` is either restated on the API or moved to `sync`.
+- No behaviour of `clm rebase` changes. Each scenario that left `sync.regenerate` is restated on the API, moved to `sync`, or dropped as a duplicate of one kept: `stale-delta-diff`'s "requirement changed on main" ("main changed a line the delta changed", for a requirement) and "serves edited on main" (`stale-delta-merge`'s); `stale-delta-merge`'s "section gone from main" and "removed requirement" (now one, "element removed on one side"); `other-delta-merge`'s "proposed change the branch adds" (`Tree::other_deltas` reads `HEAD`, so a change on the branch and one on `main` are the same case); and `retry-index-lock`'s "lock kept" and "other failure not retried" at `clm rebase`'s level, where they are `git`'s and `run`'s, and `clm rebase`'s exit 2 and `rebase failed` are `sync/outcome-line`'s.
 - `sync.regenerate` still can't depend on `clm-sync` (`check/undeclared-imports`, `splits-import-one-way`).

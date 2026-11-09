@@ -8,8 +8,8 @@ The regenerated `specs/` a branch's applied changes give on top of a base, built
 
 - `regenerated(root, onto, ids, merge) -> Result<Regenerated, Error>`: `onto`'s `specs/` with each change of `ids` re-applied (`regenerated-tree`, `regenerate-dont-merge`), after the changes whose output its deltas' bases record and otherwise in ID order, so a change's ID never decides whether it applies (`reapply-order-follows-bases`). With `merge`, a stale delta is merged three-way where the edits don't overlap and committed in `root` (`stale-delta-merge`). It gives `Regenerated::Tree`, or `Regenerated::Stopped` with the `merged` lines and what is left: the violations, then the stale-delta report (`stale-delta-diff`).
 - `Tree::other_deltas(&mut self, root, ids, onto)`: once the caller has mirrored the tree into `root`'s `specs/` and committed it, the same merge for the deltas of the other live changes the tree made stale (`stale-delta-merge`), returning the `merged` lines and what is left.
-- `git` and `run`: `clm-git`'s, run again when a held `index.lock` fails them (`retry-index-lock`). `clm-sync` runs its `git` commands through them.
-- `exists_at`, `extract_present` and `io`, helpers `clm-sync` calls rather than copies, and `Error`, `clm-git`'s `Failure`.
+- `git` and `run`: `clm-git`'s, with its `Error`, run again when a held `index.lock` fails them (`retry-index-lock`). `clm-sync` runs its `git` commands through them.
+- `exists_at`, `extract_present` and `io`, helpers `clm-sync` calls rather than copies, and `Error`, `clm-git`'s `Failure`, which `regenerated` and `Tree::other_deltas` return.
 
 It reaches no `clm-health`, so `clm-land` can depend on it (`clm/health-isolated`). It never writes `specs/` in `root`: mirroring the tree and the `Re-apply` commit are `clm rebase`'s.
 
@@ -26,7 +26,7 @@ It depends on `clm-model`, `clm-apply`, `clm-check` (for `format`, a violation a
 
 **Merge** (`stale-delta-merge`, `stale-delta-three-way-merge`). Each element is merged with `git merge-file -p --quiet -L delta -L base -L main <delta> <base> <main>` through `clm-git` on three temporary files: the element's text in the delta (a requirement's block as `clm-model` gives it, with its clean heading), the base's text and the element's text in the tree, each trimmed of leading and trailing blank lines and ending in one newline. Exit 0 is a clean merge; an exit from 1 to 127 is the number of conflicts; any other exit, or git failing to start, is a git failure. The merged text replaces the element's text in the delta, located with `clm_model::outline`'s spans as `clm-apply` locates them, keeping the heading's slug and the surrounding blank lines. The base is replaced in place: `<key>: "<old base>"` in the frontmatter, so a flow map and a block map are both edited with the other keys untouched, and the `<!-- base: <hash> -->` comment in a requirement heading. A delta with CRLF line endings is never merged. An archived change's deltas are under `changes/archive/<id>/deltas/`, which `gate/archive-immutable` lets the branch edit. After a merge in `regenerated`, it loads the tree again and applies the change once more. The `merged` lines are given on every outcome, before anything left. The merge takes the text, not the judgment: the merged section is in the branch's diff, `clm check` judges the result (`judged-by-check`), and on a branch that needs review the changed fingerprint asks a human to approve again (`tree-diff-fingerprint`).
 
-**Other changes' deltas.** `Tree::other_deltas` reads the live changes at `HEAD` whose status `clm_apply::validate` validates, `proposed` and `approved`, so an `applied` change, whose bases record the text it was applied to, is never read. It merges against the regenerated tree, the last stage, and stops at the first change still refused after the merge, as `clm rebase`'s regenerate step stops at the first change with violations: a refusal that isn't a stale base, such as a requirement the branch removed that the change modifies, stops it the same way. Only this branch's applied changes can have made such a delta stale, since one stale against `onto` itself fails `clm check` there, and the other change's author could do nothing about it until this branch lands.
+**Other deltas** (`stale-delta-merge`). `Tree::other_deltas` reads the live changes at `HEAD` whose status `clm_apply::validate` validates, `proposed` and `approved`, so an `applied` change, whose bases record the text it was applied to, is never read. It merges against the regenerated tree, the last stage, and stops at the first change still refused after the merge, as `clm rebase`'s regenerate step stops at the first change with violations: a refusal that isn't a stale base, such as a requirement the branch removed that the change modifies, stops it the same way. Only this branch's applied changes can have made such a delta stale, since one stale against `onto` itself fails `clm check` there, and the other change's author could do nothing about it until this branch lands.
 
 **A transient `index.lock`** (`retry-index-lock`). Several sessions share one clone (`session-worktrees`, `build-places`), and Claude Code, hooks and the panel run `git` in it between a session's commands. The waits are fixed, with no override. The wrapper returns `clm-git`'s error unchanged, so a caller that reads a failure's stderr sees it. It keys on the stderr text, not the exit code: `git rebase` exits 1 on the lock and `git add` and `git commit` 128. `merge-file` and `diff --no-index` take no lock, and `clm-git`'s `fetch`, `current_branch` and `extract_paths` take none or use a temporary index, so none of them goes through it. It lives here rather than in `clm-git` because only `clm rebase`'s two crates need it; should a third, it moves to `clm-git` (`shared-plumbing-in-git`).
 
@@ -165,7 +165,7 @@ When `regenerated` stops on a change with stale deltas, or `Tree::other_deltas` 
 - apply/stale-elements
 
 ### Requirement: retry-index-lock <!-- base: 0eb5526e58c57d24 -->
-When a command that `clm-regenerate`'s `git` or `run` runs fails with stderr naming `index.lock`, it SHALL run the same command again after a wait, up to four more times with waits of 0.25, 0.5, 1 and 2 seconds, and SHALL return the last failure unchanged, a git failure, when every run fails. It SHALL NOT retry a command that fails for another reason.
+When a command that `clm-regenerate`'s `git` or `run` runs fails with stderr naming `index.lock`, it SHALL run the same command again after a wait, up to four more times with waits of 0.25, 0.5, 1 and 2 seconds, and SHALL return the last run's `clm-git` error unchanged when every run fails. It SHALL NOT retry a command that fails for another reason.
 
 #### Scenario: lock lifted
 - GIVEN a work clone with a staged change, and its `index.lock` held by another process that removes it after half a second
@@ -175,12 +175,12 @@ When a command that `clm-regenerate`'s `git` or `run` runs fails with stderr nam
 #### Scenario: lock kept
 - GIVEN the same clone, with the lock held throughout
 - WHEN `git(root, ["commit", "-m", "c"])` runs
-- THEN it returns a failure whose message names `index.lock` and whose exit code is 2, within ten seconds
+- THEN it returns an error whose message names `index.lock`, after at least three seconds and within ten
 
 #### Scenario: other failure not retried
 - GIVEN a work clone
 - WHEN `run(root, ["rev-parse", "--verify", "no-such-ref"], Options::default())` runs
-- THEN it returns a failure within a second
+- THEN it returns an error within a second
 
 ## REMOVED Requirements
 
