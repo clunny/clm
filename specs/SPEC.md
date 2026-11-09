@@ -908,7 +908,7 @@ This repository's `CLAUDE.md` SHALL NOT contain `git push`. Wherever it tells a 
 #### Scenario: dispatch
 - GIVEN a repository `clm init` has just set up
 - WHEN `clm verify --due` runs in a subdirectory of it
-- THEN it prints `verify off: no [verify] in clm.toml` and exits 0
+- THEN it prints `verify off: no [verify] in origin/main:clm.toml` and exits 0
 
 #### Needs
 - verify/verify-due
@@ -916,6 +916,7 @@ This repository's `CLAUDE.md` SHALL NOT contain `git push`. Wherever it tells a 
 - verify/verify-import
 - verify/verify-commit
 - verify/verify-bisect
+- verify/settings-from-main
 
 #### Serves
 - capability/slow-tests-after-land
