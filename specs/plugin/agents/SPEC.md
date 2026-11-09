@@ -1,6 +1,6 @@
 ---
 title: Subagents
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: []
 paths: ["plugin/agents/**"]
