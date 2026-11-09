@@ -235,7 +235,7 @@ fn no_result_is_pending_even_with_nothing_landed() {
 
 #[test]
 fn settings_that_cannot_be_used_exit_1() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = Fixture::new(Some("mode = \"pipeline\"\ntriggers = [\"work-done\"]"));
     let err = clm_verify::verify(&f.work(), &Request::Import, &f.env()).unwrap_err();
     assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");

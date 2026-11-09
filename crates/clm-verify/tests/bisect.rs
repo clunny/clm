@@ -36,7 +36,7 @@ fn last_red(f: &Fixture) -> (Option<String>, Vec<String>) {
 
 #[test]
 fn the_breaking_land_found() {
-    // req:verify/verify-bisect@1e4add05
+    // req:verify/verify-bisect@b2330a00
     let (f, [_, l1, l2, l3]) =
         three_lands("mode = \"local\"\ntriggers = []\nevery = { lands = 1 }");
     let out = f.due();
@@ -56,7 +56,7 @@ fn the_breaking_land_found() {
 
 #[test]
 fn the_search_starts_after_the_last_green_commit() {
-    // req:verify/verify-bisect@1e4add05
+    // req:verify/verify-bisect@b2330a00
     // An earlier red run left lands that no record covers as passing: they are searched.
     let (f, [_, l1, l2, l3]) =
         three_lands("mode = \"local\"\ntriggers = []\nevery = { lands = 1 }");
@@ -77,7 +77,7 @@ fn the_search_starts_after_the_last_green_commit() {
 
 #[test]
 fn one_land_is_the_culprit_without_a_search() {
-    // req:verify/verify-bisect@1e4add05
+    // req:verify/verify-bisect@b2330a00
     let f = Fixture::new(Some(
         "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
     ));
@@ -95,7 +95,7 @@ fn one_land_is_the_culprit_without_a_search() {
 
 #[test]
 fn a_land_that_changed_only_docs_names_the_root_component() {
-    // req:verify/verify-bisect@1e4add05
+    // req:verify/verify-bisect@b2330a00
     let f = Fixture::new(Some(
         "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
     ));
@@ -112,7 +112,7 @@ fn a_land_that_changed_only_docs_names_the_root_component() {
 
 #[test]
 fn bisect_an_imported_failure() {
-    // req:verify/verify-bisect@1e4add05
+    // req:verify/verify-bisect@b2330a00
     let (f, [_, l1, l2, l3]) = three_lands("mode = \"import\"\nworkflow = \"slow\"");
     f.red(&l3, &[&l1, &l2, &l3], VerifyMode::Import);
     let before = f.records().len();
@@ -152,7 +152,7 @@ fn bisect_an_imported_failure() {
 
 #[test]
 fn only_a_red_commit_can_be_bisected() {
-    // req:verify/verify-bisect@1e4add05
+    // req:verify/verify-bisect@b2330a00
     let (f, [g, ..]) = three_lands("mode = \"local\"\ntriggers = []");
     for sha in [g, f.back(0)] {
         let err = clm_verify::verify(&f.work(), &Request::Bisect(sha), &f.env()).unwrap_err();

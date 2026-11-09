@@ -14,7 +14,7 @@ fn local(triggers: &str, every: &str) -> Fixture {
 
 #[test]
 fn a_finished_change_is_due() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"change-done\"", "");
     f.land(&[("a.txt", "1\n")], "one");
     let green = f.land(&[("a.txt", "2\n")], "two");
@@ -30,7 +30,7 @@ fn a_finished_change_is_due() {
 
 #[test]
 fn nothing_finished() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -53,7 +53,7 @@ fn nothing_finished() {
 
 #[test]
 fn a_dry_run_that_finds_nothing_due_exits_3() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -65,7 +65,7 @@ fn a_dry_run_that_finds_nothing_due_exits_3() {
 
 #[test]
 fn work_done_only_when_asked() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"work-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -79,7 +79,7 @@ fn work_done_only_when_asked() {
 
 #[test]
 fn a_trigger_the_project_did_not_choose_does_not_fire() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -90,7 +90,7 @@ fn a_trigger_the_project_did_not_choose_does_not_fire() {
 
 #[test]
 fn backstop_by_lands() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("", "every = { lands = 3 }");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -103,7 +103,7 @@ fn backstop_by_lands() {
 
 #[test]
 fn backstop_by_days() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("", "every = { days = 2 }");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -131,7 +131,7 @@ fn backstop_by_days() {
 
 #[test]
 fn red_stays_due() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("", "");
     let red = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&red, false);
@@ -141,7 +141,7 @@ fn red_stays_due() {
 
 #[test]
 fn queue_drained_waits_for_the_last_pending_requirement() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -167,7 +167,7 @@ fn hash_of_thing(f: &Fixture) -> String {
 
 #[test]
 fn nothing_landed() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = local("\"work-done\"", "");
     let head = f.back(0);
     f.verified(&head, true);
@@ -185,7 +185,7 @@ fn nothing_landed() {
 
 #[test]
 fn off() {
-    // req:verify/verify-due@702ae35c
+    // req:verify/verify-due@9a5327cd
     let f = Fixture::new(None);
     let requests = [
         clm_verify::Request::Due {
@@ -198,7 +198,7 @@ fn off() {
     ];
     for request in requests {
         let out = f.run(&request);
-        assert_eq!(out.line, "verify off: no [verify] in clm.toml");
+        assert_eq!(out.line, "verify off: no [verify] in origin/main:clm.toml");
         assert_eq!(out.code, 0);
     }
 }
