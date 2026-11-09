@@ -44,6 +44,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Next { root, .. }
         | C::Claim { root, .. }
         | C::Run { root, .. }
+        | C::Setup { root }
         | C::Proposals { root, .. }
         | C::Triage { root, .. }
         | C::Intake { root, .. }

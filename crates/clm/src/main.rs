@@ -361,6 +361,12 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+    /// Run the repository's `[build] setup`, which makes a fresh worktree ready to run its tests.
+    Setup {
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
     /// Print the path of a skill's SKILL.md in the pinned superpowers copy builds follow.
     Superpowers {
         /// The skill's name, such as `brainstorming`.
@@ -1287,6 +1293,7 @@ fn dispatch() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => failed("autosync", &e),
         },
+        Command::Setup { root } => orchestrated("setup", clm_run::setup(&repo_root(root))),
         Command::Superpowers { skill } => {
             orchestrated("superpowers", clm_run::superpowers_skill(&skill))
         }

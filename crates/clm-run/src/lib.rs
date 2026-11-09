@@ -167,6 +167,8 @@ pub struct Job {
     /// The build's slot, `place_slot` of `impl/<node>` once its place is taken
     /// (`prompt-slot`).
     pub slot: u64,
+    /// The repository's `[build] setup`, the command `clm setup` runs (`prompt-setup`).
+    pub setup: Option<String>,
 }
 
 /// The prompt for `job`.
@@ -302,6 +304,51 @@ pub fn prompt(job: &Job) -> String {
     } else {
         ""
     };
+    // Every test or check command the session runs itself ends within a limit
+    // (`bounded-test-runs`); `clm land --check-only` is run as written, so it is named only
+    // where the repository sets a check.
+    let as_written = if job.check.is_some() {
+        " and `clm land --check-only`, which you run as written,"
+    } else {
+        ""
+    };
+    let bounded = format!(
+        "Every test or check command you run yourself, other than `clm land`{as_written}, ends \
+         within a time limit (`bounded-test-runs`): run it in the foreground, where the tool \
+         call's own timeout ends it, or, when you run it in the background, as `timeout \
+         <limit> <command>`, with a limit well past the time the run should take. A test that \
+         hangs, such as a polling wait with no deadline of its own, never ends a run started \
+         in the background, so its completion notice never comes, and nothing wakes you, nor \
+         the orchestrating session, which counts a waiting build as still running, so the \
+         build sits idle with no one told. A run your limit ends counts as a failing run, \
+         whose hanging test you find as for any failure: fix the test when it is in your \
+         component's files, and otherwise record it as a backlog item and name that item in \
+         your pull request body."
+    );
+    // Before any test run, a build prepares its fresh worktree (`prompt-setup`).
+    let setup = if job.setup.is_some() {
+        format!(
+            "Right after you have switched to `{branch}` and checked the branch, and before you \
+             run any test, run `clm setup` from the worktree's top level as one plain command. \
+             It runs the project's `[build] setup`, so that this build's tests run against this \
+             worktree's own code and dependencies, never the main checkout's \
+             (`tests-run-in-their-own-tree`). Run `clm setup` again after your own edit to the \
+             project's dependency declarations and after a `clm rebase` that brought such an \
+             edit in from `origin/main`. A `clm setup` that fails because of the branch's own \
+             edits is fixed and run again. One that fails otherwise, or that Claude Code \
+             refuses or denies, is reported (a refusal or denial with `clm defect`) and ends \
+             the build with `stopped: setup failed`, since no test result is then to be \
+             trusted."
+        )
+    } else {
+        "This repository declares no setup step, so nothing prepares your worktree before its \
+         tests run. When a test run resolves code or dependencies from outside the worktree, \
+         such as from a parent directory or an environment the checkouts share, that is a \
+         defect of the project (`tests-run-in-their-own-tree`): record it as a `bug` backlog \
+         item whose body names `tests-run-in-their-own-tree`, and install what your tests \
+         need into your own worktree by hand before you trust a test's result."
+            .to_string()
+    };
     let ship = format!(
         "Commit everything, then {sync}. Then {again} confirm \
          `clm gate --base origin/main` prints `code`, and push with \
@@ -339,7 +386,8 @@ pub fn prompt(job: &Job) -> String {
          nothing landed. {background} Before you write your final message, landed or stopped, stop every \
          other background task you started that is still running (background shells, monitors, \
          watches) and wait for every subagent you launched to return, so that no task of a \
-         finished build wakes the orchestrating session later.\n\n\
+         finished build wakes the orchestrating session later. {bounded}\n\n\
+         {setup}\n\n\
          When Claude Code refuses a write, don't write it another way, such as through Bash: \
          treat it as a step only a human can take, as below.\n\n\
          Use the skills {skills}. For each, read and follow that file, the pinned copy every \
@@ -415,7 +463,18 @@ pub fn prompt(job: &Job) -> String {
          `CAPABILITIES.md` now states it, no longer holds is not such a fix: leave the \
          requirement unbuilt, keeping the behaviour the test checks, and add a `question` \
          backlog item whose `components` name both components, with `blocks` naming the \
-         requirement, and which names the entry, so a spec change edits it.{waits} Keep the \
+         requirement, and which names the entry, so a spec change edits it. When a requirement \
+         you build changes the text of a file `clm init` writes, and a requirement of \
+         `upgrade`, in the specs as applied, states the migration that carries that change and \
+         needs the requirement you build, write that migration in your own branch, under \
+         `upgrade`'s `paths`, exactly as that requirement states it (its ID, `old`, `new`, \
+         `done` and note), since the upgrade corpus test fails a land of either half alone \
+         (`path-ownership`, `template-change-ships-its-migration`). Add no test citing that \
+         `upgrade` requirement, which `upgrade`'s own build adds, but bring any existing test \
+         of `upgrade`'s that the new migration makes fail (such as one expecting an earlier \
+         migration's rewrite to be the last) to what `upgrade`'s requirements as applied \
+         state, and name the migration under `## Fixes in other components` in your pull \
+         request body.{waits} Keep the \
          code lean and true to the component's Contract and Design, folding in the cleanups the spec asks for. When the list \
          is long, you may open your pull request and land once the tree is green with at most \
          {BUDGET} requirements built, leaving the rest pending for the next run; list what you \
@@ -620,6 +679,45 @@ pub fn superpowers_skill(skill: &str) -> Result<String, Error> {
     Ok(path.display().to_string())
 }
 
+/// `clm setup` (`setup-command`): runs the repository's `[build] setup` in its root, through
+/// `sh -c` with standard input closed, and returns what to print on success. A command that
+/// fails is a refusal naming the command and its status; none set prints that and runs nothing.
+pub fn setup(root: &Path) -> Result<String, Error> {
+    let settings = clm_config::load(Some(root), &clm_config::process_env)
+        .map_err(|e| Error::Refused(e.to_string()))?;
+    let Some(build) = settings.build.value else {
+        return Ok("no [build] setup".to_string());
+    };
+    let status = std::process::Command::new("sh")
+        .args(["-c", &build.setup])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .status()
+        .map_err(|e| Error::Refused(format!("setup failed: can't run `{}`: {e}", build.setup)))?;
+    if status.success() {
+        return Ok(String::new());
+    }
+    let how = match (status.code(), signal(&status)) {
+        (Some(code), _) => format!("exit {code}, status {code}"),
+        (None, Some(n)) => format!("killed by signal {n}"),
+        (None, None) => "no exit status".to_string(),
+    };
+    Err(Error::Refused(format!(
+        "setup failed: `{}` ended with {how}",
+        build.setup
+    )))
+}
+
+#[cfg(unix)]
+fn signal(status: &std::process::ExitStatus) -> Option<i32> {
+    std::os::unix::process::ExitStatusExt::signal(status)
+}
+
+#[cfg(not(unix))]
+fn signal(_: &std::process::ExitStatus) -> Option<i32> {
+    None
+}
+
 /// Prepares the build of `node`, writes its prompt to `<root>/.clm/prompts/<node>.md` and
 /// returns the launcher that names it (`build-prompt-file`): landed leftovers of an earlier
 /// build are removed (`merged-claims-released`), then the local branch `impl/<node>` is
@@ -641,6 +739,7 @@ pub fn run(
     let settings = clm_config::load(Some(root), &clm_config::process_env)
         .map_err(|e| Error::Refused(e.to_string()))?;
     let check = settings.land.value.map(|land| land.check);
+    let setup = settings.build.value.map(|build| build.setup);
     // Before anything is claimed, so a missing skill leaves nothing behind.
     let skills = SKILLS
         .iter()
@@ -681,7 +780,7 @@ pub fn run(
         &branch,
         expiry_hours,
         skills,
-        check,
+        Settled { check, setup },
         review_model,
     );
     if built.is_err() && placed == Placed::New {
@@ -706,6 +805,14 @@ impl From<Error> for RunError {
     }
 }
 
+/// The repository settings a prompt names.
+struct Settled {
+    /// `[land] check`.
+    check: Option<String>,
+    /// `[build] setup`.
+    setup: Option<String>,
+}
+
 /// What `run` does once the build holds its place.
 fn build(
     root: &Path,
@@ -713,7 +820,7 @@ fn build(
     branch: &str,
     expiry_hours: u64,
     skills: Vec<(String, String)>,
-    check: Option<String>,
+    settled: Settled,
     review_model: Option<&str>,
 ) -> Result<String, Error> {
     // Before the claim, so a failure here leaves no claim behind.
@@ -733,7 +840,8 @@ fn build(
     let mut job = job(root, &main, tree, &graph, node, &pending, resumed)?;
     job.read_from_main = merged.is_none();
     job.skills = skills;
-    job.check = check;
+    job.check = settled.check;
+    job.setup = settled.setup;
     job.review_model = review_model.map(str::to_string);
     job.slot = place_slot(root, branch)?;
     // A write that fails leaves the claim, which the next `clm run` resumes.
@@ -1074,6 +1182,7 @@ fn job(
         capability_tests: graph.capability_tests_node() == node,
         read_from_main: false,
         slot: 0,
+        setup: None,
     })
 }
 
