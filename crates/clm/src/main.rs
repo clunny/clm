@@ -536,15 +536,18 @@ enum Command {
     /// Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>`
     /// when every test must run.
     Affected {
-        /// Compare with the merge base of this ref and HEAD.
-        #[arg(long, default_value = "origin/main")]
-        base: String,
+        /// Compare with the merge base of this ref and HEAD (default `origin/main`).
+        #[arg(long)]
+        base: Option<String>,
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
         /// Print only the `file` lines of the tests that read what changed, doc-only paths included.
         #[arg(long)]
         readers: bool,
+        /// Print what changing both of two commits can break, each against their merge base.
+        #[arg(long, num_args = 2, value_names = ["A", "B"])]
+        overlap: Option<Vec<String>>,
         /// Print why the change selects this path: the chain from it to a changed file.
         #[arg(long, value_name = "PATH")]
         why: Option<String>,
@@ -1570,8 +1573,9 @@ fn dispatch() -> ExitCode {
             base,
             root,
             readers,
+            overlap,
             why,
-        } => affected(&repo_root(root), &base, readers, why.as_deref()),
+        } => affected(&repo_root(root), base, readers, overlap, why.as_deref()),
         Command::Health { expiry, root } => health(&repo_root(root), expiry),
         Command::Workaround {
             requirement,
@@ -2150,7 +2154,24 @@ fn health(root: &Path, expiry: u64) -> ExitCode {
 }
 
 /// `clm affected`: its lines on stdout (`--why` prints the chain for one path instead), with `config`'s `[affected] all` globs.
-fn affected(root: &Path, base: &str, readers: bool, why: Option<&str>) -> ExitCode {
+fn affected(
+    root: &Path,
+    base: Option<String>,
+    readers: bool,
+    overlap: Option<Vec<String>>,
+    why: Option<&str>,
+) -> ExitCode {
+    for (given, flag) in [
+        (base.is_some(), "--base"),
+        (readers, "--readers"),
+        (why.is_some(), "--why"),
+    ] {
+        if overlap.is_some() && given {
+            eprintln!("clm affected: --overlap and {flag} can't be given together");
+            return ExitCode::FAILURE;
+        }
+    }
+    let base = base.as_deref().unwrap_or("origin/main");
     if readers && why.is_some() {
         eprintln!("clm affected: --readers and --why can't be given together");
         return ExitCode::FAILURE;
@@ -2191,7 +2212,11 @@ fn affected(root: &Path, base: &str, readers: bool, why: Option<&str>) -> ExitCo
             }
         };
     }
-    match clm_affected::affected(root, base, &all) {
+    let selection = match &overlap {
+        Some(revs) => clm_affected::affected_overlap(root, &revs[0], &revs[1], &all),
+        None => clm_affected::affected(root, base, &all),
+    };
+    match selection {
         Ok(clm_affected::Selection::All(path)) => println!("all {path}"),
         Ok(clm_affected::Selection::Nodes { nodes, files }) => {
             for node in nodes {
