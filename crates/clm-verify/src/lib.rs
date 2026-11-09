@@ -12,6 +12,7 @@ mod run;
 mod tree;
 
 use std::fmt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 pub use clm_land::Env;
@@ -108,6 +109,13 @@ impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Error::Git(e.to_string())
     }
+}
+
+/// Says `line` on stderr. A stderr that fails is no reason to end a run, since the check may be
+/// running unwatched or its result not yet recorded, so the write's result is dropped
+/// (`verify/verify-run`).
+pub(crate) fn say(line: &str) {
+    let _ = writeln!(std::io::stderr(), "{line}");
 }
 
 /// The repository a command runs in, with its `[verify]` settings.

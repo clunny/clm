@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [verify-loses-its-verdict-when-output-fails]
 ---
 
