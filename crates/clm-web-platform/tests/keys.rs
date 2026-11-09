@@ -65,7 +65,7 @@ fn line(path: &str) -> TreeLine<'_> {
 
 #[test]
 fn doc_only_paths_come_from_the_ledger() {
-    // req:web.worker.platform/code-key-doc-only@09f136f1
+    // req:web.worker.platform/code-key-doc-only@268b43b2
     let all = [
         "docs/x.md",
         "docs/guide/intro.md",
@@ -91,7 +91,7 @@ fn doc_only_paths_come_from_the_ledger() {
 
 #[test]
 fn keys_holds_no_copy_of_the_doc_only_list() {
-    // req:web.worker.platform/code-key-doc-only@09f136f1
+    // req:web.worker.platform/code-key-doc-only@268b43b2
     let text = include_str!("../src/keys.rs");
     let found: Vec<&str> = [
         "specs/",
@@ -112,7 +112,7 @@ fn keys_holds_no_copy_of_the_doc_only_list() {
 
 #[test]
 fn the_guides_files_are_doc_only() {
-    // req:web.worker.platform/code-key-as-ledger@1e29d98b
+    // req:web.worker.platform/code-key-as-ledger@58ed7d0d
     let dir = repo();
     let d = dir.path();
     write(
@@ -122,6 +122,7 @@ fn the_guides_files_are_doc_only() {
             ("docs/x.md", b"doc\n"),
             ("docs/guide/start.md", b"guide\n"),
             ("docs/spec-format.md", b"format\n"),
+            ("crates/a/src/lib.rs", b"fn e() {}\n"),
         ],
     );
     commit(d);
@@ -131,6 +132,7 @@ fn the_guides_files_are_doc_only() {
         Some("docs/x.md"),
         Some("docs/guide/start.md"),
         Some("docs/spec-format.md"),
+        Some("crates/a/src/lib.rs"),
     ]
     .into_iter()
     .enumerate()
@@ -155,4 +157,5 @@ fn the_guides_files_are_doc_only() {
     assert_eq!(keys[0], keys[1], "docs/x.md is doc-only");
     assert_eq!(keys[0], keys[2], "docs/guide/ is doc-only");
     assert_eq!(keys[0], keys[3], "docs/spec-format.md is doc-only");
+    assert_ne!(keys[0], keys[4], "crates/a/src/lib.rs is code");
 }
