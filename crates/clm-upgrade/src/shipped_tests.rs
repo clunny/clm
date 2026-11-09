@@ -156,7 +156,7 @@ fn an_unedited_check_script_is_rewritten_to_run_from_the_root() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-check-script-from-root@0f7f933f
+// req:upgrade/migration-check-script-from-root@46e5be99
 #[test]
 fn an_edited_check_script_is_left_and_noted() {
     let edited = format!("{OLD_SCRIPT}echo mine\n");
@@ -170,7 +170,7 @@ fn an_edited_check_script_is_left_and_noted() {
     assert!(!out.contains("applied"), "{out}");
 }
 
-// req:upgrade/migration-check-script-from-root@0f7f933f
+// req:upgrade/migration-check-script-from-root@46e5be99
 #[test]
 fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -181,7 +181,7 @@ fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-check-script-from-root@0f7f933f
+// req:upgrade/migration-check-script-from-root@46e5be99
 #[test]
 fn the_check_script_note_says_what_changed_for_every_language() {
     let dir = with_script(&format!("{OLD_SCRIPT}echo mine\n"));
@@ -492,10 +492,10 @@ fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
     .unwrap();
     assert_eq!(
         list(dir.path()).unwrap(),
-        format!("{LAND_DIR_ID} {LAND_DIR_LINE}\n")
+        format!("{LAND_DIR_ID} {LAND_DIR_LINE}\n{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n")
     );
     let out = apply(dir.path()).unwrap();
-    assert_eq!(out, format!("note {LAND_DIR_ID}\n"));
+    assert_eq!(out, format!("note {LAND_DIR_ID}\nnote {BUILD_SETUP_ID}\n"));
     assert_eq!(
         read_toml(&dir),
         format!(
@@ -515,7 +515,7 @@ fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_othe
         format!("upgraded = \"{LAND_DIR_ID}\"\n"),
     )
     .unwrap();
-    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    assert!(!list(dir.path()).unwrap().contains(LAND_DIR_ID));
     fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
     assert!(list(dir.path()).unwrap().contains(LAND_DIR_ID));
     fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
@@ -610,6 +610,69 @@ fn the_starter_note_names_what_a_project_needs_to_know() {
         "CARGO_TARGET_DIR",
         "CARGO_INCREMENTAL",
         "--decline",
+    ] {
+        assert!(note.contains(needle), "{needle}: {note}");
+    }
+}
+
+const BUILD_SETUP_ID: &str = "20261109-a-build-s-tests";
+const BUILD_SETUP_LINE: &str =
+    "advised note Builds run your tests in a fresh worktree: declare [build] setup";
+
+// req:upgrade/migration-build-setup@92303a2e
+#[test]
+fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    let before = "upgraded = \"20261109-land-still-sets-cargo\"\n\n[land]\ncheck = \"true\"\n";
+    fs::write(dir.path().join("clm.toml"), before).unwrap();
+    assert_eq!(
+        list(dir.path()).unwrap(),
+        format!("{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n")
+    );
+    let out = apply(dir.path()).unwrap();
+    assert_eq!(out, format!("note {BUILD_SETUP_ID}\n"));
+    assert_eq!(
+        read_toml(&dir),
+        before.replace("20261109-land-still-sets-cargo", &latest().unwrap())
+    );
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-build-setup@92303a2e
+#[test]
+fn the_build_setup_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{BUILD_SETUP_ID}\"\n"),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(BUILD_SETUP_ID));
+    fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(BUILD_SETUP_ID));
+    fs::remove_file(dir.path().join("clm.toml")).unwrap();
+    assert!(!list(dir.path()).unwrap().contains(BUILD_SETUP_ID));
+}
+
+// req:upgrade/migration-build-setup@92303a2e
+#[test]
+fn the_build_setup_note_names_what_a_project_needs_to_know() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join("clm.toml"), "").unwrap();
+    let note = crate::note(dir.path(), BUILD_SETUP_ID).unwrap();
+    assert!(
+        note.starts_with("Builds run your tests in a fresh worktree: declare [build] setup\n"),
+        "{note}"
+    );
+    for needle in [
+        "tests-run-in-their-own-tree",
+        "clm guide constraints",
+        "[build]",
+        "setup",
+        "clm setup",
+        "[land] check",
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }

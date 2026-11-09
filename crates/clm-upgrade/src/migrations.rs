@@ -4,6 +4,8 @@
 
 use crate::Migration;
 
+#[path = "migrations/20261109-a-build-s-tests/mod.rs"]
+mod build_setup;
 #[path = "migrations/20261106-corpus-entries-drift-from/mod.rs"]
 mod check_script_from_root;
 #[path = "migrations/20261105-clm-upgrade-2/mod.rs"]
@@ -31,4 +33,5 @@ pub(crate) static LIST: &[Migration] = &[
     tests_overlap::MIGRATION,
     land_dir::MIGRATION,
     starter_land_dir::MIGRATION,
+    build_setup::MIGRATION,
 ];
