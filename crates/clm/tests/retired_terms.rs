@@ -304,7 +304,7 @@ fn the_help_of_every_command_is_read() {
 #[test]
 fn the_repository_holds_no_retired_term() {
     // req:clm/node-names-retired@2d40cbc7
-    // req:clm/architecture-term-retired@7e356236
+    // req:clm/architecture-term-retired@dcff8eb7
     // req:clm/old-state-and-key-names-retired@381faa28
     // req:clm/retired-terms@c9fe5ba8
     let root: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -373,7 +373,7 @@ fn the_old_command_names_are_on_the_list() {
 
 #[test]
 fn the_old_architecture_term_is_on_the_list() {
-    // req:clm/architecture-term-retired@7e356236
+    // req:clm/architecture-term-retired@dcff8eb7
     assert!(RETIRED.contains(&"architecture requirement"));
     assert!(RETIRED.contains(&"architecture requirements"));
     let fixture = files(&[(
@@ -386,7 +386,7 @@ fn the_old_architecture_term_is_on_the_list() {
 
 #[test]
 fn architecture_holds_constraint_blocks() {
-    // req:clm/architecture-term-retired@7e356236
+    // req:clm/architecture-term-retired@dcff8eb7
     let text =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ARCHITECTURE.md"))
             .unwrap();
