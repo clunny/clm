@@ -20,7 +20,10 @@ fn a_land_sets_it_other_runs_remove_it_and_the_callers_cargo_variables_stay() {
     );
     clm_land::land(&linked, None, &f.env(&[])).unwrap();
     let land_dir = f.work().join(".clm/land").display().to_string();
-    assert_eq!(f.lines("check-land-dir.log"), [land_dir.clone()]);
+    assert_eq!(
+        f.lines("check-land-dir.log"),
+        std::slice::from_ref(&land_dir)
+    );
     // `--check-only` has the caller's value removed.
     clm_land::check_only(&f.work(), None, &f.env(&[])).unwrap();
     assert_eq!(f.lines("check-land-dir.log"), [land_dir, String::new()]);
