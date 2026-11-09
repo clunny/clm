@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [skills-say-to-run-clm-pr-open-without-the-arguments-it-requires]
 ---
 

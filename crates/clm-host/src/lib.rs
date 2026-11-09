@@ -4,6 +4,7 @@
 mod azure;
 mod github;
 mod keep;
+mod open;
 mod remote;
 
 use std::path::Path;
@@ -12,6 +13,7 @@ pub use azure::Azure;
 use clm_git::{REMOTE, current_branch, git};
 use github::GitHub;
 pub use keep::keep_remote;
+pub use open::pr_open;
 pub use remote::{host_for_remote, setup_steps};
 
 #[derive(Debug)]
