@@ -188,3 +188,27 @@ fn upgrade_skill_settings_by_hand() {
     }
     assert!(body.contains("takes the human's settings edit on the first, code, branch"));
 }
+
+#[test]
+fn upgrade_skill_offers_verify() {
+    // req:plugin.upgrade/upgrade-skill-offers-verify@4e293808
+    let body = skill_body("upgrade");
+    let must = ["[verify]", "Slow tests can run after the land"];
+    assert_eq!(
+        text_gaps("upgrade", &body, &must, &[]),
+        Vec::<String>::new()
+    );
+    for needle in must {
+        let gaps = text_gaps("upgrade", &body.replace(needle, "elided"), &must, &[]);
+        assert_reports(&gaps, "upgrade", needle);
+    }
+    let offer = sentence_with(&body, "ask the human the questions `/clm:init` asks");
+    for needle in ["`init-skill-asks-verify`", "recommending `change-done`"] {
+        assert!(offer.contains(needle), "{needle}: {offer}");
+    }
+    assert!(
+        body.contains("When `clm upgrade --apply` prints `applied 20261107-slow-tests-after-land`")
+    );
+    assert!(body.contains("On a yes, replace the commented section with those settings"));
+    assert!(body.contains("On a no, leave the section commented."));
+}
