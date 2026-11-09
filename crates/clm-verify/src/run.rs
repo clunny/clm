@@ -101,7 +101,10 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
         [only] => only.clone(),
         _ => state.chain[bisect::first_red(ctx, state, green, end)?].clone(),
     };
-    let mut outcome = record(ctx, state, end, Some(culprit), false, None)?;
+    let mut outcome = record(ctx, state, end, Some(culprit.clone()), false, None)?;
+    outcome
+        .notes
+        .extend(bisect::recheck_note(ctx, state, &culprit)?);
     if let Some(log) = run.log {
         outcome
             .notes
