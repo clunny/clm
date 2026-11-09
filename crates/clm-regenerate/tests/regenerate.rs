@@ -1138,6 +1138,26 @@ fn a_lock_lifted_before_the_retry_is_waited_out() {
 }
 
 #[test]
+fn run_waits_out_a_lock_lifted_before_the_retry() {
+    // req:sync.regenerate/retry-index-lock@3ef84131
+    let r = clone_with_staged_change();
+    let lock = index_lock(&r);
+    let mut holder = Command::new("sh")
+        .args(["-c", "touch \"$0\"; sleep 0.5; rm -f \"$0\""])
+        .arg(&lock)
+        .spawn()
+        .unwrap();
+    while !lock.exists() {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+
+    let out = run(&r.work, &["commit", "-m", "c"], Options::default());
+    holder.wait().unwrap();
+    assert!(out.is_ok(), "{out:?}");
+    assert_eq!(subject(&r), "c");
+}
+
+#[test]
 fn a_lock_kept_fails_the_run_in_time() {
     // req:sync.regenerate/retry-index-lock@3ef84131
     let r = clone_with_staged_change();
