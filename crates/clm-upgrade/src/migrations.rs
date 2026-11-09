@@ -14,6 +14,8 @@ mod constraints_copy;
 mod land_dir;
 #[path = "migrations/20261107-slow-tests-after-land/mod.rs"]
 mod offer_verify;
+#[path = "migrations/20261109-land-still-sets-cargo/mod.rs"]
+mod starter_land_dir;
 #[path = "migrations/20261107-projects-upgrading-past-the/mod.rs"]
 mod tests_overlap;
 #[path = "migrations/20261107-projects-set-up-before/mod.rs"]
@@ -28,4 +30,5 @@ pub(crate) static LIST: &[Migration] = &[
     offer_verify::MIGRATION,
     tests_overlap::MIGRATION,
     land_dir::MIGRATION,
+    starter_land_dir::MIGRATION,
 ];
