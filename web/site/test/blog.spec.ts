@@ -1,3 +1,7 @@
+// The site is built from this repository's guide, so an edit to it selects this file
+// (`doc-readers-marked`):
+// clm:reads docs/guide/**
+// clm:reads docs/spec-format.md
 import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
