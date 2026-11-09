@@ -30,14 +30,16 @@ A build's `clm land --check-only` runs every test and records its head's code ke
 - A failure after the land is reported with its evidence (whether the culprit's land skipped or narrowed its re-check, and on what basis) without presuming its cause: the graph, the code or a flaky test (the human, 2026-11-08).
 - Going over `check_target_seconds` stays a report, not a refusal: refusing a slow land would stall `main`, the problem this change removes.
 - The check lock stays as it is for lands. Dropping it for lands with a slot was considered, but lands that run a check still take turns on the land tree (`fixed-land-tree`), so it would buy nothing; the overlap rule is what takes checks out of the queue.
-- `CLM_LAND_DIR` goes in by expand and contract (`expand-contract`): this change adds it beside the cargo variables, which stay marked `clm:remove-by 20261108-toolchain-neutral-land-builds`; their removal waits in `backlog/land-still-sets-cargo-variables` until projects have moved.
+- `CLM_LAND_DIR` is added beside the cargo variables, which `clm land` still sets, so nothing breaks and nothing is marked for removal yet. Removing them, with the starter script's change and the migration that carries it to projects (`upgrades-carry-migrations`), is a later change of its own (`backlog/land-still-sets-cargo-variables`), proposed with its contract step once projects have the note.
+- A composed verdict is a second land verdict that doesn't rest on a cleaned tree, beside a build's recorded check: it rests on that check and on `main`'s. `fixed-land-tree` and `worktree-check-counts` are amended to accept it.
+- A composed `checked` record names only the two keys it rests on; what the land ran stays on the `landed` record (`graph-test-selection`, `land-times-on-the-landed-record`).
 
 ## Outcome
 
 - `clm affected --overlap <a> <b> [--base <ref>]` prints what both `<base>..<a>` and `<base>..<b>` can break (`check.affected/overlap-selection`).
 - A land whose merged tree's code key is new, whose head was checked whole and whose fetched `main` is checked, runs `[land] check` with the overlap as `CLM_SELECTION`, or no check at all when the overlap is empty, and records a composed `checked` record and how it re-checked (`land/overlap-recheck`, `ledger/composed-check`, `ledger/landed-recheck`).
 - `clm verify` names how a culprit's land re-checked (`verify/culprit-recheck`).
-- Every land check gets `CLM_LAND_DIR` (`land/land-dir-env`); `ci-check.sh`, `clm init`'s starter script and an advised `clm upgrade` note point cargo at it (`ci/land-dir`, `init/starter-land-dir`, `upgrade/migration-land-dir`).
+- Every land check in the land tree gets `CLM_LAND_DIR` (`land/land-dir-env`); `ci-check.sh` points cargo at it, and an advised `clm upgrade` note tells projects to (`ci/land-dir`, `upgrade/migration-land-dir`).
 - This repository runs its full check after lands with `[verify]` (`config/verify-here`).
 
 ## Constraints

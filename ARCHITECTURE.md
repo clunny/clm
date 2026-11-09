@@ -352,7 +352,7 @@ A project's `[land] check` SHALL run the tests `CLM_SELECTION` names, or every t
 #### Scenario: an unrelated move of main
 - GIVEN a project whose build checked its branch whole, and `main` moved since by a land on a component the branch's components neither own nor depend on
 - WHEN the branch lands
-- THEN its land runs no test, and a test that reads a file its markers don't name is the project's defect, which `[verify]` shows
+- THEN its land runs no test, and a test that reads a file its markers don't name is the project's defect, which `[verify]` shows after the land, or, in a project without `[verify]`, the next build's full check
 
 #### Carries
 - replaceable
@@ -366,7 +366,7 @@ A test that the spec graph doesn't connect to a change gives the same result wit
 - verify/culprit-recheck
 
 #### Untested
-Whether a test is deterministic, and whether every file it reads is one the graph connects it to, are things CLM can't see before the fact: a gap shows as a failure after the land, which `[verify]` finds, bisects to a land and reports with how that land re-checked, without presuming whether the graph, the code or the test was wrong. A check that runs more than its selection is never wrong, only slower, and the check-time report says where its time went.
+Whether a test is deterministic, and whether every file it reads is one the graph connects it to, are things CLM can't see before the fact: a gap shows as a failure after the land, which `[verify]` finds, bisects to a land and reports with how that land re-checked, or, in a project that sets no `[verify]`, as the next build's full `clm land --check-only` failing on a `main` it didn't change (`graph-test-selection`'s safeguard), without presuming whether the graph, the code or the test was wrong. A check that runs more than its selection is never wrong, only slower, and the check-time report says where its time went.
 
 ### Constraint: platform
 CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A git host (GitHub, Azure DevOps, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Moving to another agent is a change that needs review.

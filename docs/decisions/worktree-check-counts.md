@@ -17,3 +17,5 @@ status: accepted
 - *Hand `--check-only` the land's selection.* Rejected: faster, but it would drop the full runs in builds that `graph-test-selection` relies on to catch a test the selection skips; outside the lock, the full run costs the build's own time, not the queue's.
 - *A dry-run land (fetch, merge, check, no push).* Rejected here as in `land-check-command`: it needs the branch pushed first, and checks a merge the session hasn't made; with `HEAD` containing `origin/main`, the worktree already is that merge.
 - *Drop the check lock everywhere.* Not now: lands are serialised by the land lock anyway, and slot-0 runs still need it.
+
+**Amended 2026-11-08** (`20261108-toolchain-neutral-land-builds`). A build's recorded check now also counts for a land after `main` moves, composed with `main`'s own check where the branch and what `main` gained affect no test in common (`land/overlap-recheck`). The composed verdict rests on this record as much as a direct match does, so it inherits the same exception: it doesn't rest on a cleaned tree. Without `[verify]`, the safeguard is unchanged: every build's full run before it lands.
