@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [guide-names-overlap-recheck, the-guide-doesn-t-say-a-test-reading-clm-toml-needs-a-marker]
 ---
 
