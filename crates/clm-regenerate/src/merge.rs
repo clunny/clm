@@ -1,7 +1,7 @@
 //! `stale-delta-merge` (`stale-delta-three-way-merge`): a stale delta's sections whose edits
 //! don't overlap what moved them since their base, `main`'s edits or an earlier change's,
 //! merged three-way into the delta with their new base, so the caller resolves only what is
-//! left. `other-delta-merge` runs the same merge for another live change's delta.
+//! left. `Tree::other_deltas` runs the same merge for another live change's delta (`stale-delta-merge`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -136,7 +136,7 @@ pub(crate) fn merge(
     Ok(merged)
 }
 
-/// `other-delta-merge`: once the regenerate applied `regenerated` and committed `Re-apply`,
+/// `stale-delta-merge`: once the regenerate applied `regenerated` and committed `Re-apply`,
 /// with the regenerated tree, loaded from `tree`, as the last of `stages`. For each live
 /// `proposed` or `approved` change it didn't regenerate, in ID order, that `apply` refuses on
 /// that tree: its stale deltas merged as `merge` merges them and committed on their own as
