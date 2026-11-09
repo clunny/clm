@@ -13,8 +13,8 @@ The records that say what was approved, checked and landed, as facts in git that
 
 Record kinds:
 - `approved`: `fingerprint`, `branch`, `change` (a change ID, or null). A human's approval of a diff (`pinned-approval`).
-- `checked`: `code_key`, `command`. A tree whose code key passed the check command and `clm check`, written by `clm land` for its merged tree or by `clm land --check-only` for a clean, committed `HEAD` that contains `origin/main` (`land/check-only`, `worktree-check-counts`), or whose code key `code_key_with` maps, its `clm.toml` settings unchanged, to one that did, the land having run that tree's `clm check` and the tests that read `clm.toml` (`land/settings-unchanged-is-checked`).
-- `landed`: `commit`, `branch`, `land_kind` (`spec` or `code`), `review` (whether the land needed a human's review, `gate/needs-review`; false for code), `fingerprint`, `code_key` (the landed commit's code key, which the land's `checked` record names), `changes` (the live change IDs a spec land added or modified), and, when the land ran `[land] check`, `check_seconds` (the command's wall-clock time in whole seconds, rounded down) and `steps` (each step it marked, in order, as `{name, seconds, selected_by}`, `selected_by` the paths its `::clm-selected::` lines named: `land/step-times`), which `Fold::timed_lands(n)` reads back as `TimedLand { commit, at, check_seconds, steps }` with `TimedStep { name, seconds, selected_by }` (`landed-times`). A `checked` record stays a fact about a code key and carries no times (`graph-test-selection`, `land-times-on-the-landed-record`). Older records lack `code_key` (`landed-record-names-its-code-key`). Records from before review was yes or no (`yes-no-review`) have `tier` instead of `review`: `HARD` reads as `review: true`, anything else as `false`.
+- `checked`: `code_key`, `command`, and optionally `basis` (`head`, `base` and `files`: the code keys of a branch's head and of `main` whose checks it was composed from, and the files the land ran for their overlap, empty when it ran none: `composed-check`). A tree whose code key passed the check command and `clm check`, written by `clm land` for its merged tree or by `clm land --check-only` for a clean, committed `HEAD` that contains `origin/main` (`land/check-only`, `worktree-check-counts`), or whose code key `code_key_with` maps, its `clm.toml` settings unchanged, to one that did, the land having run that tree's `clm check` and the tests that read `clm.toml` (`land/settings-unchanged-is-checked`). A record with `basis` is a *composed* check: `clm land` writes one for a merged tree it checked only where the branch and `main` overlap (`land/overlap-recheck`), and it counts as checked only while `checked` records name both of its keys.
+- `landed`: `commit`, `branch`, `land_kind` (`spec` or `code`), `review` (whether the land needed a human's review, `gate/needs-review`; false for code), `fingerprint`, `code_key` (the landed commit's code key, which the land's `checked` record names), `recheck` (how the land checked its merged tree: `checked`, its code key already checked; `none`, the overlap selected nothing; `overlap`, the overlap ran; `selected`, the branch's own selection ran; absent on older records: `landed-recheck`), `recheck_files` (with `overlap` or `selected`, the number of `file` lines the check ran, or null when it ran every test), `changes` (the live change IDs a spec land added or modified), and, when the land ran `[land] check`, `check_seconds` (the command's wall-clock time in whole seconds, rounded down) and `steps` (each step it marked, in order, as `{name, seconds, selected_by}`, `selected_by` the paths its `::clm-selected::` lines named: `land/step-times`), which `Fold::timed_lands(n)` reads back as `TimedLand { commit, at, check_seconds, steps }` with `TimedStep { name, seconds, selected_by }` (`landed-times`). A `checked` record stays a fact about a code key and carries no times (`graph-test-selection`, `land-times-on-the-landed-record`). Older records lack `code_key` (`landed-record-names-its-code-key`). Records from before review was yes or no (`yes-no-review`) have `tier` instead of `review`: `HARD` reads as `review: true`, anything else as `false`.
 - `subscribed`: `endpoint`, `p256dh`, `auth`. A browser's Web Push subscription for this repo, which `web.worker` notifies (`push-subscriptions-in-ledger`).
 - `unsubscribed`: `subscription` (the `id` of a `subscribed` record). That subscription's end.
 - `proposed`: `slug`, `title`, `body`, and the components at `/nodes`. A backlog item proposed from the web app, which `clm rebase` files as `backlog/<slug>.md` on the next `impl/*` branch (`web-proposals-as-ledger-records`).
@@ -723,3 +723,34 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 - GIVEN `landed` records `a`, `b` and `c` in that order of `at`, `a` and `c` with `check_seconds` and `b` without
 - WHEN `Fold::timed_lands(2)` runs
 - THEN it returns `a` and then `c`, each with its `check_seconds` and `steps`
+
+### Requirement: composed-check
+`append` and `fold` SHALL carry a `checked` record's optional `basis`, a map with `head` and `base`, each a code key, and `files`, a list of paths, leaving it out of a record that has none; the fold SHALL count a code key as checked by a composed record only while it also holds a `checked` record, composed or not, for each of the basis's two keys with the same command. `clm ledger verify` SHALL report `ledger/unchecked-land` for a land whose only `checked` records for its code key are composed ones the fold doesn't count. `clm ledger compact` SHALL keep every `checked` record whose code key the basis of a `checked` record it keeps names, as it keeps those a land's code key names.
+
+#### Scenario: a composed check counts
+- GIVEN `checked` records for keys `h` and `b` with command `x`, a composed `checked` record for `m` with command `x` and basis `h` and `b`, and a `landed` record with code key `m`
+- WHEN `clm ledger verify` runs
+- THEN it prints nothing about that land
+
+#### Scenario: a composed check whose basis is missing
+- GIVEN the same with no `checked` record for `b`
+- WHEN `clm ledger verify` runs
+- THEN it prints `ledger/unchecked-land` naming the landed commit
+
+#### Scenario: compaction keeps the basis
+- GIVEN the caller's ledger with `checked h` and `checked b`, older than a `landed` record with code key `m`, and a composed `checked m` naming them
+- WHEN `clm ledger compact` runs
+- THEN `checked h` and `checked b` are still there
+
+### Requirement: landed-recheck
+`append` and `fold` SHALL carry a `landed` record's optional `recheck`, one of `checked`, `none`, `overlap` and `selected`, and `recheck_files`, a count or null, leaving both out of a record that has neither, and `Fold::timed_lands(n)` SHALL give each land's `recheck` and `recheck_files` beside its times, so the share of lands that ran no check and the size of each overlap can be read back.
+
+#### Scenario: a land that ran nothing
+- GIVEN a `landed` record appended with `recheck: none` and no `recheck_files`
+- WHEN the ledger is folded
+- THEN the fold's land holds `recheck` `none` and `recheck_files` absent
+
+#### Scenario: an older record
+- GIVEN a `landed` record with neither field
+- WHEN the ledger is folded
+- THEN the land holds neither, and nothing fails
