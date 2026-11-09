@@ -452,7 +452,7 @@ The `clm run` prompt SHALL tell the session to wait for a command it runs in the
 - capability/work-concurrently
 
 #### Needs
-- plugin/build-waiting-builds
+- plugin.build/build-waiting-builds
 
 ### Requirement: prompt-serves
 `clm run`'s prompt SHALL say that the component's rules serve the capabilities under `# Capabilities served` in its context bundle, and, for the component that builds the capability tests (the graph's capability component, else its root), that each capability under that heading is one its tests prove at the project's public boundary, the capability component having no rules to serve them, that an architectural constraint is proven by the rules its `#### Enforced by` names and is never cited by a test (`human-layer-proof`), and that a requirement it asks a spec branch for under `## Backlog` names the entry it serves.

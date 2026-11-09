@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 ## Intent
@@ -42,7 +42,7 @@ References re-pointed to the moved IDs:
 
 - `ARCHITECTURE.md`: `tests-run-concurrently`'s `#### Enforced by` names `plugin.init/init-skill-concurrent-tests`.
 - `#### Needs` lines in other components: the root's requirement needing `plugin/init-skill`, `init`'s needing `plugin/skill-named-build`, `orchestrator.run`'s needing `plugin/build-waiting-builds`, and `orchestrator.triage`'s needing `plugin/triage-waiting-drafts` and `plugin/architecture-auditor`.
-- Spec text: `model/carried-constraints` cites `plugin/architecture-auditor`, and `orchestrator.triage`'s Design cites `plugin/triage-waiting-drafts`.
+- Spec text: `model/carried-constraints` cites `plugin/architecture-auditor`, `upgrade/migration-offer-verify` cites `plugin/upgrade-skill-offers-verify`, and `orchestrator.triage`'s Design cites `plugin/triage-waiting-drafts`.
 - Backlog: `workaround-plugin-propose-adds-glossary-terms-1` moves to `plugin.propose` at the requirement's version after apply, and `sessions-sharing-a-checkout` keeps citing `session-worktrees`, which stays in `plugin`.
 
 Decisions under `docs/decisions/` that cite the old IDs record history and are left as written.
@@ -52,7 +52,7 @@ Expected sizes, in spec tokens: `plugin` from 45,580 to about 16,000, still over
 ## Constraints
 
 - The skill files, the subagents and the tests' assertions don't change. The builds re-cite the moved requirements' markers in `crates/clm/tests/plugin.rs` under the new IDs (`moved-markers-wait`): each child's build re-points its own, and `plugin`'s obsolete lines wait for them.
-- The requirements whose `#### Needs` line or text is re-pointed (in the root, `init`, `orchestrator.run`, `orchestrator.triage` and `model`) change version, so each of those components re-cites one or two markers; nothing they do changes.
+- The requirements whose `#### Needs` line or text is re-pointed (in the root, `init`, `orchestrator.run`, `orchestrator.triage`, `model` and `upgrade`) change version, so each of those components re-cites one or two markers; nothing they do changes.
 - `paths` stay disjoint: the children take only files that were `plugin`'s.
 - No new `clm` behaviour, no new term, no settings key, no migration: nothing a project set up by a release holds changes.
 

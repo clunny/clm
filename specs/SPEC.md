@@ -588,7 +588,7 @@ Then it SHALL remove the lock, also when it stopped on a failure, and, unless it
 - rename/requirement-rename
 - init/init-files
 - init/template-says-architectural-constraint
-- plugin/init-skill
+- plugin.init/init-skill
 - plugin/skills-write-enforcement
 - plugin/says-architectural-constraint
 - effort/architecture-list
