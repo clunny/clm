@@ -715,11 +715,12 @@ fn overlap_basis(
                 .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if c == command))
         })
     };
-    let (head, base) = (
-        clm_ledger::code_key(&repo.root, head)?,
-        clm_ledger::code_key(&repo.root, base)?,
-    );
-    Ok((checked(&head) && checked(&base)).then_some(Basis { head, base }))
+    let head = clm_ledger::code_key(&repo.root, head)?;
+    if !checked(&head) {
+        return Ok(None);
+    }
+    let base = clm_ledger::code_key(&repo.root, base)?;
+    Ok(checked(&base).then_some(Basis { head, base }))
 }
 
 /// What step 1 gathers for an attempt.

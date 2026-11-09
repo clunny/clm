@@ -152,6 +152,10 @@ fn the_overlap_fails() {
     f.write("affected-fails", "");
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(!has_recheck_line(&out.warnings), "{:?}", out.warnings);
+    // The overlap was tried first, then the land's own selection.
+    let log = f.lines("affected.log");
+    assert!(log[0].starts_with("--overlap "), "{log:?}");
+    assert!(log[1].starts_with("--base "), "{log:?}");
     // Its own selection, which failed too: the check ran every test.
     assert_eq!(f.lines("check-selection.log"), ["CLM_SELECTION=unset"]);
     let (key, recheck, files) = landed(&f);
@@ -163,7 +167,7 @@ fn the_overlap_fails() {
 fn the_head_was_never_checked_whole() {
     // req:land/overlap-recheck@272fc09e
     let f = Fixture::new("");
-    let head = f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
+    f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
     f.git(&f.work(), &["fetch", "-q", "origin"]);
     f.mark_checked("origin/main");
@@ -173,7 +177,6 @@ fn the_head_was_never_checked_whole() {
     assert_eq!(f.lines("affected.log"), [format!("--base {base}")]);
     let copied = std::fs::read_to_string(f.path("selection-copy")).unwrap();
     assert_eq!(copied, "file crates/a/tests/t.rs\n");
-    let _ = head;
     let (key, recheck, files) = landed(&f);
     assert_eq!((recheck, files), (Some(Recheck::Selected), Some(1)));
     assert_eq!(basis_of(&f, &key.unwrap()), [None]);
@@ -207,6 +210,28 @@ fn a_head_that_contains_main_is_not_composed() {
         "{:?}",
         f.lines("affected.log")
     );
+}
+
+#[test]
+fn checks_made_with_another_command_do_not_count() {
+    // req:land/overlap-recheck@272fc09e
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
+    let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    for rev in ["origin/impl/a", "origin/main"] {
+        f.append(
+            &f.work(),
+            Body::Checked {
+                code_key: clm_ledger::code_key(&f.work(), rev).unwrap(),
+                command: "some other command".into(),
+                basis: None,
+            },
+        );
+    }
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    assert!(!has_recheck_line(&out.warnings), "{:?}", out.warnings);
+    assert_eq!(f.lines("affected.log"), [format!("--base {base}")]);
 }
 
 #[test]
