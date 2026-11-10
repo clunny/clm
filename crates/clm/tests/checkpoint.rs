@@ -1523,7 +1523,7 @@ fn scenario_record_arriving_late() {
 
 #[test]
 fn wrap_up_failure_names_the_new_command() {
-    // req:clm/renamed-commands@f600d2ff
+    // req:clm/renamed-commands@164ad075
     let out = Command::new(env!("CARGO_BIN_EXE_clm"))
         .args(["wrap-up", "--root", "/nonexistent-dir"])
         .output()
@@ -1535,7 +1535,7 @@ fn wrap_up_failure_names_the_new_command() {
 
 #[test]
 fn scenario_wrap_up_by_its_new_name() {
-    // req:clm/renamed-commands@f600d2ff
+    // req:clm/renamed-commands@164ad075
     let r = repo();
     let out = output(
         Command::new(env!("CARGO_BIN_EXE_clm"))

@@ -1350,7 +1350,7 @@ fn hashes_of_the_capability_node_come_first() {
 
 #[test]
 fn help_lists_the_new_command_names_only() {
-    // req:clm/renamed-commands@f600d2ff
+    // req:clm/renamed-commands@164ad075
     let out = clm_command().arg("--help").output().unwrap();
     let text = String::from_utf8(out.stdout).unwrap();
     let commands: Vec<&str> = text
