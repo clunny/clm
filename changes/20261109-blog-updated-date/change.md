@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 # Blog posts can say when they were updated
