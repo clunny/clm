@@ -126,7 +126,7 @@ fn guard_command_asks_with_the_reason() {
 
 #[test]
 fn guard_command_blocks_dispatching_a_release() {
-    // req:plugin.hooks.guard/release-guard@1e4ebaea
+    // req:plugin.hooks.guard/release-guard@bbbfbcb2
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "gh workflow run release.yml -f version=0.2.0" },
@@ -204,7 +204,8 @@ fn take_calls(calls: &Path) -> Vec<String> {
 
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
-    // req:plugin.hooks.guard/release-guard@1e4ebaea
+    // req:plugin.hooks.guard/release-guard@bbbfbcb2
+    // req:plugin.hooks.guard/release-run-lookup@3024a9da
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/o/r");
@@ -318,7 +319,7 @@ fn guard_blocks_rerunning_a_release_run() {
 
 #[test]
 fn guard_looks_a_rerun_up_where_it_runs() {
-    // req:plugin.hooks.guard/release-guard@1e4ebaea
+    // req:plugin.hooks.guard/release-run-lookup@3024a9da
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
     let path = fake_rest_gh(fake.path(), &calls, "https://github.com/p/q");
@@ -412,7 +413,7 @@ fn guard_looks_a_rerun_up_where_it_runs() {
 
 #[test]
 fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
-    // req:plugin.hooks.guard/release-guard@1e4ebaea
+    // req:plugin.hooks.guard/release-run-lookup@3024a9da
     // a repository that can't be resolved: `repo view` fails, or its `url` isn't
     // `<scheme>://<host>/<owner>/<repo>`
     let api_ci = "if [ \"$1\" = api ]; then \
@@ -444,7 +445,7 @@ fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
 
 #[test]
 fn guard_command_blocks_pushing_to_main() {
-    // req:plugin.hooks.guard/push-guard@dff5755b
+    // req:plugin.hooks.guard/push-guard@dabbe399
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "git push origin HEAD:main" },
@@ -479,20 +480,8 @@ fn guard_in(cwd: &Path, command: &str, env: &[(&str, &str)]) -> (Option<i32>, St
 }
 
 #[test]
-fn defect_ask_says_pull_request() {
-    // req:plugin.hooks.guard/defect-ask-says-pull-request@c62dad6a
-    let nowhere = TempDir::new().unwrap();
-    let command = "clm defect --title x <<'EOF'\nThe gate misfired.\nEOF";
-    let (code, reason) = guard_in(nowhere.path(), command, &[]);
-    assert_eq!(code, Some(0));
-    assert!(reason.contains("## CLM defects"), "{reason}");
-    assert!(reason.contains("pull request body"), "{reason}");
-    assert!(!reason.contains("page"), "{reason}");
-}
-
-#[test]
 fn guard_asks_before_filing_a_defect() {
-    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    // req:plugin.hooks.guard/defect-approval@4c044d8e
     let nowhere = TempDir::new().unwrap();
     let report = "clm defect --title \"x\" <<'EOF'\nThe gate misfired.\nEOF";
     // asking: no settings, so `defects` is `ask`.
@@ -500,6 +489,8 @@ fn guard_asks_before_filing_a_defect() {
     assert_eq!(code, Some(0));
     assert!(reason.contains("## CLM defects"), "{reason}");
     assert!(reason.contains("public issue"), "{reason}");
+    assert!(reason.contains("pull request body"), "{reason}");
+    assert!(!reason.contains("page"), "{reason}");
     assert!(!reason.contains("humans-review-intent"), "{reason}");
     // Settings that can't be loaded ask too, and so does a `clm` called by path or after
     // assignments.
@@ -571,7 +562,7 @@ fn guard_asks_before_filing_a_defect() {
 
 #[test]
 fn guard_ignores_a_defect_report_body() {
-    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    // req:plugin.hooks.guard/defect-approval@4c044d8e
     let nowhere = TempDir::new().unwrap();
     let quoting = "clm approve spec/x\ngit push origin main";
     // quoting a blocked command, under each form of the heredoc operator.
@@ -620,7 +611,7 @@ fn guard_ignores_a_defect_report_body() {
 
 #[test]
 fn guard_block_wins_over_a_defect_ask() {
-    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    // req:plugin.hooks.guard/defect-approval@4c044d8e
     let nowhere = TempDir::new().unwrap();
     // block wins: the push guard's block wins over the defect's ask.
     let (code, reason) = guard_in(
@@ -645,7 +636,7 @@ fn guard_block_wins_over_a_defect_ask() {
 
 #[test]
 fn guard_quotes_the_defect_report_it_asks_about() {
-    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    // req:plugin.hooks.guard/defect-approval@4c044d8e
     let nowhere = TempDir::new().unwrap();
     let command = "clm defect --title \"x\" --component gate <<'EOF'\nThe gate misfired.\nEOF";
     let (code, reason) = guard_in(nowhere.path(), command, &[]);
@@ -687,7 +678,7 @@ fn guard_quotes_the_defect_report_it_asks_about() {
 
 #[test]
 fn guard_refuses_a_defect_report_it_cannot_show() {
-    // req:plugin.hooks.guard/defect-approval@bf60a27a
+    // req:plugin.hooks.guard/defect-approval@4c044d8e
     let nowhere = TempDir::new().unwrap();
     for command in [
         "clm defect --title x < report.md",
