@@ -476,7 +476,7 @@ When `release-prepare.sh` bumps the version, it SHALL build `clm` from the bumpe
 - architecture/upgrades-carry-migrations
 
 ### Requirement: nextest-runner
-`.github/scripts/ci-check.sh` SHALL run the Rust tests with `cargo nextest run`, never with `cargo test` except for doctests: a full run SHALL run `cargo nextest run --workspace --no-tests=pass` and then `cargo test --doc --workspace`, and a selected run SHALL run the commands `selected-tests` states. The build that makes this current SHALL change no test outside this component's `paths`: for each test that fails under `cargo nextest run --workspace` and passes under `cargo test`, it SHALL file a `kind: bug` backlog item on the test's component whose `blocks` names this requirement, and leave the script on `cargo test` until those are resolved.
+`.github/scripts/ci-check.sh` SHALL run the Rust tests with `cargo nextest run`, never with `cargo test` except for doctests: a full run SHALL run `cargo nextest run --workspace --no-tests=pass` and then `cargo test --doc --workspace`, and a selected run SHALL run the commands `selected-tests` states.
 
 #### Scenario: full run
 - GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments, and `CLM_SELECTION` unset
