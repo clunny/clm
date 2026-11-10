@@ -118,6 +118,10 @@ pub(crate) fn say(line: &str) {
     let _ = writeln!(std::io::stderr(), "{line}");
 }
 
+/// The cap `land` applies when `[land]` sets none, which `config` doesn't offer without the
+/// table.
+const DEFAULT_CAP_GB: u64 = 15;
+
 /// The repository a command runs in, with its `[verify]` settings.
 pub(crate) struct Ctx<'a> {
     pub(crate) root: PathBuf,
@@ -125,6 +129,8 @@ pub(crate) struct Ctx<'a> {
     pub(crate) verify: clm_config::Verify,
     /// `[affected] all`.
     pub(crate) affected_all: Vec<String>,
+    /// `[land] target_cap_gb`, the cap on the build place (`verify-build-cap`).
+    pub(crate) cap_gb: u64,
     pub(crate) host: clm_config::Host,
     /// `origin/main`.
     pub(crate) base: String,
@@ -154,6 +160,7 @@ impl<'a> Ctx<'a> {
         };
         Ok(Ok(Ctx {
             affected_all: settings.affected.value.map(|a| a.all).unwrap_or_default(),
+            cap_gb: settings.land.value.map_or(DEFAULT_CAP_GB, |l| l.cap_gb()),
             root,
             env,
             verify,
