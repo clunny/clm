@@ -109,6 +109,8 @@ fi
 
 `clm land` sets no toolchain variable itself, and leaves a `CARGO_TARGET_DIR` or `CARGO_INCREMENTAL` you set as it is.
 
+`clm verify` does the same for `[verify] check`, with a place of its own, `.clm/verify-build`, so the same lines in your script keep slow runs' build output out of the verify tree. Both places are bounded by `[land] target_cap_gb`: `clm verify` removes `.clm/verify-build` after a run that leaves it over the cap, as a land does `.clm/land`.
+
 ## Deployment is yours
 
 Every commit on `main` is checked, so every commit is deployable. Whether and when you deploy is your choice:

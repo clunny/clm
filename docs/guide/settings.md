@@ -47,11 +47,11 @@ Where: any file, or `CLM_DEFECTS`.
 
 ### `land`
 
-`[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check`, such as your build and test script. Optional `target_cap_gb`: the size, in gigabytes, above which a land removes its shared build directory `.clm/land` after its push (default 15). Optional `check_target_seconds`: how long a land's check should take at most (default 120).
+`[land]` with `check`: the command `clm land` runs on the tree it lands, before `clm check`, such as your build and test script. Optional `target_cap_gb`: the size, in gigabytes, above which a land removes its shared build directory `.clm/land` after its push, and `clm verify` removes its own, `.clm/verify-build`, after each run of `[verify] check` (default 15). Optional `check_target_seconds`: how long a land's check should take at most (default 120).
 
 - **Set `check`** so nothing lands on `main` without your tests passing on this machine. Each land then takes as long as the command does.
 - **Leave it unset** and `clm land` runs only `clm check`: fast, but nothing runs your tests before a land.
-- **A higher `target_cap_gb`** keeps builds incremental between lands, at the cost of disk; a lower one frees disk and makes the next land rebuild from scratch.
+- **A higher `target_cap_gb`** keeps builds incremental between lands and between verify runs, at the cost of disk; a lower one frees disk and makes the next land or verify run rebuild from scratch.
 - **`check_target_seconds`** changes nothing a land does: a land over it prints where its time went and what selected each costly step, so whoever landed it can judge whether the selection reaches too far or a suite belongs after the land. A lower target reports sooner and more often; a higher one stays quiet until lands are slower.
 
 Where: `clm.toml` or `clm.local.toml`.

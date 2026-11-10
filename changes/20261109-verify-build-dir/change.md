@@ -1,6 +1,6 @@
 ---
-status: proposed
-resolves: [backlog/the-clone-s-shared-land-and-verify-build-caches-grow-without]
+status: applied
+resolves: [the-clone-s-shared-land-and-verify-build-caches-grow-without]
 ---
 
 ## Intent

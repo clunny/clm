@@ -59,7 +59,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Approve:** a human's recorded yes to a branch that needs review (`clm approve`). *Usually:* an approving review.
 - **Land:** merging a branch into `main` through `clm land`, which runs the checks on the merged result on your machine and pushes `main`. *Usually:* merge, or land.
 - **Overlap re-check:** what a land runs when the branch's head and `main`'s head were each checked whole and `main` has moved since: only the tests both can affect (`clm affected --overlap`), and none when there are none. The land prints a `re-check:` line, and its ledger record keeps `recheck` (`checked`, `none`, `overlap` or `selected`). See `ci-and-deployment`.
-- **`CLM_LAND_DIR`:** the directory, lasting from land to land, that `clm land` gives a check it runs in the clone's land tree, for the check's build output.
+- **`CLM_LAND_DIR`:** the directory, lasting from run to run, that `clm land` gives a check it runs in the clone's land tree (`.clm/land`), and `clm verify` gives `[verify] check` (`.clm/verify-build`), for the check's build output.
 - **Rebase:** `clm rebase`: rebase a branch onto `origin/main`, regenerate `specs/` from its changes and run the checks.
 - **Wrap-up:** `clm wrap-up`: clean up landed work and say whether the session can end.
 - **Ledger:** the record of approvals, checks and lands, kept on one branch per writer (`clm ledger`); `clm ledger verify` audits `main` against it, checking every commit on `main` is a recorded land. *Usually:* an audit log.
