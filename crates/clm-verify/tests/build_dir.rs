@@ -99,7 +99,7 @@ fn a_bisect_probes_place() {
     let out = f.due();
     assert_eq!(out.code, 1, "{}", out.line);
     let lines = f.lines("dirs.out");
-    // The verification itself and at least one probe.
-    assert!(lines.len() >= 2, "{lines:?}");
+    // The verification itself and its one probe.
+    assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines.iter().all(|l| *l == main_build_dir(&f)), "{lines:?}");
 }
