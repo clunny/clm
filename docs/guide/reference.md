@@ -18,6 +18,7 @@ The skills, the commands' settings and where to read more: a page to look things
 | `/clm:help` | ask how CLM works or how to do something; it answers from the guide and changes nothing |
 | `/clm:health` | read the health report and propose cuts, for you to take to `/clm:propose` |
 | `/clm:configure` | review every setting, or change one (`/clm:configure set concurrent builds`): it explains the trade-offs, edits the right file and lands the edit |
+| `/clm:verify` | verify `main` as it is now, whatever the triggers say: on a red result it shows what failed, re-runs the failing tests when it can, and offers to take the failure in as a `P1` bug |
 
 ## Commands
 
