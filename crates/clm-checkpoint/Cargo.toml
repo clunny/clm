@@ -11,6 +11,3 @@ clm-check.workspace = true
 clm-git.workspace = true
 clm-ledger.workspace = true
 clm-orchestrator.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true
