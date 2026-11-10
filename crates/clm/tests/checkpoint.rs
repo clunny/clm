@@ -518,6 +518,19 @@ fn pushed_ledger_is_safe() {
 }
 
 #[test]
+fn a_branch_deleted_on_origin_is_not_open() {
+    // req:orchestrator.checkpoint/checkpoint@9bbd3578
+    let r = repo();
+    spec_branch(&r, "spec/d", true);
+    // Deleted on `origin` by someone else: the clone's remote-tracking ref must be pruned.
+    git(&r.origin, &["update-ref", "-d", "refs/heads/spec/d"]);
+    let (code, out) = checkpoint(&r.work);
+    assert!(!out.lines().any(|l| l == "open spec/d"), "{out}");
+    assert!(!exists(&r.work, "refs/remotes/origin/spec/d"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+}
+
+#[test]
 fn scenario_open_branch_only() {
     // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
     let r = repo();
