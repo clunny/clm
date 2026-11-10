@@ -13,7 +13,7 @@ fn every_land() -> Fixture {
 
 #[test]
 fn a_passing_run() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -68,7 +68,7 @@ fn a_passing_run() {
 
 #[test]
 fn a_run_with_no_green_record_selects_nothing() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     assert_eq!(f.due().code, 0);
@@ -77,7 +77,7 @@ fn a_run_with_no_green_record_selects_nothing() {
 
 #[test]
 fn a_failing_run() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -116,8 +116,84 @@ fn a_failing_run() {
 }
 
 #[test]
+fn a_red_runs_report() {
+    // req:verify/verify-run@ff539674
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let land = f.land(&[("crates/b/src/lib.rs", "x\n")], "two");
+    f.write("check-prints", "");
+    f.write("check-fails", "");
+    let out = f.due();
+    assert_eq!(out.code, 1);
+    assert!(out.line.starts_with("verify failed"), "{}", out.line);
+    let check = f.path("bin/check").display().to_string();
+    let at = out
+        .notes
+        .iter()
+        .position(|n| n == &format!("last 40 lines of `{check}`:"))
+        .unwrap_or_else(|| panic!("{:?}", out.notes));
+    // The last 40 of the 1000 lines the check prints, then the log's path.
+    let tail: Vec<String> = (961..=1000).map(|n| n.to_string()).collect();
+    let after = &out.notes[at + 1..];
+    assert_eq!(after.len(), 41, "{after:?}");
+    assert_eq!(&after[..40], tail.as_slice());
+    let log = f
+        .work()
+        .join(format!(".clm/verify-logs/{}.log", &land[..7]));
+    assert!(after[40].contains(&log.display().to_string()), "{after:?}");
+    // The check marks no step.
+    assert!(!out.notes.iter().any(|n| n.starts_with("the step open")));
+}
+
+#[test]
+fn a_red_runs_report_names_the_open_step() {
+    // req:verify/verify-run@ff539674
+    let f = every_land();
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    f.land(&[("crates/b/src/lib.rs", "x\n")], "two");
+    f.write("check-group", "unit");
+    f.write("check-prints", "");
+    f.write("check-fails", "");
+    let out = f.due();
+    let step = out
+        .notes
+        .iter()
+        .position(|n| n.starts_with("the step open when it ended is `unit`, lines 1 to "))
+        .unwrap_or_else(|| panic!("{:?}", out.notes));
+    let first = out
+        .notes
+        .iter()
+        .position(|n| n.starts_with("last 40 lines of"))
+        .unwrap();
+    // In order: the tail, the step, the log's path.
+    assert!(
+        first < step && step + 2 == out.notes.len(),
+        "{:?}",
+        out.notes
+    );
+    assert!(
+        out.notes[step + 1].contains("verify-logs"),
+        "{:?}",
+        out.notes
+    );
+}
+
+#[test]
+fn a_red_run_answered_from_the_ledger_prints_no_report() {
+    // req:verify/verify-run@ff539674
+    let f = every_land();
+    let land = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&land, false);
+    let out = f.run(&clm_verify::Request::Commit(land));
+    assert_eq!(out.code, 1);
+    assert!(out.notes.iter().all(|n| !n.starts_with("last 40 lines")));
+}
+
+#[test]
 fn a_land_waits_for_the_slow_check() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     f.write("sleep", "2");
@@ -148,7 +224,7 @@ fn a_land_waits_for_the_slow_check() {
 
 #[test]
 fn two_runs_never_move_the_tree_under_each_other() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     let old = f.land(&[("a.txt", "1\n")], "old");
     let new = f.land(&[("a.txt", "2\n")], "new");
@@ -170,7 +246,7 @@ fn two_runs_never_move_the_tree_under_each_other() {
 
 #[test]
 fn a_selection_that_cannot_be_made_runs_every_test() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -183,7 +259,7 @@ fn a_selection_that_cannot_be_made_runs_every_test() {
 
 #[test]
 fn one_at_a_time() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     let f = every_land();
     f.land(&[("a.txt", "1\n")], "one");
     f.write("sleep", "1");
@@ -202,7 +278,7 @@ const CHILD: &str = "CLM_TEST_STDERR_FULL";
 #[cfg(target_os = "linux")]
 #[test]
 fn the_verdict_outlives_a_failing_stderr() {
-    // req:verify/verify-run@7308e44a
+    // req:verify/verify-run@ff539674
     if std::env::var_os(CHILD).is_none() {
         // The scenario runs in a child whose stderr is `/dev/full`.
         let full = std::fs::OpenOptions::new()
