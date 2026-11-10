@@ -2494,10 +2494,8 @@ fn verify_skill() {
         "{sentence}"
     );
     // A re-run changes no record and decides nothing.
-    assert!(
-        body.contains("change no record"),
-        "re-run changes no record"
-    );
+    let sentence = sentence_with(&body, "change no record");
+    assert!(sentence.contains("decide nothing"), "{sentence}");
 }
 
 /// What `architecture-audit` asks of a skill's text.
