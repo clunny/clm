@@ -1363,6 +1363,8 @@ fn scenario_clean_lands_marked() {
     assert!(out.ends_with("wrap-up ok\n"), "{out}");
     assert_eq!(code, Some(0), "{out}");
     assert_eq!(mark(work), Some(rev(work, "origin/main")), "{out}");
+    // The mark is the clone's own: never pushed.
+    assert!(!exists(&s.r.origin, "refs/clm/tiers-verified"), "{out}");
 }
 
 #[test]
