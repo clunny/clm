@@ -1,13 +1,13 @@
 ---
 title: "Stop reviewing AI's code. Review its intent."
 series_part: 1
-summary: "AI can write the code, but it can't decide what the system is for: CLM gives humans the spec, gives AI all of the code, and lets deterministic code (not reviewers) keep the two in sync."
+summary: "AI can write the code, but it can't decide what the system is for: CLM gives humans the intent, gives AI the spec and all of the code, and lets deterministic code (not reviewers) keep the two in sync."
 tags: [clm, claude-code, spec-driven-development, ai-coding-agents, code-review, software-architecture]
 date: 2026-11-06
 draft: false
 ---
 
-**AI didn't just make writing code faster. It made the way we build software obsolete. CLM is redefines how to build software with AI.**
+**AI didn't just make writing code faster. It made the way we build software obsolete. CLM redefines how to build software with AI.**
 
 There is a moment most people using a coding agent will recognise. A pull request arrives, a few hundred lines long, and it looks fine. The tests pass. You scroll, you recognise the shapes, you approve. Somewhere in the back of your mind you know you didn't really read it, and that the approval means less than it used to.
 
@@ -19,7 +19,7 @@ And the risk was never really a bad line of code. Tests catch most of those, and
 
 CLM is an open-source Claude Code plugin and Rust CLI built on one idea: the decisions are the part that is yours, so write them down and review those instead. Its README puts it in four sentences:
 
-> Humans own the spec and design. AI writes all the code. Deterministic checks keep the two in sync, and git is the only channel between people and sessions.
+> Humans own the intent. AI writes the spec and all the code. Deterministic checks keep the two in sync, and git is the only channel between people and sessions.
 
 You say what the system must do. Claude builds it. Programs check that the code proves what you said, and nothing reaches `main` until they agree. Your review moves from the diff to the decision.
 
@@ -57,7 +57,7 @@ The most important of those checks connects the spec to the code. **Every requir
 // req:gate/needs-review@3276bfca
 ```
 
-Change what a requirement says and that marker goes stale, so the code is known to be behind without anyone having to notice. "Is this built?" stops being a judgement call and becomes something a program answers. How that works will be a futuer blog post.
+Change what a requirement says and that marker goes stale, so the code is known to be behind without anyone having to notice. "Is this built?" stops being a judgement call and becomes something a program answers. How that works will be a future blog post.
 
 Code is still reviewed, just not by you. Each build runs an AI code review and a spec audit over its own diff, fixes what it agrees with, and writes the findings into the pull request. That review advises; the checks decide. Your confidence no longer comes from "someone looked at this". It comes from "this was proved against something I wrote".
 

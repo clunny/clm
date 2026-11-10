@@ -2,7 +2,7 @@
 
 A Claude Code plugin for spec-driven development, solo or as a team. Site: <https://clm-app.dev>.
 
-Humans own the spec and design. AI writes all the code. Deterministic checks keep the two in sync, and git is the only channel between people and sessions.
+Humans own the intent. AI writes the spec and all the code. Deterministic checks keep the two in sync, and git is the only channel between people and sessions.
 
 ## Who it is for
 
