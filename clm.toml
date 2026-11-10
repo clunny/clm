@@ -55,10 +55,6 @@ command = [
     # Kept: the Contract offers it as the selection between two commits (`overlap-selection`);
     # `affected_overlap` calls it, and `land` may call it directly in its overlap re-check.
     "--allow", "clm_affected::affected_between",
-    # Kept until `verify` bounds its build place through it (`land/shared-target-cap`, built
-    # ahead of `verify/verify-build-cap`).
-    "--allow", "clm_land::cap_directory",
-    "--allow", "clm_land::Capped",
 ]
 hint = "scripts/dev-install.sh"
 

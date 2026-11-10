@@ -38,11 +38,9 @@ pub(crate) fn check(
     let selection = green.and_then(|green| selection(ctx, &tree.dir, green));
     // A place that lasts from run to run outside the verify tree, as `.clm/land` is a land's
     // (`verify-build-dir`); no toolchain's variables are set here.
+    let build = tree::places(ctx)?.join("verify-build");
     let env = clm_land::CheckEnv {
-        set: vec![(
-            "CLM_LAND_DIR".to_string(),
-            tree::places(ctx)?.join("verify-build").into_os_string(),
-        )],
+        set: vec![("CLM_LAND_DIR".to_string(), build.clone().into_os_string())],
         unset: Vec::new(),
     };
     let run = clm_land::run_check(
@@ -52,6 +50,11 @@ pub(crate) fn check(
         &env,
         log,
     )?;
+    // Still under the verify tree's lock, so no other run is building in the place; the line
+    // never changes the record or the exit status (`verify-build-cap`).
+    if let Some(capped) = clm_land::cap_directory(&build, ".clm/verify-build", ctx.cap_gb) {
+        say(capped.line());
+    }
     Ok(Probe {
         passed: run.passed,
         untestable: matches!(run.code, Some(125..=127)),
