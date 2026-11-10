@@ -324,7 +324,6 @@ dependencies = [
  "clm-ledger",
  "clm-model",
  "clm-orchestrator",
- "tempfile",
 ]
 
 [[package]]

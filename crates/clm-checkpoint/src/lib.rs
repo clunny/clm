@@ -42,7 +42,7 @@ const HOLDS_MARK: &[&str] = &["ledger/understated-land", "ledger/unrated-land"];
 const UNRECORDED: &str = "ledger/unrecorded-land";
 
 /// Runs the checkpoint for the repository holding `root`, from its main checkout. The report
-/// ends with `wrap-up ok` or `wrap-up incomplete` (`outcome-name`).
+/// ends with `wrap-up ok` or `wrap-up incomplete` (`checkpoint`).
 pub fn checkpoint(root: &Path) -> Result<Report, Error> {
     let common = git(
         root,
@@ -514,7 +514,7 @@ mod tests {
 
     #[test]
     fn agent_dirs_directly_in_claude_worktrees_are_builds() {
-        // req:orchestrator.checkpoint/checkpoint@1c25c797
+        // req:orchestrator.checkpoint/checkpoint@9bbd3578
         assert!(is_build_worktree(Path::new("/r/.claude/worktrees/agent-1")));
         assert!(!is_build_worktree(Path::new("/r/.claude/worktrees/p3")));
         assert!(!is_build_worktree(Path::new("/r/worktrees/agent-1")));
