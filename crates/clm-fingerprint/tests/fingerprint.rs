@@ -68,6 +68,19 @@ fn content_changed() {
 }
 
 #[test]
+fn main_ahead_of_the_fork_point() {
+    // req:gate.fingerprint/fingerprint-stable@d81343df
+    let d = repo(&[(A, &five_lines()), ("specs/b/SPEC.md", "b\n")]);
+    git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
+    let before = fp(d.path());
+    git(d.path(), &["switch", "-q", "main"]);
+    commit(d.path(), &[("specs/b/SPEC.md", "changed\n")]);
+    git(d.path(), &["switch", "-q", "topic"]);
+    assert_eq!(fp(d.path()), before);
+}
+
+#[test]
 fn same_file_changed_on_main() {
     // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = repo(&[(A, &five_lines())]);
