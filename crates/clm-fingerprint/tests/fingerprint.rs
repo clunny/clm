@@ -69,7 +69,7 @@ fn content_changed() {
 
 #[test]
 fn main_ahead_of_the_fork_point() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let d = repo(&[(A, &five_lines()), ("specs/b/SPEC.md", "b\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
