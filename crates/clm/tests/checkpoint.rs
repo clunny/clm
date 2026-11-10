@@ -405,6 +405,7 @@ fn scenario_branches_from_main_kept() {
     let r = repo();
     // At an older commit on `origin/main`'s first-parent chain, with no commits of its own.
     git(&r.work, &["branch", "spec/m", "origin/main"]);
+    git(&r.work, &["push", "-q", "origin", "spec/m"]);
     write(&r.work, "more.txt", "m\n");
     push_main(&r.work, "move main on");
     // At `origin/main`'s tip, pushed with no commits of its own: no land names either.
@@ -414,6 +415,8 @@ fn scenario_branches_from_main_kept() {
     assert!(exists(&r.work, "refs/heads/spec/n"), "{out}");
     assert!(exists(&r.origin, "refs/heads/spec/n"), "{out}");
     assert!(exists(&r.work, "refs/heads/spec/m"), "{out}");
+    assert!(exists(&r.origin, "refs/heads/spec/m"), "{out}");
+    assert!(out.lines().any(|l| l == "open spec/n"), "{out}");
     assert!(!out.contains("removed"), "{out}");
     assert_eq!(code, Some(0), "{out}");
 }

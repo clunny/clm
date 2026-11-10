@@ -42,7 +42,7 @@ const HOLDS_MARK: &[&str] = &["ledger/understated-land", "ledger/unrated-land"];
 const UNRECORDED: &str = "ledger/unrecorded-land";
 
 /// Runs the checkpoint for the repository holding `root`, from its main checkout. The report
-/// ends with `wrap-up ok` or `wrap-up incomplete` (`outcome-name`).
+/// ends with `wrap-up ok` or `wrap-up incomplete` (`checkpoint`).
 pub fn checkpoint(root: &Path) -> Result<Report, Error> {
     let common = git(
         root,
