@@ -858,6 +858,7 @@ fn capped(cap: bool, size: &str) -> Fixture {
 #[test]
 fn target_over_the_cap_cleared() {
     // req:land/land-target-cap@69c8919e
+    // req:land/shared-target-cap@07ebae61
     let f = capped(true, "2000000000");
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
     assert!(out.lines.last().unwrap().starts_with("landed "), "{out:?}");

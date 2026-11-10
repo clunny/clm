@@ -20,6 +20,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+pub use cap::{Capped, cap_directory};
 pub use check_only::check_only;
 pub use land::land;
 pub use reconnect::reconnect;
