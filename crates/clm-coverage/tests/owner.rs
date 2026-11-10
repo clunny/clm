@@ -8,7 +8,7 @@ use tempfile::TempDir;
 
 #[test]
 fn scenario_owned_and_unowned() {
-    // req:check.coverage/owner@5180c8da
+    // req:check.coverage/owner@2e5588c3
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -22,7 +22,7 @@ fn scenario_owned_and_unowned() {
 
 #[test]
 fn the_deepest_node_then_the_first_by_id() {
-    // req:check.coverage/owner@5180c8da
+    // req:check.coverage/owner@2e5588c3
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -36,7 +36,7 @@ fn the_deepest_node_then_the_first_by_id() {
 
 #[test]
 fn pending_puts_an_unowned_file_on_the_root() {
-    // req:check.coverage/owner@5180c8da
+    // req:check.coverage/owner@2e5588c3
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
