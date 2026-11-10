@@ -132,6 +132,7 @@ Tests too slow for every land have three places to go:
 - **before the land, for what changed**: `clm affected` selects the tests for the components a branch touches, so `[land] check` can run only the slow tests a change could break;
 - **after the land, with `clm verify`**: set `[verify]` in `clm.toml` and take the tests out of `[land] check`. Lands then wait only for the fast checks;
 - **before a release**: a release or deploy step runs `clm verify --commit <sha>`, which passes at once when that commit already passed, and otherwise runs or reads the slow tests for it.
+- **on demand**: `/clm:verify` runs `clm verify --commit origin/main` to verify `main` as it is now. A red run prints the step its check was in when it failed and the last 40 lines of its output (with the log's path); the skill re-runs the failing tests when it can tell which they are and the project can run one alone, says whether they failed again, and offers to take the failure in as a `P1` bug.
 
 ### When a land runs over its target
 

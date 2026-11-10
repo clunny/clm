@@ -12,6 +12,7 @@ Day to day you do two things: say what should change, and say yes to it. Claude 
 | `/clm:triage` | the backlog has piled up: approvals, questions for you, bugs, ideas |
 | `/clm:help` | you want to know how CLM works or how to do something |
 | `/clm:health` | you want to know what to tidy, cut or rethink |
+| `/clm:verify` | you want to know now whether `main` passes its slow tests, whatever the triggers say |
 
 A typical loop is: propose a change, approve it, build it. Triage whenever the backlog grows.
 
