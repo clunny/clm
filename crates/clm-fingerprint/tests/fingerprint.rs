@@ -44,7 +44,7 @@ fn five_lines() -> String {
 
 #[test]
 fn pure_rebase() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = repo(&[(A, &five_lines()), ("specs/b/SPEC.md", "b\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
@@ -54,14 +54,35 @@ fn pure_rebase() {
     git(d.path(), &["switch", "-q", "topic"]);
     git(d.path(), &["rebase", "-q", "main"]);
     assert_eq!(fp(d.path()), before);
-    // content changed
+}
+
+#[test]
+fn content_changed() {
+    // req:gate.fingerprint/fingerprint@5c898d3d
+    let d = repo(&[(A, &five_lines())]);
+    git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
+    let before = fp(d.path());
     commit(d.path(), &[(A, &five_lines().replace("line 1", "uno"))]);
     assert_ne!(fp(d.path()), before);
 }
 
 #[test]
+fn main_ahead_of_the_fork_point() {
+    // req:gate.fingerprint/fingerprint@5c898d3d
+    let d = repo(&[(A, &five_lines()), ("specs/b/SPEC.md", "b\n")]);
+    git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
+    let before = fp(d.path());
+    git(d.path(), &["switch", "-q", "main"]);
+    commit(d.path(), &[("specs/b/SPEC.md", "changed\n")]);
+    git(d.path(), &["switch", "-q", "topic"]);
+    assert_eq!(fp(d.path()), before);
+}
+
+#[test]
 fn same_file_changed_on_main() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = repo(&[(A, &five_lines())]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
@@ -75,7 +96,7 @@ fn same_file_changed_on_main() {
 
 #[test]
 fn git_config_ignored() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint-ignores-config@006f7b67
     let d = repo(&[
         ("old name.txt", &five_lines()),
         ("bin.dat", "x\0y"),
@@ -124,7 +145,7 @@ fn spec_branch() -> TempDir {
 
 #[test]
 fn regenerated_onto_a_main_that_changed_the_same_file() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = spec_branch();
     let before = fp(d.path());
     git(d.path(), &["switch", "-q", "main"]);
@@ -140,7 +161,13 @@ fn regenerated_onto_a_main_that_changed_the_same_file() {
         ],
     );
     assert_eq!(fp(d.path()), before);
-    // delta edited
+}
+
+#[test]
+fn delta_edited() {
+    // req:gate.fingerprint/fingerprint-stable@d81343df
+    let d = spec_branch();
+    let before = fp(d.path());
     commit(
         d.path(),
         &[("changes/x/deltas/a.md", "delta 2\n"), (A, "base\ns\nr2\n")],
@@ -150,7 +177,7 @@ fn regenerated_onto_a_main_that_changed_the_same_file() {
 
 #[test]
 fn specs_edited_by_hand_on_a_spec_branch() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = spec_branch();
     let before = fp(d.path());
     commit(d.path(), &[(A, "by hand\n")]);
@@ -159,7 +186,7 @@ fn specs_edited_by_hand_on_a_spec_branch() {
 
 #[test]
 fn empty_when_nothing_differs() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let d = repo(&[(A, "x\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     assert_eq!(fp(d.path()), "empty");
@@ -186,7 +213,7 @@ fn hex(parts: &[&str]) -> String {
 
 #[test]
 fn listings_not_a_process() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let base = vec![
         entry("blob", "aaa", "a.txt"),
         entry("blob", "same", "b.txt"),
@@ -203,7 +230,7 @@ fn listings_not_a_process() {
 
 #[test]
 fn listings_of_a_branch_that_adds_a_change() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let base = vec![entry("blob", "s1", A)];
     let head = |id: &str| {
         vec![
@@ -218,7 +245,7 @@ fn listings_of_a_branch_that_adds_a_change() {
 
 #[test]
 fn listings_of_an_archive_move() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let base = vec![
         entry("blob", "s1", A),
         entry("blob", "c", "changes/x/change.md"),
@@ -244,7 +271,7 @@ fn listings_of_an_archive_move() {
 
 #[test]
 fn adds_change_reads_one_component_ids() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let adds = |path: &str| adds_change(&[], &[entry("blob", "c", path)]);
     assert!(adds("changes/x/change.md"));
     assert!(adds("changes/archive/x/change.md"));
@@ -255,7 +282,7 @@ fn adds_change_reads_one_component_ids() {
 
 #[test]
 fn paths_are_bytes() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let listing = b"100644 blob aaa\tcaf\xe9.txt\x00040000 tree ttt\tdir\0junk\0";
     let entries = parse_ls_tree(listing);
     assert_eq!(entries.len(), 2);
@@ -269,7 +296,7 @@ fn workspace() -> PathBuf {
 
 #[test]
 fn builds_for_wasm() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let dir = workspace().join("target/wasm-test");
     let out = Command::new(env!("CARGO"))
         .current_dir(workspace())
@@ -289,7 +316,7 @@ fn builds_for_wasm() {
 
 #[test]
 fn git_runs_through_the_layer() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint@5c898d3d
     let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     for entry in std::fs::read_dir(src).unwrap() {
         let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
@@ -299,10 +326,12 @@ fn git_runs_through_the_layer() {
 
 #[test]
 fn mode_change_changes_the_fingerprint() {
-    // req:gate.fingerprint/fingerprint@fb78d185
+    // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = repo(&[("run.sh", "echo\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[("other.txt", "o\n")]);
+    let before = fp(d.path());
     git(d.path(), &["update-index", "--chmod=+x", "run.sh"]);
     git(d.path(), &["commit", "-qm", "mode"]);
-    assert_ne!(fp(d.path()), "empty");
+    assert_ne!(fp(d.path()), before);
 }
