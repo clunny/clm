@@ -42,6 +42,7 @@ if [ -n "${CLM_SELECTION-}" ]; then
 else
   echo unset >> "$DIR/check-selection.log"
 fi
+if [ -e "$DIR/check-group" ]; then echo "::group::$(cat "$DIR/check-group")"; fi
 if [ -e "$DIR/check-prints" ]; then seq 1000; fi
 echo "start" >> "$DIR/check-order.log"
 echo "start $(git rev-parse HEAD)" >> "$DIR/check-trees.log"

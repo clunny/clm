@@ -9,7 +9,7 @@ const LOCAL: &str = "mode = \"local\"\ntriggers = []";
 
 #[test]
 fn already_verified() {
-    // req:verify/verify-commit@ab79a067
+    // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     let c = f.land(&[("a.txt", "1\n")], "one");
     f.land(&[("a.txt", "2\n")], "two");
@@ -22,7 +22,7 @@ fn already_verified() {
 
 #[test]
 fn a_red_record_answers_red() {
-    // req:verify/verify-commit@ab79a067
+    // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     let c = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&c, false);
@@ -37,7 +37,7 @@ fn a_red_record_answers_red() {
 
 #[test]
 fn verified_now() {
-    // req:verify/verify-commit@ab79a067
+    // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     let h = f.land(&[("a.txt", "1\n")], "one");
     let out = f.run(&Request::Commit(h.clone()));
@@ -52,7 +52,7 @@ fn verified_now() {
 
 #[test]
 fn an_older_land_is_checked_out_with_the_last_verified_commit_before_it_as_since() {
-    // req:verify/verify-commit@ab79a067
+    // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     let g = f.land(&[("a.txt", "0\n")], "green");
     f.verified(&g, true);
@@ -70,7 +70,7 @@ fn an_older_land_is_checked_out_with_the_last_verified_commit_before_it_as_since
 
 #[test]
 fn not_on_main() {
-    // req:verify/verify-commit@ab79a067
+    // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     f.land(&[("a.txt", "1\n")], "one");
     let work = f.work();
@@ -88,8 +88,56 @@ fn not_on_main() {
 }
 
 #[test]
+fn main_by_name() {
+    // req:verify/verify-commit@af1f0935
+    let f = Fixture::new(Some(LOCAL));
+    f.land(&[("a.txt", "1\n")], "one");
+    // Another clone lands, so this clone's `origin/main` is behind until `clm verify` fetches.
+    let other = f.path("other");
+    let origin = f.path("origin.git");
+    f.git(
+        &f.work(),
+        &[
+            "clone",
+            "-q",
+            origin.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    f.git(&other, &["config", "user.name", "Other"]);
+    f.git(&other, &["config", "user.email", "o@example.com"]);
+    std::fs::write(other.join("a.txt"), "2\n").unwrap();
+    f.git(&other, &["commit", "-q", "-am", "two"]);
+    f.git(&other, &["push", "-q", "origin", "main"]);
+    let h = f.git(&other, &["rev-parse", "HEAD"]);
+    let out = f.run(&Request::Commit("origin/main".to_string()));
+    assert_eq!(out.line, format!("verify passed {} 3 lands", &h[..7]));
+    assert_eq!(out.code, 0);
+    assert_eq!(f.lines("check-head.log"), std::slice::from_ref(&h));
+    assert!(matches!(
+        f.records().as_slice(),
+        [clm_ledger::Body::Verified { commit, passed: true, .. }] if commit == &h
+    ));
+}
+
+#[test]
+fn a_revision_that_is_no_commit_is_refused() {
+    // req:verify/verify-commit@af1f0935
+    let f = Fixture::new(Some(LOCAL));
+    f.land(&[("a.txt", "1\n")], "one");
+    let err = clm_verify::verify(
+        &f.work(),
+        &Request::Commit("origin/nonesuch".to_string()),
+        &f.env(),
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("is not a commit"), "{err}");
+    assert!(f.lines("check-pwd.log").is_empty());
+}
+
+#[test]
 fn a_merged_branch_commit_is_not_a_land() {
-    // req:verify/verify-commit@ab79a067
+    // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "side"]);

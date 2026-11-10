@@ -9,6 +9,9 @@ use clm_ledger::Body;
 use crate::chain::State;
 use crate::{Ctx, Error, Outcome, bisect, import, say, tree};
 
+/// How many of the check's last lines a red run repeats, as a failing land does.
+const TAIL: usize = 40;
+
 /// What a check run on one commit came to.
 pub(crate) struct Probe {
     pub(crate) passed: bool,
@@ -17,6 +20,9 @@ pub(crate) struct Probe {
     pub(crate) untestable: bool,
     /// The log, when the run was given one and wrote it.
     pub(crate) log: Option<PathBuf>,
+    /// The last lines of the check's output, and the step open as it ended.
+    pub(crate) tail: Vec<String>,
+    pub(crate) step: Option<clm_land::Step>,
 }
 
 /// Runs `[verify] check` on `commit` in the verify tree, with `CLM_SELECTION` naming what
@@ -41,6 +47,8 @@ pub(crate) fn check(
         passed: run.passed,
         untestable: matches!(run.code, Some(125..=127)),
         log: log.filter(|_| run.logged).map(Path::to_path_buf),
+        tail: run.tail,
+        step: run.step,
     })
 }
 
@@ -127,6 +135,17 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
         None,
     )?;
     outcome.notes.extend(note);
+    // The report is of the run on this commit, not of a bisect probe's.
+    outcome
+        .notes
+        .push(format!("last {} lines of `{}`:", TAIL, ctx.verify.check));
+    outcome.notes.extend(run.tail);
+    if let Some(step) = run.step {
+        outcome.notes.push(format!(
+            "the step open when it ended is `{}`, lines {} to {} of its output",
+            step.name, step.first, step.last
+        ));
+    }
     if let Some(log) = run.log {
         outcome
             .notes
