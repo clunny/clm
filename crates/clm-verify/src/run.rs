@@ -36,11 +36,20 @@ pub(crate) fn check(
 ) -> Result<Probe, Error> {
     let tree = tree::Tree::at(ctx, commit)?;
     let selection = green.and_then(|green| selection(ctx, &tree.dir, green));
+    // A place that lasts from run to run outside the verify tree, as `.clm/land` is a land's
+    // (`verify-build-dir`); no toolchain's variables are set here.
+    let env = clm_land::CheckEnv {
+        set: vec![(
+            "CLM_LAND_DIR".to_string(),
+            tree::places(ctx)?.join("verify-build").into_os_string(),
+        )],
+        unset: Vec::new(),
+    };
     let run = clm_land::run_check(
         &ctx.verify.check,
         &tree.dir,
         selection.as_ref().map(|s| s.path.as_path()),
-        &clm_land::CheckEnv::default(),
+        &env,
         log,
     )?;
     Ok(Probe {
