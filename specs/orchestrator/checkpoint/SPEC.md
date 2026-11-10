@@ -75,7 +75,7 @@ A branch squash-merged or fast-forwarded into `main` isn't landed by this test: 
 - THEN `.claude/worktrees/p3` and the local branch `impl/a` are still there, and it prints neither as `removed`
 
 #### Scenario: merged without a record
-- GIVEN local `impl/c` with no `origin` branch and no `landed` record, whose tip is the second parent of a merge commit on `origin/main`'s first-parent chain, as a GitHub pull request merged it before the cutover
+- GIVEN local `impl/c` with no `origin` branch and no `landed` record, whose tip is the second parent of a merge commit on `origin/main`'s first-parent chain
 - WHEN `clm wrap-up` runs
 - THEN `impl/c` is gone, it prints `removed impl/c` and no `unpushed` line for it, and exits 0
 

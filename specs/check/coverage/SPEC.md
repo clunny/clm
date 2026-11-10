@@ -103,17 +103,17 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - WHEN `clm pending` runs
 - THEN it prints `n/x <version> unbuilt` and no line for `architecture/a` or `capability/u`
 
-#### Scenario: capability node
+#### Scenario: capability component
 - GIVEN component `capability` and `capability/c` cited by nothing
 - WHEN `clm pending capability` runs
 - THEN it prints `capability/c <version> unbuilt`, and `clm pending clm` prints no line for it
 
-#### Scenario: removed node, files of two nodes
+#### Scenario: removed component, files of two components
 - GIVEN no component `g`, an `applied` change whose delta for `g` has `remove: true` and lists `g/x` under `REMOVED Requirements`, markers citing `g/x` at `crates/v/t.rs:4` and `crates/w/t.rs:7`, and components `v` and `w` with `paths` `["crates/v/**"]` and `["crates/w/**"]`
 - WHEN `clm pending` runs
 - THEN it prints `g/x obsolete crates/v/t.rs:4` for `v` and `g/x obsolete crates/w/t.rs:7` for `w`
 
-#### Scenario: removed node, unowned file
+#### Scenario: removed component, unowned file
 - GIVEN no component `g`, an `applied` change whose delta for `g` has `remove: true` and lists `g/x` under `REMOVED Requirements`, and a marker at `old/t.rs:4` citing `g/x` that no component's `paths` match
 - WHEN `clm pending clm` runs
 - THEN it prints `g/x obsolete old/t.rs:4`
@@ -168,7 +168,7 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - WHEN `clm pending capability` runs
 - THEN its line for `capability/c` is `capability/c <version> behind <cited>`, with nothing after it
 
-#### Scenario: serving rule on an optional node
+#### Scenario: serving rule on an optional component
 - GIVEN component `capability`, `capability/c` cited by nothing, `backlog/q.md` with `blocks: [capability/c]`, and component `w` with `optional: true` and `serves: [capability/c]` holding `w/x` uncited
 - WHEN `clm pending capability` runs
 - THEN it prints `capability/c <version> unbuilt blocked backlog/q,w/x`, and loading reports no violation
