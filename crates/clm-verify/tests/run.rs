@@ -160,7 +160,9 @@ fn a_red_runs_report_names_the_open_step() {
     let step = out
         .notes
         .iter()
-        .position(|n| n.starts_with("the step open when it ended is `unit`, lines 1 to "))
+        .position(|n| {
+            n.starts_with("the step open when it ended is `unit`, lines 1 to 1001 of its output")
+        })
         .unwrap_or_else(|| panic!("{:?}", out.notes));
     let first = out
         .notes

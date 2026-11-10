@@ -131,7 +131,7 @@ fn a_revision_that_is_no_commit_is_refused() {
         &f.env(),
     )
     .unwrap_err();
-    assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
+    assert!(err.to_string().contains("is not a commit"), "{err}");
     assert!(f.lines("check-pwd.log").is_empty());
 }
 
