@@ -391,7 +391,7 @@ fn scenario_a_skipped_proposals_warning_names_the_command_as_run() {
 
 #[test]
 fn scenario_rebase_by_its_new_name() {
-    // req:clm/renamed-commands@f600d2ff
+    // req:clm/renamed-commands@164ad075
     {
         let name = "rebase";
         let (dir, work) = conflicting();
@@ -428,7 +428,7 @@ fn scenario_rebase_by_its_new_name() {
 
 #[test]
 fn scenario_an_old_name_is_refused() {
-    // req:clm/old-command-names-retired@bb2bff6f
+    // req:clm/old-command-names-retired@94b2cc25
     let (_dir, work) = conflicting();
     let before = head(&work);
     for old in ["sync", "checkpoint", "page"] {

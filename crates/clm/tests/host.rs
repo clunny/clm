@@ -876,7 +876,7 @@ fn scenario_issue_nowhere_to_file() {
 
 #[test]
 fn scenario_pr_with_no_host() {
-    // req:clm/renamed-commands@f600d2ff
+    // req:clm/renamed-commands@164ad075
     let (r, gh) = (checkout("none"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
     assert_eq!((code, out.as_str()), (Some(0), "none\n"), "{err}");

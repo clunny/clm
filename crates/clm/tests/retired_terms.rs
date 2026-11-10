@@ -349,7 +349,7 @@ fn every_named_path_is_read() {
 
 #[test]
 fn the_old_command_names_are_on_the_list() {
-    // req:clm/old-command-names-retired@bb2bff6f
+    // req:clm/old-command-names-retired@94b2cc25
     for term in [
         "clm sync",
         "clm checkpoint",
