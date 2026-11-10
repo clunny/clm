@@ -148,7 +148,13 @@ fn regenerated_onto_a_main_that_changed_the_same_file() {
         ],
     );
     assert_eq!(fp(d.path()), before);
-    // delta edited
+}
+
+#[test]
+fn delta_edited() {
+    // req:gate.fingerprint/fingerprint-stable@d81343df
+    let d = spec_branch();
+    let before = fp(d.path());
     commit(
         d.path(),
         &[("changes/x/deltas/a.md", "delta 2\n"), (A, "base\ns\nr2\n")],
@@ -307,10 +313,12 @@ fn git_runs_through_the_layer() {
 
 #[test]
 fn mode_change_changes_the_fingerprint() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint-stable@d81343df
     let d = repo(&[("run.sh", "echo\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[("other.txt", "o\n")]);
+    let before = fp(d.path());
     git(d.path(), &["update-index", "--chmod=+x", "run.sh"]);
     git(d.path(), &["commit", "-qm", "mode"]);
-    assert_ne!(fp(d.path()), "empty");
+    assert_ne!(fp(d.path()), before);
 }
