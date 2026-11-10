@@ -41,7 +41,7 @@ On a branch that adds a change, `specs/` is derived from the merge base's `specs
 
 #### Scenario: git config ignored
 - GIVEN a branch that renames a text file with a one-line edit, changes a binary file, and adds a file holding Latin-1 bytes
-- WHEN `clm fingerprint --base main` runs once with no `core.abbrev` or `diff.*` settings, and once with `core.abbrev=16`, `core.quotePath=false`, `diff.renames=copies` and `diff.algorithm=patience` in the repository's config
+- WHEN `clm fingerprint --base main` runs once with no `core.abbrev` or `diff.*` settings, and once with `core.abbrev=16`, `core.quotePath=false`, `diff.renames=copies`, `diff.algorithm=patience`, `diff.noprefix=true` and `diff.context=8` in the repository's config
 - THEN both print the same fingerprint
 
 ### Requirement: fingerprint-stable
