@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-clone-s-shared-land-and-verify-build-caches-grow-without]
 ---
 
