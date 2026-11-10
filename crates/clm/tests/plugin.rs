@@ -2416,6 +2416,90 @@ fn configure_skill() {
     );
 }
 
+/// What `verify-skill` asks of a `verify` skill's frontmatter and body.
+fn verify_skill_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
+    let mut gaps = text_gaps(
+        "verify",
+        body,
+        &[
+            "clm verify --commit origin/main",
+            "verify off",
+            "verify pending",
+            "verify passed",
+            "verify failed",
+            "/clm:configure",
+            "check lock",
+            "clm setup",
+            "[build] setup",
+            "git switch --detach",
+            "git worktree list",
+            "tests-run-in-their-own-tree",
+            "verify_failures",
+            "git rev-parse <sha>",
+            "`P1`",
+            "Resolves: backlog/<slug>",
+            "verify-after-land",
+            "verify/<YYYYMMDD>-<short sha>",
+            "clm gate --base origin/main",
+            "clm branch push",
+            "clm pr open",
+            "clm land",
+            "clm branch delete",
+            "git worktree remove",
+            "clm wrap-up",
+            "left <path>",
+            "session-worktrees",
+            LAND_RULE,
+        ],
+        &["git push"],
+    );
+    let description = fm["description"].as_str().unwrap_or_default();
+    for needle in ["origin/main", "triggers", "slow tests"] {
+        if !description.contains(needle) {
+            gaps.push(format!("verify: description must mention {needle}"));
+        }
+    }
+    gaps
+}
+
+#[test]
+fn verify_skill() {
+    // req:plugin/verify-skill@26e884db
+    let (fm, body) = frontmatter(&plugin().join("skills/verify/SKILL.md"));
+    assert_eq!(verify_skill_gaps(&fm, &body), Vec::<String>::new());
+    // a skill that doesn't verify main
+    let gaps = verify_skill_gaps(
+        &fm,
+        &body.replace("clm verify --commit origin/main", "elided"),
+    );
+    assert_reports(&gaps, "verify", "clm verify --commit origin/main");
+    // each outcome, the re-run and the landing steps are needed
+    for needle in [
+        "verify off",
+        "verify pending",
+        "verify failed",
+        "clm setup",
+        "git switch --detach",
+        "verify_failures",
+        "Resolves: backlog/<slug>",
+        "clm branch delete",
+    ] {
+        let gaps = verify_skill_gaps(&fm, &body.replace(needle, "elided"));
+        assert_reports(&gaps, "verify", needle);
+    }
+    // The run takes no command time limit, and the human is told lands wait.
+    let sentence = sentence_with(&body, "clm verify --commit origin/main");
+    assert!(
+        sentence.contains("background") && sentence.contains("check lock"),
+        "{sentence}"
+    );
+    // A re-run changes no record and decides nothing.
+    assert!(
+        body.contains("change no record"),
+        "re-run changes no record"
+    );
+}
+
 /// What `architecture-audit` asks of a skill's text.
 fn architecture_audit_gaps(skill: &str, body: &str) -> Vec<String> {
     let must: &[&str] = match skill {

@@ -1,0 +1,22 @@
+---
+description: Verify origin/main as it is now, whatever the project's [verify] triggers say. Use whenever the person wants to know whether main is green or to run the slow tests now.
+---
+
+# Verify main
+
+Run the project's slow tests against `origin/main` now and tell the human what they show. Never push `main` by any means but `clm land`.
+
+1. Run `clm verify --commit origin/main` in the background or with no command time limit, since it may run the project's whole slow suite, tell the human that the clone's lands wait while it runs because it holds the clone's check lock, and show them its `verify` line when it ends.
+2. Read the line:
+   - `verify off`: `origin/main`'s `clm.toml` sets no `[verify]`, so the project's slow tests run in its land check. Say so and point at `/clm:configure`.
+   - `verify pending`: the host's pipeline has no result for the head yet. Say so and to run this skill again later.
+   - `verify passed`: say `main` is green at that commit.
+   - `verify failed`: go on to step 3.
+3. Show the culprit, the components, the failing step and the last lines of output `clm verify` printed, and the log's path.
+4. Only when those lines or the log show which tests failed and the project offers a way to run one test alone, re-run each such test at the failing commit and say for each whether it failed again or passed. Run them in a detached worktree of its own from that commit, added under the main checkout's `.claude/worktrees/` (the first path `git worktree list` prints) and removed afterwards, or, in a session whose checkout already lies under `.claude/worktrees/`, in that checkout detached at the commit with `git switch --detach <sha>` and switched back afterwards (`session-worktrees`). When `clm.toml` sets `[build] setup`, run `clm setup` there before the first re-run, so the re-run tests that commit's own code with its own dependencies (`tests-run-in-their-own-tree`). Otherwise say why you re-ran nothing and guess nothing. A re-run is made to change no record and decide nothing.
+5. Offer to take the failure in at `P1`, saying that taking it in is the human's decision that it is real. Write it as a `kind: bug` item whose `verify_failures` holds the commit's full ID (`git rev-parse <sha>`), whose `components` are the `verify failed` line's, and whose body names the culprit land, its change, the failing step, the lines that show the failure, the log's path and what the re-run showed. Say that once the item is on `main`, `clm land` holds code lands on those components until a fix whose commit carries `Resolves: backlog/<slug>` lands (`verify-after-land`). When every test you re-ran passed, write it instead as a `kind: bug` item for the flaky tests with no `verify_failures`, whose `components` hold those tests, which holds no land, and say that triage lists the red result until a later run on `main` passes.
+6. Write an item the human takes in on a branch `verify/<YYYYMMDD>-<short sha>` cut from `origin/main` in a worktree of its own: `git worktree add .claude/worktrees/<YYYYMMDD>-<short sha> -b verify/<YYYYMMDD>-<short sha> origin/main`, then change into it. In a session whose checkout already lies under `.claude/worktrees/`, cut the branch in that checkout with `git switch -c verify/<YYYYMMDD>-<short sha> origin/main` instead (`session-worktrees`). Commit the item there.
+7. Land it by the first line of `clm gate --base origin/main`, as `propose` lands a branch: on `code` or `spec`, push with `clm branch push`, open the pull request with `clm pr open` and run `clm land`. On `spec review`, show the human the item and ask for their approval; on a yes run `clm approve` through the guard's confirmation, then `clm land`.
+8. Once it has landed, first leave the branch: remove the worktree with `git worktree remove` from the directory you started in, or, in an isolated session under `.claude/worktrees/`, switch off the branch with `git switch --detach origin/main` and remove nothing. Then delete the pushed branch with `clm branch delete`. Then run `clm wrap-up` and pass each `left <path>: ...` line it prints to the human as it stands, a worktree it couldn't remove, which doesn't make the wrap-up incomplete, and leave the directory, and any command the line names, to them.
+
+Run `clm approve` only after the human says yes in this conversation, and only through the guard's confirmation.
