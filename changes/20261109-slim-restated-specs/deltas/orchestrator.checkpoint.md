@@ -1,0 +1,168 @@
+---
+component: orchestrator.checkpoint
+base: { contract: "16affb081b42c845", design: "71dd863dd47d8d9a" }
+---
+
+## MODIFIED Contract
+`clm wrap-up` removes landed work, reports any work that isn't safe on `origin`, names the changes that are complete but not yet archived, and says whether the session can end (`checkpoint-before-done`). It exits 0 with `wrap-up ok` or 1 with `wrap-up incomplete`. It reads git, the ledger and the clone's build places only, so it works on every host and offline. It deletes the places that don't count (`build-places`), the backstop for builds and drafts nobody finished.
+
+## MODIFIED Design
+Crate `clm-checkpoint`. Whether a branch landed comes from `clm-git`'s ancestry queries on `origin/main`, worktrees and branches from `clm-git`'s queries, and the complete changes from `orchestrator`'s queue on `origin/main`'s tree.
+
+**Landed** (`checkpoint`). A branch whose tip is an ancestor of `origin/main` off its first-parent chain reached `main` through a merge, `clm land`'s or a GitHub pull request's, so it needs no `landed` record. The test isn't "its tip is in `origin/main`", which a branch just created from `main` also passes: that branch's tip is a commit `main` itself was at, on the first-parent chain.
+
+**Places** (`checkpoint-frees-places`). The places are judged before any removal because the removals delete a landed build's local and remote `impl/<component>`, and a build place whose branches are all gone reads as not yet claimed, so it would count by its `taken` time instead of as landed. One call of `free_stale_places`, never `places` then `free_place`, since a `clm run` or `clm draft` could retake a place of that name between the two, and checkpoint would delete the fresh place. Checkpoint has no `--expiry`: when a session ran its builds with a longer expiry than the default, checkpoint may free a place whose build is still running, which only lets one more build start on the clone than the cap.
+
+**Removals** (`checkpoint`). A build's worktree is one on an `impl/*` branch whose directory is named `agent-*` directly in a `.claude/worktrees/` directory, where Claude Code puts a subagent's worktree. Its branch has landed and it is never the session's own, so nothing on it is lost when it can't be removed: the `left` line hands the directory to the human, and the local branch stays for the next wrap-up to delete once the directory is gone. What is left of that directory is neither judged clean or dirty, since git may not know it as a worktree. A landed branch checked out in any other worktree, such as a human's session worktree, is left alone with its worktree. A `worktree-agent-*` branch is the one Claude Code makes for a build, which the build leaves when it switches to `impl/<component>`. A live claim is a commit on top of `origin/main`, unlanded work has commits `origin/main` lacks, and a new branch's tip is on the first-parent chain, so none of them is ever deleted; a landed branch on `origin` is deleted leased on the tip checkpoint judged, so a push after the fetch keeps it. An autosync snapshot whose spec branch was abandoned stays. A `propose/<slug>` claim is held by a live change only: an archived change doesn't count, so a claim made after it is kept, and checkpoint and `clm claim` agree.
+
+**Unsafe work** (`checkpoint-reports-unsafe-work`). Only the session's own work makes the wrap-up incomplete (`checkpoint-before-done`), so several sessions can each finish while the others still work. Git doesn't record which session made a build's worktree, so a build's worktree and branch are never the session's own: `build` already has each build's outcome, a land or why it stopped.
+
+**Review mark** (`checkpoint-review-mark`, `checkpoint-recomputes-new-lands`). Recomputing a land runs the gate on it, and a repository's signed lands only grow, so checkpoint doesn't recompute the whole history each time it runs. The mark is in the clone's git common directory like the build places, so every worktree of the clone shares it, and never pushed. Two calls of `ledger`'s `verify`, the first without `--review` and without `--since`, the second with both: the second's `ledger/unrecorded-land` lines repeat the first's, or, in a repository with no `landed` record yet, name every commit after the mark, so only the findings the recomputation can add are taken from it. A finding holds the mark so that it is reported at every checkpoint until a human acts on it, while a land found clean is never recomputed by this clone again; a land recomputed as needing review while recorded as not gets `ledger/understated-land` first, so its `ledger/unapproved-land` is never left behind the mark. A merge whose `landed` record hasn't reached the clone yet gets only `ledger/unrecorded-land`, so it holds the mark and is recomputed once its record arrives. The mark is a cache derived from this clone's own earlier runs, which `git-is-truth` allows: nothing lands, approves or passes a check on it, deleting it (`git update-ref -d refs/clm/tiers-verified`) costs one full pass at the next checkpoint, and `clm ledger verify --review` with no `--since` is the full audit, which reads no mark. It is a ref rather than a file because the mark is a commit: git refuses a value that isn't one, and `git fetch --prune` leaves it alone. Custom refs are what `per-writer-ledgers` rejected for shared state because no host shows or fetches them, which is right for a clone's own mark.
+
+A branch squash-merged or fast-forwarded into `main` isn't landed by this test: a squash leaves its tip outside `main`, and a fast-forward puts it on the first-parent chain. It stays and is reported, which loses nothing. A branch merged outside `clm land` is removed like any other landed branch, and `clm ledger verify` reports its merge as `ledger/unrecorded-land`, which makes the wrap-up incomplete.
+
+## MODIFIED Requirements
+### Requirement: checkpoint <!-- base: 1c25c79708586621 -->
+`clm wrap-up` SHALL fetch `origin` with `--prune` and treat a `spec/*` or `impl/*` branch as landed when its current tip is an ancestor of `origin/main` and isn't on `origin/main`'s first-parent chain, whether or not a `landed` record names it. It SHALL remove each worktree on an `impl/*` branch in a `.claude/worktrees/agent-*` directory whose branch is landed and that has no uncommitted changes, whole, also when the build left a directory in it without its owner's write permission, and delete each local and `origin` `spec/*` or `impl/*` branch that is landed (leaving a worktree or main checkout with uncommitted changes in place), delete each `origin` `autosync/spec/<id>` whose change `<id>` is in `origin/main`, under `changes/<id>/` or `changes/archive/<id>/`, and delete each `origin` `propose/<slug>` whose `backlog/<slug>.md` isn't in `origin/main` or whose `<slug>` a change outside the archive in `origin/main` lists in `resolves`, printing `removed <path>` or `removed <branch>` for each. When such a worktree can't be removed, it SHALL print `left <path>: <error>; delete the directory by hand, then run git worktree prune` in place of `removed <path>`, with the error on one line, keep that worktree's local branch and go on, print no `dirty` or `elsewhere dirty` line for that path, and the line SHALL NOT make the wrap-up incomplete or exit 2. It SHALL delete each local branch `worktree-agent-*` that no worktree has checked out and whose tip is an ancestor of `origin/main`, switching a main checkout that is on such a branch and has no uncommitted changes to `main`, fast-forwarded to `origin/main`, first. It SHALL end with `wrap-up ok` and exit 0 when it printed no `dirty` or `unpushed` line of its own (`checkpoint-reports-unsafe-work`) and no violation, and `wrap-up incomplete` with exit 1 otherwise; a git failure SHALL exit 2. It SHALL NOT delete a `spec/*` or `impl/*` branch whose tip isn't an ancestor of `origin/main` or is on its first-parent chain, call `gh`, or touch files outside the worktrees it removes other than switching a landed main checkout to `main` and deleting the clone's places that no longer count (`checkpoint-frees-places`).
+
+#### Needs
+- vcs/remove-worktree
+
+#### Scenario: landed work cleaned up
+- GIVEN `impl/a` checked out in a clean, locked worktree in `.claude/worktrees/agent-1` that holds an ignored directory `cache/` with a file in it, `cache/` without its owner's write permission, and `spec/y` on `origin` with `autosync/spec/y`, both with `landed` records whose commits on `origin/main` have their tips as second parents, and `changes/y/` in `origin/main`
+- WHEN `clm wrap-up` runs
+- THEN the worktree's directory is gone from disk and `git worktree list` doesn't name it, both local and remote branches and `autosync/spec/y` are gone, it printed `removed` with the worktree's path and `removed impl/a`, prints `wrap-up ok` and exits 0
+
+#### Scenario: build's worktree git can't remove
+- GIVEN the landed `impl/a` of "landed work cleaned up", whose worktree `git worktree remove` refuses or can't delete
+- WHEN `clm wrap-up` runs
+- THEN it printed a line starting `left ` with the worktree's path and `git worktree prune` and no `removed`, `dirty` or `elsewhere dirty` line with that path, the local branch `impl/a` still exists, and it prints `wrap-up ok` and exits 0
+
+#### Scenario: done backlog claims removed
+- GIVEN `origin/propose/q` where `backlog/q.md` isn't in `origin/main`; `origin/propose/r` where `changes/y/change.md` in `origin/main` lists `r` in `resolves`; `origin/propose/s` where `backlog/s.md` is in `origin/main` and no change there names `s`; and `origin/propose/t` where `backlog/t.md` is in `origin/main` and only `changes/archive/z/change.md` names `t`
+- WHEN `clm wrap-up` runs
+- THEN `origin/propose/q` and `origin/propose/r` are gone, and `origin/propose/s` and `origin/propose/t` still exist
+
+#### Scenario: live claim kept
+- GIVEN `origin/impl/b`, a claim commit on top of `origin/main` pushed by another session
+- WHEN `clm wrap-up` runs
+- THEN `origin/impl/b` still exists
+
+#### Scenario: branches from main kept
+- GIVEN `spec/n`, created from `origin/main`'s tip and pushed with no commits of its own, and local `spec/m` at an older commit on `origin/main`'s first-parent chain with no commits of its own, neither with a `landed` record
+- WHEN `clm wrap-up` runs
+- THEN `spec/n` still exists locally and on `origin`, and `spec/m` still exists
+
+#### Scenario: abandoned autosync kept
+- GIVEN `origin/autosync/spec/q` and no `changes/q/` in `origin/main`
+- WHEN `clm wrap-up` runs
+- THEN `origin/autosync/spec/q` still exists
+
+#### Scenario: build's abandoned branch
+- GIVEN a local branch `worktree-agent-1` at `origin/main`'s tip that no worktree has checked out, and `worktree-agent-2` with a commit `origin/main` lacks
+- WHEN `clm wrap-up` runs
+- THEN `worktree-agent-1` is gone and `worktree-agent-2` still exists
+
+#### Scenario: human's worktree kept
+- GIVEN a clean worktree `.claude/worktrees/p3` on `impl/a`, with a `landed` record at its tip
+- WHEN `clm wrap-up` runs elsewhere
+- THEN `.claude/worktrees/p3` and the local branch `impl/a` are still there, and it prints neither as `removed`
+
+#### Scenario: merged without a record
+- GIVEN local `impl/c` with no `origin` branch and no `landed` record, whose tip is the second parent of a merge commit on `origin/main`'s first-parent chain, as a GitHub pull request merged it before the cutover
+- WHEN `clm wrap-up` runs
+- THEN `impl/c` is gone, it prints `removed impl/c` and no `unpushed` line for it, and exits 0
+
+### Requirement: checkpoint-review-mark <!-- base: b17eb6fab16a4372 -->
+`clm wrap-up` SHALL run `clm ledger verify` against `origin/main` without `--review` over the whole chain, and with the recomputation of `ledger/verify-recomputes-review` only for the lands on `origin/main`'s first-parent chain after the commit the local ref `refs/clm/tiers-verified` names, or for the whole chain when the ref is unset, doesn't resolve to a commit, or names one that isn't an ancestor of `origin/main`, taking from the recomputation only its `ledger/understated-land`, `ledger/unrated-land` and `ledger/unapproved-land` findings, and printing each finding once among `clm ledger verify`'s, each making it end `wrap-up incomplete` with exit 1. Before it prints `wrap-up ok` or `wrap-up incomplete` it SHALL set the ref to the first parent of the oldest land it recomputed that got a `ledger/understated-land` or `ledger/unrated-land` finding, or of the oldest commit after the ref that the audit of the whole chain gave `ledger/unrecorded-land`, or to `origin/main` when none did, the oldest by the first-parent chain's order, and SHALL NOT push it or set it when it exits 2.
+
+#### Needs
+- ledger/verify-recomputes-review
+- ledger/verify-unrated-land
+
+#### Scenario: clean lands marked
+- GIVEN a clone whose `origin/main` holds the history of `ledger`'s *honest lands*, no `refs/clm/tiers-verified`, and no other work
+- WHEN `clm wrap-up` runs
+- THEN it prints no `ledger/` line and `wrap-up ok`, and `refs/clm/tiers-verified` names `origin/main`'s commit
+
+#### Scenario: lands before the mark not recomputed
+- GIVEN a clone whose `origin/main` holds the history of `ledger`'s *review recorded as none*, with `refs/clm/tiers-verified` at `origin/main`
+- WHEN `clm wrap-up` runs
+- THEN it prints no `ledger/understated-land` line and `wrap-up ok`
+
+#### Scenario: finding holds the mark
+- GIVEN a clone whose `origin/main` holds the land of `ledger`'s *review recorded as none* and, after it, the spec land of *honest lands*, and no `refs/clm/tiers-verified`
+- WHEN `clm wrap-up` runs twice
+- THEN each run prints `ledger/understated-land` naming the first land's commit and `wrap-up incomplete` and exits 1, and `refs/clm/tiers-verified` names that land's first parent
+
+#### Scenario: rewritten main
+- GIVEN a clone whose `origin/main` holds the history of `ledger`'s *review recorded as none*, with `refs/clm/tiers-verified` at a commit that isn't an ancestor of `origin/main`
+- WHEN `clm wrap-up` runs
+- THEN it prints `ledger/understated-land` naming the land's commit
+
+#### Scenario: record arriving late
+- GIVEN a clone whose `origin/main` holds the code land of `ledger`'s *honest lands* and, after it, the land of *review recorded as none* with no `landed` record yet, and no `refs/clm/tiers-verified`
+- WHEN `clm wrap-up` runs, then the land's signed `landed` record arrives, and `clm wrap-up` runs again
+- THEN the first run prints `ledger/unrecorded-land` and leaves `refs/clm/tiers-verified` at the land's first parent, and the second prints `ledger/understated-land` naming the land's commit
+
+#### Scenario: no lands yet
+- GIVEN a clone whose `origin/main` has commits but no `landed` record, and no `refs/clm/tiers-verified`
+- WHEN `clm wrap-up` runs twice
+- THEN neither run prints `ledger/unrecorded-land`
+
+#### Scenario: unrated land
+- GIVEN a clone whose `origin/main` holds the history of `ledger`'s *unrated land*, and no other work
+- WHEN `clm wrap-up` runs
+- THEN it prints `ledger/unrated-land` naming the first land's commit and `ledger/understated-land` naming the second's, ends with `wrap-up incomplete` and exits 1
+
+## ADDED Requirements
+### Requirement: checkpoint-reports-unsafe-work
+`clm wrap-up` SHALL report, one line each, work CLM's flow makes that isn't safe on `origin`: a checkout on a `spec/*` or `impl/*` branch with uncommitted changes or untracked files that aren't ignored is *dirty*; a local `spec/*` or `impl/*` branch that isn't landed (`checkpoint`) is *unpushed* when it has commits its `origin` branch lacks, or no `origin` branch; and this clone's ledger branch is *unpushed* when it holds a record `origin` lacks. It SHALL print `dirty <path>` and `unpushed <branch>` for the session's own work: the checkout it runs in, the branch checked out there and the clone's ledger. It SHALL print `elsewhere dirty <path>` and `elsewhere unpushed <branch>` for the rest, a build's worktree in a `.claude/worktrees/agent-*` directory and its branch always among them. It SHALL also print `open <branch>` for each local `spec/*` or `impl/*` branch that is pushed but not landed, `complete <id>` for each change the queue reports complete on `origin/main`'s tree, extracted, and the violations of every `clm check` rule on that tree. The `open`, `elsewhere`, `complete`, `freed`, `place` and `left` lines SHALL NOT make the wrap-up incomplete.
+
+#### Scenario: unpushed work
+- GIVEN the checkout `clm wrap-up` runs in on local branch `spec/z`, with a commit `origin/spec/z` lacks
+- WHEN `clm wrap-up` runs
+- THEN it prints `unpushed spec/z` and `wrap-up incomplete`, and exits 1
+
+#### Scenario: unpushed ledger
+- GIVEN this clone's ledger branch with a record `origin` lacks
+- WHEN `clm wrap-up` runs
+- THEN it prints `unpushed clm/ledger/<writer>` and `wrap-up incomplete`, and exits 1
+
+#### Scenario: open branch only
+- GIVEN local branch `spec/z` pushed and unlanded, with nothing else outstanding
+- WHEN `clm wrap-up` runs
+- THEN it prints `open spec/z` and `wrap-up ok`, and exits 0
+
+#### Scenario: unrecorded land
+- GIVEN an `origin/main` with a merge commit no `landed` record names
+- WHEN `clm wrap-up` runs
+- THEN it prints `ledger/unrecorded-land` and `wrap-up incomplete`
+
+#### Scenario: complete change
+- GIVEN an `applied` change `x` in `origin/main` whose added requirements are all cited at their current versions
+- WHEN `clm wrap-up` runs
+- THEN it prints `complete x` and `wrap-up ok`, and exits 0
+
+#### Scenario: human's files on main
+- GIVEN the main checkout on `main` with an untracked `notes.txt`
+- WHEN `clm wrap-up` runs
+- THEN it prints no `dirty` line and exits 0
+
+#### Scenario: another session's work
+- GIVEN the main checkout on `spec/z` with an uncommitted change and a commit `origin/spec/z` lacks, and `clm wrap-up` run in a linked worktree `w` on `main`
+- WHEN `clm wrap-up` runs in `w`
+- THEN it prints `elsewhere dirty <main checkout>` and `elsewhere unpushed spec/z`, then `wrap-up ok`, and exits 0
+
+#### Scenario: build's worktree is elsewhere
+- GIVEN `clm wrap-up` run in a linked worktree `w`, and `.claude/worktrees/agent-1` on `impl/a` with an uncommitted change
+- WHEN `clm wrap-up` runs in `w`
+- THEN it prints `elsewhere dirty` with that worktree's path, then `wrap-up ok`, and exits 0
+
+#### Serves
+- capability/wrap-up-session
+- architecture/git-is-truth
+
+## REMOVED Requirements
+### Requirement: checkpoint-verifies-review <!-- base: 0c4afbbd8d16f29e -->
+### Requirement: outcome-name <!-- base: cb6590f14ae942d6 -->

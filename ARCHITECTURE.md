@@ -596,6 +596,7 @@ A branch SHALL land on `main` only through `clm land`, which runs the checks on 
 - land/land
 - land/land-push-retry
 - plugin.hooks.guard/push-guard
+- plugin.hooks.guard/host-routes-guard
 - plugin/hooks-wired
 - ledger/verify
 - ci/no-workflow-pushes-main
@@ -626,6 +627,8 @@ The plugin's guard SHALL block every `git push` from a session whose destination
 
 #### Enforced by
 - plugin.hooks.guard/push-guard
+- plugin.hooks.guard/push-guard-scoped-to-clm
+- plugin.hooks.guard/host-routes-guard
 - plugin.hooks.guard.shell/guard-heredocs
 - plugin.hooks.guard.shell/guard-quotes
 - plugin.hooks.guard.shell/guard-command-position
@@ -689,6 +692,7 @@ An approval SHALL name the branch fingerprint it was given for, and counts only 
 
 #### Enforced by
 - gate.fingerprint/fingerprint
+- gate.fingerprint/fingerprint-stable
 - land.approval/approve
 - land/land
 - web.worker.review/approve

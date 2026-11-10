@@ -428,7 +428,7 @@ A test in `crates/clm/tests/` SHALL hold a list of retired terms, each the old n
 - architecture/plain-terms
 
 ### Requirement: renamed-commands
-`clm rebase`, `clm wrap-up` and `clm pr` SHALL be the top-level commands that rebase a branch onto `origin/main` (`sync`), wrap up a session (`orchestrator.checkpoint`) and open or edit a branch's pull request (`host`'s `pr open` and `pr body`), each taking the arguments and subcommands, and printing the output and exiting with the codes, that its component states, and `clm --help` SHALL list them. Run as `clm rebase`, the outcome line `sync/outcome-line` states SHALL start with `rebase`: `rebase ok`, `rebase incomplete` or `rebase failed`. `clm wrap-up`'s report SHALL end with `wrap-up ok` or `wrap-up incomplete` (`orchestrator.checkpoint/outcome-name`). A message the root prints that names the command, such as the `<command>: <reason>` prefix of a failure on stderr, SHALL name it by its new name.
+`clm rebase`, `clm wrap-up` and `clm pr` SHALL be the top-level commands that rebase a branch onto `origin/main` (`sync`), wrap up a session (`orchestrator.checkpoint`) and open or edit a branch's pull request (`host`'s `pr open` and `pr body`), each taking the arguments and subcommands, and printing the output and exiting with the codes, that its component states, and `clm --help` SHALL list them. Run as `clm rebase`, the outcome line `sync/outcome-line` states SHALL start with `rebase`: `rebase ok`, `rebase incomplete` or `rebase failed`. `clm wrap-up`'s report SHALL end with `wrap-up ok` or `wrap-up incomplete` (`orchestrator.checkpoint/checkpoint`). A message the root prints that names the command, such as the `<command>: <reason>` prefix of a failure on stderr, SHALL name it by its new name.
 
 #### Scenario: rebase by its new name
 - GIVEN a branch with one commit on top of `origin/main` that passes `clm check`
@@ -446,7 +446,7 @@ A test in `crates/clm/tests/` SHALL hold a list of retired terms, each the old n
 - THEN it prints `none`, exits 0, and runs no `gh`
 
 #### Needs
-- orchestrator.checkpoint/outcome-name
+- orchestrator.checkpoint/checkpoint
 
 #### Serves
 - architecture/plain-terms
@@ -490,7 +490,7 @@ The old names of the commands `renamed-commands` names, the subcommands `sync`, 
 - THEN its list holds the three old commands and the five old outcome lines, and it finds none of them
 
 #### Needs
-- orchestrator.checkpoint/outcome-name
+- orchestrator.checkpoint/checkpoint
 - plugin/renamed-commands
 - orchestrator.run/prompt-commands
 - orchestrator.triage/draft
