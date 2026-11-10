@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 ---
 
 # Blog posts can say when they were updated

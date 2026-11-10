@@ -29,7 +29,7 @@ const front = (title: string, date: string, extra: Record<string, string | numbe
 // parts 1 and 2 of a series whose part 3 is the draft.
 const series = {
   'alpha.md': post(
-    { ...front('Alpha', '2026-11-05', { series_part: 1 }), summary: 'First post.' },
+    { ...front('Alpha', '2026-11-05', { series_part: 1, updated: '2026-11-09' }), summary: 'First post.' },
     `See [Beta](beta.md) and [draft](quokka-draft.md). ${words(226)}`,
   ),
   'beta.md': post(
@@ -236,6 +236,41 @@ test("a post's head holds its title, summary, canonical link, article type and M
   expect(meta(index, 'name', 'description')).toContain("What we've learned building CLM with CLM")
   expect(meta(index, 'name', 'description')).not.toContain('Declare the intent')
   expect(index).toContain(`<link rel="canonical" href="${SITE}/blog/">`)
+})
+
+test('an updated date shows on the page and in the head, and a bad one fails the build', async ({ page }) => {
+  test.setTimeout(240_000)
+  // req:web.site/blog-updated-date@11514ec9
+  await page.goto(`${server.url}/blog/alpha`)
+  const byline = page.locator('.byline')
+  await expect(byline).toContainText('5 Nov 2026')
+  await expect(byline).toContainText('Updated 9 Nov 2026')
+  await expect(byline.locator('time[datetime="2026-11-09"]')).toHaveCount(1)
+  const alpha = read(seriesOut, 'blog/alpha.html')
+  expect(meta(alpha, 'property', 'article:modified_time')).toBe('2026-11-09')
+  const alphaLd = ldJson(alpha).find((d) => d['@type'] === 'BlogPosting')
+  expect(alphaLd.datePublished).toBe('2026-11-05')
+  expect(alphaLd.dateModified).toBe('2026-11-09')
+  // A post with no `updated` shows and holds none of it.
+  await page.goto(`${server.url}/blog/beta`)
+  await expect(page.locator('.byline')).not.toContainText('Updated')
+  const beta = read(seriesOut, 'blog/beta.html')
+  expect(meta(beta, 'property', 'article:modified_time')).toBeUndefined()
+  expect(ldJson(beta).find((d) => d['@type'] === 'BlogPosting')).not.toHaveProperty('dateModified')
+  const good = front('Good', '2026-11-05')
+  const bad: Record<string, string> = {
+    'early.md': post({ ...good, updated: '2026-11-01' }, 'x'),
+    'later.md': post({ ...good, updated: 'later' }, 'x'),
+    'impossible.md': post({ ...good, updated: '2026-02-30' }, 'x'),
+  }
+  for (const [file, text] of Object.entries(bad)) {
+    const { error } = build('badupdated', { BLOG_DIR: blogFixture('badupdated', { [file]: text }) })
+    expect(error, file).toBeDefined()
+    expect(error, file).toContain(file)
+  }
+  // The same day as its date is allowed.
+  const same = build('badupdated', { BLOG_DIR: blogFixture('badupdated', { 'same.md': post({ ...good, updated: '2026-11-05' }, 'x') }) })
+  expect(same.error).toBeUndefined()
 })
 
 test('in a post copy, a relative link into the repository names GitHub, and an image is no post link', () => {

@@ -14,6 +14,7 @@ export interface Post {
   title: string
   summary: string
   date: string // YYYY-MM-DD
+  updated?: string // YYYY-MM-DD, not before date (`blog-updated-date`)
   tags: string[]
   part?: number // series_part
   draft: boolean
@@ -81,6 +82,11 @@ function readParsed(dir: string): Post[] {
         }
       }
       if (!isDate(data.date)) fail(`date must be a real calendar date written YYYY-MM-DD, not ${String(data.date)}`)
+      const updated = data.updated
+      if (updated !== undefined) {
+        if (!isDate(updated)) fail(`updated must be a real calendar date written YYYY-MM-DD, not ${String(updated)}`)
+        if (updated < (data.date as string)) fail(`updated ${updated} is before date ${String(data.date)}`)
+      }
       if (data.draft !== undefined && typeof data.draft !== 'boolean') fail('draft must be true or false')
       const tags = data.tags ?? []
       if (!Array.isArray(tags) || tags.some((t) => typeof t !== 'string')) fail('tags must be a list of words')
@@ -95,6 +101,7 @@ function readParsed(dir: string): Post[] {
         title: (data.title as string).trim(),
         summary: (data.summary as string).trim(),
         date: data.date as string,
+        updated: updated as string | undefined,
         tags: tags as string[],
         part: part as number | undefined,
         draft: data.draft !== false,
@@ -136,6 +143,8 @@ export function postView(post: Post, published: Post[]) {
     summary: post.summary,
     date: post.date,
     dateLabel: dateLabel(post.date),
+    updated: post.updated ?? null,
+    updatedLabel: post.updated ? dateLabel(post.updated) : null,
     minutes: post.minutes,
     tags: post.tags,
     part: post.part ?? null,
