@@ -156,4 +156,24 @@ mod tests {
         }
         assert!(dir.path().join("big").exists());
     }
+
+    #[test]
+    fn failed_removal_warns() {
+        // req:land/shared-target-cap@07ebae61
+        use std::os::unix::fs::PermissionsExt;
+        let parent = tempfile::tempdir().unwrap();
+        let dir = parent.path().join("x");
+        fs::create_dir(&dir).unwrap();
+        sparse(&dir.join("big"), 2_000_000_000);
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
+        let got = cap_directory(&dir, ".clm/x", 1);
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o755)).unwrap();
+        if !dir.join("big").exists() {
+            return; // running as a user who removes anything: nothing to observe
+        }
+        match got {
+            Some(Capped::Warning(w)) => assert!(w.contains(&dir.display().to_string())),
+            other => panic!("{other:?}"),
+        }
+    }
 }
