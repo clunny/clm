@@ -1390,7 +1390,7 @@ fn coverage_tools_are_pinned() {
 
 #[test]
 fn nextest_replaces_cargo_test_but_for_doctests() {
-    // req:ci/nextest-runner@dd9030d0
+    // req:ci/nextest-runner@6d7394a1
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS]);
