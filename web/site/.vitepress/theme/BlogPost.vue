@@ -16,6 +16,8 @@ const post = computed(() => params.value as {
   summary: string
   date: string
   dateLabel: string
+  updated: string | null
+  updatedLabel: string | null
   minutes: number
   tags: string[]
   part: number | null
@@ -34,6 +36,10 @@ const post = computed(() => params.value as {
         <p class="lede">{{ post.summary }}</p>
         <div class="byline">
           <time :datetime="post.date">{{ post.dateLabel }}</time>
+          <template v-if="post.updated">
+            <span>·</span>
+            <span>Updated <time :datetime="post.updated">{{ post.updatedLabel }}</time></span>
+          </template>
           <span>·</span>
           <span>{{ post.minutes }} min read</span>
           <template v-if="post.tags.length > 0">

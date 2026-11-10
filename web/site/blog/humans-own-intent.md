@@ -4,6 +4,7 @@ series_part: 1
 summary: "AI can write the code, but it can't decide what the system is for: CLM gives humans the intent, gives AI the spec and all of the code, and lets deterministic code (not reviewers) keep the two in sync."
 tags: [clm, claude-code, spec-driven-development, ai-coding-agents, code-review, software-architecture]
 date: 2026-11-06
+updated: 2026-11-09
 draft: false
 ---
 

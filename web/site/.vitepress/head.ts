@@ -160,6 +160,7 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
   if (post) {
     head.push(['link', { rel: 'alternate', type: 'text/markdown', href: `${siteUrl}/blog/${post.slug}.md` }])
     head.push(meta({ property: 'article:published_time', content: post.date }))
+    if (post.updated) head.push(meta({ property: 'article:modified_time', content: post.updated }))
     head.push(
       jsonLd({
         '@context': 'https://schema.org',
@@ -167,6 +168,7 @@ export function pageHead(pageData: PageData, facts: HeadFacts): HeadConfig[] {
         headline: post.title,
         description: post.summary,
         datePublished: post.date,
+        ...(post.updated ? { dateModified: post.updated } : {}),
         keywords: post.tags,
         url: url,
         author: { '@type': 'Organization', name: 'CLM' },
