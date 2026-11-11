@@ -489,8 +489,9 @@ fn ignored_settings_step() -> String {
     )
 }
 
-/// The steps left for the human: the ignored-settings step, the `permissions` step, then the push, skipped once `git`
-/// shows it done and nothing else is left to commit, then the host's own setup steps
+/// The steps left for the human: the ignored-settings step, the `permissions` step, then the
+/// push, skipped once `git` shows it done and nothing else is left to commit, then the host's
+/// own setup steps
 /// (`clm-host`'s `setup_steps`), always printed since whether the host protects `main` would
 /// take asking it. `paths` are all of CLM's files, written or kept.
 fn next_steps(

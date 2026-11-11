@@ -187,3 +187,13 @@ fn comes_before_the_missing_rules_step() {
     assert!(steps[named[1]].contains("allow rules to"), "{out}");
     assert_eq!(named[1] + 1, push_step(&steps), "{out}");
 }
+
+#[test]
+fn another_git_failure_fails_init() {
+    // req:init/init-names-ignored-settings@a3978231
+    let dir = repo();
+    let target = TempDir::new().unwrap();
+    std::os::unix::fs::symlink(target.path(), dir.path().join(".claude")).unwrap();
+    let err = init(dir.path(), &Options::default()).unwrap_err();
+    assert!(err.contains("check-ignore"), "{err}");
+}
