@@ -16,7 +16,7 @@ The children split the work into deterministic core (`model`, `check` with its c
 
 The repo declares its build environment once. `rust-toolchain.toml` pins the Rust toolchain to an exact version, with `rustfmt`, `clippy` and the `wasm32-unknown-unknown` target, and rustup installs it on first use on every machine and in every `clm run` worktree (`pinned-rust-toolchain`). Moving the pin is a code PR that fixes any new lints in the same diff. `.claude/settings.json` lists what unattended sessions may run beyond `clm run`'s own commands: `cargo`, a narrow set of npm commands that can't run a dependency's install script, and `.github/scripts/ci-check.sh`, for a session that runs the script itself (`unattended-commands`). A build runs exactly the checks `clm land` runs with `clm land --check-only` (`land-check-command`): Claude Code's worktree isolation refused the script's path in a build, and the `clm` command names none. The script installs Playwright's browser with `--with-deps` only when `CI` is `true` (`ci/browser-install`), so running it never reaches `sudo`. A test in `crates/clm/tests/` reads both files.
 
-The root `.gitattributes` marks `Cargo.lock`, `web/package-lock.json` and `plugin-panel/package-lock.json` `linguist-generated` (`lockfiles-generated`), so neither counts toward its component's size (`check/node-size`): a session never reads a lockfile. They are written bare (`Cargo.lock linguist-generated`), which `git check-attr` reports as `set`. `crates/clm` also dispatches `clm size` to `clm-check`, and `clm affected` to `clm-affected` with `config`'s `[affected] all` globs, and loads `config`'s `component_size` and passes it to `clm size` and to `clm rebase`'s split-item step, as it passes `detectors` to `clm check`, and loads `config`'s `health` and passes it to `clm health` and to `clm rebase`'s reconsider step the same way (`check.health`).
+The root `.gitattributes` marks every lockfile the repository tracks, each `Cargo.lock` and each `package-lock.json`, `linguist-generated` (`lockfiles-generated`), so none counts toward its component's size (`check/node-size`): a session never reads a lockfile. The lines are written bare, by file name with no `/` (`Cargo.lock linguist-generated`, `package-lock.json linguist-generated`), so they mark a file of that name at any depth, a new npm package's included, and `git check-attr` reports each as `set`. `crates/clm` also dispatches `clm size` to `clm-check`, and `clm affected` to `clm-affected` with `config`'s `[affected] all` globs, and loads `config`'s `component_size` and passes it to `clm size` and to `clm rebase`'s split-item step, as it passes `detectors` to `clm check`, and loads `config`'s `health` and passes it to `clm health` and to `clm rebase`'s reconsider step the same way (`check.health`).
 
 The root's `paths` name `crates/clm`'s manifest, build script, sources and top-level test files, not the whole crate, so that `crates/clm/tests/capability/`, the capability tests' target, belongs to `capability` alone (`check/paths-disjoint`).
 
@@ -159,12 +159,12 @@ Every `clm` command with a `--root` option SHALL, when it isn't given, use the f
 - architecture/deterministic-enforcement
 
 ### Requirement: lockfiles-generated
-The repository's `.gitattributes` SHALL mark `Cargo.lock`, `web/package-lock.json` and `plugin-panel/package-lock.json` `linguist-generated`, written bare (`<path> linguist-generated`), so `git check-attr` reports `set` and `check/node-size` leaves them out of every component's code count.
+The repository's `.gitattributes` SHALL mark every tracked file named `Cargo.lock` or `package-lock.json`, at any depth, `linguist-generated`, written bare by file name (`<name> linguist-generated`), so `git check-attr` reports `set` for each and `check/node-size` leaves them out of every component's code count.
 
 #### Scenario: attributes set
 - GIVEN the repository
-- WHEN `git check-attr linguist-generated Cargo.lock web/package-lock.json plugin-panel/package-lock.json` runs
-- THEN each line ends `linguist-generated: set`
+- WHEN `git check-attr linguist-generated` runs on each file `git ls-files` lists named `Cargo.lock` or `package-lock.json`
+- THEN there is at least one, and each line ends `linguist-generated: set`
 
 #### Scenario: lockfiles don't count
 - GIVEN the repository
