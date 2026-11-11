@@ -887,7 +887,7 @@ fn scenario_nothing_pending() {
 
 #[test]
 fn scenario_chain_weight() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -928,7 +928,7 @@ fn human_first() -> clm_model::Graph {
 
 #[test]
 fn scenario_human_first() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = human_first();
     let view = blockers_view(&g, &[], &[claim("d", 1)], NOW, EXPIRY);
     let v = json(&view);
@@ -950,7 +950,7 @@ fn scenario_human_first() {
 
 #[test]
 fn scenario_dependency_holds_nothing() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -979,7 +979,7 @@ fn scenario_dependency_holds_nothing() {
 
 #[test]
 fn scenario_nothing_blocked() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -995,7 +995,7 @@ fn scenario_nothing_blocked() {
 
 #[test]
 fn a_node_waiting_on_two_chains_is_under_each_root() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         (
@@ -1026,7 +1026,7 @@ fn a_node_waiting_on_two_chains_is_under_each_root() {
 
 #[test]
 fn roots_of_equal_weight_sort_by_name_after_weight() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1086,7 +1086,7 @@ fn roots_of(view: &clm_view::BlockersView) -> Vec<(String, usize, Vec<String>)> 
 
 #[test]
 fn scenario_need_reaches_its_node() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1099,7 +1099,7 @@ fn scenario_need_reaches_its_node() {
 
 #[test]
 fn scenario_need_reaches_the_needed_requirements_item() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1117,7 +1117,7 @@ fn scenario_need_reaches_the_needed_requirements_item() {
 
 #[test]
 fn a_need_on_a_node_with_an_unsettled_dependency_stops_at_that_node() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1137,7 +1137,7 @@ fn a_need_on_a_node_with_an_unsettled_dependency_stops_at_that_node() {
 
 #[test]
 fn a_need_on_a_requirement_that_needs_another_reaches_the_last_ones_node() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/x", &[])),
@@ -1157,7 +1157,7 @@ fn a_need_on_a_requirement_that_needs_another_reaches_the_last_ones_node() {
 
 #[test]
 fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let files: clm_model::Files = [
         ("specs/SPEC.md", specd("", &[])),
         ("specs/a/SPEC.md", needing("", "b/x", &[])),
@@ -1174,7 +1174,7 @@ fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
 
 #[test]
 fn a_need_blocked_by_an_item_and_a_need_reaches_both() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/x", &[])),
@@ -1537,7 +1537,7 @@ fn the_json_carries_the_checkout_beside_the_model() {
 
 #[test]
 fn status_names_the_checkout_after_its_title() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let g = ordered();
     let status = |c: Option<&Checkout>| status_text(&g, &[], &[], &[], NOW, None, c);
     let behind = status(Some(&checkout(Some(2))));
@@ -1889,7 +1889,7 @@ fn scenario_charts_unchanged() {
 
 #[test]
 fn a_human_task_item_waits_on_the_human_and_comes_first() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),

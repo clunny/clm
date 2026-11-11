@@ -772,7 +772,7 @@ fn scenario_order() {
 
 #[test]
 fn scenario_chain_weight() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
@@ -793,7 +793,7 @@ fn scenario_chain_weight() {
 
 #[test]
 fn scenario_human_first() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
@@ -828,7 +828,7 @@ fn scenario_human_first() {
 fn scenario_dependency_holds_nothing() {
     // `b` depends on `a`, but its own requirement is unblocked, so it is ready and held by
     // nothing.
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
@@ -859,7 +859,7 @@ fn scenario_dependency_holds_nothing() {
 
 #[test]
 fn scenario_need_reaches_the_needed_requirements_item() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-view@3950c690
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(
@@ -887,7 +887,7 @@ fn scenario_need_reaches_the_needed_requirements_item() {
 
 #[test]
 fn scenario_nothing_blocked() {
-    // req:view/blockers-view@c43e8579
+    // req:view/blockers-root-lines@8d9bf009
     let dir = two_nodes();
     // `b` depends on `a`: with `a` converged, `b` is ready.
     let (graph, _) = clm_model::load(dir.path());
@@ -896,5 +896,7 @@ fn scenario_nothing_blocked() {
     let out = clm(dir.path(), &["view", "blockers"]);
     let text = stdout(&out);
     assert_eq!(out.status.code(), Some(0), "{text}");
-    assert!(text.contains("nothing is blocked"), "{text}");
+    let lines: Vec<&str> = text.lines().collect();
+    let at = lines.iter().position(|l| *l == "blockers").expect(&text);
+    assert_eq!(&lines[at + 1..], ["nothing is blocked"], "{text}");
 }
