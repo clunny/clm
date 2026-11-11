@@ -1,4 +1,5 @@
 // clm:reads clm.toml
+// clm:reads **/package.json
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1116,6 +1117,54 @@ fn this_repository_verifies_the_whole_suite_after_lands() {
         "mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20"
     );
     assert_eq!(layer, &Layer::File(f.repo_file()));
+}
+
+const SETUP: &str = "for d in plugin-panel capabilities/panel web web/site capabilities/web; do test ! -f \"$d/package.json\" || (cd \"$d\" && npm ci --ignore-scripts) || exit 1; done";
+
+/// The settings of this repository's own `clm.toml`, and the file they came from.
+fn this_repositorys_build() -> (String, Layer, Fixture) {
+    let text =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
+    let f = Fixture::new(None, Some(&text));
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("build").unwrap();
+    (value, layer.clone(), f)
+}
+
+#[test]
+fn this_repository_installs_each_packages_dependencies() {
+    // req:config/build-setup-here@c69fd4cb
+    let (value, layer, f) = this_repositorys_build();
+    assert_eq!(value, format!("setup={SETUP}"));
+    assert_eq!(layer, Layer::File(f.repo_file()));
+}
+
+#[test]
+fn every_tracked_package_json_directory_is_set_up() {
+    // req:config/build-setup-here@c69fd4cb
+    let (value, _, _) = this_repositorys_build();
+    let words = value
+        .split_once("for d in ")
+        .and_then(|(_, rest)| rest.split_once("; do"))
+        .map(|(words, _)| words.split(' ').collect::<Vec<_>>())
+        .expect("the setup holds a `for d in ... ; do` loop");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["ls-files", "-z"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let listing = String::from_utf8(out.stdout).unwrap();
+    let dirs: Vec<&str> = listing
+        .split('\0')
+        .filter_map(|p| p.strip_suffix("/package.json"))
+        .collect();
+    assert!(!dirs.is_empty());
+    for dir in dirs {
+        assert!(words.contains(&dir), "{dir} is not in the setup's list");
+    }
 }
 
 #[test]
