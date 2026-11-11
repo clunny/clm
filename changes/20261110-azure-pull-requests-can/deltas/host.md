@@ -1,0 +1,88 @@
+---
+component: host
+base: { design: "b5fa556af2c67be6" }
+---
+
+## MODIFIED Design
+Crate `clm-host`. One trait, `Host`, with these operations, and an implementation per setting. `github` runs `gh pr create --base main --head <branch> --title --body-file`, `gh pr view --json number,state,headRefName` and `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>` (the REST call, since `gh pr edit` fails on `gh` versions that query the retired Projects (classic) API), and `gh issue create`. `branch delete` is `git push --force-with-lease=refs/heads/<branch>:<sha> origin :refs/heads/<branch>` for every host, `<sha>` being `--lease` or, without it, the tip of `refs/remotes/origin/<branch>`. `git` and `none` return `None` from `pr open`, print nothing for `pr body` and `issue`, and still delete branches when there is an `origin`.
+
+**Azure DevOps** (`azure-pull-requests`, `azure-through-az-cli`). `azure` runs the Azure CLI through `clm-git`'s `run`, with `--detect true` so `az` takes the organisation, project and repository from the clone's remote, and `--output json`; `az` holds the sign-in (`az login`, or `AZURE_DEVOPS_EXT_PAT`), so CLM reads no token. `pr open` first runs `az repos pr list --source-branch <branch> --target-branch main --status active` and, when it lists a pull request, prints the first one's URL; otherwise it runs `az repos pr create --source-branch <branch> --target-branch main --title <title> --description @<file>`, the file's path made absolute against the caller's directory, since `az` reads `@<file>` relative to the directory it runs in, the repository's root. Azure's `--source-branch` takes the bare branch name. The URL printed is the pull request's web page, `<repository.webUrl>/pullrequest/<pullRequestId>`, from the JSON `az` returns, since the `url` field there is the REST API's. `pr body` finds the current branch's active pull request the same way and runs `az repos pr update --id <pullRequestId> --description @<file>`. Every other operation is the trait's default, as for `git`: `issue` prints the report and says there is nowhere to file it, `parent` returns nothing, `list` and `alerts` return nothing, and the rest report that there is no such thing on the host.
+
+**Azure's description limit** (`azure-body-limit`). Azure DevOps refuses a pull request description over 4000 characters, and `az` with it, so the adapter fits the body before `az` sees it, in `pr open` and `pr body` alike. It counts the file's text in UTF-16 code units, which never counts fewer than Azure does. A body within the limit is passed as it is. A longer one is written, cut, to a temporary file in `std::env::temp_dir()` that is removed once the call returns, the caller's file left unchanged: the longest leading part that ends at a line break and leaves room for the note, or, when no line break leaves room, the longest that ends at a character, followed by a blank line and the note `_Cut to fit Azure DevOps's 4000-character limit; the whole body is kept at <path>._`, `<path>` being where the whole is kept (`keep-unopened-body`). The adapter keeps the whole before the call and writes the line `cut the body to 4000 characters; the whole is kept at <path>` to standard error, so a caller reading the URL from standard output reads it as before. The limit is the Azure adapter's own fact; `github`'s limit is far beyond any body CLM writes, so no other adapter cuts (`yagni`).
+
+**An answer `az` gives without the pull request** (`azure-unreadable-answer`). When `az repos pr create` succeeds but its JSON lacks `pullRequestId` or `repository.webUrl`, the pull request may well be open: the adapter runs the `az repos pr list` of the first step again and gives the first listed pull request's URL. When that lists none either, or its answer lacks the fields too, the operation fails with `az repos pr create: no pullRequestId or repository.webUrl in the answer: <answer>`, the answer `az` printed to `create` with its whitespace runs joined into single spaces and cut to its first 500 characters, so the message says what `az` did answer. Output that isn't JSON fails as before, naming the parse error.
+
+**Keeping a body** (`keep-unopened-body`). A body lives in the caller's worktree (`.clm/pr-body.md`, ignored by git), which `clm run --finish`, `clm wrap-up` and a draft's end remove, so a body that reached no pull request whole would go with it. `pr_open` keeps it outside every worktree, in `<common git dir>/clm/pr-bodies/<branch>.md` (`clm-git`'s `common_dir`, each `/` of the branch's name written as `-`), overwriting an earlier copy for the branch: when the adapter's `page_open` fails, after which the error ends `; the body is kept at <path>`, and when the Azure adapter cuts it, as above. The copy is the body the call was given, the file or the one drawn from the branch (`pr-open-defaults`). Nothing deletes the copies: they are written only when a body failed to reach a pull request whole, and the person who reads one deletes it.
+
+**Pushing a branch** (`branch-push`). `branch push` reads the checked-out branch with `git symbolic-ref --short HEAD` and pushes `HEAD:refs/heads/<branch>` to `origin`, setting the branch's upstream to `origin/<branch>`. When `refs/remotes/origin/<branch>` exists it passes `--force-with-lease=refs/heads/<branch>` with no value, which leases on that ref's tip, and `--force-if-includes`, which further refuses when that tip isn't in the local branch's reflog; git ignores `--force-if-includes` beside an explicit lease value, so the value is left out. Without the remote-tracking ref it passes `--force-with-lease=refs/heads/<branch>:`, which expects no branch on `origin`. So it is a compare-and-swap on what the session last saw (`lease-claims`): a branch another session pushed since the last fetch is refused with git's `stale info`, and one a fetch brought in but the session never had locally is refused by `--force-if-includes`, so a session overwrites only its own work. A rebased claim branch passes, since its old tip is in its reflog. It prints git's message, the remote's lines included, and `pushed <branch> <sha>` on success. It retries nothing: a transient refusal is the caller's to retry, as the prompts say (`orchestrator.run/prompt-commands`).
+
+**Refused branches.** Both refuse, before any git call that writes, `main` and any branch whose name starts with `clm/`, and `branch push` refuses a detached `HEAD`. These are refusals of the command, not of the guard: the guard sees only `clm branch ...`, never the `git push` it runs (`plugin.hooks.guard/push-guard`), so the refusal must be the command's own.
+
+**Deleting only what this clone pushed** (`branch-delete`). The project's allow rules let an unattended session run `clm branch delete` with no classifier judging it (`unattended-steps-run-clm`), so the command itself must not release another session's claim or delete its spec branch, which would bypass the claim's expiry and takeover (`lease-claims`). `clm branch delete` therefore deletes only a tip this clone pushed: before the delete it reads the newest entry of `refs/remotes/origin/<branch>`'s reflog (`git reflog show -n 1 --format='%H %gs' refs/remotes/origin/<branch>`), and goes on only when that entry is git's `update by push` and its commit is the lease. Git writes that entry when a push from this clone to `origin` moves the branch, whether `clm claim`, `clm branch push`, `clm autosync` or a plain `git push` made it, and a fetch that brings another clone's tip writes a different entry, so a tip another session pushed is refused even after this clone fetched it. A fetch that finds the branch unchanged writes no entry, so a session's own branch stays deletable after `clm rebase` fetches. No reflog, as when `core.logAllRefUpdates` is off, refuses: it fails closed. Before that check it asks `origin` with `git ls-remote origin refs/heads/<branch>`, and a branch already gone, or a clone with no `origin`, is nothing to do and exits 0, so a draft deleting an `autosync/spec/<id>` that was never pushed doesn't fail. The check is the subcommand's, not the `Host` trait's: `clm land`'s delete of the branch it just landed calls the library operation, which keeps its plain lease.
+
+`pr open` on a branch that already has an open pull request prints that pull request's URL instead of opening another. **Defaults** (`pr-open-defaults`). The branch, the title and the body are each optional, and each one given overrides its default alone, so the drafts and folds that write their own body keep passing it. One `clm-host` library call, `pr_open`, takes the host and the three optional arguments, fills in what is missing and then calls the `Host` trait's `page_open`, which keeps taking all three; `crates/clm` only makes the arguments optional and passes them through, staying dispatch only. On `git` and `none`, which have no pull request, `pr_open` checks the setting first and gives `none` at once, deriving nothing and refusing nothing, whatever the arguments and whatever `HEAD` is. Otherwise the branch is `clm-git`'s `current_branch`, and a detached `HEAD` exits 1 before any host call. The title and body are drawn through `clm-git`'s `git` like every other git call (`git-through-layer`). On a branch named `spec/<id>`, `<id>` being the name after `spec/`, whose tree holds `changes/<id>/change.md`, read with `git show <branch>:changes/<id>/change.md` (a failing `git show` meaning no change), the body is the text of its `## Intent` section, up to the next `## ` heading, trimmed, and the title is that section's first sentence: its first paragraph, its line breaks joined with spaces, up to and including the first `.`, `?` or `!` followed by a space or by the paragraph's end, or the whole paragraph when there is none. Otherwise, or when that section holds only whitespace, the body is one `- <subject>` line per commit of `git log --reverse --format=%s origin/main..<branch>`, oldest first, and the title is the oldest one's subject; when that `git log` fails, as without an `origin/main`, the command exits 1 with git's message before any host call. A derived body goes to a temporary file in `std::env::temp_dir()`, outside the worktree, removed once the call returns, so the crate gains no runtime dependency and git sees nothing. A branch with no commit beyond `origin/main` and no change has nothing to describe, and the command exits 1 saying so, before any host call. The parsing is text only: `clm-host` doesn't depend on `model`, and a change's `## Intent` heading is fixed by `spec-format`. `pr body` exits 1 without a call when the file is missing or holds only whitespace, or when the current branch has no open pull request. It replaced `clm pr-body`, which went with `orchestrator.watch` (`20261027-remove-watch-node`): `pr body` is what the prompts and the skills name.
+
+**Contribution operations.** On `github` the fork's parent and the head's details come from `gh repo view --json isFork,parent` and `gh pr view --json`, a fork's `main` is brought up with `gh repo sync`, a pull request on the parent opens with `gh pr create --repo <parent> --base main --head <owner>:<branch>`, a head is fetched with `git fetch origin pull/<number>/head:refs/heads/<branch>`, and comments, closing and labels use `gh issue` or `gh pr`. What they read from the host is a stranger's text, so a caller prints it as data and acts on none of it.
+
+## ADDED Requirements
+
+### Requirement: azure-body-limit
+The `Azure` adapter's `pr open` and `pr body` SHALL give `az` a description of at most 4000 characters, counted in UTF-16 code units. A body file within that SHALL be passed as it is. For a longer one they SHALL pass, through a temporary file outside the worktree, the longest leading part of the body that ends at a line break and leaves room for the note, or, when none does, the longest that ends at a character, followed by a blank line and the note `_Cut to fit Azure DevOps's 4000-character limit; the whole body is kept at <path>._`, the whole within 4000; SHALL keep the whole body as `keep-unopened-body` says, `<path>` naming that copy; SHALL write `cut the body to 4000 characters; the whole is kept at <path>` to standard error; and SHALL leave the body file unchanged. Standard output SHALL hold what it holds for a body within the limit.
+
+#### Scenario: a long body
+- GIVEN a fake `az` that records the description file's contents, lists no active pull request for `spec/x`, and answers `pr create` with `pullRequestId` 12 and `repository.webUrl` `https://dev.azure.com/o/p/_git/r`, and a `body.md` of 300 lines of 20 characters each
+- WHEN the `Azure` adapter's `pr open` runs for `spec/x` with `body.md`
+- THEN the description `az` got is at most 4000 characters, starts with `body.md`'s first line, ends with the note naming `<common git dir>/clm/pr-bodies/spec-x.md`, that file holds all 300 lines, `body.md` is unchanged, and it gives `https://dev.azure.com/o/p/_git/r/pullrequest/12`
+
+#### Scenario: a short body
+- GIVEN the same fake `az`, and a `body.md` of 10 lines
+- WHEN the `Azure` adapter's `pr open` runs for `spec/x` with `body.md`
+- THEN the description `az` got is `body.md`'s contents, and no `pr-bodies/spec-x.md` exists
+
+#### Scenario: an update
+- GIVEN the current branch `spec/x` with active pull request 12 according to a fake `az`, and a `body.md` of 300 lines of 20 characters each
+- WHEN the `Azure` adapter's `pr body` runs for `body.md`
+- THEN the description `az repos pr update` got is at most 4000 characters and ends with the note, and it reports `updated #12`
+
+#### Serves
+- capability/git-host
+- architecture/host-adapters
+
+### Requirement: azure-unreadable-answer
+When `az repos pr create` succeeds with JSON that lacks `pullRequestId` or `repository.webUrl`, the `Azure` adapter's `pr open` SHALL run `az repos pr list --source-branch <branch> --target-branch main --status active` again and give the web URL of the first pull request it lists. When that lists none, or lists one whose JSON lacks those fields too, it SHALL fail with a message that starts `az repos pr create: no pullRequestId or repository.webUrl in the answer: ` and goes on with the text `az` printed to `create`, its runs of whitespace joined into single spaces and cut to its first 500 characters.
+
+#### Scenario: opened but unread
+- GIVEN a fake `az` whose first `pr list` for `spec/x` lists nothing, whose `pr create` answers `{"status": "active"}`, and whose next `pr list` lists active pull request 12 with `repository.webUrl` `https://dev.azure.com/o/p/_git/r`
+- WHEN the `Azure` adapter's `pr open` runs for `spec/x`
+- THEN it gives `https://dev.azure.com/o/p/_git/r/pullrequest/12`
+
+#### Scenario: nothing to read
+- GIVEN a fake `az` whose `pr list` always lists nothing and whose `pr create` answers `{"status": "active"}`
+- WHEN the `Azure` adapter's `pr open` runs for `spec/x`
+- THEN it fails with a message holding `no pullRequestId or repository.webUrl in the answer` and `"status": "active"`
+
+#### Serves
+- capability/git-host
+- architecture/host-adapters
+
+### Requirement: keep-unopened-body
+When the host's `pr open` fails after `clm pr open`'s own checks have passed, on `github` or `azure`, `clm-host`'s `pr_open` SHALL first write the body it was opening with (the `--body-file`'s contents, or the body drawn from the branch) to `<common git dir>/clm/pr-bodies/<branch>.md`, `<common git dir>` being `clm-git`'s `common_dir` and each `/` of the branch's name written as `-`, creating the directories and replacing an earlier copy, and its error SHALL end `; the body is kept at <path>` with that file's absolute path, so `clm pr open` exits 1 naming it. The `Azure` adapter SHALL write the whole body to the same path when it cuts one (`azure-body-limit`). Nothing else SHALL be written there: a pull request that opens with its whole body leaves no copy.
+
+#### Scenario: the host refuses
+- GIVEN `host = "azure"`, a fake `az` that lists no active pull request for `impl/a` and exits 1 on `pr create` printing `TF401398`, and `.clm/pr-body.md` holding `## Review`
+- WHEN `clm pr open impl/a --title x --body-file .clm/pr-body.md` runs
+- THEN it exits 1, its output holds `TF401398` and the path of `<common git dir>/clm/pr-bodies/impl-a.md`, and that file holds `## Review`
+
+#### Scenario: from a linked worktree
+- GIVEN the same, run in a linked worktree of the clone
+- WHEN `clm pr open impl/a --title x --body-file .clm/pr-body.md` runs and the worktree is then removed
+- THEN `<common git dir>/clm/pr-bodies/impl-a.md`, under the main repository's git directory, still holds `## Review`
+
+#### Scenario: opened
+- GIVEN `host = "github"` and a fake `gh` that prints a URL
+- WHEN `clm pr open impl/a --title x --body-file body.md` runs
+- THEN it prints the URL and no `clm/pr-bodies/` file exists
+
+#### Serves
+- capability/git-host
+- capability/build-from-spec
