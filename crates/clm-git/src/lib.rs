@@ -550,10 +550,20 @@ impl std::error::Error for FetchError {}
 /// more, after 1 and then 2 seconds. When the last run fails, [`FetchError::Offline`] if
 /// `git ls-remote` of `REMOTE` fails too, else [`FetchError::Git`] with the last run's error.
 pub fn fetch_retrying(root: &Path, args: &[&str]) -> Result<(), FetchError> {
+    fetch_waiting(root, args, std::thread::sleep)
+}
+
+/// [`fetch_retrying`] with its waits made through `wait`, so a test sees them without the
+/// clock.
+fn fetch_waiting(
+    root: &Path,
+    args: &[&str],
+    mut wait: impl FnMut(Duration),
+) -> Result<(), FetchError> {
     let mut last = None;
-    for wait in [0, 1, 2] {
-        if wait > 0 {
-            std::thread::sleep(Duration::from_secs(wait));
+    for secs in [0, 1, 2] {
+        if secs > 0 {
+            wait(Duration::from_secs(secs));
         }
         match git(root, args) {
             Ok(_) => return Ok(()),
@@ -753,5 +763,27 @@ fn make_writable(dir: &Path) {
     };
     for entry in entries.flatten() {
         make_writable(&entry.path());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failing_fetch_waits_1_then_2_seconds() {
+        // req:vcs/fetch-retries@a74172a3
+        let dir = tempfile::tempdir().unwrap();
+        git(dir.path(), &["init", "-q"]).unwrap();
+        let missing = dir.path().join("missing");
+        git(
+            dir.path(),
+            &["remote", "add", REMOTE, missing.to_str().unwrap()],
+        )
+        .unwrap();
+        let mut waits = Vec::new();
+        let err = fetch_waiting(dir.path(), &["fetch", REMOTE], |d| waits.push(d)).unwrap_err();
+        assert!(matches!(err, FetchError::Offline), "{err}");
+        assert_eq!(waits, [Duration::from_secs(1), Duration::from_secs(2)]);
     }
 }
