@@ -67,6 +67,3 @@ base: { design: "3da63c8049a2ccbc" }
 - vcs/common-dir
 - view/view-command
 - check/pending-narrows-on-a-graph
-
-## REMOVED Requirements
-### Requirement: shared-plumbing <!-- base: c3db052e844b6f8b -->

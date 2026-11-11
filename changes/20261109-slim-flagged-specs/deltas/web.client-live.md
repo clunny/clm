@@ -20,7 +20,7 @@ The modules import nothing of `web`'s outside `web/src/live/`, since an import o
 
 ## MODIFIED Requirements
 ### Requirement: notify-switch <!-- base: 59a9bf958dfd7fa6 -->
-The app SHALL show a Notify me switch for the repo on screen once a service worker is registered, the browser has `Notification` and `PushManager`, and the Worker answers a push key, and none otherwise. Its state SHALL be what `GET /api/repos/<o>/<r>/push?endpoint=<endpoint>` answers for the browser's subscription's endpoint, off without asking when the browser has no subscription, asked again with `fresh` when `refresh(fresh)` is called, and it SHALL be disabled offline. Turning it on SHALL ask for notification permission when it isn't granted, and when refused leave the switch off with a message beside it, outside its label so tapping the message doesn't toggle it; otherwise it SHALL take the browser's subscription, or subscribe the push manager with `userVisibleOnly` and the Worker's key as `applicationServerKey` when there is none, and post it to `POST /api/repos/<o>/<r>/push`. Turning it off SHALL send `DELETE /api/repos/<o>/<r>/push` with that endpoint. A post or delete the Worker refuses SHALL leave the switch as it was and say so.
+The app SHALL show a Notify me switch for the repo on screen once a service worker is registered, the browser has `Notification` and `PushManager`, and the Worker answers a push key, and none otherwise. Its state SHALL be what `GET /api/repos/<o>/<r>/push?endpoint=<endpoint>` answers for the browser's subscription's endpoint, off without asking when the browser has no subscription, asked again with `fresh` when `refresh(fresh)` is called, and it SHALL be disabled offline. A switch drawn again for a repo whose state the app has already shown SHALL show that state at once while it asks again, and keep it when the ask fails. Turning it on SHALL ask for notification permission when it isn't granted, and when refused leave the switch off with a message beside it, outside its label so tapping the message doesn't toggle it; otherwise it SHALL take the browser's subscription, or subscribe the push manager with `userVisibleOnly` and the Worker's key as `applicationServerKey` when there is none, and post it to `POST /api/repos/<o>/<r>/push`. Turning it off SHALL send `DELETE /api/repos/<o>/<r>/push` with that endpoint. A post or delete the Worker refuses SHALL leave the switch as it was and say so.
 
 #### Scenario: turn on
 - GIVEN a browser with notification permission granted, and a Worker answering the key `k` and `{"subscribed": false}` for `o/a`
@@ -31,6 +31,11 @@ The app SHALL show a Notify me switch for the repo on screen once a service work
 - GIVEN a Worker answering 404 for the push key, and, apart, a browser with no push manager or no registered service worker
 - WHEN the switch for `o/a` is drawn in each
 - THEN it is hidden
+
+#### Scenario: redrawn with a known state
+- GIVEN a switch for `o/a` that read on, and a Worker whose push route then fails
+- WHEN the switch for `o/a` is drawn again
+- THEN it shows on before the push route answers, and still reads on after the request fails
 
 #### Needs
 - web.worker/push-subscriptions

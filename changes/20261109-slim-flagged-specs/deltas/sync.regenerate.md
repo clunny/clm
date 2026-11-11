@@ -159,14 +159,3 @@ When `regenerated` stops on a change with stale deltas, or `Tree::other_deltas` 
 
 #### Needs
 - apply/stale-elements
-
-### Requirement: git-through-layer <!-- base: 23e72be1520f7764 -->
-`clm-regenerate` SHALL list `clm-git` among its dependencies and SHALL run no process itself: every `git` call goes through `clm-git`'s `git`, `run` or `extract_paths`, the first two through the wrapper `retry-index-lock` states (`git-plumbing-layer`).
-
-#### Scenario: covered by the scan
-- GIVEN the workspace
-- WHEN a test in `clm-regenerate` reads `crates/clm-regenerate/Cargo.toml` and every file under `crates/clm-regenerate/src`
-- THEN `clm-git` is a dependency, and no file holds `std::process` or `Command::new(`
-
-#### Serves
-- architecture/reuse-first

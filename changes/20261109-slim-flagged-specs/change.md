@@ -1,7 +1,7 @@
 ---
 status: applied
 from: backlog/specs-restate-their-requirements-and-narrate-history
-resolves: [specs-restate-their-requirements-and-narrate-history, pending-report-tests-prove-text-it-no-longer-states]
+resolves: [specs-restate-their-requirements-and-narrate-history]
 ---
 
 ## Intent
@@ -10,7 +10,7 @@ Slim the second batch of the components `clm health` flagged on 2026-11-09: `cap
 
 ## Problem
 
-A `spec-slimmer` pass per flagged component found the same causes as the first batch: Designs and Contracts restating their requirements almost word for word (`capability` has a 2820-token Design over no requirements; `plugin.panel`'s Design repeats `build-rows`' five-line rule verbatim; `view` defines the checkout line in four places), requirements that repeat another (`web.worker.platform/code-key-as-ledger` and `code-key-doc-only`; `view/view-builds-for-wasm` and `view-library`; `plugin.panel/manifest-owner` and `panel-package`), source-grep requirements that guard layout rather than behaviour (`view.repo/shared-plumbing`; most of `sync.regenerate/git-through-layer`), Design text that narrates one build's migration (`web.worker.platform`'s `tests/sign_in.rs` sentence, `capability`'s "It is built once `web/site-served-directly` is current", `view.repo`'s "a session whose checkout is behind…"), and one requirement carrying most of a component's scenarios (`plugin.panel/build-rows`, 18). Some behaviour is stated only in a Design or only in code: `web.client-live`'s push-subscription renewal, and `push-sw.ts`'s routing of an off-origin URL and its fallback when navigation fails.
+A `spec-slimmer` pass per flagged component found the same causes as the first batch: Designs and Contracts restating their requirements almost word for word (`capability` has a 2820-token Design over no requirements; `plugin.panel`'s Design repeats `build-rows`' five-line rule verbatim; `view` defines the checkout line in four places), requirements that repeat another (`web.worker.platform/code-key-as-ledger` and `code-key-doc-only`; `view/view-builds-for-wasm` and `view-library`; `plugin.panel/manifest-owner` and `panel-package`), Design text that narrates one build's migration (`web.worker.platform`'s `tests/sign_in.rs` sentence, `capability`'s "It is built once `web/site-served-directly` is current", `view.repo`'s "a session whose checkout is behind…"), and one requirement carrying most of a component's scenarios (`plugin.panel/build-rows`, 18). Some behaviour is stated only in a Design or only in code: `web.client-live`'s push-subscription renewal, and `push-sw.ts`'s routing of an off-origin URL and its fallback when navigation fails.
 
 ## Approaches
 
@@ -33,7 +33,7 @@ Each split keeps the existing ID on the core rule and adds the carved-out parts 
 
 **`check.coverage`** (the bug):
 - `pending-report` states again that an obsolete marker whose component is missing goes to the component `owner` gives its file, however the component went, which the code does and `a_node_gone_without_a_removal_delta_moves_too` proves.
-- `paths_match_as_git_glob_pathspecs_do` is re-cited to `check/path-ownership`, the rule it proves; no requirement text changes for it.
+- The bug's other half, re-citing `paths_match_as_git_glob_pathspecs_do` to `check/path-ownership`, stays filed: the test lies in `check`'s `paths`, and a `check.coverage` build may re-cite it only to its own requirement (`path-ownership`). The item is narrowed to that, on `check`, for a `clm claim check --fix`.
 
 **`plugin.panel`**:
 - `build-rows` splits into `build-rows` (which runs are a component's builds and what a row shows), `build-row-lifecycle` (waiting, done, failed with `Dismiss`, cleared and resumed) and `build-row-cost` (tokens, cost and the per-second tick). It drops "`/clm:view flight` in the chat SHALL answer with `clm`'s output alone" and the `chat unchanged` scenario, which `view-command-in-chat` states. Scenarios merge: `launcher prompt` with `quoted first step`; `finished build`, `failed build dismissed` and `cleared` into one for what is drawn and one for dismissing; `waiting ends` with `status lags the answer`. 13 scenarios remain across the three: `round`, `not a build` and `failed child of a finished build` each prove a rule no other does.
@@ -44,9 +44,8 @@ Each split keeps the existing ID on the core rule and adds the carved-out parts 
 - Kept as they are: `type-check` (`ci` names it), `component-heading` (`view`'s `#### Needs` name it) and `superseded-draw`.
 
 **`sync.regenerate`**:
-- `git-through-layer` keeps only that the crate runs git through `clm_git` and runs no process itself; the `clm-sync` scan (`no-dead-code`'s job) and the string-literal bans go, and so does `tests/git_layer.rs` where the remaining rule doesn't need it.
 - Which bases count, and when a base is unknown, is stated once, in `stale-delta-diff`; `regenerated-tree` and `stale-delta-merge` name it instead of restating it.
-- Scenarios merge: `regenerated-tree`'s "stale delta without merging" into "a change stale against main goes before the one built on it"; `git-through-layer`'s "no copy left in clm-sync" goes with the scan it proved. `stale-delta-merge` writes in its own text that `other_deltas` stops on any refusal, which only the Design said.
+- Scenarios merge: `regenerated-tree`'s "stale delta without merging" into "a change stale against main goes before the one built on it". `stale-delta-merge` writes in its own text that `other_deltas` stops on any refusal, which only the Design said.
 - Design: Order, Stages, Merge, Other deltas and The tree keep the mechanics the requirements don't state (the `git diff --no-index`/`merge-file` invocations, the text trimming, the extract-and-move, why violations are filtered); the Tests paragraph keeps its first sentence; "The waits are fixed, with no override" and "should a third, it moves to `clm-git`" go. Contract bullets shrink to one line each.
 
 **`view`**:
@@ -57,7 +56,6 @@ Each split keeps the existing ID on the core rule and adds the carved-out parts 
 - Design: Checkout, Models, Component detail, Oversized components and Charts lose their restatements; Size budget keeps one sentence naming the shared shell.
 
 **`view.repo`**:
-- `shared-plumbing` is removed with `tests/shared.rs`; `tests/plumbing.rs` keeps what it proves of other requirements.
 - `pending-names-its-commit` names `view-at-rev`'s first line and reading instead of restating them; `up to date` folds into `behind origin/main`. Its `no such commit` stays: it proves the exit of `clm pending`, a command `view-at-rev` doesn't cover.
 - `view-at-rev`'s `detached, never fetched` folds into `header`. The size report stays.
 - Design: the Pending paragraph's history and restatements go; At a commit keeps the in-memory calls, the budget and `.gitattributes` sources and where the `FETCH_HEAD` files are; the dependency sentence goes.
@@ -67,7 +65,7 @@ Each split keeps the existing ID on the core rule and adds the carved-out parts 
 - `push-shown` adds what only `push-sw.ts` did: a URL on another origin opens the app's root instead, and a window that can't be navigated gets a new one opened.
 - Scenarios: `notify-switch`'s two no-key cases become one.
 - Design: The socket, Notifications and Push handlers lose their restatements; one copy of the import-cycle rule stays. `live-updates`' timings stay: they are what the tests observe.
-- The build drops code no requirement needs: the shared-request map (`asking`) and the per-repo last-state cache (`states`).
+- `notify-switch` also states what only the per-repo last-state cache (`states`) did: a switch drawn again shows its known state at once and keeps it when the ask fails (`ui-quality`), with a scenario. The build drops the shared-request map (`asking`), which no requirement needs.
 
 **`web.worker.platform`** and **`web.worker`**:
 - `code-key-as-ledger` folds into `code-key-doc-only`; `code-key-doc-only` drops "`keys.rs` SHALL hold no list of doc-only paths of its own" and the `no copy of the list` scenario, since the first scenario proves a change to `ledger`'s list reaches the key.
@@ -81,4 +79,4 @@ The builds afterwards delete the tests of removed requirements' and dropped scen
 
 - No behaviour changes: every scenario dropped is covered by one kept, every rule removed is stated by another, and behaviour only a Design or code stated is written into a requirement, not dropped.
 - No `ARCHITECTURE.md` or `CAPABILITIES.md` entry names a requirement this change removes, so neither changes.
-- Left alone on purpose: `check.coverage/state-names` (the glossary test and three components rely on it), `plugin.panel/type-check` (`ci` names it), `plugin.panel/component-heading` (`view` needs it), the first batch's scenario choices in `orchestrator.checkpoint` and `check.coverage`, `web.client-live/live-updates`' timings, and `view.repo/view-at-rev`'s size report.
+- Left alone on purpose: `view.repo/shared-plumbing` and `sync.regenerate/git-through-layer`, the per-crate scans `remote-plumbing-scan`, `shared-plumbing-in-git` and `sync-regenerate-split` chose; `check.coverage/state-names` (the glossary test and three components rely on it), `plugin.panel/type-check` (`ci` names it), `plugin.panel/component-heading` (`view` needs it), the first batch's scenario choices in `orchestrator.checkpoint` and `check.coverage`, `web.client-live/live-updates`' timings, and `view.repo/view-at-rev`'s size report.
