@@ -155,6 +155,14 @@ pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
         );
     }
     if !reasons.is_empty() {
+        // Claude Code cancels the whole tool call on exit 2, while each reason speaks only
+        // of the part it judged (`block-refuses-whole-command`).
+        reasons.push(
+            "clm: the whole command line was refused and nothing in it ran, the commands \
+             chained before and after the refused part included; run again any of them you \
+             still need."
+                .to_string(),
+        );
         return Decision::Block(reasons.join("\n"));
     }
     let mut asks: Vec<String> = judged
