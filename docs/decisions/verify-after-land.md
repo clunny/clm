@@ -4,7 +4,7 @@ date: 2026-11-07
 status: accepted
 ---
 
-Resolves `backlog/slow-tests-after-land` (`changes/20261107-slow-tests-after-land/`), raised again by GitHub issue #262. Extends `deploy-is-downstream`, which left slow tests a choice between the land check and an unreported pipeline.
+Resolves `backlog/slow-tests-after-land` (`changes/20261107-slow-tests-after-land/`), raised again by GitHub issue #262. Extends `deploy-is-downstream`, which left slow tests a choice between the land check and an unreported pipeline. Refined by `verify-stop-admits-each-fix`: a component several items hold admits a fix of any one of them.
 
 A project may set `[verify]` in `clm.toml`: a slow-test command, a `mode` and the triggers it wants. `clm verify --due` decides from git and the ledger whether a trigger has fired since the last verified commit of `main`, and when one has, verifies `main`'s head and appends a `verified` record. A red record names the land that broke it and its components; `clm intake` lists it and `clm land` warns a branch touching those components. When the human takes it in through triage as a `kind: bug` item with `verify_failures`, `clm land` refuses code lands on the item's components until a fix whose commit resolves that item lands. Other components keep landing. Without `[verify]`, nothing changes: slow tests stay in `[land] check`.
 

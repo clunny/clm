@@ -23,10 +23,15 @@ When two `kind: bug` items with `verify_failures` both name component `b`, a bra
 
 - `land/verify-stop` (modified): a touched held component is *fixed* when a commit of the branch resolves at least one item holding it; the branch lands when every held component it touches is fixed. The refusal names each held component it touches and isn't fixed, with every item that holds it, and says that one item holding each named component is enough. New scenarios: *two items hold one component* (refused with both named), *each fix of two lands* (a fix of one lands; the other item still holds the component), and *each held component needs its own fix* (resolving `b`'s item doesn't admit `c`).
 - `land`'s Contract: the sentence on the stop says a branch lands once a commit resolves that item or another item holding the same component.
-- Decision `docs/decisions/verify-stop-admits-each-fix.md`, refining `verify-after-land`.
+- `verify`'s Design, **What it stops**: the hold it describes lets through, meanwhile, a branch resolving another item holding the same component.
+- Decision `docs/decisions/verify-stop-admits-each-fix.md`, refining `verify-after-land`, which now names it.
 - Code (built by `land`): in `crates/clm-land/src/verify_stop.rs`, compute blocking per touched held component (blocked when no item holding it is resolved), list every holding item in the refusal and reword its last line; tests for the new scenarios in `crates/clm-land/tests/verify_stop.rs`, and the requirement's other tests re-cited at its new version.
 
 ## Constraints
 
 - No edge cases or workarounds are known.
 - The capability `slow-tests-after-land` still holds as written: code lands on a broken component are refused until a fix lands, and the capability scenario has one break.
+
+## Open questions
+
+- The architecture audit noted that `plugin`'s `/clm:verify` requirement (and `plugin/skills/verify/SKILL.md` step 5) tells the human that once the item is on `main`, `clm land` holds code lands on its components until a fix resolving it lands. Left unchanged: it describes the hold of the item being taken in, which stays true, and never claimed that nothing else on the component may land; rewording it would cost a `plugin` build for no change in what the human must do. Say so if you want it to mention fixes of other items too.
