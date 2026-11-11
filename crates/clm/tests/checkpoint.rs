@@ -1087,7 +1087,7 @@ fn builds(work: &Path) -> PathBuf {
 
 #[test]
 fn scenario_stale_places_freed() {
-    // req:orchestrator.checkpoint/checkpoint-frees-places@b8507909
+    // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
     use clm_orchestrator::{PlaceKind, take_place};
     let r = repo();
     // `c` was just taken by a `clm run` that hasn't claimed yet: it counts by its `taken`
@@ -1121,7 +1121,7 @@ fn scenario_stale_places_freed() {
 
 #[test]
 fn scenario_damaged_place_kept() {
-    // req:orchestrator.checkpoint/checkpoint-frees-places@b8507909
+    // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
     let r = repo();
     write(&builds(&r.work), "z", "not a place");
     let (code, out) = checkpoint(&r.work);
@@ -1140,7 +1140,7 @@ fn scenario_damaged_place_kept() {
 #[cfg(unix)]
 #[test]
 fn a_place_the_sweep_cant_delete_is_kept_and_reported() {
-    // req:orchestrator.checkpoint/checkpoint-frees-places@b8507909
+    // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
     use std::os::unix::fs::PermissionsExt;
     let r = repo();
     let dir = builds(&r.work);
@@ -1183,7 +1183,7 @@ fn a_place_the_sweep_cant_delete_is_kept_and_reported() {
 
 #[test]
 fn a_sweep_that_fails_exits_2() {
-    // req:orchestrator.checkpoint/checkpoint-frees-places@b8507909
+    // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
     let r = repo();
     // No places directory can be made under a file.
     write(&r.work.join(".git"), "clm", "not a directory");
