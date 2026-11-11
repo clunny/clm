@@ -36,7 +36,12 @@ pub fn pr_open(
         .or_else(|| drawn.as_ref().map(|(title, _)| title.clone()))
         .unwrap_or_default();
     let (text, temp) = match body_file {
-        Some(file) => (std::fs::read_to_string(root.join(file)).ok(), None),
+        Some(file) => (
+            std::fs::read_to_string(root.join(file))
+                .or_else(|_| std::fs::read_to_string(file))
+                .ok(),
+            None,
+        ),
         None => {
             let body = drawn.map(|(_, body)| body).unwrap_or_default();
             let file = TempFile::write(&body)?;
@@ -59,6 +64,9 @@ pub fn pr_open(
 /// `error`, ending `; the body is kept at <path>` once `text` is written there; unchanged
 /// when it can't be written.
 fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
+    if matches!(error, Error::Nowhere(_)) {
+        return error;
+    }
     let Ok(path) = keep_body(root, branch, text) else {
         return error;
     };
