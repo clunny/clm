@@ -1159,7 +1159,11 @@ fn every_tracked_package_json_directory_is_set_up() {
     let listing = String::from_utf8(out.stdout).unwrap();
     let dirs: Vec<&str> = listing
         .split('\0')
-        .filter_map(|p| p.strip_suffix("/package.json"))
+        .filter_map(|p| match p.strip_suffix("package.json") {
+            Some("") => Some("."),
+            Some(dir) => dir.strip_suffix('/'),
+            None => None,
+        })
         .collect();
     assert!(!dirs.is_empty());
     for dir in dirs {
