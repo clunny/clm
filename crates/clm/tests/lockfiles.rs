@@ -39,6 +39,20 @@ fn write(root: &Path, rel: &str, content: &[u8]) {
 fn lockfiles_are_marked_generated() {
     // req:clm/lockfiles-generated@59b8d4d8
     let repo = repo();
+    let attributes = fs::read_to_string(repo.join(".gitattributes")).unwrap();
+    for bare in [
+        "Cargo.lock linguist-generated",
+        "package-lock.json linguist-generated",
+    ] {
+        assert!(attributes.lines().any(|l| l == bare), "no bare line {bare}");
+    }
+    let me = fs::read_to_string(repo.join("crates/clm/tests/lockfiles.rs")).unwrap();
+    for glob in ["**/Cargo.lock", "**/package-lock.json", "**/.gitattributes"] {
+        assert!(
+            me.contains(&format!("clm:{} {glob}", "reads")),
+            "no marker {glob}"
+        );
+    }
     let listed = git(&repo, &["ls-files"]);
     let files: Vec<&str> = listed
         .lines()
