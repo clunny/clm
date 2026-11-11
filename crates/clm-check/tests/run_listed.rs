@@ -91,6 +91,24 @@ fn a_listed_file_the_directory_lacks() {
 }
 
 #[test]
+fn the_listing_wins_inside_a_work_tree() {
+    // req:check/run-listed@162a7860
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(root, "specs/SPEC.md", &node("[]", Some("[]")));
+    write(root, "tools/y.sh", "x\n");
+    let status = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(root)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let found = lines(&clm_check::run_listed(root, &listing(&["other/z.rs"])));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(found[0].starts_with("other/z.rs: check/unowned-files"));
+}
+
+#[test]
 fn run_is_run_listed_on_the_index() {
     // req:check/run-listed@162a7860
     let dir = TempDir::new().unwrap();
