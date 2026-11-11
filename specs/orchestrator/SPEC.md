@@ -615,12 +615,12 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 #### Scenario: a later look fails
 - GIVEN `clm next --wait --interval 0.01` running after a first look that printed nothing, and `origin` then unreachable
 - WHEN it looks again, and `origin` is reachable again with component `a` ready
-- THEN it prints `clm next failed: ` with git's reason to stderr, keeps waiting, then prints `a` and exits 0
+- THEN it prints `clm next failed: ` with the fetch's reason, `origin can't be reached`, to stderr, keeps waiting, then prints `a` and exits 0
 
 #### Scenario: first look fails
 - GIVEN a clone whose `origin` can't be fetched
 - WHEN `clm next --wait` runs
-- THEN it exits 2 with git's reason, as `clm next` does
+- THEN it exits 2 saying `origin can't be reached`, as `clm next` does
 
 #### Scenario: bad interval
 - GIVEN any clone
@@ -794,3 +794,22 @@ Each place SHALL hold a slot. When `take_place` takes a new place it SHALL write
 - GIVEN a base whose `specs/SPEC.md` doesn't parse
 - WHEN `land_priority` runs
 - THEN it fails naming the reason
+
+### Requirement: fetch-retries-race
+Every fetch of `origin` that `clm-orchestrator` makes, in `clm next`, `clm next --wait`, `clm claim`, `clm claim backlog/<slug>`, `clm proposals`, `claim_local` and `taken_items`, SHALL go through `clm-git`'s `fetch_retrying` (`vcs/fetch-retries`) with the arguments it fetches with today (`fetch --prune --quiet origin`), so a fetch that lost a race with a build in another worktree of the same clone over a remote-tracking ref goes on. When `fetch_retrying` fails, the command SHALL fail as a failed fetch fails it today, as a git failure (exit 2), with the error's message: git's message from the last fetch for `FetchError::Git`, and `origin can't be reached` for `FetchError::Offline`. No file under `crates/clm-orchestrator/src` SHALL run `git fetch` other than through `fetch_retrying`.
+
+#### Scenario: a claim whose fetch loses a ref race
+- GIVEN a ready, unclaimed component `b`, and an executable `git` first on `PATH` that, for the first `fetch` naming `origin`, prints `error: cannot lock ref 'refs/remotes/origin/impl/a'` on stderr and exits 1, and runs the real `git` for every other call
+- WHEN `clm claim b` runs
+- THEN it prints `impl/b`, exits 0, and `origin` holds `impl/b`
+
+#### Scenario: a claim whose fetch keeps failing
+- GIVEN the same, with a `git` that fails every `fetch` naming `origin` that way
+- WHEN `clm claim b` runs
+- THEN it exits 2 with a message containing `cannot lock ref`, and `origin` holds no `impl/b`
+
+#### Needs
+- vcs/fetch-retries
+
+#### Serves
+- capability/work-concurrently
