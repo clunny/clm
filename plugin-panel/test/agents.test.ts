@@ -1,4 +1,4 @@
-// req:plugin.panel/build-rows@b2f57e0a
+// req:plugin.panel/build-rows@2a02f823
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 
@@ -328,12 +328,14 @@ describe('drawing', () => {
     expect(firsts.map(l => indent(l) - base)).toEqual([0, 2, 2, 4, 6, 8, 8])
   })
 
+  // req:plugin.panel/build-row-cost@5e68018b
   test('the totals name the most used model first', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look one', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'x2', type: 'Explore', description: 'look two', model: 'claude-haiku-4-5', prompt: 'Look.', at: 11_000 })
     expect(text(flightLines(CHART, list, 61_000)).at(-1)).toMatch(/· Haiku 4\.5 ×2 · Opus 5\.5 ×1$/)
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('a finished build and its subagents leave the rows at once; the totals still count them', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyStep(list, 'c1', 'claude-opus-5-5', undefined, usage(10_000))
@@ -349,6 +351,7 @@ describe('drawing', () => {
     expect(glyphs(flightLines(CHART, list, 0))).toEqual([])
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('a failed build shows ✗ in rose and a Dismiss button, until the button is pressed', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
     const lines = flightLines(CHART, list, 0)
@@ -415,6 +418,7 @@ describe('drawing', () => {
     expect(rows[4]).not.toContain('round')
   })
 
+  // req:plugin.panel/build-row-cost@5e68018b
   test('a second later the rows show a larger elapsed time, and clm has not run again', async () => {
     const at = (ms: number) => text(flightLines(CHART, gitBuild(), ms)).join('\n')
     expect(at(61_000)).toContain('1:01')
@@ -460,6 +464,7 @@ describe('drawing', () => {
     expect([...cache.keys()]).toEqual([viewKey(2, ['view', 'flight'])])
   })
 
+  // req:plugin.panel/build-row-cost@5e68018b
   test('a million input tokens cost the model\'s input rate', () => {
     const list = applyStep(started(['b1', 'build git', PROMPT('git')]), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     const row = between(text(flightLines(CHART, list, 0)), '  git ', '  init ').join('\n')
@@ -599,6 +604,7 @@ describe('waiting', () => {
     expect(all).toContain('agents')
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('an answer while the engine lists the agent waiting leaves a waiting row whose time grows', () => {
     const list = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     expect(list[0]).toMatchObject({ status: 'waiting' })
@@ -617,6 +623,7 @@ describe('waiting', () => {
     expect(onComplete(build(), { agentId: 'b1', reason: 'max_turns' }, 9_000, 'waiting')[0]?.status).toBe('failed')
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('a turn.start of a listed agent runs it again, drawn, keeping its tokens, dismissed or not', () => {
     let list = applyStep(build(), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     list = onComplete(list, { agentId: 'b1', reason: 'answer' }, 9_000, 'completed')
