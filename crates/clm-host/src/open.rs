@@ -1,10 +1,11 @@
 //! `pr_open`: the optional branch, title and body of `clm pr open`, filled in from the
 //! branch (`pr-open-defaults`).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use clm_git::{REMOTE, current_branch, git};
 
+use crate::keep::{TempFile, keep_body};
 use crate::{Error, adapter};
 
 /// Opens the pull request for `branch` (default: the checked-out one), titled `title` with
@@ -34,39 +35,38 @@ pub fn pr_open(
         .map(String::from)
         .or_else(|| drawn.as_ref().map(|(title, _)| title.clone()))
         .unwrap_or_default();
-    match body_file {
-        Some(file) => adapter(host).page_open(root, &branch, &title, file),
+    let (text, temp) = match body_file {
+        Some(file) => (std::fs::read_to_string(root.join(file)).ok(), None),
         None => {
             let body = drawn.map(|(_, body)| body).unwrap_or_default();
-            let file = TempBody::write(&body)?;
-            adapter(host).page_open(root, &branch, &title, &file.0)
+            let file = TempFile::write(&body)?;
+            (Some(body), Some(file))
         }
-    }
+    };
+    let file = match (&temp, body_file) {
+        (Some(temp), _) => temp.0.as_path(),
+        (None, Some(file)) => file,
+        (None, None) => unreachable!("a body is either given or written"),
+    };
+    adapter(host)
+        .page_open(root, &branch, &title, file)
+        .map_err(|e| match text.filter(|t| !t.trim().is_empty()) {
+            Some(text) => keeping(root, &branch, &text, e),
+            None => e,
+        })
 }
 
-/// A body written to a temporary file outside the worktree, removed on drop.
-struct TempBody(PathBuf);
-
-impl TempBody {
-    fn write(body: &str) -> Result<Self, Error> {
-        let path = std::env::temp_dir().join(format!("clm-pr-body-{}.md", std::process::id()));
-        let refuse = |e: std::io::Error| Error::Refused(format!("{}: {e}", path.display()));
-        // `create_new` refuses a file or symlink already at the path.
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(refuse)?;
-        let body = std::io::Write::write_all(&mut file, body.as_bytes());
-        let guard = TempBody(path.clone());
-        body.map_err(|e| Error::Refused(format!("{}: {e}", path.display())))?;
-        Ok(guard)
-    }
-}
-
-impl Drop for TempBody {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+/// `error`, ending `; the body is kept at <path>` once `text` is written there; unchanged
+/// when it can't be written.
+fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
+    let Ok(path) = keep_body(root, branch, text) else {
+        return error;
+    };
+    let note = |why: String| format!("{why}; the body is kept at {}", path.display());
+    match error {
+        Error::Refused(why) => Error::Refused(note(why)),
+        Error::Git(why) => Error::Git(note(why)),
+        Error::Nowhere(report) => Error::Nowhere(report),
     }
 }
 
