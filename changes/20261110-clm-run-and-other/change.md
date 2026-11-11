@@ -23,7 +23,8 @@ During `/clm:build` with several builds running, `clm run <component>` exited 2 
 ## Outcome
 
 - `vcs/fetch-tries-again` (added): `fetch(root)` runs `git fetch origin` up to three times with `fetch_retrying`'s waits, returning the last run's error, through `fetch_retrying`'s loop rather than a copy. `vcs`'s Contract names it.
-- `orchestrator/fetch-retries-race`, `orchestrator.run/run-fetch-retries-race`, `orchestrator.checkpoint/wrap-up-fetch-retries-race`, `orchestrator.triage/draft-fetch-retries-race` (added): each component's `fetch --prune --quiet origin` goes through `fetch_retrying`, failing as a git failure with `FetchError`'s message when it gives up.
+- `orchestrator/fetch-retries-race`, `orchestrator.run/run-fetch-retries-race`, `orchestrator.checkpoint/wrap-up-fetch-retries-race`, `orchestrator.triage/draft-fetch-retries-race` (added): each component's `fetch --prune --quiet origin` goes through `fetch_retrying`, failing as a git failure with `FetchError`'s message when it gives up. Each component maps `FetchError` to its `Error::Git` with the error's display.
+- `orchestrator/next-wait` (modified): its two scenarios with an unreachable `origin` say `origin can't be reached`, where they said git's reason; only the tests' citations and any assertion on git's text move.
 - Code: `crates/clm-git/src/lib.rs` (`fetch` shares `fetch_retrying`'s loop), the private `fetch` helpers in `crates/clm-orchestrator/src/repo.rs`, `crates/clm-run/src/lib.rs`, `crates/clm-checkpoint/src/lib.rs`, and the three inline fetches in `crates/clm-triage/src/{draft,finish,fold}.rs`. Each test fakes `git` first on `PATH` as `crates/clm-git/tests/fetch_retries.rs` does.
 
 ## Constraints
@@ -43,4 +44,4 @@ None bear on this item.
 
 ## Open questions
 
-None.
+- **Time in land checks** (`land-checks-stay-fast`, raised by the architecture audit): each "keeps failing" scenario sleeps through the retries' 3 seconds, and each "loses a ref race" one through 1 second, about 16 seconds of sleeping across five crates' tests, and tests elsewhere that fetch an unreachable `origin` through `fetch` (such as `clm sync`'s) grow 3 seconds each. Kept: `vcs/fetch-retries` and `land.approval/approve-retries-fetch` already pay the same waits, the crates' tests run in parallel, and the "keeps failing" scenarios are what prove each command's failure stays a git failure with the fetch's message. Moving them to `[verify]` would be the remedy if land checks slow noticeably.
