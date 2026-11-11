@@ -1,7 +1,7 @@
 //! Every code file is in some node's `paths` or the root's `outside` (`unowned-files`).
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::TempDir;
@@ -64,7 +64,7 @@ const A: (&str, &str) = ("specs/a/SPEC.md", "[\"crates/a/**\"]");
 
 #[test]
 fn file_in_no_node() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(Some("[]"), &[A], &["crates/a/lib.rs", "crates/b/lib.rs"]);
     assert_eq!(
         found(dir.path()),
@@ -74,14 +74,14 @@ fn file_in_no_node() {
 
 #[test]
 fn not_opted_in() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(None, &[A], &["crates/a/lib.rs", "crates/b/lib.rs"]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn declared_not_yet_adopted() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(
         Some("[\"crates/b/**\"]"),
         &[A],
@@ -92,7 +92,7 @@ fn declared_not_yet_adopted() {
 
 #[test]
 fn part_of_an_outside_directory_adopted() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(
         Some("[\"src/**\"]"),
         &[("specs/api/SPEC.md", "[\"src/api/**\"]")],
@@ -103,7 +103,7 @@ fn part_of_an_outside_directory_adopted() {
 
 #[test]
 fn outside_glob_left_behind() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(
         Some("[\"crates/b/**\"]"),
         &[A, ("specs/b/SPEC.md", "[\"crates/b/**\"]")],
@@ -119,7 +119,7 @@ fn outside_glob_left_behind() {
 
 #[test]
 fn spec_paths_and_untracked_files() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(
         Some("[]"),
         &[A],
@@ -139,7 +139,7 @@ fn spec_paths_and_untracked_files() {
 
 #[test]
 fn whatever_the_node_status() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(Some("[]"), &[], &["crates/a/lib.rs"]);
     write(
         dir.path(),
@@ -152,7 +152,7 @@ fn whatever_the_node_status() {
 #[cfg(unix)]
 #[test]
 fn symlinks_and_markdown_count() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = tree(Some("[]"), &[A], &["README.md"]);
     std::os::unix::fs::symlink("README.md", dir.path().join("link")).unwrap();
     for args in [&["init", "-q"][..], &["add", "."]] {
@@ -174,30 +174,38 @@ fn symlinks_and_markdown_count() {
 
 #[test]
 fn extracted_tree() {
-    // req:check/unowned-files@74ca9915
-    let dir = tree(Some("[]"), &[A], &["crates/b/lib.rs"]);
+    // req:check/unowned-files@d7dc8ebd
+    let dir = tree(
+        Some("[\".ci/**\"]"),
+        &[A],
+        &["crates/b/lib.rs", ".ci/build.yml"],
+    );
+    let files = ["specs/SPEC.md", "crates/b/lib.rs", ".ci/build.yml"].map(PathBuf::from);
+    let found: Vec<String> = clm_check::run_listed(dir.path(), &files)
+        .iter()
+        .filter(|v| v.rule == "check/unowned-files")
+        .map(clm_check::format)
+        .collect();
     assert_eq!(
-        found(dir.path()),
+        found,
         [format!("crates/b/lib.rs: check/unowned-files: {MESSAGE}")]
     );
 }
 
-#[cfg(unix)]
 #[test]
-fn extracted_tree_lists_symlinks_unfollowed() {
-    // req:check/unowned-files@74ca9915
-    let dir = tree(Some("[]"), &[A], &["crates/a/lib.rs"]);
-    std::os::unix::fs::symlink("..", dir.path().join("crates/a/up")).unwrap();
-    std::os::unix::fs::symlink("crates", dir.path().join("loop")).unwrap();
-    assert_eq!(
-        found(dir.path()),
-        [format!("loop: check/unowned-files: {MESSAGE}")]
+fn no_work_tree_no_listing() {
+    // req:check/unowned-files@d7dc8ebd
+    let dir = tree(
+        Some("[\".ci/**\"]"),
+        &[A],
+        &["crates/b/lib.rs", ".ci/build.yml"],
     );
+    assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn submodules_count() {
-    // req:check/unowned-files@74ca9915
+    // req:check/unowned-files@d7dc8ebd
     let dir = repo(Some("[]"), &[A], &["crates/a/lib.rs"]);
     let status = Command::new("git")
         .args([

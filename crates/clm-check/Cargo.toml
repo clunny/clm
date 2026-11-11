@@ -41,6 +41,10 @@ name = "undeclared_imports"
 required-features = ["checkout"]
 
 [[test]]
+name = "run_listed"
+required-features = ["checkout"]
+
+[[test]]
 name = "unowned_files"
 required-features = ["checkout"]
 

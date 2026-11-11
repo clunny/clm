@@ -56,9 +56,28 @@ pub use imports::undeclared_imports;
 pub use size::size;
 pub use size::{Budgets, Count, Length, Size, TestPart, size_of};
 
-/// Runs every rule against the repo at `root`.
+/// Runs every rule against the repo at `root`, reading the files the index holds
+/// (`git ls-files --cached`) where a rule reads the tracked files. Outside a git work tree
+/// there are none.
 #[cfg(feature = "checkout")]
 pub fn run(root: &Path) -> Vec<Violation> {
+    run_with(root, clm_git::tracked_files(root))
+}
+
+/// Runs every rule `run` runs on `root`, reading `files`, relative to `root`, as the files the
+/// index holds, whether or not `root` is in a git work tree (`run-listed`).
+#[cfg(feature = "checkout")]
+pub fn run_listed(root: &Path, files: &[std::path::PathBuf]) -> Vec<Violation> {
+    run_with(root, Ok(files.to_vec()))
+}
+
+/// `tracked` is the listing of the files the rules that read them see; `Err` when listing
+/// failed.
+#[cfg(feature = "checkout")]
+fn run_with(
+    root: &Path,
+    tracked: Result<Vec<std::path::PathBuf>, clm_git::Error>,
+) -> Vec<Violation> {
     let (graph, mut violations) = clm_model::load(root);
     for change in graph.changes.values() {
         if change.frontmatter.status.is_pending() {
@@ -78,8 +97,7 @@ pub fn run(root: &Path) -> Vec<Violation> {
     violations.extend(unenforced::violations(&graph));
     let removed = removed(&graph);
     violations.extend(removed_names::violations(&graph, &removed));
-    // Listed once for both rules; outside a git work tree the listing fails.
-    let tracked = clm_git::tracked_files(root);
+    // Listed once for both rules.
     violations.extend(disjoint::violations(
         tracked.as_deref().unwrap_or_default(),
         &graph,

@@ -2,7 +2,6 @@
 //! or one of its `outside` globs, and every `outside` glob still matches such a file
 //! (`incremental-adoption`, see specs/check/SPEC.md).
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Violation};
@@ -13,7 +12,7 @@ use crate::matches;
 const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
 const SPEC_FILES: [&str; 3] = ["ARCHITECTURE.md", "CAPABILITIES.md", "CLAUDE.md"];
 
-/// None when the root has no `outside` key. `tracked` is `clm_git::tracked_files(root)`.
+/// None when the root has no `outside` key. `tracked` is the listing `run` or `run_listed` reads.
 pub fn violations(
     root: &Path,
     graph: &Graph,
@@ -23,7 +22,8 @@ pub fn violations(
         return Vec::new();
     };
     let files = match files(root, tracked) {
-        Ok(files) => files,
+        Ok(Some(files)) => files,
+        Ok(None) => return Vec::new(),
         Err(e) => {
             return vec![Violation {
                 path: root.to_path_buf(),
@@ -69,44 +69,20 @@ fn is_spec_path(name: &str) -> bool {
     SPEC_DIRS.iter().any(|d| name.starts_with(d)) || SPEC_FILES.contains(&name)
 }
 
-/// Every entry the index holds under `root`; outside a git work tree, every file under it
-/// but hidden directories and `target/`, as the coverage scan walks. `Err` when listing
-/// fails inside a work tree, so untracked files are never read there.
+/// The listing's files; none at all (`None`) outside a work tree without a listing, where the
+/// rule reports nothing. `Err` when listing failed inside a work tree, so untracked files are
+/// never read there.
 fn files(
     root: &Path,
     tracked: &Result<Vec<PathBuf>, clm_git::Error>,
-) -> Result<Vec<PathBuf>, String> {
+) -> Result<Option<Vec<PathBuf>>, String> {
     match tracked {
-        Ok(files) => Ok(files.clone()),
+        Ok(files) => Ok(Some(files.clone())),
         Err(e) if in_work_tree(root) => Err(e.to_string()),
-        Err(_) => {
-            let mut files = Vec::new();
-            walk(root, root, &mut files);
-            files.sort();
-            Ok(files)
-        }
+        Err(_) => Ok(None),
     }
 }
 
 fn in_work_tree(root: &Path) -> bool {
     clm_git::git(root, &["rev-parse", "--is-inside-work-tree"]).is_ok_and(|out| out == "true")
-}
-
-/// Symlinks are listed, not followed, as the index holds them.
-fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if entry.file_type().is_ok_and(|t| t.is_dir()) {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if !name.starts_with('.') && name != "target" {
-                walk(root, &path, out);
-            }
-        } else if let Ok(rel) = path.strip_prefix(root) {
-            out.push(rel.to_path_buf());
-        }
-    }
 }
