@@ -81,6 +81,43 @@ fn draft_fetches_through_fetch_retrying() {
         }
         other => panic!("{other:?}"),
     }
+    // `--finish` and `--fold` go on after one lost race, and report git's message when
+    // the fetch keeps failing.
+    let ids = ["20261027-a".to_string()];
+    fs::write(g.work.join(".git/fake-mode"), "once").unwrap();
+    clm_triage::finish(&g.work, "20261027-a", 4).expect("finish goes on");
+    fs::remove_file(g.work.join(".git/fake-calls")).unwrap();
+    fs::write(g.work.join(".git/fake-mode"), "once").unwrap();
+    clm_triage::fold(&g.work, &ids).expect("fold goes on");
+    fs::write(g.work.join(".git/fake-mode"), "always").unwrap();
+    match clm_triage::finish(&g.work, "20261027-a", 4) {
+        Err(clm_triage::Error::Git(why)) => assert!(why.contains("cannot lock ref"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    match clm_triage::fold(&g.work, &ids) {
+        Err(clm_triage::Error::Git(why)) => assert!(why.contains("cannot lock ref"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+    fs::remove_file(g.work.join(".git/fake-mode")).unwrap();
+
+    // An unreachable origin is `origin can't be reached`.
+    let h = with_item();
+    fs::write(h.work.join(".git/fake-mode"), "always").unwrap();
+    git(
+        &h.work,
+        &[
+            "remote",
+            "set-url",
+            "origin",
+            h.work.join("missing").to_str().unwrap(),
+        ],
+    );
+    match run(&h) {
+        Err(DraftError::Failed(clm_triage::Error::Git(why))) => {
+            assert!(why.contains("origin can't be reached"), "{why}")
+        }
+        other => panic!("{other:?}"),
+    }
     assert!(!origin_holds_claim(&g));
     let builds = g.work.join(".git/clm/builds");
     assert!(!builds.exists() || fs::read_dir(builds).unwrap().next().is_none());
