@@ -898,7 +898,6 @@ fn scenario_a_wrap_up_whose_fetch_loses_a_ref_race() {
 fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
     // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@e4a57cf6
     let r = repo();
-    git(&r.work, &["branch", "impl/gone", "origin/main"]);
     let bin = racing_git(true);
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
     assert!(out.contains("cannot lock ref"), "{out}");
