@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - azure-pull-requests-can-fail-to-open-and-the-build-s-review
 ---
