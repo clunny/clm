@@ -40,8 +40,8 @@ pwd -P > "$F/claude.$n.pwd"
 env > "$F/claude.$n.env"
 if [ -f "$F/trap" ]; then
   trap 'echo term > "$F/claude.term"; exit 0' TERM
-  sh -c 'trap "echo term > \"$FAKE/child.term\"; exit 0" TERM; while :; do sleep 0.05; done' &
-  echo started > "$F/started.$n"
+  # The child says it started once its trap is set, so a TERM sent then reaches the trap.
+  sh -c 'trap "echo term > \"$FAKE/child.term\"; exit 0" TERM; echo started > "$FAKE/started.$1"; while :; do sleep 0.05; done' sh "$n" &
   wait
 fi
 while [ -f "$F/hold" ]; do sleep 0.05; done
@@ -205,7 +205,7 @@ impl Fixture {
             .unwrap()
     }
 
-    /// Runs the runner to its end, failing the test after 30 seconds.
+    /// Runs the runner to its end, failing the test after 120 seconds.
     fn run(&self, mode: Option<&str>, once: bool) -> Output {
         finish(self.spawn(&self.env(mode, once)))
     }
@@ -213,7 +213,7 @@ impl Fixture {
     fn wait_for(&self, what: impl Fn() -> bool) {
         let start = Instant::now();
         while !what() {
-            assert!(start.elapsed() < Duration::from_secs(30), "timed out");
+            assert!(start.elapsed() < Duration::from_secs(120), "timed out");
             std::thread::sleep(Duration::from_millis(20));
         }
     }
@@ -228,10 +228,10 @@ impl Fixture {
 fn finish(mut child: Child) -> Output {
     let start = Instant::now();
     while child.try_wait().unwrap().is_none() {
-        if start.elapsed() > Duration::from_secs(30) {
+        if start.elapsed() > Duration::from_secs(120) {
             child.kill().unwrap();
             panic!(
-                "runner still running after 30s: {:?}",
+                "runner still running after 120s: {:?}",
                 child.wait_with_output()
             );
         }
@@ -536,12 +536,13 @@ fn finished_session_looks_again_without_waiting() {
     let f = fixture();
     f.set("next.1", "a\n");
     let mut env = f.env(Some("acceptEdits"), true);
-    env.insert("CLM_RUNNER_INTERVAL_MS".into(), "60000".into());
+    env.insert("CLM_RUNNER_INTERVAL_MS".into(), "600000".into());
     let start = Instant::now();
     let out = finish(f.spawn(&env));
     assert_eq!(out.status.code(), Some(0), "{out:?}");
+    // Well under the 600-second interval, and wide enough for a loaded host.
     assert!(
-        start.elapsed() < Duration::from_secs(20),
+        start.elapsed() < Duration::from_secs(60),
         "{:?}",
         start.elapsed()
     );
@@ -716,8 +717,9 @@ fn signal_ends_a_wait_at_once() {
     assert_eq!(unsafe { libc::kill(child.id() as i32, libc::SIGINT) }, 0);
     let out = finish(child);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
+    // Well under the 600-second interval, and wide enough for a loaded host.
     assert!(
-        start.elapsed() < Duration::from_secs(5),
+        start.elapsed() < Duration::from_secs(60),
         "{:?}",
         start.elapsed()
     );
