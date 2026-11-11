@@ -255,6 +255,20 @@ fn each_fix_of_two_lands() {
     f.branch("impl/b2", &[("crates/b/src/lib2.rs", "b\n")]);
     let why = refused(clm_land::land(&work, Some("impl/b2"), &f.env(&[])));
     assert!(why.contains("b-slow") && !why.contains("b-broke"), "{why}");
+    // One whose commit carries `Resolves: backlog/b-slow` lands.
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "-b", "impl/b3", "main"]);
+    std::fs::write(work.join("crates/b/src/lib3.rs"), "b\n").unwrap();
+    f.git(&work, &["rm", "-q", "backlog/b-slow.md"]);
+    f.git(&work, &["add", "-A"]);
+    f.git(
+        &work,
+        &["commit", "-q", "-m", "Fix\n\nResolves: backlog/b-slow"],
+    );
+    f.git(&work, &["push", "-q", "origin", "impl/b3"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let out = clm_land::land(&work, Some("impl/b3"), &f.env(&[])).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
 }
 
 #[test]

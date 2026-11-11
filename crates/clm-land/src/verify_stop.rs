@@ -2,7 +2,7 @@
 //! as broken waits for the fix, and one that touches the components of a red result nobody
 //! has taken in yet is warned (`capability/slow-tests-after-land`).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use clm_ledger::{Body, Fold};
@@ -80,7 +80,7 @@ pub(crate) fn check(
     let resolves = resolved(repo, base, head)?;
     // A held component the branch touches is fixed by a resolved item holding it; the items
     // not yet resolved go on holding it.
-    let mut holders: std::collections::BTreeMap<&str, Vec<&str>> = Default::default();
+    let mut holders: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for h in &held {
         for c in &h.components {
             holders.entry(c).or_default().push(&h.slug);
@@ -167,7 +167,7 @@ fn component_paths(
     repo: &Repo,
     base: &str,
     prefix: &str,
-) -> Result<std::collections::BTreeMap<String, Vec<String>>, Error> {
+) -> Result<BTreeMap<String, Vec<String>>, Error> {
     let dir = format!("{prefix}specs/");
     let blobs = clm_git::tree_blobs(&repo.root, base, &|p: &str| p.starts_with(&dir))?;
     let files: clm_model::Files = blobs
