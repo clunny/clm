@@ -615,7 +615,7 @@ test("an oversized node's card is outlined amber, unless a queue ring colours it
   await expect.poll(() => outline('a')).toBe(await colour('--rose'));
 });
 
-// req:web.client-live/notify-switch@59a9bf95
+// req:web.client-live/notify-switch@bc04aecc
 test.describe('Notify me', () => {
   test('no key: a Worker answering 404 for the push key shows no switch', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -673,7 +673,7 @@ test.describe('Notify me', () => {
   });
 });
 
-// req:web.client-live/push-shown@28764ae8
+// req:web.client-live/push-shown@c8f12d9c
 test('the service worker imports the push handlers and shows a push', async ({ page, context, baseURL }) => {
   await mockApi(context);
   // The view, not the `load` event: the graph's large chunk can hold `load` back.

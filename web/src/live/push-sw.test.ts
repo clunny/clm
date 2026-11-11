@@ -1,4 +1,4 @@
-// req:web.client-live/push-shown@28764ae8
+// req:web.client-live/push-shown@c8f12d9c
 import { describe, expect, it, vi } from 'vitest';
 import { onNotificationClick, onPush, type PushScope } from './push-sw';
 
