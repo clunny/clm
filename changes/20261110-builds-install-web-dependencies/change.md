@@ -23,8 +23,8 @@ The design is right; this repository's settings are what's missing.
 
 ## Outcome
 
-- `config/build-setup-here`: this repository's `clm.toml` sets `[build] setup` to install its five npm packages, and every tracked `package.json` lies in one of them.
-- `config`'s Design lists the setting among this repository's.
+- `config/build-setup-here`: this repository's `clm.toml` sets `[build] setup` to install its five npm packages, skipping a listed directory with no `package.json`, every tracked `package.json` lies in a listed directory, and the test is marked `clm:reads **/package.json`.
+- `config`'s Design lists the setting among this repository's, and says how a change that adds an npm package lists it: it modifies `build-setup-here`, which the package's requirement needs, so each build edits only its own `paths` (architecture audit, `path-ownership`).
 
 ## Constraints
 
