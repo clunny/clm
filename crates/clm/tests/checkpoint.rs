@@ -423,7 +423,7 @@ fn scenario_branches_from_main_kept() {
 
 #[test]
 fn scenario_unpushed_work() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     spec_branch(&r, "spec/z", true);
     let tree = git(&r.work, &["rev-parse", "spec/z^{tree}"]);
@@ -470,7 +470,7 @@ fn ledger_branch(r: &Repo, branch: &str, push: bool) -> String {
 
 #[test]
 fn another_writers_local_ledger_isnt_the_clones() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     write(&r.work, ".git/clm/writer", "1234abcd\n");
     // Another clone's ledger, checked out here to read it, its `origin` branch since gone.
@@ -482,7 +482,7 @@ fn another_writers_local_ledger_isnt_the_clones() {
 
 #[test]
 fn scenario_unpushed_ledger() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     let branch = own_ledger(&r, false);
     let (code, out) = checkpoint(&r.work);
@@ -511,7 +511,7 @@ fn scenario_unpushed_ledger() {
 
 #[test]
 fn pushed_ledger_is_safe() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     own_ledger(&r, true);
     let (code, out) = checkpoint(&r.work);
@@ -535,7 +535,7 @@ fn a_branch_deleted_on_origin_is_not_open() {
 
 #[test]
 fn scenario_open_branch_only() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     spec_branch(&r, "spec/z", true);
     let (code, out) = checkpoint(&r.work);
@@ -546,7 +546,7 @@ fn scenario_open_branch_only() {
 
 #[test]
 fn checkpoint_reports_no_review() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     // A land recorded `SOFT` by an older `clm`, which then awaited an after-merge review.
     let r = repo();
     let tip = spec_branch(&r, "spec/y", true);
@@ -595,7 +595,7 @@ fn recreated_branch_with_an_old_land_is_kept() {
 
 #[test]
 fn scenario_unrecorded_land() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     let tip = spec_branch(&r, "spec/z", true);
     land(&r, "spec/z", &tip, false, &[]);
@@ -657,7 +657,7 @@ fn landed_at_an_older_tip_is_kept() {
 
 #[test]
 fn scenario_humans_files_on_main() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     write(&r.work, "notes.txt", "mine\n");
     let (code, out) = checkpoint(&r.work);
@@ -668,7 +668,7 @@ fn scenario_humans_files_on_main() {
 
 #[test]
 fn dirty_landed_build_worktree_is_kept_and_reported_elsewhere() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     let (wt, tip) = impl_worktree(&r, "x/a");
     land_code(&r, "impl/x/a", &tip);
@@ -745,7 +745,7 @@ fn dirty_main_checkout_on_a_builds_branch_is_left() {
 
 #[test]
 fn dirty_main_checkout_on_a_landed_branch_is_left() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     let y = propose_y(&r);
     land(&r, "spec/y", &y, false, &["y"]);
@@ -800,14 +800,109 @@ fn archived_change_releases_its_autosync() {
 
 #[test]
 fn violations_on_main_are_reported() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     write(&r.work, "specs/d/SPEC.md", "no frontmatter\n");
     push_main(&r.work, "break main");
     let (code, out) = checkpoint(&r.work);
-    assert!(out.contains("specs/d/SPEC.md: "), "{out}");
+    assert!(out.contains("origin/main: specs/d/SPEC.md: "), "{out}");
     assert!(out.ends_with("wrap-up incomplete\n"), "{out}");
     assert_eq!(code, Some(1));
+}
+
+#[test]
+fn scenario_outside_glob_under_a_hidden_directory() {
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
+    let r = repo();
+    write(
+        &r.work,
+        "specs/SPEC.md",
+        &node_with("", "outside: [\".azure-pipelines/**\"]\n", &[]),
+    );
+    write(&r.work, ".azure-pipelines/ci.yml", "steps: []\n");
+    push_main(&r.work, "outside a hidden directory");
+    let (code, out) = checkpoint(&r.work);
+    assert!(!out.contains("check/unowned-files"), "{out}");
+    assert!(out.ends_with("wrap-up ok\n"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+}
+
+#[test]
+fn scenario_violation_on_main() {
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
+    let r = repo();
+    write(
+        &r.work,
+        "specs/SPEC.md",
+        &node_with("", "outside: []\n", &[]),
+    );
+    write(&r.work, "tools/x.sh", "echo hi\n");
+    push_main(&r.work, "unowned file");
+    let (code, out) = checkpoint(&r.work);
+    assert!(
+        out.lines()
+            .any(|l| l.starts_with("origin/main: tools/x.sh: check/unowned-files: ")),
+        "{out}"
+    );
+    assert!(out.ends_with("wrap-up incomplete\n"), "{out}");
+    assert_eq!(code, Some(1), "{out}");
+}
+
+/// A directory holding a `git` that, for `fetch` naming `origin`, prints a lost ref race and
+/// exits 1 on the first call (`always` false) or on every call, and runs the real `git`
+/// otherwise.
+fn racing_git(always: bool) -> TempDir {
+    let bin = TempDir::new().unwrap();
+    let only_first = if always {
+        ""
+    } else {
+        "[ -e \"$count\" ] && exec \"$real\" \"$@\""
+    };
+    write_exec(
+        &bin.path().join("git"),
+        &format!(
+            "#!/bin/sh\nreal=$(PATH=\"${{PATH#{dir}:}}\" command -v git)\n\
+             count={dir}/fetched\n\
+             if [ \"$1\" = fetch ]; then\n\
+             for a in \"$@\"; do\n\
+             if [ \"$a\" = origin ]; then\n\
+             {only_first}\n\
+             : > \"$count\"\n\
+             echo \"error: cannot lock ref 'refs/remotes/origin/impl/a'\" >&2\n\
+             exit 1\n\
+             fi\n\
+             done\n\
+             fi\n\
+             exec \"$real\" \"$@\"\n",
+            dir = bin.path().display(),
+        ),
+    );
+    bin
+}
+
+#[test]
+fn scenario_a_wrap_up_whose_fetch_loses_a_ref_race() {
+    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@e4a57cf6
+    let r = repo();
+    let bin = racing_git(false);
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(
+        bin.path().join("fetched").exists(),
+        "the fake never failed a fetch"
+    );
+    assert!(out.ends_with("wrap-up ok\n"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+}
+
+#[test]
+fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
+    // req:orchestrator.checkpoint/wrap-up-fetch-retries-race@e4a57cf6
+    let r = repo();
+    let bin = racing_git(true);
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(out.contains("cannot lock ref"), "{out}");
+    assert!(!out.contains("wrap-up ok"), "{out}");
+    assert_eq!(code, Some(2), "{out}");
 }
 
 #[test]
@@ -862,7 +957,7 @@ fn linked_main(r: &Repo) -> PathBuf {
 
 #[test]
 fn scenario_another_sessions_work() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     spec_branch(&r, "spec/z", true);
     let tree = git(&r.work, &["rev-parse", "spec/z^{tree}"]);
@@ -892,7 +987,7 @@ fn scenario_another_sessions_work() {
 
 #[test]
 fn scenario_builds_worktree_is_elsewhere() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     // `main` is free for `w`; the main checkout is clean and on no branch.
     git(&r.work, &["checkout", "-q", "--detach"]);
@@ -913,7 +1008,7 @@ fn scenario_builds_worktree_is_elsewhere() {
 
 #[test]
 fn own_checkout_and_its_branch_are_the_sessions_own() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     let (wt, _) = impl_worktree(&r, "x/a");
     write(&wt, "scratch.txt", "unsaved\n");
@@ -1007,7 +1102,7 @@ fn git_failure_exits_2() {
 
 #[test]
 fn scenario_complete_change() {
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     cite(&r.work, "all.rs", &["a/p", "a/q", "b/r", "c/s"]);
     push_main(&r.work, "build everything");
@@ -1122,7 +1217,7 @@ fn scenario_stale_places_freed() {
 #[test]
 fn scenario_damaged_place_kept() {
     // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     let r = repo();
     write(&builds(&r.work), "z", "not a place");
     let (code, out) = checkpoint(&r.work);
@@ -1142,7 +1237,7 @@ fn scenario_damaged_place_kept() {
 #[test]
 fn a_place_the_sweep_cant_delete_is_kept_and_reported() {
     // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
-    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@82ac5307
     use std::os::unix::fs::PermissionsExt;
     let r = repo();
     let dir = builds(&r.work);
