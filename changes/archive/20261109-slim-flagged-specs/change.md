@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/specs-restate-their-requirements-and-narrate-history
 resolves: [specs-restate-their-requirements-and-narrate-history]
 ---
