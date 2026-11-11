@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - clm-defect-files-nowhere-when-the-project-s-host-is-azure-devops
 ---
