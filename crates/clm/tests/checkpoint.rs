@@ -1122,6 +1122,7 @@ fn scenario_stale_places_freed() {
 #[test]
 fn scenario_damaged_place_kept() {
     // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
     let r = repo();
     write(&builds(&r.work), "z", "not a place");
     let (code, out) = checkpoint(&r.work);
@@ -1141,6 +1142,7 @@ fn scenario_damaged_place_kept() {
 #[test]
 fn a_place_the_sweep_cant_delete_is_kept_and_reported() {
     // req:orchestrator.checkpoint/checkpoint-frees-places@38008094
+    // req:orchestrator.checkpoint/checkpoint-reports-unsafe-work@8fdf5e8b
     use std::os::unix::fs::PermissionsExt;
     let r = repo();
     let dir = builds(&r.work);
