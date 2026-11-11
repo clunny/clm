@@ -137,7 +137,7 @@ fn session_start_reminds_to_upgrade() {
 
 #[test]
 fn session_start_states_the_defect_rule() {
-    // req:plugin.hooks/defect-rule@c40c6863
+    // req:plugin.hooks/defect-rule@bf9aa424
     let start = |repo: &TempDir| {
         let event = serde_json::json!({ "cwd": repo.path() }).to_string();
         let out = hook("session-start", &event);
@@ -164,6 +164,8 @@ fn session_start_states_the_defect_rule() {
         rule.contains("the one form the guard shows the human"),
         "{text}"
     );
+    // And a report `clm defect` kept is listed in the PR body with its file's path.
+    assert!(rule.contains("kept"), "{text}");
     assert!(!text.contains("--fix"), "{text}");
     // backlog: where reports go, and fix-first.
     let text = start(&clm_repo(Some("defects = \"backlog\"\n")));
