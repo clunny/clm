@@ -55,7 +55,7 @@ fn verified(f: &Fixture, commit: &str, mode: VerifyMode) {
 
 #[test]
 fn a_held_component_is_refused() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
     let old = f.remote("main");
@@ -70,7 +70,7 @@ fn a_held_component_is_refused() {
 
 #[test]
 fn other_components_land() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     f.branch("impl/a", &[("crates/a/src/lib.rs", "a\n")]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
@@ -80,7 +80,7 @@ fn other_components_land() {
 
 #[test]
 fn only_a_bug_holds_a_component() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let text = item("b", &format!("\"{COMMIT}\"")).replace("kind: bug", "kind: deferred");
     let f = repo(&[("backlog/b-broke.md", &text)]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
@@ -90,7 +90,7 @@ fn only_a_bug_holds_a_component() {
 
 #[test]
 fn an_item_without_failures_holds_nothing() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[("backlog/b-broke.md", &item("b", ""))]);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
     let out = clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
@@ -99,7 +99,7 @@ fn an_item_without_failures_holds_nothing() {
 
 #[test]
 fn the_fix_lands() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
@@ -119,7 +119,7 @@ fn the_fix_lands() {
 
 #[test]
 fn deleting_the_item_without_its_trailer_is_not_the_fix() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
@@ -136,7 +136,7 @@ fn deleting_the_item_without_its_trailer_is_not_the_fix() {
 
 #[test]
 fn another_items_trailer_is_not_the_fix() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[("backlog/b-broke.md", &item("b", &format!("\"{COMMIT}\"")))]);
     let work = f.work();
     f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
@@ -152,7 +152,7 @@ fn another_items_trailer_is_not_the_fix() {
 
 #[test]
 fn an_untriaged_red_warns() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[]);
     let red = f.rev("origin/main");
     verified(&f, &red, VerifyMode::Local);
@@ -178,7 +178,7 @@ fn an_untriaged_red_warns() {
 
 #[test]
 fn a_red_for_other_components_does_not_warn() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[]);
     verified(&f, &f.rev("origin/main"), VerifyMode::Local);
     f.branch("impl/a", &[("crates/a/src/lib.rs", "a\n")]);
@@ -188,7 +188,7 @@ fn a_red_for_other_components_does_not_warn() {
 
 #[test]
 fn a_red_record_alone_holds_nothing() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[]);
     verified(&f, &f.rev("origin/main"), VerifyMode::Pipeline);
     f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
@@ -198,7 +198,7 @@ fn a_red_record_alone_holds_nothing() {
 
 #[test]
 fn a_red_an_item_took_in_does_not_warn_twice() {
-    // req:land/verify-stop@493381b7
+    // req:land/verify-stop@72bed87d
     let f = repo(&[]);
     let red = f.rev("origin/main");
     verified(&f, &red, VerifyMode::Local);
@@ -211,4 +211,74 @@ fn a_red_an_item_took_in_does_not_warn_twice() {
     let out = clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])).unwrap();
     assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     assert!(out.warnings.iter().all(|w| !w.contains("slow tests")));
+}
+
+#[test]
+fn two_items_hold_one_component() {
+    // req:land/verify-stop@72bed87d
+    let fails = format!("\"{COMMIT}\"");
+    let f = repo(&[
+        ("backlog/b-broke.md", &item("b", &fails)),
+        ("backlog/b-slow.md", &item("b", &fails)),
+    ]);
+    f.branch("impl/b", &[("crates/b/src/lib.rs", "b\n")]);
+    let why = refused(clm_land::land(&f.work(), Some("impl/b"), &f.env(&[])));
+    assert!(why.contains("land/verify-stop"), "{why}");
+    assert!(why.contains("b-broke") && why.contains("b-slow"), "{why}");
+    assert!(why.contains("one item holding"), "{why}");
+}
+
+#[test]
+fn each_fix_of_two_lands() {
+    // req:land/verify-stop@72bed87d
+    let fails = format!("\"{COMMIT}\"");
+    let f = repo(&[
+        ("backlog/b-broke.md", &item("b", &fails)),
+        ("backlog/b-slow.md", &item("b", &fails)),
+    ]);
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "-b", "impl/b", "main"]);
+    std::fs::create_dir_all(work.join("crates/b/src")).unwrap();
+    std::fs::write(work.join("crates/b/src/lib.rs"), "fixed\n").unwrap();
+    f.git(&work, &["rm", "-q", "backlog/b-broke.md"]);
+    f.git(&work, &["add", "-A"]);
+    f.git(
+        &work,
+        &["commit", "-q", "-m", "Fix\n\nResolves: backlog/b-broke"],
+    );
+    f.git(&work, &["push", "-q", "origin", "impl/b"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let out = clm_land::land(&work, Some("impl/b"), &f.env(&[])).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+    // The other item still holds it.
+    f.git(&work, &["pull", "-q", "origin", "main"]);
+    f.branch("impl/b2", &[("crates/b/src/lib2.rs", "b\n")]);
+    let why = refused(clm_land::land(&work, Some("impl/b2"), &f.env(&[])));
+    assert!(why.contains("b-slow") && !why.contains("b-broke"), "{why}");
+}
+
+#[test]
+fn each_held_component_needs_its_own_fix() {
+    // req:land/verify-stop@72bed87d
+    let fails = format!("\"{COMMIT}\"");
+    let f = repo(&[
+        ("backlog/b-broke.md", &item("b", &fails)),
+        ("backlog/a-broke.md", &item("a", &fails)),
+    ]);
+    let work = f.work();
+    f.git(&work, &["checkout", "-q", "-b", "impl/ab", "main"]);
+    for p in ["crates/a/src", "crates/b/src"] {
+        std::fs::create_dir_all(work.join(p)).unwrap();
+        std::fs::write(work.join(p).join("lib.rs"), "x\n").unwrap();
+    }
+    f.git(&work, &["add", "-A"]);
+    f.git(
+        &work,
+        &["commit", "-q", "-m", "Fix\n\nResolves: backlog/b-broke"],
+    );
+    f.git(&work, &["push", "-q", "origin", "impl/ab"]);
+    f.git(&work, &["checkout", "-q", "main"]);
+    let why = refused(clm_land::land(&work, Some("impl/ab"), &f.env(&[])));
+    assert!(why.contains("`a`") && why.contains("a-broke"), "{why}");
+    assert!(!why.contains("`b`"), "{why}");
 }
