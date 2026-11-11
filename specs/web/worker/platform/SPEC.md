@@ -12,13 +12,13 @@ serves: [capability/follow-from-browser]
 Crate `clm-web-platform`, the layer `web.worker`'s routes stand on, under both `clm-web` and `clm-web-review`. Built for `wasm32-unknown-unknown` and natively for tests, with no `worker` dependency: `clm-web`'s Worker adapter (`worker.rs`) implements its traits. Its modules:
 - `platform`: the `Platform` trait and its parts (assets, KV, the Cache API, GitHub, `Live`, logging, the clock, secrets, randomness) and `Auth`;
 - `http`: `Request` and `Response`, its opaque upgrade variant included, and percent coding;
-- `access`: `Access` and `check`, the read check every repo route makes, and `permission`, a login's permission on a repo asked with the installation's token (`GET /repos/{o}/{r}/collaborators/{login}/permission`, a 404 being `none`) and kept 5 minutes per repo and login;
+- `access`: `Access` and `check`, the read check every repo route makes, and `permission`, a login's permission on a repo;
 - `gh`: the GitHub REST and GraphQL client;
 - `files`: tree listings and batched GraphQL fetches of files and objects;
 - `keys`: tree listings as `Listing`, `code_key` and `fingerprint`;
 - `install`: installation IDs and tokens, `unix_time` and `rfc3339`;
-- `live`: the live state and its 60-second cache, with `fresh` (`web.worker`'s **Live state**);
-- `ledger`: the ledger branches read and folded (`web.worker`'s **Ledgers**), a branch's tip (`tip`), and the web-ledger append: `web_writer`, `record` (a record by `<login>/web`, now, with a random ID) and `append`, which commits a record as the last line of its writer's `records.jsonl` on `clm/ledger/<login>/web` with four Git Data API writes (blob, tree, commit, and the ref created or moved forward only) and nothing else;
+- `live`: the live state and its cache, with `fresh`;
+- `ledger`: the ledger branches read and folded, a branch's tip (`tip`), and the web-ledger append: `web_writer`, `record` (a record by `<login>/web`, now, with a random ID) and `append`, which commits a record as the last line of its writer's `records.jsonl` on `clm/ledger/<login>/web` with four Git Data API writes (blob, tree, commit, and the ref created or moved forward only) and nothing else;
 - `fake`, behind the cargo feature `fake`: the fake GitHub and platform the Worker's tests drive, which `clm-web` and `clm-web-review` turn on in their dev-dependencies.
 
 It answers no route of its own, and decides nothing a route answers.
@@ -26,13 +26,15 @@ It answers no route of its own, and decides nothing a route answers.
 ## Design
 **The fake** (`nested-splits`). The fake GitHub and platform live in `src/fake.rs` behind the `fake` feature. The crates only the fake uses (`futures`' executor and the like) are optional dependencies enabled by that feature alone, so the Worker's wasm build compiles none of them. The fake calls nothing of `clm-web` and writes no checkout. `src/fake.rs` counts toward this component's code: `check/node-size` reads the files under its `paths`, whatever their features.
 
-**One way down.** Nothing here imports `clm-web` or `clm-web-review`: what a module needs from a route comes in as an argument. Code both halves need goes here; code only one needs stays in it.
+**One way down.** Imports run as `web.worker`'s Design says: what a module here needs from a route comes in as an argument. Code both halves need goes here; code only one needs stays in it.
 
-**A fresh read replaces the plain entry** (`fresh-replaces-plain`). `live::cached` stores what it fetches for an `Access` carrying a `fresh` delivery under the delivery's key, `live:<o>/<r>#<d>:<what>`, and under the plain key `live:<o>/<r>:<what>` too, with two `cache_put` calls and no new `Platform` method. So the next read without `fresh` in that data centre (the 60-second refresh, a navigation, another tab) answers from the newer value and never goes back to the minute-old one, so an approval the app's reload showed doesn't vanish from a review's header. A value read from the delivery's key is stored nowhere else, since the fetch that put it there stored both. Two fetches that finish together may leave the older value under the plain key for up to 60 seconds, as two tabs fetching at once may; that is accepted. The Cache API is per data centre, so a reader in another data centre keeps its own minute-old copy until it expires or a notice's refresh replaces it; that is accepted too.
+**Caches and endpoints.** `access::permission` asks `GET /repos/{o}/{r}/collaborators/{login}/permission` with the installation's token, a 404 being `none`, and keeps the answer 5 minutes per repo and login. `live` keeps the live state 60 seconds.
 
-**Assets as responses** (`asset-responses`). `Assets` has one primitive, `fetch_asset(&self, req: &Request) -> Response`, which hands the incoming request to the `ASSETS` binding and returns its answer whole, so HEAD, `If-None-Match` (a 304) and `Range` (a 206) reach the binding and their answers reach the browser. `asset(path)` is a provided method over it, which `invited.rs` keeps calling unchanged: it fetches a `Request` with method `GET`, that `path`, and an empty query, headers, body and origin, and gives the body's text only for a 200 whose body is UTF-8. So the Worker adapter (`crates/clm-web/src/worker.rs`'s `Cloudflare`) and the fake each implement one method. Adding the required method breaks the adapter, which is `web.worker`'s code, so this component's build rewrites the adapter's `Assets` implementation as `fetch_asset` and names that fix in its pull request (`path-ownership`), as `web/app-at-app-path`'s build names the fixtures it moves. The adapter passes the request's method, path, query and headers to the binding, answers 503 without the binding and 502 when the fetch fails, converts the binding's answer into an `http::Response` (status, every header, the body's bytes), and keeps its per-isolate cache, now of whole responses, only for 200 answers to a `GET` of a `/_clm/*` path, which change only with a deploy. The fake's `assets` is a `RefCell<BTreeMap<String, (String, Vec<u8>)>>`, a content type and bytes per path, so binary fixtures (a font, an image) are allowed; it answers a path it holds with 200, a lower-case `content-type` header and the bytes, whatever the method (dropping a HEAD's body and answering conditional or range requests are the binding's, which the fake doesn't imitate), and a path it lacks with a bare 404 and no body, as the binding does under `"none"`. The platform answers no path specially. Changing the map's value type moves the fixtures of `clm-web`'s tests that insert into it (`tests/sign_in.rs`, `tests/push.rs`): this build makes those fixes and names them in its pull request (`path-ownership`), and leaves the whole workspace compiling and its tests passing, the `clm-web` wasm build included, since `cargo test -p clm-web-platform` alone doesn't build them.
+**A fresh read replaces the plain entry** (`fresh-replaces-plain`). Storing what a `fresh` read fetches under the plain key too, with two `cache_put` calls and no new `Platform` method, means the next read without `fresh` in that data centre (the 60-second refresh, a navigation, another tab) never goes back to the minute-old value, so an approval the app's reload showed doesn't vanish from a review's header. Two races are accepted: two fetches that finish together may leave the older value under the plain key for up to 60 seconds, as two tabs fetching at once may; and the Cache API is per data centre, so a reader in another data centre keeps its own minute-old copy until it expires or a notice's refresh replaces it.
 
-**Reads without the cache** (`object-reads`). The `Replica` object (`web.worker.replica`) calls this crate's GitHub reads and the web-ledger append, but must never reach KV or the Cache API (`web.worker/cache-is-disposable`): it keeps what it read in its own memory and storage. So each function it calls has a form bounded by only the traits it uses (`GitHub`, `Clock`, `Secrets`, `Live`, `Log`), which reads GitHub each time it is called; the form the Worker calls, which keeps its answer in the Cache API, is a wrapper that adds `Cache` to the bounds and calls it. The set is `gh::get`, `gh::get_ok` and `gh::graphql`, `files::listing` and `files::objects`, `install::installation_id` and `install::token`, `access::check` and `access::permission`, and `ledger::own`, `ledger::tip`, `ledger::record` and `ledger::append`; a function the object comes to call joins it. `Platform` stays the bundle the Worker's routes take.
+**Assets as responses** (`asset-responses`). `fetch_asset` takes the whole request and returns the whole answer so that HEAD, `If-None-Match` (a 304) and `Range` (a 206) reach the `ASSETS` binding and their answers reach the browser; the Worker adapter (`web.worker/asset-adapter`) and the fake each implement that one method. The fake answers a path it holds the same whatever the method, since dropping a HEAD's body and answering conditional or range requests are the binding's, and a path it lacks with a bare 404, as the binding does under `"none"`. The platform answers no path specially.
+
+**Reads without the cache** (`object-reads`). The `Replica` object (`web.worker.replica`) must never reach KV or the Cache API (`web.worker/cache-is-disposable`), so each function it calls has a form bounded by only the traits it uses, and the Worker's form is a wrapper over it that adds `Cache`.
 
 ## Requirements
 
@@ -54,39 +56,24 @@ It answers no route of its own, and decides nothing a route answers.
 - architecture/per-writer-ledgers
 
 ### Requirement: code-key-doc-only
-`keys::code_key` SHALL leave out of a commit's code key exactly the entries whose path `clm_ledger::doc_only` (`ledger/doc-only`) answers true for, by calling it, and `crates/clm-web-platform/src/keys.rs` SHALL hold no list of doc-only paths of its own, so a change to `ledger`'s list reaches the Worker's code keys with no edit to this component.
+`keys::code_key` SHALL give, for a tree listing, the key `clm_ledger::code_key` gives for the same tree, leaving out exactly the entries whose path `clm_ledger::doc_only` (`ledger/doc-only`) answers true for, by calling it, so a change to `ledger`'s list reaches the Worker's code keys with no edit to this component.
 
 #### Scenario: doc-only paths from the ledger
 - GIVEN a tree listing of `blob` entries (any mode and sha) at `docs/x.md`, `docs/guide/intro.md`, `backlog/y.md`, `CLAUDE.md`, `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`
 - WHEN `keys::code_key` runs on it
 - THEN it equals `keys::code_key` over only `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`, the entries `clm_ledger::doc_only` answers false for, and differs from the key of the listing with any one of those three removed
 
-#### Scenario: no copy of the list
-- GIVEN the text of `crates/clm-web-platform/src/keys.rs`, read by a test outside it with `include_str!`
-- WHEN the tests run
-- THEN the test fails, naming each it finds, when the text holds any of the string literals `"specs/"`, `"changes/"`, `"backlog/"`, `"docs/"`, `"docs/guide/"`, `"ARCHITECTURE.md"`, `"CAPABILITIES.md"`, `"README.md"` or `"CLAUDE.md"`
-
-#### Serves
-- architecture/reuse-first
-- architecture/no-silent-drift
-
-#### Needs
-- ledger/doc-only
-
-### Requirement: code-key-as-ledger
-`keys::code_key` SHALL give, for a tree listing, the key `clm_ledger::code_key` gives for the same tree, leaving out exactly the paths `ledger`'s `doc_only` names: a tree that differs from another only in `docs/x.md`, only in `docs/guide/intro.md` or only in `docs/spec-format.md` gets the same key, and one that differs only in `crates/a/src/lib.rs` gets a different key.
-
-#### Serves
-- architecture/reuse-first
-- architecture/no-silent-drift
-
-#### Needs
-- ledger/doc-only
-
 #### Scenario: the guide's files are doc-only
 - GIVEN a repository whose commits `a`, `b` changing only `docs/x.md`, `c` changing only `docs/guide/start.md`, `d` changing only `docs/spec-format.md` and `e` changing only `crates/a/src/lib.rs`, each listed as the Trees API lists it
 - WHEN `keys::code_key` runs on each listing
 - THEN each key equals `clm_ledger::code_key` of the same commit, `a`, `b`, `c` and `d` share one, and `e`'s differs from it
+
+#### Serves
+- architecture/reuse-first
+- architecture/no-silent-drift
+
+#### Needs
+- ledger/doc-only
 
 ### Requirement: fresh-replaces-plain
 When `live::cached` fetches a live-state item for an `Access` that carries a `fresh` delivery, it SHALL store the value under the plain key `live:<o>/<r>:<what>` as well as under the delivery's key, each for 60 seconds, so a later read of that item without `fresh` answers from it; a value it reads from the delivery's key SHALL be stored under no other key.
@@ -105,20 +92,15 @@ When `live::cached` fetches a live-state item for an `Access` that carries a `fr
 - THEN it makes no request to GitHub and stores nothing
 
 ### Requirement: asset-responses
-`platform::Assets` SHALL have the required method `fetch_asset(&self, req: &Request) -> Response`, which answers the request from the assets with their status, headers and bytes as they give them, and `asset(path) -> Option<String>` SHALL become a provided method over it that gives `Some(text)` only for a 200 whose body is UTF-8. The fake SHALL serve `fetch_asset` from its assets map, which holds a content type and bytes per path: a path the map holds answers 200 with that `Content-Type` and those bytes, and a path it lacks answers 404 with no body. The Worker adapter SHALL implement `fetch_asset` alone, passing the request's method, path, query and headers to the `ASSETS` binding, answering 503 without the binding and 502 when the fetch fails, and caching per isolate only `/_clm/*` paths.
+`platform::Assets` SHALL have the required method `fetch_asset(&self, req: &Request) -> Response`, which answers the request from the assets with their status, headers and bytes as they give them, and the provided method `asset(path) -> Option<String>` over it, which fetches a `GET` of `path` with no query, headers or body and gives `Some(text)` only for a 200 whose body is UTF-8. The fake SHALL serve `fetch_asset` from its assets map, which holds a content type and bytes per path: a path the map holds answers 200 with that `Content-Type` and those bytes, and a path it lacks answers 404 with no body.
 
 #### Serves
 - architecture/invite-only-web
 
 #### Scenario: a binary asset
-- GIVEN the fake platform whose assets map holds `/fonts/inter.woff2` as `font/woff2` with bytes that aren't UTF-8
-- WHEN `fetch_asset` answers a GET of `/fonts/inter.woff2`
-- THEN the response is 200 with `Content-Type` `font/woff2` and exactly those bytes, and `asset("/fonts/inter.woff2")` is `None`
-
-#### Scenario: a missing path
-- GIVEN the fake platform whose assets map lacks `/guide/nothing-here`
-- WHEN `fetch_asset` answers a GET of `/guide/nothing-here`
-- THEN the response is 404 with an empty body, and `asset("/guide/nothing-here")` is `None`
+- GIVEN the fake platform whose assets map holds `/fonts/inter.woff2` as `font/woff2` with bytes that aren't UTF-8, and lacks `/guide/nothing-here`
+- WHEN `fetch_asset` answers a GET of each
+- THEN the first is 200 with `Content-Type` `font/woff2` and exactly those bytes, the second is 404 with an empty body, and `asset` of either path is `None`
 
 #### Scenario: text through the provided method
 - GIVEN the fake platform with its default assets, `/_clm/invited.json` as `application/json` holding `["clunny"]`

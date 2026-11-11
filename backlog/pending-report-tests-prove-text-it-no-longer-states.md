@@ -1,12 +1,9 @@
 ---
-title: "Two pending-report tests prove behaviour the requirement no longer states"
+title: "A git glob pathspec test cites check.coverage/pending-report instead of the rule it proves"
 kind: bug
-components: [check.coverage]
+components: [check]
 ---
 
-The spec auditor found, after `check.coverage/pending-report` lost the sentence "This holds for every obsolete marker whose component is missing, however the component went.", that:
+`paths_match_as_git_glob_pathspecs_do` (`crates/clm-check/tests/pending.rs`) checks git `:(glob)` semantics, which only `check/path-ownership` states, but it cites `check.coverage/pending-report`. Re-cite it to `check/path-ownership` at its current version. The test lies in `check`'s `paths`, so a `check.coverage` build may re-cite it only to its own requirements (`path-ownership`); fix it with `clm claim check --fix backlog/pending-report-tests-prove-text-it-no-longer-states`.
 
-1. `a_node_gone_without_a_removal_delta_moves_too` (`crates/clm-check/tests/pending.rs`) proves markers of a missing component without a `remove: true` delta move to the owning component, and the code does it (`pending.rs`, `by_owner`), but no text states it. Either restore the rule in the requirement or drop the test and the general branch.
-2. `paths_match_as_git_glob_pathspecs_do` (same file) checks git `:(glob)` semantics, which only `check/path-ownership` states, and the test cites `pending-report` instead.
-
-Needs a spec change.
+The item's other half, that `pending-report` didn't state how markers of a component gone without a `remove: true` delta are counted, is fixed by change `20261109-slim-flagged-specs`.
