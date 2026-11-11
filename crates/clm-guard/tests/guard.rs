@@ -1139,3 +1139,43 @@ fn the_hook_judges_with_the_hooks_budgets() {
     let words: Vec<&str> = body.split_whitespace().collect();
     assert_eq!(words.join(" "), "guard_within(event, &Budgets::HOOK)");
 }
+
+const WHOLE_LINE_REFUSED: &str = "nothing in it ran";
+
+#[test]
+fn a_block_says_the_whole_command_line_was_refused() {
+    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    for command in [
+        "git commit -m m && clm land impl/x | tail",
+        "git add f && git push origin HEAD:main",
+    ] {
+        let why = blocks(&bash_in(command, dir.path()));
+        let last = why.lines().last().unwrap();
+        assert!(last.contains(WHOLE_LINE_REFUSED), "{command}: {why}");
+    }
+}
+
+#[test]
+fn two_refusing_rules_say_it_once() {
+    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    let why = blocks(&bash_in(
+        "git push origin main; clm land spec/x | tail",
+        dir.path(),
+    ));
+    assert!(why.contains("guard-blocks-push-to-main"), "{why}");
+    assert!(why.contains("guard-refuses-piped-land"), "{why}");
+    assert_eq!(why.matches(WHOLE_LINE_REFUSED).count(), 1, "{why}");
+    assert!(why.lines().last().unwrap().contains(WHOLE_LINE_REFUSED));
+}
+
+#[test]
+fn allowed_and_asked_commands_carry_no_such_line() {
+    // req:plugin.hooks.guard/block-refuses-whole-command@b3879746
+    allows(&bash("git commit -m m && clm land impl/x"));
+    let why = asks_cmd("clm approve spec/x");
+    assert!(!why.contains(WHOLE_LINE_REFUSED), "{why}");
+}
