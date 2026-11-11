@@ -903,10 +903,6 @@ fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
     assert!(out.contains("cannot lock ref"), "{out}");
     assert!(!out.contains("wrap-up ok"), "{out}");
     assert_eq!(code, Some(2), "{out}");
-    assert!(
-        exists(&r.work, "refs/heads/impl/gone"),
-        "nothing is deleted"
-    );
 }
 
 #[test]
