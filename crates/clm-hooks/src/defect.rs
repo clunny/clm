@@ -14,7 +14,7 @@ pub fn defect(cwd: &Path, title: &str, nodes: &[String], report: &str) -> Result
     let settings = settings(Some(cwd)).map_err(|e| format!("settings: {e}"))?;
     match settings.defects.value {
         Defects::Backlog => to_backlog(cwd, title, nodes, report),
-        Defects::Ask => to_issue(cwd, settings.host.value, title, nodes, report),
+        Defects::Ask => to_issue(cwd, title, nodes, report),
         Defects::Off => Ok(format!(
             "CLM defect reporting is off (`defects = off`, from {}); nothing filed.",
             settings.defects.layer
@@ -55,25 +55,38 @@ fn to_backlog(cwd: &Path, title: &str, nodes: &[String], report: &str) -> Result
         )
     };
     fs::create_dir_all(root.join("backlog")).map_err(|e| unfiled("backlog", e))?;
-    let base = slug(title);
+    match create_unique(&root.join("backlog"), &slug(title), &item) {
+        Ok(name) => Ok(format!("backlog/{name}")),
+        Err((name, e)) => Err(unfiled(&format!("backlog/{name}"), e)),
+    }
+}
+
+/// Writes `content` to `<dir>/<base>.md`, or `<base>-2.md`, `<base>-3.md`... when that exists,
+/// and returns the file name. `create_new`, so two reports with one title at once can't
+/// overwrite each other. On failure, the name it tried and why.
+fn create_unique(
+    dir: &Path,
+    base: &str,
+    content: &str,
+) -> Result<String, (String, std::io::Error)> {
     for n in 1.. {
-        let rel = match n {
-            1 => format!("backlog/{base}.md"),
-            n => format!("backlog/{base}-{n}.md"),
+        let name = match n {
+            1 => format!("{base}.md"),
+            n => format!("{base}-{n}.md"),
         };
-        // `create_new`, so two reports with one title at once can't overwrite each other.
         match fs::File::options()
             .write(true)
             .create_new(true)
-            .open(root.join(&rel))
+            .open(dir.join(&name))
         {
             Ok(mut file) => {
-                file.write_all(item.as_bytes())
-                    .map_err(|e| unfiled(&rel, e))?;
-                return Ok(rel);
+                return match file.write_all(content.as_bytes()) {
+                    Ok(()) => Ok(name),
+                    Err(e) => Err((name, e)),
+                };
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(e) => return Err(unfiled(&rel, e)),
+            Err(e) => return Err((name, e)),
         }
     }
     unreachable!("an unused name")
@@ -119,15 +132,10 @@ fn origin(root: &Path) -> Option<String> {
     (!change.is_empty() && !change.contains('/')).then(|| change.to_string())
 }
 
-/// Files an issue on `clunny/clm` through `host`'s adapter (`host-adapters`), run in `cwd`,
-/// and returns its URL.
-fn to_issue(
-    cwd: &Path,
-    host: Host,
-    title: &str,
-    nodes: &[String],
-    report: &str,
-) -> Result<String, String> {
+/// Files an issue on `clunny/clm` through the `github` adapter, whatever the repository's
+/// `host` (`defects-file-on-github`), run in `cwd`, and returns its URL. A report it can't file
+/// is kept under `clm/defects/` in the git common directory of `cwd`'s repository.
+fn to_issue(cwd: &Path, title: &str, nodes: &[String], report: &str) -> Result<String, String> {
     let mut body = format!("## What happened\n\n{}\n\n", report.trim_end_matches('\n'));
     if !nodes.is_empty() {
         body.push_str(&format!("- Components: {}\n", nodes.join(", ")));
@@ -138,21 +146,44 @@ fn to_issue(
         std::env::consts::OS,
         std::env::consts::ARCH
     ));
-    let unfiled = |why: String| {
-        format!(
-            "{}\nclm defect: the report above wasn't filed: {why}",
-            report.trim_end_matches('\n')
-        )
+    let report = report.trim_end_matches('\n');
+    let why = match file_issue(cwd, title, &body) {
+        Ok(url) => return Ok(url),
+        Err(why) => why,
     };
-    let mut file = tempfile::NamedTempFile::new().map_err(|e| unfiled(e.to_string()))?;
-    file.write_all(body.as_bytes())
-        .map_err(|e| unfiled(e.to_string()))?;
-    match clm_host::adapter(host).issue(cwd, title, file.path(), "clunny/clm") {
-        Ok(url) if url.trim().is_empty() => Err(unfiled("the host printed no issue URL".into())),
+    let kept = match clm_git::common_dir(cwd) {
+        Err(_) => "it isn't in a git repository, so the report wasn't kept".to_string(),
+        Ok(common) => {
+            let dir = common.join("clm").join("defects");
+            let content = format!("# {title}\n\n{body}");
+            match fs::create_dir_all(&dir)
+                .map_err(|e| (dir.display().to_string(), e))
+                .and_then(|()| create_unique(&dir, &slug(title), &content))
+            {
+                Ok(name) => format!(
+                    "kept in {}; file it by hand on clunny/clm",
+                    dir.join(name).display()
+                ),
+                Err((name, e)) => format!("the report wasn't kept: {name}: {e}"),
+            }
+        }
+    };
+    Err(format!(
+        "{report}\nclm defect: the report above wasn't filed: {why}\nclm defect: {kept}"
+    ))
+}
+
+/// Opens the issue through the `github` adapter and returns its URL, or why it couldn't.
+fn file_issue(cwd: &Path, title: &str, body: &str) -> Result<String, String> {
+    let mut file = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+    file.write_all(body.as_bytes()).map_err(|e| e.to_string())?;
+    match clm_host::adapter(Host::Github).issue(cwd, title, file.path(), "clunny/clm") {
+        Ok(url) if url.trim().is_empty() => Err("the host printed no issue URL".into()),
         Ok(url) => Ok(url),
-        Err(clm_host::Error::Nowhere(_)) => Err(unfiled(format!(
-            "there is nowhere to file it (`host = \"{host}\"`)"
-        ))),
-        Err(clm_host::Error::Refused(why) | clm_host::Error::Git(why)) => Err(unfiled(why)),
+        Err(
+            clm_host::Error::Nowhere(why)
+            | clm_host::Error::Refused(why)
+            | clm_host::Error::Git(why),
+        ) => Err(why),
     }
 }

@@ -94,7 +94,9 @@ what fits and reports the rest.";
 /// What `session-start` adds when `defects` is `ask`: the one form of `clm defect` the guard
 /// shows the human before the report leaves the project (`defect-ask-shows-report`).
 const ASK_RULE: &str = " Send the report as the body of a `<<'EOF'` heredoc on the \
-`clm defect` line, the one form the guard shows the human before the report leaves the project.";
+`clm defect` line, the one form the guard shows the human before the report leaves the project. When `clm defect` keeps a report it couldn't \
+file (`defect-issue`), list that report under `## CLM defects` in your PR body with the kept \
+file's path, for the human to file by hand.";
 
 /// `Stop`: pushes a snapshot of the spec work in the CLM repository holding the event's
 /// `cwd` (`autosync-policy`), unless its `autosync` setting is `false` or can't be loaded.

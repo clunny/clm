@@ -311,7 +311,7 @@ fn backlog_taken_slug() {
 
 #[test]
 fn issue_filed() {
-    // req:plugin.hooks/defect-issue@73f880b9
+    // req:plugin.hooks/defect-issue@698b188d
     let repo = repo("host = \"github\"\n");
     let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
     let out = defect(
@@ -348,9 +348,9 @@ fn issue_filed() {
 }
 
 #[test]
-fn issue_with_no_host() {
-    // req:plugin.hooks/defect-issue@73f880b9
-    for host in ["git", "none"] {
+fn issue_filed_from_a_project_on_another_host() {
+    // req:plugin.hooks/defect-issue@698b188d
+    for host in ["azure", "git", "none"] {
         let repo = repo(&format!("host = \"{host}\"\n"));
         let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
         let out = defect(
@@ -359,22 +359,72 @@ fn issue_with_no_host() {
             REPORT,
             &[("PATH", &path_with(&gh))],
         );
-        assert_eq!(out.status.code(), Some(1), "{host}: {out:?}");
-        let text = format!(
-            "{}{}",
-            String::from_utf8_lossy(&out.stdout),
-            String::from_utf8_lossy(&out.stderr)
+        assert_eq!(out.status.code(), Some(0), "{host}: {out:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).trim(),
+            "https://github.com/clunny/clm/issues/7",
+            "{host}"
         );
-        assert!(text.contains(REPORT.trim()), "{host}: {text}");
-        assert!(text.contains("nowhere to file it"), "{host}: {text}");
-        assert!(!gh.path().join("args").exists(), "{host}: gh was called");
-        assert!(!repo.path().join("backlog").exists());
+        let args = fs::read_to_string(gh.path().join("args")).unwrap();
+        let args: Vec<&str> = args.lines().collect();
+        assert_eq!(
+            args[..4],
+            ["issue", "create", "--repo", "clunny/clm"],
+            "{host}"
+        );
+    }
+}
+
+/// The report `clm defect` kept as `name` under `clm/defects/` in `git_dir`.
+fn kept(git_dir: &Path, name: &str) -> String {
+    fs::read_to_string(git_dir.join("clm/defects").join(name)).unwrap()
+}
+
+fn text_of(out: &Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+}
+
+#[test]
+fn issue_not_filed_is_kept_without_gh() {
+    // req:plugin.hooks/defect-issue@698b188d
+    let repo = repo("host = \"git\"\n");
+    // A `PATH` that holds `git` and no `gh`.
+    let no_gh = TempDir::new().unwrap();
+    let git_path = String::from_utf8(
+        Command::new("sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(git_path.trim(), no_gh.path().join("git")).unwrap();
+    let git_dir = repo.path().join(".git").canonicalize().unwrap();
+    for name in ["sync-loses-a-delta.md", "sync-loses-a-delta-2.md"] {
+        let out = defect(
+            repo.path(),
+            &["--title", "Sync loses a delta"],
+            REPORT,
+            &[("PATH", &no_gh.path().display().to_string())],
+        );
+        assert_eq!(out.status.code(), Some(1), "{out:?}");
+        let text = text_of(&out);
+        assert!(text.contains(REPORT.trim()), "{text}");
+        assert!(text.contains("wasn't filed"), "{text}");
+        let file = git_dir.join("clm/defects").join(name);
+        assert!(text.contains(&file.display().to_string()), "{text}");
+        assert!(text.contains("file it by hand on clunny/clm"), "{text}");
+        assert!(kept(&git_dir, name).contains(REPORT.trim()));
     }
 }
 
 #[test]
 fn issue_without_access() {
-    // req:plugin.hooks/defect-issue@73f880b9
+    // req:plugin.hooks/defect-issue@698b188d
     let repo = repo("");
     let gh = fake_gh(
         "echo \"GraphQL: Could not resolve to a Repository with the name 'clunny/clm'.\" >&2\nexit 1",
@@ -393,11 +443,77 @@ fn issue_without_access() {
     );
     assert!(text.contains(REPORT.trim()), "{text}");
     assert!(text.contains("Could not resolve to a Repository"), "{text}");
+    let git_dir = repo.path().join(".git").canonicalize().unwrap();
+    let file = git_dir.join("clm/defects/sync-loses-a-delta.md");
+    assert!(text.contains(&file.display().to_string()), "{text}");
+    let body = kept(&git_dir, "sync-loses-a-delta.md");
+    assert!(body.starts_with("# Sync loses a delta\n\n"), "{body}");
+    assert!(body.contains(REPORT), "{body}");
+    assert!(body.contains(env!("CARGO_PKG_VERSION")), "{body}");
+}
+
+#[test]
+fn issue_kept_from_a_linked_worktree() {
+    // req:plugin.hooks/defect-issue@698b188d
+    let repo = repo("");
+    git(
+        repo.path(),
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "x",
+        ],
+    );
+    let parent = TempDir::new().unwrap();
+    let tree = parent.path().join("wt");
+    git(
+        repo.path(),
+        &["worktree", "add", "-q", tree.to_str().unwrap()],
+    );
+    let gh = fake_gh("echo nope >&2\nexit 1");
+    let out = defect(
+        &tree,
+        &["--title", "Sync loses a delta"],
+        REPORT,
+        &[("PATH", &path_with(&gh))],
+    );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    git(
+        repo.path(),
+        &["worktree", "remove", "--force", tree.to_str().unwrap()],
+    );
+    let git_dir = repo.path().join(".git").canonicalize().unwrap();
+    assert!(kept(&git_dir, "sync-loses-a-delta.md").contains(REPORT.trim()));
+}
+
+#[test]
+fn issue_not_kept_outside_git() {
+    // req:plugin.hooks/defect-issue@698b188d
+    let dir = TempDir::new().unwrap();
+    let gh = fake_gh("echo nope >&2\nexit 1");
+    let out = defect(
+        dir.path(),
+        &["--title", "Sync loses a delta"],
+        REPORT,
+        &[("PATH", &path_with(&gh))],
+    );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    let text = text_of(&out);
+    assert!(text.contains(REPORT.trim()), "{text}");
+    assert!(text.contains("nope"), "{text}");
+    assert!(text.contains("isn't in a git repository"), "{text}");
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
 
 #[test]
 fn issue_unfiled_when_gh_fails_silently_or_is_missing() {
-    // req:plugin.hooks/defect-issue@73f880b9
+    // req:plugin.hooks/defect-issue@698b188d
     let repo = repo("");
     let silent = fake_gh("exit 3");
     let no_gh = TempDir::new().unwrap();
@@ -430,11 +546,13 @@ fn issue_unfiled_when_gh_fails_silently_or_is_missing() {
         String::from_utf8_lossy(&out.stderr).contains(REPORT.trim()),
         "{out:?}"
     );
+    let git_dir = repo.path().join(".git").canonicalize().unwrap();
+    assert!(kept(&git_dir, "sync-loses-a-delta.md").contains(REPORT.trim()));
 }
 
 #[test]
 fn reporting_off() {
-    // req:plugin.hooks/defect-issue@73f880b9
+    // req:plugin.hooks/defect-issue@698b188d
     let repo = repo("");
     let gh = fake_gh("echo https://github.com/clunny/clm/issues/7");
     let out = defect(
@@ -454,7 +572,7 @@ fn reporting_off() {
 
 #[test]
 fn settings_that_cannot_load() {
-    // req:plugin.hooks/defect-issue@73f880b9
+    // req:plugin.hooks/defect-issue@698b188d
     let repo = repo("defects = \"always\"\n");
     let out = defect(repo.path(), &["--title", "x"], REPORT, &[]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
