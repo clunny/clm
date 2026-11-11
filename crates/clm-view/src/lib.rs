@@ -3,7 +3,7 @@
 //!
 //! The models ([`spec_view`], [`flight_view`], [`blockers_view`]) and the renderers
 //! ([`render`]) need neither git nor a checkout, so the crate builds for
-//! `wasm32-unknown-unknown` (`view-builds-for-wasm`). The commands that read a repository
+//! `wasm32-unknown-unknown` (`view-library`). The commands that read a repository
 //! are `clm-view-repo`'s.
 
 mod blockers;

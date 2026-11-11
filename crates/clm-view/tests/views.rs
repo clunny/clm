@@ -766,7 +766,7 @@ fn changes_in_a_group_sort_by_priority_then_id() {
 fn flight_chart_names_every_state_and_the_claim() {
     // req:view/flight-view@d01ad49e
     // req:view/view-command@c59324c3
-    // req:view/says-component@a40c940b
+    // req:view/says-component@f1f9079e
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["p"])),
@@ -1235,7 +1235,7 @@ fn lines_are_cut_to_the_width_in_text_and_ansi() {
 
 #[test]
 fn json_is_the_model_with_the_view_named() {
-    // req:view/view-library@a2719e39
+    // req:view/view-library@b5ceab63
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
     let out = render(&View::Flight(model.clone()), Format::Json, 100, None);
@@ -1246,7 +1246,7 @@ fn json_is_the_model_with_the_view_named() {
 
 #[test]
 fn a_merged_ref_is_not_a_claim() {
-    // req:view/view-library@a2719e39
+    // req:view/view-library@b5ceab63
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1512,7 +1512,7 @@ fn the_spec_svg_puts_the_checkout_above_the_boxes() {
 
 #[test]
 fn the_json_carries_the_checkout_beside_the_model() {
-    // req:view/view-library@a2719e39
+    // req:view/view-library@b5ceab63
     // req:view/view-command@c59324c3
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
@@ -1577,7 +1577,7 @@ fn depth(view: &clm_view::SpecView, node: &str) -> usize {
 
 #[test]
 fn scenario_spec_lines() {
-    // req:view/spec-component-lines@459bfd9a
+    // req:view/spec-component-lines@fcbd78c9
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1624,7 +1624,7 @@ fn scenario_spec_lines() {
 
 #[test]
 fn scenario_spec_long_id() {
-    // req:view/spec-component-lines@459bfd9a
+    // req:view/spec-component-lines@fcbd78c9
     // Distinct letters, so a cut taken from anywhere but the ID's start shows.
     let long = "abcdefghij".repeat(6);
     let g = graph(&[
@@ -1765,7 +1765,7 @@ fn spec_node(v: &Value, id: &str) -> Value {
 
 #[test]
 fn scenario_node_detail() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let (g, markers) = detailed();
     let a = spec_node(&json(&spec_view(&g, &markers, None)), "a");
     assert_eq!(a["contract"], "Alpha does X.");
@@ -1790,7 +1790,7 @@ fn scenario_node_detail() {
 
 #[test]
 fn scenario_nothing_touches_it() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let (g, markers) = detailed();
     let v = json(&spec_view(&g, &markers, None));
     let root = spec_node(&v, "clm");
@@ -1805,7 +1805,7 @@ fn scenario_nothing_touches_it() {
 
 #[test]
 fn node_detail_leaves_out_abandoned_changes_and_sorts_by_id() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x", "y"])),
@@ -1828,7 +1828,7 @@ fn node_detail_leaves_out_abandoned_changes_and_sorts_by_id() {
 
 #[test]
 fn node_detail_names_a_change_once_however_many_deltas_name_the_node() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x", "y"])),
@@ -1842,7 +1842,7 @@ fn node_detail_names_a_change_once_however_many_deltas_name_the_node() {
 
 #[test]
 fn node_backlog_goes_by_kind_before_slug() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let item = |kind: &str| format!("---\ntitle: T\nkind: {kind}\ncomponents: [a, a]\n---\n");
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1876,7 +1876,7 @@ fn node_backlog_goes_by_kind_before_slug() {
 
 #[test]
 fn scenario_charts_unchanged() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let (g, markers) = detailed();
     let view = spec_chart(&g, &markers);
     for format in [Format::Text, Format::Ansi, Format::Svg] {

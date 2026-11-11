@@ -336,7 +336,7 @@ fn scenario_nested_nodes() {
 
 #[test]
 fn scenario_node_detail_from_the_command() {
-    // req:view/component-detail@3d932c73
+    // req:view/component-detail@5158adfc
     let dir = two_nodes();
     write(
         dir.path(),
@@ -508,7 +508,7 @@ fn spec_chart_shows_the_queue_state_from_the_claim_refs() {
 #[test]
 fn scenario_claimed_node_and_command_matches_library() {
     // req:view/flight-view@d01ad49e
-    // req:view/view-library@a2719e39
+    // req:view/view-library@b5ceab63
     let dir = two_nodes();
     init(dir.path());
     claim_ref(dir.path(), "a", 1);
