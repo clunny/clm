@@ -636,7 +636,9 @@ fn scenario_checkout_current() {
         Some(format!("commit {}", head7(d)).as_str()),
         "{text}"
     );
-    let v = json(&clm(d, &["view", "spec", "--format", "json"]));
+    let out = clm(d, &["view", "spec", "--format", "json"]);
+    assert_eq!(out.status.code(), Some(0));
+    let v = json(&out);
     assert_eq!(v["checkout"]["behind"], 0, "{v:#}");
     assert_eq!(v["checkout"]["commit"], head7(d), "{v:#}");
     // Without a repository there is no commit to name, and no `checkout`.
