@@ -585,10 +585,10 @@ The Worker adapter's `fetch_asset` SHALL pass the request's method, path, query 
 - WHEN the adapter answers a `HEAD` of `/fonts/inter.woff2` with query `v=1` and the headers `if-none-match`, `cookie` and `authorization`
 - THEN the binding was asked once, with method `HEAD`, path `/fonts/inter.woff2`, query `v=1` and the header `if-none-match` but neither `cookie` nor `authorization`, and the answer is 304 with the binding's headers and an empty body
 
-#### Scenario: no binding, or a failed fetch
-- GIVEN no `ASSETS` binding, and then a fake binding whose fetch fails
+#### Scenario: no binding, or a failed answer
+- GIVEN no `ASSETS` binding, then a fake binding whose fetch fails, then one whose answer's body can't be read
 - WHEN the adapter answers a `GET` of `/app/index.html` with each
-- THEN the first answer is 503 and the second 502
+- THEN the first answer is 503, and the second and third 502
 
 #### Scenario: kept per isolate
 - GIVEN a fake `ASSETS` binding that answers `/_clm/invited.json` and `/app/index.html` with 200 and bytes, and `/_clm/missing.json` with 404

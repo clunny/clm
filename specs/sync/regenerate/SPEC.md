@@ -185,12 +185,18 @@ When a command that `clm-regenerate`'s `git` or `run` runs fails with stderr nam
 - THEN it returns an error within a second
 
 ### Requirement: git-through-layer
-`clm-regenerate` SHALL list `clm-git` among its dependencies and SHALL run no process itself: every `git` call goes through `clm-git`'s `git`, `run` or `extract_paths`, the first two through the wrapper `retry-index-lock` states (`git-plumbing-layer`).
+`clm-regenerate` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `git`, `run` or `extract_paths`, the first two through the wrapper `retry-index-lock` states. No file under `crates/clm-regenerate/src` SHALL hold `fn extract(` or `--ignore-skip-worktree-bits`, extracting only through `extract_paths` (`extract-through-layer`). Its `Error` SHALL be `clm-git`'s `Failure`, and no file under `crates/clm-regenerate/src` SHALL hold a string literal that begins `"origin`, the base being the caller's `onto` (`shared-plumbing-in-git`). No file under `crates/clm-sync/src` SHALL define `fn regenerated(`, `fn retried(`, `fn merge_file(` or `fn other_deltas(`, nor declare `mod merge`, `mod stale`, `mod stages` or `mod lock`: those are `clm-regenerate`'s alone (`no-dead-code`).
 
 #### Scenario: covered by the scan
 - GIVEN the workspace
 - WHEN a test in `clm-regenerate` reads `crates/clm-regenerate/Cargo.toml` and every file under `crates/clm-regenerate/src`
-- THEN `clm-git` is a dependency, and no file holds `std::process` or `Command::new(`
+- THEN `clm-git` is a dependency, and no file holds `Command::new("git")`, `Command::new("gh")`, `"origin`, `fn extract(` or `--ignore-skip-worktree-bits`
+
+#### Scenario: no copy left in clm-sync
+- GIVEN the workspace
+- WHEN the same test reads every file under `crates/clm-sync/src` through `CARGO_MANIFEST_DIR`
+- THEN no file holds `fn regenerated(`, `fn retried(`, `fn merge_file(`, `fn other_deltas(`, `mod merge`, `mod stale`, `mod stages` or `mod lock`
 
 #### Serves
 - architecture/reuse-first
+- architecture/no-dead-code

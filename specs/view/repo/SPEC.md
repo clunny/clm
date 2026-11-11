@@ -55,6 +55,20 @@ Crate `clm-view-repo`: the `clm status`, `clm view` and `clm pending` commands' 
 - vcs/common-dir
 - view/view-command
 
+### Requirement: shared-plumbing
+`clm-view-repo` SHALL take the remote's name from `clm-git`'s `REMOTE` for the ref it compares the checkout against (`refs/remotes/<remote>/main`), and read the time from `clm-git`'s `now()`, defining no clock of its own: no line of a file under `crates/clm-view-repo/src` or `crates/clm-view/src`, apart from those whose first non-blank characters are `//`, SHALL hold `"origin"`, `"origin/`, `remotes/origin`, `SystemTime` or `fn now(` (`remote-plumbing-scan`). Text it renders for a person that names `origin`, such as `⚠ <n> behind origin/main`, SHALL keep its wording.
+
+#### Scenario: no copy of the remote's name or the clock
+- GIVEN the workspace
+- WHEN a test in `clm-view-repo` reads every file under `crates/clm-view-repo/src` and `crates/clm-view/src`, skipping each line whose first non-blank characters are `//`
+- THEN no line holds `"origin"`, `"origin/`, `remotes/origin`, `SystemTime` or `fn now(`
+
+#### Serves
+- architecture/reuse-first
+
+#### Needs
+- view/view-command
+
 ### Requirement: pending-names-its-commit
 `clm pending [<component>]` SHALL print on stderr, before anything it prints on stdout and also when it prints the spec graph's violations, the checkout line as `view/view-command`'s `text` chart begins with it, and no such line when `HEAD` can't be read (`views-name-their-commit`). `clm pending [<component>] --at <rev>` SHALL list the pending requirements of `<rev>`'s commit, read as `view-at-rev` reads that commit, and print on stderr, in place of the checkout line, the first line `view-at-rev` gives its `text` chart; a `<rev>` that names no commit SHALL exit 1 naming it on stderr. With or without `--at`, stdout SHALL hold exactly what `check.coverage/pending-report` defines, and the exit code SHALL be its.
 
