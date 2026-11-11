@@ -451,9 +451,14 @@ const DOC_READERS: &[&str] = &[
 fn init_skill_marks_doc_readers() {
     // req:plugin.init/init-skill-marks-doc-readers@82070e56
     let body = skill_body("init");
-    assert_eq!(lacks("init", &body, DOC_READERS), Vec::<String>::new());
+    // The names must sit in the step itself, not in another line that happens to hold them.
+    let step = body
+        .lines()
+        .find(|l| l.contains("`clm:reads <glob>`"))
+        .expect("a line naming clm:reads");
+    assert_eq!(lacks("init", step, DOC_READERS), Vec::<String>::new());
     for needle in DOC_READERS {
-        let gaps = lacks("init", &body.replace(needle, "elided"), DOC_READERS);
+        let gaps = lacks("init", &step.replace(needle, "elided"), DOC_READERS);
         assert!(!gaps.is_empty(), "{needle}");
     }
     // It comes before the bootstrap commit is made.
