@@ -153,7 +153,11 @@ fn kept_per_isolate() {
             assert_eq!((res.status, res.body.as_slice()), (status, bytes), "{path}");
         }
     }
-    assert_eq!(get("/_clm/invited.json", "x=1").body, b"[\"a\"]");
+    let queried = get("/_clm/invited.json", "x=1");
+    assert_eq!(
+        (queried.status, queried.body.as_slice()),
+        (200, &b"[\"a\"]"[..])
+    );
     let count = |path: &str, query: &str| {
         fake.asked
             .borrow()

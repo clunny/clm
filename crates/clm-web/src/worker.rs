@@ -136,7 +136,7 @@ impl AssetBinding for Binding {
             let _ = out.set(name, value);
         }
         let mut init = RequestInit::new();
-        init.with_method(method_of(method));
+        init.with_method(Method::from(method.to_string()));
         init.with_headers(out);
         let query = if query.is_empty() {
             String::new()
