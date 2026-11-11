@@ -163,6 +163,18 @@ fn kept_per_isolate() {
     };
     assert_eq!(count("/_clm/invited.json", ""), 1);
     assert_eq!(count("/_clm/invited.json", "x=1"), 1);
+    // Only a GET is kept: a HEAD is asked of the binding each time.
+    for _ in 0..2 {
+        block_on(fetch_asset(
+            Some(&fake),
+            &cache,
+            &request("HEAD", "/_clm/invited.json", "", &[]),
+        ));
+    }
+    assert_eq!(
+        fake.asked.borrow().iter().filter(|a| a.0 == "HEAD").count(),
+        2
+    );
     assert_eq!(count("/app/index.html", ""), 2);
     assert_eq!(count("/_clm/missing.json", ""), 2);
 }
