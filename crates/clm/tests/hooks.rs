@@ -165,7 +165,7 @@ fn session_start_states_the_defect_rule() {
         "{text}"
     );
     // And a report `clm defect` kept is listed in the PR body with its file's path.
-    assert!(rule.contains("kept"), "{text}");
+    assert!(rule.contains("with the kept file's path"), "{text}");
     assert!(!text.contains("--fix"), "{text}");
     // backlog: where reports go, and fix-first.
     let text = start(&clm_repo(Some("defects = \"backlog\"\n")));

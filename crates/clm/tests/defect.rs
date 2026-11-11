@@ -507,6 +507,7 @@ fn issue_not_kept_outside_git() {
     let text = text_of(&out);
     assert!(text.contains(REPORT.trim()), "{text}");
     assert!(text.contains("nope"), "{text}");
+    assert!(text.contains("isn't in a git repository"), "{text}");
     assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
 }
 
@@ -545,6 +546,8 @@ fn issue_unfiled_when_gh_fails_silently_or_is_missing() {
         String::from_utf8_lossy(&out.stderr).contains(REPORT.trim()),
         "{out:?}"
     );
+    let git_dir = repo.path().join(".git").canonicalize().unwrap();
+    assert!(kept(&git_dir, "sync-loses-a-delta.md").contains(REPORT.trim()));
 }
 
 #[test]
