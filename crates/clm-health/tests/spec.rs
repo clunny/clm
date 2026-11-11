@@ -106,7 +106,7 @@ const REQ_X: &str = "\n### Requirement: x\nx.\n\n#### Scenario: s\n- on 2026-10-
 
 #[test]
 fn scenario_history_in_a_design() {
-    // req:check.health/spec-bloat-signals@f92bab08
+    // req:check.health/spec-bloat-signals@6a8806e4
     let dir = repo();
     let d = dir.path();
     // Line 11 is `## Design`, so its third line is 14.
@@ -126,7 +126,7 @@ fn scenario_history_in_a_design() {
 
 #[test]
 fn scenario_a_present_condition() {
-    // req:check.health/spec-bloat-signals@f92bab08
+    // req:check.health/spec-bloat-signals@6a8806e4
     let dir = repo();
     let d = dir.path();
     let design = "Design.\n\nA local branch that no longer contains its remote tip is kept\n";
@@ -140,8 +140,23 @@ fn scenario_a_present_condition() {
 }
 
 #[test]
+fn scenario_a_passive_used_to() {
+    // req:check.health/spec-bloat-signals@6a8806e4
+    let dir = repo();
+    let d = dir.path();
+    let design = "Design.\n\nThe claim ref is used to hold the session's place\n";
+    write(d, "specs/a/SPEC.md", &node("Contract.\n\n", design, REQ_X));
+    let out = report(d);
+    assert_eq!(
+        section(&out, "history-words"),
+        ["health/history-words: 0 lines"],
+        "{out}"
+    );
+}
+
+#[test]
 fn history_phrases_match_whole_words_in_any_case() {
-    // req:check.health/spec-bloat-signals@f92bab08
+    // req:check.health/spec-bloat-signals@6a8806e4
     let dir = repo();
     let d = dir.path();
     let contract = "It Previously ran.\nThe refused run stays.\nToday's build.\n\n";
@@ -167,7 +182,7 @@ fn bytes(fill: char, bytes: usize) -> String {
 
 #[test]
 fn scenario_design_heavier_than_the_rest() {
-    // req:check.health/spec-bloat-signals@f92bab08
+    // req:check.health/spec-bloat-signals@6a8806e4
     // req:check.health/says-component@15cdb4fa
     let dir = repo();
     let d = dir.path();
@@ -188,7 +203,7 @@ fn scenario_design_heavier_than_the_rest() {
 
 #[test]
 fn scenario_outlier() {
-    // req:check.health/spec-bloat-signals@f92bab08
+    // req:check.health/spec-bloat-signals@6a8806e4
     // req:check.health/says-component@15cdb4fa
     let dir = repo();
     let d = dir.path();
@@ -214,7 +229,7 @@ fn scenario_outlier() {
 
 #[test]
 fn fewer_than_three_nodes_give_no_median() {
-    // req:check.health/spec-bloat-signals@f92bab08
+    // req:check.health/spec-bloat-signals@6a8806e4
     // req:check.health/says-component@15cdb4fa
     let dir = repo();
     let d = dir.path();

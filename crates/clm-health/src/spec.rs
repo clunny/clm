@@ -13,8 +13,7 @@ use crate::{Section, finding, phrase_at, tokens};
 
 /// Phrases that narrate history rather than describe the system (`spec-is-current`),
 /// matched case-insensitively at word boundaries.
-const HISTORY_PHRASES: [&str; 9] = [
-    "used to",
+const HISTORY_PHRASES: [&str; 8] = [
     "as before",
     "today's",
     "amended",

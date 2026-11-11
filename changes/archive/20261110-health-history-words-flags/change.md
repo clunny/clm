@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/health-history-words-flags-passive-used-to
 resolves:
   - health-history-words-flags-passive-used-to
