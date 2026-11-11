@@ -166,3 +166,24 @@ fn ignored_on_a_rerun() {
     assert!(steps[named[0]].contains("!.claude/settings.json"), "{out}");
     assert!(named[0] < push_step(&steps), "{out}");
 }
+
+#[test]
+fn comes_before_the_missing_rules_step() {
+    // req:init/init-names-ignored-settings@a3978231
+    let dir = repo();
+    run(dir.path());
+    let gitignore = dir.path().join(".gitignore");
+    let mut text = std::fs::read_to_string(&gitignore).unwrap();
+    text.push_str(".claude/\n");
+    std::fs::write(&gitignore, text).unwrap();
+    std::fs::write(dir.path().join(".claude/settings.json"), "{}\n").unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "-q", "-m", "init"]);
+    let out = run(dir.path());
+    let steps = steps(&out);
+    let named = naming_settings(&steps);
+    assert_eq!(named.len(), 2, "{out}");
+    assert!(steps[named[0]].contains("Git ignores"), "{out}");
+    assert!(steps[named[1]].contains("allow rules to"), "{out}");
+    assert_eq!(named[1] + 1, push_step(&steps), "{out}");
+}
