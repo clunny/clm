@@ -417,7 +417,7 @@ fn issue_not_filed_is_kept_without_gh() {
         assert!(text.contains("wasn't filed"), "{text}");
         let file = git_dir.join("clm/defects").join(name);
         assert!(text.contains(&file.display().to_string()), "{text}");
-        assert!(text.contains("clunny/clm"), "{text}");
+        assert!(text.contains("file it by hand on clunny/clm"), "{text}");
         assert!(kept(&git_dir, name).contains(REPORT.trim()));
     }
 }
