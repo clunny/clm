@@ -2,7 +2,7 @@
 //! as broken waits for the fix, and one that touches the components of a red result nobody
 //! has taken in yet is warned (`capability/slow-tests-after-land`).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use clm_ledger::{Body, Fold};
@@ -18,7 +18,7 @@ struct Held {
 
 /// Refuses `head` when its code changes a file under the `paths` of a component a `kind: bug`
 /// item on `base`'s backlog holds with `verify_failures`, unless a commit it adds carries
-/// `Resolves: backlog/<slug>` for each such item. Otherwise gives the warnings for the red
+/// `Resolves: backlog/<slug>` for one item holding that component. Otherwise gives the warnings for the red
 /// `verified` results on `base`'s first-parent chain that no item names and whose components
 /// `head` touches. A spec land, which changes no code, and a code land touching neither,
 /// give none.
@@ -78,26 +78,30 @@ pub(crate) fn check(
     };
 
     let resolves = resolved(repo, base, head)?;
-    let blocking: Vec<(String, &str)> = held
+    // A held component the branch touches is fixed by a resolved item holding it; the items
+    // not yet resolved go on holding it.
+    let mut holders: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for h in &held {
+        for c in &h.components {
+            holders.entry(c).or_default().push(&h.slug);
+        }
+    }
+    let blocking: Vec<(&str, &Vec<&str>)> = holders
         .iter()
-        .filter(|h| !resolves.contains(&h.slug))
-        .flat_map(|h| {
-            h.components
-                .iter()
-                .filter(|c| touches(c))
-                .map(|c| (c.clone(), h.slug.as_str()))
-        })
+        .filter(|(c, slugs)| touches(c) && !slugs.iter().any(|s| resolves.contains(*s)))
+        .map(|(c, slugs)| (*c, slugs))
         .collect();
     if !blocking.is_empty() {
         let mut why = String::from(
             "land/verify-stop: slow tests failed after a land, and this branch changes code of",
         );
-        for (component, slug) in &blocking {
-            why.push_str(&format!("\n  `{component}`, held by backlog/{slug}"));
+        for (component, slugs) in &blocking {
+            let items: Vec<String> = slugs.iter().map(|s| format!("backlog/{s}")).collect();
+            why.push_str(&format!("\n  `{component}`, held by {}", items.join(", ")));
         }
         why.push_str(
             "\nit lands once a commit it adds carries the trailer `Resolves: backlog/<slug>` \
-             for each such item",
+             for one item holding each component named",
         );
         return Err(Error::Refused(why));
     }
@@ -163,7 +167,7 @@ fn component_paths(
     repo: &Repo,
     base: &str,
     prefix: &str,
-) -> Result<std::collections::BTreeMap<String, Vec<String>>, Error> {
+) -> Result<BTreeMap<String, Vec<String>>, Error> {
     let dir = format!("{prefix}specs/");
     let blobs = clm_git::tree_blobs(&repo.root, base, &|p: &str| p.starts_with(&dir))?;
     let files: clm_model::Files = blobs
