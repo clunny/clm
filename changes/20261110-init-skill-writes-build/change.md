@@ -7,7 +7,11 @@ resolves:
 
 ## Intent
 
-`/clm:init` writes the project's `[build] setup` into `clm.toml` before the bootstrap commit, beside the `[verify]` settings, instead of on the first spec branch, where the edit made the branch `mixed` and unlandable (`backlog/init-skill-writes-build-setup-on-the-first-spec-branch-which-the`). `plugin.init/init-skill-build-setup` is modified to say so, with a scenario that fails a skill whose setup sentence names the spec branch or doesn't name the bootstrap commit.
+`/clm:init` writes the project's `[build] setup` into `clm.toml` before the bootstrap commit, beside the `[verify]` settings, instead of on the first spec branch, where the edit made the branch `mixed` and unlandable (`backlog/init-skill-writes-build-setup-on-the-first-spec-branch-which-the`). `plugin.init/init-skill-build-setup` is modified to say so, with a scenario that fails a skill whose setup sentence names the first spec branch or doesn't name the bootstrap commit.
+
+## Builder check and audit
+
+The builder check found the scenario first forbade `spec branch` in the very sentence whose requirement says "never on the spec branch"; it now forbids only `first spec branch`, the old wording. It found no pending requirement relied on (`config/build-setup-here` is unbuilt but the requirement is skill text only) and no capability test affected. The architecture audit found nothing.
 
 ## Problem
 
@@ -21,7 +25,7 @@ resolves:
 
 ## Outcome
 
-- `plugin.init/init-skill-build-setup` (modified): the setup is written into `clm.toml` before the bootstrap commit, never on the spec branch, and says why. A new scenario checks the sentence names `bootstrap commit` and not `spec branch`.
+- `plugin.init/init-skill-build-setup` (modified): the setup is written into `clm.toml` before the bootstrap commit, never on the spec branch, and says why. A new scenario checks the sentence names `bootstrap commit` and not `first spec branch`, the old wording (the sentence may still name `spec branch` to say why).
 - The build rewrites the last clause of step 3's setup paragraph in `plugin/skills/init/SKILL.md` and extends `init_skill_build_setup` in `crates/clm/tests/plugin_init.rs`.
 
 ## Constraints
