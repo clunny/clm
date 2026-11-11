@@ -158,7 +158,15 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
 
     let mut out = files.out;
     let host = configured_host(&root, host);
-    let steps = next_steps(&root, &files.paths, host, permission_step(&root));
+    // After the `.gitignore` edits, which can't add a pattern that ignores the file.
+    let settings_ignored = ignored(&root, SETTINGS, false)?;
+    let steps = next_steps(
+        &root,
+        &files.paths,
+        host,
+        settings_ignored.then(ignored_settings_step),
+        permission_step(&root),
+    );
     // After the steps, which go by the remote the repository had (`init-keeps-a-remote`).
     let kept = clm_host::keep_remote(&root, host).map_err(|e| match e {
         clm_host::Error::Refused(m) | clm_host::Error::Nowhere(m) | clm_host::Error::Git(m) => m,
@@ -289,7 +297,7 @@ impl Files<'_> {
         self.paths.push(rel);
         let mut missing = Vec::new();
         for (entry, probe) in IGNORED {
-            if !ignored(self.root, probe)? {
+            if !ignored(self.root, probe, true)? {
                 missing.push(entry);
             }
         }
@@ -326,12 +334,18 @@ const IGNORED: [(&str, &str); 3] = [
     (".claude/worktrees/", ".claude/worktrees/x/f"),
 ];
 
-/// Whether git ignores `probe` in `root`: `git check-ignore -q --no-index` exits 0 when it
-/// does and 1 when it doesn't; anything else is git's error. `--no-index` reads the patterns
-/// whatever the index holds, so a tracked `clm.local.toml` the file lists still counts. One
-/// path a call, since `-q` with several can't tell them apart.
-fn ignored(root: &Path, probe: &str) -> Result<bool, String> {
-    match git(root, &["check-ignore", "-q", "--no-index", probe]) {
+/// Whether git ignores `probe` in `root`: `git check-ignore -q` exits 0 when it does and 1
+/// when it doesn't; anything else is git's error. With `patterns_only`, `--no-index` reads the
+/// patterns whatever the index holds, so a tracked `clm.local.toml` the file lists still
+/// counts; without it a tracked file is not ignored, as for a commit. One path a call, since
+/// `-q` with several can't tell them apart.
+fn ignored(root: &Path, probe: &str, patterns_only: bool) -> Result<bool, String> {
+    let mut args = vec!["check-ignore", "-q"];
+    if patterns_only {
+        args.push("--no-index");
+    }
+    args.push(probe);
+    match git(root, &args) {
         Ok(_) => Ok(true),
         Err(clm_git::Error::Failed { status, .. }) if status.code() == Some(1) => Ok(false),
         Err(e) => Err(e.to_string()),
@@ -465,12 +479,29 @@ fn make_executable(path: &Path) -> std::io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
 }
 
-/// The steps left for the human: the `permissions` step, then the push, skipped once `git`
+/// The step naming that git ignores [`SETTINGS`], so the allow rules stay on this machine
+/// (`init-names-ignored-settings`).
+fn ignored_settings_step() -> String {
+    format!(
+        "Git ignores `{SETTINGS}`, so its allow rules stay on this machine: in place of the \
+         pattern that ignores the whole directory, such as `.claude/`, ignore `.claude/*` and \
+         add `!{SETTINGS}` after it, or commit the file with `git add -f {SETTINGS}`."
+    )
+}
+
+/// The steps left for the human: the ignored-settings step, the `permissions` step, then the push, skipped once `git`
 /// shows it done and nothing else is left to commit, then the host's own setup steps
 /// (`clm-host`'s `setup_steps`), always printed since whether the host protects `main` would
 /// take asking it. `paths` are all of CLM's files, written or kept.
-fn next_steps(root: &Path, paths: &[&str], host: Host, permissions: Option<String>) -> Vec<String> {
+fn next_steps(
+    root: &Path,
+    paths: &[&str],
+    host: Host,
+    ignored_settings: Option<String>,
+    permissions: Option<String>,
+) -> Vec<String> {
     let mut steps: Vec<String> = missing_main(root).into_iter().collect();
+    steps.extend(ignored_settings);
     steps.extend(permissions);
     // Done: nothing to commit, and `REMOTE/main` (as last fetched) has the same files, or
     // there's no remote to push to.
