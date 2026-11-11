@@ -1608,6 +1608,7 @@ fn scenario_a_run_whose_fetch_loses_a_ref_race() {
     assert!(launcher.contains("git switch impl/b"), "{launcher}");
     assert!(remote_tip(&r, "impl/b").is_some(), "claimed");
     assert!(local_tip(&r, "impl/b").is_some());
+    assert!(r.work.join(".git/clm/builds/b").exists(), "place b");
 }
 
 #[test]
@@ -1623,11 +1624,7 @@ fn scenario_a_run_whose_fetch_keeps_failing() {
     let stderr = refused(&r, &f, "b", &env, 2);
     assert!(stderr.contains("cannot lock ref"), "{stderr}");
     assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
-    let common = git(&r.work, &["rev-parse", "--git-common-dir"]);
-    assert!(
-        !r.work.join(common).join("clm/builds/b").exists(),
-        "no place b"
-    );
+    assert!(!r.work.join(".git/clm/builds/b").exists(), "no place b");
 }
 
 #[test]

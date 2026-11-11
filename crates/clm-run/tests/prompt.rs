@@ -1146,6 +1146,10 @@ fn scenario_prompt_doc_readers() {
             "CAPABILITIES.md",
             "README.md",
             "specs/",
+            "changes/",
+            "backlog/",
+            "docs/",
+            "<glob>` marker",
             "clm.toml",
             "land-checks-stay-fast",
         ] {
