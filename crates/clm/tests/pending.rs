@@ -55,7 +55,7 @@ fn version(root: &Path, id: &str) -> String {
 
 #[test]
 fn scenario_states() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = repo();
     let d = dir.path();
     let (x, y, z) = (version(d, "a/x"), version(d, "a/y"), version(d, "a/z"));
@@ -74,7 +74,7 @@ fn scenario_states() {
 
 #[test]
 fn scenario_blocked() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = repo();
     let d = dir.path();
     write(
@@ -107,7 +107,7 @@ fn needs_repo() -> TempDir {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = needs_repo();
     let d = dir.path();
     write(
@@ -123,7 +123,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_need_satisfied() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = needs_repo();
     let d = dir.path();
     write(d, "t.rs", &format!("// {REQ}b/z@{}\n", version(d, "b/z")));
@@ -134,7 +134,7 @@ fn scenario_need_satisfied() {
 
 #[test]
 fn scenario_nothing_pending() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = repo();
     let d = dir.path();
     let cite = |id: &str| format!("// {REQ}{id}@{}\n", version(d, id));
@@ -146,7 +146,7 @@ fn scenario_nothing_pending() {
 
 #[test]
 fn every_node_without_an_argument() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = repo();
     let d = dir.path();
     write(
@@ -161,7 +161,7 @@ fn every_node_without_an_argument() {
 
 #[test]
 fn violations_and_unknown_nodes_exit_1() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = repo();
     let d = dir.path();
     let (code, out) = clm_pending(d, Some("nope"));
@@ -175,7 +175,7 @@ fn violations_and_unknown_nodes_exit_1() {
 
 #[test]
 fn scenario_removed_node_from_the_cli() {
-    // req:check.coverage/pending-report@0ca7a745
+    // req:check.coverage/pending-report@1e9fec90
     let dir = repo();
     let d = dir.path();
     write(
