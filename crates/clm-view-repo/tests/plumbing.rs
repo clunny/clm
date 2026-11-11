@@ -15,7 +15,7 @@ fn git(root: &Path, args: &[&str]) -> String {
 
 #[test]
 fn the_command_compares_the_checkout_with_the_remotes_main() {
-    // req:view/spec-component-lines@459bfd9a
+    // req:view/spec-component-lines@fcbd78c9
     // req:view.repo/shared-plumbing@c3db052e
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -59,7 +59,7 @@ fn the_command_compares_the_checkout_with_the_remotes_main() {
     {
         assert!(line.starts_with(start), "{line:?} in {out}");
     }
-    // Scenario `spec lines at a commit`: the same four lines after the one naming it.
+    // The same four lines after the one naming the commit, with `--at origin/main`.
     let rev = format!("{}/main", clm_git::REMOTE);
     let source = Source::At {
         rev: &rev,
