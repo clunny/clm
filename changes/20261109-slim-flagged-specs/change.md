@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 from: backlog/specs-restate-their-requirements-and-narrate-history
 resolves: [specs-restate-their-requirements-and-narrate-history, pending-report-tests-prove-text-it-no-longer-states]
 ---

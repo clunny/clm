@@ -61,6 +61,8 @@ The Worker reads its secrets as `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (a PKC
 
 **Moving the routes.** The view routes and the webhook move to the `Replica` object only once it is built: `replica-class-export` needs `web.worker.replica/object-class`, which defines the class, and every requirement that moves a route or the webhook onto the object (`views-from-replica`, `capabilities`, `architecture`, `fresh-live-state`, `repo-access`, `webhook-refresh`) needs the object's `object-class`, `applies-events`, `first-build` and `alarm-batches` (`needs-alone-order`). Within this component the build orders them itself: `replica-class-export` and `views-from-replica` first, as the others answer through them. The capability tests under `capabilities/web/` drive the Worker as deployed, so the build that moves the routes also adds the `REPLICA` binding (`className: 'Replica'`, on SQLite) to their Miniflare harness and the GitHub calls the object makes to their fake, reading past `preparing` as the app does: test-fixture fixes the removal of the Worker's own views forces, named in its pull request (`path-ownership`).
 
+**Assets adapter** (`asset-adapter`). The session cookie and the user's credentials stay with the Worker, so they never reach the binding. A `/_clm/*` answer changes only with a deploy, which starts new isolates, so the adapter keeps it for the isolate's life; the site's answers change without one and are never kept. `worker.rs` is built only for `wasm32`, so what the adapter decides about an asset request (what reaches the binding, the 503 and 502 answers, what it keeps) is code built for the host too, over a binding that `worker.rs` supplies from `ASSETS` and tests fake; `worker.rs` keeps only the binding's calls.
+
 **Size** (`slim-components`). This component's budget is 72,000 code tokens and 16,000 spec tokens, above the defaults, because what stays is the Worker's one shell: the router every route passes through, the session and sign-in, the view routes and their cache, proposals, decide, the webhook's dispatch and the live socket, and the Worker adapter, with the tests that drive them through `handle`.
 
 ## Requirements
@@ -574,3 +576,24 @@ The "not invited" page the callback answers to a login that isn't invited SHALL 
 
 #### Serves
 - capability/learn-clm
+
+### Requirement: asset-adapter
+The Worker adapter's `fetch_asset` SHALL pass the request's method, path, query and headers, but for `cookie` and `authorization`, to the `ASSETS` binding, and answer the binding's status, every header and the body's bytes. It SHALL answer 503 when there is no `ASSETS` binding, and 502 when the fetch fails or the body can't be read. It SHALL keep, for the isolate's life, only 200 answers to a `GET` with no query of a `/_clm/*` path, and answer a later such request for the same path from what it kept without asking the binding.
+
+#### Scenario: passed through
+- GIVEN a fake `ASSETS` binding that answers 304 with an `etag` header and no body
+- WHEN the adapter answers a `HEAD` of `/fonts/inter.woff2` with query `v=1` and the headers `if-none-match`, `cookie` and `authorization`
+- THEN the binding was asked once, with method `HEAD`, path `/fonts/inter.woff2`, query `v=1` and the header `if-none-match` but neither `cookie` nor `authorization`, and the answer is 304 with the binding's headers and an empty body
+
+#### Scenario: no binding, or a failed fetch
+- GIVEN no `ASSETS` binding, and then a fake binding whose fetch fails
+- WHEN the adapter answers a `GET` of `/app/index.html` with each
+- THEN the first answer is 503 and the second 502
+
+#### Scenario: kept per isolate
+- GIVEN a fake `ASSETS` binding that answers `/_clm/invited.json` and `/app/index.html` with 200 and bytes, and `/_clm/missing.json` with 404
+- WHEN the adapter answers two `GET`s of each path, and one of `/_clm/invited.json` with query `x=1`
+- THEN the binding was asked once for `/_clm/invited.json` without a query, once with it, and twice each for `/app/index.html` and `/_clm/missing.json`, and each answer carries the binding's status and exactly its bytes
+
+#### Serves
+- architecture/invite-only-web
