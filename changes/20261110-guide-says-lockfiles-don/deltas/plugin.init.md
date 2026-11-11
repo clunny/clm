@@ -9,7 +9,7 @@ component: plugin.init
 #### Scenario: the shipped init skill
 - GIVEN the plugin's `skills/init/SKILL.md`
 - WHEN a test reads it
-- THEN it contains `.gitattributes`, `linguist-generated`, `git check-attr`, `uv.lock` and `check/node-size`, and the first line naming `.gitattributes` comes before the first line naming `--no-detectors`, the step that runs `clm init`
+- THEN it contains `.gitattributes`, `linguist-generated`, `git check-attr`, `uv.lock` and `check/node-size`, and the first line naming `.gitattributes` is an earlier line than the first line naming `--no-detectors`, the step that runs `clm init` (the same line fails)
 
 #### Serves
 - capability/adopt-clm

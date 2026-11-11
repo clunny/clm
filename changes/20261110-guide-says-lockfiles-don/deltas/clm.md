@@ -70,7 +70,7 @@ The root's `paths` name `crates/clm`'s manifest, build script, sources and top-l
 
 ## MODIFIED Requirements
 ### Requirement: lockfiles-generated <!-- base: 6d26f87691961dee -->
-The repository's `.gitattributes` SHALL mark every tracked file named `Cargo.lock` or `package-lock.json`, at any depth, `linguist-generated`, written bare by file name (`<name> linguist-generated`), so `git check-attr` reports `set` for each and `check/node-size` leaves them out of every component's code count.
+The repository's `.gitattributes` SHALL mark every tracked file named `Cargo.lock` or `package-lock.json`, at any depth, `linguist-generated`, written bare by file name (`<name> linguist-generated`), so `git check-attr` reports `set` for each and `check/node-size` leaves them out of every component's code count. Its test lists those files from the whole tree, so it SHALL carry `clm:reads` markers for `**/Cargo.lock`, `**/package-lock.json` and `**/.gitattributes`, and selection runs it on a land that adds, removes or re-marks a lockfile anywhere (`land-checks-stay-fast`).
 
 #### Scenario: attributes set
 - GIVEN the repository
