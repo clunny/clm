@@ -39,7 +39,7 @@ Where: `clm.toml` or `clm.local.toml`. Changing it in `clm.toml` needs review.
 
 Where `clm defect` sends a report when CLM itself gets in a session's way. `ask` (the default): an issue on CLM's own GitHub repository, filed once you confirm it. `backlog`: a `kind: bug` item in this project's backlog. `off`: no report.
 
-- **`ask`** gets CLM's maintainers the report, and asks you each time, since it leaves the project.
+- **`ask`** gets CLM's maintainers the report, and asks you each time, since it leaves the project. It files through `gh`, whatever your project's host; when it can't (no `gh`, or not signed in), it keeps the report under `clm/defects/` in the clone's `.git` directory and prints the file's path, for you to file by hand.
 - **`backlog`** keeps reports in the project, with no question: suits a project that fixes CLM itself, or one whose work mustn't leave it.
 - **`off`** saves the interruption and loses the reports.
 
