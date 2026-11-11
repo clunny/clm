@@ -524,7 +524,7 @@ fn a_removed_node_is_an_unknown_node() {
 /// node's marker in exactly the files `git ls-files ':(glob)<pattern>'` lists.
 #[test]
 fn paths_match_as_git_glob_pathspecs_do() {
-    // req:check.coverage/pending-report@1e9fec90
+    // req:check/path-ownership@5c51292c
     let files = [
         "crates/v/t.rs",
         "crates/v/tests/t.rs",
