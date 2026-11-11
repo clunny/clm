@@ -12,7 +12,7 @@ use clm_git::git;
 use clm_model::parse_change_frontmatter;
 use clm_orchestrator::{PlaceFile, REMOTE, free_place, places};
 
-use crate::Error;
+use crate::{Error, fetch_origin};
 
 /// Frees place `change` and, when `origin/main` holds `changes/<change>/` or
 /// `changes/archive/<change>/`, or the local `spec/<change>` has landed (a fold's
@@ -27,7 +27,7 @@ pub fn finish(root: &Path, change: &str, expiry_hours: u64) -> Result<String, Er
     if change.is_empty() || change.contains('/') {
         return Err(Error::Refused(format!("`{change}` isn't a change ID")));
     }
-    git(root, &["fetch", "--prune", "--quiet", REMOTE])?;
+    fetch_origin(root)?;
     let mut done = Vec::new();
     let branch = format!("spec/{change}");
     // A fold's branch `spec/<batch>` names no change, so only the ancestry test finds it.

@@ -220,6 +220,16 @@ fn designed(root: &Path, id: &str) -> bool {
 }
 
 /// The graph of `origin/main`'s tree as of the last fetch, as `clm next` reads it.
+/// Fetches `origin` as `clm draft`, `--finish` and `--fold` do, trying again over a ref
+/// race with a build in another worktree (`draft-fetch-retries-race`).
+pub(crate) fn fetch_origin(root: &Path) -> Result<(), Error> {
+    clm_git::fetch_retrying(
+        root,
+        &["fetch", "--prune", "--quiet", clm_orchestrator::REMOTE],
+    )
+    .map_err(|e| Error::Git(e.to_string()))
+}
+
 fn main_graph(root: &Path) -> Result<Graph, Error> {
     let tmp = clm_git::extract_tree(root, &format!("{REMOTE}/main"))?;
     let (graph, violations) = clm_model::load(tmp.path());
