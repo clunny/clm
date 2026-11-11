@@ -80,10 +80,10 @@ fn create_unique(
             .open(dir.join(&name))
         {
             Ok(mut file) => {
-                return file
-                    .write_all(content.as_bytes())
-                    .map(|()| name.clone())
-                    .map_err(|e| (name, e));
+                return match file.write_all(content.as_bytes()) {
+                    Ok(()) => Ok(name),
+                    Err(e) => Err((name, e)),
+                };
             }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => return Err((name, e)),
