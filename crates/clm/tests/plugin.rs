@@ -68,7 +68,7 @@ fn manifest_owner() {
 
 #[test]
 fn panel_package() {
-    // req:plugin.panel/panel-package@e80d5d13
+    // req:plugin.panel/panel-package@286ccb95
     let market = json(&repo().join(".claude-plugin/marketplace.json"));
     let names: Vec<_> = market["plugins"]
         .as_array()

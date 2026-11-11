@@ -1,4 +1,4 @@
-// req:plugin.panel/build-rows@b2f57e0a
+// req:plugin.panel/build-rows@2a02f823
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 
@@ -334,6 +334,7 @@ describe('drawing', () => {
     expect(text(flightLines(CHART, list, 61_000)).at(-1)).toMatch(/· Haiku 4\.5 ×2 · Opus 5\.5 ×1$/)
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('a finished build and its subagents leave the rows at once; the totals still count them', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyStep(list, 'c1', 'claude-opus-5-5', undefined, usage(10_000))
@@ -415,6 +416,7 @@ describe('drawing', () => {
     expect(rows[4]).not.toContain('round')
   })
 
+  // req:plugin.panel/build-row-cost@5e68018b
   test('a second later the rows show a larger elapsed time, and clm has not run again', async () => {
     const at = (ms: number) => text(flightLines(CHART, gitBuild(), ms)).join('\n')
     expect(at(61_000)).toContain('1:01')
@@ -460,6 +462,7 @@ describe('drawing', () => {
     expect([...cache.keys()]).toEqual([viewKey(2, ['view', 'flight'])])
   })
 
+  // req:plugin.panel/build-row-cost@5e68018b
   test('a million input tokens cost the model\'s input rate', () => {
     const list = applyStep(started(['b1', 'build git', PROMPT('git')]), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     const row = between(text(flightLines(CHART, list, 0)), '  git ', '  init ').join('\n')

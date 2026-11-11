@@ -503,7 +503,7 @@ describe('inspector-detail', () => {
 })
 
 describe('blocker-chains', () => {
-  // req:plugin.panel/blocker-chains@6a0db350
+  // req:plugin.panel/blocker-chains@8b24bb4f
   test('folded at first: the heading and the root lines, pressable, and no tree line', () => {
     const { lines, inspector } = chartLines({ tab: 'blockers', chart: BLOCKERS_CHART, own: BLOCKERS, selected: 'a', unfolded: [] })
     expect(inspector).toBeUndefined()

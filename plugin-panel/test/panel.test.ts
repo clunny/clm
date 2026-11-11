@@ -30,7 +30,7 @@ import {
   unfenced,
   viewArgs,
 } from '../src/panel.ts'
-import { chartLines, modelRuns } from '../src/inspector.ts'
+import { chartLines, modelRuns, pressNode } from '../src/inspector.ts'
 
 const PANEL = '/plugins/clm/plugin-panel'
 const SHIM = '/plugins/clm/plugin/bin/clm'
@@ -131,7 +131,7 @@ describe('view-command-in-chat', () => {
 })
 
 describe('views-panel', () => {
-  // req:plugin.panel/views-panel@99ca88c7
+  // req:plugin.panel/views-panel@a97b0ae7
   test('the pane is CLM with Spec, Flight, Blockers and Capabilities, Flight first', () => {
     expect(PANE_TITLE).toBe('CLM')
     expect(TABS).toEqual(['spec', 'flight', 'blockers', 'capabilities'])
@@ -203,6 +203,24 @@ describe('views-panel', () => {
     await first.fetching
     expect(fetchIfDue($, '/work/repo', 60_000, first.lastFetch)).toEqual({ lastFetch: 0 })
     expect($.calls).toHaveLength(1)
+  })
+
+  test('a press changes no run the pane holds for this generation, so no clm command runs again', async () => {
+    const cache = new Map<string, Promise<Run>>()
+    let started = 0
+    const start = async (): Promise<Run> => ({ exitCode: 0, stdout: `${++started}`, stderr: '' })
+    // A draw's runs: the chart, its model and, with a component selected, the other tab's model.
+    const draw = (selected: string | null) => {
+      const { own, other } = modelRuns('spec', 'terminal', selected, true)
+      const argvs = [viewArgs('spec', 'terminal', 80, true), own!, ...(other ? [other] : [])]
+      return Promise.all(argvs.map(argv => cachedRun(cache, viewKey(7, argv), start)))
+    }
+    await draw('a')
+    expect(started).toBe(3)
+    // Pressing `b`'s line selects it; pressing `Contract` changes no argument at all.
+    await draw(pressNode('a', 'b'))
+    await draw(pressNode('b', 'b'))
+    expect(started).toBe(3)
   })
 
   test('a failed fetch draws an amber line above the chart until a fetch succeeds', async () => {
@@ -312,7 +330,7 @@ describe('views-panel', () => {
 })
 
 describe('panel-package', () => {
-  // req:plugin.panel/panel-package@e80d5d13
+  // req:plugin.panel/panel-package@286ccb95
   test("with no clm, it says clm isn't installed, naming the clm plugin", async () => {
     const $ = fake({ files: ['/work/repo/specs/SPEC.md'], dirs: ['/work/repo', '/work/repo/.git'] })
     expect(await clmCommand($)).toBe('clm')
@@ -320,6 +338,15 @@ describe('panel-package', () => {
     expect(NOT_INSTALLED).toContain('the `clm` plugin')
     // No git either, so no `origin/main`: the checkout's view.
     expect($.calls.at(-1)).toEqual({ argv: ['clm', 'view', 'flight'], cwd: '/work/repo' })
+  })
+
+  // req:plugin.panel/panel-package@286ccb95
+  test("the manifest names the owner in full and the licence", () => {
+    // `npm test` runs in `plugin-panel/`.
+    const text = ts.sys.readFile(`${ts.sys.getCurrentDirectory()}/.claude-plugin/plugin.json`)
+    const manifest = JSON.parse(text ?? '') as { author: { name: string }; license: string }
+    expect(manifest.author.name).toBe('Christopher Lunny')
+    expect(manifest.license).toBe('MIT')
   })
 
   test("from the plugin cache it runs the clm plugin's shim of its own version", async () => {
