@@ -103,7 +103,7 @@ describe('a refresh a notice asked for', () => {
   });
 });
 
-// req:web.client-live/notify-switch@59a9bf95
+// req:web.client-live/notify-switch@bc04aecc
 describe('api.send', () => {
   it('deletes with a JSON body, and a failed get carries its status', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 })).mockResolvedValueOnce(new Response('', { status: 404 }));

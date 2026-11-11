@@ -1,4 +1,5 @@
-// req:web.client-live/notify-switch@59a9bf95
+// req:web.client-live/notify-switch@bc04aecc
+// req:web.client-live/push-renewal@d02c4647
 import { describe, expect, it, vi } from 'vitest';
 import { Notify, type NotifyEnv, type PushManagerLike, type SubscriptionLike } from './notify';
 
@@ -230,5 +231,48 @@ describe('Notify me', () => {
     expect(box(e).checked).toBe(true);
     expect(fresh).toEqual([undefined, 'd1']);
     e.remove();
+  });
+
+  it('redrawn with a known state: shows it at once, and keeps it when the ask fails', async () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+    const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': true }, stored: { 'o/a': endpoint } });
+    const n = new Notify(t.env);
+    const first = n.switchFor('o', 'a');
+    await vi.waitFor(() => expect(box(first)?.checked).toBe(true));
+    let release: () => void = () => undefined;
+    t.env.subscribed = () =>
+      new Promise<boolean>((_resolve, reject) => {
+        release = () => reject(new Error('down'));
+      });
+    const again = n.switchFor('o', 'a');
+    expect(again.hidden).toBe(false);
+    expect(box(again).checked).toBe(true);
+    await vi.waitFor(() => expect(release).not.toBe(undefined));
+    release();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(again.hidden).toBe(false);
+    expect(box(again).checked).toBe(true);
+  });
+
+  it('a post the Worker refuses leaves the switch off and says so', async () => {
+    const t = setup({ subscribed: { '/api/repos/o/a': false } });
+    t.env.send = async () => new Response(null, { status: 403 });
+    const e = new Notify(t.env).switchFor('o', 'a');
+    await vi.waitFor(() => expect(shown(e)).toBe(true));
+    toggle(e);
+    await vi.waitFor(() => expect(e.textContent).toMatch(/Not turned on \(403\)/));
+    expect(box(e).checked).toBe(false);
+  });
+
+  it('a delete the Worker refuses leaves the switch on and says so', async () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+    const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': true }, stored: { 'o/a': endpoint } });
+    t.env.send = async () => new Response(null, { status: 500 });
+    const e = new Notify(t.env).switchFor('o', 'a');
+    await vi.waitFor(() => expect(box(e)?.checked).toBe(true));
+    toggle(e);
+    await vi.waitFor(() => expect(e.textContent).toMatch(/Not turned off \(500\)/));
+    expect(box(e).checked).toBe(true);
+    expect(t.current()!.unsubscribe).not.toHaveBeenCalled();
   });
 });
