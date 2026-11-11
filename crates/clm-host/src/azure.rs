@@ -14,6 +14,12 @@ pub struct Azure;
 /// Runs `az repos pr <args>` with the clone's remote detected and JSON output, and parses
 /// what it prints.
 fn pr(root: &Path, args: &[&str]) -> Result<Value, Error> {
+    let out = pr_raw(root, args)?;
+    serde_json::from_slice(&out).map_err(|e| Error::Git(format!("az repos pr: bad JSON: {e}")))
+}
+
+/// What `az repos pr <args>` prints, unparsed.
+fn pr_raw(root: &Path, args: &[&str]) -> Result<Vec<u8>, Error> {
     let mut all = vec!["repos", "pr"];
     all.extend(args);
     all.extend(["--detect", "true", "--output", "json"]);
@@ -28,7 +34,7 @@ fn pr(root: &Path, args: &[&str]) -> Result<Value, Error> {
     )
     // A failed `az` (not installed, not signed in) is a refusal with its message: exit 1.
     .map_err(|e| Error::Refused(e.to_string()))?;
-    serde_json::from_slice(&out).map_err(|e| Error::Git(format!("az repos pr: bad JSON: {e}")))
+    Ok(out)
 }
 
 /// The active pull request whose source is `branch`, as `az` reports it.
@@ -62,6 +68,14 @@ fn web_url(pr: &Value) -> Result<String, Error> {
     }
 }
 
+/// What `az repos pr create` answered, its whitespace runs joined into single spaces and cut
+/// to its first 500 characters.
+fn said(answer: &[u8]) -> String {
+    let text = String::from_utf8_lossy(answer);
+    let joined = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    joined.chars().take(500).collect()
+}
+
 /// `file` made absolute against the caller's directory: `az` runs in the repository's root
 /// and reads `@<file>` relative to that.
 fn absolute(file: &Path) -> Result<PathBuf, Error> {
@@ -80,7 +94,7 @@ impl Host for Azure {
             return web_url(&open).map(Some);
         }
         let description = format!("@{}", absolute(body_file)?.display());
-        let created = pr(
+        let created = pr_raw(
             root,
             &[
                 "create",
@@ -94,7 +108,19 @@ impl Host for Azure {
                 &description,
             ],
         )?;
-        web_url(&created).map(Some)
+        let answer = serde_json::from_slice(&created)
+            .map_err(|e| Error::Git(format!("az repos pr: bad JSON: {e}")))?;
+        // `create` may have opened the pull request without saying so readably: look again.
+        match web_url(&answer) {
+            Ok(url) => Ok(Some(url)),
+            Err(_) => match active(root, branch)?.as_ref().map(web_url) {
+                Some(Ok(url)) => Ok(Some(url)),
+                _ => Err(Error::Git(format!(
+                    "az repos pr create: no pullRequestId or repository.webUrl in the answer: {}",
+                    said(&created)
+                ))),
+            },
+        }
     }
 
     fn page_body(&self, root: &Path, file: &Path) -> Result<Option<String>, Error> {

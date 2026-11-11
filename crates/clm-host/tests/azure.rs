@@ -253,3 +253,108 @@ fn contributions_and_alerts_are_not_there() {
         );
     });
 }
+
+/// An `az` whose first `pr list` lists nothing and whose later ones print `later`, and whose
+/// `pr create` prints `created`.
+fn fake_az_listing_late(dir: &Path, later: &str, created: &str) {
+    let script = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> {d}/az.args\n\
+         case \"$*\" in\n\
+         *'pr list'*) if [ -e {d}/listed ]; then cat <<'EOT'\n{later}\nEOT\n\
+         else touch {d}/listed; echo '[]'; fi;;\n\
+         *'pr create'*) cat <<'EOT'\n{created}\nEOT\n;;\nesac\n",
+        d = dir.display(),
+    );
+    let az = dir.join("az");
+    fs::write(&az, script).unwrap();
+    fs::set_permissions(&az, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+const UNREAD: &str = r#"{"status": "active"}"#;
+const NO_FIELDS: &str = "az repos pr create: no pullRequestId or repository.webUrl in the answer: ";
+
+#[test]
+fn opened_but_unread() {
+    // req:host/azure-unreadable-answer@d62c6d57
+    let listed = format!("[{}]", pull_request(12));
+    with_fakes(&[], "spec/x", "b", |root, dir| {
+        fake_az_listing_late(dir, &listed, UNREAD);
+        let got = Azure
+            .page_open(root, "spec/x", "x", &root.join("body.md"))
+            .unwrap();
+        assert_eq!(got, Some(url(12)));
+        let az = calls(dir, "az");
+        let lists: Vec<&str> = az.lines().filter(|l| l.contains("repos pr list")).collect();
+        assert_eq!(lists.len(), 2, "{az}");
+        for arg in [
+            "--source-branch spec/x",
+            "--target-branch main",
+            "--status active",
+        ] {
+            assert!(lists[1].contains(arg), "{arg} missing from {}", lists[1]);
+        }
+    });
+}
+
+#[test]
+fn nothing_to_read() {
+    // req:host/azure-unreadable-answer@d62c6d57
+    let answers = [
+        ("pr list", "[]"),
+        ("pr create", "{\"status\":\n   \"active\"}"),
+    ];
+    with_fakes(&answers, "spec/x", "b", |root, _| {
+        let err = Azure
+            .page_open(root, "spec/x", "x", &root.join("body.md"))
+            .unwrap_err();
+        let Error::Git(why) = err else {
+            panic!("{err:?}")
+        };
+        assert_eq!(why, format!("{NO_FIELDS}{UNREAD}"));
+    });
+}
+
+#[test]
+fn a_listing_without_fields_fails_too() {
+    // req:host/azure-unreadable-answer@d62c6d57
+    with_fakes(&[], "spec/x", "b", |root, dir| {
+        fake_az_listing_late(dir, &format!("[{UNREAD}]"), UNREAD);
+        let err = Azure
+            .page_open(root, "spec/x", "x", &root.join("body.md"))
+            .unwrap_err();
+        assert!(
+            format!("{err:?}").contains(&format!("{NO_FIELDS}{}", UNREAD.replace('"', "\\\""))),
+            "{err:?}"
+        );
+    });
+}
+
+#[test]
+fn the_answer_is_cut_to_500_characters() {
+    // req:host/azure-unreadable-answer@d62c6d57
+    let long = format!("{{\"x\": \"{}\"}}", "a".repeat(900));
+    let answers = [("pr list", "[]"), ("pr create", long.as_str())];
+    with_fakes(&answers, "spec/x", "b", |root, _| {
+        let err = Azure
+            .page_open(root, "spec/x", "x", &root.join("body.md"))
+            .unwrap_err();
+        let Error::Git(why) = err else {
+            panic!("{err:?}")
+        };
+        let answer = why.strip_prefix(NO_FIELDS).unwrap();
+        assert_eq!(answer.chars().count(), 500);
+        assert!(long.starts_with(answer));
+    });
+}
+
+#[test]
+fn an_answer_that_is_not_json_names_the_parse_error() {
+    // req:host/azure-unreadable-answer@d62c6d57
+    let answers = [("pr list", "[]"), ("pr create", "not json")];
+    with_fakes(&answers, "spec/x", "b", |root, _| {
+        let err = Azure
+            .page_open(root, "spec/x", "x", &root.join("body.md"))
+            .unwrap_err();
+        assert!(format!("{err:?}").contains("bad JSON"), "{err:?}");
+    });
+}
