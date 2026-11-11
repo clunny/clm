@@ -143,7 +143,7 @@ fn summary(graph: &Graph, markers: &[clm_check::Marker]) -> String {
 
 #[test]
 fn summary_counts_entries() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let (_dir, graph) = scenario();
     let line = summary(&graph, &[marker_on_x(&graph)]);
     assert!(
@@ -160,7 +160,7 @@ fn summary_counts_entries() {
 
 #[test]
 fn summary_entry_with_both_blocks_counts_twice() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let (_dir, graph) = graph(&[arch("e", &["a/x"], true)], &[("b", false)], &[]);
     let line = summary(&graph, &[marker_on_x(&graph)]);
     assert!(
@@ -171,7 +171,7 @@ fn summary_entry_with_both_blocks_counts_twice() {
 
 #[test]
 fn summary_without_architecture_or_untested() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let (_dir, graph) = graph(&[], &[("b", false)], &[]);
     let line = summary(&graph, &[marker_on_x(&graph)]);
     assert!(line.ends_with("; 1/2 requirements current"), "{line}");

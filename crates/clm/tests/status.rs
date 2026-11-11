@@ -164,7 +164,7 @@ fn remote_ref(root: &Path, name: &str, hours: u64) {
 
 #[test]
 fn scenario_summary() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -195,7 +195,7 @@ fn scenario_summary() {
 
 #[test]
 fn summary_counts_unbuilt_nodes() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -209,7 +209,7 @@ fn summary_counts_unbuilt_nodes() {
 
 #[test]
 fn scenario_aligned_columns() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -228,7 +228,7 @@ fn scenario_aligned_columns() {
 
 #[test]
 fn scenario_changes_grouped() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     // req:check.coverage/status-report@47ccc387
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -250,7 +250,7 @@ fn scenario_changes_grouped() {
 #[test]
 fn scenario_complete_change() {
     // req:check.coverage/status-report@47ccc387
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -288,7 +288,7 @@ fn scenario_groups_in_order() {
 
 #[test]
 fn scenario_waiting_on_you() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     item(d, "q", "question");
@@ -307,7 +307,7 @@ fn scenario_waiting_on_you() {
 
 #[test]
 fn a_change_awaiting_approval_waits_on_you_and_a_node_writing_a_protected_path_is_ready() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     write(
@@ -331,7 +331,7 @@ fn a_change_awaiting_approval_waits_on_you_and_a_node_writing_a_protected_path_i
 
 #[test]
 fn scenario_claims_counted() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     // req:orchestrator/status-claims@726cb7c5
     let dir = base();
     let d = dir.path();
@@ -353,7 +353,7 @@ fn scenario_claims_counted() {
 
 #[test]
 fn backlog_claims_are_counted_with_node_claims() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     // req:orchestrator/status-claims@726cb7c5
     let dir = base();
     let d = dir.path();
@@ -371,7 +371,7 @@ fn backlog_claims_are_counted_with_node_claims() {
 
 #[test]
 fn merged_claims_are_counted_and_released() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node("specd", &["x"]));
@@ -407,7 +407,7 @@ fn merged_claims_are_counted_and_released() {
 
 #[test]
 fn scenario_pending_states() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -431,7 +431,7 @@ fn scenario_pending_states() {
 
 #[test]
 fn summary_orders_statuses_states_and_kinds() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     // Nodes in every pending state: `a` and `i` ready (`i` writes a protected path), `b`
@@ -485,7 +485,7 @@ fn summary_orders_statuses_states_and_kinds() {
 
 #[test]
 fn scenario_nothing_in_flight() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     // req:check.coverage/status-report@47ccc387
     // req:orchestrator/status-claims@726cb7c5 (not a git repository)
     let dir = base();
@@ -513,7 +513,7 @@ fn scenario_nothing_in_flight() {
 
 #[test]
 fn invalid_graph_prints_violations() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     // req:check.coverage/status-report@47ccc387
     let dir = base();
     write(dir.path(), "specs/b/SPEC.md", "---\ntitle: B\n---\n");
@@ -526,7 +526,7 @@ fn invalid_graph_prints_violations() {
 
 #[test]
 fn status_and_view_never_fetch() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     // req:view/view-command@8e470e55
     let dir = base();
     let d = dir.path();
@@ -604,7 +604,7 @@ fn nodes_line(text: &str) -> String {
 
 #[test]
 fn scenario_oversized_node() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = sized("");
     let text = status(dir.path());
     let line = nodes_line(&text);
@@ -615,7 +615,7 @@ fn scenario_oversized_node() {
 
 #[test]
 fn scenario_budget_accepted() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = sized("size_budget: { code_tokens: 1000 }\n");
     let text = status(dir.path());
     assert!(!nodes_line(&text).contains("oversized"), "{text}");
@@ -624,7 +624,7 @@ fn scenario_budget_accepted() {
 
 #[test]
 fn sizes_that_cant_be_checked_mark_nothing() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = sized("");
     write(
         dir.path(),
@@ -671,7 +671,7 @@ fn ledger_ref(root: &Path, writer: &str, records: &str) {
 
 #[test]
 fn status_has_no_review_section() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -704,7 +704,7 @@ fn origin_ahead(root: &Path, n: usize) {
 
 #[test]
 fn the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -720,7 +720,7 @@ fn the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to() {
 
 #[test]
 fn scenario_checkout_named() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     claim_refs(dir.path(), &[]);
     let text = status(dir.path());
@@ -735,7 +735,7 @@ fn scenario_checkout_named() {
 
 #[test]
 fn scenario_checkout_behind() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     claim_refs(d, &[]);
@@ -762,7 +762,7 @@ fn scenario_checkout_behind() {
 
 #[test]
 fn scenario_no_origin() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
     git_env(d, &["init", "-q", "-b", "main"], &[]);
@@ -776,7 +776,7 @@ fn scenario_no_origin() {
 
 #[test]
 fn no_repository_names_no_commit() {
-    // req:view/status-report@5d9653b2
+    // req:view/status-report@538240fb
     let dir = base();
     let text = status(dir.path());
     assert!(
