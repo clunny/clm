@@ -157,20 +157,20 @@ pub fn checkpoint(root: &Path) -> Result<Report, Error> {
 
     // 5 (first half). `origin/main`'s tree: its violations, its complete changes, and what
     // holds backlog items there, which step 2 needs.
-    let tmp = clm_git::extract_tree(root, &main)?;
+    // The commit judged, resolved once so a fetch by another session in between can't make
+    // the tree, its file listing and the ledger audit describe different commits.
+    let audited = git(root, &["rev-parse", &format!("{main}^{{commit}}")])?;
+    let tmp = clm_git::extract_tree(root, &audited)?;
     let tree = tmp.path();
     // The files of `origin/main`'s commit, as `clm check` sees the tracked files of a
     // checkout of it, those under directories that start with `.` among them.
-    let listing = listed_files(root, &main)?;
+    let listing = listed_files(root, &audited)?;
     let mut violations: Vec<String> = clm_check::run_listed(tree, &listing)
         .iter()
         .map(|v| format!("{main}: {}", clm_check::format(v)))
         .collect();
     // `clm ledger verify` on `origin/main`: without `--review` over the whole chain, then with
     // it for the lands after the review mark only (`checkpoint-review-mark`).
-    // The commit audited, resolved once so a fetch by another session in between can't
-    // move the mark past lands this run never recomputed.
-    let audited = git(root, &["rev-parse", &format!("{main}^{{commit}}")])?;
     let mark = review_mark(root, &audited)?;
     let (findings, held_at) = verify(root, &audited, mark.as_deref())?;
     violations.extend(
@@ -481,13 +481,16 @@ fn listed_files(root: &Path, rev: &str) -> Result<Vec<std::path::PathBuf>, Error
     let out = clm_git::run(
         root,
         "git",
-        &["ls-tree", "-r", "--name-only", "-z", rev],
+        &["ls-tree", "-r", "--name-only", "--full-tree", "-z", rev],
         clm_git::Options::default(),
     )?;
     Ok(out
         .split(|b| *b == 0)
         .filter(|name| !name.is_empty())
-        .map(|name| std::path::PathBuf::from(String::from_utf8_lossy(name).into_owned()))
+        .map(|name| {
+            use std::os::unix::ffi::OsStrExt;
+            std::path::PathBuf::from(std::ffi::OsStr::from_bytes(name))
+        })
         .collect())
 }
 
