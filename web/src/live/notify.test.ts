@@ -254,6 +254,22 @@ describe('Notify me', () => {
     expect(box(again).checked).toBe(true);
   });
 
+  it('turn on over an existing browser subscription posts it, remembers it, and turning off then unsubscribes', async () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
+    const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': false } });
+    const e = new Notify(t.env).switchFor('o', 'a');
+    await vi.waitFor(() => expect(shown(e)).toBe(true));
+    toggle(e);
+    await vi.waitFor(() => expect(t.sent).toHaveLength(1));
+    expect(t.pm.subscribe).not.toHaveBeenCalled();
+    expect(t.sent[0].body).toEqual(t.current()!.toJSON());
+    expect(JSON.parse(t.store.get('clm-push')!)).toEqual({ 'o/a': endpoint });
+    await vi.waitFor(() => expect(box(e).disabled).toBe(false));
+    toggle(e);
+    await vi.waitFor(() => expect(t.current()!.unsubscribe).toHaveBeenCalled());
+    expect(JSON.parse(t.store.get('clm-push')!)).toEqual({});
+  });
+
   it('a post the Worker refuses leaves the switch off and says so', async () => {
     const t = setup({ subscribed: { '/api/repos/o/a': false } });
     t.env.send = async () => new Response(null, { status: 403 });
