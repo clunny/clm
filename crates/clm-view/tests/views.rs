@@ -765,7 +765,7 @@ fn changes_in_a_group_sort_by_priority_then_id() {
 #[test]
 fn flight_chart_names_every_state_and_the_claim() {
     // req:view/flight-view@d01ad49e
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     // req:view/says-component@f1f9079e
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1198,7 +1198,7 @@ fn a_need_blocked_by_an_item_and_a_need_reaches_both() {
 
 #[test]
 fn ansi_adds_colour_and_nothing_else() {
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let (g, markers) = nested();
     let view = spec_with(&g, &markers, &[claim("check.drift", 1)]);
     let plain = render(&view, Format::Text, 100, None);
@@ -1210,7 +1210,7 @@ fn ansi_adds_colour_and_nothing_else() {
 
 #[test]
 fn lines_are_cut_to_the_width_in_text_and_ansi() {
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let long = "a".repeat(60);
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1266,7 +1266,7 @@ fn a_merged_ref_is_not_a_claim() {
 
 #[test]
 fn svg_is_a_document_with_the_nodes_and_their_edges() {
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let (g, markers) = nested();
     let out = render(&spec_chart(&g, &markers), Format::Svg, 100, None);
     assert!(out.starts_with("<svg"), "{out}");
@@ -1289,7 +1289,7 @@ fn svg_is_a_document_with_the_nodes_and_their_edges() {
 
 #[test]
 fn svg_escapes_text() {
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &node("specd", "", "\"<o&o>\"", &["x"])),
@@ -1345,7 +1345,7 @@ fn svg_draws_the_bar_and_outlines_a_pending_node_in_its_state() {
 #[test]
 fn the_flight_bar_writes_each_pending_state_as_its_own_symbol() {
     // req:view/flight-view@d01ad49e
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/n/SPEC.md", &specd("", &["x", "y"])),
@@ -1443,7 +1443,7 @@ fn the_commit_line_heads_every_chart_at_a_commit() {
 
 #[test]
 fn the_checkout_line_heads_every_chart() {
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let (g, markers) = nested();
     let views = [
         spec_chart(&g, &markers),
@@ -1489,7 +1489,7 @@ fn the_checkout_line_heads_every_chart() {
 
 #[test]
 fn the_spec_svg_puts_the_checkout_above_the_boxes() {
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let (g, markers) = nested();
     let view = spec_chart(&g, &markers);
     let svg = render(&view, Format::Svg, 100, Some(&head(Some(1))));
@@ -1513,7 +1513,7 @@ fn the_spec_svg_puts_the_checkout_above_the_boxes() {
 #[test]
 fn the_json_carries_the_checkout_beside_the_model() {
     // req:view/view-library@b5ceab63
-    // req:view/view-command@c59324c3
+    // req:view/view-command@8e470e55
     let g = ordered();
     let model = flight_view(&g, &[], &[], NOW, EXPIRY);
     let view = View::Flight(model.clone());
