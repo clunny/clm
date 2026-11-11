@@ -6,7 +6,7 @@ resolves:
 
 ## Intent
 
-On `host = "azure"`, `clm pr open` and `clm pr body` cut a body over Azure DevOps's 4000-character description limit to fit, with a note saying so, instead of `az` refusing it; when `az repos pr create` answers without the pull request's ID or web URL, the adapter lists the branch's active pull request again before failing, and a failure quotes what `az` said. Whenever a body doesn't reach a pull request whole (the host refused it, or Azure's limit cut it), `clm pr open` keeps the whole body under the clone's common git directory and names the path, so it outlives the build's worktree; the build prompt tells the session to keep bodies short, to land anyway when the pull request doesn't open, and to name the kept body in its final message.
+On `host = "azure"`, `clm pr open` and `clm pr body` cut a body over Azure DevOps's 4000-character description limit to fit, with a note saying so, instead of `az` refusing it; when `az repos pr create` answers without the pull request's ID or web URL, the adapter lists the branch's active pull request again before failing, and a failure quotes what `az` said. Whenever a body doesn't reach a pull request whole (the host refused it, or Azure's limit cut it), `clm pr open` keeps the whole body under the clone's common git directory and names the path, so it outlives the build's worktree; the build prompt tells the session that a host may cut a long body, to land anyway when the pull request doesn't open, and to name the kept body in its final message.
 
 ## Problem
 
@@ -25,8 +25,9 @@ Three builds on an Azure DevOps project landed with no new pull request. One bod
 - `host/azure-body-limit` (added): `pr open` and `pr body` on Azure cut a body over 4000 UTF-16 code units at a line break, add a note naming the kept copy, keep the whole, and say so on standard error.
 - `host/azure-unreadable-answer` (added): a `create` answer without `pullRequestId` or `repository.webUrl` is followed by another `pr list`; failing that, the error quotes the answer.
 - `host/keep-unopened-body` (added): a failed `pr open` keeps its body at `<common git dir>/clm/pr-bodies/<branch>.md` and its error names the path.
-- `host`'s Design gains the three paragraphs.
-- `orchestrator.run/prompt-unopened-pr` (added): the build prompt names the limit, lands when the pull request doesn't open, and has the final message name a kept body. Needs `host/keep-unopened-body`.
+- `host`'s Contract says `pr open` keeps a body that didn't reach its pull request whole and `pr body` cuts to the host's limit; its Design gains the three paragraphs.
+- The guide's Azure paragraph (`docs/guide/ci-and-deployment.md`) names the limit, the cut and where a body is kept.
+- `orchestrator.run/prompt-unopened-pr` (added): the build prompt says a host may cut a long body, naming no host or limit (`host-adapters`), lands when the pull request doesn't open, and has the final message name a kept body. Needs `host/keep-unopened-body`.
 
 ## Constraints
 
