@@ -1,6 +1,6 @@
 ---
 status: proposed
-from: [backlog/specs-restate-their-requirements-and-narrate-history]
+from: backlog/specs-restate-their-requirements-and-narrate-history
 ---
 
 ## Intent
