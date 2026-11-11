@@ -65,7 +65,10 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 
 *Checking.* `clm init --check-permissions` reads `.claude/settings.json` and `.claude/settings.local.json` there, each when present, and takes the union of their `permissions.allow` arrays, since Claude Code merges both; a file it can't read as that shape counts as allowing nothing. It compares rules as exact strings, so a rule in the older `Bash(clm land:*)` form counts as missing: the check names exactly what to add. It prints each missing rule on its own line, in the list's order, after a line `missing allow rules in .claude/settings.json:`, and exits 1; with none missing it prints nothing and exits 0. It writes nothing and needs no `specs/`. It finds the CLM repository as `clm init` does (`init-root`), and outside a git repository it exits 1 saying so, as `clm init` does. The rules it names, and the first-run seeding, are one list, so a rule added to the list is checked for in every repository at once, including those set up before it existed.
 
+
 *Next steps.* On a rerun, when the check would report a rule missing, the next steps name `.claude/settings.json` and each missing rule, as the last upgrade step, right before the push step (`init-next-steps`). On a first run they name them only when the file couldn't be edited.
+
+*Ignored settings* (`init-names-ignored-settings`). The rules reach other machines, and the unattended sessions run there, only once `.claude/settings.json` is committed, and a project's `.gitignore` often ignores all of `.claude/`. So on every run, first or rerun, after its `.gitignore` edits, `clm init` asks git whether it would leave the file out of a commit: `git check-ignore -q .claude/settings.json`, through `clm-git` in the CLM repository's root, as for the `.gitignore` probes but without `--no-index`, since a file the index already tracks is committed whatever the patterns say and isn't reported. Exit 0 means ignored, exit 1 not, and any other failure fails `clm init`, as the `.gitignore` probes do. When it is ignored, the next steps say that git ignores `.claude/settings.json`, so its allow rules stay on this machine, and name the fix: in place of a pattern that ignores the whole directory, such as `.claude/`, ignore `.claude/*` and add `!.claude/settings.json` after it (git can't re-include a file whose directory it excludes), or commit the file with `git add -f`. The step comes before the missing-rules step, which stays the last step before the push step (`init-seeds-permissions`), and right before the push step when that one isn't printed. `clm init` edits no pattern of the project's own: which of `.claude/`'s other files the project keeps out is its choice, and the line it would rewrite may sit in another ignore file. The answer is git's, so this clone's own excludes count too: a file only `.git/info/exclude` ignores is reported, which is right, since this clone's commits would leave it out.
 
 ## Requirements
 
@@ -802,3 +805,36 @@ The `scripts/clm-check.sh` that `clm init` writes for `--lang rust` SHALL, in th
 #### Serves
 - capability/adopt-clm
 - capability/work-concurrently
+
+### Requirement: init-names-ignored-settings
+On every run, after its `.gitignore` edits, `clm init` SHALL ask git, by `git check-ignore -q .claude/settings.json` in the CLM repository's root (without `--no-index`), whether `.claude/settings.json` there is ignored, and when git exits 0 its next steps SHALL say, before the push step and before any step naming missing allow rules, that git ignores `.claude/settings.json`, and name the fix: ignore `.claude/*` in place of the pattern that ignores the directory and add `!.claude/settings.json`, or commit the file with `git add -f`. It SHALL still seed the rules `init-seeds-permissions` names, and SHALL change no ignore pattern of the project's own. When git exits 1, as for a file the index tracks, no next step SHALL name `.claude/settings.json` for this reason. Any other git failure SHALL fail `clm init`.
+
+#### Scenario: directory ignored
+- GIVEN a git repository with no `specs/` and no global or system git excludes, whose `.gitignore` holds `.claude/`
+- WHEN `clm init` runs
+- THEN it exits 0, `.claude/settings.json` holds the unattended allow rules, `.gitignore` still holds `.claude/`, and a next step, before the push step, names `.claude/settings.json`, `.claude/*` and `!.claude/settings.json`
+
+#### Scenario: not ignored
+- GIVEN an empty git repository with no global or system git excludes
+- WHEN `clm init` runs
+- THEN no next step names `.claude/settings.json`
+
+#### Scenario: re-included
+- GIVEN a git repository with no `specs/` and no global or system git excludes, whose `.gitignore` holds `.claude/*` then `!.claude/settings.json`
+- WHEN `clm init` runs
+- THEN no next step names `.claude/settings.json`, and `git status --porcelain --untracked-files=all` lists `.claude/settings.json` as untracked
+
+#### Scenario: tracked though ignored
+- GIVEN a repository initialised by `clm init`, then `.claude/` added to its `.gitignore`, and everything committed, `.gitignore` included, with `.claude/settings.json` force-added
+- WHEN `clm init` runs again
+- THEN `git status` shows no change and no next step names `.claude/settings.json`
+
+#### Scenario: ignored on a rerun
+- GIVEN a repository initialised by `clm init`, then `.claude/` added to its `.gitignore`, and everything committed but `.claude/settings.json`, which stays on disk untracked
+- WHEN `clm init` runs again
+- THEN a next step, before the push step, names `.claude/settings.json` and `!.claude/settings.json`
+
+#### Serves
+- capability/adopt-clm
+- capability/build-from-spec
+- capability/triage-unattended
