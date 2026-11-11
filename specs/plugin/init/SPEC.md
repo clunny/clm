@@ -119,7 +119,7 @@ It SHALL NOT contain the text `clm.yml`, `clm-build.sh`, `spec-approved`, `spec-
 - THEN it contains `tests-run-in-their-own-tree`, `[build] setup`, `clm setup` and `fresh worktree`
 
 #### Scenario: skill writing the setup on the spec branch
-- GIVEN an `init` `SKILL.md` whose sentence proposing the setup command (the one naming `whether a fresh worktree needs such a command`) doesn't name `bootstrap commit`, or names `spec branch`
+- GIVEN an `init` `SKILL.md` whose sentence proposing the setup command (the one naming `whether a fresh worktree needs such a command`) doesn't name `bootstrap commit`, or names `first spec branch`
 - WHEN the tests run
 - THEN a test fails naming the skill and the sentence
 
