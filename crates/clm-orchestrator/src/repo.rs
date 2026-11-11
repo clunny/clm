@@ -550,8 +550,10 @@ fn claim_id() -> String {
 
 pub(crate) fn fetch(root: &Path) -> Result<(), Error> {
     // Not `clm_git::fetch`: claims and spec work whose branches were deleted must go.
-    git(root, &["fetch", "--prune", "--quiet", REMOTE])?;
-    Ok(())
+    // Tried again, so a fetch that lost a ref race with another worktree goes on
+    // (`fetch-retries-race`).
+    clm_git::fetch_retrying(root, &["fetch", "--prune", "--quiet", REMOTE])
+        .map_err(|e| Error::Git(e.to_string()))
 }
 
 /// Claims keyed by name, from `refs/remotes/origin/<prefix>`. A name containing `/`, such

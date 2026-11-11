@@ -805,7 +805,7 @@ fn wait(r: &Repo, interval: &str, notes: &mut Vec<String>) -> Result<Vec<String>
 
 #[test]
 fn scenario_next_wait_work_arrives() {
-    // req:orchestrator/next-wait@49b8dc88
+    // req:orchestrator/next-wait@bd4b8159
     let r = converged();
     let (_keep, other) = second_clone(&r);
     let pusher = std::thread::spawn(move || {
@@ -825,7 +825,7 @@ fn scenario_next_wait_work_arrives() {
 
 #[test]
 fn scenario_next_wait_work_already_there() {
-    // req:orchestrator/next-wait@49b8dc88
+    // req:orchestrator/next-wait@bd4b8159
     let r = repo();
     let mut notes = vec![];
     assert_eq!(wait(&r, "60", &mut notes).unwrap(), ready(&r));
@@ -834,7 +834,7 @@ fn scenario_next_wait_work_already_there() {
 
 #[test]
 fn scenario_next_wait_a_place_frees() {
-    // req:orchestrator/next-wait@49b8dc88
+    // req:orchestrator/next-wait@bd4b8159
     let r = repo();
     push_claim(&r.work, "b", 1);
     hold(&r.work, "b");
@@ -852,7 +852,7 @@ fn scenario_next_wait_a_place_frees() {
 
 #[test]
 fn scenario_next_wait_a_later_look_fails() {
-    // req:orchestrator/next-wait@49b8dc88
+    // req:orchestrator/next-wait@bd4b8159
     let r = converged();
     let (_keep, other) = second_clone(&r);
     let gone = r.origin.with_extension("gone");
@@ -860,7 +860,7 @@ fn scenario_next_wait_a_later_look_fails() {
     let flaky = std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(500));
         std::fs::rename(&origin, &gone).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(900));
+        std::thread::sleep(std::time::Duration::from_millis(4500));
         std::fs::rename(&gone, &origin).unwrap();
         write(&other, "specs/a/SPEC.md", &node("b", &["p", "q", "new"]));
         push_main(&other, "a gains a requirement");
@@ -873,24 +873,27 @@ fn scenario_next_wait_a_later_look_fails() {
     assert!(
         notes
             .iter()
-            .all(|n| n.starts_with("clm next failed: ") && n.contains("git fetch")),
+            .all(|n| n.starts_with("clm next failed: ") && n.contains("origin can't be reached")),
         "{notes:?}"
     );
 }
 
 #[test]
 fn scenario_next_wait_first_look_fails() {
-    // req:orchestrator/next-wait@49b8dc88
+    // req:orchestrator/next-wait@bd4b8159
     let r = repo();
     std::fs::rename(&r.origin, r.origin.with_extension("gone")).unwrap();
     let mut notes = vec![];
-    assert!(matches!(wait(&r, "0.005", &mut notes), Err(Error::Git(_))));
+    match wait(&r, "0.005", &mut notes) {
+        Err(Error::Git(m)) => assert!(m.contains("origin can't be reached"), "{m}"),
+        other => panic!("{other:?}"),
+    }
     assert!(notes.is_empty());
 }
 
 #[test]
 fn scenario_next_wait_bad_interval() {
-    // req:orchestrator/next-wait@49b8dc88
+    // req:orchestrator/next-wait@bd4b8159
     // No repository at all: a look would fail with a git error, so a refusal proves the
     // interval was judged before any look.
     let dir = tempfile::TempDir::new().unwrap();
