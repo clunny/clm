@@ -1575,3 +1575,71 @@ fn scenario_prompt_slot() {
         );
     }
 }
+
+/// A `git` first on PATH that fails the fetches of `origin` its `FAKE_FETCH_FAILS` counts
+/// down (`always` for every one) as a lost ref race does, and runs the real `git` otherwise.
+fn fake_git(f: &Fake) {
+    write_exec(
+        &f.bin.join("git"),
+        "#!/bin/sh\n\
+         real=$(PATH=\"$FAKE_REAL_PATH\" command -v git)\n\
+         if [ \"$1\" = fetch ]; then for a in \"$@\"; do if [ \"$a\" = origin ]; then\n\
+           echo fetch >> \"$FAKE_OUT/fetches\"\n\
+           n=$(wc -l < \"$FAKE_OUT/fetches\")\n\
+           if [ \"$FAKE_FETCH_FAILS\" = always ] || [ \"$n\" -le \"$FAKE_FETCH_FAILS\" ]; then\n\
+             echo \"error: cannot lock ref 'refs/remotes/origin/impl/a'\" >&2; exit 1\n\
+           fi\n\
+         fi; done; fi\n\
+         exec \"$real\" \"$@\"\n",
+    );
+}
+
+#[test]
+fn scenario_a_run_whose_fetch_loses_a_ref_race() {
+    // req:orchestrator.run/run-fetch-retries-race@4a85eabb
+    let (r, f) = (repo(), fake());
+    fake_git(&f);
+    let real = PathBuf::from(std::env::var("PATH").unwrap_or_default());
+    let env = [
+        ("FAKE_REAL_PATH", &*real),
+        ("FAKE_FETCH_FAILS", Path::new("1")),
+    ];
+    let (launcher, _) = launched_in(&r.work, &r.work, &f, "b", &env);
+    assert!(launcher.contains("git switch impl/b"), "{launcher}");
+    assert!(remote_tip(&r, "impl/b").is_some(), "claimed");
+    assert!(local_tip(&r, "impl/b").is_some());
+}
+
+#[test]
+fn scenario_a_run_whose_fetch_keeps_failing() {
+    // req:orchestrator.run/run-fetch-retries-race@4a85eabb
+    let (r, f) = (repo(), fake());
+    fake_git(&f);
+    let real = PathBuf::from(std::env::var("PATH").unwrap_or_default());
+    let env = [
+        ("FAKE_REAL_PATH", &*real),
+        ("FAKE_FETCH_FAILS", Path::new("always")),
+    ];
+    let stderr = refused(&r, &f, "b", &env, 2);
+    assert!(stderr.contains("cannot lock ref"), "{stderr}");
+    assert!(remote_tip(&r, "impl/b").is_none(), "no claim");
+    let common = git(&r.work, &["rev-parse", "--git-common-dir"]);
+    assert!(
+        !r.work.join(common).join("clm/builds/b").exists(),
+        "no place b"
+    );
+}
+
+#[test]
+fn scenario_a_finish_whose_fetch_loses_a_ref_race() {
+    // req:orchestrator.run/run-fetch-retries-race@4a85eabb
+    let (r, f) = (repo(), fake());
+    fake_git(&f);
+    let real = PathBuf::from(std::env::var("PATH").unwrap_or_default());
+    let env = [
+        ("FAKE_REAL_PATH", &*real),
+        ("FAKE_FETCH_FAILS", Path::new("1")),
+    ];
+    let ran = clm_run_with(&r.work, &r.work, &f, &["--finish", "b"], &env);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+}

@@ -1103,3 +1103,53 @@ fn scenario_template_migration_fix() {
         }
     }
 }
+
+#[test]
+fn scenario_prompt_unopened_pr() {
+    // req:orchestrator.run/prompt-unopened-pr@0e07e5be
+    for resumed in [false, true] {
+        let p = prompt(&Job { resumed, ..job() });
+        let para = p
+            .split("\n\n")
+            .find(|para| para.contains("clm pr open"))
+            .expect("a paragraph opens the pull request");
+        for needle in [
+            "host may cut a long body",
+            "what a reviewer needs first",
+            "When `clm pr open` fails",
+            "still land with `clm land`",
+            "not retry `clm pr open` by another route",
+            "final message names that path",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+        for host in ["GitHub", "Azure", "65536", "character limit"] {
+            assert!(!p.contains(host), "{host} in {p}");
+        }
+    }
+}
+
+#[test]
+fn scenario_prompt_doc_readers() {
+    // req:orchestrator.run/prompt-doc-readers@9d550ef3
+    let marker = concat!("clm:", "reads");
+    for resumed in [false, true] {
+        let p = prompt(&Job { resumed, ..job() });
+        let para = p
+            .split("\n\n")
+            .find(|para| para.contains("test-first"))
+            .expect("a paragraph says to build test-first");
+        for needle in [
+            marker,
+            "CLAUDE.md",
+            "ARCHITECTURE.md",
+            "CAPABILITIES.md",
+            "README.md",
+            "specs/",
+            "clm.toml",
+            "land-checks-stay-fast",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+    }
+}
