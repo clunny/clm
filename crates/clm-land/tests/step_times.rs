@@ -21,9 +21,11 @@ fn timing(f: &Fixture) -> (Option<u64>, Vec<TimedStep>) {
 fn two_steps() {
     // req:land/step-times@d247dda8
     let f = Fixture::new("");
+    // The step sleeps 2 seconds where the scenario's sleeps 1, so a land that reads its
+    // `::group::` line late on a loaded host still times it at 1 or more.
     f.write(
         "check-prints",
-        "echo ::group::a\necho ::clm-selected::x/y.rs\necho '::clm-selected::x/y.rs  '\nsleep 1\n\
+        "echo ::group::a\necho ::clm-selected::x/y.rs\necho '::clm-selected::x/y.rs  '\nsleep 2\n\
          echo ::endgroup::\necho ::clm-selected::ignored\necho ::group::b\n",
     );
     f.branch("impl/a", &[("b.txt", "b\n")]);
