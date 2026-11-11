@@ -391,6 +391,8 @@ A test that the spec graph doesn't connect to a change gives the same result wit
 - land/overlap-recheck
 - land/check-time-report
 - verify/culprit-recheck
+- orchestrator.run/prompt-doc-readers
+- plugin.init/init-skill-marks-doc-readers
 
 #### Untested
 Whether a test is deterministic, and whether every file it reads is one the graph connects it to, are things CLM can't see before the fact: a gap shows as a failure after the land, which `[verify]` finds, bisects to a land and reports with how that land re-checked, or, in a project that sets no `[verify]`, as the next build's full `clm land --check-only` failing on a `main` it didn't change (`graph-test-selection`'s safeguard), without presuming whether the graph, the code or the test was wrong. A check that runs more than its selection is never wrong, only slower, and the check-time report says where its time went.

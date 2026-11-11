@@ -27,7 +27,8 @@ A spec branch edited `CLAUDE.md`, and a project test that reads `CLAUDE.md` reje
 ## Constraints
 
 - No edge cases or workarounds are known.
-- `land-checks-stay-fast`'s text is unchanged; its `#### Untested` block still holds, since no program sees whether a session marked what its test reads.
+- `ARCHITECTURE.md`: `land-checks-stay-fast`'s `#### Enforced by` gains the two rules, as `tests-run-concurrently` and `tests-run-in-their-own-tree` list their prompt and skill rules (found by the architecture audit). Its statement and `#### Untested` block are unchanged: no program sees whether a session marked what its test reads.
+- The requirements list the paths rather than saying "doc-only", a term the glossary doesn't define (`plain-terms`, found by the architecture audit).
 - The test of each requirement reads only the prompt or the skill, never this repository's doc-only files, so it needs no `clm:reads` marker of its own.
 
 ## Open questions
