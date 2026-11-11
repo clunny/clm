@@ -378,7 +378,7 @@ fn build_setup_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn init_skill_build_setup() {
-    // req:plugin.init/init-skill-build-setup@a7cb5fa5
+    // req:plugin.init/init-skill-build-setup@d71c6aff
     let body = skill_body("init");
     assert_eq!(build_setup_gaps(&body), Vec::<String>::new());
     for needle in BUILD_SETUP {
@@ -394,6 +394,67 @@ fn init_skill_build_setup() {
     assert!(told.contains("`clm.toml`"), "{told}");
     let propose = sentence_with(&body, "whether a fresh worktree needs such a command");
     assert!(propose.contains("confirm"), "{propose}");
+    // The command goes into `clm.toml` before the bootstrap commit, never on the spec branch,
+    // which `clm.toml` in the root's `paths` would make `mixed`.
+    assert!(propose.contains("bootstrap commit"), "{propose}");
+    assert!(!propose.contains("first spec branch"), "{propose}");
+}
+
+const GITATTRIBUTES: &[&str] = &[
+    ".gitattributes",
+    "linguist-generated",
+    "git check-attr",
+    "uv.lock",
+    "check/node-size",
+];
+
+/// 1-based number of the first line of `body` naming `needle`.
+fn first_line(body: &str, needle: &str) -> usize {
+    body.lines()
+        .position(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no line names {needle}"))
+        + 1
+}
+
+#[test]
+fn init_skill_marks_lockfiles() {
+    // req:plugin.init/init-skill-marks-lockfiles@75ba7e47
+    let body = skill_body("init");
+    assert_eq!(lacks("init", &body, GITATTRIBUTES), Vec::<String>::new());
+    for needle in GITATTRIBUTES {
+        let gaps = lacks("init", &body.replace(needle, "elided"), GITATTRIBUTES);
+        assert!(!gaps.is_empty(), "{needle}");
+    }
+    // It comes before the step that runs `clm init`.
+    assert!(
+        first_line(&body, ".gitattributes") < first_line(&body, "--no-detectors"),
+        "the lockfile step must come before the step running clm init"
+    );
+}
+
+const DOC_READERS: &[&str] = &[
+    "clm:reads",
+    "land-checks-stay-fast",
+    "CLAUDE.md",
+    "ARCHITECTURE.md",
+    "specs/",
+    "clm.toml",
+];
+
+#[test]
+fn init_skill_marks_doc_readers() {
+    // req:plugin.init/init-skill-marks-doc-readers@82070e56
+    let body = skill_body("init");
+    assert_eq!(lacks("init", &body, DOC_READERS), Vec::<String>::new());
+    for needle in DOC_READERS {
+        let gaps = lacks("init", &body.replace(needle, "elided"), DOC_READERS);
+        assert!(!gaps.is_empty(), "{needle}");
+    }
+    // It comes before the bootstrap commit is made.
+    assert!(
+        first_line(&body, "clm:reads") < first_line(&body, "Make the bootstrap commit"),
+        "the doc-reader step must come before the bootstrap commit"
+    );
 }
 
 const INIT_VERIFY: &[&str] = &[
