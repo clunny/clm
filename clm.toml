@@ -24,6 +24,13 @@ all = [
     ".github/scripts/ci-check.sh",
 ]
 
+# `clm setup` installs each npm package's locked dependencies into the build's own worktree
+# (build-setup-here, tests-run-in-their-own-tree), running no install script; a directory with no
+# package.json is skipped and the first failing install stops the loop. Rust needs no setup. A
+# test fails when a tracked package.json lies outside this list.
+[build]
+setup = 'for d in plugin-panel capabilities/panel web web/site capabilities/web; do test ! -f "$d/package.json" || (cd "$d" && npm ci --ignore-scripts) || exit 1; done'
+
 # `clm health`'s `unexercised` signal reads this lcov tracefile, which
 # .github/scripts/coverage.sh writes (lcov-coverage-signal); the counts keep their defaults.
 [health]

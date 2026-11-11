@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - builds-install-web-dependencies-by-hand-because-no-build-setup
 ---
