@@ -59,7 +59,7 @@ fn the_command_compares_the_checkout_with_the_remotes_main() {
     {
         assert!(line.starts_with(start), "{line:?} in {out}");
     }
-    // Scenario `spec lines at a commit`: the same four lines after the one naming it.
+    // The same four lines after the one naming the commit, with `--at origin/main`.
     let rev = format!("{}/main", clm_git::REMOTE);
     let source = Source::At {
         rev: &rev,
