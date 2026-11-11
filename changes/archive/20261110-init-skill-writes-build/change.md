@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/init-skill-writes-build-setup-on-the-first-spec-branch-which-the
 resolves:
   - init-skill-writes-build-setup-on-the-first-spec-branch-which-the
