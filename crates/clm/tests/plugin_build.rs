@@ -501,6 +501,7 @@ fn resume_gaps(body: &str) -> Vec<String> {
             "full disk",
             "SendMessage",
             "at most once",
+            "one at a time",
             "resume-sound-builds",
         ],
         &[],
@@ -509,7 +510,7 @@ fn resume_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn build_resumes_sound_builds() {
-    // req:plugin.build/build-resumes-sound-builds@d890ad93
+    // req:plugin.build/build-resumes-sound-builds@0fb00352
     let body = skill_body("build");
     assert_eq!(resume_gaps(&body), Vec::<String>::new());
     // build without the resume
@@ -518,6 +519,9 @@ fn build_resumes_sound_builds() {
     // build that resumes only limited builds
     let gaps = resume_gaps(&body.replace("full disk", "elided"));
     assert_reports(&gaps, "build", "full disk");
+    // build that rebuilds a recurring outside stop
+    let gaps = resume_gaps(&body.replace("one at a time", "elided"));
+    assert_reports(&gaps, "build", "one at a time");
     // The judgement comes first and has criteria.
     let judge = sentence_with(&body, "judge by why it stopped");
     for needle in [
@@ -534,14 +538,35 @@ fn build_resumes_sound_builds() {
     for needle in ["outside the work", "network outage", "host failure"] {
         assert!(sound.contains(needle), "{needle}: {sound}");
     }
-    let again = sentence_with(&body, "Build again, with the retry below");
+    let limited = sentence_with(&body, "Resume a build stopped by a usage or rate limit");
     for needle in [
-        "approach",
-        "ran out of context",
-        "at most once",
+        "full disk",
+        "each time",
+        "never build it again",
+        "bounds each resume",
+    ] {
+        assert!(limited.contains(needle), "{needle}: {limited}");
+    }
+    let once = sentence_with(&body, "Resume at most once for the same reason");
+    for needle in [
+        "check or test that keeps failing",
+        "network outage",
         "second such stop",
     ] {
+        assert!(once.contains(needle), "{needle}: {once}");
+    }
+    let again = sentence_with(&body, "Build again, with the retry below");
+    for needle in ["approach", "ran out of context"] {
         assert!(again.contains(needle), "{needle}: {again}");
+    }
+    let recurs = sentence_with(&body, "When the same outside cause stops builds again");
+    for needle in [
+        "it recurred",
+        "land checks",
+        "one at a time",
+        "launch no new build",
+    ] {
+        assert!(recurs.contains(needle), "{needle}: {recurs}");
     }
     let blocked = sentence_with(&body, "Neither resume nor build again");
     assert!(
