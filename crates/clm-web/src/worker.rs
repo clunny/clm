@@ -1,6 +1,8 @@
 //! The `workers-rs` adapter: the fetch event, KV, the Cache API, `Fetch` and
 //! WebCrypto behind the core's traits. It decides nothing.
 
+use std::collections::BTreeMap;
+
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use worker::js_sys::{self, Array, Function, Object, Reflect, Uint8Array};
@@ -16,7 +18,6 @@ use clm_web_platform::http::{self, percent_encode};
 use clm_web_platform::platform::{
     Assets, Auth, Cache, Clock, GhRequest, GhResponse, GitHub, Kv, Live, Log, Secrets,
 };
-use std::collections::BTreeMap;
 
 /// The KV namespace binding in `wrangler.toml`.
 const KV_BINDING: &str = "CLM";
