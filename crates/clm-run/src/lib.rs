@@ -277,6 +277,20 @@ pub fn prompt(job: &Job) -> String {
     } else {
         ""
     };
+    // The marker's name is built so it never stands whole in this file, or `clm affected`
+    // would take the file for a reader (`prompt-doc-readers`).
+    let reads = concat!("clm:", "reads");
+    let doc_readers = format!(
+        "A test you write or change that reads a file of the repository's own tree (not a \
+         fixture's) at `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `README.md` or a file \
+         under `specs/`, `changes/`, `backlog/` or `docs/`, whether it opens the file or runs a \
+         command that reads it, or that reads the repository's own `clm.toml`, holds a `{reads}\
+         \u{20}<glob>` marker, usually a comment, whose glob matches each such path it reads: a \
+         land whose code was already checked runs only `clm check` and the tests whose markers \
+         match a file the branch changes (`land-checks-stay-fast`), so an unmarked reader lets a \
+         spec branch that breaks it land and leaves `main` failing every later code land's \
+         check. "
+    );
     // Only a repository with a `[land] check` has a check to record (`prompt-recorded-check`).
     let recorded = if job.check.is_some() {
         "A passing `clm land --check-only` on a committed `HEAD` that contains `origin/main`, \
@@ -355,7 +369,12 @@ pub fn prompt(job: &Job) -> String {
          `clm branch push`. Write the whole pull request body with `Write` to \
          `{PR_BODY}` (outside git, like the logs) and open the branch's pull request with \
          `clm pr open {branch} --title <title> --body-file {PR_BODY}`. To correct the body, \
-         rewrite that file and run `clm pr body {PR_BODY}`. The body has `## Plan`, \
+         rewrite that file and run `clm pr body {PR_BODY}`. A host may cut a long body, so the \
+         body puts what a reviewer needs first and stays short. When `clm pr open` fails, you \
+         still land with `clm land`, since nothing waits on a pull request (`land-locally`), \
+         and you do not retry `clm pr open` by another route. Whenever `clm pr open` or \
+         `clm pr body` says the body is kept at a path, your final message names that path, \
+         since your worktree, and `{PR_BODY}` with it, is removed once it lands. The body has `## Plan`, \
          `## Review`, `## Sync`, `## Workarounds`, `## Fixes in other components`, `## Left pending` and \
          `## CLM defects`. \
          Summarise your step plan under `## Plan`, under `## Review` list every finding and \
@@ -414,7 +433,7 @@ pub fn prompt(job: &Job) -> String {
          its requirement at the current version, `req:<id>@<version>`, which is what makes it \
          current; cite the versions listed here. The component's rules serve the capabilities \
          under `# Capabilities served` in your context bundle, when it has one; build them to \
-         that purpose.{capability_tests} An architectural constraint is proven by the rules its \
+         that purpose.{capability_tests} {doc_readers}An architectural constraint is proven by the rules its \
          `#### Enforced by` names and is never cited by a test (`human-layer-proof`); one \
          that says only `#### Untested` needs no proof. \
          For an `obsolete` requirement, remove the \
@@ -1343,8 +1362,10 @@ fn exclude_workdir(root: &Path) -> Result<(), Error> {
 /// Fetches `origin`, pruning, so a claim whose branch was deleted is gone, as `clm claim`
 /// sees it.
 fn fetch(root: &Path) -> Result<(), Error> {
-    git(root, &["fetch", "--prune", "--quiet", REMOTE])?;
-    Ok(())
+    // Tried again after a failure, so a fetch that lost a race with another build of the
+    // clone over a remote-tracking ref goes on (`run-fetch-retries-race`).
+    clm_git::fetch_retrying(root, &["fetch", "--prune", "--quiet", REMOTE])
+        .map_err(|e| Error::Git(e.to_string()))
 }
 
 /// The graph at `dir`, or the violations that keep it from loading.
