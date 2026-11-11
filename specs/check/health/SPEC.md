@@ -53,10 +53,10 @@ Crate `clm-health`, dispatched from `crates/clm` as `clm health` and `clm workar
 - `unanswered`: for each `question` or `human-task` item, the commit that added its file, `git log --diff-filter=A --format=%ct -- backlog/<slug>.md` through `clm-git`, oldest when several; `backlog/<slug>.md: health/unanswered: <kind> open <d> days`. An untracked item has no commit and is skipped. `now` is passed in, so tests are deterministic.
 - `uncited-decision`: the decisions `clm-model` loads, `status: accepted` only (a superseded one is history), each cited as `uncited-decisions` says. A missing `CAPABILITIES.md`, `CLAUDE.md` or `docs/guide/` is simply nothing to search.
 - `unserved`: each entry of the human layers, architecture first, each layer's in file order, that no rule's effective serves (`Graph::effective_serves`, a `#### Serves` block or its component's `serves`) names. It is advisory: an entry may be proven end to end by its own tests alone.
-- `history-words`: each line of a component's Contract or Design, outside fenced code blocks, that holds a date `20\d\d-\d\d-\d\d` or, case-insensitively and at word boundaries, one of the history phrases below: `specs/<component path>/SPEC.md:<line>: health/history-words: <the date or phrase>`, once per line, naming the first match. A scenario may legitimately give a date, which is why requirements and scenarios are never read. The phrase list is a constant of the crate, changed by a code PR; it sits in a fenced block so this component's own text isn't flagged for it. A phrase goes on the list only when it narrates a change wherever it appears: "no longer" stays off it, since it as often states a present condition (a local branch that no longer contains its remote tip, a tree the session no longer has), and a signal that advises costs reader time and invites wrong cuts each time it misfires (`health-advises`).
+- `history-words`: each line of a component's Contract or Design, outside fenced code blocks, that holds a date `20\d\d-\d\d-\d\d` or, case-insensitively and at word boundaries, one of the history phrases below: `specs/<component path>/SPEC.md:<line>: health/history-words: <the date or phrase>`, once per line, naming the first match. A scenario may legitimately give a date, which is why requirements and scenarios are never read. The phrase list is a constant of the crate, changed by a code PR; it sits in a fenced block so this component's own text isn't flagged for it. A phrase goes on the list only when it narrates a change wherever it appears: "no longer" stays off it, since it as often states a present condition (a local branch that no longer contains its remote tip, a tree the session no longer has), and so does "used to", since it is as often a passive that describes the present system (a ref that is used to hold the claim, a file that may be used to override a setting); the matcher reads no grammar, so a phrase that is history only in some of its forms is dropped rather than parsed (`yagni`), and a signal that advises costs reader time and invites wrong cuts each time it misfires (`health-advises`).
 
 ```
-used to, as before, today's, amended, predates, formerly, previously, was removed, is gone
+as before, today's, amended, predates, formerly, previously, was removed, is gone
 ```
 
 - `design-heavy`: a component with no requirements and no Contract is skipped.
@@ -169,6 +169,11 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 
 #### Scenario: a present condition
 - GIVEN component `a` whose Design says `A local branch that no longer contains its remote tip is kept`, and no other line of its Contract or Design holds a date or a history phrase
+- WHEN `clm health` runs
+- THEN it prints no `history-words` line for `a`
+
+#### Scenario: a passive used to
+- GIVEN component `a` whose Design says `The claim ref is used to hold the session's place`, and no other line of its Contract or Design holds a date or a history phrase
 - WHEN `clm health` runs
 - THEN it prints no `history-words` line for `a`
 
