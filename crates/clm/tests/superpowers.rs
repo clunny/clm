@@ -284,11 +284,16 @@ fn a_clone_the_environment_names_is_left_alone() {
     git(&["init", "-q", "--separate-git-dir", g.to_str().unwrap()]);
     fs::write(w.join("f"), "x").unwrap();
     git(&["add", "f"]);
+    // `maintenance.auto=false`: newer git detaches auto-maintenance after a
+    // commit, and its `objects/maintenance.lock` comes and goes under the
+    // snapshots.
     git(&[
         "-c",
         "user.name=t",
         "-c",
         "user.email=t@t",
+        "-c",
+        "maintenance.auto=false",
         "commit",
         "-q",
         "-m",
