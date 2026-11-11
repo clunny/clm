@@ -1394,7 +1394,7 @@ fn at(ago: Option<u64>, branch: Option<&str>) -> Head {
 
 #[test]
 fn the_commit_line_heads_every_chart_at_a_commit() {
-    // req:view.repo/view-at-rev@55922294
+    // req:view.repo/view-at-rev@6e9e02ab
     let (g, markers) = nested();
     let view = View::Flight(flight_view(&g, &markers, &[], NOW, EXPIRY));
     let first = |head: Head| {
