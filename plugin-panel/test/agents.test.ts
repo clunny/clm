@@ -328,6 +328,7 @@ describe('drawing', () => {
     expect(firsts.map(l => indent(l) - base)).toEqual([0, 2, 2, 4, 6, 8, 8])
   })
 
+  // req:plugin.panel/build-row-cost@5e68018b
   test('the totals name the most used model first', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look one', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'x2', type: 'Explore', description: 'look two', model: 'claude-haiku-4-5', prompt: 'Look.', at: 11_000 })
@@ -350,6 +351,7 @@ describe('drawing', () => {
     expect(glyphs(flightLines(CHART, list, 0))).toEqual([])
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('a failed build shows ✗ in rose and a Dismiss button, until the button is pressed', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
     const lines = flightLines(CHART, list, 0)
@@ -602,6 +604,7 @@ describe('waiting', () => {
     expect(all).toContain('agents')
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('an answer while the engine lists the agent waiting leaves a waiting row whose time grows', () => {
     const list = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     expect(list[0]).toMatchObject({ status: 'waiting' })
@@ -620,6 +623,7 @@ describe('waiting', () => {
     expect(onComplete(build(), { agentId: 'b1', reason: 'max_turns' }, 9_000, 'waiting')[0]?.status).toBe('failed')
   })
 
+  // req:plugin.panel/build-row-lifecycle@2de7d406
   test('a turn.start of a listed agent runs it again, drawn, keeping its tokens, dismissed or not', () => {
     let list = applyStep(build(), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     list = onComplete(list, { agentId: 'b1', reason: 'answer' }, 9_000, 'completed')

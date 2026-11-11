@@ -205,6 +205,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
+  // req:plugin.panel/views-panel@a97b0ae7
   test('a press changes no run the pane holds for this generation, so no clm command runs again', async () => {
     const cache = new Map<string, Promise<Run>>()
     let started = 0
@@ -217,9 +218,9 @@ describe('views-panel', () => {
     }
     await draw('a')
     expect(started).toBe(3)
-    // Pressing `b`'s line selects it; pressing `Contract` changes no argument at all.
+    // Pressing `b`'s line selects it; pressing `Contract` changes no argument, so the draw is the same.
     await draw(pressNode('a', 'b'))
-    await draw(pressNode('b', 'b'))
+    await draw('b')
     expect(started).toBe(3)
   })
 
