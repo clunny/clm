@@ -91,9 +91,9 @@ fn a_fetch_that_loses_a_ref_race_goes_on() {
     let (_dir, clone) = clone_with("once");
     let start = Instant::now();
     fetch_retrying(&clone, &["fetch", REMOTE]).unwrap();
+    // The waits' lengths and order are the unit test's: a bound above would fail on a loaded
+    // host.
     assert!(start.elapsed() >= Duration::from_secs(1));
-    // The first wait is 1 second, not the 2 before the second retry.
-    assert!(start.elapsed() < Duration::from_secs(2));
     assert_eq!(calls(&clone, "fetch"), 2);
 }
 
