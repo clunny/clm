@@ -81,7 +81,7 @@ const blockersJson = (roots: object[]) => ok(JSON.stringify({ view: 'blockers', 
 const BLOCKERS = blockersJson([root('gate'), root('host')])
 
 describe('node-inspector', () => {
-  // req:plugin.panel/component-inspector@afd97bda
+  // req:plugin.panel/component-inspector@d5852e70
   test("each node line of the Spec chart is pressable, by position, with the same text and colours", () => {
     const { lines, inspector } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, selected: null, unfolded: [] })
     expect(inspector).toBeUndefined()
@@ -90,6 +90,7 @@ describe('node-inspector', () => {
     expect(lines[2]!.spans).toEqual(SPEC_CHART[2])
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('select a node: the inspector holds its spec and its work in flight, above the chart', () => {
     const { lines, inspector } = chartLines({
       tab: 'spec',
@@ -155,6 +156,7 @@ describe('node-inspector', () => {
     expect(inspector![7]!.find(s => s.text === 'obsolete')?.color).toBe('red')
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('no waiting field: without `waiting_on`, or with it, nothing says waiting', () => {
     // The flight model as `view` gives it after `needs-alone-order`, and as older builds did.
     for (const extra of [{}, { waiting_on: ['b'] }]) {
@@ -171,6 +173,7 @@ describe('node-inspector', () => {
     expect(inspector![3]![0]).toEqual({ text: 'waiting', color: undefined })
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('a cut ID matches by position', () => {
     const chart = ansiLines('commit abc\nr  active\n├─ al…  active\n└─ b  active\n')
     const { lines, inspector } = chartLines({
@@ -186,11 +189,13 @@ describe('node-inspector', () => {
     expect(text(inspector![0]!)).toBe('alongname  Long')
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('converged: a node the flight model does not list', () => {
     const { inspector } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other: FLIGHT, selected: 'b', unfolded: [] })
     expect(inspector!.slice(3)).toEqual([[{ text: 'converged', color: 'green' }]])
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('pressing the selected line again, or Close, deselects', () => {
     expect(pressNode(null, 'a')).toBe('a')
     expect(pressNode('b', 'a')).toBe('a')
@@ -199,6 +204,7 @@ describe('node-inspector', () => {
     expect(none.inspector).toBeUndefined()
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('the selection holds on the Flight tab, whose component lines between components and changes are pressable', () => {
     expect(otherTab('spec')).toBe('flight')
     expect(otherTab('flight')).toBe('spec')
@@ -223,6 +229,7 @@ describe('node-inspector', () => {
     expect(keys(lines)).toEqual([])
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('a selected node the spec model no longer lists draws no inspector, and draws one when it comes back', () => {
     const gone = chartLines({
       tab: 'spec',
@@ -238,6 +245,7 @@ describe('node-inspector', () => {
     expect(text(back.inspector![0]!)).toBe('a  Alpha')
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('lines and model disagree: the chart as text, nothing pressable, no inspector', () => {
     const { lines, inspector } = chartLines({
       tab: 'spec',
@@ -307,6 +315,7 @@ describe('node-inspector', () => {
     expect(paneChart({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other: FLIGHT, selected: 'a', unfolded: [] }).inspector).toBeDefined()
   })
 
+  // req:plugin.panel/views-panel@a97b0ae7
   test('a press reruns nothing the pane already holds this generation', async () => {
     const cache = new Map<string, Promise<Run>>()
     const started: string[] = []
@@ -381,7 +390,7 @@ describe('inspector-detail', () => {
       ...extra,
     })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('changes and backlog: one line each after the work in flight, the Contract button secondary, no contract text', () => {
     const { inspector, detail } = draw('a', false)
     expect(inspectorText(inspector)).toBe(
@@ -400,7 +409,7 @@ describe('inspector-detail', () => {
     expect(JSON.stringify(detail)).not.toContain('promises')
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('a complete change says so in green', () => {
     const own = specJson([
       node('r'),
@@ -412,14 +421,14 @@ describe('inspector-detail', () => {
     expect(detail!.lines[1]!.at(-1)).toEqual({ text: 'complete', color: 'green' })
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('nothing touches it: changes none and backlog none', () => {
     const { detail } = draw('b', false)
     expect(detail!.lines.map(text)).toEqual(['changes none', 'backlog none'])
     expect(detail!.lines[0]).toEqual([{ text: 'changes', color: 'blue' }, { text: ' none' }])
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('contract shown: the button primary and the paragraph on lines no wider than 80, broken at spaces', () => {
     const { detail } = draw('a', true)
     expect(detail!.button).toBe('primary')
@@ -429,7 +438,7 @@ describe('inspector-detail', () => {
     expect(lines.join(' ')).toBe(CONTRACT)
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('contract hidden again, and the next node draws its button secondary too', () => {
     expect(draw('a', false).detail!.button).toBe('secondary')
     const b = draw('b', false).detail!
@@ -439,7 +448,7 @@ describe('inspector-detail', () => {
     expect(draw('b', true).detail!.contract).toEqual(['B does b.'])
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('the spec model failing on the Flight tab: its stderr, and no changes, backlog or Contract button', () => {
     const { inspector, detail } = chartLines({
       tab: 'flight',
@@ -455,20 +464,20 @@ describe('inspector-detail', () => {
     expect(detail).toBeUndefined()
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('a model without the detail, from an older clm, draws the inspector without it', () => {
     const { inspector, detail } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other: FLIGHT, selected: 'a', unfolded: [] })
     expect(inspector).toBeDefined()
     expect(detail).toBeUndefined()
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('no inspector, no detail: nothing selected, or a node the model does not list', () => {
     expect(draw('a', true, { selected: null }).detail).toBeUndefined()
     expect(draw('gone', true).detail).toBeUndefined()
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/views-panel@a97b0ae7
   test('pressing Contract reruns nothing the pane already holds this generation', async () => {
     const cache = new Map<string, Promise<Run>>()
     const started: string[] = []
@@ -488,7 +497,7 @@ describe('inspector-detail', () => {
     expect(started).toHaveLength(3)
   })
 
-  // req:plugin.panel/inspector-detail@ff6adf21
+  // req:plugin.panel/inspector-detail@7b641ee8
   test('wrapText: at spaces, a long word cut across lines, blank lines kept, 100 for an unmeasured pane', () => {
     expect(wrapText('aa bb cc', 5)).toEqual(['aa bb', 'cc'])
     expect(wrapText('abcdefghij x', 4)).toEqual(['abcd', 'efgh', 'ij x'])
