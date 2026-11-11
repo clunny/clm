@@ -1,6 +1,10 @@
 //! The repository's lockfiles are marked `linguist-generated` in `.gitattributes`, so
 //! `clm size` leaves them out of every node's code count (clm/lockfiles-generated).
 
+// clm:reads **/Cargo.lock
+// clm:reads **/package-lock.json
+// clm:reads **/.gitattributes
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,20 +37,32 @@ fn write(root: &Path, rel: &str, content: &[u8]) {
 
 #[test]
 fn lockfiles_are_marked_generated() {
-    // req:clm/lockfiles-generated@6d26f876
+    // req:clm/lockfiles-generated@59b8d4d8
+    let repo = repo();
+    let listed = git(&repo, &["ls-files"]);
+    let files: Vec<&str> = listed
+        .lines()
+        .filter(|f| {
+            matches!(
+                f.rsplit('/').next(),
+                Some("Cargo.lock" | "package-lock.json")
+            )
+        })
+        .collect();
+    assert!(!files.is_empty(), "no lockfile tracked");
     let mut args = vec!["check-attr", "linguist-generated"];
-    args.extend(LOCKFILES);
-    let out = git(&repo(), &args);
+    args.extend(&files);
+    let out = git(&repo, &args);
     let lines: Vec<&str> = out.lines().collect();
-    assert_eq!(lines.len(), LOCKFILES.len(), "{out}");
-    for (line, file) in lines.iter().zip(LOCKFILES) {
+    assert_eq!(lines.len(), files.len(), "{out}");
+    for (line, file) in lines.iter().zip(&files) {
         assert_eq!(*line, format!("{file}: linguist-generated: set"));
     }
 }
 
 #[test]
 fn lockfiles_dont_count() {
-    // req:clm/lockfiles-generated@6d26f876
+    // req:clm/lockfiles-generated@59b8d4d8
     // A repository holding this one's `.gitattributes` and lockfiles, and nodes `clm`, `web`
     // and `plugin.panel` with the paths that own them, so each lockfile is the only file
     // under its node. The graph is a fixture: a doc-only PR skips the tests, so none of them
