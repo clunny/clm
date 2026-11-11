@@ -90,6 +90,7 @@ describe('node-inspector', () => {
     expect(lines[2]!.spans).toEqual(SPEC_CHART[2])
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('select a node: the inspector holds its spec and its work in flight, above the chart', () => {
     const { lines, inspector } = chartLines({
       tab: 'spec',
@@ -155,6 +156,7 @@ describe('node-inspector', () => {
     expect(inspector![7]!.find(s => s.text === 'obsolete')?.color).toBe('red')
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('no waiting field: without `waiting_on`, or with it, nothing says waiting', () => {
     // The flight model as `view` gives it after `needs-alone-order`, and as older builds did.
     for (const extra of [{}, { waiting_on: ['b'] }]) {
@@ -171,6 +173,7 @@ describe('node-inspector', () => {
     expect(inspector![3]![0]).toEqual({ text: 'waiting', color: undefined })
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('a cut ID matches by position', () => {
     const chart = ansiLines('commit abc\nr  active\n├─ al…  active\n└─ b  active\n')
     const { lines, inspector } = chartLines({
@@ -186,11 +189,13 @@ describe('node-inspector', () => {
     expect(text(inspector![0]!)).toBe('alongname  Long')
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('converged: a node the flight model does not list', () => {
     const { inspector } = chartLines({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other: FLIGHT, selected: 'b', unfolded: [] })
     expect(inspector!.slice(3)).toEqual([[{ text: 'converged', color: 'green' }]])
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('pressing the selected line again, or Close, deselects', () => {
     expect(pressNode(null, 'a')).toBe('a')
     expect(pressNode('b', 'a')).toBe('a')
@@ -199,6 +204,7 @@ describe('node-inspector', () => {
     expect(none.inspector).toBeUndefined()
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('the selection holds on the Flight tab, whose component lines between components and changes are pressable', () => {
     expect(otherTab('spec')).toBe('flight')
     expect(otherTab('flight')).toBe('spec')
@@ -223,6 +229,7 @@ describe('node-inspector', () => {
     expect(keys(lines)).toEqual([])
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('a selected node the spec model no longer lists draws no inspector, and draws one when it comes back', () => {
     const gone = chartLines({
       tab: 'spec',
@@ -238,6 +245,7 @@ describe('node-inspector', () => {
     expect(text(back.inspector![0]!)).toBe('a  Alpha')
   })
 
+  // req:plugin.panel/component-inspector@d5852e70
   test('lines and model disagree: the chart as text, nothing pressable, no inspector', () => {
     const { lines, inspector } = chartLines({
       tab: 'spec',
