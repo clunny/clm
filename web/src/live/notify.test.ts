@@ -239,7 +239,7 @@ describe('Notify me', () => {
     const n = new Notify(t.env);
     const first = n.switchFor('o', 'a');
     await vi.waitFor(() => expect(box(first)?.checked).toBe(true));
-    let release: () => void = () => undefined;
+    let release: (() => void) | null = null;
     t.env.subscribed = () =>
       new Promise<boolean>((_resolve, reject) => {
         release = () => reject(new Error('down'));
@@ -247,8 +247,8 @@ describe('Notify me', () => {
     const again = n.switchFor('o', 'a');
     expect(again.hidden).toBe(false);
     expect(box(again).checked).toBe(true);
-    await vi.waitFor(() => expect(release).not.toBe(undefined));
-    release();
+    await vi.waitFor(() => expect(release).not.toBeNull());
+    release!();
     await new Promise((r) => setTimeout(r, 10));
     expect(again.hidden).toBe(false);
     expect(box(again).checked).toBe(true);
