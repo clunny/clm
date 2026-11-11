@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [check-subagent-honours-allow-rule]
 ---
 
