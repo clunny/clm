@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves:
   - clm-wrap-up-reports-an-outside-glob-unmatched-when-it-names-only
 ---
