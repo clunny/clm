@@ -551,9 +551,14 @@ fn build_resumes_sound_builds() {
     for needle in [
         "check or test that keeps failing",
         "network outage",
+        "tool or host failure",
+        "already passed",
         "second such stop",
     ] {
         assert!(once.contains(needle), "{needle}: {once}");
+    }
+    for needle in ["usage", "full disk"] {
+        assert!(!once.contains(needle), "{needle}: {once}");
     }
     let again = sentence_with(&body, "Build again, with the retry below");
     for needle in ["approach", "ran out of context"] {
@@ -564,7 +569,7 @@ fn build_resumes_sound_builds() {
         "it recurred",
         "land checks",
         "one at a time",
-        "launch no new build",
+        "launch no new build until they have returned",
     ] {
         assert!(recurs.contains(needle), "{needle}: {recurs}");
     }
