@@ -7,7 +7,7 @@ resolves:
 
 ## Intent
 
-`clm init` tells the human when git ignores `.claude/settings.json`, the file it seeds with the allow rules unattended sessions need, and names the fix. A new requirement, `init/init-names-ignored-settings`, has every run of `clm init`, first or rerun, ask `git check-ignore -q .claude/settings.json` after its `.gitignore` edits and, when git ignores the file, print a next step right before the push step saying so and naming the fix (`.claude/*` with `!.claude/settings.json`, or `git add -f`). `init`'s Design gains an *Ignored settings* paragraph saying how and why.
+`clm init` tells the human when git ignores `.claude/settings.json`, the file it seeds with the allow rules unattended sessions need, and names the fix. A new requirement, `init/init-names-ignored-settings`, has every run of `clm init`, first or rerun, ask `git check-ignore -q .claude/settings.json` after its `.gitignore` edits and, when git ignores the file, print a next step before the push step, ahead of any missing-rules step, saying so and naming the fix (`.claude/*` with `!.claude/settings.json`, or `git add -f`). `init`'s Design gains an *Ignored settings* paragraph saying how and why.
 
 ## Problem
 
@@ -24,9 +24,15 @@ resolves:
 
 - `init`'s Design: a new *Ignored settings* paragraph after *Next steps.* under **Allow rules for unattended sessions**.
 - `init/init-names-ignored-settings`, added, with five scenarios: the directory ignored on a first run, not ignored, re-included by a negation, tracked though ignored, and ignored on a rerun.
-- Code (built by `init`): one `check-ignore` probe of `.claude/settings.json` without `--no-index` in `crates/clm-init/src/init.rs`, after the `.gitignore` edits, reusing the existing probe's exit-code handling, and one next step before the push step; tests in the crate's existing `clm init` test harness, which already isolates git's global and system configuration.
+- Code (built by `init`): one `check-ignore` probe of `.claude/settings.json` without `--no-index` in `crates/clm-init/src/init.rs`, after the `.gitignore` edits, with the existing `ignored` probe's exit-code handling (that helper always passes `--no-index`, so it takes a flag or a sibling), and one next step ahead of the missing-rules step and the push step; tests in the crate's existing `clm init` test harness, which already isolates git's global and system configuration.
 
 ## Constraints
 
 - No edge cases or workarounds are known. A file only this clone's excludes ignore is reported, which is right, since this clone's commits would leave it out.
-- `init-root-ownership` and `init-seeds-permissions` stay as written: the root still owns the file, and the rules are still seeded.
+- `init-root-ownership` and `init-seeds-permissions` stay as written: the root still owns the file, the rules are still seeded, and the missing-rules step stays the last before the push step, the new step going ahead of it.
+- No requirement this one relies on is pending, and no capability test sees a difference: none sets up a repository that ignores `.claude/` (builder check). The plugin's `/clm:init` skill shows the next steps verbatim, so it needs nothing.
+- The "any other git failure" clause has no scenario; the builder proves it with a unit test of the probe if it can provoke one, as the `.gitignore` probes' symbolic-link case does.
+
+## Open questions
+
+- None. The architecture audit found no broken constraint, gap or contradicted decision; its one finding, that the new step's place clashed with `init-seeds-permissions`' "last step before the push step", is fixed by putting the new step ahead of the missing-rules step.
