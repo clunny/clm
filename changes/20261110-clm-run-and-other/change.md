@@ -7,7 +7,7 @@ resolves:
 
 ## Intent
 
-Let every fetch of `origin` that CLM runs survive a lost ref race with another build of the same clone, as `clm land`, `clm reconnect` and `clm approve` already do. `clm run`, `clm run --finish`, `clm wrap-up`, `clm next`, `clm claim`, `clm proposals`, `clm draft`, `clm draft --finish` and `clm draft --fold` fetch through `clm-git`'s `fetch_retrying` (`vcs/fetch-retries`), and `clm-git`'s plain `fetch(root)`, which `clm sync`, `clm verify`, the ledger's compaction and `clm intake` use, tries again the same way.
+Let every fetch of `origin` that CLM runs survive a lost ref race with another build of the same clone, as `clm land`, `clm reconnect` and `clm approve` already do. `clm run`, `clm run --finish`, `clm wrap-up`, `clm next`, `clm claim`, `clm proposals`, `clm draft`, `clm draft --finish` and `clm draft --fold` fetch through `clm-git`'s `fetch_retrying` (`vcs/fetch-retries`), and `clm-git`'s plain `fetch(root)`, which `clm rebase`, `clm verify`, the ledger's compaction and `clm intake` use, tries again the same way.
 
 ## Problem
 
@@ -15,8 +15,8 @@ During `/clm:build` with several builds running, `clm run <component>` exited 2 
 
 ## Approaches
 
-1. **Each component's fetches go through `fetch_retrying`, and `clm_git::fetch` retries itself.** Chosen. It reuses the one retry loop `vcs` already offers (`reuse-first`), as `land/fetch-retry-in-layer` and `land.approval/approve-retries-fetch` did, keeps each command's fetch arguments and exit codes, and covers the plain-`fetch` callers (`clm sync`, `clm verify`, the ledger's compaction, `clm intake`) with one `vcs` rule and no code change in their components.
-2. **Only the four components the item names.** Rejected: `clm sync`, `clm verify` and `clm intake` fetch `origin` in the same clone while builds run, and the item expects every fetch of `origin` to retry; one `vcs` rule closes them for the price of a few lines.
+1. **Each component's fetches go through `fetch_retrying`, and `clm_git::fetch` retries itself.** Chosen. It reuses the one retry loop `vcs` already offers (`reuse-first`), as `land/fetch-retry-in-layer` and `land.approval/approve-retries-fetch` did, keeps each command's fetch arguments and exit codes, and covers the plain-`fetch` callers (`clm rebase`, `clm verify`, the ledger's compaction, `clm intake`) with one `vcs` rule and no code change in their components.
+2. **Only the four components the item names.** Rejected: `clm rebase`, `clm verify` and `clm intake` fetch `origin` in the same clone while builds run, and the item expects every fetch of `origin` to retry; one `vcs` rule closes them for the price of a few lines.
 3. **One `vcs` rule with a scan failing any crate that runs `git fetch` outside `fetch_retrying`.** Rejected: the scan's test lives in `vcs` and would fail until four other components' code moved, which a build of `vcs` alone can't do (`node-reconciliation`).
 4. **Make `fetch_retrying`'s `Offline` carry the last error so `fetch(root)` can return it.** Rejected: `land` and `land.approval` match on `FetchError`, so the change would be a contract change for nothing; `fetch(root)` returns the last run's error without the `ls-remote` probe instead.
 
@@ -30,7 +30,7 @@ During `/clm:build` with several builds running, `clm run <component>` exited 2 
 ## Constraints
 
 - Every command keeps its fetch arguments and its exit code on a failed fetch; only the message of an offline failure becomes `origin can't be reached` where git's message stood, as `clm land` already says.
-- An offline fetch now takes 3 seconds longer before failing (two retries after 1 and 2 seconds). `clm next --wait`'s retries while offline, the ledger's compaction (which ignores a failed fetch) and `clm sync` pay that delay; none of them is waited on interactively at a rate where 3 seconds matters.
+- An offline fetch now takes 3 seconds longer before failing (two retries after 1 and 2 seconds). `clm next --wait`'s retries while offline, the ledger's compaction (which ignores a failed fetch) and `clm rebase` pay that delay; none of them is waited on interactively at a rate where 3 seconds matters.
 
 ## Edge cases and workarounds
 
@@ -44,4 +44,4 @@ None bear on this item.
 
 ## Open questions
 
-- **Time in land checks** (`land-checks-stay-fast`, raised by the architecture audit): each "keeps failing" scenario sleeps through the retries' 3 seconds, and each "loses a ref race" one through 1 second, about 16 seconds of sleeping across five crates' tests, and tests elsewhere that fetch an unreachable `origin` through `fetch` (such as `clm sync`'s) grow 3 seconds each. Kept: `vcs/fetch-retries` and `land.approval/approve-retries-fetch` already pay the same waits, the crates' tests run in parallel, and the "keeps failing" scenarios are what prove each command's failure stays a git failure with the fetch's message. Moving them to `[verify]` would be the remedy if land checks slow noticeably.
+- **Time in land checks** (`land-checks-stay-fast`, raised by the architecture audit): each "keeps failing" scenario sleeps through the retries' 3 seconds, and each "loses a ref race" one through 1 second, about 16 seconds of sleeping across five crates' tests, and tests elsewhere that fetch an unreachable `origin` through `fetch` (such as `clm rebase`'s) grow 3 seconds each. Kept: `vcs/fetch-retries` and `land.approval/approve-retries-fetch` already pay the same waits, the crates' tests run in parallel, and the "keeps failing" scenarios are what prove each command's failure stays a git failure with the fetch's message. Moving them to `[verify]` would be the remedy if land checks slow noticeably.

@@ -11,7 +11,7 @@ It also owns the plumbing that the crates which shell out would otherwise each c
 ## ADDED Requirements
 
 ### Requirement: fetch-tries-again
-`fetch(root)` SHALL run `git fetch origin` in `root` and, when it fails, run it again at most twice more, with the waits `fetch_retrying` makes (`fetch-retries`). It SHALL return success at the first run that succeeds and, when the last run fails, that run's error, running no `git ls-remote`, so `clm sync`, `clm verify`, the ledger's compaction and `clm intake`, which fetch through it, go on after a fetch that lost a race with another process of the same clone over a remote-tracking ref. Its retries SHALL be `fetch_retrying`'s loop, not a second copy of it.
+`fetch(root)` SHALL run `git fetch origin` in `root` and, when it fails, run it again at most twice more, with the waits `fetch_retrying` makes (`fetch-retries`). It SHALL return success at the first run that succeeds and, when the last run fails, that run's error, running no `git ls-remote`, so `clm rebase`, `clm verify`, the ledger's compaction and `clm intake`, which fetch through it, go on after a fetch that lost a race with another process of the same clone over a remote-tracking ref. Its retries SHALL be `fetch_retrying`'s loop, not a second copy of it.
 
 #### Scenario: a plain fetch that loses a ref race
 - GIVEN a clone whose `origin` is a bare repository with a branch `b` the clone hasn't fetched, and an executable `git` first on `PATH` that, for the first `fetch` naming `origin`, prints `error: cannot lock ref 'refs/remotes/origin/main'` on stderr and exits 1, and runs the real `git` for every other call
