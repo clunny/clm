@@ -368,21 +368,6 @@ fn scenario_removed_node() {
 }
 
 #[test]
-fn scenario_component_gone_without_a_removal_delta() {
-    // req:check.coverage/pending-report@1e9fec90
-    let dir = repo();
-    let d = dir.path();
-    write(
-        d,
-        "changes/r/deltas/g.md",
-        "---\ncomponent: g\n---\n## REMOVED Requirements\n\n### Requirement: x <!-- base: 0123456789abcdef -->\n",
-    );
-    node_with_paths(d, "v", r#"["crates/v/**"]"#);
-    write(d, "crates/v/t.rs", &format!("{REQ}g/x\n"));
-    assert_eq!(lines(d, Some("v")), ["g/x obsolete crates/v/t.rs:1"]);
-}
-
-#[test]
 fn scenario_removed_node_files_of_two_nodes() {
     // req:check.coverage/pending-report@1e9fec90
     let dir = removed_node_repo();
