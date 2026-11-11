@@ -15,7 +15,7 @@ use clm_orchestrator::{
     PlaceKind, Placed, REMOTE, claim, free_place, places, rename_place, take_place,
 };
 
-use crate::{Error, GATE, PR_BODY, main_graph};
+use crate::{Error, GATE, PR_BODY, fetch_origin, main_graph};
 
 const WORKDIR: &str = ".clm";
 /// Where `clm draft` writes its prompts, one file per change ID.
@@ -84,7 +84,7 @@ pub fn draft(
             .to_string(),
         None => String::new(),
     };
-    git(root, &["fetch", "--prune", "--quiet", REMOTE]).map_err(Error::from)?;
+    fetch_origin(root)?;
     // Before the place and the claims, so a checkout that can't hold the prompt holds
     // nothing.
     let prompts = prompts_dir(root, PROMPTS)?;

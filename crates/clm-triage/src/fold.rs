@@ -12,7 +12,7 @@ use clm_model::{ChangeStatus, parse_change_frontmatter, split_frontmatter};
 use clm_orchestrator::REMOTE;
 
 use crate::draft::prompts_dir;
-use crate::{Error, GATE, PR_BODY};
+use crate::{Error, GATE, PR_BODY, fetch_origin};
 
 /// Where `clm draft --fold` writes its prompts, one file per first folded change.
 const PROMPTS: &str = ".clm/prompts/fold";
@@ -48,7 +48,7 @@ impl Folded {
 /// given, leaving one that isn't there or isn't `applied`, and writes the fold prompt for
 /// the rest to `<root>/.clm/prompts/fold/<first folded id>.md`.
 pub fn fold(root: &Path, ids: &[String]) -> Result<Fold, Error> {
-    git(root, &["fetch", "--prune", "--quiet", REMOTE])?;
+    fetch_origin(root)?;
     let mut left = Vec::new();
     let mut folded: Vec<Folded> = Vec::new();
     let mut seen = std::collections::BTreeSet::new();
