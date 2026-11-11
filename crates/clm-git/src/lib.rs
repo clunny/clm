@@ -521,9 +521,10 @@ impl From<Error> for Failure {
     }
 }
 
-/// `git fetch` from [`REMOTE`].
+/// `git fetch` from [`REMOTE`], run again after a failure as [`fetch_retrying`] runs it; the
+/// last run's error when all fail, with no `git ls-remote`.
 pub fn fetch(root: &Path) -> Result<(), Error> {
-    git(root, &["fetch", REMOTE]).map(drop)
+    run_again(root, &["fetch", REMOTE], std::thread::sleep)
 }
 
 /// Why [`fetch_retrying`] gave up.
@@ -555,25 +556,30 @@ pub fn fetch_retrying(root: &Path, args: &[&str]) -> Result<(), FetchError> {
 
 /// [`fetch_retrying`] with its waits made through `wait`, so a test sees them without the
 /// clock.
-fn fetch_waiting(
-    root: &Path,
-    args: &[&str],
-    mut wait: impl FnMut(Duration),
-) -> Result<(), FetchError> {
-    let mut last = None;
+fn fetch_waiting(root: &Path, args: &[&str], wait: impl FnMut(Duration)) -> Result<(), FetchError> {
+    let Err(last) = run_again(root, args, wait) else {
+        return Ok(());
+    };
+    match git(root, &["ls-remote", "--quiet", REMOTE, "refs/heads/main"]) {
+        Err(_) => Err(FetchError::Offline),
+        Ok(_) => Err(FetchError::Git(last)),
+    }
+}
+
+/// `git <args>` in `root`, up to three runs with `wait` of 1 then 2 seconds between them;
+/// the last run's error when all fail.
+fn run_again(root: &Path, args: &[&str], mut wait: impl FnMut(Duration)) -> Result<(), Error> {
+    let mut result = Ok(());
     for secs in [0, 1, 2] {
         if secs > 0 {
             wait(Duration::from_secs(secs));
         }
-        match git(root, args) {
-            Ok(_) => return Ok(()),
-            Err(e) => last = Some(e),
+        result = git(root, args).map(drop);
+        if result.is_ok() {
+            break;
         }
     }
-    match git(root, &["ls-remote", "--quiet", REMOTE, "refs/heads/main"]) {
-        Err(_) => Err(FetchError::Offline),
-        Ok(_) => Err(FetchError::Git(last.expect("three runs failed"))),
-    }
+    result
 }
 
 /// Whether `a` is an ancestor of `b` (`git merge-base --is-ancestor a b` exits 0).
