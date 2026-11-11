@@ -615,12 +615,12 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 #### Scenario: a later look fails
 - GIVEN `clm next --wait --interval 0.01` running after a first look that printed nothing, and `origin` then unreachable
 - WHEN it looks again, and `origin` is reachable again with component `a` ready
-- THEN it prints `clm next failed: ` with git's reason to stderr, keeps waiting, then prints `a` and exits 0
+- THEN it prints `clm next failed: ` with the fetch's reason, `origin can't be reached`, to stderr, keeps waiting, then prints `a` and exits 0
 
 #### Scenario: first look fails
 - GIVEN a clone whose `origin` can't be fetched
 - WHEN `clm next --wait` runs
-- THEN it exits 2 with git's reason, as `clm next` does
+- THEN it exits 2 saying `origin can't be reached`, as `clm next` does
 
 #### Scenario: bad interval
 - GIVEN any clone
