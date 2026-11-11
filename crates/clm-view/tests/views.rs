@@ -979,7 +979,7 @@ fn scenario_dependency_holds_nothing() {
 
 #[test]
 fn scenario_nothing_blocked() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-root-lines@8d9bf009
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
