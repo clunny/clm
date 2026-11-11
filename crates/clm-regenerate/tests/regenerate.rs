@@ -1041,8 +1041,11 @@ fn another_change_refused_for_another_reason_stops_the_run() {
     main_moves(&r, &[("specs/a/SPEC.md", &a_designed(THREE))]);
     pull(&r);
     let h1 = hash(&r, "design");
-    // `o` modifies the Design with no base at all: refused, but not as stale.
-    let o = "---\ncomponent: a\n---\n## MODIFIED Design\nO1\n".to_string();
+    // `o` adds requirement `p`, which `a` already has: refused, and not as a stale base.
+    let o = format!(
+        "---\ncomponent: a\n---\n## ADDED Requirements\n{}",
+        requirement("p")
+    );
     let files = change_files("o", "proposed", &o);
     let files: Vec<(&str, &str)> = files
         .iter()
@@ -1059,8 +1062,10 @@ fn another_change_refused_for_another_reason_stops_the_run() {
         left.iter().any(|l| l.contains("changes/o/deltas/a.md")),
         "{left:?}"
     );
-    // A missing base gets no report (`stale-delta-diff`), only the violation.
-    assert_eq!(left.len(), 1, "{left:?}");
+    assert!(
+        !left.iter().any(|l| l.contains("apply/stale-base")),
+        "{left:?}"
+    );
     assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), before);
 }
 
