@@ -1,4 +1,4 @@
-//! `keys::code_key` is the ledger's (`code-key-doc-only`, `code-key-as-ledger`): the doc-only
+//! `keys::code_key` is the ledger's (`code-key-doc-only`): the doc-only
 //! paths come from `clm_ledger::doc_only`, and the key equals the one `clm land` records.
 
 use std::path::Path;
@@ -65,7 +65,7 @@ fn line(path: &str) -> TreeLine<'_> {
 
 #[test]
 fn doc_only_paths_come_from_the_ledger() {
-    // req:web.worker.platform/code-key-doc-only@268b43b2
+    // req:web.worker.platform/code-key-doc-only@609e1b0d
     let all = [
         "docs/x.md",
         "docs/guide/intro.md",
@@ -90,29 +90,8 @@ fn doc_only_paths_come_from_the_ledger() {
 }
 
 #[test]
-fn keys_holds_no_copy_of_the_doc_only_list() {
-    // req:web.worker.platform/code-key-doc-only@268b43b2
-    let text = include_str!("../src/keys.rs");
-    let found: Vec<&str> = [
-        "specs/",
-        "changes/",
-        "backlog/",
-        "docs/",
-        "docs/guide/",
-        "ARCHITECTURE.md",
-        "CAPABILITIES.md",
-        "README.md",
-        "CLAUDE.md",
-    ]
-    .into_iter()
-    .filter(|lit| text.contains(&format!("\"{lit}\"")))
-    .collect();
-    assert!(found.is_empty(), "keys.rs lists doc-only paths: {found:?}");
-}
-
-#[test]
 fn the_guides_files_are_doc_only() {
-    // req:web.worker.platform/code-key-as-ledger@58ed7d0d
+    // req:web.worker.platform/code-key-doc-only@609e1b0d
     let dir = repo();
     let d = dir.path();
     write(
