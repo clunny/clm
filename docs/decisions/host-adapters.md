@@ -13,3 +13,5 @@ Everything host-specific is one adapter, the `host` node, picked by the `host` s
 Rejected: an abstraction over hosted CI (the point is not to need one) and keeping labels as a mirror of the ledger on GitHub (two sources of the same fact, one of which someone will read).
 
 Refined by `none-keeps-its-own-remote` (2026-11-07): with `host = "none"` the clone keeps a remote of its own, so `clm land` no longer lands on the local `main` alone.
+
+Refined by `defects-file-on-github` (2026-11-10): `clm defect` files its reports through the `github` adapter whatever the `host` setting, since they go to CLM's repository on GitHub, not the project's host.

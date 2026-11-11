@@ -26,9 +26,10 @@ Where an unfiled report is kept:
 ## Outcome
 
 - `plugin.hooks/defect-issue` (modified): files through the `github` adapter on every host; keeps an unfiled report in `clm/defects/<slug>.md` under the git common directory, naming it, and exits 1; outside git it prints the report as before.
+- `plugin.hooks/defect-rule` (modified): with `ask`, the session-start paragraph says a kept report goes under `## CLM defects` with its path.
 - `plugin.hooks`' Design says how; `host`'s Contract says `clm defect` uses the `github` adapter whatever the setting. `host`'s `issue` operation and its requirements are unchanged: `clm issue` on `azure`, `git` and `none` still says there is nowhere to file.
 - `docs/guide/settings.md`'s `defects` section says where an unfiled report is kept.
-- Decision `defects-file-on-github`.
+- Decision `defects-file-on-github`, which supersedes in part `host-adapters`' "file an issue" through the `host` setting; `host-adapters` says it is refined by it.
 
 ## Constraints
 
