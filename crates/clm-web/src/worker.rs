@@ -1,9 +1,6 @@
 //! The `workers-rs` adapter: the fetch event, KV, the Cache API, `Fetch` and
 //! WebCrypto behind the core's traits. It decides nothing.
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use worker::js_sys::{self, Array, Function, Object, Reflect, Uint8Array};
@@ -14,10 +11,12 @@ use worker::{
 };
 
 use crate::Replicas;
+use crate::assets::{AssetBinding, AssetCache, BindingAnswer, fetch_asset};
 use clm_web_platform::http::{self, percent_encode};
 use clm_web_platform::platform::{
     Assets, Auth, Cache, Clock, GhRequest, GhResponse, GitHub, Kv, Live, Log, Secrets,
 };
+use std::collections::BTreeMap;
 
 /// The KV namespace binding in `wrangler.toml`.
 const KV_BINDING: &str = "CLM";
@@ -116,62 +115,51 @@ impl GitHub for Cloudflare {
 }
 
 thread_local! {
-    /// Whole 200 answers to a GET of a `/_clm/*` path. They change only with a deploy,
-    /// which starts new isolates, so they are kept for the isolate's life. The site's
-    /// responses are never kept here.
-    static ASSET_CACHE: RefCell<HashMap<String, http::Response>> = RefCell::default();
+    /// The `/_clm/*` answers kept for the isolate's life (`asset-adapter`).
+    static ASSET_CACHE: AssetCache = AssetCache::default();
+}
+
+/// The `ASSETS` binding's calls.
+struct Binding(worker::Fetcher);
+
+impl AssetBinding for Binding {
+    async fn fetch(
+        &self,
+        method: &str,
+        path: &str,
+        query: &str,
+        headers: &BTreeMap<String, String>,
+    ) -> Result<BindingAnswer, ()> {
+        let out = Headers::new();
+        for (name, value) in headers {
+            let _ = out.set(name, value);
+        }
+        let mut init = RequestInit::new();
+        init.with_method(method_of(method));
+        init.with_headers(out);
+        let query = if query.is_empty() {
+            String::new()
+        } else {
+            format!("?{query}")
+        };
+        let mut res = self
+            .0
+            .fetch(format!("https://assets.local{path}{query}"), Some(init))
+            .await
+            .map_err(|_| ())?;
+        Ok(BindingAnswer {
+            status: res.status_code(),
+            headers: res.headers().entries().collect(),
+            body: res.bytes().await.map_err(|_| ()),
+        })
+    }
 }
 
 impl Assets for Cloudflare {
     async fn fetch_asset(&self, req: &http::Request) -> http::Response {
-        let cacheable =
-            req.method == "GET" && req.query.is_empty() && req.path.starts_with("/_clm/");
-        if cacheable && let Some(hit) = ASSET_CACHE.with(|c| c.borrow().get(&req.path).cloned()) {
-            return hit;
-        }
-        let Ok(assets) = self.env.assets(ASSETS_BINDING) else {
-            return http::Response::empty(503);
-        };
-        let failed = http::Response::empty(502);
-        let headers = Headers::new();
-        // The session cookie and credentials stay with the Worker.
-        for (name, value) in req
-            .headers
-            .iter()
-            .filter(|(k, _)| !matches!(k.as_str(), "cookie" | "authorization"))
-        {
-            let _ = headers.set(name, value);
-        }
-        let mut init = RequestInit::new();
-        init.with_method(method_of(&req.method));
-        init.with_headers(headers);
-        let query = if req.query.is_empty() {
-            String::new()
-        } else {
-            format!("?{}", req.query)
-        };
-        let Ok(mut res) = assets
-            .fetch(
-                format!("https://assets.local{}{query}", req.path),
-                Some(init),
-            )
-            .await
-        else {
-            return failed;
-        };
-        let Ok(body) = res.bytes().await else {
-            return failed;
-        };
-        let out = http::Response {
-            status: res.status_code(),
-            headers: res.headers().entries().collect(),
-            body,
-            upgrade: None,
-        };
-        if cacheable && out.status == 200 {
-            ASSET_CACHE.with(|c| c.borrow_mut().insert(req.path.clone(), out.clone()));
-        }
-        out
+        let binding = self.env.assets(ASSETS_BINDING).ok().map(Binding);
+        let cache = ASSET_CACHE.with(|c| c.clone());
+        fetch_asset(binding.as_ref(), &cache, req).await
     }
 }
 

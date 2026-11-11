@@ -4,6 +4,7 @@
 //! traits in `clm_web_platform::platform`. The `worker` module, built only for `wasm32`, adapts
 //! `workers-rs` to those traits and does nothing else.
 
+pub mod assets;
 pub mod auth;
 mod capabilities;
 mod invited;
