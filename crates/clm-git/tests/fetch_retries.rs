@@ -126,3 +126,43 @@ fn an_unreachable_origin_is_offline() {
     let err = fetch_retrying(&clone, &["fetch", REMOTE]).unwrap_err();
     assert!(matches!(err, FetchError::Offline), "{err}");
 }
+
+/// A branch `b` on the bare origin that the clone hasn't fetched.
+fn push_branch_b(dir: &Path, clone: &Path) {
+    let other = dir.join("other");
+    sh(
+        dir,
+        &[
+            "clone",
+            "-q",
+            dir.join("origin.git").to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    );
+    sh(&other, &["push", "-q", "origin", "HEAD:refs/heads/b"]);
+    assert!(!clone.join(".git/refs/remotes/origin/b").exists());
+}
+
+#[test]
+fn a_plain_fetch_that_loses_a_ref_race_goes_on() {
+    // req:vcs/fetch-tries-again@041de3a5
+    let (dir, clone) = clone_with("once");
+    push_branch_b(dir.path(), &clone);
+    let start = Instant::now();
+    clm_git::fetch(&clone).unwrap();
+    assert!(start.elapsed() >= Duration::from_secs(1));
+    sh(&clone, &["rev-parse", "--verify", "refs/remotes/origin/b"]);
+    assert_eq!(calls(&clone, "fetch"), 2);
+}
+
+#[test]
+fn a_plain_fetch_that_keeps_failing_returns_the_last_error() {
+    // req:vcs/fetch-tries-again@041de3a5
+    let (_dir, clone) = clone_with("always");
+    let start = Instant::now();
+    let err = clm_git::fetch(&clone).unwrap_err();
+    assert!(start.elapsed() >= Duration::from_secs(3));
+    assert!(err.to_string().contains("cannot lock ref"), "{err}");
+    assert_eq!(calls(&clone, "fetch"), 3);
+    assert_eq!(calls(&clone, "ls-remote"), 0);
+}
