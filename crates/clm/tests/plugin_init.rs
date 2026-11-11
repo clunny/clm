@@ -396,8 +396,14 @@ fn init_skill_build_setup() {
     assert!(propose.contains("confirm"), "{propose}");
     // The command goes into `clm.toml` before the bootstrap commit, never on the spec branch,
     // which `clm.toml` in the root's `paths` would make `mixed`.
-    assert!(propose.contains("bootstrap commit"), "{propose}");
-    assert!(!propose.contains("first spec branch"), "{propose}");
+    assert!(
+        propose.contains("bootstrap commit"),
+        "init: must name bootstrap commit: {propose}"
+    );
+    assert!(
+        !propose.contains("first spec branch"),
+        "init: must not name first spec branch: {propose}"
+    );
 }
 
 const GITATTRIBUTES: &[&str] = &[
@@ -452,8 +458,8 @@ fn init_skill_marks_doc_readers() {
     }
     // It comes before the bootstrap commit is made.
     assert!(
-        first_line(&body, "clm:reads") < first_line(&body, "Make the bootstrap commit"),
-        "the doc-reader step must come before the bootstrap commit"
+        first_line(&body, "`clm:reads <glob>`") < first_line(&body, "Make the bootstrap commit"),
+        "init: the doc-reader step must come before the bootstrap commit"
     );
 }
 
