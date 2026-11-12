@@ -1,6 +1,6 @@
 ---
 title: Machine load
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: [orchestrator, vcs]
 paths: ["crates/clm-machine/**"]
