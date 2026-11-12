@@ -5,7 +5,7 @@ mod common;
 use std::fs;
 
 use clm_orchestrator::{
-    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, next, next_wait,
+    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, next, next_look, next_wait,
     queue_from_refs, status_claims, take_place,
 };
 use common::*;
@@ -40,7 +40,7 @@ fn scenario_one_remote_name() {
 
 #[test]
 fn scenario_dependency_doesnt_order_then_converged() {
-    // req:orchestrator/next@1f34c883
+    // req:orchestrator/next@f8bdf513
     let r = repo();
     // `a` depends on `b`; `c` is on its own. Nothing is cited yet.
     assert_eq!(ready(&r), ["a", "b", "c"]);
@@ -51,7 +51,7 @@ fn scenario_dependency_doesnt_order_then_converged() {
 
 #[test]
 fn next_reads_origin_main_not_the_checkout() {
-    // req:orchestrator/next@1f34c883
+    // req:orchestrator/next@f8bdf513
     let r = repo();
     cite(&r.work, "c.rs", &["c/s"]);
     write(&r.work, "specs/a/SPEC.md", "garbage");
@@ -64,7 +64,7 @@ fn next_reads_origin_main_not_the_checkout() {
 
 #[test]
 fn scenario_live_and_lapsed_claims() {
-    // req:orchestrator/next@1f34c883
+    // req:orchestrator/next@f8bdf513
     let r = repo();
     push_claim(&r.work, "b", 1);
     push_claim(&r.work, "c", 5);
@@ -74,7 +74,7 @@ fn scenario_live_and_lapsed_claims() {
 
 #[test]
 fn scenario_merged_claim() {
-    // req:orchestrator/next@1f34c883
+    // req:orchestrator/next@f8bdf513
     let r = repo();
     push_claim(&r.work, "b", 1);
     merge_claim(&r.work, "b");
@@ -96,7 +96,7 @@ fn hold(root: &std::path::Path, node: &str) {
 
 #[test]
 fn scenario_capped_by_places() {
-    // req:orchestrator/next@1f34c883
+    // req:orchestrator/next@f8bdf513
     let r = repo();
     write(&r.work, "specs/d/SPEC.md", &node("", &["t"]));
     write(&r.work, "specs/e/SPEC.md", &node("", &["u"]));
@@ -110,11 +110,20 @@ fn scenario_capped_by_places() {
 
 #[test]
 fn scenario_no_place_free() {
-    // req:orchestrator/next@1f34c883 req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@f8bdf513 req:orchestrator/claim@026fab7a
     let r = repo();
     hold(&r.work, "z");
     assert_eq!(next(&r.work, 4, 1).unwrap(), Vec::<String>::new());
     assert_eq!(next(&r.work, 4, 0).unwrap(), Vec::<String>::new());
+    let look = next_look(&r.work, 4, 1).unwrap();
+    assert!(look.components.is_empty());
+    assert_eq!(
+        look.no_place.as_deref(),
+        Some("no free build place: 1 of max_builds = 1 in use, 3 ready")
+    );
+    let roomy = next_look(&r.work, 4, 9).unwrap();
+    assert_eq!(roomy.no_place, None);
+    assert!(!roomy.components.is_empty());
     assert_eq!(
         claim(&r.work, "a", 4).unwrap(),
         "impl/a",
@@ -123,8 +132,18 @@ fn scenario_no_place_free() {
 }
 
 #[test]
+fn scenario_full_cap_empty_queue() {
+    // req:orchestrator/next@f8bdf513
+    let r = converged();
+    hold(&r.work, "z");
+    let look = next_look(&r.work, 4, 1).unwrap();
+    assert!(look.components.is_empty());
+    assert_eq!(look.no_place, None, "nothing ready, so nothing to say");
+}
+
+#[test]
 fn scenario_same_as_next_on_a_repo() {
-    // req:orchestrator/queue-matches-next@b56edb27 req:orchestrator/next@1f34c883
+    // req:orchestrator/queue-matches-next@b56edb27 req:orchestrator/next@f8bdf513
     // The tree of `queue.rs`'s *same as next*: `a` depends on `b`, `c` on `d`, `b` is
     // converged, `e` claimed an hour ago, and `backlog/h.md` blocks `f/x`.
     let r = repo();
@@ -172,7 +191,7 @@ fn scenario_same_as_next_on_a_repo() {
 
 #[test]
 fn scenario_places_shared_by_worktrees() {
-    // req:orchestrator/next@1f34c883
+    // req:orchestrator/next@f8bdf513
     let r = repo();
     hold(&r.work, "z");
     let tmp = tempfile::TempDir::new().unwrap();
@@ -192,7 +211,7 @@ fn scenario_places_shared_by_worktrees() {
 
 #[test]
 fn nested_branches_claim_no_node() {
-    // req:orchestrator/next@1f34c883 req:orchestrator/status-claims@726cb7c5
+    // req:orchestrator/next@f8bdf513 req:orchestrator/status-claims@726cb7c5
     // req:orchestrator/nested-branches-not-claims@a7ec57b2
     let r = repo();
     push_claim(&r.work, "b/x", 1);
@@ -213,7 +232,7 @@ fn scenario_archive_branch_beside_a_claim() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_listed_and_claimed() {
-    // req:orchestrator/next@1f34c883 req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@f8bdf513 req:orchestrator/claim@026fab7a
     let r = repo();
     write(
         &r.work,
@@ -848,6 +867,10 @@ fn scenario_next_wait_a_place_frees() {
     let got = next_wait(&r.work, 4, 1, "0.005", &mut |n| notes.push(n.to_string())).unwrap();
     lander.join().unwrap();
     assert_eq!(got, ["a"]);
+    assert!(
+        notes.is_empty(),
+        "no `no free build place` line while waiting: {notes:?}"
+    );
 }
 
 #[test]

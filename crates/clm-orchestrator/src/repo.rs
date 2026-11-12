@@ -20,18 +20,41 @@ pub(crate) fn current_branch(root: &Path) -> Option<String> {
     clm_git::current_branch(root).ok().flatten()
 }
 
+/// What one look of `clm next` found: the components to print and, when the list is empty
+/// only because no build place is free while some component is ready and unclaimed, the line
+/// for stderr that tells a full cap from an empty queue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NextLook {
+    pub components: Vec<String>,
+    pub no_place: Option<String>,
+}
+
 /// What `clm next` prints: the `ready` nodes, read from `origin/main` after fetching, the
 /// most urgent first, at most as many as the clone has free build places of `max_builds`
 /// (`build-places`). The places only cut the list: they never change which nodes are ready.
 pub fn next(root: &Path, expiry_hours: u64, max_builds: u64) -> Result<Vec<String>, Error> {
+    Ok(next_look(root, expiry_hours, max_builds)?.components)
+}
+
+/// [`next`], with the `no free build place` line when a full cap alone emptied the list.
+pub fn next_look(root: &Path, expiry_hours: u64, max_builds: u64) -> Result<NextLook, Error> {
     let mut ready = queue_on_main(root, expiry_hours)?.0.next();
     let held = crate::places(root, expiry_hours)?
         .iter()
         .filter(|p| p.counts)
         .count();
     let free = max_builds.saturating_sub(held as u64);
+    let ready_count = ready.len();
     ready.truncate(usize::try_from(free).unwrap_or(usize::MAX));
-    Ok(ready)
+    let no_place = (ready.is_empty() && ready_count > 0).then(|| {
+        format!(
+            "no free build place: {held} of max_builds = {max_builds} in use, {ready_count} ready"
+        )
+    });
+    Ok(NextLook {
+        components: ready,
+        no_place,
+    })
 }
 
 /// `clm next --wait` (`next-wait`): looks as [`next`] does and, while a look prints nothing,
