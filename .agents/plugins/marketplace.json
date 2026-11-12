@@ -1,0 +1,20 @@
+{
+  "name": "clm",
+  "interface": {
+    "displayName": "CLM"
+  },
+  "plugins": [
+    {
+      "name": "clm",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

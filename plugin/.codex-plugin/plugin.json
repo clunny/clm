@@ -1,0 +1,10 @@
+{
+  "name": "clm",
+  "version": "0.26.0",
+  "description": "Spec-driven team development: specs as the source of truth, deterministic checks, parallel implementation through git.",
+  "author": { "name": "Christopher Lunny" },
+  "license": "MIT",
+  "repository": "https://github.com/clunny/clm",
+  "skills": "./skills/",
+  "hooks": "./hooks/codex.json"
+}
