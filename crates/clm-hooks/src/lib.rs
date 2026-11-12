@@ -3,6 +3,7 @@
 
 use std::path::Path;
 
+use clm_agent_harness::{AgentHarness, parse_event};
 use serde_json::Value;
 
 mod defect;
@@ -12,12 +13,46 @@ pub use defect::defect;
 /// `SessionStart`: `clm status` for the CLM repository holding the event's `cwd`, then the
 /// rule for reporting CLM defects unless `defects` is `off` (or the settings' error), else "".
 pub fn session_start(event: &str) -> String {
-    let Ok(event) = serde_json::from_str::<Value>(event) else {
-        return String::new();
-    };
-    let Some(cwd) = event["cwd"].as_str().map(Path::new) else {
-        return String::new();
-    };
+    match serde_json::from_str::<Value>(event) {
+        Ok(event) => event["cwd"]
+            .as_str()
+            .map(|cwd| session_text(Path::new(cwd)))
+            .unwrap_or_default(),
+        Err(_) => String::new(),
+    }
+}
+
+/// `session_start` for an agent harness (`hooks-per-agent-harness`): the event's `cwd` comes
+/// from the agent harness's own parser, and the text is written the way that agent harness
+/// adds it to the session's context. The exit code is 0.
+pub fn session_start_hook(agent_harness: AgentHarness, event: &str) -> (String, i32) {
+    let text = hook_cwd(agent_harness, event)
+        .map(|cwd| session_text(Path::new(&cwd)))
+        .unwrap_or_default();
+    if text.is_empty() || agent_harness != AgentHarness::Codex {
+        return (text, 0);
+    }
+    // Codex reads a session start's `additionalContext` as context for the session.
+    let out = serde_json::json!({"hookSpecificOutput": {
+        "hookEventName": "SessionStart",
+        "additionalContext": text,
+    }});
+    (format!("{out}\n"), 0)
+}
+
+/// `autosync` for an agent harness (`hooks-per-agent-harness`): silent, exit code 0.
+pub fn autosync_hook(agent_harness: AgentHarness, event: &str) -> (String, i32) {
+    if let Some(cwd) = hook_cwd(agent_harness, event) {
+        autosync_in(Path::new(&cwd));
+    }
+    (String::new(), 0)
+}
+
+fn hook_cwd(agent_harness: AgentHarness, event: &str) -> Option<String> {
+    parse_event(agent_harness, event).ok()?.cwd
+}
+
+fn session_text(cwd: &Path) -> String {
     let Some(root) = clm_root(cwd) else {
         return String::new();
     };
@@ -102,10 +137,16 @@ file's path, for the human to file by hand.";
 /// `cwd` (`autosync-policy`), unless its `autosync` setting is `false` or can't be loaded.
 /// Silent whatever happens: it runs every turn.
 pub fn autosync(event: &str) {
-    let Ok(event) = serde_json::from_str::<Value>(event) else {
-        return;
-    };
-    let Some(root) = event["cwd"].as_str().map(Path::new).and_then(clm_root) else {
+    if let Some(cwd) = serde_json::from_str::<Value>(event)
+        .ok()
+        .and_then(|e| e["cwd"].as_str().map(str::to_string))
+    {
+        autosync_in(Path::new(&cwd));
+    }
+}
+
+fn autosync_in(cwd: &Path) {
+    let Some(root) = clm_root(cwd) else {
         return;
     };
     if settings(Some(root)).is_ok_and(|s| s.autosync.value) {
