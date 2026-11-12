@@ -26,7 +26,11 @@ fn push_violation(files: &[(&str, &str)]) -> Result<(), String> {
 fn claude_md_pushes_through_clm() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let claude = fs::read_to_string(root.join("CLAUDE.md")).unwrap();
-    let agents = fs::read_to_string(root.join("AGENTS.md")).ok();
+    let agents = match fs::read_to_string(root.join("AGENTS.md")) {
+        Ok(a) => Some(a),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => panic!("AGENTS.md unreadable: {e}"),
+    };
     let mut files = vec![("CLAUDE.md", claude.as_str())];
     if let Some(a) = &agents {
         files.push(("AGENTS.md", a.as_str()));
@@ -42,6 +46,13 @@ fn agents_md_holds_the_instructions() {
         ("AGENTS.md", "use clm branch push"),
     ];
     assert_eq!(push_violation(&ok), Ok(()));
+}
+
+// req:clm/claude-md-pushes-with-clm@af3228bd
+#[test]
+fn no_clm_branch_push_fails() {
+    let none = [("CLAUDE.md", "@AGENTS.md"), ("AGENTS.md", "nothing")];
+    assert!(push_violation(&none).is_err());
 }
 
 // req:clm/claude-md-pushes-with-clm@af3228bd
