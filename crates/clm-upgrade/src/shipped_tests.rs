@@ -395,7 +395,8 @@ fn the_setup_note_lists_the_rules_and_the_ways_out() {
     assert!(note.contains("`Bash(clm setup *)`"), "{note}");
     assert!(note.contains("tests-run-in-their-own-tree"), "{note}");
     assert!(note.contains("auto mode"), "{note}");
-    assert!(note.contains("by hand"), "{note}");
+    assert!(note.contains("first test run on a code branch"), "{note}");
+    assert!(note.contains("`.claude/settings.json` by hand"), "{note}");
     assert!(note.contains("clm init --check-permissions"), "{note}");
     assert!(
         note.contains(&format!("clm upgrade --decline {SETUP_ID}")),
