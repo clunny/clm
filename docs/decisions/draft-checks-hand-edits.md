@@ -18,3 +18,5 @@ A `clm draft` session whose spec branch changes a file outside `specs/`, `change
 - *A gate warning for hand edits.* The gate can't tell which files a test reads without running the tests, so it would warn on every hand edit and still not say whether anything broke.
 - *Taking `ARCHITECTURE.md`, `CAPABILITIES.md` and `CLAUDE.md` off the ledger's doc-only list.* A land would then run the check on them, which is still after the approval the item is about.
 - *Running the check on every draft.* It costs a full build per draft for a failure that needs a hand edit outside the generated text.
+
+**Amended 2026-11-12** (`20261112-retired-terms-in-spec`). The retired-terms scan now runs in `clm check` as a detector of this repository (`config/retired-terms-detector`), so a draft's generated `specs/` text is checked for retired terms before its land; the other text scans stay unchecked while drafting, as above.
