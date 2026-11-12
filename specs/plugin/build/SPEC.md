@@ -25,7 +25,7 @@ Whenever a build's subagent returns, landed or stopped, `build` runs `clm run --
 ## Requirements
 
 ### Requirement: skill-named-build
-The plugin SHALL ship the skill that builds the approved specs as `skills/build/SKILL.md` and no `skills/implement/` directory, its heading and its description saying build. The description SHALL contain `approved specs` and `not compile`, so that nobody takes `/clm:build` for a compiler. No file under `plugin/` or `docs/guide/`, nor `CLAUDE.md`, nor `README.md`, SHALL name `/clm:implement` or `skills/implement/`.
+The plugin SHALL ship the skill that builds the approved specs as `skills/build/SKILL.md` and no `skills/implement/` directory, its heading and its description saying build. The description SHALL contain `approved specs` and `not compile`, so that nobody takes `/clm:build` for a compiler. No file under `plugin/` or `docs/guide/`, nor `CLAUDE.md`, nor `AGENTS.md` when it exists, nor `README.md`, SHALL name `/clm:implement` or `skills/implement/`, so the rule still covers this repository's instructions once `upgrade/migration-agents-md` has moved them from `CLAUDE.md` to `AGENTS.md`.
 
 #### Scenario: the skill and its description
 - GIVEN the plugin
@@ -36,6 +36,11 @@ The plugin SHALL ship the skill that builds the approved specs as `skills/build/
 - GIVEN a guide page or a skill that still says `/clm:implement`
 - WHEN the tests run
 - THEN the test fails, naming the file and the line
+
+#### Scenario: the repository's instructions are read
+- GIVEN the repository
+- WHEN the tests run
+- THEN the files they check for `/clm:implement` include `CLAUDE.md`, `README.md`, and `AGENTS.md` when it exists
 
 ### Requirement: build-subagents
 `skills/build/SKILL.md` SHALL tell Claude to say once, before the first build, that builds run under the session's permission mode and pause for the human's answers in manual mode, and never to refuse a mode. It SHALL tell Claude to build each component `clm next` prints by running `clm run <component>` and, only when it exits 0, passing its stdout to the Agent tool as a background subagent with `isolation: "worktree"`; when the subagent returns, to read its closing `landed <sha>` line, or tell the human the `stopped:` reason; to build a component again the same way when it stopped without landing and isn't one it resumes (`build-resumes-sound-builds`), until it lands or stops twice for the same reason; and never to do a component's work in its own context. It SHALL NOT name `clm next --interactive`, `.clm/logs`, `clm watch` or `PR #<number>`.
