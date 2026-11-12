@@ -330,7 +330,7 @@ fn rules_without_setup() -> Vec<String> {
         .collect()
 }
 
-// req:upgrade/migration-setup-allow-rules@dfae9b68
+// req:upgrade/migration-setup-allow-rules@7a85824e
 #[test]
 fn a_project_lacking_the_setup_rules_is_offered_them_and_keeps_its_settings() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -349,7 +349,7 @@ fn a_project_lacking_the_setup_rules_is_offered_them_and_keeps_its_settings() {
     assert_eq!(before, after);
 }
 
-// req:upgrade/migration-setup-allow-rules@dfae9b68
+// req:upgrade/migration-setup-allow-rules@7a85824e
 #[test]
 fn each_setup_rule_is_needed_and_the_two_files_are_read_together() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -372,7 +372,7 @@ fn each_setup_rule_is_needed_and_the_two_files_are_read_together() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-setup-allow-rules@dfae9b68
+// req:upgrade/migration-setup-allow-rules@7a85824e
 #[test]
 fn a_declined_setup_rules_migration_is_not_listed() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -385,7 +385,7 @@ fn a_declined_setup_rules_migration_is_not_listed() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-setup-allow-rules@dfae9b68
+// req:upgrade/migration-setup-allow-rules@7a85824e
 #[test]
 fn the_setup_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
