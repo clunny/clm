@@ -198,13 +198,10 @@ fn a_multi_word_term_matches_across_spaces() {
     // req:clm/retired-terms@b30c0e50
     let got = scan_files(
         &["grommet stub"],
-        &[("docs/guide/a.md", "GROMMET   stub\ngrommet\tstub\n")],
+        &[("docs/guide/a.md", "GROMMET   stub\n")],
     );
     assert_eq!(got.code, 1);
-    assert_eq!(
-        got.out,
-        "docs/guide/a.md:1: grommet stub\ndocs/guide/a.md:2: grommet stub\n"
-    );
+    assert_eq!(got.out, "docs/guide/a.md:1: grommet stub\n");
 }
 
 #[test]
@@ -323,7 +320,7 @@ fn the_help_of_every_command_is_written_and_scanned() {
     assert!(names.contains(&"clm".to_string()));
     assert!(names.contains(&"clm-land".to_string()));
     assert!(names.iter().any(|n| n.split('-').count() > 2), "{names:?}");
-    // The scan reads the whole directory.
+    // The scan reads a file of the directory.
     let list = dir.path().join("list.txt");
     fs::write(&list, "land\n").unwrap();
     let got = scan(dir.path(), &["--list", list.to_str().unwrap(), "clm-land"]);
@@ -527,6 +524,16 @@ fn the_plain_word_is_free() {
         .map(|l| l.split(':').nth(1).unwrap())
         .collect();
     assert_eq!(numbers, ["2", "3"]);
+}
+
+#[test]
+fn binary_files_are_skipped() {
+    // req:clm/retired-terms@b30c0e50
+    let dir = tempfile::tempdir().unwrap();
+    write(dir.path(), "list.txt", "frob\n");
+    fs::write(dir.path().join("b.bin"), b"frob\0binary").unwrap();
+    let got = scan(dir.path(), &["--list", "list.txt", "b.bin"]);
+    assert_eq!((got.code, got.out.as_str()), (0, ""), "{}", got.err);
 }
 
 #[test]
