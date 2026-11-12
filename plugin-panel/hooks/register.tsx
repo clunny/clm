@@ -19,6 +19,7 @@ import {
   ticking,
 } from '../src/agents.ts'
 import { type PaneLine, keyTarget, modelRuns, paneChart, pressNode, toggleRoot, withBuildRows } from '../src/inspector.ts'
+import { MACHINE_MS, machineLines, machineSampler } from '../src/machine.ts'
 import {
   FIRST_TAB,
   ORIGIN_MAIN_ARGV,
@@ -57,6 +58,8 @@ const generation = atom({ plugin: 'clm-panel', key: 'generation' } as const, 0)
 // The subagents this session launched, and the time their rows are drawn at.
 const agents = atom({ plugin: 'clm-panel', key: 'agents' } as const, [])
 const now = atom({ plugin: 'clm-panel', key: 'now' } as const, 0)
+// Bumped when a `clm machine` sample finishes: the pane redraws from the views' cache.
+const sampled = atom({ plugin: 'clm-panel', key: 'sampled' } as const, 0)
 
 type PaneEvent = { surface: Surface; props: { bodyColumns: number } }
 
@@ -64,6 +67,11 @@ const LABELS = { spec: 'Spec', flight: 'Flight', blockers: 'Blockers' } as const
 
 let timer: { cancel(): void } | undefined
 let tick: { cancel(): void } | undefined
+let machineTimer: { cancel(): void } | undefined
+// The columns the latest sample was drawn for: a pane resized draws its rows again at its width.
+let sampledColumns: number | undefined
+let columns = Number.NaN
+let sampler: ReturnType<typeof machineSampler> | undefined
 let lastFetch: number | undefined
 // The latest fetch that finished, for the line drawn while it failed.
 let latestFetch: Fetched | undefined
@@ -98,7 +106,18 @@ async function redraw($: EngineInterface) {
   }
 }
 
+// One `clm machine` run, unless the last is still going; the pane redraws without rerunning `clm view`.
+async function sampleMachine($: EngineInterface) {
+  sampler ??= machineSampler($, () => $.session.cwd())
+  sampledColumns = columns
+  if (await sampler.sample(columns)) await update($, sampled, n => n + 1)
+}
+
 function startTimer($: EngineInterface) {
+  machineTimer?.cancel()
+  machineTimer = $.clock.every(MACHINE_MS, () => {
+    void isPlaced($).then(placed => (placed ? sampleMachine($) : undefined))
+  })
   timer?.cancel()
   timer = $.clock.every(REDRAW_MS, () => {
     void isPlaced($).then(async placed => {
@@ -112,6 +131,8 @@ function startTimer($: EngineInterface) {
 function stopTimer() {
   timer?.cancel()
   timer = undefined
+  machineTimer?.cancel()
+  machineTimer = undefined
 }
 
 const setNow = async ($: EngineInterface) => {
@@ -238,6 +259,10 @@ export const register: Register = on => {
 async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   // A tab kept by an earlier version of the panel that is none of the three reads as Flight.
   const shown = tabOf(await read($, tab))
+  // The machine rows follow the latest sample; a pane measured at a new width samples again.
+  await read($, sampled)
+  columns = e.props.bodyColumns
+  if (sampledColumns !== columns) void sampleMachine($)
   // Each surface's table is one member of a union: `Svg` is read by narrowing it.
   const elements = $.ui.resolve(e)
   const { Box, Text, Button } = elements
@@ -275,6 +300,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
               {s.text}
             </Text>
           ))
+  const machine = machineLines(sampler?.state() ?? {}).map(line => <Text wrap="truncate-end">{runsOf(line)}</Text>)
   // A press changes an atom and nothing else: the redraw reruns no `clm` it already holds.
   const press = (key: string) => {
     const target = keyTarget(key)
@@ -327,6 +353,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
     return (
       <Box flexDirection="column">
         {tabs}
+        {machine}
         {fetchLine}
         <Text color="error">{body.error}</Text>
       </Box>
@@ -341,6 +368,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
     return (
       <Box flexDirection="column">
         {tabs}
+        {machine}
         {fetchLine}
         {drawn}
         {lines(flightRows(undefined, list, at).map(spans => ({ spans })))}
@@ -363,6 +391,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   return (
     <Box flexDirection="column">
       {tabs}
+      {machine}
       {fetchLine}
       {head && (
         <Box flexDirection="row" gap={2}>
