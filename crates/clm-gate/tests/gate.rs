@@ -2216,5 +2216,15 @@ fn agents_md_edit_is_a_spec_edit() {
     write(dir.path(), "AGENTS.md", "x\n");
     commit_all(dir.path(), "instructions");
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
-    assert_eq!(out.kind, Kind::Spec, "{:?}", out.violations);
+    assert_eq!((out.kind, out.review), (Kind::Spec, false));
+}
+
+#[test]
+fn nested_agents_md_is_code() {
+    // req:gate/agents-md-spec-path@165bf739
+    let dir = repo();
+    write(dir.path(), "sub/AGENTS.md", "x\n");
+    commit_all(dir.path(), "nested");
+    let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
+    assert_eq!(out.kind, Kind::Code);
 }
