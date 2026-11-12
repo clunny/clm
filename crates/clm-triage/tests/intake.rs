@@ -502,6 +502,7 @@ fn scenario_taken_in() {
             verified(2, &c2, false, Some(&c1), &["b", "a"]),
         ],
     );
+    // A kept log exists, yet an imported line gets no `log` line.
     keep_log(&r, &c2);
     for slug in ["b-broke", "a-also"] {
         write(

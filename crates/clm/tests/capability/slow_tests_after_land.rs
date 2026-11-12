@@ -114,6 +114,12 @@ fn a_slow_test_breaks_after_the_land() {
         .unwrap_or_else(|| panic!("{intake}"))
         .1;
     assert!(std::path::Path::new(log).is_file(), "{intake}");
+    assert!(log.ends_with(&format!("{}.log", &red[..7])), "{intake}");
+    let sha = lines[at].split(' ').nth(1).unwrap();
+    assert!(
+        lines[at + 1].starts_with(&format!("verify {sha} log ")),
+        "{intake}"
+    );
 
     // The person takes it in as a bug item naming the red commit.
     repo.write(
