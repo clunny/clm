@@ -869,6 +869,7 @@ fn build_drafts_bugs() {
     for needle in [
         "before launching builds",
         "no draft of this session has taken",
+        "while a place is free",
         "exits 3",
         "never pass `--answers`",
         "`human`, `idea`, `deferred` or `workaround`",
