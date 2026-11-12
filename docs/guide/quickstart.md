@@ -4,7 +4,7 @@ From nothing to your first change built, for a new project or an existing one.
 
 ## You need
 
-- [Claude Code](https://claude.com/claude-code), on Linux or macOS.
+- [Claude Code](https://claude.com/claude-code) or [Codex](https://developers.openai.com/codex), on Linux or macOS. Another coding agent works too, if it reads `AGENTS.md` and runs shell commands: see [Other agents](#other-agents).
 - `git` and `curl`.
 - A git repository for your project, where you can push to `main`. GitHub is optional.
 
@@ -16,6 +16,8 @@ In Claude Code:
 /plugin marketplace add clunny/clm
 /plugin install clm@clm
 ```
+
+In Codex, add the same marketplace, `clunny/clm`, with Codex's plugin commands and install `clm` from it. The skills are the same, and so is the binary.
 
 The plugin downloads the `clm` binary the first time it needs it. No account or sign-in is needed.
 
@@ -38,7 +40,7 @@ Claude commits CLM's setup files and then stops, because only you push to `main`
 
 Claude drafts the first design of your project: what it does, what must always hold, and how it splits into components. For an existing project, it describes what the code does today and shows you the split before writing the rest.
 
-Read it as intent: is this what the system is, or should be? Ask for changes in the conversation. When you're happy, say yes, and confirm the command Claude Code shows you. The design lands on `main`.
+Read it as intent: is this what the system is, or should be? Ask for changes in the conversation. When you're happy, say yes, and confirm the command Claude Code shows you. Codex can't ask you to confirm a command, so there the agent gives you the approval command to run in your own terminal instead. The design lands on `main`.
 
 ## 5. Run `/clm:build`
 
@@ -57,3 +59,7 @@ Day to day you use four workflows, each described in [Using CLM](using-clm.md):
 | `/clm:health` | see how healthy the project is |
 
 To understand what happens underneath, read [How it works](how-it-works.md).
+
+## Other agents
+
+A project under CLM keeps its instructions in `AGENTS.md`, and `CLAUDE.md` imports it, so every agent reads the same rules, and people on different tools can work on one project. With an agent that has no CLM plugin, put the `clm` binary from the [release](https://github.com/clunny/clm/releases) on your `PATH`, ask the agent to follow the skills' steps from `AGENTS.md`, and always run the approval command yourself, in your own terminal.

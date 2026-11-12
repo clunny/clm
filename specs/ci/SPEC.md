@@ -419,7 +419,7 @@ Every workflow under `.github/workflows/` SHALL push nothing to `main` but the r
 #### Scenario: an author reads it
 - GIVEN this repository's `.github/PULL_REQUEST_TEMPLATE.md`
 - WHEN a test reads it
-- THEN it names `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `CONTRIBUTING.md` and `closed`
+- THEN it names `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md` and `closed`
 
 #### Serves
 - capability/contribute-from-outside

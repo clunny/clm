@@ -6,7 +6,7 @@ How a project under CLM can take contributions from people without write access.
 
 Under CLM nobody reviews code, and `clm land` runs the merged tree's check command on the lander's machine. Someone without write access also can't claim a component or land a branch, because both push to `origin`. So landing a stranger's code would mean running it on your machine with nobody having read it.
 
-What an outsider can safely offer is intent. A contribution is acceptable when every file it changes is on a spec path: `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md` or `CLAUDE.md`. Such a branch can't change a script or setting a land runs, and when the code on `main` has already been checked, a land runs only `clm check`.
+What an outsider can safely offer is intent. A contribution is acceptable when every file it changes is on a spec path: `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` or `AGENTS.md`. Such a branch can't change a script or setting a land runs, and when the code on `main` has already been checked, a land runs only `clm check`.
 
 ## The levels
 
@@ -29,7 +29,7 @@ Run `/clm:contribution <number>` for a pull request or an issue. It treats every
 
 `clm intake` also lists the host's open dependency alerts (Dependabot's, on GitHub), matched to the backlog by an item's `alerts` key the same way. An alert names only your own dependency, its severity and its manifest, so it needs no verifier: you pick which to take in and at what priority, and each becomes a `kind: bug` item that a build fixes by updating the package. The host closes the alert itself once the update is on `main`.
 
-**Read every one by hand.** A branch that only rewords a requirement would land on checks, but a contribution isn't your own session's work. Spec text and `CLAUDE.md` instruct your future sessions, so a malicious edit is prompt injection, and your review is the only defence. Accepting also spends your budget, since your builds write the code the spec asks for.
+**Read every one by hand.** A branch that only rewords a requirement would land on checks, but a contribution isn't your own session's work. Spec text, `AGENTS.md` and `CLAUDE.md` instruct your future sessions, so a malicious edit is prompt injection, and your review is the only defence. Accepting also spends your budget, since your builds write the code the spec asks for.
 
 ## What enforces it
 
@@ -55,7 +55,7 @@ Someone who only opened an issue has no commit of their own. A `Co-authored-by` 
 ```markdown
 # Contributing
 
-This project is built with CLM: AI writes the code, from a spec people own. We take contributions of intent, read by hand by a maintainer. A pull request changing any file outside `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md` or `CLAUDE.md` is closed.
+This project is built with CLM: AI writes the code, from a spec people own. We take contributions of intent, read by hand by a maintainer. A pull request changing any file outside `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` or `AGENTS.md` is closed.
 
 Open an issue with a bug or an idea, one line is fine. For more, agree the idea in an issue, then send a pull request adding `backlog/<slug>.md` with `title`, `kind: idea` and your reasoning, leaving out `priority`, or a full change with `/clm:propose` in a clone of your fork. Leave "Allow edits by maintainers" on, and use a commit email linked to your account so the commit counts as yours.
 ```

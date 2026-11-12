@@ -228,7 +228,7 @@ People decide what to do next from what they can see, and the state lives scatte
 - THEN it shows each, and names the commit it describes
 
 ### Capability: watch-beside-chat
-A person can watch the project's state update in a pane beside their Claude Code chat.
+A person can watch the project's state update in a pane beside their Claude Code chat. The pane is Claude Code's alone, since no other supported agent harness lets a plugin draw one; there `/clm:view` answers in the chat and `clm view` runs beside it.
 
 #### Why
 Switching to a terminal to ask for the state breaks the conversation it informs.
@@ -347,7 +347,7 @@ Teams and machines differ, and a setting whose source is hidden can't be trusted
 - THEN it prints the override's value and the file it came from
 
 ### Capability: install-and-release
-A person can install CLM as a Claude Code plugin with its `clm` binary, and its maintainers can release new versions.
+A person can install CLM as a Claude Code or Codex plugin with its `clm` binary, or use it from any other agent that reads `AGENTS.md` with the `clm` binary alone, and its maintainers can release new versions.
 
 #### Why
 CLM reaches people only through what they install, and a release that doesn't match its binary breaks every session.
@@ -356,6 +356,27 @@ CLM reaches people only through what they install, and a release that doesn't ma
 - GIVEN a machine with Claude Code and no Rust toolchain
 - WHEN the person installs the plugin
 - THEN its first session runs the release's `clm` binary of the same version
+
+#### Scenario: install on Codex
+- GIVEN a machine with Codex and no Rust toolchain
+- WHEN the person installs the plugin in Codex
+- THEN its first session runs the release's `clm` binary of the same version, and its skills are listed
+
+### Capability: work-from-any-agent-harness
+A project under CLM can be worked from any supported agent harness (Claude Code, Codex, or any agent that reads `AGENTS.md` and runs shell commands), by contributors on different tools or one person switching tools in the middle of a change, with the same rules, state and approvals.
+
+#### Why
+Teams don't share one coding tool, and people change tools; a method tied to one tool locks out everyone else on the project, or splits the project's rules between files each tool reads.
+
+#### Scenario: switch tools mid-change
+- GIVEN a spec branch proposed and approved from Claude Code
+- WHEN a Codex session builds it and lands it
+- THEN the build follows the same `AGENTS.md`, specs and claims, and `clm land` lands it as it would a Claude Code build
+
+#### Scenario: approve under an agent harness that can't ask
+- GIVEN a session under a recognised agent harness that can't make the human confirm a command
+- WHEN the session runs `clm approve`
+- THEN nothing is approved, and the refusal tells the human to run it in their own terminal
 
 ### Capability: upgrade-clm
 A person can upgrade the `clm` a project uses to the latest release, from any earlier one, and get the project brought up to date with what the new release expects.

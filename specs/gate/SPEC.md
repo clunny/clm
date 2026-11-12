@@ -15,7 +15,7 @@ serves: [capability/land-safely, capability/approve-intent, architecture/humans-
 `clm-gate` also offers `settings_unchanged(before, after)`: given `clm.toml`'s bytes on each side of a diff (`Option<&[u8]>`, `None` where the file doesn't exist), whether its settings are the same once the upgrade notes `upgraded` and `declined_migrations`, comments and formatting are set aside, false when either side isn't UTF-8 TOML. `land` reads it to count a land whose `clm.toml` changed only so as checked (`land/settings-unchanged-is-checked`).
 
 ## Design
-Changes come from `git diff --name-status --no-renames <merge-base>...HEAD`. Spec paths are `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md` and `CLAUDE.md`. File contents at the merge base and at `HEAD` are compared with `git diff <rev>:<path> <rev>:<path>`. Uses the `git` CLI, not a git library.
+Changes come from `git diff --name-status --no-renames <merge-base>...HEAD`. Spec paths are `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and `AGENTS.md`. File contents at the merge base and at `HEAD` are compared with `git diff <rev>:<path> <rev>:<path>`. Uses the `git` CLI, not a git library.
 
 **Review is yes or no** (`yes-no-review`). A spec branch needs a human's review only for what a program can't judge for the human: the two human layers, `ARCHITECTURE.md` and `CAPABILITIES.md`, edited whole in the branch; the keys a signed repository trusts, `docs/allowed_signers` (any entry at or under that path, never counted as a status-only edit; `signed-ledger-records`); whose approval counts (`approval-setting`); and a change that declares a burden, something that spends the human's money or time or can't be undone. Everything else, component specs, decisions, backlog edits and changes with no burdens, lands on checks, and nothing is reviewed after the fact. Whether a branch needs review is read from the diff's paths, `clm.toml` at both sides and the `change.md` texts at `HEAD`, so no graph is loaded. A `change.md` that can't be read or parsed needs review, so the gate fails closed; a live one that holds `gate` parses (the model sinks the key) and `clm check` rejects it (`model/parse-changes`). `undeclared_burdens` checks what a program can see of a burden: a `kind: human-task` item the branch adds is a step only the human can take, so a spec branch that adds one must say so in `human_burdens`, which then makes it need review. Builds file `question` and `human-task` items freely; those block only their own requirements.
 
@@ -631,3 +631,14 @@ When the diff lists `clm.toml` and its parsed TOML at the merge base and at `HEA
 
 #### Serves
 - capability/upgrade-clm
+
+### Requirement: agents-md-spec-path
+The gate SHALL count `AGENTS.md` at the top of the repository as a spec path, as it counts `CLAUDE.md` (`classify`, `files-outside-spec-paths`), since it holds the project's instructions for every agent harness (`platform`).
+
+#### Scenario: instructions edit
+- GIVEN a branch that edits only `AGENTS.md`
+- WHEN `clm gate` judges it
+- THEN its first line is `spec`
+
+#### Serves
+- capability/work-from-any-agent-harness
