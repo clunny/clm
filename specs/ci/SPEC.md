@@ -37,7 +37,7 @@ It runs one `cargo nextest run --no-tests=pass -p <package> <targets>` per packa
 1. `prepare` runs `.github/scripts/release-prepare.sh <version>`. The logic lives in a script so tests can run it against a temporary repository whose `origin` is a local bare repository, with a fake `gh` on `PATH`. The script fails unless the `release` preconditions hold. Among them, every target `plugin/bin/clm` maps a platform to is a `target:` in the build matrix of `.github/workflows/release.yml` (`shim-assets-before-release`): the script reads both files as text, the shim's `target=<target>` assignments and the matrix's `target: <target>` lines, so a release whose shim would ask for an asset the release doesn't hold fails here, before anything is built, naming the asset.
 
    When `version` is higher than the workspace version, the script:
-   - sets `[workspace.package] version` in `Cargo.toml`, and the `version` in `plugin/.claude-plugin/plugin.json` and in `plugin-panel/.claude-plugin/plugin.json`, so `claude plugin update` delivers both plugins (`plugin.panel/panel-package`);
+   - sets `[workspace.package] version` in `Cargo.toml`, and the `version` in `plugin/.claude-plugin/plugin.json`, in `plugin/.codex-plugin/plugin.json` and in `plugin-panel/.claude-plugin/plugin.json`, so `claude plugin update` delivers both Claude Code plugins (`plugin.panel/panel-package`) and Codex's plugin update delivers the Codex package (`plugin/codex-package`), and stages all three with the bump;
    - updates the workspace's entries in `Cargo.lock` (`cargo update --workspace`);
    - runs `.github/scripts/detector-tools.sh`, then `cargo test --all`;
    - commits `Release v<version>` as `github-actions[bot]` and force-pushes it to the branch `release/v<version>`, replacing whatever an earlier failed run left there.
@@ -67,7 +67,7 @@ The code key lives in `ledger`, landing in `land` and approval pinning in the le
 
 ### Requirement: release
 The release workflow SHALL run only on `workflow_dispatch`, with a `version` input. It SHALL fail, publishing nothing and leaving `main` unchanged, unless all of these hold: it runs from `main`; `version` is `MAJOR.MINOR.PATCH`; `version` is not lower than the workspace version; no release or tag `v<version>` exists; every target `plugin/bin/clm` downloads an asset for is a target of the workflow's build matrix; and, when `version` equals the workspace version, `crates/clm-upgrade/corpus/v<version>.tar.gz` exists, since a release without a bump records no corpus entry (`release-records-upgrade-corpus`). Otherwise it SHALL:
-- when `version` is higher than the workspace version, commit a bump of the workspace version, `Cargo.lock`, `plugin/.claude-plugin/plugin.json` and `plugin-panel/.claude-plugin/plugin.json` to `version`, with the release's upgrade corpus entry and lock lines (`release-records-upgrade-corpus`), and run the tests on that commit;
+- when `version` is higher than the workspace version, commit a bump of the workspace version, `Cargo.lock`, `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json` and `plugin-panel/.claude-plugin/plugin.json` to `version`, with the release's upgrade corpus entry and lock lines (`release-records-upgrade-corpus`), and run the tests on that commit;
 - build `clm` from that commit for `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin` and `aarch64-apple-darwin`, and for no Windows target (`no-windows-support`), every target on a Linux runner with `cargo zigbuild` and none on a macOS runner (`cross-built-macos-binaries`), each macOS target built for macOS `11.0` or later, failing unless each Linux binary is statically linked;
 - publish the release `v<version>` at that commit with `clm-<target>.tar.gz`, holding `clm`, and `clm-<target>.tar.gz.sha256` for every target;
 - only after publishing, bring the bump commit into `main`, with a commit message starting `Release v`.
@@ -107,7 +107,7 @@ It and the site workflow (`site-deploy`) SHALL be the only workflows in `.github
 #### Scenario: higher version
 - GIVEN workspace version `0.1.0` and no release `v0.2.0`
 - WHEN the prepare step runs with `version` `0.2.0`
-- THEN `release/v0.2.0` on the remote holds one new commit setting `0.2.0` in `Cargo.toml`, `Cargo.lock`, `plugin/.claude-plugin/plugin.json` and `plugin-panel/.claude-plugin/plugin.json`, and the remote's `main` is unchanged
+- THEN `release/v0.2.0` on the remote holds one new commit setting `0.2.0` in `Cargo.toml`, `Cargo.lock`, `plugin/.claude-plugin/plugin.json`, `plugin/.codex-plugin/plugin.json` and `plugin-panel/.claude-plugin/plugin.json`, and the remote's `main` is unchanged
 
 #### Scenario: same version without a corpus entry
 - GIVEN workspace version `0.1.0`, no release or tag `v0.1.0`, and no `crates/clm-upgrade/corpus/v0.1.0.tar.gz`
