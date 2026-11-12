@@ -4,7 +4,6 @@
 use std::path::Path;
 
 use clm_agent_harness::{AgentHarness, parse_event};
-use serde_json::Value;
 
 mod defect;
 mod upgrade;
@@ -13,13 +12,7 @@ pub use defect::defect;
 /// `SessionStart`: `clm status` for the CLM repository holding the event's `cwd`, then the
 /// rule for reporting CLM defects unless `defects` is `off` (or the settings' error), else "".
 pub fn session_start(event: &str) -> String {
-    match serde_json::from_str::<Value>(event) {
-        Ok(event) => event["cwd"]
-            .as_str()
-            .map(|cwd| session_text(Path::new(cwd)))
-            .unwrap_or_default(),
-        Err(_) => String::new(),
-    }
+    session_start_hook(AgentHarness::ClaudeCode, event).0
 }
 
 /// `session_start` for an agent harness (`hooks-per-agent-harness`): the event's `cwd` comes
@@ -137,12 +130,7 @@ file's path, for the human to file by hand.";
 /// `cwd` (`autosync-policy`), unless its `autosync` setting is `false` or can't be loaded.
 /// Silent whatever happens: it runs every turn.
 pub fn autosync(event: &str) {
-    if let Some(cwd) = serde_json::from_str::<Value>(event)
-        .ok()
-        .and_then(|e| e["cwd"].as_str().map(str::to_string))
-    {
-        autosync_in(Path::new(&cwd));
-    }
+    autosync_hook(AgentHarness::ClaudeCode, event);
 }
 
 fn autosync_in(cwd: &Path) {
