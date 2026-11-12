@@ -56,3 +56,15 @@ fn help_lists_machine() {
     let help = String::from_utf8_lossy(&out.stdout);
     assert!(help.lines().any(|l| l.trim_start().starts_with("machine ")));
 }
+
+// req:clm/machine-command@9c8df2a2
+#[test]
+fn text_format_prints_the_three_readings() {
+    let dir = initialised();
+    let out = clm(dir.path(), &["machine", "--format", "text"]);
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8_lossy(&out.stdout);
+    for word in ["cpu", "mem", "disk"] {
+        assert!(text.contains(word), "{text}");
+    }
+}
