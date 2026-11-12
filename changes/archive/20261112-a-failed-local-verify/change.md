@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-failed-local-verify-records-no-log-of-which-tests-failed]
 ---
 
