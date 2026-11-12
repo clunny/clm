@@ -300,7 +300,7 @@ fn scenario_branch_moved() {
 
 #[test]
 fn branch_moved_keeps_its_message() {
-    // req:host/shared-plumbing@a65259c7
+    // req:host/shared-plumbing@02348618
     let (r, gh) = (checkout("github"), fake_gh());
     let s = push_impl_a(&r, "a.txt");
     other_clone_push(&r, "impl/a", "b.txt");
@@ -578,7 +578,7 @@ fn body(gh: &Gh) -> String {
 
 #[test]
 fn scenario_pr_open_a_spec_branchs_change() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -595,7 +595,7 @@ fn scenario_pr_open_a_spec_branchs_change() {
 
 #[test]
 fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     for (intent, title) in [
         ("Is it so? Yes.\n", "Is it so?"),
         (
@@ -615,7 +615,7 @@ fn pr_open_title_is_the_first_sentence_of_the_first_paragraph() {
 
 #[test]
 fn pr_open_blank_intent_falls_back_to_commits() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let r = spec_branch("  \n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -626,7 +626,7 @@ fn pr_open_blank_intent_falls_back_to_commits() {
 
 #[test]
 fn scenario_pr_open_a_branch_without_a_change() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "fix/y"]);
     for subject in ["first", "second"] {
@@ -640,7 +640,7 @@ fn scenario_pr_open_a_branch_without_a_change() {
 
 #[test]
 fn pr_open_describes_the_branch_it_is_given() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let r = spec_branch("Skills fail. They name a bare command.\n");
     git(&r.work, &["checkout", "-q", "-b", "fix/y", "origin/main"]);
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "other"]);
@@ -654,7 +654,7 @@ fn pr_open_describes_the_branch_it_is_given() {
 
 #[test]
 fn pr_open_spec_branch_without_a_change_uses_commits() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "spec/nochange"]);
     git(&r.work, &["commit", "-q", "--allow-empty", "-m", "only"]);
@@ -666,7 +666,7 @@ fn pr_open_spec_branch_without_a_change_uses_commits() {
 
 #[test]
 fn scenario_pr_open_given_arguments_override() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(
@@ -684,7 +684,7 @@ fn scenario_pr_open_given_arguments_override() {
 
 #[test]
 fn pr_open_each_argument_overrides_alone() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let r = spec_branch("Skills fail. They name a bare command.\n");
     let gh = fake_gh();
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open", "--title", "mine"], &[]);
@@ -703,7 +703,7 @@ fn pr_open_each_argument_overrides_alone() {
 
 #[test]
 fn scenario_pr_open_nothing_to_describe() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "-b", "fix/z"]);
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -713,7 +713,7 @@ fn scenario_pr_open_nothing_to_describe() {
 
 #[test]
 fn scenario_pr_open_detached_head() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     let (r, gh) = (checkout("github"), fake_gh());
     git(&r.work, &["checkout", "-q", "--detach"]);
     let (code, _, err) = clm(&r.work, &gh, &["pr", "open"], &[]);
@@ -723,7 +723,7 @@ fn scenario_pr_open_detached_head() {
 
 #[test]
 fn scenario_pr_open_defaults_no_host() {
-    // req:host/pr-open-defaults@aa76a931
+    // req:host/pr-open-defaults@6b09a910
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         git(&r.work, &["checkout", "-q", "--detach"]);
