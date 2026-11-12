@@ -242,6 +242,8 @@ fn isolated(mut command: Command) -> Command {
         "CLM_DEFECTS",
         "CLM_WRITER",
         "CLM_MAX_BUILDS",
+        "CLAUDECODE",
+        clm_agent_harness::CODEX_MARKER,
     ] {
         command.env_remove(var);
     }
