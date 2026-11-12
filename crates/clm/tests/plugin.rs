@@ -1838,8 +1838,14 @@ fn agent_harness_gaps(skill: &str, body: &str) -> Vec<String> {
             "`named-agents`",
             "`confirm`",
             "own terminal",
+            "never run it from this session",
         ],
-        _ => &["clm agent-harness", "`confirm`", "own terminal"],
+        _ => &[
+            "clm agent-harness",
+            "`confirm`",
+            "own terminal",
+            "never run it from this session",
+        ],
     };
     let mut gaps = text_gaps(skill, body, must, &[]);
     for line in body
