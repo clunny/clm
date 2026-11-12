@@ -45,6 +45,7 @@ import {
   unlessSuperseded,
   viewArgs,
   viewKey,
+  widthOf,
 } from '../src/panel.ts'
 
 const tab = atom({ plugin: 'clm-panel', key: 'tab' } as const, FIRST_TAB, { shape: 'tab-1' })
@@ -109,8 +110,11 @@ async function redraw($: EngineInterface) {
 // One `clm machine` run, unless the last is still going; the pane redraws without rerunning `clm view`.
 async function sampleMachine($: EngineInterface) {
   sampler ??= machineSampler($, () => $.session.cwd())
-  sampledColumns = columns
-  if (await sampler.sample(columns)) await update($, sampled, n => n + 1)
+  const width = widthOf(columns)
+  if (await sampler.sample(columns)) {
+    sampledColumns = width
+    await update($, sampled, n => n + 1)
+  }
 }
 
 function startTimer($: EngineInterface) {
@@ -262,7 +266,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   // The machine rows follow the latest sample; a pane measured at a new width samples again.
   await read($, sampled)
   columns = e.props.bodyColumns
-  if (sampledColumns !== columns) void sampleMachine($)
+  if (sampledColumns !== widthOf(columns)) void sampleMachine($).catch(() => undefined)
   // Each surface's table is one member of a union: `Svg` is read by narrowing it.
   const elements = $.ui.resolve(e)
   const { Box, Text, Button } = elements
