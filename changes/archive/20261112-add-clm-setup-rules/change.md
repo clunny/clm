@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [add-clm-setup-rules-to-claude-settings]
 ---
 
