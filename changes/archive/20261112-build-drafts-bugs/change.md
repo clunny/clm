@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 human_burdens:
   - Each `/clm:build` run also spends model tokens drafting the backlog's bug groups, on the session's own model.
 ---

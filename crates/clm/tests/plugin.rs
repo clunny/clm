@@ -506,6 +506,11 @@ fn defect_gaps(skill: &str, body: &str) -> Vec<String> {
         .any(|paragraph| DEFECT_FIX_STEP.iter().all(|n| paragraph.contains(n)));
     // `build` has no fix step: its drain drafts the defects its builds report as bugs
     // (`plugin.build/build-drafts-bugs`).
+    if skill == "build" && body.contains("fix reported defects") {
+        gaps.push(format!(
+            "{skill}: SKILL.md must have no paragraph that holds `fix reported defects`"
+        ));
+    }
     if skill == "propose" && !fix_step {
         gaps.push(format!(
             "{skill}: SKILL.md must have a paragraph that holds `fix reported defects`, \
@@ -517,7 +522,7 @@ fn defect_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_check_for_defects_before_a_pr() {
-    // req:plugin/defect-check-before-pr@3c314926
+    // req:plugin/defect-check-before-pr@abdfad5c
     for skill in ["propose"] {
         let body = skill_body(skill);
         assert_eq!(defect_gaps(skill, &body), Vec::<String>::new());
@@ -564,6 +569,9 @@ fn skills_check_for_defects_before_a_pr() {
         let gaps = defect_gaps("propose", &body);
         assert_reports(&gaps, "propose", "fix reported defects");
     }
+    // build keeping its own fix step
+    let gaps = defect_gaps("build", &format!("{build}\nfix reported defects\n"));
+    assert_reports(&gaps, "build", "fix reported defects");
     // `init` checks for defects before its page too.
     let init = skill_body("init");
     for needle in ["clm defect", "## CLM defects"] {
@@ -1755,7 +1763,7 @@ fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn launch_models() {
-    // req:plugin/launch-models@f7550b3b
+    // req:plugin/launch-models@030ff83e
     for skill in ["build", "triage", "propose", "health", "init"] {
         let body = skill_body(skill);
         assert_eq!(launch_model_gaps(skill, &body), Vec::<String>::new());
@@ -1810,6 +1818,8 @@ fn launch_models() {
     let triage = skill_body("triage");
     assert!(sentence_with(&triage, "clm draft <slug>...").contains(OWN_MODEL));
     assert!(sentence_with(&triage, "clm draft --fold <id>...").contains(SONNET));
+    // The build skill's fold runs on a named model too.
+    assert!(sentence_with(&body, "clm draft --fold <id>...").contains(SONNET));
 }
 
 /// The words that must stand beside any mention of the Agent tool.
