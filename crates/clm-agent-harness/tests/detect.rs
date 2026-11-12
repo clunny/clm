@@ -30,6 +30,16 @@ fn codex_inside_claude_code_is_codex() {
 
 // req:agent-harness/detect@5df05d5b
 #[test]
+fn codex_marker_is_the_variable_codex_sets() {
+    assert_eq!(CODEX_MARKER, "CODEX_THREAD_ID");
+    assert_eq!(
+        detect(env(&[("CODEX_THREAD_ID", "t")])),
+        AgentHarness::Codex
+    );
+}
+
+// req:agent-harness/detect@5df05d5b
+#[test]
 fn humans_terminal_is_none() {
     assert_eq!(detect(env(&[])), AgentHarness::None);
     assert_eq!(detect(env(&[("CLAUDECODE", "")])), AgentHarness::None);

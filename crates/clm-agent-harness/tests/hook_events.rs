@@ -41,6 +41,10 @@ fn codex_ask_becomes_block() {
     assert_eq!(r.exit_code, 2);
     assert!(r.stderr.contains("confirm clm approve"));
     assert!(r.stderr.contains("own terminal"));
+    assert!(r.stderr.contains("can't ask the human"));
+    let n = render(AgentHarness::None, &Decision::Ask("x".into()));
+    assert_eq!(n.exit_code, 2);
+    assert!(n.stderr.contains("own terminal"));
 }
 
 // req:agent-harness/hook-events@cab71a98
