@@ -8,7 +8,7 @@ fn decision(status: &str, body: &str) -> String {
 
 #[test]
 fn scenario_cited_and_uncited() {
-    // req:check.health/uncited-decisions@43e37f91
+    // req:check.health/uncited-decisions@4dc76b14
     let dir = repo();
     let d = dir.path();
     let mut a = spec("[]", &["x"]);
@@ -30,7 +30,7 @@ fn scenario_cited_and_uncited() {
 
 #[test]
 fn scenario_named_only_in_a_fence() {
-    // req:check.health/uncited-decisions@43e37f91
+    // req:check.health/uncited-decisions@4dc76b14
     let dir = repo();
     let d = dir.path();
     let mut a = spec("[]", &["x"]);
@@ -46,12 +46,13 @@ fn scenario_named_only_in_a_fence() {
 
 #[test]
 fn every_other_source_cites_a_decision() {
-    // req:check.health/uncited-decisions@43e37f91
+    // req:check.health/uncited-decisions@4dc76b14
     let dir = repo();
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "Invariant `by-arch`.\n");
     write(d, "CAPABILITIES.md", "## Capabilities\n\nSee `by-caps`.\n");
     write(d, "CLAUDE.md", "Rule `by-claude`.\n");
+    write(d, "AGENTS.md", "Rule `by-agents`.\n");
     write(d, "docs/guide/page.md", "See `by-guide`.\n");
     write(
         d,
@@ -63,6 +64,7 @@ fn every_other_source_cites_a_decision() {
         "by-arch",
         "by-caps",
         "by-claude",
+        "by-agents",
         "by-guide",
         "by-change",
         "by-archive",

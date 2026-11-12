@@ -58,7 +58,7 @@ fn markdown(dir: &Path, skip: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// Each accepted decision no spec, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, guide page, live
+/// Each accepted decision no spec, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `AGENTS.md`, guide page, live
 /// change or other decision names in a code span.
 pub(crate) fn uncited_decisions(root: &Path, graph: &Graph) -> Section {
     let read = |p: &Path| std::fs::read_to_string(p).unwrap_or_default();
@@ -66,7 +66,15 @@ pub(crate) fn uncited_decisions(root: &Path, graph: &Graph) -> Section {
         .into_iter()
         .filter(|p| p.file_name().is_some_and(|n| n == "SPEC.md"))
         .collect();
-    sources.extend(["ARCHITECTURE.md", "CAPABILITIES.md", "CLAUDE.md"].map(|f| root.join(f)));
+    sources.extend(
+        [
+            "ARCHITECTURE.md",
+            "CAPABILITIES.md",
+            "CLAUDE.md",
+            "AGENTS.md",
+        ]
+        .map(|f| root.join(f)),
+    );
     sources.extend(markdown(&root.join("docs/guide"), None));
     let changes = root.join("changes");
     sources.extend(markdown(&changes, Some(&changes.join("archive"))));
