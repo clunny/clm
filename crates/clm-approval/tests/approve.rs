@@ -74,6 +74,16 @@ fn refused_under_codex() {
 }
 
 #[test]
+fn refusal_comes_before_any_git_work() {
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    let f = Fixture::new("");
+    let env = f.env(&[(clm_agent_harness::CODEX_MARKER, "t1")]);
+    let missing = f.path("no-such-root");
+    let why = refused(clm_approval::approve(&missing, Some("spec/none"), &env));
+    assert!(why.contains("codex"), "{why}");
+}
+
+#[test]
 fn approves_in_the_humans_terminal() {
     // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
     let f = Fixture::new("");
