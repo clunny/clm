@@ -156,8 +156,35 @@ fn propose_claims_items_before_designing() {
 }
 
 #[test]
+fn propose_follows_agent_harness() {
+    // req:plugin.propose/propose-follows-agent-harness@f2fd7f68
+    let body = skill_body("propose");
+    assert_eq!(agent_harness_gaps(&body), Vec::<String>::new());
+    for needle in ["clm agent-harness", "confirm", "own terminal"] {
+        let gaps = agent_harness_gaps(&body.replace(needle, "elided"));
+        assert_reports(&gaps, "propose", needle);
+    }
+    // The check and the audit run before the pull request, and `subagents` `no` is named.
+    let check = numbered_steps(&body)
+        .into_iter()
+        .find(|s| s.contains("Run a builder check"))
+        .unwrap();
+    for needle in [
+        "`clm agent-harness`",
+        "`subagents` is `no`",
+        "one after the other",
+    ] {
+        assert!(check.contains(needle), "{needle}: {check}");
+    }
+    let ask = sentence_with(&body, "`confirm` is `no`");
+    for needle in ["own terminal", "never run `clm approve` yourself"] {
+        assert!(body.contains(needle), "{needle}: {ask}");
+    }
+}
+
+#[test]
 fn propose_archives_design_only_changes() {
-    // req:plugin.propose/propose-archives-design-only@1cb1a00e
+    // req:plugin.propose/propose-archives-design-only@b3297811
     let body = skill_body("propose");
     assert_eq!(design_only_gaps(&body), Vec::<String>::new());
     // skill without archiving
@@ -186,6 +213,15 @@ fn propose_archives_design_only_changes() {
     let when = sentence_with(&body, "archive-in-spec-pr");
     for needle in ["add, modify and remove no requirement", "nothing to build"] {
         assert!(when.contains(needle), "{needle}: {when}");
+    }
+    // skill without the promised work recorded
+    for needle in [
+        "kind: deferred",
+        "deferred-work-resolves-in-code",
+        "no requirement it adds or modifies makes pending",
+    ] {
+        let gaps = design_only_gaps(&body.replace(needle, "elided"));
+        assert_reports(&gaps, "propose", needle);
     }
     let how = sentence_with(&body, "clm archive <id>");
     for needle in [
@@ -834,7 +870,39 @@ fn design_only_gaps(body: &str) -> Vec<String> {
                 .to_owned(),
         );
     }
+    // The paragraph naming `clm archive` records the work the outcome promises.
+    let paragraph = body
+        .lines()
+        .find(|l| l.contains("clm archive <id>"))
+        .unwrap_or_default();
+    for needle in ["kind: deferred", "deferred-work-resolves-in-code"] {
+        if !paragraph.contains(needle) {
+            gaps.push(format!(
+                "propose: the paragraph naming `clm archive` must mention {needle}"
+            ));
+        }
+    }
+    let check = numbered_steps(body)
+        .into_iter()
+        .find(|s| s.contains("Run a builder check"))
+        .unwrap_or_default();
+    let needle = "no requirement it adds or modifies makes pending";
+    if !check.contains(needle) {
+        gaps.push(format!(
+            "propose: the builder-check step must mention {needle}"
+        ));
+    }
     gaps
+}
+
+/// What `propose-follows-agent-harness` asks of the `propose` skill.
+fn agent_harness_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "propose",
+        body,
+        &["clm agent-harness", "confirm", "own terminal"],
+        &[],
+    )
 }
 
 /// What `propose-priority` asks of the `propose` skill about ideas and triage.
