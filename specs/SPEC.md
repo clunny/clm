@@ -139,9 +139,6 @@ Every `clm` command with a `--root` option SHALL, when it isn't given, use the f
 - WHEN the test's check runs on it
 - THEN it reports that entry
 
-#### Needs
-- init/init-seeds-permissions
-
 #### Serves
 - capability/guard-sessions
 - capability/unattended-runner
