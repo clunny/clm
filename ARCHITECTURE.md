@@ -367,7 +367,6 @@ A build's red and green test runs exercise the branch's own code with the depend
 - orchestrator.triage/draft-prompt-setup
 - init/init-build-setup
 - plugin.init/init-skill-build-setup
-- plugin.build/build-defect-fixes-run-setup
 - plugin.propose/propose-fix-runs-setup
 
 #### Untested
