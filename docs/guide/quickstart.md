@@ -40,7 +40,7 @@ Claude commits CLM's setup files and then stops, because only you push to `main`
 
 Claude drafts the first design of your project: what it does, what must always hold, and how it splits into components. For an existing project, it describes what the code does today and shows you the split before writing the rest.
 
-Read it as intent: is this what the system is, or should be? Ask for changes in the conversation. When you're happy, say yes, and confirm the command Claude Code shows you. Codex can't ask you to confirm a command, so there the agent asks you to run `clm approve` in your own terminal instead. The design lands on `main`.
+Read it as intent: is this what the system is, or should be? Ask for changes in the conversation. When you're happy, say yes, and confirm the command Claude Code shows you. Codex can't ask you to confirm a command, so there the agent gives you the approval command to run in your own terminal instead. The design lands on `main`.
 
 ## 5. Run `/clm:build`
 
@@ -62,4 +62,4 @@ To understand what happens underneath, read [How it works](how-it-works.md).
 
 ## Other agents
 
-A project under CLM keeps its instructions in `AGENTS.md`, and `CLAUDE.md` imports it, so every agent reads the same rules, and people on different tools can work on one project. With an agent that has no CLM plugin, put the `clm` binary from the [release](https://github.com/clunny/clm/releases) on your `PATH`, ask the agent to follow the skills' steps from `AGENTS.md`, and always run `clm approve` yourself, in your own terminal. `clm agent-harness` says which agent harness a command runs under and what CLM can use there.
+A project under CLM keeps its instructions in `AGENTS.md`, and `CLAUDE.md` imports it, so every agent reads the same rules, and people on different tools can work on one project. With an agent that has no CLM plugin, put the `clm` binary from the [release](https://github.com/clunny/clm/releases) on your `PATH`, ask the agent to follow the skills' steps from `AGENTS.md`, and always run the approval command yourself, in your own terminal.
