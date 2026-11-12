@@ -60,7 +60,7 @@ fn first_session_runs_release(tmp: &TempDir, manifest: &str) -> std::path::PathB
     let installed = top.join("installed");
     let version = install_plugin(&installed, manifest);
 
-    // A machine with Claude Code and `curl`, and no Rust toolchain: `PATH` holds only the
+    // A machine with the agent harness and `curl`, and no Rust toolchain: `PATH` holds only the
     // system's tools and the fake `curl`.
     let bin = top.join("bin");
     fs::create_dir_all(&bin).unwrap();
