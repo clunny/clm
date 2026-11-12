@@ -54,7 +54,8 @@ fn nothing_kept() {
     let (linked, land) = linked(&f);
     assert_eq!(f.due().code, 0);
     assert_eq!(clm_verify::kept_log(&linked, &land), None);
-    assert!(!f.work().join(".clm/verify-logs").join(&land).exists());
+    let dir = f.work().join(".clm/verify-logs");
+    assert!(std::fs::read_dir(dir).is_ok_and(|mut d| d.next().is_none()));
 }
 
 #[test]
@@ -90,4 +91,5 @@ fn a_missing_directory() {
     let f = every_land();
     let (linked, land) = linked(&f);
     assert_eq!(clm_verify::kept_log(&linked, &land), None);
+    assert!(!f.work().join(".clm/verify-logs").exists());
 }
