@@ -35,6 +35,7 @@ clm-git.workspace = true
 clm-host.workspace = true
 clm-rename.workspace = true
 clm-upgrade.workspace = true
+clm-machine.workspace = true
 clap.workspace = true
 serde_json.workspace = true
 
