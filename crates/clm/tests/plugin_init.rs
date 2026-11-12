@@ -491,7 +491,13 @@ fn init_skill_asks_verify() {
 }
 
 /// What `init-follows-agent-harness` asks of the `init` skill.
-const INIT_HARNESS: &[&str] = &["clm agent-harness", "own terminal"];
+const INIT_HARNESS: &[&str] = &[
+    "clm agent-harness",
+    "own terminal",
+    "`subagents` is `no`",
+    "`confirm` is `no`",
+    "one at a time",
+];
 
 #[test]
 fn init_follows_agent_harness() {
