@@ -11,7 +11,7 @@ const KEEP_SECONDS: u64 = 30 * 60;
 /// A run adds no sample when the newest is this young.
 const MIN_GAP_SECONDS: u64 = 5;
 /// The most samples kept.
-pub const MAX_SAMPLES: usize = 180;
+const MAX_SAMPLES: usize = 180;
 
 /// A moment's shares: for each reading, how heavy the load is, `None` when unknown. CPU is
 /// `load1 / cores` over 2; memory and disk are `1 − available / total`.

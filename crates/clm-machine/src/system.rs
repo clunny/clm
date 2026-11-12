@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::{Readings, Space};
 
 /// The machine's readings, with the free space of the filesystem holding `disk_path`.
-pub fn read_system(disk_path: &Path) -> Readings {
+pub(crate) fn read_system(disk_path: &Path) -> Readings {
     // A reading the system refuses is unknown.
     let memory = sysinfo::System::new().ok().and_then(|mut system| {
         system.refresh_memory();

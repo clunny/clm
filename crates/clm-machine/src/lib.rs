@@ -11,9 +11,10 @@ mod walk;
 use std::path::{Path, PathBuf};
 
 pub use history::Sample;
-pub use record::{MEASURE_EVERY_SECONDS, Record};
+use record::MEASURE_EVERY_SECONDS;
+pub use record::Record;
 pub use render::{json, rows, text};
-pub use system::read_system;
+use system::read_system;
 pub use time::format as format_time;
 
 /// How a reading stands against what the builds need.

@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::time;
 
 /// How long a measurement is reused.
-pub const MEASURE_EVERY_SECONDS: u64 = 600;
+pub(crate) const MEASURE_EVERY_SECONDS: u64 = 600;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Record {
@@ -81,7 +81,7 @@ impl Record {
 }
 
 /// Writes `text` to `path` through a temporary file beside it and a rename.
-pub fn write_atomically(path: &Path, text: &str) {
+pub(crate) fn write_atomically(path: &Path, text: &str) {
     let Some(dir) = path.parent() else { return };
     if std::fs::create_dir_all(dir).is_err() {
         return;
