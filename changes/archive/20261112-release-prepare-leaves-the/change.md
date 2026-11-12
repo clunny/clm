@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [release-prepare-leaves-the-codex-plugin-version-behind]
 ---
 
