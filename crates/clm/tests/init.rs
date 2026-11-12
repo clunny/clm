@@ -355,6 +355,11 @@ fn claude_md_names_the_skills() {
     assert!(claude.contains("/clm:help"), "{claude}");
     assert!(claude.contains("clm approve"), "{claude}");
     assert!(
+        claude.contains("Never run `clm approve` yourself"),
+        "{claude}"
+    );
+    assert!(claude.contains("have the human run it"), "{claude}");
+    assert!(
         claude.contains("whatever the agent harness calls them"),
         "{claude}"
     );
@@ -545,6 +550,12 @@ fn project_files_kept() {
             .any(|l| l.contains("add `@AGENTS.md` to `CLAUDE.md`")),
         "{out}"
     );
+    // An `AGENTS.md` of the project's own is kept.
+    let (_tmp, dir) = repo();
+    write(&dir, "AGENTS.md", "# Mine\n");
+    let out = init(&dir, &[], &fake_hosts());
+    assert_eq!(read(&dir, "AGENTS.md"), "# Mine\n");
+    assert!(out.contains("kept AGENTS.md\n"), "{out}");
     // A CLAUDE.md that already imports it needs no such line.
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Ours\n@AGENTS.md\n");

@@ -496,6 +496,7 @@ fn binary_files_count_and_spec_files_do_not() {
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
         "CLAUDE.md",
+        "AGENTS.md",
     ] {
         files.push((f, b"x\n"));
     }
@@ -512,6 +513,7 @@ fn binary_files_count_and_spec_files_do_not() {
         "ARCHITECTURE",
         "CAPABILITIES",
         "CLAUDE",
+        "AGENTS",
     ] {
         assert!(!text.contains(f), "{f}: {text}");
     }
