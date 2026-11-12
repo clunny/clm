@@ -1,6 +1,6 @@
 ---
 title: Agent harness adapters
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: []
 paths: ["crates/clm-agent-harness/**"]
