@@ -92,6 +92,7 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
         "land",
         "pr",
         "rebase",
+        "setup",
         "verify",
         "workaround",
     ]

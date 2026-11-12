@@ -26,9 +26,9 @@ const SETTINGS: &str = ".claude/settings.json";
 const LOCAL_SETTINGS: &str = ".claude/settings.local.json";
 
 /// The allow rules for the `clm` commands unattended sessions run that write to the branch,
-/// `origin` or the backlog: for each of eleven subcommands, the bare form then the one with
+/// `origin` or the backlog: for each of twelve subcommands, the bare form then the one with
 /// arguments. `clm approve` is never among them, and neither is any `git` command.
-pub const UNATTENDED_RULES: [&str; 22] = [
+pub const UNATTENDED_RULES: [&str; 24] = [
     "Bash(clm apply)",
     "Bash(clm apply *)",
     "Bash(clm branch)",
@@ -47,6 +47,8 @@ pub const UNATTENDED_RULES: [&str; 22] = [
     "Bash(clm pr *)",
     "Bash(clm rebase)",
     "Bash(clm rebase *)",
+    "Bash(clm setup)",
+    "Bash(clm setup *)",
     "Bash(clm verify)",
     "Bash(clm verify *)",
     "Bash(clm workaround)",

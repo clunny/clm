@@ -18,6 +18,8 @@ mod constraints_copy;
 mod land_dir;
 #[path = "migrations/20261107-slow-tests-after-land/mod.rs"]
 mod offer_verify;
+#[path = "migrations/20261112-a-draft-s-clm/mod.rs"]
+mod setup_allow_rules;
 #[path = "migrations/20261109-land-still-sets-cargo/mod.rs"]
 mod starter_land_dir;
 #[path = "migrations/20261107-projects-upgrading-past-the/mod.rs"]
@@ -37,6 +39,7 @@ pub(crate) static LIST: &[Migration] = &[
     starter_land_dir::MIGRATION,
     build_setup::MIGRATION,
     agents_md::MIGRATION,
+    setup_allow_rules::MIGRATION,
 ];
 
 /// `(migration, note it supersedes)`: a note whose edit is to a text the later migration has
