@@ -628,7 +628,8 @@ fn detector_tools_installs_cargo_machete_pinned() {
 
 /// What breaks `ci/detector-tools` in a `clm.toml` and `detector-tools.sh`'s lines: a
 /// detector whose tool has no install line its `hint` repeats, a `clm` detector whose hint
-/// doesn't name `scripts/dev-install.sh`, or a script line that installs `clm`.
+/// doesn't name `scripts/dev-install.sh`, a script line that installs `clm` or `sh`; a detector
+/// that runs `sh` on a file of the repository (under `root`) needs no line.
 fn detector_tool_problems(
     config: &toml::Table,
     lines: &[String],
@@ -649,7 +650,7 @@ fn detector_tool_problems(
             && d["command"]
                 .get(1)
                 .and_then(|p| p.as_str())
-                .is_some_and(|p| root.join(p).is_file())
+                .is_some_and(|p| !p.starts_with('/') && !p.contains("..") && root.join(p).is_file())
         {
             // `sh <file in the repository>` needs only `sh` and `grep`; nothing installs it.
         } else if hint.split_whitespace().last() != Some(tool) {
