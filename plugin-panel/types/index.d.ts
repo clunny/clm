@@ -43,6 +43,8 @@ declare module 'claude-code' {
       /** Whether the inspector shows the selected node's contract. */
       contract: Shaped<boolean>
       generation: number
+      /** Bumped when a `clm machine` sample finishes. */
+      sampled: number
       agents: AgentRun[]
       now: number
     }

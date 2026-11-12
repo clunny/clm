@@ -166,13 +166,15 @@ export async function hasOriginMain($: Host, cwd: string): Promise<boolean> {
  */
 export const viewOf = (tab: ViewTab, at: boolean): string[] => ['view', tab, ...(at ? ['--at', 'origin/main'] : [])]
 
+/** `--width` takes 1 to 65535; a pane not yet measured gets clm's default. */
+export const widthOf = (columns: number): number =>
+  Number.isFinite(columns) ? Math.min(65535, Math.max(1, Math.floor(columns))) : 100
+
 /** The `clm view` arguments for a tab on a surface `columns` wide: an SVG, or ANSI on the terminal. */
 export function viewArgs(tab: ViewTab, surface: Surface, columns: number, at = false): string[] {
   const view = viewOf(tab, at)
   if (surface !== 'terminal') return [...view, '--format', 'svg']
-  // `--width` takes 1 to 65535; a pane not yet measured gets clm's default.
-  const width = Number.isFinite(columns) ? Math.min(65535, Math.max(1, Math.floor(columns))) : 100
-  return [...view, '--format', 'ansi', '--width', String(width)]
+  return [...view, '--format', 'ansi', '--width', String(widthOf(columns))]
 }
 
 /** What the pane draws under its tabs, from its `clm` run: `clm`'s stderr first. */
