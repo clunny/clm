@@ -1,0 +1,21 @@
+# The old names completed renames replaced (plain-terms-renames), one per line, each in a form
+# ordinary English never takes. A change that completes a rename adds the names it retires.
+clm sync
+clm checkpoint
+clm page
+sync ok
+sync incomplete
+sync failed
+checkpoint ok
+checkpoint incomplete
+architecture requirement
+architecture requirements
+frontier stub
+frontier stubs
+--node
+--nodes
+node_size
+clm friction
+`kind: human`
+specd
+`kind: friction`
