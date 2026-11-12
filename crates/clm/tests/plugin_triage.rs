@@ -1146,3 +1146,49 @@ fn triage_follows_agent_harness() {
         assert!(para.contains(needle), "{needle}: {para}");
     }
 }
+
+/// What `triage-verify-log` asks of a `triage` skill.
+fn verify_log_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "triage",
+        body,
+        &[
+            "verify <sha> log <path>",
+            "last 40 lines",
+            "::group::",
+            "::endgroup::",
+            "kept no output",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn triage_verify_log() {
+    // req:plugin.triage/triage-verify-log@c81ea64e
+    let body = skill_body("triage");
+    assert_eq!(verify_log_gaps(&body), Vec::<String>::new());
+    let gaps = verify_log_gaps(&body.replace("kept no output", "elided"));
+    assert_reports(&gaps, "triage", "kept no output");
+    let line = sentence_with(&body, "`verify <sha> log <path>`");
+    assert!(line.contains("`verify <sha> new`"), "{line}");
+    let show = sentence_with(&body, "last 40 lines");
+    for needle in [
+        "`check-step-markers`",
+        "`::endgroup::`",
+        "the step open as the output ended",
+        "kept no output",
+        "culprit and components alone",
+    ] {
+        assert!(show.contains(needle), "{needle}: {show}");
+    }
+    let item = sentence_with(&body, "the failing step");
+    for needle in [
+        "when a log was kept",
+        "the lines that show the failure",
+        "the log's path",
+        "culprit land and its change (`verify-after-land`), on",
+    ] {
+        assert!(item.contains(needle), "{needle}: {item}");
+    }
+}
