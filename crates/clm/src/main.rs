@@ -1477,9 +1477,7 @@ fn dispatch() -> ExitCode {
             let root = clm_hooks::clm_root(&cwd);
             let lines =
                 clm_config::load(root, &clm_config::process_env).and_then(|s| match config {
-                    Config::Get { key } => s
-                        .get(&key)
-                        .map(|(value, layer)| vec![format!("{value}\t{layer}")]),
+                    Config::Get { key } => s.lines(&key),
                     Config::List => s.list(),
                 });
             match lines {
