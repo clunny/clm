@@ -74,7 +74,7 @@ Where: `clm.toml` or `clm.local.toml`.
 - **Set variables** when your checks read a value that differs per project or per machine. They reach CLM's commands only, not your shell or other projects.
 - **Leave it unset** and the commands get the environment of whatever runs `clm`, which differs between a terminal and a session.
 
-`clm verify` takes `clm.toml`'s `[env]` as committed on `origin/main`, with this clone's `clm.local.toml`, so a shared variable changes for verify once its edit lands. `clm config list` prints each variable with the file it came from.
+Each command reads `clm.toml`'s `[env]` from the tree it checks, with this clone's `clm.local.toml`: a land from the merged branch, `clm verify` from the commit it verifies. A land whose variables differ from `main`'s runs every test, and a land checked under other variables, such as another clone's, isn't counted as checked. `clm config list` prints each variable with the file it came from.
 
 Where: `clm.toml` or `clm.local.toml`.
 

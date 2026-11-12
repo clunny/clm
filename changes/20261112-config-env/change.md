@@ -23,11 +23,18 @@ A project's slow-test script reads `RELAY_SERVER_IMAGE`, a locally built contain
 
 - `config/env-setting` (added): `env` is repository-only, set only by `clm.toml` or `clm.local.toml`, so neither the user's `config.toml` nor a shell variable can change a project's checks from outside its clone. It is a table of strings keyed by variable names. Loading refuses names beginning `CLM_` and `CI`, which CLM sets or removes for its runs, so a variable in the table can never be silently overridden. It also refuses values holding a line break, since `clm config get` prints one line per variable. The two files' tables merge name by name, each variable keeping the file it came from.
 - `config/layers` and `config/config-list` (modified): `env` is the exception to tables never merging, and `clm config list` prints one `env` line per variable with its file. `config`'s Contract and Design state both; the guide's settings page gains `env`'s section and says the exception where it describes tables.
-- `land/check-env` (added): every run of `[land] check`, by a land or `--check-only`, sets the variables, from the settings it takes `[land] check` from (the root's, `land-policy-from-base`).
-- `verify/verify-env` (added): every run of `[verify] check`, bisect probes included, sets the variables from the settings it follows: `origin/main`'s `clm.toml` with the clone's `clm.local.toml` (`settings-from-main`), never the working tree's `clm.toml`.
+- `config/env-setting` also offers `committed_env(root, text, source)`: the variables of a `clm.toml` committed somewhere, with the clone's `clm.local.toml`, reading only the text's `[env]`, so an old commit whose other keys a later `clm` rejects still gives its variables.
+- `land/check-env` (added): every run of `[land] check`, by a land or `--check-only`, sets the variables of the tree it checks (the merge commit's `clm.toml`, or the working tree's), with the clone's `clm.local.toml`. A `checked` record's command is the check preceded by `NAME=value ` for each variable, so a record counts only for a check run with the same variables. A land whose variables differ from the base's runs every test (no `CLM_SELECTION`).
+- `verify/verify-env` (added), `verify/settings-from-main` (modified): every run of `[verify] check` sets the variables of the commit it checks out (the head, `--commit`'s commit, or a bisect probe's land), with the clone's `clm.local.toml`, never the working tree's `clm.toml`. A verification whose variables differ from the last green commit's runs every test.
 - `orchestrator.run/setup-command` (modified): `clm setup` sets the variables.
 
 In all three commands, a variable in `[env]` replaces the value the caller's environment holds (`env-table`), and CLM's own variables are applied after it, unchanged.
+
+## Builder check and audit
+
+The builder check found nothing blocking: no upgrade migration (a new optional table invalidates nothing `clm init` wrote), no capability test observes it, and `crates/clm/tests/cli.rs`'s seventeen-line `clm config list` test follows `config/config-list`. The architecture audit found two gaps, both fixed here:
+- `land-checks-stay-fast`: a variable reaches every test, but an `[env]` edit to `clm.toml` selected only `config`'s tests and `clm.toml`'s readers. Now a land, or a verification, whose variables differ from its base's runs every test. A bisect probe takes its own land's variables, so a land that changed one can be named the culprit.
+- `tests-run-in-their-own-tree` ("what a build saw pass is what its land checks"): a `checked` record matched by code key and command alone would count for a check run under other variables, such as another clone's `clm.local.toml`. Now the variables are part of the record's command. With no `[env]` the command is unchanged, so existing records still count.
 
 ## Constraints
 
