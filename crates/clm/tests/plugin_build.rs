@@ -158,7 +158,7 @@ fn build_launches_subagents() {
         assert_eq!(gaps, [format!("build: SKILL.md must not mention {old}")]);
     }
     // The subagent is launched only on a clean exit, with the printed prompt.
-    let launch = sentence_with(&body, "isolation: \"worktree\"");
+    let launch = sentence_with(&body, "run `clm run <component> --review-model <alias>`");
     for needle in [
         "clm run <component>",
         "exits 0",
@@ -251,7 +251,7 @@ fn build_finishes_builds() {
     let again = sentence_with(&body, "run `clm next` again");
     assert!(again.contains("returns"), "{again}");
     // Exit 3 launches nothing; finishing comes first, whether it landed or stopped.
-    let full = sentence_with(&body, "exits 3");
+    let full = sentence_with(&body, "When `clm run` exits 3");
     for needle in ["no free place", "launch nothing for that component"] {
         assert!(full.contains(needle), "{needle}: {full}");
     }
@@ -801,43 +801,114 @@ fn build_skill_is_named_build() {
     assert!(gaps.is_empty(), "{gaps:#?}");
 }
 
-/// What the defect-fix paragraph lacks of the build-setup rule.
-fn defect_setup_gaps(body: &str) -> Vec<String> {
-    let Some(step) = body.lines().find(|p| p.contains("fix reported defects")) else {
-        return vec!["no paragraph holds `fix reported defects`".to_owned()];
-    };
-    ["clm setup", "tests-run-in-their-own-tree", "[build] setup"]
-        .iter()
-        .filter(|n| !step.contains(*n))
-        .map(|n| format!("the defect-fix paragraph lacks `{n}`"))
-        .collect()
+/// What the skill lacks of the bug-drafting rule (`build-drafts-bugs`).
+fn drafts_gaps(body: &str) -> Vec<String> {
+    let mut gaps = text_gaps(
+        "build",
+        body,
+        &[
+            "clm triage",
+            "clm draft <slug>...",
+            "clm draft --finish <id>",
+            "proposed <id> review",
+            "build-drafts-bugs",
+            "clm draft --fold <id>...",
+            "proposed <batch> review <url>",
+            "approve-in-session",
+            "only `group` lines",
+        ],
+        &[],
+    );
+    if body.lines().any(|p| p.contains("fix reported defects")) {
+        gaps.push("build: a paragraph holds `fix reported defects`".to_owned());
+    }
+    gaps
 }
 
 #[test]
-fn build_defect_fixes_run_setup() {
-    // req:plugin.build/build-defect-fixes-run-setup@d705d976
+fn build_drafts_bugs() {
+    // req:plugin.build/build-drafts-bugs@c5168e54
     let body = skill_body("build");
-    assert_eq!(defect_setup_gaps(&body), Vec::<String>::new());
-    for needle in ["clm setup", "tests-run-in-their-own-tree", "[build] setup"] {
-        let gaps = defect_setup_gaps(&body.replace(needle, "elided"));
+    assert_eq!(drafts_gaps(&body), Vec::<String>::new());
+    for needle in [
+        "clm triage",
+        "clm draft <slug>...",
+        "clm draft --finish <id>",
+        "proposed <id> review",
+        "build-drafts-bugs",
+        "clm draft --fold <id>...",
+        "proposed <batch> review <url>",
+        "approve-in-session",
+        "only `group` lines",
+    ] {
+        let gaps = drafts_gaps(&body.replace(needle, "elided"));
         assert!(
             gaps.iter().any(|g| g.contains(needle)),
             "{needle}: {gaps:?}"
         );
     }
-    // It runs before any test, again when dependencies change, and a failure fixes nothing.
-    let step = body
+    // A skill that keeps its defect-fix step is reported.
+    let gaps = drafts_gaps(&format!("{body}\nfix reported defects\n"));
+    assert_reports(&gaps, "build", "fix reported defects");
+    // The draft launch: unchanged stdout, background, worktree, the session's own model,
+    // before the builds, and exit 3 stops the round's drafts.
+    let step = sentence_with(&body, "run `clm draft <slug>...`");
+    for needle in [
+        "only when it exits 0",
+        "unchanged",
+        "background",
+        "isolation: \"worktree\"",
+        "session's own model",
+    ] {
+        assert!(step.contains(needle), "{needle}: {step}");
+    }
+    let para = body
         .lines()
-        .find(|p| p.contains("fix reported defects"))
+        .find(|l| l.contains("run `clm draft <slug>...`"))
         .unwrap();
     for needle in [
-        "before you run any test there",
-        "dependency declarations",
-        "`clm rebase`",
-        "fix nothing there that needs a test",
-        "say so in the summary",
+        "before launching builds",
+        "no draft of this session has taken",
+        "while a place is free",
+        "exits 3",
+        "never pass `--answers`",
+        "`human`, `idea`, `deferred` or `workaround`",
+        "background-work-stopped",
+        "`landed <sha>`",
+        "`stopped: <reason>`",
+        "`left <slug>: <reason>`",
     ] {
-        assert!(step.contains(needle), "{needle}");
+        assert!(para.contains(needle), "{needle}");
+    }
+    // The fold: only its own drafts, in `group` order, `model: "sonnet"`, one approval.
+    let fold = body
+        .lines()
+        .find(|l| l.contains("clm draft --fold <id>..."))
+        .unwrap();
+    for needle in [
+        "model: \"sonnet\"",
+        "only those",
+        "`## Intent`",
+        "`## Decisions`",
+        "`## Open questions`",
+        "`clm approve spec/<batch>`",
+        "`clm land spec/<batch>`",
+    ] {
+        assert!(fold.contains(needle), "{needle}");
+    }
+    // The drain ends only when nothing is left to draft either, and a draft's items aren't
+    // taken twice; after the archive lands, triage runs again.
+    for needle in [
+        "prints no `group` line whose items no draft of this session has taken",
+        "none of your builds or drafts is left",
+        "go back to step 1",
+        "in `clm triage`'s order",
+        "background `general-purpose` subagent",
+        "never approve or land a change a draft left for review otherwise",
+        "never retry",
+        "run `clm triage` again",
+    ] {
+        assert!(body.contains(needle), "{needle}");
     }
 }
 
