@@ -25,8 +25,6 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     let repo = Repo::open(root, env)?;
     let branch = repo.approval.branch_name(branch, "landed")?;
     let check = repo.settings.land.value.as_ref().map(|l| l.check.clone());
-    // What a `checked` record names: the project's command, or `clm check` alone.
-    let command = check.clone().unwrap_or_else(|| "clm check".into());
     // Before any subcommand runs, so none runs from a binary the check can take away.
     let exe = Exe::new(&repo)?;
     let exe = exe.path();
@@ -35,11 +33,11 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     // Where `[land] check` keeps its build output, the clone's shared `.clm/land`
     // (`land/shared-land-target`).
     let target = check.as_ref().map(|_| places.join("land"));
-    let checked_with = |fold: &clm_ledger::Fold, key: &str| {
+    let checked_with = |fold: &clm_ledger::Fold, key: &str, command: &str| {
         fold.checks.get(key).is_some_and(|records| {
             records
                 .iter()
-                .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if *c == command))
+                .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if c == command))
         })
     };
     // The effort the branch's sessions spent here, read once, so neither the reading nor a
@@ -114,13 +112,28 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             }
             None => None,
         };
+        // What a `checked` record names: the project's command with the `[env]` of the tree
+        // it checks, or `clm check` alone (`land/check-env`). A land whose `env` differs from
+        // the base's checks every test.
+        let (env_vars, env_changed) = match (&check, &merged) {
+            (Some(_), Some((tree, _))) => {
+                let vars = repo.env_at(tree)?;
+                let changed = vars != repo.env_at(&base)?;
+                (vars, changed)
+            }
+            _ => (Vec::new(), false),
+        };
+        let command = match &check {
+            Some(check) => crate::checked_command(check, &env_vars),
+            None => "clm check".to_string(),
+        };
         // No record names the merged key: a `clm.toml` that differs only in what
         // `settings_unchanged` sets aside is looked up by the key without it, here, before
         // the lock is decided on (`land/settings-unchanged-is-checked`).
         let via_settings = match &merged {
-            Some((tree, key)) if !checked_with(&fold, key) => {
+            Some((tree, key)) if !checked_with(&fold, key, &command) => {
                 match settings_key(&repo, tree, &base)? {
-                    Some(settings_key) => checked_with(&fold, &settings_key),
+                    Some(settings_key) => checked_with(&fold, &settings_key, &command),
                     None => false,
                 }
             }
@@ -129,7 +142,12 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // Unchecked code whose head and base were each checked whole may be checked only where
         // the two overlap (`land/overlap-recheck`).
         let overlap = match &merged {
-            Some((_, key)) if check.is_some() && !via_settings && !checked_with(&fold, key) => {
+            Some((_, key))
+                if check.is_some()
+                    && !env_changed
+                    && !via_settings
+                    && !checked_with(&fold, key, &command) =>
+            {
                 overlap_basis(&repo, &fold, &head, &base, &command)?
             }
             _ => None,
@@ -147,6 +165,9 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             overlap,
             behind,
             warnings,
+            command,
+            env_vars,
+            env_changed,
         })
     };
     // The check runs when the merge is clean and its code key wasn't checked; a conflicting
@@ -154,7 +175,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     // takes the lock once the overlap says a check runs.
     let check_runs = |p: &Prepared| {
         p.merged.as_ref().is_some_and(|(_, key)| {
-            !p.via_settings && p.overlap.is_none() && !checked_with(&p.fold, key)
+            !p.via_settings && p.overlap.is_none() && !checked_with(&p.fold, key, &p.command)
         })
     };
     let mut out = Output {
@@ -199,6 +220,9 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             overlap,
             behind,
             warnings,
+            command,
+            env_vars,
+            env_changed,
         } = p;
         for warning in warnings {
             if !out.warnings.contains(&warning) {
@@ -281,7 +305,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
 
         // 6. The checks, unless the code was checked, and the gate again. The merge commit's
         // code key is its tree's.
-        let checked = via_settings || checked_with(&fold, &key);
+        let checked = via_settings || checked_with(&fold, &key, &command);
         // Whether `[land] check` runs, and the selection it gets: on unchecked code the tests
         // the branch can break, on checked code only the readers of what differs
         // (`land/selected-tests`).
@@ -323,7 +347,12 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 Selected::Failed => {}
             }
         }
-        if check.is_some() && !overlapped {
+        if env_changed && !checked {
+            // A variable can change any test's result: every test runs, with no selection
+            // (`land/check-env`).
+            runs = true;
+            recheck = Some(Recheck::Selected);
+        } else if check.is_some() && !overlapped {
             match repo.selection(exe, dir.path(), &base, checked) {
                 Selected::Nothing => {}
                 Selected::Tests(s) => {
@@ -391,6 +420,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 &vars,
                 ON_MERGE,
                 CheckHow {
+                    env: &env_vars,
                     log: Some(&log),
                     slot,
                     rank: Some(check_rank),
@@ -418,7 +448,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             repo.clm_check(exe, dir.path(), false, ON_MERGE)?;
             // The tree's own key is checked now, so the `landed` record names a checked key
             // and a retry finds it (`land/settings-unchanged-is-checked`).
-            if !checked_with(&fold, &key) {
+            if !checked_with(&fold, &key, &command) {
                 repo.append(Body::Checked {
                     code_key: key.clone(),
                     command: command.clone(),
@@ -665,21 +695,7 @@ fn specs_changed_on_both(
 fn settings_key(repo: &Repo, tree: &str, base: &str) -> Result<Option<String>, Error> {
     let prefix = repo.git(&["rev-parse", "--show-prefix"])?;
     let path = format!("{prefix}clm.toml");
-    // A missing file reads as none.
-    let read = |rev: &str| -> Result<Option<Vec<u8>>, Error> {
-        let spec = format!("{rev}:{path}");
-        if repo.git(&["cat-file", "-e", &spec]).is_err() {
-            return Ok(None);
-        }
-        let blob = clm_git::run(
-            &repo.root,
-            "git",
-            &["cat-file", "blob", &spec],
-            clm_git::Options::default(),
-        )?;
-        Ok(Some(blob))
-    };
-    let (before, after) = (read(base)?, read(tree)?);
+    let (before, after) = (repo.blob(base, &path)?, repo.blob(tree, &path)?);
     if before == after || !clm_gate::settings_unchanged(before.as_deref(), after.as_deref()) {
         return Ok(None);
     }
@@ -740,6 +756,12 @@ struct Prepared {
     behind: bool,
     /// What `land/verify-stop` warns of.
     warnings: Vec<String>,
+    /// The command a `checked` record names for the merged tree, and the `[env]` it runs with
+    /// (`land/check-env`).
+    command: String,
+    env_vars: Vec<(String, String)>,
+    /// Whether that `env` differs from the base's.
+    env_changed: bool,
 }
 
 /// The merged tree and its code key, refused when the merge conflicts or both sides changed

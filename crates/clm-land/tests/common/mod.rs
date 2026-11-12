@@ -58,6 +58,8 @@ pwd -P >> "$DIR/check-pwd.log"
 echo "CI=${CI-unset} CLM_LAND_DIR=${CLM_LAND_DIR-unset}" >> "$DIR/check-env.log"
 echo "${CARGO_TARGET_DIR-unset} ${CARGO_INCREMENTAL-unset}" >> "$DIR/check-cargo.log"
 echo "${CLM_SLOT-unset}" >> "$DIR/check-slot.log"
+echo "${RELAY_SERVER_IMAGE-unset}" >> "$DIR/check-relay.log"
+echo "${A-unset}" >> "$DIR/check-a.log"
 echo "${CLM_LAND_DIR-}" >> "$DIR/check-land-dir.log"
 echo "CLM_SELECTION=${CLM_SELECTION-unset}" >> "$DIR/check-selection.log"
 if [ -n "${CLM_SELECTION-}" ]; then cp "$CLM_SELECTION" "$DIR/selection-copy"; fi
@@ -432,6 +434,17 @@ impl Fixture {
             .into_iter()
             .filter_map(|r| match r.body {
                 Body::Checked { code_key, .. } => Some(code_key),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The command each `checked` record names, in order.
+    pub fn checked_commands(&self) -> Vec<String> {
+        self.records()
+            .into_iter()
+            .filter_map(|r| match r.body {
+                Body::Checked { command, .. } => Some(command),
                 _ => None,
             })
             .collect()
