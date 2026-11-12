@@ -1073,6 +1073,19 @@ fn triage_archives_complete() {
     // triage naming the branch as a claim
     let gaps = archive_gaps(&format!("{body}\nLand `impl/archive` later.\n"));
     assert_reports(&gaps, "triage", "impl/archive/<id>");
+    let gaps = archive_gaps(&format!("{body}\nLand impl/archive later.\n"));
+    assert_reports(&gaps, "triage", "impl/archive/<id>");
+    let gaps = archive_gaps(&format!("{body}\nLand impl/archive"));
+    assert_reports(&gaps, "triage", "impl/archive/<id>");
+    for needle in [
+        "`git rev-parse --show-toplevel`, as before entering a fold's worktree",
+        "run `clm rebase` until its last line is `rebase ok`, push with `clm branch push`",
+        "`clm pr open impl/archive/<id>` and a body written under `.clm/`",
+        "`git branch -D` when its push was refused",
+        "and then run `clm wrap-up` again",
+    ] {
+        assert!(body.contains(needle), "{needle}");
+    }
     // The archive text follows the wrap-up paragraph, which stays whole.
     let para = body.lines().find(|l| l.contains("clm wrap-up")).unwrap();
     assert!(para.contains("left <path>"), "{para}");
