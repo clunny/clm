@@ -318,7 +318,7 @@ pub fn prompt(job: &Job) -> String {
     } else {
         ""
     };
-    // Every test or check command the session runs itself ends within a limit
+    // Every command the session runs itself ends within a limit
     // (`bounded-test-runs`); `clm land --check-only` is run as written, so it is named only
     // where the repository sets a check.
     let as_written = if job.check.is_some() {
