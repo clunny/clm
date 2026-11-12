@@ -428,7 +428,7 @@ fn short(r: &Repo, commit: &str) -> String {
 
 #[test]
 fn scenario_a_new_failure() {
-    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
     let r = repo();
     let [c0, c1, c2] = three_commits(&r);
     push_ledger(
@@ -448,9 +448,28 @@ fn scenario_a_new_failure() {
     );
 }
 
+/// Keeps a log for `commit` in the clone's main worktree, as a failed local run does.
+fn keep_log(r: &Repo, commit: &str) -> std::path::PathBuf {
+    let dir = r.work.join(".clm/verify-logs");
+    fs::create_dir_all(&dir).unwrap();
+    let file = dir.join(format!("{}.log", short(r, commit)));
+    fs::write(&file, "output\n").unwrap();
+    file.canonicalize().unwrap()
+}
+
+/// A linked worktree of the clone.
+fn linked(r: &Repo) -> std::path::PathBuf {
+    let path = r.work.parent().unwrap().join("linked-intake");
+    git(
+        &r.work,
+        &["worktree", "add", "-q", "--detach", path.to_str().unwrap()],
+    );
+    path
+}
+
 #[test]
-fn scenario_taken_in() {
-    // req:orchestrator.triage/intake-verify-failures@540c3ede
+fn scenario_a_kept_log() {
+    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
     let r = repo();
     let [c0, c1, c2] = three_commits(&r);
     push_ledger(
@@ -460,6 +479,31 @@ fn scenario_taken_in() {
             verified(2, &c2, false, Some(&c1), &["b", "a"]),
         ],
     );
+    let log = keep_log(&r, &c2);
+    let linked = linked(&r);
+    assert_eq!(
+        intake(&linked, &host(vec![])).unwrap(),
+        [
+            format!("verify {} new {} a b", short(&r, &c2), short(&r, &c1)),
+            format!("verify {} log {}", short(&r, &c2), log.display()),
+        ]
+    );
+}
+
+#[test]
+fn scenario_taken_in() {
+    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
+    let r = repo();
+    let [c0, c1, c2] = three_commits(&r);
+    push_ledger(
+        &r,
+        &[
+            verified(1, &c0, true, None, &[]),
+            verified(2, &c2, false, Some(&c1), &["b", "a"]),
+        ],
+    );
+    // A kept log exists, yet an imported line gets no `log` line.
+    keep_log(&r, &c2);
     for slug in ["b-broke", "a-also"] {
         write(
             &r.work,
@@ -481,7 +525,7 @@ fn scenario_taken_in() {
 
 #[test]
 fn scenario_fixed_since() {
-    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
     let r = repo();
     let [_, c1, c2] = three_commits(&r);
     push_ledger(
@@ -496,7 +540,7 @@ fn scenario_fixed_since() {
 
 #[test]
 fn reds_follow_the_hosts_lines_in_first_parent_order() {
-    // req:orchestrator.triage/intake-verify-failures@540c3ede
+    // req:orchestrator.triage/intake-verify-failures@7e39eb0d
     let r = repo();
     let [_, c1, c2] = three_commits(&r);
     // Recorded newest commit first: the lines follow the chain, not the records.

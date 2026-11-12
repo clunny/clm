@@ -125,7 +125,8 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
             .filter(|i| i.frontmatter.verify_failures.contains(&red.commit))
             .map(|i| i.slug.as_str())
             .collect();
-        let tail = if slugs.is_empty() {
+        let is_new = slugs.is_empty();
+        let tail = if is_new {
             let culprit = match &red.culprit {
                 Some(c) => short(root, c)?,
                 None => "unknown".to_string(),
@@ -137,7 +138,11 @@ pub fn intake(root: &Path, host: &dyn Host) -> Result<Vec<String>, Error> {
         } else {
             format!("imported {}", Vec::from_iter(slugs).join(" "))
         };
-        lines.push(format!("verify {} {tail}", short(root, &red.commit)?));
+        let abbreviated = short(root, &red.commit)?;
+        lines.push(format!("verify {abbreviated} {tail}"));
+        if is_new && let Some(log) = clm_verify::kept_log(root, &red.commit) {
+            lines.push(format!("verify {abbreviated} log {}", log.display()));
+        }
     }
     Ok(lines)
 }

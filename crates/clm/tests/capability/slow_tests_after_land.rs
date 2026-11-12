@@ -102,6 +102,24 @@ fn a_slow_test_breaks_after_the_land() {
             && l.ends_with(" b")),
         "{intake}"
     );
+    // The failing run's kept log follows it, and the file exists.
+    let lines: Vec<&str> = intake.lines().collect();
+    let at = lines
+        .iter()
+        .position(|l| l.starts_with("verify ") && l.contains(" new "))
+        .unwrap();
+    let log = lines
+        .get(at + 1)
+        .and_then(|l| l.split_once(" log "))
+        .unwrap_or_else(|| panic!("{intake}"))
+        .1;
+    assert!(std::path::Path::new(log).is_file(), "{intake}");
+    assert!(log.ends_with(&format!("{}.log", &red[..7])), "{intake}");
+    let sha = lines[at].split(' ').nth(1).unwrap();
+    assert!(
+        lines[at + 1].starts_with(&format!("verify {sha} log ")),
+        "{intake}"
+    );
 
     // The person takes it in as a bug item naming the red commit.
     repo.write(
