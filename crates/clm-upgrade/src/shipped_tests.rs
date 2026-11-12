@@ -290,7 +290,9 @@ fn a_declined_rules_migration_is_not_listed() {
     fs::remove_dir_all(dir.path().join(".claude")).unwrap();
     fs::write(
         dir.path().join("clm.toml"),
-        stamped(&format!("declined_migrations = [\"{RULES_ID}\"]\n")),
+        stamped(&format!(
+            "declined_migrations = [\"{RULES_ID}\", \"20261112-a-draft-s-clm\"]\n"
+        )),
     )
     .unwrap();
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
