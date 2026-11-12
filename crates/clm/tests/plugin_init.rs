@@ -489,3 +489,23 @@ fn init_skill_asks_verify() {
         assert!(!gaps.is_empty(), "{needle}");
     }
 }
+
+/// What `init-follows-agent-harness` asks of the `init` skill.
+const INIT_HARNESS: &[&str] = &[
+    "clm agent-harness",
+    "own terminal",
+    "`subagents` is `no`",
+    "`confirm` is `no`",
+    "one at a time",
+];
+
+#[test]
+fn init_follows_agent_harness() {
+    // req:plugin.init/init-follows-agent-harness@8df57b35
+    let body = skill_body("init");
+    assert_eq!(lacks("init", &body, INIT_HARNESS), Vec::<String>::new());
+    for needle in INIT_HARNESS {
+        let gaps = lacks("init", &body.replace(needle, "elided"), INIT_HARNESS);
+        assert!(!gaps.is_empty(), "{needle}");
+    }
+}
