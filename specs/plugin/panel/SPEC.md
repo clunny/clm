@@ -2,14 +2,14 @@
 title: Panel
 status: active
 owners: ["@clunny"]
-depends_on: [view, effort]
+depends_on: [view, effort, machine]
 paths: ["plugin-panel/**"]
 successor: ""
 serves: [capability/watch-beside-chat, capability/see-project-state]
 ---
 
 ## Contract
-The Claude Code plugin `clm-panel`, listed in this repo's marketplace after `clm`: the `/clm:view` command, which answers in the chat with `clm status` or `clm view <name>`, and with no argument opens a pane titled `CLM` with four tabs: Spec, Flight and Blockers, showing those views of `origin/main` as of the pane's last fetch (`views-rendered-by-clm`), and Capabilities, showing `clm capabilities` and a capability's page, read-only. It opens the same pane, on Flight, when the `clm:build` skill starts and the pane isn't open (`build-opens-panel`). It displays what `clm` prints and decides nothing about the repository. Under the Flight chart's component lines it adds the one kind of fact `clm` can't see: the builds its own session launched that are running or failed, with their nested subagents, status, steps, context, tokens, estimated cost and time.
+The Claude Code plugin `clm-panel`, listed in this repo's marketplace after `clm`: the `/clm:view` command, which answers in the chat with `clm status` or `clm view <name>`, and with no argument opens a pane titled `CLM` with three tabs, Spec, Flight and Blockers, showing those views of `origin/main` as of the pane's last fetch (`views-rendered-by-clm`). Above every tab it draws three rows charting the machine's CPU load, available memory and free disk over the last 30 minutes, from `clm machine` (`machine`), sampled every 10 seconds. It opens the same pane, on Flight, when the `clm:build` skill starts and the pane isn't open (`build-opens-panel`). It displays what `clm` prints and decides nothing about the repository or the machine. Under the Flight chart's component lines it adds the one kind of fact `clm` can't see: the builds its own session launched that are running or failed, with their nested subagents, status, steps, context, tokens, estimated cost and time.
 
 ## Design
 **The CLM panel** (`views-rendered-by-clm`). The panel is its own plugin, `clm-panel`, in `plugin-panel/`. Keeping it out of `clm` means `clm`'s command hooks never share a plugin with a hooks module, and a person on a Claude Code too old for hooks modules simply doesn't install it. It needs `clm`: its `plugin.json` lists `clm` under `dependencies`, and it runs the `clm` plugin's `bin/clm` shim, so it gets the same binary and `version-skew` handling as the Bash tool, or `clm` on `PATH` when it can't find the shim. Its rules (which command to run for a surface and width, ANSI escapes to coloured cells, when to redraw and when to fetch, what to answer for each `/clm:view` argument, and the build rows below) are plain functions in `plugin-panel/src/`, taking a fake of the few `$` calls and events they use, and tested with `vitest` under `npm test`, which CI runs (`ci`). `register.tsx` only wires them to `$`. The `/clm:view` command is the `clm` plugin's, not this module's: `$.command.register` takes a bare name run as `/<name>`, so a hooks module can't register a `clm:`-namespaced command, and `clm-panel`'s own would be `clm-panel:`. `plugin/commands/view.md` makes `/clm:view` exist (`plugin`), and the module hooks `command.run` for `clm:view` and answers it without calling `next`, so no model turn starts. The view tabs run `clm` through `$.process.run` at the session's `cwd`, so they describe what has landed, whichever branch or worktree the session is on. Whether `refs/remotes/origin/main` exists is checked with `git rev-parse --verify -q` after each fetch; the chart's first line names the commit, when it was fetched and the session's branch (`view`'s `view-at-rev`). On the terminal surface the ANSI escapes become coloured text cells; the SVG is drawn with `Svg`. `clm view` itself never fetches. The fetch-failed line's `<age>` is since that fetch started, as `<n>m` under an hour and `<n>h` from then on, as `view-at-rev` writes it. When `clm` isn't installed the pane shows the shim's message instead of a chart. Outside a CLM repository means no `specs/SPEC.md` found as `session-start` finds it. Without `clm-panel`, the command file has the model run `clm status` or `clm view <name>` through the Bash tool, so the panel's answer that `clm` isn't installed (`panel-package`) arises only with the `clm` plugin installed but its shim not found and no `clm` on `PATH`.
@@ -29,14 +29,14 @@ The Claude Code plugin `clm-panel`, listed in this repo's marketplace after `clm
 - **Changes, backlog and the contract** (`inspector-detail`). The `changes` and `backlog` headings are indigo and ` none` plain, each entry indented two cells, in the model's order, `complete` in green and a backlog item's kind dimmed. A contract line longer than the pane's columns is wrapped at spaces, a word longer than the width cut across lines, with one character to a cell as `lineText` and `--width` assume; blank lines within the text are kept; and nothing is rendered as markdown, since the terminal shows text and the panel draws no view of its own. The rules return this detail as a part of its own beside the inspector's lines, so the lines `component-inspector` pins keep their positions and `register.tsx` places the `Button` after them; `ChartInput` carries the pane's columns for the wrapping, 100 when `bodyColumns` isn't a positive number, as `viewArgs` falls back. The contract is hidden at first because it runs to paragraphs and would push the chart the person just pressed off the pane.
 - **Blocker chains.** A folded root's line alone is drawn, whose `holds up <n>` says how much is beneath it.
 
-**Capabilities** (`capabilities-tab`, `review-capability-cost`). The tab decides nothing. It runs `clm` through the same cache as the views, and draws text, not a chart, so it takes no `--width` and draws no SVG; its lines wrap at the pane's edge rather than being cut, since a page's prose runs past it. A row's slug must match as well as its position, since the list prints slugs whole and two runs that straddled a rename can agree on the count alone. Each row is a `plain` `Button` with the key `capability:<slug>`; pressing it sets the atom `capability`, a slug or `null`, `null` at first, under its own `shape` in `types/index.d.ts`. While it holds a slug the page's run is started together with the list's runs. `/clm:view` opens the tab on the list, as it opens the pane on Flight. The page's `decide:` line stays text since `clm capabilities decide` is what the guard asks the human about (`plugin.hooks.guard/approve-guard`); the person decides in the chat or on the web. The rules are pure functions in `plugin-panel/src/capabilities.ts`; `register.tsx` only wires them.
+**Machine load** (`machine-charts`, `machine-load-measured-by-clm`). The charts decide nothing: `clm machine --format json` (`machine/machine-report`) takes the readings and judges each `green`, `amber`, `rose` or `unknown`, and the pane keeps them and draws them. The readings are the atom `machine`, a list of at most 180 samples, each the time it was taken and the JSON's `cpu`, `memory` and `disk` objects, under its own `shape` in `types/index.d.ts`, kept across a reload like `tab`, so a reload doesn't empty the charts; `session.end` leaves it, since the machine's load isn't the session's. The sampling is its own `$.clock.every` of 10 seconds, started and stopped with the redraw timer; a sample that finds the previous run still going is skipped, since a run that measures the builds' worktrees can take seconds. A sample appends to the atom and redraws from the views' cache, never rerunning `clm view`. A row is the label padded to four cells, a space, the chart, a space and the figure: the chart is the newest readings that fit, one cell each, newest on the right, each cell the `k`th of `▁▂▃▄▅▆▇█`, `k` its share of a full scale times 8 rounded up, at least 1 and at most 8, the scale being (cpu `load1 / cores` against 2, so a full block is twice the cores; memory `1 − available / total`; disk `1 − available / total`), so for all three a taller block is a heavier load. The figure is the latest reading's: cpu `<load1 / cores>×` to one decimal, memory `<available> avail` and disk `<available> free`, bytes as `850M`, `12G` or `1.3T` (powers of 1024, one decimal under 10). The row's colour is the latest reading's state, as `colour-meanings` gives green, amber and rose, and `unknown` is dimmed. The rows are text on every surface, placed above the tab's content and the fetch-failed line, so they read the same on Spec, Flight and Blockers. The rules are pure functions in `plugin-panel/src/machine.ts`; `register.tsx` only wires them. Builds' disk is measured by `clm machine`, not the panel, since only `clm` knows the clone's build places.
 
 **Type-check** (`type-check`, `panel-types-hand-written`). The type-check runs first because the tests strip types, and `claude plugin validate` checks only what the engine would refuse to load. `tsconfig.json` types the module as the engine does (`target` and `lib` `es2023`, `module` `esnext`, `moduleResolution` `bundler`, `strict`, `noUncheckedIndexedAccess`, `noEmit`, `skipLibCheck`, `jsx` `react` with `h` and `Fragment`); `allowImportingTsExtensions` is there since the module imports its files by their `.ts` names. The declarations are never a copy of the ones Claude Code writes, which no package ships and which aren't this repository's to redistribute. When `tsc` and `claude plugin validate` disagree about the module, the file is what's wrong, since the validator reads the module as the engine does. `.claude-plugin/types/`, where the engine lays its own when it hot-reloads the panel from a checkout, stays ignored. The lockfile pins `typescript`, so `npm ci` brings `tsc` and the check needs nothing else on the machine; it runs inside `npm test` rather than as `npx tsc`, which unattended sessions may not run (`unattended-commands`), and a human typing `npm test` here gets the same check as a land. The tests type under the same options as the module, with `vitest`'s own types from `node_modules`, so they use only what the module's environment has (no `Buffer`: the engine has no Node.js), and a fake they pass is the type the rule takes. `claude plugin validate` passes with `declarations/` and `tsconfig.json` present: it reads the manifest, the module and the contract, nothing else.
 
 ## Requirements
 
 ### Requirement: views-panel
-`/clm:view` with no argument SHALL open a pane titled `CLM` with tabs Spec, Flight, Blockers and Capabilities, showing Flight first. The Spec, Flight and Blockers tabs SHALL show the output of `clm view <tab> --at origin/main`, with `--format ansi --width <the pane's columns>` on the terminal surface, drawn in colour, with its component lines pressable and the Blockers tab's chains folded until pressed (`component-inspector`, `blocker-chains`), and with `--format svg` on other surfaces. It SHALL redraw when it opens, when the tab changes, when a turn ends, and every 30 seconds while it is placed, and SHALL run `git fetch --quiet origin` at most once every 2 minutes while it is placed. A press SHALL NOT rerun a `clm` command whose output the pane already holds for this generation. Every `clm view` the pane runs SHALL pass `--at origin/main` while `refs/remotes/origin/main` exists, and no `--at` otherwise. When the latest fetch failed, the pane SHALL draw above the chart an amber line `⚠ fetch failed <age> ago:` and the first line of git's stderr, until a fetch succeeds. When `clm` exits non-zero, the pane SHALL show its stderr. The pane SHALL draw no `Image`, offer no `Picture` button and never run `clm view` with `--format png`. Outside a CLM repository, `/clm:view` SHALL say so and open no pane.
+`/clm:view` with no argument SHALL open a pane titled `CLM` with tabs Spec, Flight and Blockers, showing Flight first; a tab kept across a reload that is none of the three SHALL read as Flight. The tabs SHALL show the output of `clm view <tab> --at origin/main`, with `--format ansi --width <the pane's columns>` on the terminal surface, drawn in colour, with its component lines pressable and the Blockers tab's chains folded until pressed (`component-inspector`, `blocker-chains`), and with `--format svg` on other surfaces. It SHALL redraw when it opens, when the tab changes, when a turn ends, and every 30 seconds while it is placed, and SHALL run `git fetch --quiet origin` at most once every 2 minutes while it is placed. A press SHALL NOT rerun a `clm` command whose output the pane already holds for this generation. Every `clm view` the pane runs SHALL pass `--at origin/main` while `refs/remotes/origin/main` exists, and no `--at` otherwise. When the latest fetch failed, the pane SHALL draw above the chart an amber line `⚠ fetch failed <age> ago:` and the first line of git's stderr, until a fetch succeeds. When `clm` exits non-zero, the pane SHALL show its stderr. The pane SHALL draw no `Image`, offer no `Picture` button and never run `clm view` with `--format png`. Outside a CLM repository, `/clm:view` SHALL say so and open no pane.
 
 #### Scenario: terminal pane
 - GIVEN a session on the terminal surface in a CLM repository, with a pane 80 columns wide
@@ -47,6 +47,11 @@ The Claude Code plugin `clm-panel`, listed in this repo's marketplace after `clm
 - GIVEN the same session on the desktop surface
 - WHEN the person opens the Spec tab
 - THEN the pane runs `clm view spec --at origin/main --format svg` and draws the SVG
+
+#### Scenario: three tabs
+- GIVEN a pane whose kept tab, from an earlier version of the panel, is `capabilities`
+- WHEN the module is reloaded and the pane draws
+- THEN its tab row holds Spec, Flight and Blockers only, and it shows Flight
 
 #### Scenario: refresh and fetch
 - GIVEN an open pane
@@ -250,42 +255,6 @@ While a component is selected (`component-inspector`), the inspector SHALL hold,
 - WHEN the pane draws
 - THEN the inspector holds `boom` and no `changes`, `backlog` or `Contract` button
 
-### Requirement: capabilities-tab
-The pane SHALL have a Capabilities tab, after Blockers, that runs `clm capabilities` and `clm capabilities --format json`, cached per generation as the views are, and draws `clm capabilities`' text as lines on every surface. Each row of the list (a line after the header and before the `unattributed` line, starting with `⚑ ` or two spaces) SHALL be pressable, matched to a capability by its position among the rows and the JSON's `capabilities` and by its slug, except a row slugged `decide` or `help`, which `clm capabilities` reads as subcommands; when the counts or the slugs differ, or the JSON run fails or doesn't parse, the list SHALL be drawn with nothing pressable. Pressing a row SHALL show that capability's page, the text of `clm capabilities <slug>`, under a `Back` button that returns to the list; which page shows SHALL be kept across a reload. When `clm` exits non-zero the tab SHALL show its stderr, with the `Back` button while a page was asked for. The tab SHALL have no control that runs `clm capabilities decide`.
-
-#### Serves
-- capability/review-capability-cost
-- capability/watch-beside-chat
-
-#### Needs
-- effort/capabilities-list
-- effort/capability-page
-
-#### Scenario: the list
-- GIVEN a pane on the Capabilities tab, whose `clm capabilities` prints a header, rows for `adopt-clm` and `⚑ git-host`, and the `unattributed` and `architecture only` lines, and whose `clm capabilities --format json` lists `adopt-clm` then `git-host`
-- WHEN the pane draws, on the terminal surface and again on the desktop surface
-- THEN both times it runs `clm capabilities`, draws its lines as text, and the two rows are pressable, the second as `git-host`
-
-#### Scenario: counts differ
-- GIVEN that list, and a `clm capabilities --format json` that lists three capabilities, and in a second run one that lists `adopt-clm` then `keep-a-backlog`
-- WHEN the pane draws
-- THEN both times it draws the list with nothing pressable
-
-#### Scenario: a capability's page
-- GIVEN that list
-- WHEN the person presses the `⚑ git-host` row, and the module is then reloaded
-- THEN both times the tab runs `clm capabilities git-host` and draws a `Back` button and its lines, and pressing `Back` draws the list again
-
-#### Scenario: nothing decides
-- GIVEN a page whose last line is `decide: clm capabilities decide git-host --value high|medium|low --decision keep|cut|redesign|accept`
-- WHEN the pane draws
-- THEN that line is text, and no pressable line or button names `decide`
-
-#### Scenario: clm fails
-- GIVEN a `clm capabilities` that exits 1 with `boom` on stderr
-- WHEN the pane draws
-- THEN it shows `boom`
-
 ### Requirement: component-heading
 Where the pane finds the Flight chart's component lines, for the inspector (`component-inspector`) and for the runs drawn under a line (`build-rows`), it SHALL take the lines between the heading `components` and the heading `changes`, and, when the chart has no `components` heading, between the old heading and `changes`: the old word for components (`component-words`), which a `clm` built before `view/flight-component-lines` gave its new heading still prints, so the pane works with the `clm` the session runs, older or newer (`component-words`). Labels the pane draws itself SHALL hold no old word `component-words` doesn't keep.
 
@@ -367,7 +336,7 @@ A pane draw whose `$` call the engine aborts, because a newer draw replaced it, 
 - THEN the pane shows why `clm` couldn't start
 
 ### Requirement: build-opens-panel
-The hooks module SHALL hook Claude Code's `skill.prompt` event, which fires when a skill's prompt is expanded for the model, whether the person typed its slash command or the model called the Skill tool, and for the `clm` plugin's `build` skill (named `clm:build`, or `build` with `pluginName` `clm`) SHALL return what `next(e)` resolves to, unchanged. When that skill's prompt is expanded, the session's `cwd` is in a CLM repository as `/clm:view` finds one, and `$.ui.panes()` lists no pane whose `id` is the panel's, it SHALL open the pane as `/clm:view` with no argument does: on the Flight tab with no capability page selected, its redraw timer started and a redraw begun. When the pane is listed, open or waiting for room, it SHALL leave it as it is, its tab and capability page unchanged; outside a CLM repository and for any other skill it SHALL open nothing. A failure while opening SHALL leave the skill's prompt as `next(e)` resolved it.
+The hooks module SHALL hook Claude Code's `skill.prompt` event, which fires when a skill's prompt is expanded for the model, whether the person typed its slash command or the model called the Skill tool, and for the `clm` plugin's `build` skill (named `clm:build`, or `build` with `pluginName` `clm`) SHALL return what `next(e)` resolves to, unchanged. When that skill's prompt is expanded, the session's `cwd` is in a CLM repository as `/clm:view` finds one, and `$.ui.panes()` lists no pane whose `id` is the panel's, it SHALL open the pane as `/clm:view` with no argument does: on the Flight tab, its redraw and sampling timers started and a redraw begun. When the pane is listed, open or waiting for room, it SHALL leave it as it is, its tab unchanged; outside a CLM repository and for any other skill it SHALL open nothing. A failure while opening SHALL leave the skill's prompt as `next(e)` resolved it.
 
 #### Scenario: build opens the closed panel
 - GIVEN a session in a CLM repository with `clm-panel` loaded and no pane `CLM` listed
@@ -437,3 +406,47 @@ Each build row (`build-rows`) SHALL show its run's tokens, estimated cost marked
 - GIVEN a run whose one model request used a million input tokens on a model the price table knows
 - WHEN the pane draws
 - THEN its row holds `≈$` followed by that model's input rate, and `1.0M tok`
+
+### Requirement: machine-charts
+While the pane is placed it SHALL run `clm machine --format json` when it opens and every 10 seconds, starting none while the previous run is still going, and SHALL keep the readings of the last 30 minutes, at most 180, oldest dropped first, across a reload and a cleared session. Above each tab's content, on every surface, it SHALL draw three rows of text, `cpu`, `mem` and `disk`: each a chart of one block from `▁▂▃▄▅▆▇█` per kept reading, newest on the right, as many of the newest as fit the pane's columns beside the label and the figure, scaled so that a taller block is a heavier load (cpu as `load1 / cores` against twice the cores, memory and disk as the used share of their total), then the latest figure: `<load1 / cores>×` to one decimal, `<available> avail` and `<available> free`, bytes as `850M`, `12G` or `1.3T`. Each row SHALL be drawn in the colour of its latest reading's state, green, amber or rose, and dimmed when it is `unknown`. A sample SHALL NOT rerun `clm view`. When `clm machine` exits non-zero or its output doesn't parse, the pane SHALL keep no reading for that sample and draw, while no later sample has succeeded, one dimmed line `machine: ` and the first line of its stderr, or `unreadable output`, in place of the rows when it holds no reading, and under them otherwise. With no reading and no failure yet, it SHALL draw no row.
+
+#### Serves
+- capability/watch-machine-load
+
+#### Needs
+- machine/machine-report
+
+#### Scenario: the rows
+- GIVEN a terminal pane 40 columns wide that has taken three samples, the last with `cpu` `load1` 8 of 8 cores `amber`, memory 4G available of 16G `green`, and disk 20G available of 100G `rose`
+- WHEN the pane draws, on the terminal surface and again on the desktop surface
+- THEN both times it draws rows `cpu`, `mem` and `disk` above the tab, each ending in three blocks, the last of `cpu` `▄`, and figures `1.0×`, `4.0G avail` and `20G free`, coloured amber, green and rose
+
+#### Scenario: the newest fit
+- GIVEN a pane 30 columns wide that has taken 180 samples
+- WHEN it draws
+- THEN each row is at most 30 cells wide and its chart ends with the newest sample
+
+#### Scenario: thirty minutes kept
+- GIVEN a pane that has taken 180 samples
+- WHEN 10 seconds pass and the module is then reloaded
+- THEN it holds 180 readings, the oldest of the earlier ones gone and the newest the one just taken
+
+#### Scenario: a sample reruns no view
+- GIVEN an open pane on the Flight tab that has run `clm view flight` this generation
+- WHEN 10 seconds pass
+- THEN it has run `clm machine --format json` once more and `clm view` no more
+
+#### Scenario: one run at a time
+- GIVEN a pane whose `clm machine` run takes 25 seconds
+- WHEN 30 seconds pass
+- THEN it has started one `clm machine` run
+
+#### Scenario: unknown
+- GIVEN a sample whose `cpu` state is `unknown`
+- WHEN the pane draws
+- THEN the `cpu` row is dimmed
+
+#### Scenario: clm machine fails
+- GIVEN a pane holding no reading, whose `clm machine` exits 1 with `boom` on stderr
+- WHEN it draws, and again after a later sample succeeds
+- THEN the first draw shows the dimmed line `machine: boom` and no row, and the second shows the rows and no such line

@@ -238,6 +238,17 @@ Switching to a terminal to ask for the state breaks the conversation it informs.
 - WHEN a build lands
 - THEN the pane shows the new state without the person asking
 
+### Capability: watch-machine-load
+A person can watch, beside their Claude Code chat, how the machine's CPU load, available memory and free disk have moved over the last half hour while builds run, and see when one is running short of what the builds need.
+
+#### Why
+Parallel builds can exhaust memory or disk partway through a land check, after their code is written and reviewed; seeing the trend early lets the person free space or run fewer builds first.
+
+#### Scenario: charts in the pane
+- GIVEN the CLM pane open in Claude Code
+- WHEN 30 seconds pass
+- THEN the pane shows `cpu`, `mem` and `disk` rows, each charting the readings taken so far
+
 ### Capability: follow-from-browser
 A person can follow a change's progress and approve it from a browser or a phone.
 
