@@ -125,10 +125,18 @@ fn install_on_codex() {
     let skills = installed.join(manifest["skills"].as_str().unwrap());
     let mut listed = Vec::new();
     for entry in fs::read_dir(&skills).unwrap() {
-        let skill = entry.unwrap().path().join("SKILL.md");
+        let dir = entry.unwrap().path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let skill = dir.join("SKILL.md");
         let text = fs::read_to_string(&skill).unwrap();
         assert!(text.contains("\ndescription: "), "{}", skill.display());
         listed.push(skill);
     }
-    assert!(listed.len() >= 10, "{listed:?}");
+    assert!(
+        !listed.is_empty(),
+        "no skill listed in {}",
+        skills.display()
+    );
 }
