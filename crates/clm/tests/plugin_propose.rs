@@ -177,8 +177,12 @@ fn propose_follows_agent_harness() {
         assert!(check.contains(needle), "{needle}: {check}");
     }
     let ask = sentence_with(&body, "`confirm` is `no`");
+    let step = numbered_steps(&body)
+        .into_iter()
+        .find(|s| s.contains("`confirm` is `no`"))
+        .unwrap();
     for needle in ["own terminal", "never run `clm approve` yourself"] {
-        assert!(body.contains(needle), "{needle}: {ask}");
+        assert!(step.contains(needle), "{needle}: {ask}");
     }
 }
 
@@ -873,7 +877,10 @@ fn design_only_gaps(body: &str) -> Vec<String> {
     // The paragraph naming `clm archive` records the work the outcome promises.
     let paragraph = body
         .lines()
-        .find(|l| l.contains("clm archive <id>"))
+        .find(|l| {
+            l.trim_start()
+                .starts_with("A change whose deltas add, modify and remove no requirement")
+        })
         .unwrap_or_default();
     for needle in ["kind: deferred", "deferred-work-resolves-in-code"] {
         if !paragraph.contains(needle) {
