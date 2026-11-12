@@ -956,6 +956,11 @@ fn scenario_draft_records_promised_code_work_prompt() {
     ] {
         assert!(design.contains(needle), "{needle} missing from {design}");
     }
+    let before = design
+        .find("before you apply the change")
+        .expect("ordering");
+    let apply = design.find("clm apply <id>").expect("apply step");
+    assert!(before < apply, "record the work before applying: {design}");
     let check = paragraph(&p, "builder-check-asks-order");
     assert!(
         check.contains("no requirement it adds or modifies makes pending"),
