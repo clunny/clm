@@ -55,7 +55,7 @@ fn needs(wf: &Value, job: &str) -> Vec<String> {
 
 #[test]
 fn triggers_only_on_dispatch_with_a_required_version() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     let on = wf["on"].as_mapping().unwrap();
     let triggers: Vec<_> = on.keys().map(|k| k.as_str().unwrap()).collect();
@@ -66,7 +66,7 @@ fn triggers_only_on_dispatch_with_a_required_version() {
 
 #[test]
 fn may_write_contents_and_never_runs_twice_at_once() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     assert_eq!(wf["permissions"]["contents"].as_str(), Some("write"));
     assert_eq!(wf["concurrency"]["group"].as_str(), Some("release"));
@@ -78,7 +78,7 @@ fn may_write_contents_and_never_runs_twice_at_once() {
 
 #[test]
 fn prepare_runs_the_script_that_bumps_both_versions() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     step_running(&wf, "prepare", ".github/scripts/release-prepare.sh");
     let outputs = wf["jobs"]["prepare"]["outputs"].as_mapping().unwrap();
@@ -86,6 +86,7 @@ fn prepare_runs_the_script_that_bumps_both_versions() {
     let script = fs::read_to_string(script()).unwrap();
     assert!(script.contains("Cargo.toml"));
     assert!(script.contains("plugin/.claude-plugin/plugin.json"));
+    assert!(script.contains("plugin/.codex-plugin/plugin.json"));
 }
 
 #[test]
@@ -129,7 +130,7 @@ fn exact(version: &str) -> bool {
 
 #[test]
 fn builds_the_four_targets_from_the_prepared_commit() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     assert_eq!(needs(&wf, "build"), ["prepare"]);
     let build = &wf["jobs"]["build"];
@@ -263,7 +264,7 @@ fn static_build(report: &str) -> std::process::Output {
 
 #[test]
 fn linux_binaries_must_be_statically_linked() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     for report in ["static-pie linked", "statically linked"] {
         let out = static_build(report);
         assert!(out.status.success(), "{report}: {out:?}");
@@ -276,7 +277,7 @@ fn linux_binaries_must_be_statically_linked() {
 
 #[test]
 fn packs_and_passes_on_both_assets_per_target() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     let i = step_running(&wf, "build", "tar czf");
     let pack = &steps(&wf, "build")[i];
@@ -342,7 +343,7 @@ fn packs_and_passes_on_both_assets_per_target() {
 
 #[test]
 fn publishes_the_release_before_pushing_main() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     let n = needs(&wf, "publish");
     assert!(n.iter().any(|j| j == "build") && n.iter().any(|j| j == "prepare"));
@@ -379,7 +380,7 @@ fn publishes_the_release_before_pushing_main() {
 
 #[test]
 fn merge_retries_then_prints_the_commands_for_a_human() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     let i = step_running(&wf, "publish", "git push origin main");
     let run = steps(&wf, "publish")[i]["run"].as_str().unwrap();
@@ -597,7 +598,7 @@ fn web_deploy_reads_only_the_cloudflare_secrets() {
 
 #[test]
 fn no_run_step_interpolates_the_version_input() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let wf = workflow();
     for (job, def) in wf["jobs"].as_mapping().unwrap() {
         for s in def["steps"].as_sequence().into_iter().flatten() {
@@ -738,6 +739,7 @@ impl Fixture {
         for dir in [
             "plugin/.claude-plugin",
             "plugin/bin",
+            "plugin/.codex-plugin",
             "plugin-panel/.claude-plugin",
             ".github/workflows",
         ] {
@@ -776,6 +778,11 @@ impl Fixture {
             format!(
                 "{{\n  \"name\": \"clm\",\n  \"version\": \"{version}\",\n  \"author\": {{ \"name\": \"x\", \"version\": \"keep\" }}\n}}\n"
             ),
+        )
+        .unwrap();
+        fs::write(
+            work.join("plugin/.codex-plugin/plugin.json"),
+            format!("{{\n  \"name\": \"clm\",\n  \"version\": \"{version}\"\n}}\n"),
         )
         .unwrap();
         fs::write(work.join(".gitignore"), "/target\n").unwrap();
@@ -954,7 +961,7 @@ fn assert_refused(r: &Run) {
 
 #[test]
 fn lower_version_fails_and_pushes_nothing() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.2.0");
     assert_refused(&f.run("0.1.0"));
     let f = Fixture::new("0.10.0");
@@ -963,7 +970,7 @@ fn lower_version_fails_and_pushes_nothing() {
 
 #[test]
 fn existing_release_fails_and_pushes_nothing() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     f.releases(&["v0.1.0", "v0.2.0"]);
     let r = f.run("0.2.0");
@@ -973,7 +980,7 @@ fn existing_release_fails_and_pushes_nothing() {
 
 #[test]
 fn failing_gh_fails_closed() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     fs::write(f.bin().join("gh-fails"), "").unwrap();
     assert_refused(&f.run("0.1.0"));
@@ -981,7 +988,7 @@ fn failing_gh_fails_closed() {
 
 #[test]
 fn existing_tag_fails_and_pushes_nothing() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     let bare = f.bare();
     f.git(&bare, &["tag", "v0.2.0", "main"]);
@@ -994,7 +1001,7 @@ fn existing_tag_fails_and_pushes_nothing() {
 
 #[test]
 fn only_main_can_release() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     assert_refused(&f.run_on("refs/heads/feature", "0.1.0"));
     assert_refused(&f.run_on("refs/tags/v0.1.0", "0.1.0"));
@@ -1002,7 +1009,7 @@ fn only_main_can_release() {
 
 #[test]
 fn version_must_be_major_minor_patch() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     for bad in [
         "1.2",
         "v1.2.3",
@@ -1026,7 +1033,7 @@ fn version_must_be_major_minor_patch() {
 
 #[test]
 fn same_version_releases_the_dispatched_commit() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     f.releases(&["v0.0.9", "v0.1.0-rc1"]);
     let r = f.run("0.1.0");
@@ -1038,7 +1045,7 @@ fn same_version_releases_the_dispatched_commit() {
 
 #[test]
 fn same_version_without_a_corpus_entry_fails_naming_it() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     f.git(
         &f.work(),
@@ -1053,7 +1060,7 @@ fn same_version_without_a_corpus_entry_fails_naming_it() {
 
 #[test]
 fn shim_naming_an_unbuilt_asset_fails_naming_it() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     let mut targets = TARGETS.to_vec();
     targets[0] = "x86_64-unknown-linux-gnu";
@@ -1074,7 +1081,7 @@ fn shim_naming_an_unbuilt_asset_fails_naming_it() {
 
 #[test]
 fn shim_with_no_targets_fails() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     f.shim(&[]);
     f.commit("shim maps nothing");
@@ -1085,7 +1092,7 @@ fn shim_with_no_targets_fails() {
 
 #[test]
 fn shim_matching_the_matrix_passes_whatever_its_order() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     // Two platforms may share a target.
     let mut targets = TARGETS.to_vec();
@@ -1111,7 +1118,7 @@ fn cargo_versions(toml: &str) -> Vec<&str> {
 
 #[test]
 fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     f.releases(&["v0.1.0", "v0.2.0-rc1"]);
     let main_before = f.head();
@@ -1146,6 +1153,7 @@ fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
             "crates/clm-upgrade/migrations.lock",
             "plugin-panel/.claude-plugin/plugin.json",
             "plugin/.claude-plugin/plugin.json",
+            "plugin/.codex-plugin/plugin.json",
         ]
     );
     let panel: serde_json::Value =
@@ -1166,6 +1174,9 @@ fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
         serde_json::from_str(&show("plugin/.claude-plugin/plugin.json")).unwrap();
     assert_eq!(plugin["version"], "0.2.0");
     assert_eq!(plugin["author"]["version"], "keep");
+    let codex: serde_json::Value =
+        serde_json::from_str(&show("plugin/.codex-plugin/plugin.json")).unwrap();
+    assert_eq!(codex["version"], "0.2.0");
     assert!(!r.gh_log.contains("release create"), "{}", r.gh_log);
 }
 
@@ -1221,7 +1232,7 @@ fn assert_failed_before_pushing(r: &Run) {
 
 #[test]
 fn failing_tests_push_no_bump() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     fs::write(
         f.work().join("m/src/lib.rs"),
@@ -1237,7 +1248,7 @@ fn failing_tests_push_no_bump() {
 
 #[test]
 fn bump_replaces_an_earlier_failed_runs_branch() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     fs::write(f.work().join("stray"), "left by an earlier run\n").unwrap();
     f.git(&f.work(), &["add", "stray"]);
@@ -1259,7 +1270,7 @@ fn bump_replaces_an_earlier_failed_runs_branch() {
 
 #[test]
 fn a_version_edit_that_changes_nothing_fails() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.1.0");
     fs::write(
         f.work().join("plugin/.claude-plugin/plugin.json"),
@@ -1275,7 +1286,7 @@ fn a_version_edit_that_changes_nothing_fails() {
 
 #[test]
 fn versions_compare_as_numbers() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let f = Fixture::new("0.9.0");
     let r = f.run("0.10.0");
     assert!(r.ok, "{}", r.stderr);
@@ -1284,7 +1295,7 @@ fn versions_compare_as_numbers() {
 
 #[test]
 fn release_and_site_are_the_only_workflows() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let mut names: Vec<_> = fs::read_dir(repo().join(".github/workflows"))
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -1347,7 +1358,7 @@ fn merge_release_branch(moved: bool) -> (String, Vec<String>) {
 
 #[test]
 fn merge_into_main_is_titled_release_when_main_moved() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let (subject, parents) = merge_release_branch(true);
     assert!(subject.starts_with("Release v"), "{subject}");
     assert_eq!(parents.len(), 2, "not a merge: {parents:?}");
@@ -1355,7 +1366,7 @@ fn merge_into_main_is_titled_release_when_main_moved() {
 
 #[test]
 fn merge_into_main_fast_forwards_to_the_bump() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     let (subject, parents) = merge_release_branch(false);
     assert_eq!(subject, "Release v0.2.0");
     assert_eq!(parents.len(), 1, "{parents:?}");
@@ -1363,7 +1374,7 @@ fn merge_into_main_fast_forwards_to_the_bump() {
 
 #[test]
 fn every_cargo_job_installs_the_pinned_toolchain() {
-    // req:ci/release@575aa841
+    // req:ci/release@3cd997f5
     // Jobs install what `rust-toolchain.toml` names (`pinned-rust-toolchain`) with `rustup
     // show`, always, before any step that runs cargo itself or through one of the scripts.
     let wf = workflow();
