@@ -2159,8 +2159,6 @@ fn sync_settings(root: &Path) -> Result<clm_health::Settings, String> {
         .map_err(|e| clm_check::format(&settings_violation(e, "check.health/health-report")))
 }
 
-/// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
-/// when the settings or the graph can't be loaded, 2 when git fails.
 /// What `clm agent-harness` prints: the detected agent harness, then its abilities.
 fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
     let harness = clm_agent_harness::detect(env);
@@ -2183,6 +2181,8 @@ fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
     }
     out
 }
+/// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
+/// when the settings or the graph can't be loaded, 2 when git fails.
 
 fn health(root: &Path, expiry: u64) -> ExitCode {
     let settings = match clm_config::load(Some(root), &clm_config::process_env) {
