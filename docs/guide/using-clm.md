@@ -35,7 +35,7 @@ When Claude asks for your approval it shows you the change's intent, what it ask
 
 ## Build: `/clm:build`
 
-Run `/clm:build` and Claude builds every part of the system whose code is behind its design, each in its own background session, in parallel, writing the tests first. Each part lands on `main` once its checks pass, and the workflow keeps going until nothing is left to build. At the end it tells you what landed and anything waiting on you.
+Run `/clm:build` and Claude builds every part of the system whose code is behind its design, each in its own background session, in parallel, writing the tests first. Each part lands on `main` once its checks pass, and the workflow keeps going until nothing is left to build. It also drafts fixes for the backlog's bugs, in the background beside the builds; a fix that needs your review is gathered with the others into one change, which it asks you to approve at the end. At the end it tells you what landed and anything waiting on you.
 
 Builds run under your session's permission mode: in manual mode they pause for your answers, in auto mode they run alone. Auto mode lets them push and land only through the allow rules that setting up CLM puts in `.claude/settings.json`; if your repository was set up before those rules existed, Claude tells you which to add before the first build.
 
@@ -49,7 +49,7 @@ Run `/clm:triage` and Claude shows you a menu of what the backlog holds. Pick wh
 
 - **Approvals:** changes already designed and waiting for your yes.
 - **Needs your input:** questions and steps only you can take, each with the answer Claude recommends. Work that depends on them waits until you answer.
-- **Bugs:** Claude designs the fixes in the background, in parallel.
+- **Bugs:** Claude designs the fixes in the background, in parallel. `/clm:build` drafts them too, so after a build there may be none left.
 - **Blockers:** whatever is holding up the most work, first.
 - **Ideas:** Claude brainstorms each one with you, then proposes it, keeps it for later, or drops it.
 

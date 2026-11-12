@@ -12,7 +12,7 @@ The skills, the commands' settings and where to read more: a page to look things
 |---|---|
 | `/clm:init` | bring a new or existing repository under CLM |
 | `/clm:propose` | turn an intent into one spec branch, and see it landed |
-| `/clm:build` | build everything ready, in parallel, until the queue is empty |
+| `/clm:build` | build everything ready and draft the backlog's bugs, in parallel, until the queue is empty |
 | `/clm:triage` | work the backlog down from a menu: approve designed changes, answer questions, brainstorm ideas, draft bugs in the background, and approve the drafts that need review in one go |
 | `/clm:contribution` | take in a contributor's pull request or issue: judge its files, show it to you, close it or land it on your yes |
 | `/clm:help` | ask how CLM works or how to do something; it answers from the guide and changes nothing |

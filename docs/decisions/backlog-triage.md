@@ -23,3 +23,5 @@ Rejected:
 (Amended 2026-10-30, `20261030-clm-draft-s-prompt`: `deferred` items no longer form `design` groups. A deferred item waits on a condition its body names that only the human can judge, so every draft of one ended `stopped` and the next run drafted it again. A draft that meets an `idea` item waiting on such a condition sets its kind to `deferred`, so the next run leaves it; the human takes it up with `/clm:propose`. A draft whose branch edits only the backlog, deferring an item, correcting a bug's `nodes` or reporting a CLM defect, lands that edit as a change with no delta rather than deleting its branch.)
 
 (Amended 2026-10-30, `20261030-triage-menu`: `idea` items no longer form `design` groups; `clm triage` lists each as an `idea` line that no draft takes, and the `triage` skill brainstorms it with the human in its session. The skill works only what the human picks from a menu (`ideas-brainstormed`).)
+
+(Amended 2026-11-12, `20261112-build-drafts-bugs`: `/clm:build` also drafts the bug groups, each round of its drain, as triage drafts a picked `group` line; drafts that need review stay for the next `/clm:triage` to approve (`build-drafts-bugs`).)
