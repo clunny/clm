@@ -543,6 +543,7 @@ fn skills_check_for_defects_before_a_pr() {
         }
     }
     let build = skill_body("build");
+    assert_eq!(defect_gaps("build", &build), Vec::<String>::new());
     // skill without the check
     let gaps = defect_gaps("build", &build.replace("## CLM defects", "elided"));
     assert_reports(&gaps, "build", "## CLM defects");

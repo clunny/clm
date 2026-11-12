@@ -900,6 +900,12 @@ fn build_drafts_bugs() {
     // taken twice; after the archive lands, triage runs again.
     for needle in [
         "prints no `group` line whose items no draft of this session has taken",
+        "none of your builds or drafts is left",
+        "go back to step 1",
+        "in `clm triage`'s order",
+        "background `general-purpose` subagent",
+        "never approve or land a change a draft left for review otherwise",
+        "never retry",
         "run `clm triage` again",
     ] {
         assert!(body.contains(needle), "{needle}");
