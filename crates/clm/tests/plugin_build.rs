@@ -806,3 +806,38 @@ fn build_defect_fixes_run_setup() {
         assert!(step.contains(needle), "{needle}");
     }
 }
+
+#[test]
+fn build_follows_agent_harness() {
+    // req:plugin.build/build-follows-agent-harness@3e0df57b
+    let body = skill_body("build");
+    let must = [
+        "clm agent-harness",
+        "isolated-worktrees",
+        "git worktree add .claude/worktrees/agent-<component> origin/main",
+        "subagents",
+        "model-choice",
+        "--review-model",
+    ];
+    assert_eq!(text_gaps("build", &body, &must, &[]), Vec::<String>::new());
+    // Each rule is tied to the capability that is `no`, in the paragraph that runs the check.
+    let para = body
+        .lines()
+        .find(|l| l.contains("clm agent-harness"))
+        .unwrap();
+    for needle in [
+        "Where `isolated-worktrees` is `no`, add each build's worktree",
+        "tell the build, before the launcher `clm run` printed, to work in that directory",
+        "`clm run --finish` and `clm wrap-up` tidy it",
+        "Where `subagents` is `no`, build the components one at a time in this session itself",
+        "Where `model-choice` is `no`, launch with this session's own model and pass its name as `--review-model`",
+    ] {
+        assert!(para.contains(needle), "{needle}");
+    }
+    // The check comes before the first launch.
+    let step = body
+        .lines()
+        .find(|l| l.contains("clm agent-harness"))
+        .unwrap();
+    assert!(step.contains("before your first launch"));
+}
