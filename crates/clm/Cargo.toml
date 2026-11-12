@@ -30,6 +30,7 @@ clm-runner.workspace = true
 clm-unreferenced.workspace = true
 clm-affected.workspace = true
 clm-health.workspace = true
+clm-agent-harness.workspace = true
 clm-git.workspace = true
 clm-host.workspace = true
 clm-rename.workspace = true

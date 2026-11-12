@@ -5,6 +5,7 @@
 // clm:reads ARCHITECTURE.md
 // clm:reads CAPABILITIES.md
 // clm:reads CLAUDE.md
+// clm:reads AGENTS.md
 // clm:reads README.md
 // clm:reads docs/guide/**
 // clm:reads docs/spec-format.md
@@ -87,7 +88,7 @@ fn bare_words<'a>(terms: &[&'a str]) -> Vec<&'a str> {
 
 #[test]
 fn a_retired_term_in_a_skill_is_reported() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let got = scan_files(
         &["grommet stub"],
         &[(
@@ -112,7 +113,7 @@ fn a_retired_term_in_a_skill_is_reported() {
 
 #[test]
 fn a_line_marked_remove_by_is_exempt() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let text = concat!(
         "`clm frob` still runs `clm twiddle` // clm:remove",
         "-by 20261201-x\n`clm frob` here\n"
@@ -129,7 +130,7 @@ fn a_line_marked_remove_by_is_exempt() {
 
 #[test]
 fn history_is_left_alone() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "scripts/retired-terms.txt", "frobbed\n");
     for rel in [
@@ -146,7 +147,7 @@ fn history_is_left_alone() {
 
 #[test]
 fn every_named_path_is_read() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "scripts/retired-terms.txt", "frobbed\n");
     let named = [
@@ -158,6 +159,7 @@ fn every_named_path_is_read() {
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
         "CLAUDE.md",
+        "AGENTS.md",
         "README.md",
     ];
     for rel in named {
@@ -174,7 +176,7 @@ fn every_named_path_is_read() {
 
 #[test]
 fn only_whole_words_match() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let got = scan_files(
         &["frob"],
         &[("docs/guide/a.md", "frobnicate\nxfrob\nfrob_x\nfrob2\n")],
@@ -195,7 +197,7 @@ fn only_whole_words_match() {
 
 #[test]
 fn a_multi_word_term_matches_across_spaces() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let got = scan_files(
         &["grommet stub"],
         &[("docs/guide/a.md", "GROMMET   stub\n")],
@@ -206,7 +208,7 @@ fn a_multi_word_term_matches_across_spaces() {
 
 #[test]
 fn a_list_line_is_trimmed_and_comments_hold_none() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let dir = tempfile::tempdir().unwrap();
     write(
         dir.path(),
@@ -225,7 +227,7 @@ fn a_list_line_is_trimmed_and_comments_hold_none() {
 
 #[test]
 fn hits_come_in_line_then_list_order() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let got = scan_files(
         &["beta", "alpha"],
         &[("b.md", "alpha beta\nbeta\n"), ("a.md", "alpha\n")],
@@ -238,7 +240,7 @@ fn hits_come_in_line_then_list_order() {
 
 #[test]
 fn a_missing_list_is_refused() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "a.md", "text\n");
     let got = scan(dir.path(), &["--list", "nowhere.txt", "a.md"]);
@@ -249,7 +251,7 @@ fn a_missing_list_is_refused() {
 
 #[test]
 fn no_plain_english_word_is_on_the_list() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     assert_eq!(bare_words(&["clm frob", "--frob", "frob"]), ["frob"]);
     let terms = retired();
     let terms: Vec<&str> = terms.iter().map(String::as_str).collect();
@@ -314,7 +316,7 @@ fn write_help(dir: &Path) -> Vec<String> {
 
 #[test]
 fn the_help_of_every_command_is_written_and_scanned() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let dir = tempfile::tempdir().unwrap();
     let names = write_help(dir.path());
     assert!(names.contains(&"clm".to_string()));
@@ -332,7 +334,7 @@ fn the_repository_holds_no_retired_term() {
     // req:clm/node-names-retired@2d40cbc7
     // req:clm/architecture-term-retired@dcff8eb7
     // req:clm/old-state-and-key-names-retired@381faa28
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let root = repo_root();
     let got = scan(&root, &[]);
     assert!(got.code == 0, "retired terms:\n{}{}", got.out, got.err);
@@ -528,7 +530,7 @@ fn the_plain_word_is_free() {
 
 #[test]
 fn binary_files_are_skipped() {
-    // req:clm/retired-terms@b30c0e50
+    // req:clm/retired-terms@78943b19
     let dir = tempfile::tempdir().unwrap();
     write(dir.path(), "list.txt", "frob\n");
     fs::write(dir.path().join("b.bin"), b"frob\0binary").unwrap();

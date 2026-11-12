@@ -44,6 +44,7 @@ clm-web-review = { path = "crates/clm-web-review" }
 clm-web-replica = { path = "crates/clm-web-replica" }
 clm-replica = { path = "crates/clm-replica" }
 clm-health = { path = "crates/clm-health" }
+clm-agent-harness = { path = "crates/clm-agent-harness" }
 clm-rename = { path = "crates/clm-rename" }
 clm-upgrade = { path = "crates/clm-upgrade" }
 serde = { version = "1", features = ["derive"] }
