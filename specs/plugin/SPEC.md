@@ -24,7 +24,7 @@ The Claude Code plugin `clm`, installed from this repo's marketplace. It provide
 The rules several skills share are this component's, though the files they constrain are its children's. What each asks of the skills:
 - `skills`: `propose` and `build` never push `main` by any means but `clm land`, and run `clm approve` only after the human's yes, through the guard; no skill or agent names `clm hash`, only `clm hashes`;
 - `builder-check` and `architecture-audit`: `propose` runs a builder check and, beside it, the `architecture-auditor` before its pull request; `build` lists the `question` and `human-task` items that block what it leaves; `contribution` launches the auditor too;
-- `session-worktrees`: `propose`, `init` and `build` cut each branch in a worktree of its own under `.claude/worktrees/`, never switching the checkout the session started in, except in a session already isolated there;
+- `session-worktrees`: `propose`, `init` and `build` cut each branch in a worktree of its own under `.claude/worktrees/`, never switching the checkout the session started in, except in a session already isolated there; `triage` cuts its archive branch the same way, a rule its own requirement states (`plugin.triage/triage-archives-complete`);
 - `defect-check-before-pr`: `propose` and `build` review the session for CLM defects before any pull request, and fix the reported ones once their branches have landed;
 - `recommend-the-right-design`: `triage` and `propose` read the specs and code before recommending, and recommend the correct design over the convenient one;
 - `skills-write-serves` and `skills-write-enforcement`: `propose` and `init` give components `serves`, and constraints `#### Enforced by` or `#### Untested`;
