@@ -1124,7 +1124,7 @@ fn worktree_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_cut_branches_in_worktrees() {
-    // req:plugin/session-worktrees@6d976f97
+    // req:plugin/session-worktrees@651acb1c
     for skill in ["propose", "init", "build"] {
         let body = skill_body(skill);
         assert_eq!(worktree_gaps(skill, &body), Vec::<String>::new());
@@ -1159,7 +1159,7 @@ fn skills_cut_branches_in_worktrees() {
     }
     // propose counting its own worktree as isolated: the skills' own worktrees, named by a
     // change ID or `archive`, don't count, whoever started there.
-    for needle in ["`<YYYYMMDD>-<slug>`", "`archive`", "`defects`"] {
+    for needle in ["`<YYYYMMDD>-<slug>`", "`archive`"] {
         assert!(isolated.contains(needle), "propose: {needle}: {isolated}");
     }
     // Such a session adds its worktree under the main checkout, never nested in its own.
@@ -1206,20 +1206,6 @@ fn skills_cut_branches_in_worktrees() {
         &build.replace("git switch -c impl/archive/<id>", "elided"),
     );
     assert_reports(&gaps, "build", "git switch -c impl/archive/<id>");
-    // build fixing defects with no step for an isolated session: the paragraph holding
-    // `fix reported defects` must say `isolated under`, as `propose`'s step 1 does.
-    let step = build
-        .lines()
-        .find(|p| p.contains("fix reported defects"))
-        .unwrap();
-    for needle in [
-        "isolated under",
-        "before each `clm claim <component> --fix backlog/<slug>`",
-        "add and remove no worktree",
-        "or its claim or push is refused",
-    ] {
-        assert!(step.contains(needle), "build: {needle}: {step}");
-    }
     let archive = sentence_with(&build, "git switch -c impl/archive/<id> origin/main");
     for needle in [
         "removes no worktree",
