@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [spec-slimmer-proposes-removing-requirements-that-are-the-only]
 ---
 
