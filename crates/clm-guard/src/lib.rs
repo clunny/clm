@@ -9,34 +9,27 @@ mod shell;
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::Value;
-
+pub use clm_agent_harness::Decision;
+use clm_agent_harness::{AgentHarness, Rendered, parse_event, render};
 use clm_hooks::settings;
 use push::Reach;
 use shell::command;
 use shell::walk::{Judged, Stdin, walk};
 
-/// What the guard answers a `PreToolUse` event with.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Decision {
-    /// Let the command run: exit 0, print nothing.
-    Allow,
-    /// Have the human confirm the command (`approve-in-session`), with the reason.
-    Ask(String),
-    /// Refuse the command, with the reason: exit 2.
-    Block(String),
+/// The `ask` permission decision Claude Code reads from a `PreToolUse` hook's stdout: the
+/// agent harness adapter's rendering of an `Ask`, written once.
+pub fn ask_json(reason: &str) -> String {
+    render(AgentHarness::ClaudeCode, &Decision::Ask(reason.to_string())).stdout
 }
 
-/// The `ask` permission decision Claude Code reads from a `PreToolUse` hook's stdout.
-pub fn ask_json(reason: &str) -> String {
-    serde_json::json!({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "ask",
-            "permissionDecisionReason": reason,
-        }
-    })
-    .to_string()
+/// What `clm hook guard` prints and exits with for `event` under `agent_harness`
+/// (`guard-per-agent-harness`): the same rules whatever the agent harness, rendered as that
+/// agent harness reads a decision, so an `ask` where it can't confirm blocks.
+pub fn guard_hook(agent_harness: AgentHarness, event: &str) -> Rendered {
+    render(
+        agent_harness,
+        &judge_event(agent_harness, event, &Budgets::HOOK),
+    )
 }
 
 /// The time the guard's `git` queries and `gh` lookups may spend (`hook-budgets`).
@@ -66,16 +59,25 @@ pub fn guard(event: &str) -> Decision {
 /// has the human confirm one that runs `clm approve` (`approve-in-session`), or files a CLM
 /// defect as an issue. A block wins over an ask. Git queries and `gh` lookups spend `budgets`.
 pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
-    let Ok(event) = serde_json::from_str::<Value>(event) else {
+    judge_event(AgentHarness::ClaudeCode, event, budgets)
+}
+
+/// Reads `event` as `agent_harness` writes it and judges its shell command.
+fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets) -> Decision {
+    let Ok(event) = parse_event(agent_harness, event) else {
         return Decision::Allow;
     };
-    if event["tool_name"] != "Bash" {
+    if event.tool.as_deref() != Some("Bash") {
         return Decision::Allow;
     }
-    let Some(command) = event["tool_input"]["command"].as_str() else {
+    let Some(command) = event.command.as_deref() else {
         return Decision::Allow;
     };
-    let cwd = event["cwd"].as_str().map(Path::new);
+    judge_command(command, event.cwd.as_deref().map(Path::new), budgets)
+}
+
+/// The rules, whatever the agent harness: judges `command` run from `cwd`.
+fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets) -> Decision {
     let judged = walk(command, cwd);
     let mut reasons: Vec<String> = Vec::new();
     // Re-running a release run would publish, merge or deploy again, and one that can't be

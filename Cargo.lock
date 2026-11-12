@@ -409,6 +409,7 @@ dependencies = [
 name = "clm-guard"
 version = "0.26.0"
 dependencies = [
+ "clm-agent-harness",
  "clm-config",
  "clm-git",
  "clm-hooks",
