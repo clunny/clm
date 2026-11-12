@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [retired-terms-in-spec-text-are-caught-only-at-land]
 ---
 

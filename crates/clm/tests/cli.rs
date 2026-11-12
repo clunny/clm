@@ -97,6 +97,7 @@ fn reports_every_violation_and_exits_1() {
 fn this_repository_is_clean() {
     // req:check/report-and-exit@2528ee97
     // req:clm/clean-check-runs-own-clm@06b04860
+    // req:config/retired-terms-detector@afaa1f7a
     let repo_root = repo_root();
     let out = clm_check_on_path(&repo_root, &std::env::var_os("PATH").unwrap_or_default())
         .output()
@@ -1591,6 +1592,44 @@ fn config_get_env_prints_a_line_per_variable() {
     assert_eq!(out, format!("A=1\t{0}\nB=2\t{0}\n", file.display()));
     let (out, _) = config_get_in_repo(None, "env");
     assert_eq!(out, "\tdefault\n");
+}
+
+#[test]
+fn this_repository_names_the_retired_terms_detector() {
+    // req:config/retired-terms-detector@afaa1f7a
+    let out = clm_config_get(&repo_root(), "detectors");
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        stdout.starts_with("unused-dependencies,unreferenced-public-items,retired-terms\t"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn check_fails_on_a_retired_term_in_a_spec() {
+    // req:config/retired-terms-detector@afaa1f7a
+    let script = fs::read_to_string(repo_root().join("scripts/retired-terms.sh")).unwrap();
+    let dir = detector_repo(None);
+    write(dir.path(), "scripts/retired-terms.sh", &script);
+    write(dir.path(), "scripts/retired-terms.txt", "grommet stub\n");
+    write(
+        dir.path(),
+        "clm.toml",
+        "[[detectors]]\nname = \"retired-terms\"\ncommand = [\"sh\", \"scripts/retired-terms.sh\"]\nhint = \"scripts/retired-terms.sh needs only sh and grep\"\n",
+    );
+    write(dir.path(), "specs/notes.md", "make it a grommet stub\n");
+    let out = clm_check(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{stdout}{stderr}");
+    assert!(
+        stderr.contains("specs/notes.md:1: grommet stub"),
+        "{stderr}"
+    );
+    assert!(
+        stdout.contains("clm.toml: check/detectors: retired-terms failed (exit 1)"),
+        "{stdout}"
+    );
 }
 
 #[test]

@@ -65,6 +65,13 @@ command = [
 ]
 hint = "scripts/dev-install.sh"
 
+# The root's scan for terms a rename retired (clm/retired-terms), so a spec branch finds one while
+# it is drafted rather than at its land. It needs nothing installed.
+[[detectors]]
+name = "retired-terms"
+command = ["sh", "scripts/retired-terms.sh"]
+hint = "scripts/retired-terms.sh needs only sh and grep"
+
 # The whole suite runs after lands that checked only where the branch and `main` overlap
 # (verify-here, land/overlap-recheck): on this machine, once the build queue drains and at least
 # every 20 lands. See `clm guide ci-and-deployment`.
