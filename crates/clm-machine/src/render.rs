@@ -162,7 +162,11 @@ pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
         let room = width.saturating_sub(4 + 1 + 1 + figure.chars().count() + tail.chars().count());
         let shown = &shares[shares.len().saturating_sub(room)..];
         let chart: String = shown.iter().map(|s| block(*s)).collect();
-        let line = format!("{label:<4} {chart} {figure}{tail}");
+        // No line is wider than the width, even when the row's fixed part is.
+        let line: String = format!("{label:<4} {chart} {figure}{tail}")
+            .chars()
+            .take(width)
+            .collect();
         out.push_str(&paint(state, &line));
         out.push('\n');
     }
