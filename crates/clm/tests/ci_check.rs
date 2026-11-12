@@ -279,7 +279,7 @@ impl Tree {
 #[test]
 fn every_check() {
     // req:ci/web-checks@72a04372
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     // The real `detector-tools.sh` runs first: its install is the first `cargo` call.
@@ -598,7 +598,7 @@ fn capability_package_installs_the_browser() {
 
 #[test]
 fn detector_tools_installs_cargo_machete_pinned() {
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     let lines = script_lines("detector-tools.sh");
     let install = lines
         .iter()
@@ -628,8 +628,13 @@ fn detector_tools_installs_cargo_machete_pinned() {
 
 /// What breaks `ci/detector-tools` in a `clm.toml` and `detector-tools.sh`'s lines: a
 /// detector whose tool has no install line its `hint` repeats, a `clm` detector whose hint
-/// doesn't name `scripts/dev-install.sh`, or a script line that installs `clm`.
-fn detector_tool_problems(config: &toml::Table, lines: &[String]) -> Vec<String> {
+/// doesn't name `scripts/dev-install.sh`, a script line that installs `clm` or `sh`; a detector
+/// that runs `sh` on a file of the repository (under `root`) needs no line.
+fn detector_tool_problems(
+    config: &toml::Table,
+    lines: &[String],
+    root: &std::path::Path,
+) -> Vec<String> {
     let mut problems = Vec::new();
     for d in config["detectors"].as_array().unwrap() {
         let tool = d["command"][0].as_str().unwrap();
@@ -641,6 +646,13 @@ fn detector_tool_problems(config: &toml::Table, lines: &[String]) -> Vec<String>
                     "`clm` detector's hint `{hint}` doesn't name scripts/dev-install.sh"
                 ));
             }
+        } else if tool == "sh"
+            && d["command"]
+                .get(1)
+                .and_then(|p| p.as_str())
+                .is_some_and(|p| !p.starts_with('/') && !p.contains("..") && root.join(p).is_file())
+        {
+            // `sh <file in the repository>` needs only `sh` and `grep`; nothing installs it.
         } else if hint.split_whitespace().last() != Some(tool) {
             problems.push(format!("hint `{hint}` doesn't install `{tool}`"));
         } else if !lines.iter().any(|l| l == hint) {
@@ -650,7 +662,16 @@ fn detector_tool_problems(config: &toml::Table, lines: &[String]) -> Vec<String>
     for line in lines.iter().filter(|l| installs_clm(l)) {
         problems.push(format!("detector-tools.sh installs clm: `{line}`"));
     }
+    for line in lines.iter().filter(|l| installs_sh(l)) {
+        problems.push(format!("detector-tools.sh installs sh: `{line}`"));
+    }
     problems
+}
+
+/// Whether a line installs `sh`: an install command naming it.
+fn installs_sh(line: &str) -> bool {
+    let words: Vec<&str> = line.split_whitespace().collect();
+    words.iter().any(|w| *w == "install" || *w == "binstall") && words.contains(&"sh")
 }
 
 /// Whether a line installs `clm`: an install command (`cargo install`, `cargo binstall`)
@@ -666,7 +687,7 @@ fn installs_clm(line: &str) -> bool {
 
 #[test]
 fn every_detector_has_its_tool_installed() {
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     // Each detector's tool has an install line, and its `hint` is that line, so the
     // version is pinned in one place; a `clm` detector has none.
     let config: toml::Table = fs::read_to_string(repo().join("clm.toml"))
@@ -675,13 +696,13 @@ fn every_detector_has_its_tool_installed() {
         .unwrap();
     let lines = script_lines("detector-tools.sh");
     assert!(!config["detectors"].as_array().unwrap().is_empty());
-    let problems = detector_tool_problems(&config, &lines);
+    let problems = detector_tool_problems(&config, &lines, &repo());
     assert!(problems.is_empty(), "{problems:?}: {lines:?}");
 }
 
 #[test]
 fn clm_detector_needs_no_install_line() {
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     let machete = "cargo install --locked --version 0.9.2 cargo-machete";
     let config = |clm_hint: &str| -> toml::Table {
         format!(
@@ -700,11 +721,11 @@ fn clm_detector_needs_no_install_line() {
     };
     let ok = config("scripts/dev-install.sh");
     assert_eq!(
-        detector_tool_problems(&ok, &lines(&[])),
+        detector_tool_problems(&ok, &lines(&[]), &repo()),
         Vec::<String>::new()
     );
     // A `clm` detector whose hint doesn't say how a clone gets `main`'s `clm`.
-    let problems = detector_tool_problems(&config("cargo install clm"), &lines(&[]));
+    let problems = detector_tool_problems(&config("cargo install clm"), &lines(&[]), &repo());
     assert!(
         problems.len() == 1 && problems[0].contains("dev-install.sh"),
         "{problems:?}"
@@ -717,19 +738,54 @@ fn clm_detector_needs_no_install_line() {
         "cargo binstall clm",
         "scripts/dev-install.sh",
     ] {
-        let problems = detector_tool_problems(&ok, &lines(&[install]));
+        let problems = detector_tool_problems(&ok, &lines(&[install]), &repo());
         assert!(
             problems.len() == 1 && problems[0].contains("installs clm"),
             "{install}: {problems:?}"
         );
     }
     // Another detector's tool without its line.
-    assert_eq!(detector_tool_problems(&ok, &[]).len(), 1);
+    assert_eq!(detector_tool_problems(&ok, &[], &repo()).len(), 1);
+}
+
+#[test]
+fn sh_detector_on_a_repository_file_needs_no_install_line() {
+    // req:ci/detector-tools@86210325
+    let machete = "cargo install --locked --version 0.9.2 cargo-machete";
+    let config = |script: &str| -> toml::Table {
+        format!(
+            "[[detectors]]\nname = \"unused-dependencies\"\ncommand = [\"cargo-machete\"]\n\
+             hint = \"{machete}\"\n\n[[detectors]]\nname = \"retired-terms\"\n\
+             command = [\"sh\", \"{script}\"]\nhint = \"none needed\"\n"
+        )
+        .parse()
+        .unwrap()
+    };
+    let lines = vec![machete.to_owned()];
+    // The script exists in the repository: no install line.
+    let root = repo();
+    assert_eq!(
+        detector_tool_problems(&config(".github/scripts/ci-check.sh"), &lines, &root),
+        Vec::<String>::new()
+    );
+    // A file that doesn't exist falls back to the install-line rule.
+    assert_eq!(
+        detector_tool_problems(&config("scripts/nope.sh"), &lines, &root).len(),
+        1
+    );
+    // The script installing `sh`.
+    let mut with_sh = lines.clone();
+    with_sh.push("cargo install sh".to_owned());
+    let problems = detector_tool_problems(&config(".github/scripts/ci-check.sh"), &with_sh, &root);
+    assert!(
+        problems.len() == 1 && problems[0].contains("installs sh"),
+        "{problems:?}"
+    );
 }
 
 #[test]
 fn only_detector_tools_installs_tools() {
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     // Other tools, such as the release's `cargo-zigbuild`, may be installed elsewhere.
     let config: toml::Table = fs::read_to_string(repo().join("clm.toml"))
         .unwrap()
@@ -762,7 +818,7 @@ fn only_detector_tools_installs_tools() {
 
 #[test]
 fn check_script_installs_the_tools() {
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     let lines = script_lines("ci-check.sh");
     let tools = lines
         .iter()

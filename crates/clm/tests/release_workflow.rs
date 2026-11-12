@@ -90,7 +90,7 @@ fn prepare_runs_the_script_that_bumps_both_versions() {
 
 #[test]
 fn prepare_installs_detector_tools_before_the_tests() {
-    // req:ci/detector-tools@156131ed
+    // req:ci/detector-tools@86210325
     let wf = workflow();
     let toolchain = step_running(&wf, "prepare", "rustup show");
     let tools = step_running(&wf, "prepare", ".github/scripts/detector-tools.sh");
