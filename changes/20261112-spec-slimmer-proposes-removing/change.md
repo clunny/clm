@@ -19,11 +19,13 @@ On 2026-11-11 `/clm:health` sent the spec-slimmer over the flagged components, a
 
 ## Outcome
 
-`plugin.agents/spec-slimmer` gains the search and the report, and a scenario whose test fails when the prompt names none of `#### Enforced by`, `docs/decisions/` or `#### Needs`. Its build edits `plugin/agents/spec-slimmer.md` and the test in `crates/clm/tests/plugin_agents.rs`, re-citing it.
+`plugin.agents/spec-slimmer` gains the search and the report, and a scenario whose test fails when the prompt leaves out any of `#### Enforced by`, `docs/decisions/` and `#### Needs`. `/clm:health` already lists each cut with its quotes, and the reference is quoted beside the cut, so it reaches the human with no skill change. Its build edits `plugin/agents/spec-slimmer.md` and the test in `crates/clm/tests/plugin_agents.rs`, re-citing it.
 
 ## Constraints
 
 - `health-advises`: the slimmer only advises; nothing gates on its report.
 - `proven-by-tests`, `deterministic-enforcement`: a requirement named as the proof of a constraint or decision keeps that proof unless something else takes it over.
+
+- `ancestor-scoped-context`: the search reads past the component's bundle, as the slimmer's reading of its code and tests already does. That is accepted: what names a requirement is a reverse lookup no bundle holds, the slimmer only advises, and it reads only the lines that name `<component>/<slug>`, not other components' specs whole. The constraint governs the bundle `clm context` builds (`context/bundle-contents`), which doesn't change.
 
 No edge cases or workarounds are known.
