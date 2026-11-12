@@ -80,7 +80,7 @@ fn issue_forms_parse_and_say_what_is_asked() {
 
 #[test]
 fn pull_request_template_lists_the_spec_paths() {
-    // req:ci/pull-request-template@4dbdf428
+    // req:ci/pull-request-template@d9fd26dc
     assert_holds(
         "PULL_REQUEST_TEMPLATE.md",
         &read("PULL_REQUEST_TEMPLATE.md"),
@@ -92,6 +92,7 @@ fn pull_request_template_lists_the_spec_paths() {
             "ARCHITECTURE.md",
             "CAPABILITIES.md",
             "CLAUDE.md",
+            "AGENTS.md",
             "CONTRIBUTING.md",
             "closed without review",
             "Which issue",

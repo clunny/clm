@@ -2,7 +2,7 @@
 CLM takes intent from outside, not code (see CONTRIBUTING.md). A pull request that changes
 any file outside these paths is closed without review:
 
-  specs/  changes/  backlog/  docs/  ARCHITECTURE.md  CAPABILITIES.md  CLAUDE.md  CONTRIBUTING.md
+  specs/  changes/  backlog/  docs/  ARCHITECTURE.md  CAPABILITIES.md  CLAUDE.md  AGENTS.md  CONTRIBUTING.md
 -->
 
 ## Issue
