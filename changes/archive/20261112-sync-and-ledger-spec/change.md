@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [sync-and-ledger-spec-path-lists-miss-agents-md]
 ---
 
