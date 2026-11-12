@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-next-prints-nothing-when-the-clone-s-build-places-are-full]
 ---
 
