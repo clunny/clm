@@ -12,7 +12,7 @@ Each setting's value comes from the first of these that sets it:
 4. `~/.config/clm/config.toml` (or under `$XDG_CONFIG_HOME`): yours, for every project;
 5. its default.
 
-A table such as `[land]` is one setting: the first file that sets it supplies all of it, and files never merge within a table.
+A table such as `[land]` is one setting: the first file that sets it supplies all of it, and files never merge within a table. `[env]` is the one exception: `clm.local.toml`'s variables replace `clm.toml`'s one name at a time, and the rest of `clm.toml`'s still apply.
 
 Not every file may set every setting. The project's settings, which decide how its checks and reviews run, can be set only in `clm.toml` or `clm.local.toml`, so nobody weakens a project's checks from their own file. `writer` names a person, so `clm.toml` never sets it. Each section below says where its setting may go.
 
@@ -64,6 +64,17 @@ Where: `clm.toml` or `clm.local.toml`.
 - **Leave it unset** when your tests need nothing installed in a fresh worktree, as a cargo workspace doesn't. Builds then run their tests straight away.
 
 `[land] check` never runs it: keep your check script installing what it needs, since CI and `[verify]` run it in trees no build prepared.
+
+Where: `clm.toml` or `clm.local.toml`.
+
+### `env`
+
+`[env]`: environment variables, as `NAME = "value"` strings, that CLM sets for `[build] setup`, `[land] check` and `[verify] check`, such as `RELAY_SERVER_IMAGE = "relay:arm64"` for a slow-test script that needs the image built for this machine. Unlike every other table, the files merge: put the variables the project shares in `clm.toml`, and in `clm.local.toml` only the ones this clone needs different. A variable set here replaces the value in the shell or session that runs `clm`, so a land run from a terminal and one run by a session see the same thing. Names beginning `CLM_`, and `CI`, are refused, since CLM sets those itself; values are one line each.
+
+- **Set variables** when your checks read a value that differs per project or per machine. They reach CLM's commands only, not your shell or other projects.
+- **Leave it unset** and the commands get the environment of whatever runs `clm`, which differs between a terminal and a session.
+
+Each command reads `clm.toml`'s `[env]` from the tree it checks, with this clone's `clm.local.toml`: a land from the merged branch, `clm verify` from the commit it verifies. A land whose variables differ from `main`'s runs every test, and a land checked under other variables, such as another clone's, isn't counted as checked. `clm config list` prints each variable with the file it came from.
 
 Where: `clm.toml` or `clm.local.toml`.
 

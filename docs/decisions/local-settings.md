@@ -15,3 +15,5 @@ A fifth settings layer, `clm.local.toml`, sits between the environment variable 
 **Tables are one key.** `[node_size]`, `[land]` and `[[detectors]]` come whole from the first layer that sets them; layers never merge within a table, so what a file says is all of that table, and errors and `clm config get` name the one file the value came from.
 
 (Amended 2026-11-05, `20261105-clm-upgrade`: every key but `upgraded` and `declined_migrations`, which record the repository's state and only `clm.toml` may set; and `skip_migrations` only this file may set, so a skip of a broken migration never reaches another clone (`upgrade-migrations`).)
+
+(Amended 2026-11-12, `20261112-config-env`: `[env]` is the one table whose layers merge, name by name, since its variables are independent of one another (`env-table`).)
