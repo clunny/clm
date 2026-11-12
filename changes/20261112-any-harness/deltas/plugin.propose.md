@@ -1,6 +1,6 @@
 ---
 component: plugin.propose
-base: { frontmatter: "1b79214002e6ad1e" }
+base: { frontmatter: "1b79214002e6ad1e", design: "1483129846b3ea00" }
 ---
 
 ## MODIFIED Frontmatter
