@@ -7,7 +7,7 @@ resolves: [a-draft-s-clm-setup-is-denied-by-claude-code-s-auto-mode, draft-promp
 
 Two gaps in what unattended drafts are allowed and told to do.
 
-`clm setup` joins the `clm` subcommands whose allow rules `clm init` seeds and `clm init --check-permissions` checks for (`init/init-seeds-permissions`), so Claude Code's auto mode no longer denies a draft's or build's `clm setup` and the draft can fix a code-only item instead of leaving it as `setup failed`. And the `clm draft` prompt records the code work a design-only change promises, and its builder check asks about it, as `/clm:propose` already does (`orchestrator.triage/draft-records-promised-code-work`, mirroring `plugin.propose/propose-archives-design-only`).
+`clm setup` joins the `clm` subcommands whose allow rules `clm init` seeds and `clm init --check-permissions` checks for (`init/init-seeds-permissions`), so Claude Code's auto mode no longer denies a draft's or build's `clm setup` and the draft can fix a code-only item instead of leaving it as `setup failed`; this repository's settings allow them (`clm/session-commands`), and a note migration offers them to projects set up earlier (`upgrade/migration-setup-allow-rules`). And the `clm draft` prompt records the code work a design-only change promises, and its builder check asks about it, as `/clm:propose` already does (`orchestrator.triage/draft-records-promised-code-work`, mirroring `plugin.propose/propose-archives-design-only`).
 
 ## Problem
 
@@ -32,10 +32,14 @@ The draft doesn't archive a design-only change, as `/clm:propose` does: it lands
 
 ## Outcome
 
-- `init/init-seeds-permissions` names `setup` between `rebase` and `verify`: twenty-four rules. Its build adds `Bash(clm setup)` and `Bash(clm setup *)` to `UNATTENDED_RULES` and to this repository's own `.claude/settings.json`, which `clm/session-commands` keeps equal to the list. `init`'s Design names the full list (it lacked `verify` too) and why `setup` is safe to allow.
+- `init/init-seeds-permissions` names `setup` between `rebase` and `verify`: twenty-four rules. Its build adds `Bash(clm setup)` and `Bash(clm setup *)` to `UNATTENDED_RULES` (`crates/clm-init/src/init.rs`, a `[&str; 22]` today) and moves `crates/clm/tests/init.rs`'s count and rule list to them. `init`'s Design names the full list (it lacked `verify` too) and why `setup` is safe to allow.
+- `clm/session-commands` names the two `clm setup` rules itself, so the root's build adds them to this repository's `.claude/settings.json` (a root path `init`'s build can't edit) first; `init/init-seeds-permissions` needs it, so its build finds the file already allowing them and the test that keeps the file equal to the list passes (`dependency-work-is-a-requirement`).
+- `upgrade/migration-setup-allow-rules` (new): an `advised` note migration, `20261112-a-draft-s-clm`, offers the two rules to projects set up earlier, since `20261107-projects-set-up-before` is frozen with its twenty-two (`shipped-migrations-frozen`, `allow-rules-offered-by-note`), and `clm/upgrade-covers-allow-rules` fails a land that seeds a rule no migration offers. `init/init-seeds-permissions`' build writes it (`template-change-ships-its-migration`), with the up-to-date fixtures the requirement names.
 - `orchestrator.triage/draft-records-promised-code-work` (new) has the `clm draft` prompt record promised code work and ask the builder check about it.
 
 ## Constraints
 
 - No edge cases or workarounds are known.
-- A repository set up before this change gets the two rules only when its human adds them; `clm init --check-permissions` names them before the next draft or build.
+- A repository set up before this change gets the two rules only when its human adds them: the note migration and the session-start reminder name them, and `clm init --check-permissions` before the next draft or build. The settings stay the human's (`allow-rules-offered-by-note`).
+- Build order: `clm/session-commands` first (this repository's settings allow the rules), then `init/init-seeds-permissions` (the list, its tests and the migration), which needs it; `upgrade/migration-setup-allow-rules` needs `init/init-seeds-permissions` and is written by its build.
+- The builder check and the architecture audit found the settings edit and the missing migration; both are settled above. `orchestrator.triage/draft-records-promised-code-work` changes only `clm draft`'s prompt; `clm draft --fold`'s builder check is left as it is, since the item names only the draft prompt and a fold reviews changes a draft's builder check already asked about.
