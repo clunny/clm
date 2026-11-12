@@ -183,6 +183,9 @@ fn slimmer_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
             "duplicates another",
             "prove the same thing",
             "code no requirement needs",
+            "#### Enforced by",
+            "docs/decisions/",
+            "#### Needs",
             "Never edit",
             "severity",
         ]
@@ -195,7 +198,7 @@ fn slimmer_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
 
 #[test]
 fn spec_slimmer() {
-    // req:plugin.agents/spec-slimmer@8de89fe3
+    // req:plugin.agents/spec-slimmer@d0110548
     let (fm, body) = frontmatter(&plugin().join("agents/spec-slimmer.md"));
     assert_eq!(slimmer_gaps(&fm, &body), Vec::<String>::new());
     // agent that could edit
@@ -206,6 +209,11 @@ fn spec_slimmer() {
     // agent without the context command
     let gaps = slimmer_gaps(&fm, &body.replace("clm context", "elided"));
     assert_eq!(gaps, ["spec-slimmer: must name `clm context <component>`"]);
+    // agent that doesn't look for references
+    for needle in ["#### Enforced by", "docs/decisions/", "#### Needs"] {
+        let gaps = slimmer_gaps(&fm, &body.replace(needle, "elided"));
+        assert_eq!(gaps, [format!("spec-slimmer: must name `{needle}`")]);
+    }
 }
 
 /// What `issue-verifier` asks of the verifier's frontmatter and prompt.
