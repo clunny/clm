@@ -1210,6 +1210,8 @@ fn skills_cut_branches_in_worktrees() {
     for needle in [
         "removes no worktree",
         "git switch --detach origin/main",
+        "or its push was refused",
+        "git branch -D",
         "clm wrap-up",
     ] {
         assert!(archive.contains(needle), "{needle}: {archive}");
