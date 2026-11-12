@@ -21,10 +21,14 @@ Let a session tell a full build cap from an empty queue. When the clone's build 
 ## Outcome
 
 - `orchestrator` Contract: `clm next` says on stderr when it prints nothing only because no place is free.
-- `orchestrator/next` (modified): the stderr line, its format, when it appears and when it doesn't (empty queue; a waiting `--wait` look), with scenarios `no place free` (modified), `full cap, empty queue` and `waiting on a full cap` (added). The code: `clm_orchestrator::next` returns the held and ready counts beside the list (or a type carrying them), and `crates/clm`'s `next` command writes the line; `next_wait` doesn't. `crates/clm/tests/run.rs` calls `clm_orchestrator::next` and moves with it.
-- `plugin.build/build-finishes-builds` (modified): the skill treats a `clm next` that prints nothing with a `no free build place` line as no free place, never as an empty queue, and with none of its own builds running tells the human the cap is reached and by how many places, naming `max_builds` and `clm.local.toml`. Needs `orchestrator/next`, so the skill names the line only once `clm next` writes it.
+- `orchestrator/next` (modified): the stderr line, its format, when it appears and when it doesn't (empty queue; a waiting `--wait` look), with scenarios `no place free` (modified), `full cap, empty queue` and `waiting on a full cap` (added). The code: `clm_orchestrator` decides on and formats the line (`path-ownership`): `next` returns it beside the list, or passes it to a `note` callback as `next_wait` passes its notes, and `crates/clm/src/main.rs`, dispatch only, just prints it to stderr; `next_wait` passes no such line. `crates/clm/tests/run.rs` and `crates/clm-orchestrator/tests/orchestrator.rs` call `clm_orchestrator::next`; when its signature changes, `run.rs`'s edit is a test-fixture fix the change forces, named in the pull request.
+- `plugin.build/build-finishes-builds` (modified): the skill treats a `clm next` that prints nothing with a `no free build place` line as no free place, never as an empty queue, and with none of its own builds running tells the human the cap is reached and by how many places, naming `max_builds` and `clm.local.toml`, then runs step 5 as at any drain (the wrap-up, a summary naming the full cap, and the watch offer), so `next-wait`'s "wrap up before each wait" holds; the same now applies when `clm run` exits 3, which before ended the session with no wrap-up. Needs `orchestrator/next`, so the skill names the line only once `clm next` writes it.
 
 ## Constraints
 
 - `build-places`, `reuse-first`, `yagni`, `code-fix-needs-a-written-rule`.
 - No edge cases or workarounds known.
+
+## Open questions
+
+- `clm-runner` (`crates/clm-runner/src/looks.rs`) runs `clm next` and ignores its stderr on exit 0, so an unattended runner also waits silently on a full cap. It waits correctly (a place frees as work arrives); surfacing the cap there is left out of this change (`yagni`) and can be a backlog item if it proves confusing.
