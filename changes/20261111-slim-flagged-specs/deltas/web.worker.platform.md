@@ -6,7 +6,7 @@ base: { design: "e30a972e8c4dd93b" }
 ## MODIFIED Design
 **The fake** (`nested-splits`). The fake GitHub and platform live in `src/fake.rs` behind the `fake` feature. The crates only the fake uses (`futures`' executor and the like) are optional dependencies enabled by that feature alone, so the Worker's wasm build compiles none of them. The fake calls nothing of `clm-web` and writes no checkout. `src/fake.rs` counts toward this component's code: `check/node-size` reads the files under its `paths`, whatever their features.
 
-**One way down.** Imports run one way, as `web.worker`'s Contract says: what a module here needs from a route comes in as an argument. Code both halves need goes here; code only one needs stays in it.
+**One way down.** Imports run one way, as `web.worker`'s Design says: what a module here needs from a route comes in as an argument. Code both halves need goes here; code only one needs stays in it.
 
 **Caches and endpoints.** `access::permission` asks `GET /repos/{o}/{r}/collaborators/{login}/permission` with the installation's token, a 404 being `none`, and keeps the answer 5 minutes per repo and login. `live` keeps the live state 60 seconds.
 
