@@ -66,11 +66,22 @@ fn a_longer_name() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join(format!("{}.log", &land[..7])), "short").unwrap();
     std::fs::write(dir.join(format!("{}.log", &land[..9])), "long").unwrap();
-    // A name that is no prefix of the commit, or is too short, is not matched.
-    std::fs::write(dir.join(format!("{}.log", &land[..6])), "tiny").unwrap();
-    std::fs::write(dir.join("0000000000.log"), "other").unwrap();
     let found = clm_verify::kept_log(&linked, &land).unwrap();
     assert_eq!(std::fs::read_to_string(found).unwrap(), "long");
+}
+
+#[test]
+fn only_a_prefix_of_seven_or_more_matches() {
+    // req:verify/kept-log@05b0ad5c
+    let f = every_land();
+    let (linked, land) = linked(&f);
+    let dir = f.work().join(".clm/verify-logs");
+    std::fs::create_dir_all(&dir).unwrap();
+    // Too short, and a stretch of the commit that is no prefix of it.
+    std::fs::write(dir.join(format!("{}.log", &land[..6])), "tiny").unwrap();
+    std::fs::write(dir.join(format!("{}.log", &land[1..10])), "inner").unwrap();
+    std::fs::write(dir.join(format!("{}.txt", &land[..9])), "other").unwrap();
+    assert_eq!(clm_verify::kept_log(&linked, &land), None);
 }
 
 #[test]
