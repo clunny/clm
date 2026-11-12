@@ -628,13 +628,30 @@ enum Hook {
     /// PreToolUse: exit 2 with the reason when a Bash command would cut a release or push to
     /// `main`; print the `ask` decision when it would run `clm approve`, or file a CLM defect
     /// as an issue.
-    Guard,
+    Guard {
+        #[command(flatten)]
+        flag: HarnessFlag,
+    },
     /// SessionStart: print `clm status` and the rule for reporting CLM defects when the
     /// session's cwd is a CLM repository.
-    SessionStart,
+    SessionStart {
+        #[command(flatten)]
+        flag: HarnessFlag,
+    },
     /// Stop: push a snapshot of the spec work on a `spec/*` branch; silent, never fails.
     /// The `autosync` setting (`clm config get autosync`) turns it off.
-    Autosync,
+    Autosync {
+        #[command(flatten)]
+        flag: HarnessFlag,
+    },
+}
+
+/// The agent harness whose event a hook reads (`hook-agent-harness-flag`).
+#[derive(clap::Args)]
+struct HarnessFlag {
+    /// The agent harness running the hook: `claude-code` (the default), `codex` or `none`.
+    #[arg(long = "agent-harness", default_value = "claude-code")]
+    agent_harness: String,
 }
 
 #[derive(Subcommand)]
@@ -1304,27 +1321,40 @@ fn dispatch() -> ExitCode {
             // A hook that can't read its event has nothing to do; it never breaks a session.
             let mut event = String::new();
             let _ = std::io::stdin().read_to_string(&mut event);
-            match hook {
-                Hook::Guard => match clm_guard::guard(&event) {
-                    clm_guard::Decision::Allow => ExitCode::SUCCESS,
-                    clm_guard::Decision::Ask(why) => {
-                        println!("{}", clm_guard::ask_json(&why));
-                        ExitCode::SUCCESS
-                    }
-                    clm_guard::Decision::Block(why) => {
-                        eprintln!("{why}");
-                        ExitCode::from(2)
-                    }
-                },
-                Hook::SessionStart => {
-                    print!("{}", clm_hooks::session_start(&event));
-                    ExitCode::SUCCESS
+            let (flag, name) = match &hook {
+                Hook::Guard { flag } => (flag, "guard"),
+                Hook::SessionStart { flag } => (flag, "session-start"),
+                Hook::Autosync { flag } => (flag, "autosync"),
+            };
+            let Some(agent_harness) =
+                clm_agent_harness::AgentHarness::from_name(&flag.agent_harness)
+            else {
+                // Exit 1 is no block for Claude Code or Codex (`guard-fails-open`).
+                if name == "guard" {
+                    eprintln!("unknown agent harness `{}`", flag.agent_harness);
+                    return ExitCode::from(1);
                 }
-                Hook::Autosync => {
-                    clm_hooks::autosync(&event);
-                    ExitCode::SUCCESS
+                return ExitCode::SUCCESS;
+            };
+            let (stdout, stderr, code) = match hook {
+                Hook::Guard { .. } => {
+                    let r = clm_guard::guard_hook(agent_harness, &event);
+                    (r.stdout, r.stderr, r.exit_code)
                 }
+                Hook::SessionStart { .. } => {
+                    let (out, code) = clm_hooks::session_start_hook(agent_harness, &event);
+                    (out, String::new(), code)
+                }
+                Hook::Autosync { .. } => {
+                    let (out, code) = clm_hooks::autosync_hook(agent_harness, &event);
+                    (out, String::new(), code)
+                }
+            };
+            print!("{stdout}");
+            if !stderr.is_empty() {
+                eprintln!("{stderr}");
             }
+            ExitCode::from(u8::try_from(code).unwrap_or(1))
         }
         Command::Defect { title, nodes } => {
             let mut report = String::new();
