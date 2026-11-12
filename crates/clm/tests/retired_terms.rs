@@ -219,7 +219,7 @@ fn a_list_line_is_trimmed_and_comments_hold_none() {
     write(
         dir.path(),
         "a.md",
-        "a frob here\ngrommet stub\npass --frob\n",
+        "# a comment about frob\ngrommet stub\npass --frob\n",
     );
     let got = scan(dir.path(), &["--list", "list.txt", "a.md"]);
     assert_eq!(got.code, 1);
