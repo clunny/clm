@@ -10,11 +10,16 @@ use crate::{Ctx, Error, say};
 /// `<main worktree>/<prefix>/.clm`: where a land keeps what it keeps, and so does a
 /// verification (`land/land-tree`).
 pub(crate) fn places(ctx: &Ctx) -> Result<PathBuf, Error> {
-    let main = clm_git::worktrees(&ctx.root)?
+    places_of(&ctx.root, &ctx.prefix)
+}
+
+/// `places` for the CLM root `root`, whose place in its git repository is `prefix`.
+pub(crate) fn places_of(root: &Path, prefix: &str) -> Result<PathBuf, Error> {
+    let main = clm_git::worktrees(root)?
         .into_iter()
         .next()
-        .map_or_else(|| ctx.root.clone(), |w| w.path);
-    Ok(main.join(&ctx.prefix).join(".clm"))
+        .map_or_else(|| root.to_path_buf(), |w| w.path);
+    Ok(main.join(prefix).join(".clm"))
 }
 
 /// The tree at a commit, held exclusively until dropped.

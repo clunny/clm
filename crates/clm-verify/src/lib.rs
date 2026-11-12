@@ -8,8 +8,11 @@ mod bisect;
 mod chain;
 mod due;
 mod import;
+mod kept;
 mod run;
 mod tree;
+
+pub use kept::kept_log;
 
 use std::fmt;
 use std::io::Write;
