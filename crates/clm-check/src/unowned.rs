@@ -10,7 +10,12 @@ use crate::matches;
 
 /// The spec paths, which no node owns: the same ones `gate` names.
 const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
-const SPEC_FILES: [&str; 3] = ["ARCHITECTURE.md", "CAPABILITIES.md", "CLAUDE.md"];
+const SPEC_FILES: [&str; 4] = [
+    "ARCHITECTURE.md",
+    "CAPABILITIES.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+];
 
 /// None when the root has no `outside` key. `tracked` is the listing `run` or `run_listed` reads.
 pub fn violations(
