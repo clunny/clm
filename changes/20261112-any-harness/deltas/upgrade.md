@@ -43,7 +43,6 @@ An `advised` `apply` migration SHALL move a project's instructions to `AGENTS.md
 
 #### Needs
 - clm/upgrade-command
-- upgrade/superseded-notes
 - init/init-files
 - init/claude-md-names-the-skills
 
