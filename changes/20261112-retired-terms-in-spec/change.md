@@ -26,12 +26,13 @@ A spec branch whose text names a retired term (a renamed command, flag or coined
 - `clm/retired-terms`: the list moves to `scripts/retired-terms.txt` and the scan to `scripts/retired-terms.sh` (`sh` and `grep` only), with the same files, matching rules and `clm:remove-by` exemption; the root's `paths` gain both files. The test in `crates/clm/tests/retired_terms.rs` runs the script on fixtures, on the tree and on the help texts written to files, and its list checks (plain words, the old command, flag, state and key names) read the list file.
 - `config/retired-terms-detector`: this repository's `clm.toml` names a third detector, `retired-terms`, `["sh", "scripts/retired-terms.sh"]`; `config`'s Design lists it.
 - `ci/detector-tools`: a detector whose command is `sh` and a tracked script needs no install line, as one whose command is `clm` needs none.
+- `docs/decisions/plain-terms-renames.md` and `docs/decisions/draft-checks-hand-edits.md` carry an amendment saying so.
 
 ## Edge cases and workarounds
 
 - The script's whole-word test is `grep -w`'s (a letter, digit or `_` is a word character), which is the rule as stated; a multi-word term becomes an extended regex with ` +` between its words, and the script escapes the regex metacharacters a term holds (a backtick needs none; a leading `-` needs `-e`).
 - `grep -I` skips binary files, where the Rust walk skipped files that weren't UTF-8; the effect on this repository's text is the same.
-- A help text is written to a temporary file named for its command so the scan's output names it as the test's did.
+- A help text is written to a temporary file named for its command (`clm-land`); the test strips the directory when it reports.
 - Until `config`'s build lands, `clm check` doesn't run the scan; the land still runs the test through its marker, as now.
 
 ## Constraints
@@ -40,4 +41,4 @@ A spec branch whose text names a retired term (a renamed command, flag or coined
 
 ## Open questions
 
-- `docs/decisions/draft-checks-hand-edits.md` says the generated `specs/` text is accepted as unchecked while drafting, the retired-terms scan being one of the text scans it reaches. Once `config/retired-terms-detector` is built that holds for the other scans only. The decision is left as written, since it records the reasoning of its day and an edit would make this a hand-edit branch.
+- None. The audit's two findings were taken: `plain-terms-renames` and `draft-checks-hand-edits` each carry an amendment saying the scan now runs as this repository's `clm check` detector.
