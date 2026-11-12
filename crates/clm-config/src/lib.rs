@@ -360,6 +360,9 @@ pub struct Settings {
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: a build's worktree
     /// gets nothing before its tests run.
     pub build: Setting<Option<Build>>,
+    /// Repository-only: `clm.toml`'s and `clm.local.toml`'s `[env]` variables merged name by name
+    /// (`env-setting`), sorted by name, each with the layer that set it. Empty: none.
+    pub env: Vec<(String, Setting<String>)>,
     /// Repository-only: set by `clm.toml` or `clm.local.toml` alone. None: slow tests stay in
     /// `[land] check`.
     pub verify: Setting<Option<Verify>>,
@@ -381,7 +384,7 @@ pub struct Settings {
 }
 
 /// Every key `Settings::get` accepts, in the order `clm config list` prints them (`config-list`).
-pub const KEYS: [&str; 17] = [
+pub const KEYS: [&str; 18] = [
     "autosync",
     "defects",
     "max_builds",
@@ -390,6 +393,7 @@ pub const KEYS: [&str; 17] = [
     "approval",
     "land",
     "build",
+    "env",
     "verify",
     "affected",
     "detectors",
@@ -404,21 +408,43 @@ pub const KEYS: [&str; 17] = [
 impl Settings {
     /// One line per key of `KEYS`: the key, then what `get` gives, tab-separated (`config-list`).
     pub fn list(&self) -> Result<Vec<String>, Error> {
-        KEYS.iter()
-            .map(|key| {
-                let (value, layer) = self.get(key)?;
-                Ok(format!("{key}\t{value}\t{layer}"))
-            })
-            .collect()
+        let mut lines = Vec::new();
+        for key in KEYS {
+            for line in self.lines(key)? {
+                lines.push(format!("{key}\t{line}"));
+            }
+        }
+        Ok(lines)
+    }
+
+    /// What `clm config get <key>` prints: one `<value>\t<layer>` line, or for `env` one line
+    /// per variable, `<NAME>=<value>` and its layer, or an empty value and `default` with none.
+    pub fn lines(&self, key: &str) -> Result<Vec<String>, Error> {
+        if key != "env" {
+            let (value, layer) = self.get(key)?;
+            return Ok(vec![format!("{value}\t{layer}")]);
+        }
+        if self.env.is_empty() {
+            return Ok(vec![format!("\t{}", Layer::Default)]);
+        }
+        Ok(self
+            .env
+            .iter()
+            .map(|(name, s)| format!("{name}={}\t{}", s.value, s.layer))
+            .collect())
     }
 
     /// The key's value as its TOML value (for `detectors`, the names, comma-separated), and
-    /// the layer it came from.
+    /// the layer it came from. `env` has a layer per variable: read it with `lines`.
     pub fn get(&self, key: &str) -> Result<(String, &Layer), Error> {
         if !KEYS.contains(&key) {
             return Err(Error::new(None, format!("unknown key `{key}`")));
         }
         match key {
+            "env" => Err(Error::new(
+                None,
+                "`env` has one layer per variable; read it with `lines`".into(),
+            )),
             "autosync" => Ok((self.autosync.value.to_string(), &self.autosync.layer)),
             "defects" => Ok((self.defects.value.to_string(), &self.defects.layer)),
             "max_builds" => Ok((self.max_builds.value.to_string(), &self.max_builds.layer)),
@@ -543,6 +569,8 @@ struct RepoFile {
     /// Read raw, as `land` is.
     build: Option<toml::Value>,
     /// Read raw, as `land` is.
+    env: Option<toml::Value>,
+    /// Read raw, as `land` is.
     verify: Option<toml::Value>,
     component_size: Option<toml::Value>,
     /// The table's old name, read only to refuse it by name.
@@ -572,6 +600,8 @@ struct LocalFile {
     land: Option<toml::Value>,
     /// Read raw, as `component_size` is.
     build: Option<toml::Value>,
+    /// Read raw, as `component_size` is.
+    env: Option<toml::Value>,
     /// Read raw, as `component_size` is.
     verify: Option<toml::Value>,
     /// Read raw so every error `component_size` reports names it, which toml's own don't.
@@ -618,6 +648,7 @@ impl From<RepoFile> for LocalFile {
             approval: f.approval,
             land: f.land,
             build: f.build,
+            env: f.env,
             verify: f.verify,
             component_size: f.component_size,
             node_size: f.node_size,
@@ -666,6 +697,7 @@ fn defaults() -> Settings {
         approval: default(Approval::Any),
         land: default(None),
         build: default(None),
+        env: Vec::new(),
         verify: default(None),
         node_size: default(NodeSize::default()),
         affected: default(None),
@@ -812,6 +844,7 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     let max_builds = file.max_builds.map(|v| max_builds(v, path)).transpose()?;
     let land = file.land.map(|v| land(v, path)).transpose()?;
     let build = file.build.map(|v| build(v, path)).transpose()?;
+    let env = file.env.map(|v| env_table(v, path)).transpose()?;
     let verify = file.verify.map(|v| verify(v, path)).transpose()?;
     if file.node_size.is_some() {
         return Err(Error::file(
@@ -845,6 +878,7 @@ fn apply(settings: &mut Settings, file: LocalFile, path: &Path) -> Result<(), Er
     set(&mut settings.approval, file.approval, layer());
     set(&mut settings.land, land.map(Some), layer());
     set(&mut settings.build, build.map(Some), layer());
+    merge_env(&mut settings.env, env, path);
     set(&mut settings.verify, verify.map(Some), layer());
     set(&mut settings.node_size, node_size, layer());
     set(&mut settings.affected, affected.map(Some), layer());
@@ -1048,6 +1082,92 @@ fn build(value: toml::Value, path: &Path) -> Result<Build, Error> {
         ))),
         None => Err(fail("`setup` is missing".into())),
     }
+}
+
+/// Reads `[env]`: a table of string values, keyed by variable names that CLM doesn't set itself
+/// (`env-setting`).
+fn env_table(value: toml::Value, path: &Path) -> Result<Vec<(String, String)>, Error> {
+    let fail = |problem: String| Error::file(path, format!("`env`: {problem}"));
+    let toml::Value::Table(table) = value else {
+        return Err(fail(format!("must be a table, not {value}")));
+    };
+    let mut vars = Vec::with_capacity(table.len());
+    for (name, value) in table {
+        let mut chars = name.chars();
+        let valid = chars
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+            && chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid {
+            return Err(fail(format!(
+                "`{name}` isn't a variable name: expected an ASCII letter or `_`, then ASCII \
+                 letters, digits and `_`"
+            )));
+        }
+        if name.starts_with("CLM_") || name == "CI" {
+            return Err(fail(format!("`{name}` is set by CLM itself")));
+        }
+        let toml::Value::String(text) = value else {
+            return Err(fail(format!("`{name}` must be a string, not {value}")));
+        };
+        if text.contains(['\0', '\r', '\n']) {
+            return Err(fail(format!(
+                "`{name}` must hold no NUL, carriage return or newline"
+            )));
+        }
+        vars.push((name, text));
+    }
+    Ok(vars)
+}
+
+/// Sets each variable of one file's table, replacing the value of a name an earlier layer set,
+/// and keeps the list sorted by name.
+fn merge_env(
+    env: &mut Vec<(String, Setting<String>)>,
+    vars: Option<Vec<(String, String)>>,
+    path: &Path,
+) {
+    for (name, value) in vars.into_iter().flatten() {
+        let setting = Setting {
+            value,
+            layer: Layer::File(path.to_path_buf()),
+        };
+        match env.binary_search_by(|(n, _)| n.as_str().cmp(&name)) {
+            Ok(i) => env[i].1 = setting,
+            Err(i) => env.insert(i, (name, setting)),
+        }
+    }
+}
+
+/// The `[env]` variables that the repository's `clm.toml` committed as `text` (none when `text`
+/// is `None`) and the clone's `clm.local.toml` give, as loading gives them, reading no other key
+/// of either, so a commit whose other settings a later `clm` rejects still gives its variables
+/// (`env-setting`). A broken table fails naming `source` for the text, and `clm.local.toml`.
+pub fn committed_env(
+    root: &Path,
+    text: Option<&str>,
+    source: &str,
+) -> Result<Vec<(String, Setting<String>)>, Error> {
+    fn env_of(text: &str, path: &Path) -> Result<Option<Vec<(String, String)>>, Error> {
+        let table: toml::Table = parse(text, path)
+            .map_err(|e| Error::file(path, format!("`env`: can't read the file: {}", e.message)))?;
+        table
+            .get("env")
+            .cloned()
+            .map(|v| env_table(v, path))
+            .transpose()
+    }
+    let mut env = Vec::new();
+    if let Some(text) = text {
+        let path = PathBuf::from(source);
+        merge_env(&mut env, env_of(text, &path)?, &path);
+    }
+    if let Some(path) = local_file(root)
+        && let Ok(text) = std::fs::read_to_string(&path)
+    {
+        merge_env(&mut env, env_of(&text, &path)?, &path);
+    }
+    Ok(env)
 }
 
 /// Reads `[verify]`: a table with a non-empty string `check`, a `mode`, optional distinct

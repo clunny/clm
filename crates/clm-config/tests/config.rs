@@ -82,7 +82,7 @@ fn files() -> Fixture {
 
 #[test]
 fn repository_over_user() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = files();
     let s = f.load(&[]).unwrap();
     assert_eq!(s.defects.value, Defects::Backlog);
@@ -93,7 +93,7 @@ fn repository_over_user() {
 
 #[test]
 fn variable_over_files() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = files();
     let s = f
         .load(&[("CLM_DEFECTS", "ask"), ("CLM_AUTOSYNC", "0")])
@@ -106,7 +106,7 @@ fn variable_over_files() {
 
 #[test]
 fn autosync_variable_accepts_true_and_false_spellings() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = Fixture::new(Some("autosync = false\n"), None);
     for (v, want) in [("0", false), ("false", false), ("1", true), ("true", true)] {
         let s = f.load(&[("CLM_AUTOSYNC", v)]).unwrap();
@@ -116,7 +116,7 @@ fn autosync_variable_accepts_true_and_false_spellings() {
 
 #[test]
 fn no_files_gives_defaults() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = Fixture::new(None, None);
     let s = f.load(&[]).unwrap();
     assert_eq!(s.defects.value, Defects::Ask);
@@ -127,7 +127,7 @@ fn no_files_gives_defaults() {
 
 #[test]
 fn no_root_reads_only_the_user_file() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = files();
     let env = HashMap::from([(
         "XDG_CONFIG_HOME".to_string(),
@@ -140,7 +140,7 @@ fn no_root_reads_only_the_user_file() {
 
 #[test]
 fn home_fallback_when_xdg_unset_or_empty() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let dir = TempDir::new().unwrap();
     let file = dir.path().join(".config/clm/config.toml");
     fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -159,7 +159,7 @@ fn home_fallback_when_xdg_unset_or_empty() {
 
 #[test]
 fn no_home_no_user_file() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let s = load_with(None, &HashMap::new()).unwrap();
     assert_eq!(s.defects.layer, Layer::Default);
     assert_eq!(s.autosync.layer, Layer::Default);
@@ -759,7 +759,7 @@ fn writer_unset_is_left_to_the_caller() {
 
 #[test]
 fn local_over_repository() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = Fixture::new(None, Some("defects = \"backlog\"\nhost = \"github\"\n"))
         .local("defects = \"off\"\n");
     let s = f.load(&[]).unwrap();
@@ -771,7 +771,7 @@ fn local_over_repository() {
 
 #[test]
 fn variable_over_local() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = files().local("defects = \"off\"\nautosync = true\n");
     let s = f
         .load(&[("CLM_DEFECTS", "ask"), ("CLM_AUTOSYNC", "0")])
@@ -784,7 +784,7 @@ fn variable_over_local() {
 
 #[test]
 fn local_over_user() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = Fixture::new(Some("autosync = false\n"), None).local("autosync = true\n");
     let s = f.load(&[]).unwrap();
     assert!(s.autosync.value);
@@ -793,7 +793,7 @@ fn local_over_user() {
 
 #[test]
 fn tables_dont_merge() {
-    // req:config/layers@cf14f119
+    // req:config/layers@36207631
     let f = Fixture::new(
         None,
         Some(
@@ -1978,7 +1978,7 @@ fn verify_in_the_user_file_fails() {
 
 #[test]
 fn list_has_a_line_for_every_key_in_order() {
-    // req:config/config-list@a0b1d174
+    // req:config/config-list@7bccae0d
     let f = Fixture::new(None, Some("defects = \"backlog\"\n")).local("max_builds = 5\n");
     let lines = f.load(&[]).unwrap().list().unwrap();
     let keys: Vec<&str> = lines
@@ -1996,6 +1996,7 @@ fn list_has_a_line_for_every_key_in_order() {
             "approval",
             "land",
             "build",
+            "env",
             "verify",
             "affected",
             "detectors",
@@ -2010,17 +2011,45 @@ fn list_has_a_line_for_every_key_in_order() {
     assert!(lines.contains(&format!("defects\tbacklog\t{}", f.repo_file().display())));
     assert!(lines.contains(&format!("max_builds\t5\t{}", f.local_file().display())));
     assert!(lines.contains(&"autosync\ttrue\tdefault".to_string()));
+    assert!(lines.contains(&"env\t\tdefault".to_string()));
+    assert_eq!(lines.len(), 18);
+}
+
+#[test]
+fn list_has_a_line_per_env_variable_between_build_and_verify() {
+    // req:config/config-list@7bccae0d
+    let f = Fixture::new(None, Some("[env]\nA = \"1\"\n")).local("[env]\nB = \"2\"\n");
+    let lines = f.load(&[]).unwrap().list().unwrap();
+    assert_eq!(lines.len(), 19);
+    let at = lines.iter().position(|l| l.starts_with("build\t")).unwrap();
+    assert_eq!(
+        lines[at + 1],
+        format!("env\tA=1\t{}", f.repo_file().display())
+    );
+    assert_eq!(
+        lines[at + 2],
+        format!("env\tB=2\t{}", f.local_file().display())
+    );
+    assert!(lines[at + 3].starts_with("verify\t"));
 }
 
 #[test]
 fn every_listed_key_is_one_get_accepts_and_prints_the_same() {
-    // req:config/config-list@a0b1d174
+    // req:config/config-list@7bccae0d
     let s = Fixture::new(None, None).load(&[]).unwrap();
-    for (key, line) in clm_config::KEYS.iter().zip(s.list().unwrap()) {
-        let (value, layer) = s.get(key).unwrap();
-        assert_eq!(line, format!("{key}\t{value}\t{layer}"));
+    let mut listed = s.list().unwrap().into_iter();
+    for key in clm_config::KEYS {
+        for line in s.lines(key).unwrap() {
+            assert_eq!(listed.next().unwrap(), format!("{key}\t{line}"));
+        }
     }
-    assert!(s.get("colour").unwrap_err().to_string().contains("colour"));
+    assert_eq!(listed.next(), None);
+    assert!(
+        s.lines("colour")
+            .unwrap_err()
+            .to_string()
+            .contains("colour")
+    );
 }
 
 #[test]
@@ -2135,4 +2164,102 @@ fn an_error_in_committed_text_names_the_source_and_key() {
     assert_eq!(e.source.as_deref(), Some("origin/main:clm.toml"));
     let e = load_committed_from(&f, Some("defect = \"off\"\n")).unwrap_err();
     assert!(e.to_string().contains("defect"), "{e}");
+}
+
+#[test]
+fn env_local_overrides_one_variable() {
+    // req:config/env-setting@000d4bed
+    let f = Fixture::new(
+        None,
+        Some("[env]\nRELAY_SERVER_IMAGE = \"relay:amd64\"\nRUST_LOG = \"info\"\n"),
+    )
+    .local("[env]\nRELAY_SERVER_IMAGE = \"relay:arm64\"\n");
+    let s = f.load(&[]).unwrap();
+    assert_eq!(
+        s.lines("env").unwrap(),
+        [
+            format!(
+                "RELAY_SERVER_IMAGE=relay:arm64\t{}",
+                f.local_file().display()
+            ),
+            format!("RUST_LOG=info\t{}", f.repo_file().display()),
+        ]
+    );
+}
+
+#[test]
+fn env_unset_is_empty_and_default() {
+    // req:config/env-setting@000d4bed
+    let s = Fixture::new(None, Some("")).load(&[]).unwrap();
+    assert!(s.env.is_empty());
+    assert_eq!(s.lines("env").unwrap(), ["\tdefault"]);
+}
+
+#[test]
+fn env_that_is_not_valid_fails_naming_the_file() {
+    // req:config/env-setting@000d4bed
+    for bad in [
+        "[env]\nCLM_SLOT = \"4\"\n",
+        "[env]\nCI = \"1\"\n",
+        "[env]\nWORKERS = 4\n",
+        "[env]\nA = \"x\\ny\"\n",
+        "[env]\nA = \"x\\ry\"\n",
+        "[env]\nA = \"x\\u0000y\"\n",
+        "[env]\n\"1A\" = \"x\"\n",
+        "[env]\n\"A-B\" = \"x\"\n",
+        "[env]\n\"\" = \"x\"\n",
+        "env = \"x\"\n",
+    ] {
+        let f = Fixture::new(None, Some(bad));
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
+        assert!(e.message.contains("`env`"), "{bad}: {}", e.message);
+        let f = Fixture::new(None, None).local(bad);
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(
+            e.source,
+            Some(f.local_file().display().to_string()),
+            "{bad}"
+        );
+    }
+}
+
+#[test]
+fn env_in_the_user_file_fails() {
+    // req:config/env-setting@000d4bed
+    let e = Fixture::new(Some("[env]\nA = \"1\"\n"), None)
+        .load(&[])
+        .unwrap_err();
+    assert!(e.to_string().contains("config.toml"), "{e}");
+    assert!(e.to_string().contains("env"), "{e}");
+}
+
+#[test]
+fn committed_env_reads_the_text_and_the_local_file_and_nothing_else() {
+    // req:config/env-setting@000d4bed
+    let f = Fixture::new(None, Some("[env]\nZ = \"from the working file\"\n"))
+        .local("[env]\nB = \"2\"\n");
+    let got = clm_config::committed_env(
+        &f.root(),
+        Some("no_such_key = 3\n\n[env]\nA = \"1\"\n"),
+        "abc123:clm.toml",
+    )
+    .unwrap();
+    let names: Vec<_> = got
+        .iter()
+        .map(|(n, s)| (n.as_str(), s.value.as_str()))
+        .collect();
+    assert_eq!(names, [("A", "1"), ("B", "2")]);
+    assert_eq!(got[0].1.layer, Layer::File("abc123:clm.toml".into()));
+    assert_eq!(got[1].1.layer, Layer::File(f.local_file()));
+    let none = clm_config::committed_env(&f.root(), None, "abc123:clm.toml").unwrap();
+    assert_eq!(none.len(), 1);
+    let e = clm_config::committed_env(&f.root(), Some("[env]\nCI = \"1\"\n"), "abc123:clm.toml")
+        .unwrap_err();
+    assert!(e.to_string().contains("abc123:clm.toml"), "{e}");
+    assert!(e.to_string().contains("env"), "{e}");
+    let e =
+        clm_config::committed_env(&f.root(), Some("= not toml"), "abc123:clm.toml").unwrap_err();
+    assert!(e.to_string().contains("abc123:clm.toml"), "{e}");
+    assert!(e.to_string().contains("env"), "{e}");
 }
