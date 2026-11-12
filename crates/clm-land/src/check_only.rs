@@ -32,6 +32,11 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
     }
     let repo = Repo::open(root, env)?;
     let exe = Exe::new(&repo)?;
+    // The working tree's `[env]` (`land/check-env`).
+    let env_vars = match &repo.settings.land.value {
+        Some(_) => repo.env_of(std::fs::read(repo.root.join("clm.toml")).ok().as_deref())?,
+        None => Vec::new(),
+    };
     let before = Tree::read(&repo)?;
     if let Some(land) = &repo.settings.land.value {
         // The slot of the place that names the checked-out branch, 0 when `HEAD` is detached
@@ -47,6 +52,7 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
             &[],
             FAILS,
             CheckHow {
+                env: &env_vars,
                 log: None,
                 slot,
                 rank: (slot == 0).then_some(Rank::ORDINARY),
@@ -58,7 +64,7 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
     let mut out = Output::default();
     match not_recorded(&repo, &before, &after)? {
         Some(why) => out.lines.push(format!("not recorded: {why}")),
-        None => match record(&repo, &after.head) {
+        None => match record(&repo, &after.head, &env_vars) {
             Ok(()) => out
                 .lines
                 .push(format!("recorded {} as checked", after.head)),
@@ -71,9 +77,9 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
 }
 
 /// Appends the `checked` record for `head`'s code key with the command a land's names.
-fn record(repo: &Repo, head: &str) -> Result<(), Error> {
+fn record(repo: &Repo, head: &str, env: &[(String, String)]) -> Result<(), Error> {
     let command = match &repo.settings.land.value {
-        Some(land) => land.check.clone(),
+        Some(land) => crate::checked_command(&land.check, env),
         None => "clm check".into(),
     };
     let code_key = clm_ledger::code_key(&repo.root, head)?;

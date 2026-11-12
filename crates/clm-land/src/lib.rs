@@ -211,6 +211,36 @@ impl<'a> Repo<'a> {
         runner::places_of(&self.root)
     }
 
+    /// The `[env]` variables `clm.toml` as it is at `rev` (a commit or a tree) and the clone's
+    /// `clm.local.toml` give, sorted by name (`land/check-env`).
+    fn env_at(&self, rev: &str) -> Result<Vec<(String, String)>, Error> {
+        let prefix = self.git(&["rev-parse", "--show-prefix"])?;
+        let text = self.blob(rev, &format!("{prefix}clm.toml"))?;
+        self.env_of(text.as_deref())
+    }
+
+    /// As `env_at`, for the bytes of a `clm.toml`, none when the file is missing.
+    fn env_of(&self, bytes: Option<&[u8]>) -> Result<Vec<(String, String)>, Error> {
+        let text = bytes.map(String::from_utf8_lossy);
+        let env = clm_config::committed_env(&self.root, text.as_deref(), "clm.toml")
+            .map_err(|e| Error::Refused(e.to_string()))?;
+        Ok(env.into_iter().map(|(n, s)| (n, s.value)).collect())
+    }
+
+    /// The bytes of `path` at `rev`, none when `rev` holds no such file.
+    fn blob(&self, rev: &str, path: &str) -> Result<Option<Vec<u8>>, Error> {
+        let spec = format!("{rev}:{path}");
+        if self.git(&["cat-file", "-e", &spec]).is_err() {
+            return Ok(None);
+        }
+        Ok(Some(clm_git::run(
+            &self.root,
+            "git",
+            &["cat-file", "blob", &spec],
+            clm_git::Options::default(),
+        )?))
+    }
+
     /// The slot of the build place that names `branch`, 0 outside one (`land/check-slot`),
     /// for `CLM_SLOT`; exit 2 with `place_slot`'s error when it fails.
     fn slot(&self, branch: &str) -> Result<u64, Error> {
@@ -234,7 +264,12 @@ impl<'a> Repo<'a> {
         fails: &str,
         how: CheckHow,
     ) -> Result<Timing, Error> {
-        let CheckHow { log, slot, rank } = how;
+        let CheckHow {
+            env: vars_env,
+            log,
+            slot,
+            rank,
+        } = how;
         // The runner `verify` shares: one check at a time on the clone, whatever the target
         // (`land/check-lock`, `land/shared-check-runner`), except a `--check-only` run in a
         // build place. `--check-only` passes no log, so its refusal repeats no tail and names
@@ -249,6 +284,9 @@ impl<'a> Repo<'a> {
             // caller's removed (`land/land-dir-env`).
             unset: vec!["CI".to_string(), "CLM_LAND_DIR".to_string()],
         };
+        // The tree's `[env]`, replacing the caller's own (`land/check-env`).
+        env.set
+            .extend(vars_env.iter().map(|(k, v)| (k.clone(), v.into())));
         // Replacing the caller's own (`land/check-slot`).
         env.set.push(("CLM_SLOT".into(), slot.to_string().into()));
         let selection = vars
@@ -432,9 +470,22 @@ impl Timing {
 /// How a `[land] check` is run beyond its command: where its output is logged, the slot it
 /// gets (`land/check-slot`) and the rank it takes the check lock in, if any (`land/check-lock`, `land/lock-queue`).
 pub(crate) struct CheckHow<'a> {
+    /// The `[env]` variables the check runs with, replacing the caller's (`land/check-env`).
+    pub(crate) env: &'a [(String, String)],
     pub(crate) log: Option<&'a Path>,
     pub(crate) slot: u64,
     pub(crate) rank: Option<lock::Rank>,
+}
+
+/// The command a `checked` record names: `check` preceded by `<NAME>=<value> ` for each of
+/// `env`, which is sorted by name (`land/check-env`).
+pub(crate) fn checked_command(check: &str, env: &[(String, String)]) -> String {
+    let mut command = String::new();
+    for (name, value) in env {
+        command.push_str(&format!("{name}={value} "));
+    }
+    command.push_str(check);
+    command
 }
 
 /// The directory `clm-land`'s temporary directories go in: `TMPDIR` through the injected
