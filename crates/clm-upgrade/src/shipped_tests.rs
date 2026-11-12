@@ -738,6 +738,21 @@ fn both_files_keep_every_line_and_gain_the_import_first() {
 
 // req:upgrade/migration-agents-md@41da745b
 #[test]
+fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md() {
+    let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
+    let out = list(dir.path()).unwrap();
+    assert!(
+        out.contains(&format!("{AGENTS_ID} advised apply ")),
+        "{out}"
+    );
+    fs::write(dir.path().join("CLAUDE.md"), "@AGENTS.md\n").unwrap();
+    assert!(!list(dir.path()).unwrap().contains(AGENTS_ID));
+    fs::remove_file(dir.path().join("CLAUDE.md")).unwrap();
+    assert!(!list(dir.path()).unwrap().contains(AGENTS_ID));
+}
+
+// req:upgrade/migration-agents-md@41da745b
+#[test]
 fn a_claude_md_that_imports_agents_md_has_nothing_pending() {
     let dir = project(NEW_ARCHITECTURE, "# Ours\n@AGENTS.md\n");
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
