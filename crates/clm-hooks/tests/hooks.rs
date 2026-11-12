@@ -99,6 +99,7 @@ fn session_start_is_silent_elsewhere() {
         "land",
         "pr",
         "rebase",
+        "setup",
         "verify",
         "workaround",
     ]
