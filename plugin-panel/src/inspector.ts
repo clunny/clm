@@ -110,10 +110,9 @@ export const toggleRoot = (unfolded: readonly string[], name: string): string[] 
 /** What a pressed line's or button's key names; `dismiss:<id>` is a failed build row's `Dismiss`. */
 export const keyTarget = (
   key: string,
-): { node: string } | { root: string } | { capability: string } | { dismiss: string } | undefined =>
+): { node: string } | { root: string } | { dismiss: string } | undefined =>
   key.startsWith('node:') ? { node: key.slice(5) }
   : key.startsWith('root:') ? { root: key.slice(5) }
-  : key.startsWith('capability:') ? { capability: key.slice(11) }
   : key.startsWith('dismiss:') ? { dismiss: key.slice(8) }
   : undefined
 

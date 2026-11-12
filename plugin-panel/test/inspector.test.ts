@@ -315,7 +315,7 @@ describe('node-inspector', () => {
     expect(paneChart({ tab: 'spec', chart: SPEC_CHART, own: SPEC, other: FLIGHT, selected: 'a', unfolded: [] }).inspector).toBeDefined()
   })
 
-  // req:plugin.panel/views-panel@a97b0ae7
+  // req:plugin.panel/views-panel@2ea8bd17
   test('a press reruns nothing the pane already holds this generation', async () => {
     const cache = new Map<string, Promise<Run>>()
     const started: string[] = []
@@ -477,7 +477,7 @@ describe('inspector-detail', () => {
     expect(draw('gone', true).detail).toBeUndefined()
   })
 
-  // req:plugin.panel/views-panel@a97b0ae7
+  // req:plugin.panel/views-panel@2ea8bd17
   test('pressing Contract reruns nothing the pane already holds this generation', async () => {
     const cache = new Map<string, Promise<Run>>()
     const started: string[] = []

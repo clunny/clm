@@ -30,7 +30,7 @@ export type AgentRun = {
   tasks: Task[]
 }
 
-export type PanelTab = 'spec' | 'flight' | 'blockers' | 'capabilities'
+export type PanelTab = 'spec' | 'flight' | 'blockers'
 
 declare module 'claude-code' {
   interface PluginState {
@@ -42,8 +42,6 @@ declare module 'claude-code' {
       unfolded: Shaped<string[]>
       /** Whether the inspector shows the selected node's contract. */
       contract: Shaped<boolean>
-      /** The capability whose page the Capabilities tab shows, by slug; null for the list. */
-      capability: Shaped<string | null>
       generation: number
       agents: AgentRun[]
       now: number
