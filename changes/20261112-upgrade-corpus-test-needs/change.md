@@ -15,7 +15,7 @@ Name the upgrade-corpus test among the fixtures a new allow-rules note migration
 
 1. **State both IDs, and the duty to extend the list, in `clm/upgrade-corpus`; name the corpus test in `upgrade/migration-setup-allow-rules`** (chosen). This brings the rules up to the code as built. It also tells the next change that adds such a migration where its ID goes. Both requirements go `behind`, and their builds re-cite their tests at the new versions. No code changes.
 2. **Have the test decline every pending note migration whose `file` is `.claude/settings.json`, read from `clm-upgrade`'s list.** No list to maintain, but it would hide a future note on that file that the corpus should not decline. It also widens the test's reach into `upgrade`'s internals for a gap that has come up once (`yagni`). Rejected.
-3. **Widen `template-change-ships-its-migration`'s exception in `ARCHITECTURE.md` to cover `clm`'s corpus test as well as `upgrade`'s tests.** That is a general rule for a narrow case, and the corpus test is already covered as a test-fixture fix that the build names. Stating it in the requirement is enough. Rejected.
+3. **Widen `template-change-ships-its-migration`'s exception in `ARCHITECTURE.md` to cover `clm`'s corpus test as well as `upgrade`'s tests.** That is a general rule for a narrow case, and it would edit `ARCHITECTURE.md` for a gap that has come up once. Rejected for now: see `## Open questions`.
 
 ## Outcome
 
@@ -26,3 +26,7 @@ Name the upgrade-corpus test among the fixtures a new allow-rules note migration
 ## Edge cases and workarounds
 
 None.
+
+## Open questions
+
+- **`path-ownership`** (architecture audit). Both requirements have `init`'s build edit `crates/clm/tests/upgrade.rs`, which is `clm`'s. That is like the `clm_repo` fixture in `crates/clm/tests/hooks.rs`, which `upgrade/migration-setup-allow-rules` already sends that build to on `main`. `template-change-ships-its-migration`'s exception names only `upgrade`'s tests. The decline-list edit is not plainly a forced test-fixture fix in the sense `forced-fixes-cover-additions` gives. The change has the build name both edits under `## Fixes in other components`, as every exception requires, and states the edit in the requirements. It leaves open whether `ARCHITECTURE.md`'s exception should widen to cover `clm`'s upgrade tests (rejected Approach 3). That hand edit needs review, and this change does not make it.
