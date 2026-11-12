@@ -19,7 +19,7 @@ Have `/clm:propose` record the code work a change with nothing to build relies o
 
 ## Outcome
 
-`plugin.propose/propose-archives-design-only` gains the record step in the paragraph that names `clm archive` and a builder-check point, with a scenario whose test fails when either is missing. Its build edits `plugin/skills/propose/SKILL.md` and extends `design_only_gaps` and `propose_archives_design_only_changes` in `crates/clm/tests/plugin_propose.rs`, re-citing the test. No capability test observes the skill's text. Nothing else changes: the `clm draft` prompt has no design-only archive step, so it has no such paragraph to extend.
+`plugin.propose/propose-archives-design-only` gains the record step in the paragraph that names `clm archive` and a builder-check point, with a scenario whose test fails when either is missing. Its build edits `plugin/skills/propose/SKILL.md` and extends `design_only_gaps` and `propose_archives_design_only_changes` in `crates/clm/tests/plugin_propose.rs`, re-citing the test. No capability test observes the skill's text. The `clm draft` prompt's same gap is filed as a backlog item on `orchestrator.triage`.
 
 ## Constraints
 
@@ -28,6 +28,10 @@ Have `/clm:propose` record the code work a change with nothing to build relies o
 - `deferred-work-resolves-in-code`: the deferred item is closed by the code branch that does the work, with the trailer.
 - `fold-small-defer-large`: the item is how the deferred work stays visible.
 
+## Decisions
+
+- `dependency-work-is-a-requirement` is amended: besides harness work, a Design-only change's code work that changes nothing a requirement states, such as removing code nothing calls, is recorded as a `kind: deferred` item.
+
 ## Open questions
 
-- The prompt `clm draft` prints (`orchestrator.triage`) archives no design-only change and asks its builder check nothing about promised code work either; a design-only draft's outcome could make the same promise. Left out of this change, which the item scopes to `plugin.propose`; worth a backlog item if it recurs.
+- The prompt `clm draft` prints (`orchestrator.triage`) has the same gap: it asks its builder check nothing about promised code work. Out of this change's component, so it is filed as `backlog/draft-prompt-doesn-t-ask-about-promised-code-work`.

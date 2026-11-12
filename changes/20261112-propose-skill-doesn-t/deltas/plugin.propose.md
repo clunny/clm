@@ -17,7 +17,7 @@ component: plugin.propose
 - THEN it names `clm archive`, `status: done` and `archive-in-spec-pr`, and no sentence of the paragraph that names `archive-in-spec-pr` both names `specs/` and says `by hand` (step 8's general rule for conflicted files elsewhere stays)
 
 #### Scenario: skill without the promised work recorded
-- GIVEN a `skills/propose/SKILL.md` whose paragraph naming `clm archive` doesn't contain `kind: deferred` or `deferred-work-resolves-in-code`, or whose builder-check step doesn't contain `no requirement it adds or modifies makes pending`
+- GIVEN a `skills/propose/SKILL.md` whose paragraph naming `clm archive` lacks either of `kind: deferred` and `deferred-work-resolves-in-code`, or whose builder-check step lacks `no requirement it adds or modifies makes pending`
 - WHEN the tests run
 - THEN a test fails naming the skill and the missing text
 
