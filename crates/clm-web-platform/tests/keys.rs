@@ -65,12 +65,13 @@ fn line(path: &str) -> TreeLine<'_> {
 
 #[test]
 fn doc_only_paths_come_from_the_ledger() {
-    // req:web.worker.platform/code-key-doc-only@609e1b0d
+    // req:web.worker.platform/code-key-doc-only@99e1fff6
     let all = [
         "docs/x.md",
         "docs/guide/intro.md",
         "backlog/y.md",
         "CLAUDE.md",
+        "AGENTS.md",
         "web/README.md",
         "crates/a/src/lib.rs",
         "docsy/z.md",
@@ -91,7 +92,7 @@ fn doc_only_paths_come_from_the_ledger() {
 
 #[test]
 fn the_guides_files_are_doc_only() {
-    // req:web.worker.platform/code-key-doc-only@609e1b0d
+    // req:web.worker.platform/code-key-doc-only@99e1fff6
     let dir = repo();
     let d = dir.path();
     write(
