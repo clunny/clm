@@ -2181,9 +2181,9 @@ fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
     }
     out
 }
+
 /// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
 /// when the settings or the graph can't be loaded, 2 when git fails.
-
 fn health(root: &Path, expiry: u64) -> ExitCode {
     let settings = match clm_config::load(Some(root), &clm_config::process_env) {
         Ok(s) => s,
