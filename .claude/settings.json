@@ -9,6 +9,8 @@
       "Bash(npx playwright test *)",
       "Bash(.github/scripts/ci-check.sh)",
       "Bash(.github/scripts/ci-check.sh *)",
+      "Bash(clm setup)",
+      "Bash(clm setup *)",
       "Bash(clm apply)",
       "Bash(clm apply *)",
       "Bash(clm branch)",
