@@ -291,5 +291,8 @@ It SHALL NOT name a branch `impl/archive` without `/<id>`, which the queue would
 
 
 
+#### Needs
+- clm/harness-command
+
 #### Serves
 - capability/work-from-any-harness

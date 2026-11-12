@@ -275,7 +275,7 @@ The plugin SHALL ship the skill that builds the approved specs as `skills/build/
 - architecture/tests-run-in-their-own-tree
 
 ### Requirement: build-follows-harness
-`skills/build/SKILL.md` SHALL hold `plugin/skills-follow-harness`'s rule for its builds: it SHALL tell the session to run `clm harness` before its first launch; where `isolated-worktrees` is `no`, to add each build's worktree with `git worktree add .claude/worktrees/agent-<component> origin/main` and tell the build, before the launcher `clm run` printed, to work in that directory, so `clm run --finish` and `clm checkpoint` tidy it as they tidy a subagent's `agent-*` worktree; where `subagents` is `no`, to build the components one at a time in the session itself, each in such a worktree; and, where `model-choice` is `no`, to launch with the session's own model and pass its name as `--review-model`.
+`skills/build/SKILL.md` SHALL hold `plugin/skills-follow-harness`'s rule for its builds: it SHALL tell the session to run `clm harness` before its first launch; where `isolated-worktrees` is `no`, to add each build's worktree with `git worktree add .claude/worktrees/agent-<component> origin/main` and tell the build, before the launcher `clm run` printed, to work in that directory, so `clm run --finish` and `clm wrap-up` tidy it as they tidy a subagent's `agent-*` worktree; where `subagents` is `no`, to build the components one at a time in the session itself, each in such a worktree; and, where `model-choice` is `no`, to launch with the session's own model and pass its name as `--review-model`.
 
 #### Scenario: builds under Codex
 - GIVEN `skills/build/SKILL.md`
@@ -283,6 +283,9 @@ The plugin SHALL ship the skill that builds the approved specs as `skills/build/
 - THEN it names `clm harness`, `isolated-worktrees` and `.claude/worktrees/agent-<component>`
 
 
+
+#### Needs
+- clm/harness-command
 
 #### Serves
 - capability/work-from-any-harness

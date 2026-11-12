@@ -236,7 +236,7 @@ When `origin/main`'s tree holds `docs/allowed_signers`, `clm land` SHALL count a
 - capability/work-concurrently
 
 ### Requirement: approve-refuses-unconfirming-harness
-`clm approve` SHALL, before it fetches or appends anything, ask `harness`'s `detect` which harness its environment names, and when that harness's `abilities` hold `confirm` false and the harness isn't `None`, SHALL exit 1, appending nothing, with a message naming the harness and `approval-policy` and saying the human approves by running the same `clm approve` command in their own terminal, outside any agent. Under a harness whose `confirm` is true, or `None`, it SHALL go on as `approve` says.
+`clm approve` SHALL, before it fetches or appends anything, ask `harness`'s `detect` which harness its environment names, and when that harness's `abilities` hold `confirm` false and the harness isn't `None`, SHALL exit 1, appending nothing, with a message naming the harness and `approval-policy` and saying the human approves by running the same `clm approve` command in their own terminal, outside any agent. Under a harness whose `confirm` is true, or `None`, it SHALL go on as `approve` says. It SHALL read the markers from the environment lookup `approve` is given, not from the process's environment. The tests, capability tests included, that run `clm approve` SHALL remove both harnesses' markers from its environment unless a scenario sets them, so the suite passes from inside any harness; this requirement's build makes that change to them.
 
 #### Scenario: under Codex
 - GIVEN Codex's marker set in `clm approve spec/x`'s environment and a branch with a diff
@@ -252,6 +252,10 @@ When `origin/main`'s tree holds `docs/allowed_signers`, `clm land` SHALL count a
 - GIVEN `CLAUDECODE=1` set
 - WHEN `clm approve spec/x` runs on a branch with a diff
 - THEN it appends the `approved` record, the guard having asked the human first
+
+#### Needs
+- harness/detect
+- harness/abilities
 
 #### Serves
 - capability/approve-intent

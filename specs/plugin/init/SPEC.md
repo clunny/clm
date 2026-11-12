@@ -160,5 +160,8 @@ It SHALL NOT contain the text `clm.yml`, `clm-build.sh`, `spec-approved`, `spec-
 
 
 
+#### Needs
+- clm/harness-command
+
 #### Serves
 - capability/work-from-any-harness

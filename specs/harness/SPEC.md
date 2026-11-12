@@ -12,7 +12,7 @@ serves: [capability/work-from-any-harness, architecture/harness-adapters]
 Which agent harness a `clm` command runs under, what that harness can do, and how its hook events and decisions are written (`harness-adapters`). Crate `clm-harness`:
 - `Harness`: `ClaudeCode`, `Codex` or `None`, the last meaning the command runs outside any agent CLM recognises (the human's terminal, CI, or an agent of the generic tier, which reads `AGENTS.md` and needs no adapter). Each has a name, `claude-code`, `codex` or `none`, and `Harness::from_name` reads one back.
 - `detect(env)`: the harness the environment names, from its markers; `None` when it names none.
-- `abilities(harness)`: an `Abilities` of booleans `confirm` (the harness can make the human confirm a shell command before it runs), `guard` (it runs a hook before each shell command that can stop it), `session_hooks` (it runs hooks at a session's start and at the end of each turn), `subagents` (a session can launch subagents), `isolated_worktrees` (a subagent can be given a worktree of its own, which the harness makes) and `model_choice` (a session can name a subagent's model), with `build_model`, the model alias builds launch with when `model_choice` is true.
+- `abilities(harness)`: an `Abilities` of booleans `confirm` (the harness can make the human confirm a shell command before it runs), `guard` (it runs a hook before each shell command that can stop it), `session_hooks` (it runs hooks at a session's start and at the end of each turn), `subagents` (a session can launch subagents), `isolated_worktrees` (a subagent can be given a worktree of its own, which the harness makes), `named_agents` (the harness loads the plugin's agents and a session can launch one by name) and `model_choice` (a session can name a subagent's model), with `build_model`, the model alias builds launch with when `model_choice` is true.
 - `HookEvent`: what `clm`'s hooks read from an event (its kind, the tool and its shell command for a pre-tool event, and its `cwd`), parsed from a harness's event JSON by `parse_event(harness, json)`.
 - `Decision` rendering: `render(harness, decision)` gives the stdout and the exit code by which a harness reads an `Allow`, an `Ask(reason)` or a `Block(reason)`.
 
@@ -25,15 +25,17 @@ Crate `clm-harness`, at `crates/clm-harness/`, depending on `serde_json` and not
 
 **Abilities**, as each harness documents them (checked 2026-11-12):
 
-| | `confirm` | `guard` | `session_hooks` | `subagents` | `isolated_worktrees` | `model_choice` |
-|---|---|---|---|---|---|---|
-| `claude-code` | yes | yes | yes | yes | yes | yes, `build_model` `sonnet` |
-| `codex` | no, until Codex's pre-tool hook is shown to make the human confirm | yes | yes | yes | no | no |
-| `none` | no | no | no | no | no | no |
+| | `confirm` | `guard` | `session_hooks` | `subagents` | `isolated_worktrees` | `named_agents` | `model_choice` |
+|---|---|---|---|---|---|---|---|
+| `claude-code` | yes | yes | yes | yes | yes | yes | yes, `build_model` `sonnet` |
+| `codex` | no, until Codex's pre-tool hook is shown to make the human confirm | yes | yes | yes | no | no, until Codex is shown to load a plugin's agents | no |
+| `none` | no | no | no | no | no | no | no |
 
 `confirm` stays `false` for a harness until its documentation shows a hook can hold a command for the human's yes, since a wrong `true` would let an agent approve (`approval-policy`); a wrong `false` costs only a trip to the terminal. `none` declares nothing, since nothing is known of what runs it.
 
 **Events.** Claude Code's event is `{"hook_event_name", "tool_name", "tool_input": {"command"}, "cwd"}`; Codex's is as its hooks documentation gives it, read for the same fields. A field an event lacks is `None`, and an event that isn't JSON is an error, which each hook handles as its own requirement says.
+
+**One decision type.** `Decision` (`Allow`, `Ask(reason)`, `Block(reason)`) is this crate's; `clm-guard` returns it, so the guard's rules and each harness's rendering never hold two copies.
 
 **Rendering.** For `claude-code`: `Allow` is exit 0 with no output; `Ask(reason)` is the `ask` permission decision's JSON on stdout (`{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": <reason>}}`) and exit 0; `Block(reason)` is the reason on stderr and exit 2. For `codex`, as its hooks documentation gives a pre-tool hook's allow and deny. A harness whose `confirm` is false renders `Ask` as `Block`, its reason followed by a line saying the harness can't ask the human, so the command is to be run in the human's own terminal: an `ask` a harness can't show would otherwise let the command through or be dropped.
 
@@ -58,7 +60,7 @@ Crate `clm-harness`, at `crates/clm-harness/`, depending on `serde_json` and not
 - THEN it returns `None`
 
 ### Requirement: abilities
-`clm-harness`'s `abilities(harness)` SHALL return, for each harness, the abilities this component's Design tabulates: for `ClaudeCode` every ability true and `build_model` `sonnet`; for `Codex` `guard`, `session_hooks` and `subagents` true and `confirm`, `isolated_worktrees` and `model_choice` false; for `None` every ability false. No harness's `confirm` SHALL be true unless its Design row says so.
+`clm-harness`'s `abilities(harness)` SHALL return, for each harness, the abilities this component's Design tabulates: for `ClaudeCode` every ability true and `build_model` `sonnet`; for `Codex` `guard`, `session_hooks` and `subagents` true and `confirm`, `isolated_worktrees`, `named_agents` and `model_choice` false; for `None` every ability false. No harness's `confirm` SHALL be true unless its Design row says so.
 
 #### Scenario: Codex can't confirm
 - GIVEN `Codex`
