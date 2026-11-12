@@ -14,8 +14,8 @@ Serves `capability/right-model-per-task` and applies the re-founding's "the righ
 | a rebuild after a build stopped (not on a backlog item or spec change) | `implement` | the session's own model (stepping up) |
 | a build's `spec-auditor`, its final review | the build | the `--review-model` `implement` passes to `clm run`: the session's own model |
 | any other subagent a build launches | the build | `sonnet` |
-| a draft | `triage` | the session's own model (design) |
-| the fold | `triage` | `sonnet` |
+| a draft | `triage`, `build` | the session's own model (design) |
+| the fold | `triage`, `build` | `sonnet` |
 | a builder check | `propose`, a draft, the fold | `sonnet`, the model the builder will run on |
 | `architecture-auditor`, a design review (`spec-architecture-audit`) | `propose`, `contribution`, a draft, the fold | the session's own model (`sonnet` in the fold) |
 | `spec-slimmer` | `health` | `sonnet` |

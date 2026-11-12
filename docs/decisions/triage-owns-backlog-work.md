@@ -17,3 +17,5 @@ Refines `friction-flags` and `deferred-work-resolves-in-code`.
 Rejected:
 - **Group friction and deferred items with the bugs and draft them unasked.** A flag is evidence, not a defect, and a deferred item's condition is the human's to judge; a draft can't ask.
 - **Keep them under `propose`.** `propose` would stay a second, partial triage.
+
+(Amended 2026-11-12, `20261112-build-drafts-bugs`: `/clm:build` drafts the bug groups too, as part of its drain; every other kind stays `triage`'s (`build-drafts-bugs`).)
