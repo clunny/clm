@@ -253,7 +253,7 @@ fn entries() -> Vec<PathBuf> {
     entries
 }
 
-// req:clm/upgrade-corpus@ebe78a0a
+// req:clm/upgrade-corpus@8a37317b
 #[test]
 fn every_corpus_entry_upgrades_to_what_init_writes() {
     let expected = init_files();
@@ -270,7 +270,7 @@ fn every_corpus_entry_upgrades_to_what_init_writes() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-// req:clm/upgrade-corpus@ebe78a0a
+// req:clm/upgrade-corpus@8a37317b
 #[test]
 fn an_entry_set_up_with_the_allow_rules_is_not_declined() {
     let parent = TempDir::new().unwrap();
@@ -304,7 +304,7 @@ fn an_entry_set_up_with_the_allow_rules_is_not_declined() {
     check_entry(&entry, &init_files()).unwrap();
 }
 
-// req:clm/upgrade-corpus@ebe78a0a
+// req:clm/upgrade-corpus@8a37317b
 #[test]
 fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
     let mut expected = init_files();
