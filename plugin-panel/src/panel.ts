@@ -5,13 +5,12 @@
 /** What `/clm:view <name>` accepts: `status` runs `clm status`, the rest `clm view <name>`. */
 export const NAMES = ['status', 'spec', 'flight', 'blockers'] as const
 
-/** The pane's tabs, in order; it opens on `flight`. The last draws `clm capabilities`, not a view. */
-export const TABS = ['spec', 'flight', 'blockers', 'capabilities'] as const
-export type Tab = (typeof TABS)[number]
-/** The tabs that show `clm view <tab>`. */
-export type ViewTab = Exclude<Tab, 'capabilities'>
-export const isViewTab = (tab: Tab): tab is ViewTab => tab !== 'capabilities'
+/** The pane's tabs, in order; it opens on `flight`. Each shows `clm view <tab>`. */
+export const TABS = ['spec', 'flight', 'blockers'] as const
+export type ViewTab = (typeof TABS)[number]
 export const FIRST_TAB: ViewTab = 'flight'
+/** A tab kept across a reload, read as one of the three; any other reads as Flight (`views-panel`). */
+export const tabOf = (kept: unknown): ViewTab => TABS.find(t => t === kept) ?? FIRST_TAB
 
 export const PANE_ID = 'clm'
 export const PANE_TITLE = 'CLM'

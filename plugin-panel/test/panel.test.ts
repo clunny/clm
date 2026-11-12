@@ -20,7 +20,7 @@ import {
   fetchIfDue,
   fetchWarning,
   hasOriginMain,
-  isViewTab,
+  tabOf,
   paneBody,
   cachedRun,
   runClm,
@@ -131,11 +131,17 @@ describe('view-command-in-chat', () => {
 })
 
 describe('views-panel', () => {
-  // req:plugin.panel/views-panel@a97b0ae7
-  test('the pane is CLM with Spec, Flight, Blockers and Capabilities, Flight first', () => {
+  // req:plugin.panel/views-panel@2ea8bd17
+  test('the pane is CLM with Spec, Flight and Blockers, Flight first', () => {
     expect(PANE_TITLE).toBe('CLM')
-    expect(TABS).toEqual(['spec', 'flight', 'blockers', 'capabilities'])
+    expect(TABS).toEqual(['spec', 'flight', 'blockers'])
     expect(FIRST_TAB).toBe('flight')
+  })
+
+  test('a kept tab that is none of the three reads as Flight', () => {
+    expect(tabOf('capabilities')).toBe('flight')
+    expect(tabOf(undefined)).toBe('flight')
+    for (const t of TABS) expect(tabOf(t)).toBe(t)
   })
 
   test('the terminal pane asks for ANSI at its width; others for SVG', () => {
@@ -205,7 +211,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
-  // req:plugin.panel/views-panel@a97b0ae7
+  // req:plugin.panel/views-panel@2ea8bd17
   test('a press changes no run the pane holds for this generation, so no clm command runs again', async () => {
     const cache = new Map<string, Promise<Run>>()
     let started = 0
@@ -278,7 +284,7 @@ describe('views-panel', () => {
       }
     }
     const panel = `${ts.sys.getCurrentDirectory()}/`
-    for (const file of ['hooks/register.tsx', 'src/panel.ts', 'src/inspector.ts', 'src/agents.ts', 'src/capabilities.ts']) {
+    for (const file of ['hooks/register.tsx', 'src/panel.ts', 'src/inspector.ts', 'src/agents.ts']) {
       expect(ts.sys.readFile(panel + file), file).not.toMatch(/Picture|<Image|\bpng\b/)
     }
   })
