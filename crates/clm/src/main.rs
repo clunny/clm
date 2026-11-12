@@ -1143,7 +1143,12 @@ fn dispatch() -> ExitCode {
                                 eprintln!("{n}")
                             })
                         } else {
-                            clm_orchestrator::next(&root, expiry, max)
+                            clm_orchestrator::next_look(&root, expiry, max).map(|look| {
+                                if let Some(line) = &look.no_place {
+                                    eprintln!("{line}");
+                                }
+                                look.components
+                            })
                         }
                     })
                     .map(|n| n.join("\n")),

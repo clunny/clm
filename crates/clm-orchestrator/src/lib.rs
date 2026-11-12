@@ -31,8 +31,8 @@ pub use queue::{
 };
 #[cfg(feature = "git")]
 pub use repo::{
-    Claim, claim, claim_fix, claim_local, claim_refs, next, next_wait, propose_refs, refusal,
-    status_claims,
+    Claim, NextLook, claim, claim_fix, claim_local, claim_refs, next, next_look, next_wait,
+    propose_refs, refusal, status_claims,
 };
 pub use taken::{BareClaim, Holding, HoldingChange, SpecRef, Taken, taken_from_refs};
 
