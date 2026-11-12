@@ -28,6 +28,11 @@ A draft that lands a change with nothing to build (a backlog-and-decision change
 - `archive-branches`, `archive-on-sync`, `checkpoint-before-done`, `session-worktrees`, `land-locally`.
 - No edge cases or workarounds known.
 
+## Settled by the builder check and the audit
+
+- `plugin` Contract: the `session-worktrees` line says `triage` cuts its archive branch the same way, a rule `triage-archives-complete` states. The shared requirement `plugin/session-worktrees` and its test stay as they are, since the triage requirement carries its own scenarios (architecture audit).
+- A session isolated under `.claude/worktrees/` removes no leftover archive worktree, as `build`'s does (`session-worktrees` decision; architecture audit). The archive text sits after the wrap-up paragraph that `wrap-up-left-lines`' test reads, leaving it whole (builder check).
+
 ## Open questions
 
-- `plugin`'s Contract lists `session-worktrees` as applying to `propose`, `init` and `build`; triage now also cuts a branch (the archive's) in a worktree of its own. The new requirement states that itself, so the shared rule is left as is.
+- None. The builder check found no requirement this one relies on that isn't current and no capability test it changes.
