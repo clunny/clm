@@ -83,7 +83,10 @@ fn a_record_under_the_same_variables_counts() {
         },
     );
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
-    assert!(f.lines("check.log").is_empty(), "the check ran");
+    assert!(
+        f.lines("check.log").is_empty(),
+        "the check ran despite a record"
+    );
 }
 
 #[test]
