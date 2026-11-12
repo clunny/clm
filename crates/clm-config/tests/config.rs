@@ -2263,3 +2263,17 @@ fn committed_env_reads_the_text_and_the_local_file_and_nothing_else() {
     assert!(e.to_string().contains("abc123:clm.toml"), "{e}");
     assert!(e.to_string().contains("env"), "{e}");
 }
+
+#[test]
+fn env_is_in_byte_order_of_the_names_across_files() {
+    // req:config/env-setting@000d4bed
+    let f = Fixture::new(None, Some("[env]\nZ = \"1\"\nb = \"1\"\n")).local("[env]\nA = \"2\"\n");
+    let names: Vec<String> = f
+        .load(&[])
+        .unwrap()
+        .env
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    assert_eq!(names, ["A", "Z", "b"]);
+}
