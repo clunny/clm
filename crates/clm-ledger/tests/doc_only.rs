@@ -46,6 +46,8 @@ fn legacy_paths() {
         ("CAPABILITIES.md", false),
         ("README.md", true),
         ("crates/a/README.md", false),
+        // Frozen: AGENTS.md was code then.
+        ("AGENTS.md", false),
         ("docsy/z.md", false),
     ] {
         assert_eq!(clm_ledger::legacy_doc_only(path), want, "{path}");
