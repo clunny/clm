@@ -557,4 +557,4 @@ The warnings the rebase prints on stderr that name the command (those `file-prop
 - THEN the snapshot it pushes holds that edit
 
 #### Serves
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness

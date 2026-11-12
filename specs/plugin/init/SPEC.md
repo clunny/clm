@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: []
 paths: ["plugin/skills/init/**"]
 successor: ""
-serves: [architecture/method-in-the-plugin, capability/work-from-any-harness]
+serves: [architecture/method-in-the-plugin, capability/work-from-any-agent-harness]
 ---
 
 ## Contract
@@ -150,18 +150,18 @@ It SHALL NOT contain the text `clm.yml`, `clm-build.sh`, `spec-approved`, `spec-
 - capability/adopt-clm
 - architecture/land-checks-stay-fast
 
-### Requirement: init-follows-harness
-`skills/init/SKILL.md` SHALL hold `plugin/skills-follow-harness`'s rule for its per-component subagents and its approval: it SHALL tell the session to run `clm harness` before its first launch, to draft each component in the session itself, one at a time, where `subagents` is `no`, and, where `confirm` is `no`, to have the human run `clm approve` in their own terminal after their yes.
+### Requirement: init-follows-agent-harness
+`skills/init/SKILL.md` SHALL hold `plugin/skills-follow-agent-harness`'s rule for its per-component subagents and its approval: it SHALL tell the session to run `clm agent-harness` before its first launch, to draft each component in the session itself, one at a time, where `subagents` is `no`, and, where `confirm` is `no`, to have the human run `clm approve` in their own terminal after their yes.
 
 #### Scenario: init under Codex
 - GIVEN `skills/init/SKILL.md`
 - WHEN a test reads it
-- THEN it names `clm harness` and `own terminal`
+- THEN it names `clm agent-harness` and `own terminal`
 
 
 
 #### Needs
-- clm/harness-command
+- clm/agent-harness-command
 
 #### Serves
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness
