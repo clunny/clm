@@ -28,8 +28,10 @@ fn done(root: &Path) -> bool {
 
 fn apply(root: &Path) -> Result<(), String> {
     let claude = root.join("CLAUDE.md");
-    let Ok(text) = fs::read_to_string(&claude) else {
-        return Ok(());
+    let text = match fs::read_to_string(&claude) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(format!("can't read CLAUDE.md: {e}")),
     };
     let write = |path: &Path, content: &str| {
         fs::write(path, content).map_err(|e| format!("can't write {}: {e}", path.display()))
