@@ -1354,7 +1354,7 @@ fn dispatch() -> ExitCode {
             if !stderr.is_empty() {
                 eprintln!("{stderr}");
             }
-            ExitCode::from(u8::try_from(code).unwrap_or(1))
+            ExitCode::from(u8::try_from(code).unwrap_or(2))
         }
         Command::Defect { title, nodes } => {
             let mut report = String::new();
