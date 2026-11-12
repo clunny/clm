@@ -976,7 +976,7 @@ fn scenario_prompt_slot() {
 
 #[test]
 fn scenario_bounded_test_runs() {
-    // req:orchestrator.run/bounded-test-runs@32cf27ea
+    // req:orchestrator.run/bounded-test-runs@986bf514
     let mut checked = job();
     checked.check = Some("scripts/check.sh".into());
     let mut resumed = job();
@@ -997,6 +997,8 @@ fn scenario_bounded_test_runs() {
             "timeout <limit> <command>",
             "foreground",
             "hangs",
+            "standard input",
+            "editing tools",
             "bounded-test-runs",
             "backlog item",
             "pull request body",
