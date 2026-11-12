@@ -1033,3 +1033,116 @@ fn triage_revises_a_declined_fold() {
     );
     assert_reports(&gaps, "triage", "triage-revises-declined-fold");
 }
+
+/// What `triage-archives-complete` asks of a `triage` skill.
+fn archive_gaps(body: &str) -> Vec<String> {
+    let mut gaps = text_gaps(
+        "triage",
+        body,
+        &[
+            "complete <id>",
+            "impl/archive/<id>",
+            "git worktree add .claude/worktrees/archive -b impl/archive/<id> origin/main",
+            "git switch -c impl/archive/<id> origin/main",
+            "clm land impl/archive/<id>",
+            "git worktree remove .claude/worktrees/archive",
+        ],
+        &[],
+    );
+    // `impl/archive` with no `/<id>` would read as a claim on a component `archive`.
+    let bare = body.match_indices("impl/archive").any(|(at, needle)| {
+        matches!(
+            body[at + needle.len()..].chars().next(),
+            Some(' ' | '`') | None
+        )
+    });
+    if bare {
+        gaps.push("triage: SKILL.md must mention impl/archive/<id>, not impl/archive".to_owned());
+    }
+    gaps
+}
+
+#[test]
+fn triage_archives_complete() {
+    // req:plugin.triage/triage-archives-complete@a909ade0
+    let body = skill_body("triage");
+    assert_eq!(archive_gaps(&body), Vec::<String>::new());
+    // triage with no archive step
+    let gaps = archive_gaps(&body.replace("impl/archive/<id>", "elided"));
+    assert_reports(&gaps, "triage", "impl/archive/<id>");
+    // triage naming the branch as a claim
+    let gaps = archive_gaps(&format!("{body}\nLand `impl/archive` later.\n"));
+    assert_reports(&gaps, "triage", "impl/archive/<id>");
+    let gaps = archive_gaps(&format!("{body}\nLand impl/archive later.\n"));
+    assert_reports(&gaps, "triage", "impl/archive/<id>");
+    let gaps = archive_gaps(&format!("{body}\nLand impl/archive"));
+    assert_reports(&gaps, "triage", "impl/archive/<id>");
+    for needle in [
+        "`git rev-parse --show-toplevel`, as before entering a fold's worktree",
+        "run `clm rebase` until its last line is `rebase ok`, push with `clm branch push`",
+        "`clm pr open impl/archive/<id>` and a body written under `.clm/`",
+        "`git branch -D` when its push was refused",
+        "and then run `clm wrap-up` again",
+    ] {
+        assert!(body.contains(needle), "{needle}");
+    }
+    // The archive text follows the wrap-up paragraph, which stays whole.
+    let para = body.lines().find(|l| l.contains("clm wrap-up")).unwrap();
+    assert!(para.contains("left <path>"), "{para}");
+    assert!(!para.contains("impl/archive"), "{para}");
+    assert!(body.find("left <path>").unwrap() < body.find("complete <id>").unwrap());
+    // Isolated sessions, a refused push, and the rule that archiving is `clm rebase`.
+    let isolated = sentence_with(&body, "git switch -c impl/archive/<id> origin/main");
+    for needle in ["add no worktree", "`.claude/worktrees/`"] {
+        assert!(isolated.contains(needle), "{needle}: {isolated}");
+    }
+    let cut = sentence_with(&body, "git worktree add .claude/worktrees/archive");
+    for needle in ["EnterWorktree", "`triage-enters-branch-worktree`"] {
+        assert!(cut.contains(needle), "{needle}: {cut}");
+    }
+    let push = sentence_with(&body, "already exists on `origin`");
+    assert!(push.contains("leave the archive"), "{push}");
+    let by_hand = sentence_with(&body, "never by setting a change's `status`");
+    assert!(by_hand.contains("`clm archive`"), "{by_hand}");
+    let back = sentence_with(&body, "ExitWorktree `action: \"keep\"`");
+    for needle in [
+        "git worktree remove",
+        "never forcing",
+        "git switch --detach origin/main",
+    ] {
+        assert!(back.contains(needle), "{needle}: {back}");
+    }
+    let other = sentence_with(&body, "still unlanded on `origin`");
+    assert!(other.contains("summary"), "{other}");
+}
+
+/// What `triage-follows-agent-harness` asks of a `triage` skill.
+fn harness_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "triage",
+        body,
+        &["clm agent-harness", "confirm", "own terminal"],
+        &[],
+    )
+}
+
+#[test]
+fn triage_follows_agent_harness() {
+    // req:plugin.triage/triage-follows-agent-harness@0e0ff30c
+    let body = skill_body("triage");
+    assert_eq!(harness_gaps(&body), Vec::<String>::new());
+    let gaps = harness_gaps(&body.replace("own terminal", "elided"));
+    assert_reports(&gaps, "triage", "own terminal");
+    let para = body
+        .lines()
+        .find(|l| l.contains("clm agent-harness"))
+        .unwrap();
+    for needle in [
+        "before your first launch",
+        "Where `isolated-worktrees` is `no`, give each draft and fold its own worktree under `.claude/worktrees/` before launching it",
+        "Where `subagents` is `no`, run each draft in this session itself, one at a time",
+        "Where `confirm` is `no`, ask for the human's yes in this conversation and then have the human run each `clm approve` in their own terminal, never running it from this session",
+    ] {
+        assert!(para.contains(needle), "{needle}: {para}");
+    }
+}
