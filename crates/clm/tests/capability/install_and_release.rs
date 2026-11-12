@@ -1,6 +1,6 @@
 //! `install-and-release`: a person installs CLM as a plugin on a machine with Claude Code and
 //! no Rust toolchain, and its first session runs the release's `clm` binary of the same
-//! version.
+//! version, whether the plugin is installed in Claude Code or in Codex.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -36,9 +36,9 @@ case "$asset" in
 esac
 "##;
 
-/// The plugin as a person's Claude Code installs it, copied from the repository's `plugin/`
-/// into `dir`; returns the plugin's version.
-fn install_plugin(dir: &Path) -> String {
+/// The plugin as a person's agent harness installs it, copied from the repository's `plugin/`
+/// into `dir`; returns the version its `manifest` declares.
+fn install_plugin(dir: &Path, manifest: &str) -> String {
     let plugin = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
     let status = Command::new("cp")
         .arg("-R")
@@ -47,20 +47,20 @@ fn install_plugin(dir: &Path) -> String {
         .status()
         .unwrap();
     assert!(status.success());
-    let manifest = fs::read_to_string(dir.join(".claude-plugin/plugin.json")).unwrap();
+    let manifest = fs::read_to_string(dir.join(manifest)).unwrap();
     let manifest: serde_json::Value = serde_json::from_str(&manifest).unwrap();
     manifest["version"].as_str().unwrap().to_string()
 }
 
-#[test]
-fn install() {
-    // req:capability/install-and-release@6456c1e6
-    let tmp = TempDir::new().unwrap();
+/// Installs the plugin by the manifest of one agent harness, runs its first session on a
+/// machine with no Rust toolchain, and returns the install's directory (the temporary
+/// directory is kept alive by the caller's `tmp`).
+fn first_session_runs_release(tmp: &TempDir, manifest: &str) -> std::path::PathBuf {
     let top = tmp.path().canonicalize().unwrap();
     let installed = top.join("installed");
-    let version = install_plugin(&installed);
+    let version = install_plugin(&installed, manifest);
 
-    // A machine with Claude Code and `curl`, and no Rust toolchain: `PATH` holds only the
+    // A machine with the agent harness and `curl`, and no Rust toolchain: `PATH` holds only the
     // system's tools and the fake `curl`.
     let bin = top.join("bin");
     fs::create_dir_all(&bin).unwrap();
@@ -102,4 +102,41 @@ fn install() {
     let second = session(&["status"]);
     assert!(second.status.success());
     assert_eq!(fs::read_to_string(&log).unwrap(), downloads);
+    installed
+}
+
+#[test]
+fn install() {
+    // req:capability/install-and-release@2778e2e3
+    let tmp = TempDir::new().unwrap();
+    first_session_runs_release(&tmp, ".claude-plugin/plugin.json");
+}
+
+#[test]
+fn install_on_codex() {
+    // req:capability/install-and-release@2778e2e3
+    let tmp = TempDir::new().unwrap();
+    let installed = first_session_runs_release(&tmp, ".codex-plugin/plugin.json");
+
+    // Its skills are listed: the manifest names a skills directory that holds each skill with
+    // a description.
+    let manifest = fs::read_to_string(installed.join(".codex-plugin/plugin.json")).unwrap();
+    let manifest: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+    let skills = installed.join(manifest["skills"].as_str().unwrap());
+    let mut listed = Vec::new();
+    for entry in fs::read_dir(&skills).unwrap() {
+        let dir = entry.unwrap().path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let skill = dir.join("SKILL.md");
+        let text = fs::read_to_string(&skill).unwrap();
+        assert!(text.contains("\ndescription: "), "{}", skill.display());
+        listed.push(skill);
+    }
+    assert!(
+        !listed.is_empty(),
+        "no skill listed in {}",
+        skills.display()
+    );
 }
