@@ -636,6 +636,7 @@ dependencies = [
  "clm-ledger",
  "clm-model",
  "clm-orchestrator",
+ "clm-verify",
  "serde_yaml",
  "tempfile",
 ]
