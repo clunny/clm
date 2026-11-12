@@ -34,7 +34,7 @@ fn text(bytes: &[u8]) -> String {
 
 #[test]
 fn scenario_setup_runs_in_the_root() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let r = repo("[build]\nsetup = \"touch ready\"\n");
     let out = clm_setup(&r.path().join("src"));
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
@@ -44,7 +44,7 @@ fn scenario_setup_runs_in_the_root() {
 
 #[test]
 fn scenario_setup_fails() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let r = repo("[build]\nsetup = \"exit 3\"\n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(1));
@@ -56,7 +56,7 @@ fn scenario_setup_fails() {
 
 #[test]
 fn a_setup_killed_by_a_signal_says_so() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let r = repo("[build]\nsetup = \"kill -9 $$\"\n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(1));
@@ -66,7 +66,7 @@ fn a_setup_killed_by_a_signal_says_so() {
 
 #[test]
 fn setup_passes_output_through_and_closes_stdin() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let r = repo(
         "[build]\nsetup = \"echo installed; echo warned >&2; timeout 10 cat > got; echo $? > ended\"\n",
     );
@@ -92,7 +92,7 @@ fn setup_passes_output_through_and_closes_stdin() {
 
 #[test]
 fn scenario_nothing_declared() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let r = repo("[land]\ncheck = \"true\"\n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(0));
@@ -101,7 +101,7 @@ fn scenario_nothing_declared() {
 
 #[test]
 fn scenario_unreadable_settings() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let r = repo("[build\nsetup = \n");
     let out = clm_setup(r.path());
     assert_eq!(out.status.code(), Some(1));
@@ -111,4 +111,29 @@ fn scenario_unreadable_settings() {
         text(&out.stderr)
     );
     assert!(text(&out.stdout).is_empty());
+}
+
+#[test]
+fn scenario_setup_gets_the_projects_variables() {
+    // req:orchestrator.run/setup-command@fdb7c407
+    let r = repo(
+        "[build]\nsetup = \"echo $RELAY_SERVER_IMAGE > seen\"\n[env]\nRELAY_SERVER_IMAGE = \"relay:amd64\"\n",
+    );
+    fs::write(
+        r.path().join("clm.local.toml"),
+        "[env]\nRELAY_SERVER_IMAGE = \"relay:arm64\"\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
+        .arg("setup")
+        .current_dir(r.path())
+        .env("XDG_CONFIG_HOME", r.path())
+        .env("RELAY_SERVER_IMAGE", "relay:shell")
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    assert_eq!(
+        fs::read_to_string(r.path().join("seen")).unwrap().trim(),
+        "relay:arm64"
+    );
 }

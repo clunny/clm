@@ -708,6 +708,7 @@ pub fn superpowers_skill(skill: &str) -> Result<String, Error> {
 /// `clm setup` (`setup-command`): runs the repository's `[build] setup` in its root, through
 /// `sh -c` with standard input closed, and returns what to print on success. A command that
 /// fails is a refusal naming the command and its status; none set prints that and runs nothing.
+/// The settings' `[env]` variables are set for the command, over the caller's own.
 pub fn setup(root: &Path) -> Result<String, Error> {
     let settings = clm_config::load(Some(root), &clm_config::process_env)
         .map_err(|e| Error::Refused(e.to_string()))?;
@@ -717,6 +718,7 @@ pub fn setup(root: &Path) -> Result<String, Error> {
     let status = std::process::Command::new("sh")
         .args(["-c", &build.setup])
         .current_dir(root)
+        .envs(settings.env.iter().map(|(n, s)| (n, &s.value)))
         .stdin(std::process::Stdio::null())
         .status()
         .map_err(|e| Error::Refused(format!("setup failed: can't run `{}`: {e}", build.setup)))?;
