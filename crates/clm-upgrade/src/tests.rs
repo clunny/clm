@@ -268,3 +268,34 @@ fn a_skip_in_the_main_worktrees_local_settings_reaches_a_linked_worktree() {
     let err = require_current_in(&other, &linked).unwrap_err();
     assert!(err.contains("`s`") && !err.contains("`r`"), "{err}");
 }
+
+fn done_x(root: &Path) -> bool {
+    marker_done("x")(root)
+}
+
+/// A note, and the later migration `SUPERSEDES` says supersedes it.
+fn superseded_pair() -> ([Migration; 2], &'static str, &'static str) {
+    let (new, old) = crate::migrations::SUPERSEDES[0];
+    (
+        [note(old, done_a), apply(new, Level::Advised, done_x)],
+        old,
+        new,
+    )
+}
+
+// req:upgrade/superseded-notes@4161b9ae
+#[test]
+fn a_note_a_done_migration_supersedes_is_not_pending() {
+    let (list, _, _) = superseded_pair();
+    let dir = project(None);
+    fs::write(dir.path().join("x"), "").unwrap();
+    assert!(pending_in(&list, dir.path()).unwrap().is_empty());
+}
+
+// req:upgrade/superseded-notes@4161b9ae
+#[test]
+fn a_note_is_pending_until_its_superseder_is_done() {
+    let (list, old, new) = superseded_pair();
+    let dir = project(None);
+    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), vec![old, new]);
+}

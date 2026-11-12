@@ -699,6 +699,7 @@ fn read(dir: &TempDir, name: &str) -> String {
     fs::read_to_string(dir.path().join(name)).unwrap()
 }
 
+// req:upgrade/migration-agents-md@41da745b
 #[test]
 fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
     let dir = unstamped(NEW_ARCHITECTURE, OLD_CLAUDE);
@@ -714,6 +715,7 @@ fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
+// req:upgrade/migration-agents-md@41da745b
 #[test]
 fn an_edited_claude_md_moves_whole() {
     let edited = format!("{OLD_CLAUDE}\nMy own rule.\n");
@@ -723,6 +725,7 @@ fn an_edited_claude_md_moves_whole() {
     assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
 }
 
+// req:upgrade/migration-agents-md@41da745b
 #[test]
 fn both_files_keep_every_line_and_gain_the_import_first() {
     let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
@@ -733,6 +736,22 @@ fn both_files_keep_every_line_and_gain_the_import_first() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
+// req:upgrade/migration-agents-md@41da745b
+#[test]
+fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md() {
+    let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
+    let out = list(dir.path()).unwrap();
+    assert!(
+        out.contains(&format!("{AGENTS_ID} advised apply ")),
+        "{out}"
+    );
+    fs::write(dir.path().join("CLAUDE.md"), "@AGENTS.md\n").unwrap();
+    assert!(!list(dir.path()).unwrap().contains(AGENTS_ID));
+    fs::remove_file(dir.path().join("CLAUDE.md")).unwrap();
+    assert!(!list(dir.path()).unwrap().contains(AGENTS_ID));
+}
+
+// req:upgrade/migration-agents-md@41da745b
 #[test]
 fn a_claude_md_that_imports_agents_md_has_nothing_pending() {
     let dir = project(NEW_ARCHITECTURE, "# Ours\n@AGENTS.md\n");
