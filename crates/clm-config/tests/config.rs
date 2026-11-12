@@ -1138,7 +1138,7 @@ fn this_repository_names_the_retired_terms_detector_last() {
     let d = &s.detectors.value[2];
     assert_eq!(d.command, ["sh", "scripts/retired-terms.sh"]);
     let hint = d.hint.as_deref().unwrap();
-    assert!(hint.contains("sh") && hint.contains("grep"), "{hint}");
+    assert!(hint.contains("only sh and grep"), "{hint}");
 }
 
 const SETUP: &str = "for d in plugin-panel capabilities/panel web web/site capabilities/web; do test ! -f \"$d/package.json\" || (cd \"$d\" && npm ci --ignore-scripts) || exit 1; done";
