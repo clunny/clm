@@ -1,0 +1,9 @@
+[package]
+name = "clm-agent-harness"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true

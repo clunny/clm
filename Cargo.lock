@@ -282,6 +282,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clm-agent-harness"
+version = "0.26.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "clm-apply"
 version = "0.26.0"
 dependencies = [
