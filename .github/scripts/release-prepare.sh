@@ -8,6 +8,7 @@ set -euo pipefail
 version=${1:-}
 cargo_toml=Cargo.toml
 plugin_json=plugin/.claude-plugin/plugin.json
+codex_json=plugin/.codex-plugin/plugin.json
 panel_json=plugin-panel/.claude-plugin/plugin.json
 shim=plugin/bin/clm
 workflow=.github/workflows/release.yml
@@ -78,8 +79,8 @@ fi
 
 sed -i "/^\[workspace.package\]/,/^\[/s/^version = \".*\"/version = \"$version\"/" "$cargo_toml"
 [ "$(workspace_version)" = "$version" ] || fail "couldn't set the version in $cargo_toml"
-# Both plugins, so `claude plugin update` delivers each (plugin.panel/panel-package).
-for json in "$plugin_json" "$panel_json"; do
+# Every plugin manifest, so each harness's plugin update delivers the release (plugin.panel/panel-package).
+for json in "$plugin_json" "$codex_json" "$panel_json"; do
   sed -i "0,/\"version\": *\"[^\"]*\"/s//\"version\": \"$version\"/" "$json"
   grep -q "\"version\": \"$version\"" "$json" || fail "couldn't set the version in $json"
 done
@@ -93,7 +94,7 @@ clm_bin=$(realpath "${CARGO_TARGET_DIR:-target}")/release/clm
 "$corpus_dir/make.sh" "$version" "$clm_bin" || fail "couldn't make the upgrade corpus entry"
 "$clm_bin" upgrade --lock "$version" || fail "couldn't lock the migrations"
 
-git add "$cargo_toml" Cargo.lock "$plugin_json" "$panel_json" "$corpus_dir/v$version.tar.gz" \
+git add "$cargo_toml" Cargo.lock "$plugin_json" "$codex_json" "$panel_json" "$corpus_dir/v$version.tar.gz" \
   crates/clm-upgrade/migrations.lock
 cargo test --all
 
