@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [propose-skill-doesn-t-tell-an-archive-in-spec-change-to-record]
 ---
 
