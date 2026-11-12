@@ -1179,3 +1179,48 @@ fn allowed_and_asked_commands_carry_no_such_line() {
     let why = asks_cmd("clm approve spec/x");
     assert!(!why.contains(WHOLE_LINE_REFUSED), "{why}");
 }
+
+#[test]
+fn a_push_to_main_under_codex_is_blocked() {
+    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    let dir = TempDir::new().unwrap();
+    checkout_on(dir.path(), "impl/x/b");
+    let out = clm_guard::guard_hook(
+        clm_agent_harness::AgentHarness::Codex,
+        &bash_in("git push origin main", dir.path()),
+    );
+    assert_eq!(out.exit_code, 2, "{out:?}");
+    assert!(out.stderr.contains("guard-blocks-push-to-main"), "{out:?}");
+}
+
+#[test]
+fn an_approve_under_codex_says_to_use_the_humans_terminal() {
+    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    let out = clm_guard::guard_hook(
+        clm_agent_harness::AgentHarness::Codex,
+        &bash("clm approve spec/x"),
+    );
+    assert_eq!(out.exit_code, 2, "{out:?}");
+    assert!(out.stderr.contains("own terminal"), "{out:?}");
+}
+
+#[test]
+fn claude_code_is_unchanged_and_other_events_pass() {
+    // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
+    use clm_agent_harness::AgentHarness::ClaudeCode;
+    let out = clm_guard::guard_hook(ClaudeCode, &bash("clm approve spec/x"));
+    assert_eq!(out.exit_code, 0);
+    let why = asks_cmd("clm approve spec/x");
+    assert_eq!(out.stdout, clm_guard::ask_json(&why));
+    let v: serde_json::Value = serde_json::from_str(&out.stdout).unwrap();
+    assert_eq!(v["hookSpecificOutput"]["permissionDecision"], "ask");
+    let other = serde_json::json!({
+        "hook_event_name": "PreToolUse", "tool_name": "Read",
+        "tool_input": { "command": "git push origin main" },
+    })
+    .to_string();
+    for event in [other.as_str(), "not json"] {
+        let out = clm_guard::guard_hook(ClaudeCode, event);
+        assert_eq!((out.exit_code, out.stdout.as_str()), (0, ""), "{event}");
+    }
+}
