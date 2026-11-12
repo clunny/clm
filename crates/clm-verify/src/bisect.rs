@@ -43,7 +43,7 @@ pub(crate) fn first_red(
     let green = green.map(|g| state.chain[g].as_str());
     let mut aside = BTreeSet::new();
     while let Some(mid) = nearest(lo, hi, &aside) {
-        let probe = run::check(ctx, &state.chain[mid], green, None)?;
+        let probe = run::check(ctx, &state.chain[mid], &state.chain[end], green, None)?;
         if probe.untestable {
             aside.insert(mid);
         } else if probe.passed {

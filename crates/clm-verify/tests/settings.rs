@@ -10,7 +10,7 @@ const LOCAL: &str = "[verify]\ncheck = \"true\"\nmode = \"local\"\ntriggers = [\
 
 #[test]
 fn a_checkout_behind_main() {
-    // req:verify/settings-from-main@325c67ff
+    // req:verify/settings-from-main@bbaa1ef1
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -27,7 +27,7 @@ fn a_checkout_behind_main() {
 
 #[test]
 fn turned_off_on_main() {
-    // req:verify/settings-from-main@325c67ff
+    // req:verify/settings-from-main@bbaa1ef1
     let f = Fixture::new(None);
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -52,7 +52,7 @@ fn turned_off_on_main() {
 
 #[test]
 fn an_invalid_setting_on_main() {
-    // req:verify/settings-from-main@325c67ff
+    // req:verify/settings-from-main@bbaa1ef1
     let f = Fixture::new(None);
     let before_land = f.back(0);
     f.land(
@@ -79,7 +79,7 @@ fn an_invalid_setting_on_main() {
 
 #[test]
 fn a_fetch_that_fails_is_a_git_failure() {
-    // req:verify/settings-from-main@325c67ff
+    // req:verify/settings-from-main@bbaa1ef1
     let f = Fixture::new(Some("mode = \"local\"\ntriggers = [\"work-done\"]"));
     f.git(
         &f.work(),

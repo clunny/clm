@@ -25,22 +25,48 @@ pub(crate) struct Probe {
     pub(crate) step: Option<clm_land::Step>,
 }
 
+/// The `[env]` variables `commit`'s `clm.toml` and the clone's `clm.local.toml` give, as
+/// `(name, value)` sorted by name (`verify-env`).
+fn env_of(ctx: &Ctx, commit: &str) -> Result<Vec<(String, String)>, Error> {
+    let source = format!("{commit}:{}clm.toml", ctx.prefix);
+    let text = match ctx.git(&["rev-parse", "--verify", "--quiet", &source]) {
+        Ok(_) => Some(ctx.git(&["show", &source])?),
+        Err(_) => None,
+    };
+    let label = format!("{}:clm.toml", ctx.short(commit)?);
+    let vars = clm_config::committed_env(&ctx.root, text.as_deref(), &label)?;
+    Ok(vars.into_iter().map(|(k, s)| (k, s.value)).collect())
+}
+
 /// Runs `[verify] check` on `commit` in the verify tree, with `CLM_SELECTION` naming what
 /// `clm affected --base <green>` selects when there is a green commit, under the clone's
-/// check lock. Its output goes to stderr, and to `log` when given.
+/// check lock. `verifying` is the commit the verification is for, which `commit` is unless a
+/// bisect probe runs. Its output goes to stderr, and to `log` when given.
 pub(crate) fn check(
     ctx: &Ctx,
     commit: &str,
+    verifying: &str,
     green: Option<&str>,
     log: Option<&Path>,
 ) -> Result<Probe, Error> {
     let tree = tree::Tree::at(ctx, commit)?;
+    let vars = env_of(ctx, commit)?;
+    // A variable can change any test's result, so a changed table runs every test
+    // (`verify-env`).
+    let green = match green {
+        Some(green) if env_of(ctx, verifying)? != env_of(ctx, green)? => None,
+        other => other,
+    };
     let selection = green.and_then(|green| selection(ctx, &tree.dir, green));
     // A place that lasts from run to run outside the verify tree, as `.clm/land` is a land's
     // (`verify-build-dir`); no toolchain's variables are set here.
     let build = tree::places(ctx)?.join("verify-build");
     let env = clm_land::CheckEnv {
-        set: vec![("CLM_LAND_DIR".to_string(), build.clone().into_os_string())],
+        set: vars
+            .into_iter()
+            .map(|(k, v)| (k, v.into()))
+            .chain([("CLM_LAND_DIR".to_string(), build.clone().into_os_string())])
+            .collect(),
         unset: Vec::new(),
     };
     let run = clm_land::run_check(
@@ -116,6 +142,7 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
         .join(format!("{short}.log"));
     let run = check(
         ctx,
+        commit,
         commit,
         green.map(|g| state.chain[g].as_str()),
         Some(&log),
