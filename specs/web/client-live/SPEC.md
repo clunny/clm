@@ -15,13 +15,13 @@ Three modules of `web`'s browser app under `web/src/live/`, each with its Vitest
 - `push-sw.ts`: `onPush` and `onNotificationClick`, the service worker's push handlers, which `web/vite.config.ts` builds into `sw-push.js` and `web/sw.js` imports.
 
 ## Design
-The modules import nothing of `web`'s outside `web/src/live/`, since an import of `web`'s code from here would need `depends_on: [web]`, a cycle with `web`'s dependency on this component (`check/undeclared-imports`). What they need of the app comes in through their constructors and parameters: the repo's API base through `NotifyEnv` or as a parameter, and the switch's few elements are built with `document.createElement` or a builder passed in, the builder's choice.
+The modules import nothing of `web`'s outside `web/src/live/`, since an import of `web`'s code from here would need `depends_on: [web]`, a cycle with `web`'s dependency on this component (`check/undeclared-imports`). What they need of the app comes in through their constructors and parameters, the repo's API base among them.
 
-**The socket** (`live-updates`). A browser reports no status for a failed handshake, so every close or failure while a URL is wanted is retried the same way. `web.live`'s object answers the ping with `pong` without waking (its hibernation auto-response), so a socket a phone's network silently dropped is noticed by the missing `pong`.
+**The socket** (`live-updates`). A browser reports no status for a failed handshake, so every close or failure while a URL is wanted is retried the same way. `web.live`'s object answers the ping without waking, so a socket a phone's network silently dropped is noticed by the missing `pong` at no cost to the object.
 
-**Notifications** (`push-subscriptions-in-ledger`, `notify-switch`, `push-renewal`). The browser holds one push subscription for the app, shared by every repo's switch, so the app remembers which repos it posted that subscription to: the browser may renew the subscription under a new endpoint, which the Worker's ledger doesn't know, and unsubscribing the browser for one repo would silence the others. Without storage the app can't tell that no other switch is on, so it keeps the subscription. Where the switch sits on the page is `web`'s.
+**Notifications** (`push-subscriptions-in-ledger`, `notify-switch`, `push-renewal`). The browser holds one push subscription for the app, shared by every repo's switch, so the app remembers which repos it posted that subscription to: the browser may renew the subscription under a new endpoint, which the Worker's ledger doesn't know, and unsubscribing the browser for one repo would silence the others. Without storage the app can't tell that no other switch is on, so it keeps the subscription.
 
-**Push handlers** (`push-shown`). The notification is tagged with its `url` so a repeat replaces it. A click only ever opens the app's own origin, whatever the message names. `navigate` rejects for a window the worker doesn't control (one hard-reloaded, or opened before the worker took over), hence the new window.
+**Push handlers** (`push-shown`). The tag makes a repeat replace the notification. `navigate` rejects for a window the worker doesn't control (one hard-reloaded, or opened before the worker took over), hence the new window.
 
 ## Requirements
 

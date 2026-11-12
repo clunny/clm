@@ -1,10 +1,10 @@
 ---
-status: proposed
+status: applied
 ---
 
 ## Intent
 
-Slim the ten components `clm health` flagged on 2026-11-11 (`host` and `capability` for their text; `check.coverage`, `orchestrator.checkpoint`, `plugin.panel`, `sync.regenerate`, `view`, `view.repo`, `web.client-live` and `web.worker.platform` as size outliers). Each component's Design and Contract lose the sentences that restate a requirement or describe what the code shows, and scenarios that another one fully covers are dropped or merged. Nothing a person or another component relies on changes. `host`'s two "as before" phrases go with the paragraphs that held them.
+Slim the ten components `clm health` flagged on 2026-11-11 (`host` and `capability` for their text; `check.coverage`, `orchestrator.checkpoint`, `plugin.panel`, `sync.regenerate`, `view`, `view.repo`, `web.client-live` and `web.worker.platform` as size outliers). Each component's Design and Contract lose the sentences that restate a requirement or describe what the code shows, and five requirements of `host` and `plugin.panel` lose text that restated another rule or said "as before". No scenario is dropped and nothing a person or another component relies on changes. `host`'s two "as before" phrases go with the paragraphs that held them.
 
 ## Problem
 
@@ -17,7 +17,13 @@ Slim the ten components `clm health` flagged on 2026-11-11 (`host` and `capabili
 
 ## Outcome
 
-<!-- filled in once the deltas are written -->
+Each cut the slimmer proposed was checked against the spec and the code first. Most scenario merges it proposed were rejected: each pair proved a different trigger, entry point or requirement.
+
+- `capability`, `sync.regenerate`, `view`, `view.repo`, `web.client-live`, `web.worker.platform`: Design (and for `view.repo` Contract) only. No requirement changes, so nothing is rebuilt. `web.worker.platform`'s "One way down" now points at `web.worker`'s Contract, where the rule is.
+- `host`: the Design loses the restated paragraphs, the history sentence about `clm pr-body`, both "as before" phrases, and a wrong claim that `issue` prints nothing on `git` and `none`. `shared-plumbing` keeps its scan but names the one kind of message that may still say `origin` instead of restating `branch-delete`; `pr-open-defaults` loses a closing sentence about its own build. Their tests are re-cited.
+- `plugin.panel`: the Design loses its restatements. `blocker-chains` and `superseded-draw` say what is drawn where they said "as before"; `build-opens-panel` loses two clauses other text already forces. Their tests are re-cited.
+- `check.coverage` and `orchestrator.checkpoint` get no delta: every proposed cut was text `20261109-slim-restated-specs` kept on purpose, or a scenario that proves something no other does.
+- `backlog/platform-fake-dead-helpers` (`kind: deferred`) carries the fake's unused helpers and fields, which `20261109-slim-flagged-specs` meant to remove but, being Design-only, never built.
 
 ## Constraints
 
