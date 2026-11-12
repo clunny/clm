@@ -57,6 +57,37 @@ fn package() {
 }
 
 #[test]
+fn codex_package() {
+    // req:plugin/codex-package@88f0c401
+    // clm:reads .agents/plugins/marketplace.json
+    // clm:reads plugin/.codex-plugin/plugin.json
+    let market = json(&repo().join(".agents/plugins/marketplace.json"));
+    let listed = market["plugins"].as_array().unwrap();
+    let clm = listed
+        .iter()
+        .find(|p| p["name"] == "clm")
+        .expect("clm listed");
+    assert_eq!(clm["source"]["path"], "./plugin", "{market}");
+    let manifest = json(&plugin().join(".codex-plugin/plugin.json"));
+    assert_eq!(manifest["name"], "clm");
+    assert_workspace_version(&manifest, "codex plugin");
+    // One set of skills, and the hooks file the Codex wiring ships.
+    assert_eq!(manifest["skills"], "./skills/");
+    assert_eq!(manifest["hooks"], "./hooks/codex.json");
+    assert!(plugin().join("skills").is_dir());
+    // Claude Code loads `skills/` by default, so its manifest names no other directory.
+    let claude_manifest = json(&plugin().join(".claude-plugin/plugin.json"));
+    assert!(
+        claude_manifest["skills"].is_null() || claude_manifest["skills"] == "./skills/",
+        "{claude_manifest}"
+    );
+    // Both packages run the same shim.
+    assert!(plugin().join("bin/clm").is_file());
+    let claude = fs::read_to_string(plugin().join("hooks/hooks.json")).unwrap();
+    assert!(claude.contains("bin/clm"), "{claude}");
+}
+
+#[test]
 fn manifest_owner() {
     // req:plugin/manifest-owner@17c45976
     let manifest = json(&plugin().join(".claude-plugin/plugin.json"));
@@ -2213,7 +2244,7 @@ fn contribution_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
 
 #[test]
 fn contribution_skill() {
-    // req:plugin/contribution-skill@35342225
+    // req:plugin/contribution-skill@c27fbc23
     let (fm, body) = frontmatter(&plugin().join("skills/contribution/SKILL.md"));
     assert_eq!(contribution_gaps(&fm, &body), Vec::<String>::new());
     let description = fm["description"].as_str().unwrap();
@@ -2233,7 +2264,7 @@ fn contribution_skill() {
         ),
         (
             "instruction to a session",
-            &["flagging", "CLAUDE.md", "change.md"][..],
+            &["flagging", "CLAUDE.md", "AGENTS.md", "change.md"][..],
         ),
         (
             "noreply",
