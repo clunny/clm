@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-build-hung-for-hours-on-a-background-command-of-its-own-and]
 ---
 
