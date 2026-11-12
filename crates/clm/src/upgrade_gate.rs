@@ -13,8 +13,8 @@ pub(crate) struct Located<'a> {
     pub(crate) blocked: bool,
 }
 
-/// Where `command` works, or `None` for the two commands that never look at the project:
-/// `guide` and `hook`. Every variant is named, so a command added later doesn't compile until
+/// Where `command` works, or `None` for the commands that never look at the project:
+/// `guide`, `hook` and `agent-harness`. Every variant is named, so a command added later doesn't compile until
 /// someone decides which side of the list it is on.
 pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
     use Command as C;
@@ -25,7 +25,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         at(root.as_deref(), true)
     }
     match command {
-        C::Guide { .. } | C::Hook { .. } => None,
+        C::Guide { .. } | C::Hook { .. } | C::AgentHarness => None,
         // The commands that run whatever is pending.
         C::Status { root, .. }
         | C::Backlog { root, .. }

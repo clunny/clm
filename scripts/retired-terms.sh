@@ -106,7 +106,7 @@ if [ $# -gt 0 ]; then
         visit "$path"
     done
 else
-    for path in docs/guide plugin specs web/src docs/spec-format.md ARCHITECTURE.md CAPABILITIES.md CLAUDE.md README.md; do
+    for path in docs/guide plugin specs web/src docs/spec-format.md ARCHITECTURE.md CAPABILITIES.md CLAUDE.md AGENTS.md README.md; do
         [ -e "$path" ] || continue
         visit "$path"
     done

@@ -605,6 +605,8 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+    /// Print the agent harness this command runs under and what it can do.
+    AgentHarness,
     /// Print CLM's guide: with no page, the index of its pages; with one, that page.
     Guide {
         /// The page to print, by name (`index` for the guide's start).
@@ -1565,6 +1567,10 @@ fn dispatch() -> ExitCode {
                 }
             }
         }
+        Command::AgentHarness => {
+            print!("{}", agent_harness_report(&clm_config::process_env));
+            ExitCode::SUCCESS
+        }
         Command::Guide { page } => match clm_init::guide(page.as_deref()) {
             Ok(text) => {
                 print!("{text}");
@@ -2155,6 +2161,29 @@ fn sync_settings(root: &Path) -> Result<clm_health::Settings, String> {
 
 /// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
 /// when the settings or the graph can't be loaded, 2 when git fails.
+/// What `clm agent-harness` prints: the detected agent harness, then its abilities.
+fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
+    let harness = clm_agent_harness::detect(env);
+    let a = clm_agent_harness::abilities(harness);
+    let yes = |b: bool| if b { "yes" } else { "no" };
+    let mut out = format!("agent harness {}\n", harness.name());
+    for (name, on) in [
+        ("confirm", a.confirm),
+        ("guard", a.guard),
+        ("session-hooks", a.session_hooks),
+        ("subagents", a.subagents),
+        ("isolated-worktrees", a.isolated_worktrees),
+        ("named-agents", a.named_agents),
+        ("model-choice", a.model_choice),
+    ] {
+        out.push_str(&format!("{name} {}\n", yes(on)));
+    }
+    if let (true, Some(model)) = (a.model_choice, a.build_model) {
+        out.push_str(&format!("build-model {model}\n"));
+    }
+    out
+}
+
 fn health(root: &Path, expiry: u64) -> ExitCode {
     let settings = match clm_config::load(Some(root), &clm_config::process_env) {
         Ok(s) => s,
