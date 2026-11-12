@@ -404,7 +404,7 @@ describe('panel-package', () => {
 })
 
 describe('superseded-draw', () => {
-  // req:plugin.panel/superseded-draw@261a6911
+  // req:plugin.panel/superseded-draw@53be288d
   const aborted = new Error(`clm-panel: $.process.run(${SHIM}) aborted`)
 
   test('a draw whose run the engine aborted ends without throwing and draws nothing, and the newer draw runs again', async () => {
