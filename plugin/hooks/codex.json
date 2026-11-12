@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"${PLUGIN_ROOT}/bin/clm\" hook session-start --agent-harness codex" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "\"${PLUGIN_ROOT}/bin/clm\" hook guard --agent-harness codex" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"${PLUGIN_ROOT}/bin/clm\" hook autosync --agent-harness codex", "timeout": 30 }
+        ]
+      }
+    ]
+  }
+}

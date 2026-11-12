@@ -165,6 +165,44 @@ fn hooks_wired() {
     assert_eq!(commands("Stop", None), [format!("{launcher}autosync")]);
 }
 
+#[test]
+fn codex_hooks_wired() {
+    // req:plugin/codex-hooks-wired@1b861624
+    // clm:reads plugin/hooks/codex.json
+    // clm:reads plugin/hooks/hooks.json
+    let hooks = json(&plugin().join("hooks/codex.json"));
+    let commands = |event: &str, matcher: Option<&str>| -> Vec<String> {
+        hooks["hooks"][event]
+            .as_array()
+            .unwrap_or_else(|| panic!("no {event} in {hooks}"))
+            .iter()
+            .filter(|g| matcher.is_none_or(|m| g["matcher"] == m))
+            .flat_map(|g| g["hooks"].as_array().unwrap().iter())
+            .map(|h| h["command"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let launcher = "\"${PLUGIN_ROOT}/bin/clm\" hook ";
+    assert_eq!(
+        commands("PreToolUse", Some("Bash")),
+        [format!("{launcher}guard --agent-harness codex")]
+    );
+    assert_eq!(
+        commands("SessionStart", None),
+        [format!("{launcher}session-start --agent-harness codex")]
+    );
+    assert_eq!(
+        commands("Stop", None),
+        [format!("{launcher}autosync --agent-harness codex")]
+    );
+    assert!(
+        commands("PreToolUse", Some("Bash"))[0]
+            .ends_with("bin/clm\" hook guard --agent-harness codex")
+    );
+    // Claude Code's wiring is unchanged.
+    let claude = fs::read_to_string(plugin().join("hooks/hooks.json")).unwrap();
+    assert!(!claude.contains("--agent-harness"), "{claude}");
+}
+
 /// The YAML frontmatter and the body of a markdown file.
 fn frontmatter(path: &Path) -> (serde_yaml::Value, String) {
     let text = fs::read_to_string(path).unwrap();
