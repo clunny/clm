@@ -5,7 +5,7 @@ resolves: [a-build-hung-for-hours-on-a-background-command-of-its-own-and]
 
 ## Intent
 
-Bound every command a build or draft runs itself, not only its test and check runs. The `clm run` and `clm draft` prompts (`bounded-test-runs`) already have a session run its tests and checks in the foreground or under `timeout <limit> <command>`. They now say the same of any command the session starts in the background, each command of a chain included, and that no command it runs reads standard input, since nothing ever types into one: the session writes a file with its editing tools instead. Resolves `backlog/a-build-hung-for-hours-on-a-background-command-of-its-own-and`.
+Bound every command a build or draft runs itself, not only its test and check runs. The `clm run` and `clm draft` prompts (`bounded-test-runs`) already have a session run its tests and checks in the foreground or under `timeout <limit> <command>`. They now say the same of any command the session starts in the background, each command of a chain included, and that no command it runs reads standard input that nothing feeds it, since nothing ever types into one: the session writes a file with its editing tools instead. A command fed by a heredoc or a pipe, such as `clm defect`, stays fine. Resolves `backlog/a-build-hung-for-hours-on-a-background-command-of-its-own-and`.
 
 ## Problem
 
@@ -22,13 +22,17 @@ During `/clm:build`, a build started a background command whose first part was a
 - `orchestrator.run/bounded-test-runs` and `orchestrator.triage/bounded-test-runs` (modified). Each prompt now says the following:
   - every command the session runs itself ends within a time limit, other than `clm land` (and, in `clm run`, `clm land --check-only` when `[land] check` is set);
   - a command it starts in the background runs as `timeout <limit> <command>`, whatever it is, and so does each command of a chain;
-  - no command it runs reads standard input, such as `cat` with no file or a `cat >> <file>` meant to write one, and it writes files with its editing tools instead;
+  - no command it runs reads standard input that nothing feeds it, such as `cat` with no file or a `cat >> <file>` with no input given, and it writes files with its editing tools instead. A command given its input by a heredoc or a pipe, such as `clm defect` or `clm workaround` with its report on stdin, is fine, since its input ends;
   - a command that never ends by itself, such as a hanging test or one waiting on standard input, leaves the session and its orchestrator idle with no one told.
 
   Only a test or check run that its limit ends counts as a failing run, whose hanging test the session finds. The scenarios also check for `standard input` and `editing tools`.
 - `docs/decisions/bounded-test-runs.md` records this second incident and the widened bound.
 
 No capability test observes these prompts' wording. There are no edge cases or workarounds.
+
+## Builder check and audit
+
+The builder check found nothing blocking. Neither requirement relies on another that isn't current, and no capability test sees a difference. The architecture audit found that a blanket ban on reading standard input would forbid the stdin-fed `clm defect` and `clm workaround` calls that `workaround-flags` and `defect-ask-shows-report` require. The ban now covers only input that nothing feeds, and it says a heredoc or a pipe is fine.
 
 ## The human's answers
 
