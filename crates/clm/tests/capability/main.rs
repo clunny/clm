@@ -26,6 +26,7 @@ mod triage_unattended;
 mod unattended_runner;
 mod upgrade_clm;
 mod work_concurrently;
+mod work_from_any_agent_harness;
 mod wrap_up_session;
 
 use std::fs;
