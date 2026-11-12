@@ -806,3 +806,31 @@ fn build_defect_fixes_run_setup() {
         assert!(step.contains(needle), "{needle}");
     }
 }
+
+#[test]
+fn build_follows_agent_harness() {
+    // req:plugin.build/build-follows-agent-harness@3e0df57b
+    let body = skill_body("build");
+    let must = [
+        "clm agent-harness",
+        "isolated-worktrees",
+        "git worktree add .claude/worktrees/agent-<component> origin/main",
+        "subagents",
+        "model-choice",
+        "--review-model",
+    ];
+    assert_eq!(text_gaps("build", &body, &must, &[]), Vec::<String>::new());
+    for needle in must {
+        let gaps = text_gaps("build", &body.replace(needle, "elided"), &must, &[]);
+        assert!(
+            gaps.iter().any(|g| g.contains(needle)),
+            "{needle}: {gaps:?}"
+        );
+    }
+    // The check comes before the first launch.
+    let step = body
+        .lines()
+        .find(|l| l.contains("clm agent-harness"))
+        .unwrap();
+    assert!(step.contains("before your first launch"));
+}
