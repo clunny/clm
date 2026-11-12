@@ -18,7 +18,12 @@ const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
 const SPECS: &str = "specs/";
 const CHANGES: &str = "changes/";
 const ARCHIVE: &str = "changes/archive/";
-const SPEC_FILES: [&str; 3] = ["ARCHITECTURE.md", "CAPABILITIES.md", "CLAUDE.md"];
+const SPEC_FILES: [&str; 4] = [
+    "ARCHITECTURE.md",
+    "CAPABILITIES.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+];
 /// The repository's settings, whose top-level `approval` key is the approval policy.
 const POLICY: &str = "clm.toml";
 
