@@ -607,15 +607,22 @@ fn prompt(
          monitor that matches processes by name (such as `pgrep -f`): such a match also \
          finds other drafts' and builds' processes and outlives the command it waits for. \
          Running a command in the background is a setting of the tool call, not a change to \
-         the command. Every test or check command you run yourself, such as the checks of \
+         the command. Every command you run yourself, such as the checks of \
          the code-fix path, other than `clm land` in any form, which you run as written, \
          ends within a time limit (`bounded-test-runs`): run it in the foreground, where the \
          tool call's own timeout ends it, or, when you run it in the background, as \
-         `timeout <limit> <command>`, with a limit well past the time the run should take. \
-         The reason: a test that hangs, such as a polling wait with no deadline of its own, \
-         never ends a run started in the background, so its completion notice never comes, \
+         `timeout <limit> <command>`, with a limit well past the time the run should take, \
+         whatever the command is, a test or check run or any other, and for each command of \
+         a chain you start in the background. No command you run reads standard input that \
+         nothing feeds it, such as `cat` with no file to read or a `cat >> <file>` with no \
+         input given, since nothing ever types into a command you run: write a file with \
+         your editing tools instead; a command given its input by a heredoc or a pipe, such \
+         as `clm defect` or `clm workaround` with the report on stdin, is fine, since its \
+         input ends. The reason: a command that never ends by itself, such as a test that \
+         hangs on a polling wait with no deadline of its own or a command waiting on \
+         standard input, never ends a run started in the background, so its completion notice never comes, \
          and nothing wakes a session that waits for it, nor the triage session, which counts \
-         a waiting draft as still running, so the draft sits idle with no one told. A run \
+         a waiting draft as still running, so the draft sits idle with no one told. A test or check run \
          your limit ends counts as a failing run, whose hanging test you find as for any \
          failure: fix the test when it is in the files of the component you are fixing, \
          and otherwise record it as a backlog item and name that item in your pull request \

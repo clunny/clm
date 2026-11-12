@@ -914,7 +914,7 @@ fn scenario_nothing_declared() {
 
 #[test]
 fn scenario_bounded_test_runs_prompt() {
-    // req:orchestrator.triage/bounded-test-runs@9a53e9d5
+    // req:orchestrator.triage/bounded-test-runs@0bd139da
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     let para = paragraph(&p, "`stopped: <reason>`");
@@ -922,6 +922,12 @@ fn scenario_bounded_test_runs_prompt() {
         "timeout <limit> <command>",
         "foreground",
         "hangs",
+        "standard input",
+        "editing tools",
+        "Every command you run yourself",
+        "reads standard input that nothing feeds it",
+        "heredoc or a pipe",
+        "each command of a chain",
         "bounded-test-runs",
         "backlog item",
         "failing run",
