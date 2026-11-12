@@ -19,7 +19,7 @@ fn copies(text: &str) -> Vec<&str> {
 
 #[test]
 fn no_copy_of_the_remote_name() {
-    // req:host/shared-plumbing@a65259c7
+    // req:host/shared-plumbing@02348618
     let files = all_files(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"));
     assert!(!files.is_empty(), "no source files read");
     let found: Vec<String> = files
@@ -37,7 +37,7 @@ fn no_copy_of_the_remote_name() {
 
 #[test]
 fn the_scan_skips_only_comment_lines() {
-    // req:host/shared-plumbing@a65259c7
+    // req:host/shared-plumbing@02348618
     for needle in NEEDLES {
         assert_eq!(copies(&format!("    git(root, &[{needle}])")).len(), 1);
         assert_eq!(copies(&format!("x(); // {needle}")).len(), 1);
