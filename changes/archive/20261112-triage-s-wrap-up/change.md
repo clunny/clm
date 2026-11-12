@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [triage-s-wrap-up-step-doesn-t-say-how-to-archive-the-changes-clm]
 ---
 
