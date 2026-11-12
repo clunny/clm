@@ -481,7 +481,16 @@ fn prompt(
          covers (a top-level `clm` command, a requirement state, a component status, a change \
          status, a backlog kind or a key of `change.md`'s frontmatter), add the term's entry to \
          `docs/guide/glossary.md` on `spec/<id>`, since the code branch that builds the term \
-         can't carry a spec path and its land fails without the entry. Write one `deltas/<component>.md` per component it changes, with bases from \
+         can't carry a spec path and its land fails without the entry. A change whose deltas \
+         add, modify and remove no requirement makes no component pending, so no build does \
+         code work its outcome or its Design edit relies on (`component-reconciliation`); \
+         before you apply the change, record each piece of such work: work that a requirement \
+         would have to state is added to the change as that requirement, so the change has \
+         something to build (`dependency-work-is-a-requirement`); work that changes nothing a \
+         requirement states, such as removing code nothing calls, goes into a `kind: deferred` \
+         backlog item whose `components` name the components whose `paths` hold the code and \
+         whose body names that code, which a code branch later resolves with the trailer \
+         `Resolves: backlog/<slug>` (`deferred-work-resolves-in-code`). Write one `deltas/<component>.md` per component it changes, with bases from \
          `clm hashes <component>`, record decisions as `docs/decisions/<name>.md`, and make the \
          backlog edits it needs. Run `clm check` until it passes, then `clm apply <id>`, \
          commit, and {rebase}. Run `clm gate --base origin/main`: its first line says whether \
@@ -499,7 +508,9 @@ fn prompt(
          each requirement the change adds or modifies, which requirements not yet current it \
          relies on, of any component, among the change's own and those `clm pending` lists, \
          answering `none` for a requirement that relies on none \
-         (`builder-check-asks-order`). Settle in \
+         (`builder-check-asks-order`). Ask it too whether the change's outcome promises code \
+         work that no requirement it adds or modifies makes pending, and record each such piece \
+         of work as the design step says. Settle in \
          the change what the repository answers; give a requirement that waits on another \
          component's pending requirement a `#### Needs` block (`requirement-needs`), and a \
          requirement that relies on a pending requirement of its own component that has a \

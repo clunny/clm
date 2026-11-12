@@ -940,3 +940,30 @@ fn scenario_bounded_test_runs_prompt() {
         assert!(para.contains(needle), "{needle} missing from {para}");
     }
 }
+
+#[test]
+fn scenario_draft_records_promised_code_work_prompt() {
+    // req:orchestrator.triage/draft-records-promised-code-work@6161f68b
+    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
+    let (_, p) = drafted_prompt(&r, &["a"]);
+    let design = paragraph(&p, "`gate/undeclared-burden`");
+    for needle in [
+        "component-reconciliation",
+        "kind: deferred",
+        "deferred-work-resolves-in-code",
+        "dependency-work-is-a-requirement",
+        "Resolves: backlog/<slug>",
+    ] {
+        assert!(design.contains(needle), "{needle} missing from {design}");
+    }
+    let before = design
+        .find("before you apply the change")
+        .expect("ordering");
+    let apply = design.find("clm apply <id>").expect("apply step");
+    assert!(before < apply, "record the work before applying: {design}");
+    let check = paragraph(&p, "builder-check-asks-order");
+    assert!(
+        check.contains("no requirement it adds or modifies makes pending"),
+        "promised-work question missing from {check}"
+    );
+}
