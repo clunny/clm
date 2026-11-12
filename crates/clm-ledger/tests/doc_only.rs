@@ -3,13 +3,14 @@
 
 #[test]
 fn paths() {
-    // req:ledger/doc-only@780e373b
+    // req:ledger/doc-only@6986bbf0
     for (path, want) in [
         ("docs/x.md", true),
         ("docs/guide/intro.md", true),
         ("docs/spec-format.md", true),
         ("backlog/y.md", true),
         ("CLAUDE.md", true),
+        ("AGENTS.md", true),
         ("crates/a/src/lib.rs", false),
         ("docsy/z.md", false),
         // The rest of the list.
@@ -20,6 +21,7 @@ fn paths() {
         ("crates/a/CAPABILITIES.md", false),
         ("README.md", true),
         ("crates/a/README.md", false),
+        ("crates/a/AGENTS.md", false),
         ("docs", false),
     ] {
         assert_eq!(clm_ledger::doc_only(path), want, "{path}");
@@ -44,6 +46,8 @@ fn legacy_paths() {
         ("CAPABILITIES.md", false),
         ("README.md", true),
         ("crates/a/README.md", false),
+        // Frozen: AGENTS.md was code then.
+        ("AGENTS.md", false),
         ("docsy/z.md", false),
     ] {
         assert_eq!(clm_ledger::legacy_doc_only(path), want, "{path}");

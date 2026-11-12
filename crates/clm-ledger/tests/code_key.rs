@@ -4,7 +4,7 @@ use common::{commit, repo, sh};
 
 #[test]
 fn doc_only_difference() {
-    // req:ledger/code-key@b3dc8cf8
+    // req:ledger/code-key@9217c035
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     repo(root, "T");
@@ -15,6 +15,7 @@ fn doc_only_difference() {
         ("specs/SPEC.md", "spec\n"),
         ("ARCHITECTURE.md", "arch\n"),
         ("CLAUDE.md", "claude\n"),
+        ("AGENTS.md", "agents\n"),
     ];
     let a = commit(root, &base, "a");
     let b = commit(root, &[("docs/x.md", "x\n"), ("backlog/y.md", "y\n")], "b");
@@ -28,6 +29,7 @@ fn doc_only_difference() {
             ("CAPABILITIES.md", "caps 2\n"),
             ("README.md", "readme 2\n"),
             ("CLAUDE.md", "claude 2\n"),
+            ("AGENTS.md", "agents 2\n"),
         ],
         "b2",
     );
