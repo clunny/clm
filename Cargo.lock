@@ -301,6 +301,7 @@ dependencies = [
 name = "clm-approval"
 version = "0.26.0"
 dependencies = [
+ "clm-agent-harness",
  "clm-config",
  "clm-gate",
  "clm-git",

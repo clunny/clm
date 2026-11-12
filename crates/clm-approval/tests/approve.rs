@@ -59,3 +59,34 @@ fn main_refused() {
     assert!(why.contains("`main`"), "{why}");
     assert!(f.records().is_empty());
 }
+
+#[test]
+fn refused_under_codex() {
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    let f = Fixture::new("");
+    f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
+    let env = f.env(&[(clm_agent_harness::CODEX_MARKER, "t1")]);
+    let why = refused(clm_approval::approve(&f.work(), Some("spec/x"), &env));
+    for word in ["codex", "approval-policy", "own terminal"] {
+        assert!(why.contains(word), "{why}");
+    }
+    assert!(f.records().is_empty());
+}
+
+#[test]
+fn approves_in_the_humans_terminal() {
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    let f = Fixture::new("");
+    f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
+    clm_approval::approve(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
+    assert_eq!(f.records().len(), 1);
+}
+
+#[test]
+fn approves_under_claude_code() {
+    // req:land.approval/approve-refuses-unconfirming-agent-harness@7ce8cd60
+    let f = Fixture::new("");
+    f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
+    clm_approval::approve(&f.work(), Some("spec/x"), &f.env(&[("CLAUDECODE", "1")])).unwrap();
+    assert_eq!(f.records().len(), 1);
+}
