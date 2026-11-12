@@ -414,7 +414,7 @@ CLM SHALL be built on git and the supported agent harnesses: Claude Code and Cod
 A choice of foundation, not a behaviour; changing it is an edit to this file, which needs review.
 
 ### Constraint: harness-adapters
-Every rule SHALL live in `clm` and git, never in a harness. A harness adapter only recognises its harness from the environment of the command it runs, translates the harness's hook events into `clm`'s and `clm`'s decisions back into the harness's format, and declares what the harness can do: make the human confirm a command, run a hook before a shell command, run hooks at a session's start and end, launch subagents, give a subagent a worktree of its own, and choose a subagent's model. Where a harness lacks an ability, CLM degrades to a path that keeps every rule (the human's own terminal for an approval, `clm land`'s gate where no guard runs, builds one at a time where there are no subagents), never to one that trusts the agent.
+Every rule SHALL live in `clm` and git, never in a harness. A harness adapter only recognises its harness from the environment of the command it runs, translates the harness's hook events into `clm`'s and `clm`'s decisions back into the harness's format, and declares what the harness can do: make the human confirm a command, run a hook before a shell command, run hooks at a session's start and end, launch subagents, give a subagent a worktree of its own, and choose a subagent's model. Where a recognised harness lacks an ability, CLM degrades to a path that keeps every rule (the human's own terminal for an approval, builds one at a time where there are no subagents, the session's own model where it can't choose one), never to one that trusts the agent. An agent of the generic tier has no adapter, so CLM can't tell it from the human's terminal: there no guard runs and `clm approve` can't refuse, and what holds is what `approval-policy` and `guard-blocks-push-to-main` say under `#### Untested`.
 
 #### Scenario: a harness that can't confirm
 - GIVEN a session under a recognised harness whose adapter declares no confirmation
@@ -430,7 +430,7 @@ Every rule SHALL live in `clm` and git, never in a harness. A harness adapter on
 - land.approval/approve-refuses-unconfirming-harness
 
 #### Untested
-That an adapter holds no rule of its own is a judgement in design and review; that a harness's declared abilities match what it really offers rests on its documentation, which CLM doesn't test.
+That an adapter holds no rule of its own is a judgement in design and review; that a harness's declared abilities match what it really offers rests on its documentation, which CLM doesn't test. The generic tier is accepted with the two gaps above, since it needs no adapter at all; a project that needs every rule held by a program works from a recognised harness.
 
 ### Constraint: yagni
 The project SHALL build what a capability needs now, not what it might need later: no speculative options, adapters, settings or extension points without a capability asking for them. Adding complexity needs a reason.
@@ -640,7 +640,7 @@ In a repository with a remote, `main` SHALL have one copy, the remote's: `clm la
 - land/offline-land
 
 ### Constraint: guard-blocks-push-to-main
-Each supported harness's guard SHALL block every `git push` from a session whose destination is `main`, by refspec, `--all`, `--mirror` or implicitly from a checkout on `main`, unless the push runs from a git repository that isn't under CLM (one holding no `specs/SPEC.md` at its top or in any subdirectory), where no `clm land` owns `main`; a push whose repository the guard can't tell counts as under CLM. Every unattended build SHALL load the guard. A `clm` command that pushes or deletes a branch for a session, whose own `git push` the guard never sees, SHALL refuse `main` itself.
+The guard of each harness whose adapter declares one SHALL block every `git push` from a session whose destination is `main`, by refspec, `--all`, `--mirror` or implicitly from a checkout on `main`, unless the push runs from a git repository that isn't under CLM (one holding no `specs/SPEC.md` at its top or in any subdirectory), where no `clm land` owns `main`; a push whose repository the guard can't tell counts as under CLM. Every unattended build SHALL load the guard. A `clm` command that pushes or deletes a branch for a session, whose own `git push` the guard never sees, SHALL refuse `main` itself.
 
 #### Scenario: implicit push
 - GIVEN a session on `main` in a repository under CLM
@@ -669,6 +669,9 @@ Each supported harness's guard SHALL block every `git push` from a session whose
 - orchestrator.runner/runner-needs-guard
 - host/branch-push
 - host/branch-delete
+
+#### Untested
+An agent of the generic tier runs no guard, so nothing stops its direct `git push` to `main` but the host's branch protection, where the host has it, and the instruction `AGENTS.md` carries; `clm ledger verify` finds a `main` commit no `landed` record names after the fact (`harness-adapters`).
 
 ### Constraint: per-writer-ledgers
 Approvals, checks and lands SHALL be records in per-writer ledger branches that only their writer appends to, so appends never race, rebase or force-push.

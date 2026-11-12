@@ -8,7 +8,7 @@ What the workflows do underneath: the files a project holds, how a change travel
 
 - `clm.toml`: settings: where the remote lives (`host`), whose approval counts (`approval`), what `clm land` runs (`[land] check`), and the dead-code detectors for your languages.
 - `scripts/clm-check.sh`: builds and tests your project. It's yours to edit.
-- `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md` and `CLAUDE.md`, when you don't have them yet.
+- `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md`, `AGENTS.md` and `CLAUDE.md`, when you don't have them yet. `AGENTS.md` holds your project's instructions for every agent, and `CLAUDE.md` imports it for Claude Code.
 - `.gitignore`: `clm.local.toml`, `.clm/` and `.claude/worktrees/`.
 
 It writes nothing under `.github/`. On an existing project, `/clm:init` moves the build and test steps of your CI workflows into `scripts/clm-check.sh` and removes those workflows, because `clm land` lands on CLM's own checks. It tells you before it does this. Deploy, release and scheduled workflows are left alone.

@@ -20,5 +20,8 @@ serves: [architecture/method-in-the-plugin, capability/work-from-any-harness]
 
 
 
+#### Needs
+- clm/harness-command
+
 #### Serves
 - capability/work-from-any-harness

@@ -53,9 +53,11 @@ Codex (CLI 0.117 and later) and the Antigravity CLI now offer the same kinds of 
 
 ## Deferred
 
-`backlog/antigravity-cli-harness` (stage 2), `backlog/runner-per-harness` and `backlog/effort-from-other-harnesses` (stage 3), `backlog/neutral-build-and-draft-prompts` and `backlog/pane-on-other-harnesses`. The decision is `any-harness`.
+`backlog/antigravity-cli-harness` (stage 2), `backlog/runner-per-harness` and `backlog/effort-from-other-harnesses` (stage 3), `backlog/neutral-build-and-draft-prompts` and `backlog/pane-on-other-harnesses`, and `backlog/contributing-md-lists-agents-md` (deferred, for this repository's `CONTRIBUTING.md`). The decision is `any-harness`.
 
 ## Open questions
 
 - Codex's facts come from its documentation, read at build time: the environment marker it sets in every command, its hook event and decision JSON, the variable a plugin's hook command uses for the plugin's own directory, and the file and format of a repository's plugin marketplace (`.agents/plugins/` is assumed in `plugin`'s `paths`). The builds of `harness`, `plugin.hooks` and `plugin` read them, and correct `plugin`'s `paths` through a spec change if the marketplace lives elsewhere.
+- **The generic tier keeps two gaps, accepted in writing** (architecture audit). An agent CLM doesn't recognise looks like the human's terminal: `clm approve` can't refuse under it, and no guard blocks its direct push to `main`. `harness-adapters`, `approval-policy` and `guard-blocks-push-to-main` now say so under `#### Untested`, naming what holds instead (the `AGENTS.md` instruction, signed approvals, branch protection, `clm ledger verify`). A TTY confirmation for `clm approve` was considered and left out, since an agent's shell can be given a terminal. The alternative is to drop the generic tier from `platform` and support only recognised harnesses.
+- **The word "harness"** (architecture audit, `plain-terms`). The glossary already used "Harness" for the capability suite's test harness. Kept, with "Agent harness" and "generic tier" defined beside it and each entry saying it isn't the other; the alternative is another name, such as "agent tool", for the component and the command.
 - Whether Codex's pre-tool hook can hold a command for the human's yes. Until a build shows it can, `codex`'s `confirm` is false and approvals there go to the human's terminal.
