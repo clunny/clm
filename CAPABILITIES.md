@@ -228,7 +228,7 @@ People decide what to do next from what they can see, and the state lives scatte
 - THEN it shows each, and names the commit it describes
 
 ### Capability: watch-beside-chat
-A person can watch the project's state update in a pane beside their Claude Code chat. The pane is Claude Code's alone, since no other supported harness lets a plugin draw one; there `/clm:view` answers in the chat and `clm view` runs beside it.
+A person can watch the project's state update in a pane beside their Claude Code chat. The pane is Claude Code's alone, since no other supported agent harness lets a plugin draw one; there `/clm:view` answers in the chat and `clm view` runs beside it.
 
 #### Why
 Switching to a terminal to ask for the state breaks the conversation it informs.
@@ -362,7 +362,7 @@ CLM reaches people only through what they install, and a release that doesn't ma
 - WHEN the person installs the plugin in Codex
 - THEN its first session runs the release's `clm` binary of the same version, and its skills are listed
 
-### Capability: work-from-any-harness
+### Capability: work-from-any-agent-harness
 A project under CLM can be worked from any supported agent harness (Claude Code, Codex, or any agent that reads `AGENTS.md` and runs shell commands), by contributors on different tools or one person switching tools in the middle of a change, with the same rules, state and approvals.
 
 #### Why
@@ -373,8 +373,8 @@ Teams don't share one coding tool, and people change tools; a method tied to one
 - WHEN a Codex session builds it and lands it
 - THEN the build follows the same `AGENTS.md`, specs and claims, and `clm land` lands it as it would a Claude Code build
 
-#### Scenario: approve under a harness that can't ask
-- GIVEN a session under a recognised harness that can't make the human confirm a command
+#### Scenario: approve under an agent harness that can't ask
+- GIVEN a session under a recognised agent harness that can't make the human confirm a command
 - WHEN the session runs `clm approve`
 - THEN nothing is approved, and the refusal tells the human to run it in their own terminal
 

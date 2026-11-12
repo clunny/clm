@@ -37,4 +37,4 @@ Code lives in crate `clm-sync` and uses the `git` CLI, not a git library. The re
 - THEN the snapshot it pushes holds that edit
 
 #### Serves
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness

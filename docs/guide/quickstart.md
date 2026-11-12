@@ -62,4 +62,4 @@ To understand what happens underneath, read [How it works](how-it-works.md).
 
 ## Other agents
 
-A project under CLM keeps its instructions in `AGENTS.md`, and `CLAUDE.md` imports it, so every agent reads the same rules, and people on different tools can work on one project. With an agent that has no CLM plugin, put the `clm` binary from the [release](https://github.com/clunny/clm/releases) on your `PATH`, ask the agent to follow the skills' steps from `AGENTS.md`, and always run `clm approve` yourself, in your own terminal. `clm harness` says which agent a command runs under and what CLM can use there.
+A project under CLM keeps its instructions in `AGENTS.md`, and `CLAUDE.md` imports it, so every agent reads the same rules, and people on different tools can work on one project. With an agent that has no CLM plugin, put the `clm` binary from the [release](https://github.com/clunny/clm/releases) on your `PATH`, ask the agent to follow the skills' steps from `AGENTS.md`, and always run `clm approve` yourself, in your own terminal. `clm agent-harness` says which agent harness a command runs under and what CLM can use there.

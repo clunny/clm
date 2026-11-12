@@ -5,14 +5,14 @@ base: { frontmatter: "85d6fea685d2be9c" }
 
 ## MODIFIED Frontmatter
 ```yaml
-depends_on: [config, model, sync, view, view.repo, host, vcs, upgrade, harness]
-serves: [capability/guard-sessions, capability/work-from-any-harness, architecture/approval-policy, architecture/guard-blocks-push-to-main, architecture/harness-adapters]
+depends_on: [config, model, sync, view, view.repo, host, vcs, upgrade, agent-harness]
+serves: [capability/guard-sessions, capability/work-from-any-agent-harness, architecture/approval-policy, architecture/guard-blocks-push-to-main, architecture/agent-harness-adapters]
 ```
 
 ## ADDED Requirements
 
-### Requirement: hooks-per-harness
-`clm-hooks` SHALL offer `session_start_hook(harness, event)` and `autosync_hook(harness, event)`, which find the event's `cwd` with `harness`'s `parse_event` for that harness and do what `session-status` and `autosync-hook` say, returning stdout and an exit code of 0. `session_start_hook` SHALL write what it prints in the form that harness adds to the session's context: plain stdout for Claude Code, and Codex's session-start output as its hooks documentation gives it.
+### Requirement: hooks-per-agent-harness
+`clm-hooks` SHALL offer `session_start_hook(agent_harness, event)` and `autosync_hook(agent_harness, event)`, which find the event's `cwd` with `agent-harness`'s `parse_event` for that agent harness and do what `session-status` and `autosync-hook` say, returning stdout and an exit code of 0. `session_start_hook` SHALL write what it prints in the form that agent harness adds to the session's context: plain stdout for Claude Code, and Codex's session-start output as its hooks documentation gives it.
 
 #### Scenario: Codex session start
 - GIVEN a Codex session-start event whose `cwd` has a valid `specs/`
@@ -25,8 +25,8 @@ serves: [capability/guard-sessions, capability/work-from-any-harness, architectu
 - THEN it runs `clm autosync` there, its stdout is empty and the exit code is 0
 
 #### Needs
-- harness/hook-events
+- agent-harness/hook-events
 
 #### Serves
-- capability/work-from-any-harness
-- architecture/harness-adapters
+- capability/work-from-any-agent-harness
+- architecture/agent-harness-adapters

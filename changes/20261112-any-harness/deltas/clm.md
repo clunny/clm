@@ -5,56 +5,56 @@ base: { frontmatter: "ebca29b2c812fa99" }
 
 ## MODIFIED Frontmatter
 ```yaml
-depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, harness]
+depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, agent-harness]
 ```
 
 ## ADDED Requirements
 
-### Requirement: harness-command
-`clm harness` SHALL print `harness <name>`, the name of the harness `harness`'s `detect` finds in its environment, then one line `<ability> yes` or `<ability> no` for each of `confirm`, `guard`, `session-hooks`, `subagents`, `isolated-worktrees`, `named-agents` and `model-choice` from `harness`'s `abilities`, in that order, then `build-model <alias>` when `model-choice` is yes, and exit 0. It needs no CLM repository, and `clm --help` SHALL list it.
+### Requirement: agent-harness-command
+`clm agent-harness` SHALL print `agent harness <name>`, the name of the agent harness `agent-harness`'s `detect` finds in its environment, then one line `<ability> yes` or `<ability> no` for each of `confirm`, `guard`, `session-hooks`, `subagents`, `isolated-worktrees`, `named-agents` and `model-choice` from `agent-harness`'s `abilities`, in that order, then `build-model <alias>` when `model-choice` is yes, and exit 0. It needs no CLM repository, and `clm --help` SHALL list it.
 
 #### Scenario: under Codex
 - GIVEN Codex's marker set and `CLAUDECODE` unset
-- WHEN `clm harness` runs outside any repository
-- THEN it prints `harness codex`, `confirm no`, `guard yes`, `subagents yes`, `isolated-worktrees no`, `named-agents no` and `model-choice no`, no `build-model` line, and exits 0
+- WHEN `clm agent-harness` runs outside any repository
+- THEN it prints `agent harness codex`, `confirm no`, `guard yes`, `subagents yes`, `isolated-worktrees no`, `named-agents no` and `model-choice no`, no `build-model` line, and exits 0
 
 #### Scenario: under Claude Code
 - GIVEN `CLAUDECODE=1`
-- WHEN `clm harness` runs
-- THEN it prints `harness claude-code`, `confirm yes` and `build-model sonnet`
+- WHEN `clm agent-harness` runs
+- THEN it prints `agent harness claude-code`, `confirm yes` and `build-model sonnet`
 
 #### Needs
-- harness/detect
-- harness/abilities
+- agent-harness/detect
+- agent-harness/abilities
 
 #### Serves
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness
 
-### Requirement: hook-harness-flag
-`clm hook guard`, `clm hook session-start` and `clm hook autosync` SHALL take `--harness <name>`, a name `harness`'s `Harness::from_name` reads, `claude-code` when it is left out, and SHALL pass the event on stdin and that harness to `plugin.hooks.guard`'s `guard_hook` and `plugin.hooks`' `session_start_hook` and `autosync_hook`, printing their stdout and exiting with their exit code. An unknown name SHALL make `clm hook guard` exit 1, naming it on stderr, an exit Claude Code doesn't read as a block (`guard-fails-open`) and that the build confirms Codex doesn't either from its hooks documentation, choosing another non-blocking exit if it does, and make the other two print nothing and exit 0.
+### Requirement: hook-agent-harness-flag
+`clm hook guard`, `clm hook session-start` and `clm hook autosync` SHALL take `--agent-harness <name>`, a name `agent-harness`'s `AgentHarness::from_name` reads, `claude-code` when it is left out, and SHALL pass the event on stdin and that agent harness to `plugin.hooks.guard`'s `guard_hook` and `plugin.hooks`' `session_start_hook` and `autosync_hook`, printing their stdout and exiting with their exit code. An unknown name SHALL make `clm hook guard` exit 1, naming it on stderr, an exit Claude Code doesn't read as a block (`guard-fails-open`) and that the build confirms Codex doesn't either from its hooks documentation, choosing another non-blocking exit if it does, and make the other two print nothing and exit 0.
 
 #### Scenario: push to main under Codex
 - GIVEN a Codex pre-tool event for `git push origin main` in a repository under CLM
-- WHEN `clm hook guard --harness codex` runs
+- WHEN `clm hook guard --agent-harness codex` runs
 - THEN it gives Codex's block, naming `guard-blocks-push-to-main`
 
 #### Scenario: no flag
 - GIVEN a Claude Code `PreToolUse` event for `clm approve spec/x`
-- WHEN `clm hook guard` runs with no `--harness`
+- WHEN `clm hook guard` runs with no `--agent-harness`
 - THEN it prints the `ask` permission decision's JSON and exits 0, as before
 
-#### Scenario: unknown harness
+#### Scenario: unknown agent harness
 - GIVEN any event
-- WHEN `clm hook guard --harness nope` runs
+- WHEN `clm hook guard --agent-harness nope` runs
 - THEN it exits 1 naming `nope`
 
 #### Needs
-- plugin.hooks.guard/guard-per-harness
-- plugin.hooks/hooks-per-harness
+- plugin.hooks.guard/guard-per-agent-harness
+- plugin.hooks/hooks-per-agent-harness
 
 #### Serves
-- capability/work-from-any-harness
-- architecture/harness-adapters
+- capability/work-from-any-agent-harness
+- architecture/agent-harness-adapters
 
 ## MODIFIED Requirements
 

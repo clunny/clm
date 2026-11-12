@@ -5,17 +5,17 @@ base: { frontmatter: "6ff9475e5f330216", contract: "a6cf2e4060450357" }
 
 ## MODIFIED Frontmatter
 ```yaml
-depends_on: [check, context, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, sync, config, view, plugin.hooks, plugin.panel, land, host, plugin.propose, plugin.triage, plugin.build, plugin.init, plugin.upgrade, plugin.agents, harness]
+depends_on: [check, context, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, sync, config, view, plugin.hooks, plugin.panel, land, host, plugin.propose, plugin.triage, plugin.build, plugin.init, plugin.upgrade, plugin.agents, agent-harness]
 paths: ["plugin/bin/**", "plugin/hooks/**", "plugin/commands/**", "plugin/.claude-plugin/**", "plugin/.codex-plugin/**", ".claude-plugin/**", ".agents/plugins/**", "plugin/skills/help/**", "plugin/skills/health/**", "plugin/skills/configure/**", "plugin/skills/contribution/**", "plugin/skills/verify/**"]
-serves: [architecture/method-in-the-plugin, capability/work-from-any-harness]
+serves: [architecture/method-in-the-plugin, capability/work-from-any-agent-harness]
 ```
 
 ## MODIFIED Contract
 
-The plugin `clm`, one set of files packaged for Claude Code and for Codex (`harness-adapters`), each installed from this repo's marketplace for that harness. It provides, on both:
+The plugin `clm`, one set of files packaged for Claude Code and for Codex (`agent-harness-adapters`), each installed from this repo's marketplace for that agent harness. It provides, on both:
 - the `clm` command on the shell tool's PATH;
 - `clm defect`, which reports a defect in CLM itself as `config`'s `defects` setting says: as a backlog item in CLM's own repository, or as an issue filed through the host that the human approves (`defect-reports`, `host-adapters`); its rules are `plugin.hooks`';
-- hooks that call `clm hook <name> --harness <harness>`, whose rules are `plugin.hooks`': to show the repo's state at session start, with the rule for reporting CLM defects, to have the human confirm `clm approve`, to block cutting releases and pushing to `main`, to have the human approve each defect issue, and to autosync spec work at the end of each turn;
+- hooks that call `clm hook <name> --agent-harness <agent harness>`, whose rules are `plugin.hooks`': to show the repo's state at session start, with the rule for reporting CLM defects, to have the human confirm `clm approve`, to block cutting releases and pushing to `main`, to have the human approve each defect issue, and to autosync spec work at the end of each turn;
 - the skills `propose` (`plugin.propose`), `build` (`plugin.build`), `triage` (`plugin.triage`), `init` (`plugin.init`) and `upgrade` (`plugin.upgrade`), each its child's;
 - skill `contribution` (take in a contributor's pull request or issue on the maintainer's side: judge its files, show it to the human, close it or land it on their yes, and credit its author; `clm guide contributions` says why);
 - skill `help` (answer a person's questions about CLM, read-only, from what the installed `clm` carries: the guide, `clm guide constraints` and, in a repository under CLM, its state; it points at the skill that acts and changes nothing);
@@ -32,7 +32,7 @@ The rules several skills share are this component's, though the files they const
 - `recommend-the-right-design`: `triage` and `propose` read the specs and code before recommending, and recommend the correct design over the convenient one;
 - `skills-write-serves` and `skills-write-enforcement`: `propose` and `init` give components `serves`, and constraints `#### Enforced by` or `#### Untested`;
 - `launch-models`: every subagent a skill launches has its model named;
-- `skills-follow-harness`: every skill reads `clm harness` and follows what the harness can do, in words no single harness owns;
+- `skills-follow-agent-harness`: every skill reads `clm agent-harness` and follows what the agent harness can do, in words no single agent harness owns;
 - `skills-push-with-clm`: no skill says `git push`; pushes and remote deletes go through `clm branch push` and `clm branch delete`;
 - `unattended-permissions-check` and `skills-run-verify`: `build` and `triage` check the allow rules before their first launch, and run `clm verify --due --event work-done` before `clm wrap-up`;
 - `wrap-up-left-lines`: a skill that runs `clm wrap-up` passes each `left` line to the human and never prunes a worktree itself;
@@ -66,47 +66,47 @@ The repository SHALL hold a Codex plugin marketplace, in the file and format Cod
 
 #### Serves
 - capability/install-and-release
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness
 
 ### Requirement: codex-hooks-wired
-`plugin/hooks/codex.json` SHALL run, through the plugin's `bin/clm` named as Codex's hook documentation names a plugin's own files, `clm hook session-start --harness codex` at a session's start, `clm hook guard --harness codex` before each shell command, and `clm hook autosync --harness codex` at the end of each turn, in Codex's hook configuration format. `plugin/hooks/hooks.json` SHALL keep wiring Claude Code's events as `hooks-wired` says.
+`plugin/hooks/codex.json` SHALL run, through the plugin's `bin/clm` named as Codex's hook documentation names a plugin's own files, `clm hook session-start --agent-harness codex` at a session's start, `clm hook guard --agent-harness codex` before each shell command, and `clm hook autosync --agent-harness codex` at the end of each turn, in Codex's hook configuration format. `plugin/hooks/hooks.json` SHALL keep wiring Claude Code's events as `hooks-wired` says.
 
 #### Scenario: guard wired for Codex
 - GIVEN `plugin/hooks/codex.json`
 - WHEN it is parsed
-- THEN its pre-tool hook for the shell tool runs a command ending in `bin/clm" hook guard --harness codex`
+- THEN its pre-tool hook for the shell tool runs a command ending in `bin/clm" hook guard --agent-harness codex`
 
 #### Needs
-- plugin.hooks.guard/guard-per-harness
-- plugin.hooks/hooks-per-harness
+- plugin.hooks.guard/guard-per-agent-harness
+- plugin.hooks/hooks-per-agent-harness
 
 #### Serves
 - capability/guard-sessions
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness
 - architecture/guard-blocks-push-to-main
 
-### Requirement: skills-follow-harness
-Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for a build or asks for an approval SHALL tell the session to run `clm harness` before its first such step and to follow what it prints: where `subagents` is `no`, to do each piece of work a subagent would take in the session itself, one at a time; where `isolated-worktrees` is `no`, to give a build its own worktree with `git worktree add .claude/worktrees/agent-<component>` before launching it, and to tell the build to work there; where `model-choice` is `no`, to launch with the session's own model, the model names the skill gives being Claude Code's; where `confirm` is `no`, to ask the human for their yes in the conversation and then to have them run `clm approve <branch>` in their own terminal, never running it from the session; and, where `named-agents` is `no`, to launch a general subagent told to follow the agent's file under the plugin's `agents/`. A skill SHALL name the Agent tool only beside the words `or the harness's own subagent tool`. This component's own skills (`help`, `health`, `configure`, `contribution`, `verify`) SHALL hold it; the children's skills hold it through their own requirements.
+### Requirement: skills-follow-agent-harness
+Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for a build or asks for an approval SHALL tell the session to run `clm agent-harness` before its first such step and to follow what it prints: where `subagents` is `no`, to do each piece of work a subagent would take in the session itself, one at a time; where `isolated-worktrees` is `no`, to give a build its own worktree with `git worktree add .claude/worktrees/agent-<component>` before launching it, and to tell the build to work there; where `model-choice` is `no`, to launch with the session's own model, the model names the skill gives being Claude Code's; where `confirm` is `no`, to ask the human for their yes in the conversation and then to have them run `clm approve <branch>` in their own terminal, never running it from the session; and, where `named-agents` is `no`, to launch a general subagent told to follow the agent's file under the plugin's `agents/`. A skill SHALL name the Agent tool only beside the words `or the agent harness's own subagent tool`. This component's own skills (`help`, `health`, `configure`, `contribution`, `verify`) SHALL hold it; the children's skills hold it through their own requirements.
 
 #### Scenario: health under Codex
 - GIVEN `skills/health/SKILL.md`
 - WHEN a test reads it
-- THEN it names `clm harness` and `subagents`
+- THEN it names `clm agent-harness` and `subagents`
 
-#### Scenario: a skill tied to one harness
-- GIVEN a `SKILL.md` that names the Agent tool without `or the harness's own subagent tool`
+#### Scenario: a skill tied to one agent harness
+- GIVEN a `SKILL.md` that names the Agent tool without `or the agent harness's own subagent tool`
 - WHEN the test's check runs on it
 - THEN it reports the skill
 
 #### Needs
-- plugin.propose/propose-follows-harness
-- plugin.build/build-follows-harness
-- plugin.triage/triage-follows-harness
-- plugin.init/init-follows-harness
-- clm/harness-command
+- plugin.propose/propose-follows-agent-harness
+- plugin.build/build-follows-agent-harness
+- plugin.triage/triage-follows-agent-harness
+- plugin.init/init-follows-agent-harness
+- clm/agent-harness-command
 
 #### Serves
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness
 
 ## MODIFIED Requirements
 

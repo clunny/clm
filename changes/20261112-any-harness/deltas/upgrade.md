@@ -19,7 +19,7 @@ A migration SHALL be able to name the earlier note migrations it supersedes, and
 
 
 ### Requirement: migration-agents-md
-An `advised` `apply` migration SHALL move a project's instructions to `AGENTS.md`, which every supported harness reads (`platform`). Its `done` SHALL be true when `CLAUDE.md` doesn't exist or holds the line `@AGENTS.md`. Its `apply` SHALL, when `AGENTS.md` is missing, write to `AGENTS.md` the text the current `clm init` writes there when `CLAUDE.md`'s text equals one a released `clm init` wrote, and `CLAUDE.md`'s text unchanged otherwise, and replace `CLAUDE.md` with the one line `@AGENTS.md`, so an unedited project ends as `clm init` writes it today (`clm/upgrade-corpus`) and an edited one keeps its edits; and, when both files exist, add the line `@AGENTS.md` as `CLAUDE.md`'s first line, followed by a blank line, changing nothing else, so no instruction is lost or moved under the human's feet. It SHALL supersede `20261105-clm-upgrade-2`, whose `done` reads `CLAUDE.md` for `/clm:help`, which the moved text no longer holds there.
+An `advised` `apply` migration SHALL move a project's instructions to `AGENTS.md`, which every supported agent harness reads (`platform`). Its `done` SHALL be true when `CLAUDE.md` doesn't exist or holds the line `@AGENTS.md`. Its `apply` SHALL, when `AGENTS.md` is missing, write to `AGENTS.md` the text the current `clm init` writes there when `CLAUDE.md`'s text equals one a released `clm init` wrote, and `CLAUDE.md`'s text unchanged otherwise, and replace `CLAUDE.md` with the one line `@AGENTS.md`, so an unedited project ends as `clm init` writes it today (`clm/upgrade-corpus`) and an edited one keeps its edits; and, when both files exist, add the line `@AGENTS.md` as `CLAUDE.md`'s first line, followed by a blank line, changing nothing else, so no instruction is lost or moved under the human's feet. It SHALL supersede `20261105-clm-upgrade-2`, whose `done` reads `CLAUDE.md` for `/clm:help`, which the moved text no longer holds there.
 
 #### Scenario: CLAUDE.md alone
 - GIVEN a project whose edited `CLAUDE.md` holds the instructions and no `AGENTS.md`
@@ -48,4 +48,4 @@ An `advised` `apply` migration SHALL move a project's instructions to `AGENTS.md
 
 #### Serves
 - capability/upgrade-clm
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness

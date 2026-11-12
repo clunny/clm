@@ -32,7 +32,7 @@ A branch behind `<ref>` may land (`land-locally`). `clm land` merges `<ref>` int
 ## ADDED Requirements
 
 ### Requirement: agents-md-spec-path
-The gate SHALL count `AGENTS.md` at the top of the repository as a spec path, as it counts `CLAUDE.md` (`classify`, `files-outside-spec-paths`), since it holds the project's instructions for every harness (`platform`).
+The gate SHALL count `AGENTS.md` at the top of the repository as a spec path, as it counts `CLAUDE.md` (`classify`, `files-outside-spec-paths`), since it holds the project's instructions for every agent harness (`platform`).
 
 #### Scenario: instructions edit
 - GIVEN a branch that edits only `AGENTS.md`
@@ -40,4 +40,4 @@ The gate SHALL count `AGENTS.md` at the top of the repository as a spec path, as
 - THEN its first line is `spec`
 
 #### Serves
-- capability/work-from-any-harness
+- capability/work-from-any-agent-harness
