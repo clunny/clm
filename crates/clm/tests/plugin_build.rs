@@ -780,12 +780,13 @@ fn build_skill_is_named_build() {
     text_files_under(&repo().join("docs/guide"), &mut files);
     // `AGENTS.md` too, when the repository has one.
     for name in ["CLAUDE.md", "AGENTS.md", "README.md"] {
-        if let Ok(text) = fs::read_to_string(repo().join(name)) {
-            files.push((name.to_owned(), text));
-        } else {
-            assert_ne!(name, "CLAUDE.md", "CLAUDE.md must exist");
-            assert_ne!(name, "README.md", "README.md must exist");
+        if name == "AGENTS.md" && !repo().join(name).exists() {
+            continue;
         }
+        files.push((
+            name.to_owned(),
+            fs::read_to_string(repo().join(name)).unwrap(),
+        ));
     }
     let gaps = old_skill_name_gaps(&files);
     assert!(gaps.is_empty(), "{gaps:#?}");
