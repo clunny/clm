@@ -16,6 +16,8 @@ Running a project's slow tests after the land, at the moments the project choose
 
 Every outcome is one line on stdout starting `verify `: `verify not-due <why>`, `verify due <trigger>`, `verify passed <sha> <n> lands`, `verify failed <sha> culprit <land|unknown> components <component>...`, `verify pending <sha>` and `verify nothing to import`, `<sha>` abbreviated as `git rev-parse --short` abbreviates it. It exits 0 when it passed, nothing was due or there was nothing to import; 1 when the verification failed, or with the reason when it can't run (a `<sha>` not on `origin/main`'s first parents, a `[verify]` it can't use); 2 when git fails; 3 when, with `--dry-run`, nothing is due; and 4 when the result is pending (`import`). Each verification it decides appends one `verified` record (`ledger`); nothing else writes one.
 
+As a library call it offers `kept_log(root, commit)`: the path of the log a failed run of `commit` kept in this clone, or none (`kept-log`), so `orchestrator.triage`'s `clm intake` can point a session at a red result's output without knowing where verify keeps it (`path-ownership`).
+
 ## Design
 **Settings** (`settings-from-main`). `clm verify` verifies `origin/main`, so it reads how to verify it from `origin/main`: the commit it checks out is the one whose settings it follows. It first loads the root's own settings for `host` alone, which names the host adapter, fetches `origin` (every host has one: `none-keeps-its-own-remote`), and then loads the settings again with `config`'s `load_committed`, the repository layer being the text of `origin/main:<prefix>clm.toml` (none when `origin/main` or the file is missing) and its source `origin/main:clm.toml`. `[verify]`, `[affected] all` and `[land] target_cap_gb`, the cap on verify's build place (`verify-build-cap`), come from those; the clone's `clm.local.toml` still sets either for this clone, as everywhere (`local-settings`), since it belongs to the clone and is never behind. Whether `[verify]` is set is decided only after the fetch, so a project with no `[verify]` pays one fetch per call; a fetch that fails is exit 2 as for any other call. The sessions that run `clm verify --due --event work-done` at their end (`plugin/skills-run-verify`) run it in their own checkout, which they leave as it is and which may be far behind `main`: reading the checkout's file there skipped every run with `verify off` once `[verify]` had landed after the checkout was made. `host` stays the root's, as `land` keeps it (`land-policy-from-base`): it is needed before there is anything fetched to read, and names the tooling, not the policy. This is the decision `verify-settings-from-main`.
 
@@ -301,3 +303,21 @@ Every run of `[verify] check`, a bisect probe's included, SHALL set in the comma
 
 #### Needs
 - config/env-setting
+
+### Requirement: kept-log
+`clm-verify` SHALL offer `kept_log(root, commit)`, `root` a CLM root in any worktree of a clone and `commit` a full commit ID, returning the absolute path of the file in `.clm/verify-logs/` in the CLM root of the clone's main worktree, the directory `verify-run` keeps a failed run's log in, whose name is `<name>.log` with `<name>` a prefix of `commit` at least 7 characters long, the longest such name when several match, and none when no file matches or the directory is missing. It SHALL read only that directory, running no git command other than the one that finds the main worktree, and SHALL neither create nor remove a file. Matching by prefix rather than by the abbreviation `git rev-parse --short` gives now keeps a log found after the repository's abbreviations have grown longer than when the run named it.
+
+#### Scenario: a red run's log
+- GIVEN a clone with a linked worktree, `mode = "local"`, one land since a passing record and a `[verify] check` that exits 1, and `clm verify --due` run in the main worktree with a trigger holding
+- WHEN `kept_log` is called with the linked worktree's CLM root and the head's full commit ID
+- THEN it returns the path of the log `clm verify` named, which exists
+
+#### Scenario: nothing kept
+- GIVEN the same clone, and a `[verify] check` that exits 0
+- WHEN `clm verify --due` runs and `kept_log` is called with the head's full commit ID
+- THEN it returns none
+
+#### Scenario: a longer name
+- GIVEN `.clm/verify-logs/` holding `<first 7 of commit>.log` and `<first 9 of commit>.log`
+- WHEN `kept_log` is called with `commit`
+- THEN it returns the path of `<first 9 of commit>.log`
