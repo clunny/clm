@@ -1818,6 +1818,63 @@ fn launch_models() {
     assert!(sentence_with(&triage, "clm draft --fold <id>...").contains(SONNET));
 }
 
+/// The words that must stand beside any mention of the Agent tool.
+const OWN_SUBAGENT_TOOL: &str = "or the agent harness's own subagent tool";
+
+/// What `skills-follow-agent-harness` asks of the plugin component's own skills, one line
+/// per gap naming the skill and the text. Empty when it says it all.
+fn agent_harness_gaps(skill: &str, body: &str) -> Vec<String> {
+    let must: &[&str] = match skill {
+        "health" => &[
+            "clm agent-harness",
+            "`subagents`",
+            "`model-choice`",
+            "`named-agents`",
+        ],
+        "contribution" => &[
+            "clm agent-harness",
+            "`subagents`",
+            "`model-choice`",
+            "`named-agents`",
+            "`confirm`",
+            "own terminal",
+        ],
+        _ => &["clm agent-harness", "`confirm`", "own terminal"],
+    };
+    let mut gaps = text_gaps(skill, body, must, &[]);
+    for line in body
+        .lines()
+        .filter(|l| l.contains("Agent tool") || l.contains("Agent` tool"))
+    {
+        if !line.contains(OWN_SUBAGENT_TOOL) {
+            gaps.push(format!(
+                "{skill}: SKILL.md must mention {OWN_SUBAGENT_TOOL} beside the Agent tool"
+            ));
+        }
+    }
+    gaps
+}
+
+#[test]
+fn skills_follow_the_agent_harness() {
+    // req:plugin/skills-follow-agent-harness@bd4508d6
+    for skill in ["health", "contribution", "configure", "verify"] {
+        let body = skill_body(skill);
+        assert_eq!(agent_harness_gaps(skill, &body), Vec::<String>::new());
+        let first = if skill == "health" {
+            "clm agent-harness"
+        } else {
+            "`confirm`"
+        };
+        let gaps = agent_harness_gaps(skill, &body.replace(first, "elided"));
+        assert_reports(&gaps, skill, first);
+    }
+    // A skill tied to one agent harness: it names the Agent tool alone.
+    let body = skill_body("contribution").replace(OWN_SUBAGENT_TOOL, "elided");
+    let gaps = agent_harness_gaps("contribution", &body);
+    assert_reports(&gaps, "contribution", OWN_SUBAGENT_TOOL);
+}
+
 #[test]
 fn skills_say_how_a_recommendation_is_chosen() {
     // req:plugin/recommend-the-right-design@df33f4b2
