@@ -272,6 +272,7 @@ fn build_finishes_builds() {
         "run step 5",
         "in place of an empty queue",
         "clm next --wait",
+        "whichever of the two said so",
     ] {
         assert!(cap.contains(needle), "{needle}: {cap}");
     }
@@ -280,9 +281,17 @@ fn build_finishes_builds() {
     for needle in [
         "prints nothing",
         "stderr",
+        "treat it as no free place",
         "never tell the human nothing is left",
     ] {
         assert!(stderr.contains(needle), "{needle}: {stderr}");
+    }
+    // Steps 4 and 6 tell the full cap from a drained queue.
+    for needle in [
+        "with no `no free build place` line on stderr",
+        "or only the `no free build place` line",
+    ] {
+        assert!(body.contains(needle), "{needle}");
     }
     // full cap read as an empty queue
     let gaps = finish_gaps(&body.replace("no free build place", "elided"));
