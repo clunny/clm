@@ -52,5 +52,7 @@ fn dispatch_passes_max_builds_from_a_subdirectory() {
 fn help_lists_machine() {
     let dir = initialised();
     let out = clm(dir.path(), &["--help"]);
-    assert!(String::from_utf8_lossy(&out.stdout).contains("machine"));
+    assert!(out.status.success(), "{out:?}");
+    let help = String::from_utf8_lossy(&out.stdout);
+    assert!(help.lines().any(|l| l.trim_start().starts_with("machine ")));
 }
