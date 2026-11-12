@@ -319,6 +319,91 @@ fn the_rules_note_lists_the_rules_and_the_ways_out() {
     assert!(note.contains("spec change"), "{note}");
 }
 
+const SETUP_ID: &str = "20261112-a-draft-s-clm";
+const SETUP_NOTE: &str =
+    "Unattended sessions need clm's allow rules for clm setup in .claude/settings.json";
+
+fn rules_without_setup() -> Vec<String> {
+    all_rules()
+        .into_iter()
+        .filter(|r| !r.starts_with("Bash(clm setup"))
+        .collect()
+}
+
+// req:upgrade/migration-setup-allow-rules@dfae9b68
+#[test]
+fn a_project_lacking_the_setup_rules_is_offered_them_and_keeps_its_settings() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    write_settings(dir.path(), "settings.json", &rules_without_setup());
+    let before = fs::read_to_string(dir.path().join(".claude/settings.json")).unwrap();
+    let listed = list(dir.path()).unwrap();
+    assert!(
+        listed.contains(&format!("{SETUP_ID} advised note {SETUP_NOTE}\n")),
+        "{listed}"
+    );
+    assert!(!listed.contains(RULES_ID), "{listed}");
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("note {SETUP_ID}\n")), "{out}");
+    assert!(!out.contains("applied"), "{out}");
+    let after = fs::read_to_string(dir.path().join(".claude/settings.json")).unwrap();
+    assert_eq!(before, after);
+}
+
+// req:upgrade/migration-setup-allow-rules@dfae9b68
+#[test]
+fn each_setup_rule_is_needed_and_the_two_files_are_read_together() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    for keep in ["Bash(clm setup)", "Bash(clm setup *)"] {
+        let mut rules = rules_without_setup();
+        rules.push(keep.to_string());
+        write_settings(dir.path(), "settings.json", &rules);
+        assert!(list(dir.path()).unwrap().contains(SETUP_ID), "{keep}");
+    }
+    write_settings(
+        dir.path(),
+        "settings.json",
+        &[rules_without_setup(), vec!["Bash(clm setup)".to_string()]].concat(),
+    );
+    write_settings(
+        dir.path(),
+        "settings.local.json",
+        &["Bash(clm setup *)".to_string()],
+    );
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-setup-allow-rules@dfae9b68
+#[test]
+fn a_declined_setup_rules_migration_is_not_listed() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    write_settings(dir.path(), "settings.json", &rules_without_setup());
+    fs::write(
+        dir.path().join("clm.toml"),
+        stamped(&format!("declined_migrations = [\"{SETUP_ID}\"]\n")),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-setup-allow-rules@dfae9b68
+#[test]
+fn the_setup_note_lists_the_rules_and_the_ways_out() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    write_settings(dir.path(), "settings.json", &rules_without_setup());
+    let note = crate::note(dir.path(), SETUP_ID).unwrap();
+    assert!(note.contains("`Bash(clm setup)`"), "{note}");
+    assert!(note.contains("`Bash(clm setup *)`"), "{note}");
+    assert!(note.contains("tests-run-in-their-own-tree"), "{note}");
+    assert!(note.contains("auto mode"), "{note}");
+    assert!(note.contains("first test run on a code branch"), "{note}");
+    assert!(note.contains("`.claude/settings.json` by hand"), "{note}");
+    assert!(note.contains("clm init --check-permissions"), "{note}");
+    assert!(
+        note.contains(&format!("clm upgrade --decline {SETUP_ID}")),
+        "{note}"
+    );
+}
+
 const VERIFY_ID: &str = "20261107-slow-tests-after-land";
 const VERIFY_LINE: &str = "advised apply Slow tests can run after the land: offer [verify]";
 const OVERLAP_ID: &str = "20261107-projects-upgrading-past-the";
