@@ -504,7 +504,9 @@ fn defect_gaps(skill: &str, body: &str) -> Vec<String> {
     let fix_step = body
         .lines()
         .any(|paragraph| DEFECT_FIX_STEP.iter().all(|n| paragraph.contains(n)));
-    if !fix_step {
+    // `build` has no fix step: its drain drafts the defects its builds report as bugs
+    // (`plugin.build/build-drafts-bugs`).
+    if skill == "propose" && !fix_step {
         gaps.push(format!(
             "{skill}: SKILL.md must have a paragraph that holds `fix reported defects`, \
              `clm claim <component> --fix backlog/<slug>`, `origin/main` and `clm wrap-up`"
@@ -516,7 +518,7 @@ fn defect_gaps(skill: &str, body: &str) -> Vec<String> {
 #[test]
 fn skills_check_for_defects_before_a_pr() {
     // req:plugin/defect-check-before-pr@3c314926
-    for skill in ["propose", "build"] {
+    for skill in ["propose"] {
         let body = skill_body(skill);
         assert_eq!(defect_gaps(skill, &body), Vec::<String>::new());
         // The fix runs in a worktree of the session's own, after its branches land.
@@ -552,14 +554,14 @@ fn skills_check_for_defects_before_a_pr() {
     );
     assert_reports(&gaps, "propose", "each fixed one with its fix");
     // skill without the fix step: each of its parts missing from the paragraph
-    let step = build
+    let step = propose
         .lines()
         .find(|p| p.contains("fix reported defects"))
         .unwrap();
     for needle in DEFECT_FIX_STEP {
-        let body = build.replace(step, &step.replace(needle, "elided"));
-        let gaps = defect_gaps("build", &body);
-        assert_reports(&gaps, "build", "fix reported defects");
+        let body = propose.replace(step, &step.replace(needle, "elided"));
+        let gaps = defect_gaps("propose", &body);
+        assert_reports(&gaps, "propose", "fix reported defects");
     }
     // `init` checks for defects before its page too.
     let init = skill_body("init");
@@ -1786,11 +1788,14 @@ fn launch_models() {
     let retry = sentence_with(&body, "stopped without landing");
     assert!(retry.contains(OWN_MODEL), "{retry}");
     // Each launch's own sentence names its model, not just some line of the file.
-    let first = sentence_with(&body, "isolation: \"worktree\"");
+    let first = sentence_with(&body, "run `clm run <component> --review-model <alias>`");
     assert!(
         first.contains("--review-model") && first.contains(SONNET),
         "{first}"
     );
+    // A bug draft designs, so it runs on the session's own model (`build-drafts-bugs`).
+    let draft = sentence_with(&body, "run `clm draft <slug>...`");
+    assert!(draft.contains(OWN_MODEL), "{draft}");
     for (skill, launch) in [
         ("propose", "Launch a fresh subagent"),
         ("health", "launch the `spec-slimmer` subagent"),
