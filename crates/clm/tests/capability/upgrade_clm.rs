@@ -76,6 +76,7 @@ fn skipping_releases() {
         "land",
         "pr",
         "rebase",
+        "setup",
         "verify",
         "workaround",
     ]

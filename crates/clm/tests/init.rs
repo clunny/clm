@@ -876,7 +876,7 @@ fn an_old_clm_toml_gets_no_upgrade_step() {
     no_ci(&steps);
 }
 
-/// The twenty-two allow rules `clm init` seeds, in order.
+/// The twenty-four allow rules `clm init` seeds, in order.
 fn rules() -> Vec<String> {
     let mut rules = Vec::new();
     for sub in [
@@ -889,6 +889,7 @@ fn rules() -> Vec<String> {
         "land",
         "pr",
         "rebase",
+        "setup",
         "verify",
         "workaround",
     ] {
@@ -912,13 +913,15 @@ fn allowed(dir: &Path) -> Vec<String> {
 
 #[test]
 fn init_seeds_the_allow_rules() {
-    // req:init/init-seeds-permissions@b27290fc
+    // req:init/init-seeds-permissions@649ed056
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
     assert_eq!(allowed(&dir), rules());
     assert_eq!(clm_init::UNATTENDED_RULES.to_vec(), rules());
-    assert_eq!(allowed(&dir).len(), 22);
+    assert_eq!(allowed(&dir).len(), 24);
+    assert!(allowed(&dir).contains(&"Bash(clm setup)".to_owned()));
+    assert!(allowed(&dir).contains(&"Bash(clm setup *)".to_owned()));
     assert!(allowed(&dir).contains(&"Bash(clm verify *)".to_owned()));
     assert!(allowed(&dir).contains(&"Bash(clm land *)".to_owned()));
     assert!(
@@ -937,7 +940,7 @@ fn init_seeds_the_allow_rules() {
 
 #[test]
 fn init_keeps_the_settings_it_finds() {
-    // req:init/init-seeds-permissions@b27290fc
+    // req:init/init-seeds-permissions@649ed056
     let (_tmp, dir) = repo();
     write(
         &dir,
@@ -963,7 +966,7 @@ fn init_keeps_the_settings_it_finds() {
 
 #[test]
 fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
-    // req:init/init-seeds-permissions@b27290fc
+    // req:init/init-seeds-permissions@649ed056
     let (_tmp, dir) = repo();
     write(&dir, ".claude/settings.json", "  \n");
     init(&dir, &[], &fake_hosts());
@@ -977,7 +980,7 @@ fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
 
 #[test]
 fn init_leaves_settings_that_arent_json() {
-    // req:init/init-seeds-permissions@b27290fc
+    // req:init/init-seeds-permissions@649ed056
     for text in [
         "{",
         "[]",
@@ -994,7 +997,7 @@ fn init_leaves_settings_that_arent_json() {
 
 #[test]
 fn a_rerun_leaves_the_settings_alone() {
-    // req:init/init-seeds-permissions@b27290fc
+    // req:init/init-seeds-permissions@649ed056
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -1018,7 +1021,7 @@ fn a_rerun_leaves_the_settings_alone() {
 
 #[test]
 fn a_rerun_with_the_rules_names_nothing() {
-    // req:init/init-seeds-permissions@b27290fc
+    // req:init/init-seeds-permissions@649ed056
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -1116,7 +1119,10 @@ fn check_permissions_wants_the_exact_rule() {
     write(&dir, ".claude/settings.json", "{");
     let out = check_permissions(&dir);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert_eq!(String::from_utf8(out.stdout).unwrap().lines().count(), 23);
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap().lines().count(),
+        rules().len() + 1
+    );
 }
 
 #[test]
