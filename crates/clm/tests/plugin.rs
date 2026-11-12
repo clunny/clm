@@ -75,6 +75,12 @@ fn codex_package() {
     assert_eq!(manifest["skills"], "./skills/");
     assert_eq!(manifest["hooks"], "./hooks/codex.json");
     assert!(plugin().join("skills").is_dir());
+    // Claude Code loads `skills/` by default, so its manifest names no other directory.
+    let claude_manifest = json(&plugin().join(".claude-plugin/plugin.json"));
+    assert!(
+        claude_manifest["skills"].is_null() || claude_manifest["skills"] == "./skills/",
+        "{claude_manifest}"
+    );
     // Both packages run the same shim.
     assert!(plugin().join("bin/clm").is_file());
     let claude = fs::read_to_string(plugin().join("hooks/hooks.json")).unwrap();
