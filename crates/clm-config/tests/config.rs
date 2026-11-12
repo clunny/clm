@@ -2221,6 +2221,7 @@ fn env_that_is_not_valid_fails_naming_the_file() {
             Some(f.local_file().display().to_string()),
             "{bad}"
         );
+        assert!(e.message.contains("`env`"), "{bad}: {}", e.message);
     }
 }
 

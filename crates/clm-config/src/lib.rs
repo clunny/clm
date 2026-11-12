@@ -383,7 +383,7 @@ pub struct Settings {
     pub skip_migrations: Setting<Option<Vec<String>>>,
 }
 
-/// Every key `Settings::get` accepts, in the order `clm config list` prints them (`config-list`).
+/// Every key `clm config get` accepts (`Settings::lines`), in the order `clm config list` prints them (`config-list`).
 pub const KEYS: [&str; 18] = [
     "autosync",
     "defects",
