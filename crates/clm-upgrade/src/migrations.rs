@@ -4,6 +4,8 @@
 
 use crate::Migration;
 
+#[path = "migrations/20261112-agents-md/mod.rs"]
+mod agents_md;
 #[path = "migrations/20261109-a-build-s-tests/mod.rs"]
 mod build_setup;
 #[path = "migrations/20261106-corpus-entries-drift-from/mod.rs"]
@@ -34,4 +36,9 @@ pub(crate) static LIST: &[Migration] = &[
     land_dir::MIGRATION,
     starter_land_dir::MIGRATION,
     build_setup::MIGRATION,
+    agents_md::MIGRATION,
 ];
+
+/// `(migration, note it supersedes)`: a note whose edit is to a text the later migration has
+/// moved, so it is left out of `pending` once that migration is done.
+pub(crate) static SUPERSEDES: &[(&str, &str)] = &[("20261112-agents-md", "20261105-clm-upgrade-2")];

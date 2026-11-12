@@ -304,14 +304,14 @@ fn an_entry_set_up_with_the_allow_rules_is_not_declined() {
 #[test]
 fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
     let mut expected = init_files();
-    let claude = expected.get_mut("CLAUDE.md").unwrap();
+    let claude = expected.get_mut("AGENTS.md").unwrap();
     let text = String::from_utf8(claude.clone()).unwrap();
     let changed = text.replacen("CLM", "CLX", 1);
     assert_ne!(changed, text, "the template names CLM");
     *claude = changed.into_bytes();
     let entry = entries().pop().unwrap();
     let err = check_entry(&entry, &expected).unwrap_err();
-    assert!(err.contains("CLAUDE.md"), "{err}");
+    assert!(err.contains("AGENTS.md"), "{err}");
     assert!(
         err.contains(&entry.file_name().unwrap().to_string_lossy().to_string()),
         "{err}"

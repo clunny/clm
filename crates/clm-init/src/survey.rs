@@ -203,7 +203,12 @@ pub(crate) fn code_files(root: &Path) -> Result<Vec<String>, String> {
 /// `files` without the spec paths.
 pub(crate) fn code_only(mut files: Vec<String>) -> Vec<String> {
     const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];
-    const SPEC_FILES: [&str; 3] = ["ARCHITECTURE.md", "CAPABILITIES.md", "CLAUDE.md"];
+    const SPEC_FILES: [&str; 4] = [
+        "ARCHITECTURE.md",
+        "CAPABILITIES.md",
+        "CLAUDE.md",
+        "AGENTS.md",
+    ];
     files.retain(|f| {
         !SPEC_DIRS.iter().any(|d| f.starts_with(d)) && !SPEC_FILES.contains(&f.as_str())
     });

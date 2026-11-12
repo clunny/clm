@@ -110,12 +110,13 @@ fn init(cwd: &Path, args: &[&str], hosts: &TempDir) -> String {
     String::from_utf8(out.stdout).unwrap()
 }
 
-const FILES: [&str; 6] = [
+const FILES: [&str; 7] = [
     "clm.toml",
     "scripts/clm-check.sh",
     "ARCHITECTURE.md",
     "CAPABILITIES.md",
     "specs/SPEC.md",
+    "AGENTS.md",
     "CLAUDE.md",
 ];
 
@@ -135,7 +136,7 @@ fn host_line(dir: &Path) -> String {
 
 #[test]
 fn empty_repository() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let hosts = fake_hosts();
@@ -162,6 +163,7 @@ fn empty_repository() {
         toml.contains("\n[land]\ncheck = \"scripts/clm-check.sh\"\n"),
         "{toml}"
     );
+    assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
     let spec = read(&dir, "specs/SPEC.md");
     assert!(spec.contains("title: \"shop\"\n"), "{spec}");
     assert!(spec.contains("status: unbuilt\n"), "{spec}");
@@ -186,7 +188,7 @@ fn layer_entries(dir: &Path, layer: &str, hosts: &TempDir) -> Vec<String> {
 
 #[test]
 fn init_writes_capabilities() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     let out = init(&dir, &["--lang", "rust"], &hosts);
@@ -234,12 +236,12 @@ fn template_says_pull_request() {
 
 #[test]
 fn template_says_architectural_constraint() {
-    // req:init/template-says-architectural-constraint@04de37bd
+    // req:init/template-says-architectural-constraint@edbeb5d2
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
     let arch = read(&dir, "ARCHITECTURE.md");
-    let claude = read(&dir, "CLAUDE.md");
+    let claude = read(&dir, "AGENTS.md");
     assert!(
         arch.contains("\nThe architectural constraints:"),
         "preamble: {arch}"
@@ -331,10 +333,10 @@ fn architecture_template_proof() {
 
 #[test]
 fn claude_md_points_at_the_guide() {
-    // req:init/claude-md-points-at-guide@7f48ae23
+    // req:init/claude-md-points-at-guide@e9cdc867
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
-    let claude = read(&dir, "CLAUDE.md");
+    let claude = read(&dir, "AGENTS.md");
     assert!(claude.contains("`clm guide`"), "{claude}");
     assert!(
         !claude.contains("https://") && !claude.contains("http://"),
@@ -344,13 +346,18 @@ fn claude_md_points_at_the_guide() {
 
 #[test]
 fn claude_md_names_the_skills() {
-    // req:init/claude-md-names-the-skills@d2ecddb8
+    // req:init/claude-md-names-the-skills@f687fbf9
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
-    let claude = read(&dir, "CLAUDE.md");
+    let claude = read(&dir, "AGENTS.md");
     assert!(claude.contains("/clm:propose"), "{claude}");
     assert!(claude.contains("/clm:build"), "{claude}");
     assert!(claude.contains("/clm:help"), "{claude}");
+    assert!(claude.contains("clm approve"), "{claude}");
+    assert!(
+        claude.contains("whatever the agent harness calls them"),
+        "{claude}"
+    );
     assert!(!claude.contains("/clm:implement"), "{claude}");
 }
 
@@ -431,6 +438,7 @@ fn root_outside_skips_clm_files_and_escapes() {
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
         "CLAUDE.md",
+        "AGENTS.md",
         "specs/x/SPEC.md",
         "changes/c/change.md",
         "backlog/b.md",
@@ -449,7 +457,7 @@ fn root_outside_skips_clm_files_and_escapes() {
 
 #[test]
 fn no_remote() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(host_line(&dir), "host = \"none\"");
@@ -457,7 +465,7 @@ fn no_remote() {
 
 #[test]
 fn host_given() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     init(&dir, &["--host", "git"], &fake_hosts());
@@ -471,7 +479,7 @@ fn host_given() {
 
 #[test]
 fn azure_remote() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     origin(&dir, "https://o@dev.azure.com/o/p/_git/r");
     let hosts = fake_hosts();
@@ -505,7 +513,7 @@ fn host_unknown_refused() {
 
 #[test]
 fn host_from_origin() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     for (url, host) in [
         ("git@github.com:o/r.git", "github"),
         ("https://GitHub.com/o/r", "github"),
@@ -522,7 +530,7 @@ fn host_from_origin() {
 
 #[test]
 fn project_files_kept() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Our rules\n");
     write(&dir, "clm.toml", "defects = \"off\"\n");
@@ -531,6 +539,18 @@ fn project_files_kept() {
     assert_eq!(read(&dir, "clm.toml"), "defects = \"off\"\n");
     assert!(out.contains("kept CLAUDE.md\n"), "{out}");
     assert!(out.contains("kept clm.toml\n"), "{out}");
+    assert!(out.contains("wrote AGENTS.md\n"), "{out}");
+    assert!(
+        out.lines()
+            .any(|l| l.contains("add `@AGENTS.md` to `CLAUDE.md`")),
+        "{out}"
+    );
+    // A CLAUDE.md that already imports it needs no such line.
+    let (_tmp, dir) = repo();
+    write(&dir, "CLAUDE.md", "# Ours\n@AGENTS.md\n");
+    let out = init(&dir, &[], &fake_hosts());
+    assert!(out.contains("kept CLAUDE.md\n"), "{out}");
+    assert!(!out.contains("add `@AGENTS.md`"), "{out}");
     assert!(out.contains("wrote ARCHITECTURE.md\n"), "{out}");
 }
 
@@ -1221,7 +1241,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
 
 #[test]
 fn not_a_repository() {
-    // req:init/init-files@633c5ab3
+    // req:init/init-files@2e91537b
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join("plain");
     fs::create_dir(&dir).unwrap();
@@ -1633,4 +1653,15 @@ fn dependencies_not_installed() {
         ),
         "{line}"
     );
+}
+
+#[test]
+fn survey_counts_agents_md_as_a_spec_file() {
+    // req:init/survey-agents-md@3dd4afc6
+    let (_tmp, dir) = repo();
+    write(&dir, "AGENTS.md", "x\n");
+    write(&dir, "src/a.rs", "fn a() {}\n");
+    git(&dir, &["add", "-A"]);
+    init(&dir, &[], &fake_hosts());
+    assert_eq!(spec_key(&dir, "outside"), r#"outside: ["src/**"]"#);
 }

@@ -24,6 +24,14 @@ pub(crate) fn strings(table: &toml::Table, key: &str) -> Vec<String> {
     }
 }
 
+/// Whether a migration of `list` that supersedes `id` is done at `root`, so a note whose edit is to
+/// a text that migration moved is no longer needed.
+pub(crate) fn superseded(list: &[Migration], id: &str, root: &Path) -> bool {
+    migrations::SUPERSEDES
+        .iter()
+        .any(|(by, old)| *old == id && list.iter().any(|m| m.id == *by && (m.done)(root)))
+}
+
 /// The migrations of `list` the project at `root` still needs, in list order.
 pub(crate) fn pending_in<'a>(
     list: &'a [Migration],
@@ -46,6 +54,7 @@ pub(crate) fn pending_in<'a>(
         .enumerate()
         .filter(|(i, m)| {
             !(m.done)(root)
+                && !superseded(list, m.id, root)
                 && match m.kind {
                     Kind::Apply(..) => *i >= stamped.unwrap_or(0),
                     Kind::Note(_) => !declined.iter().any(|d| d == m.id),

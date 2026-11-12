@@ -9,6 +9,7 @@ use clm_git::{REMOTE, git};
 const ARCHITECTURE: &str = include_str!("../templates/architecture.md");
 const CAPABILITIES: &str = include_str!("../templates/capabilities.md");
 const ROOT_SPEC: &str = include_str!("../templates/spec.md");
+const AGENTS: &str = include_str!("../templates/agents.md");
 const CLAUDE: &str = include_str!("../templates/claude.md");
 
 /// What `clm land` runs before `clm check`, written by `clm init` for the project to edit.
@@ -154,7 +155,12 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         String::new()
     };
     files.write("specs/SPEC.md", &spec)?;
-    files.write("CLAUDE.md", CLAUDE)?;
+    files.write("AGENTS.md", AGENTS)?;
+    if !files.write("CLAUDE.md", CLAUDE)? && !imports_agents(&root.join("CLAUDE.md")) {
+        files.out.push_str(
+            "add `@AGENTS.md` to `CLAUDE.md` so Claude Code reads the same instructions\n",
+        );
+    }
 
     let mut out = files.out;
     let host = configured_host(&root, host);
@@ -181,6 +187,12 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         }
     }
     Ok(out)
+}
+
+/// Whether the `CLAUDE.md` at `path` holds the line `@AGENTS.md`, which Claude Code reads as an
+/// import (`init-files`).
+fn imports_agents(path: &Path) -> bool {
+    fs::read_to_string(path).is_ok_and(|text| text.lines().any(|l| l.trim_end() == "@AGENTS.md"))
 }
 
 /// Writes CLM's files into `root`, noting each as `wrote` or `kept` in `out` (or, for

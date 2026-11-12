@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::Path;
 
-use crate::pending::{pending_in, skipped, strings, table};
+use crate::pending::{pending_in, skipped, strings, superseded, table};
 use crate::{Kind, Level, Migration, migrations};
 
 /// `clm upgrade` with no flag: one line per pending migration, or `up to date`.
@@ -95,7 +95,7 @@ pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String
     // Judged before the stamp is written, so a note the stamp takes is shown on the run that
     // takes it.
     for m in pending {
-        if matches!(m.kind, Kind::Note(_)) && !(m.done)(root) {
+        if matches!(m.kind, Kind::Note(_)) && !(m.done)(root) && !superseded(list, m.id, root) {
             out.push_str(&format!("note {}\n", m.id));
         }
     }

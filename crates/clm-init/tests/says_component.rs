@@ -227,7 +227,7 @@ fn repo() -> TempDir {
 
 #[test]
 fn init_text_says_component() {
-    // req:init/says-component@b5561cf9
+    // req:init/says-component@c8e61ff0
     let sources = read("src", "rs");
     let templates = read("templates", "md");
     assert!(!sources.is_empty() && !templates.is_empty());
@@ -254,10 +254,10 @@ fn init_text_says_component() {
 
 #[test]
 fn a_new_repository_says_component() {
-    // req:init/says-component@b5561cf9
+    // req:init/says-component@c8e61ff0
     let dir = repo();
     init(dir.path(), &Options::default()).unwrap();
-    let claude = fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
+    let claude = fs::read_to_string(dir.path().join("AGENTS.md")).unwrap();
     assert!(claude.contains("<component-id>/<slug>"), "{claude}");
     let spec = fs::read_to_string(dir.path().join("specs/SPEC.md")).unwrap();
     assert!(
@@ -265,7 +265,7 @@ fn a_new_repository_says_component() {
         "{spec}"
     );
     for file in [
-        "CLAUDE.md",
+        "AGENTS.md",
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
         "specs/SPEC.md",
@@ -280,7 +280,7 @@ fn a_new_repository_says_component() {
 
 #[test]
 fn a_duplicate_in_the_map() {
-    // req:init/says-component@b5561cf9
+    // req:init/says-component@c8e61ff0
     let dir = repo();
     let map = "components:\n  - { id: a, paths: [] }\n  - { id: a, paths: [] }\n";
     let found = check_nodes(dir.path(), Path::new("map.yaml"), map).unwrap();
