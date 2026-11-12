@@ -6,7 +6,7 @@ use std::fs;
 use crate::{Repo, bash_event, landed, printed};
 
 const CLAUDE_CODE: [(&str, &str); 1] = [("CLAUDECODE", "1")];
-const CODEX: [(&str, &str); 1] = [(clm_agent_harness::CODEX_MARKER, "thread-1")];
+const CODEX: [(&str, &str); 1] = [("CODEX_THREAD_ID", "thread-1")];
 
 /// `CAPABILITIES.md` edited on `spec/cap`, which needs review, pushed; the work tree is on `main`.
 fn capability_edit(repo: &Repo) {
