@@ -222,7 +222,7 @@ pub fn read(root: &Path, max_builds: u64, expiry_hours: u64, now: u64) -> Snapsh
         record = Record::load(&record_path);
         let due = record
             .measured
-            .is_none_or(|at| now.saturating_sub(at) >= MEASURE_EVERY_SECONDS);
+            .is_none_or(|at| at > now || now - at >= MEASURE_EVERY_SECONDS);
         let mut sizes = Vec::new();
         for place in places.iter().filter(|p| p.counts) {
             counting.push(place.name.clone());

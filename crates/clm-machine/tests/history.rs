@@ -201,3 +201,14 @@ fn scenario_damaged_history() {
     }
     assert_eq!(samples(dir.path()).len(), 1);
 }
+
+#[test]
+fn samples_from_a_clock_since_stepped_back_are_dropped() {
+    // req:machine/machine-history@48d41228
+    let dir = repo();
+    let now = clm_git::now();
+    write_history(dir.path(), now + 3600, 3, 0, 10);
+    let snapshot = clm_machine::read(dir.path(), 3, 4, now);
+    assert_eq!(snapshot.history.len(), 1);
+    assert_eq!(snapshot.history[0].time, now);
+}

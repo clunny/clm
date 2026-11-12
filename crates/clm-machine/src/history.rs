@@ -84,6 +84,8 @@ pub fn keep(path: &Path, sample: Sample, now: u64) -> Vec<Sample> {
         .lines()
         .filter_map(Sample::parse)
         .collect();
+    // A sample from a clock that has since stepped back is not history.
+    samples.retain(|s| s.time <= now);
     samples.sort_by_key(|s| s.time);
     if !samples
         .last()

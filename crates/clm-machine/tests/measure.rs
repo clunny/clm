@@ -127,3 +127,13 @@ fn a_record_round_trips_and_its_peak_only_rises() {
     let higher = next.measured_at(1_700_001_400, vec![("a".into(), 1000)]);
     assert_eq!(higher.peak, Some(1000));
 }
+
+#[test]
+fn a_record_dated_in_the_future_is_due() {
+    // req:machine/build-measure@322d7d46
+    let (dir, _holder, _tree) = clone_with_build();
+    let t = clm_git::now();
+    json(dir.path(), t + 3600);
+    let again = json(dir.path(), t);
+    assert_eq!(again["disk"]["measured"], clm_machine::format_time(t));
+}

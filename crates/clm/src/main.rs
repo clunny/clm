@@ -2246,10 +2246,8 @@ fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
     out
 }
 
-/// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
-/// when the settings or the graph can't be loaded, 2 when git fails.
 /// `clm machine`: the readings in the chosen form, with `config`'s `max_builds`; exit 0 whatever
-/// the states, 1 only when its output can't be written (`machine-command`).
+/// the states, 1 when the settings are invalid or its output can't be written (`machine-command`).
 fn machine(root: &Path, format: MachineFormat, width: usize, expiry: u64) -> ExitCode {
     use std::io::Write;
     let max_builds = match clm_config::load(Some(root), &clm_config::process_env) {
@@ -2274,6 +2272,8 @@ fn machine(root: &Path, format: MachineFormat, width: usize, expiry: u64) -> Exi
     }
 }
 
+/// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
+/// when the settings or the graph can't be loaded, 2 when git fails.
 fn health(root: &Path, expiry: u64) -> ExitCode {
     let settings = match clm_config::load(Some(root), &clm_config::process_env) {
         Ok(s) => s,
