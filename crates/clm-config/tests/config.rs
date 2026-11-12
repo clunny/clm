@@ -1119,6 +1119,28 @@ fn this_repository_verifies_the_whole_suite_after_lands() {
     assert_eq!(layer, &Layer::File(f.repo_file()));
 }
 
+#[test]
+fn this_repository_names_the_retired_terms_detector_last() {
+    // req:config/retired-terms-detector@afaa1f7a
+    let text =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
+    let f = Fixture::new(None, Some(&text));
+    let s = f.load(&[]).unwrap();
+    let names: Vec<&str> = s.detectors.value.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "unused-dependencies",
+            "unreferenced-public-items",
+            "retired-terms"
+        ]
+    );
+    let d = &s.detectors.value[2];
+    assert_eq!(d.command, ["sh", "scripts/retired-terms.sh"]);
+    let hint = d.hint.as_deref().unwrap();
+    assert!(hint.contains("sh") && hint.contains("grep"), "{hint}");
+}
+
 const SETUP: &str = "for d in plugin-panel capabilities/panel web web/site capabilities/web; do test ! -f \"$d/package.json\" || (cd \"$d\" && npm ci --ignore-scripts) || exit 1; done";
 
 /// The settings of this repository's own `clm.toml`, and the file they came from.

@@ -1594,6 +1594,33 @@ fn config_get_env_prints_a_line_per_variable() {
 }
 
 #[test]
+fn check_fails_on_a_retired_term_in_a_spec() {
+    // req:config/retired-terms-detector@afaa1f7a
+    let script = fs::read_to_string(repo_root().join("scripts/retired-terms.sh")).unwrap();
+    let dir = detector_repo(None);
+    write(dir.path(), "scripts/retired-terms.sh", &script);
+    write(dir.path(), "scripts/retired-terms.txt", "grommet stub\n");
+    write(
+        dir.path(),
+        "clm.toml",
+        "[[detectors]]\nname = \"retired-terms\"\ncommand = [\"sh\", \"scripts/retired-terms.sh\"]\nhint = \"needs only sh and grep\"\n",
+    );
+    write(dir.path(), "specs/notes.md", "make it a grommet stub\n");
+    let out = clm_check(dir.path());
+    let stdout = String::from_utf8(out.stdout).unwrap();
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{stdout}{stderr}");
+    assert!(
+        stderr.contains("specs/notes.md:1: grommet stub"),
+        "{stderr}"
+    );
+    assert!(
+        stdout.contains("clm.toml: check/detectors: retired-terms failed (exit 1)"),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn config_get_verify_prints_the_table_and_the_file() {
     // req:config/verify-setting@5bf87fcc
     let (out, file) = config_get_in_repo(
