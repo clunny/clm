@@ -496,6 +496,7 @@ fn binary_files_count_and_spec_files_do_not() {
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
         "CLAUDE.md",
+        "AGENTS.md",
     ] {
         files.push((f, b"x\n"));
     }
@@ -512,6 +513,7 @@ fn binary_files_count_and_spec_files_do_not() {
         "ARCHITECTURE",
         "CAPABILITIES",
         "CLAUDE",
+        "AGENTS",
     ] {
         assert!(!text.contains(f), "{f}: {text}");
     }
@@ -530,7 +532,7 @@ fn a_star_does_not_cross_a_slash() {
 
 #[test]
 fn a_duplicate_component_exits_1() {
-    // req:init/says-component@b5561cf9
+    // req:init/says-component@c8e61ff0
     let repo = repo(TWO_CRATES);
     let map = "components:\n  - { id: a, paths: [] }\n  - { id: a, paths: [] }\n";
     fs::write(repo.path().join("map.yaml"), map).unwrap();

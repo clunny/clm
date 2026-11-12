@@ -105,7 +105,10 @@ fn an_unedited_claude_md_gains_the_help_pointer() {
     let out = apply(dir.path()).unwrap();
     assert!(out.contains(&format!("applied {HELP_ID}\n")), "{out}");
     let text = fs::read_to_string(dir.path().join("CLAUDE.md")).unwrap();
-    assert_eq!(text, NEW_CLAUDE);
+    assert_eq!(
+        text,
+        include_str!("migrations/20261105-clm-upgrade-2/new.md")
+    );
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
@@ -681,4 +684,57 @@ fn the_build_setup_note_names_what_a_project_needs_to_know() {
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }
+}
+
+const AGENTS_ID: &str = "20261112-agents-md";
+
+/// A project no migration has stamped, so the apply migrations are pending.
+fn unstamped(architecture: &str, claude: &str) -> TempDir {
+    let dir = project(architecture, claude);
+    fs::write(dir.path().join("clm.toml"), "defects = \"ask\"\n").unwrap();
+    dir
+}
+
+fn read(dir: &TempDir, name: &str) -> String {
+    fs::read_to_string(dir.path().join(name)).unwrap()
+}
+
+#[test]
+fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
+    let dir = unstamped(NEW_ARCHITECTURE, OLD_CLAUDE);
+    assert!(list(dir.path()).unwrap().contains(AGENTS_ID));
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("applied {AGENTS_ID}\n")), "{out}");
+    assert!(!out.contains(&format!("note {HELP_ID}")), "{out}");
+    assert_eq!(
+        read(&dir, "AGENTS.md"),
+        include_str!("../../clm-init/templates/agents.md")
+    );
+    assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+#[test]
+fn an_edited_claude_md_moves_whole() {
+    let edited = format!("{OLD_CLAUDE}\nMy own rule.\n");
+    let dir = unstamped(NEW_ARCHITECTURE, &edited);
+    apply(dir.path()).unwrap();
+    assert_eq!(read(&dir, "AGENTS.md"), edited);
+    assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
+}
+
+#[test]
+fn both_files_keep_every_line_and_gain_the_import_first() {
+    let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
+    fs::write(dir.path().join("AGENTS.md"), "# Theirs\n").unwrap();
+    apply(dir.path()).unwrap();
+    assert_eq!(read(&dir, "AGENTS.md"), "# Theirs\n");
+    assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n\n# Ours\n");
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+#[test]
+fn a_claude_md_that_imports_agents_md_has_nothing_pending() {
+    let dir = project(NEW_ARCHITECTURE, "# Ours\n@AGENTS.md\n");
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
