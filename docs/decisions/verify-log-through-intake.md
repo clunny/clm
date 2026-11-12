@@ -16,4 +16,6 @@ A failed `local` run of `[verify] check` already keeps its whole output in `.clm
 - *The triage skill builds the path itself.* It would copy verify's layout into a skill and break when the repository's abbreviations grow longer than the name the run gave its log (`path-ownership`).
 - *A command of its own, such as `clm verify --log <sha>`.* `clm intake` already lists the red result; a second command would only make the session ask twice.
 
+**Intake's lines stay free of host text** (`untrusted-text-read-only-verifier`). The `log` line adds a filesystem path to what intake's lines hold, beside numbers, slugs, change IDs, commits and logins. No host text reaches it: the path is the clone's own main worktree joined with `.clm/verify-logs/` and a file name that is a prefix of a commit ID, so it cannot start another line. The log it names is the project's own test output on this clone, which a session may read as it reads a land's log.
+
 A red result from another clone or from the host's pipeline gets no `log` line, and the skill says so; carrying output across clones waits until a project needs it (`yagni`).
