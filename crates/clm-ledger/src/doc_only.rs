@@ -7,7 +7,7 @@
 /// so anything new gets a new key. The guide's pages and `docs/spec-format.md` are compiled
 /// into `clm`, but the tests that read them hold `clm:reads` markers (`doc-readers-marked`),
 /// so a land that edits them still runs those tests.
-const DOC_ONLY: [&str; 8] = [
+const DOC_ONLY: [&str; 9] = [
     "specs/",
     "changes/",
     "backlog/",
@@ -16,6 +16,7 @@ const DOC_ONLY: [&str; 8] = [
     "CAPABILITIES.md",
     "README.md",
     "CLAUDE.md",
+    "AGENTS.md",
 ];
 
 /// Whether `path`, relative to the repository root, is doc-only: `code_key` leaves it out.
