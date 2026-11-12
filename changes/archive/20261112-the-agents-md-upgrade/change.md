@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-agents-md-upgrade-migration-breaks-clm-s-own-requirement-clm]
 ---
 

@@ -2,6 +2,7 @@
 // clm:reads docs/guide/**
 // clm:reads CLAUDE.md
 // clm:reads README.md
+// clm:reads AGENTS.md
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -211,6 +212,7 @@ fn finish_gaps(body: &str) -> Vec<String> {
         &[
             "clm run --finish <component>",
             "exits 3",
+            "no free build place",
             "max_builds",
             "clm.local.toml",
             "left <path>",
@@ -221,7 +223,7 @@ fn finish_gaps(body: &str) -> Vec<String> {
 
 #[test]
 fn build_finishes_builds() {
-    // req:plugin.build/build-finishes-builds@6b0cdcd0
+    // req:plugin.build/build-finishes-builds@ade8f7bd
     let body = skill_body("build");
     assert_eq!(finish_gaps(&body), Vec::<String>::new());
     // build without finishing
@@ -263,9 +265,37 @@ fn build_finishes_builds() {
         assert!(finish.contains(needle), "{needle}: {finish}");
     }
     let cap = sentence_with(&body, "max_builds");
-    for needle in ["none of your own builds is running", "cap is reached"] {
+    for needle in [
+        "none of your own builds is running",
+        "cap is reached",
+        "other sessions' builds or drafts",
+        "run step 5",
+        "in place of an empty queue",
+        "clm next --wait",
+        "whichever of the two said so",
+    ] {
         assert!(cap.contains(needle), "{needle}: {cap}");
     }
+    // A full cap on `clm next` is no empty queue.
+    let stderr = sentence_with(&body, "no free build place");
+    for needle in [
+        "prints nothing",
+        "stderr",
+        "treat it as no free place",
+        "never tell the human nothing is left",
+    ] {
+        assert!(stderr.contains(needle), "{needle}: {stderr}");
+    }
+    // Steps 4 and 6 tell the full cap from a drained queue.
+    for needle in [
+        "with no `no free build place` line on stderr",
+        "or only the `no free build place` line",
+    ] {
+        assert!(body.contains(needle), "{needle}");
+    }
+    // full cap read as an empty queue
+    let gaps = finish_gaps(&body.replace("no free build place", "elided"));
+    assert_reports(&gaps, "build", "no free build place");
     // A build's worktree is `clm run --finish`'s to remove, never `git worktree remove`'s.
     for line in body.lines().flat_map(|l| l.split(". ")) {
         if line.contains("git worktree remove") {
@@ -727,7 +757,7 @@ fn old_skill_name_gaps(files: &[(String, String)]) -> Vec<String> {
 
 #[test]
 fn build_skill_is_named_build() {
-    // req:plugin.build/skill-named-build@80390f85
+    // req:plugin.build/skill-named-build@3434a2db
     // The skill is `skills/build/SKILL.md`, with `skills/implement/` gone, and its description
     // holds `approved specs` and `not compile`.
     assert!(plugin().join("skills/build/SKILL.md").is_file());
@@ -757,7 +787,11 @@ fn build_skill_is_named_build() {
     let mut files = Vec::new();
     text_files_under(&plugin(), &mut files);
     text_files_under(&repo().join("docs/guide"), &mut files);
-    for name in ["CLAUDE.md", "README.md"] {
+    // `AGENTS.md` too, when the repository has one.
+    for name in ["CLAUDE.md", "AGENTS.md", "README.md"] {
+        if name == "AGENTS.md" && !repo().join(name).exists() {
+            continue;
+        }
         files.push((
             name.to_owned(),
             fs::read_to_string(repo().join(name)).unwrap(),
