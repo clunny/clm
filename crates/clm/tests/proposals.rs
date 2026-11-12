@@ -149,8 +149,13 @@ fn next_is_capped_by_the_max_builds_setting() {
     assert_eq!(placed.unwrap(), clm_orchestrator::Placed::New);
     let (code, out, err) = next_with(&r.work, "2");
     assert_eq!((code, out.as_str()), (Some(0), "a\n"), "{err}");
+    assert_eq!(err, "", "a list that isn't empty says nothing");
     let (code, out, err) = next_with(&r.work, "1");
-    assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
+    assert_eq!((code, out.as_str()), (Some(0), ""));
+    assert_eq!(
+        err,
+        "no free build place: 1 of max_builds = 1 in use, 3 ready\n"
+    );
     let (code, _, err) = next_with(&r.work, "none");
     assert_eq!(code, Some(1), "settings that don't load: {err}");
     assert!(err.contains("max_builds"), "{err}");
