@@ -88,7 +88,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 
 Every `clm` command, by what it's for. `clm help <command>` says more.
 
-- Seeing the state: `clm status`, `clm view`, `clm backlog`, `clm proposals`, `clm pending`, `clm coverage`, `clm next`, `clm health`, `clm size`, `clm capabilities`, `clm architecture`, `clm effort`, `clm ledger`, `clm agent-harness` (which agent harness a command runs under and what it can do).
+- Seeing the state: `clm status`, `clm view`, `clm backlog`, `clm proposals`, `clm pending`, `clm coverage`, `clm next`, `clm health`, `clm size`, `clm capabilities`, `clm architecture`, `clm effort`, `clm ledger`, `clm agent-harness` (which agent harness a command runs under and what it can do), `clm machine` (the machine's CPU load, available memory and free disk, judged against what the clone's builds use).
 - Writing specs: `clm context`, `clm hashes`, `clm apply`, `clm archive`, `clm rename`, `clm survey`, `clm guide`.
 - Checking: `clm check`, `clm gate`, `clm affected`, `clm unreferenced`, `clm fingerprint`.
 - Working: `clm claim`, `clm run`, `clm setup`, `clm runner`, `clm triage`, `clm draft`, `clm intake`, `clm workaround`, `clm defect`, `clm superpowers`.

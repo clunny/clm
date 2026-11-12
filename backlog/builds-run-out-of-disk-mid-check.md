@@ -15,3 +15,7 @@ On 2026-11-07 six parallel builds filled the disk: each build's worktree held it
 ## Toolchains
 
 Disk use per build differs by orders of magnitude: a Rust or C++ workspace can keep several GB per worktree, a JavaScript project's dependency install can too, while a Python or Go project may keep little (Go's build cache is shared). So the check must be measured, not assumed, and any clearing of build output must go through the project's own clean command or a declared output path, never a hard-coded `target/`.
+
+## Since
+
+`20261112-machine-load-in-panel` adds `clm machine`, which measures each build's worktree into a clone-local record and judges free space against the largest build seen (`machine-load-measured-by-clm`). The check before starting a build can reuse that measure and judgement rather than a measure of its own.

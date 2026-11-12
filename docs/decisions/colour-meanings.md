@@ -29,3 +29,5 @@ Rejected:
 Updated 2026-10-25: `interactive` left the table with the queue state it named (`builds-in-subagents`); `oversized` joined amber, since an over-budget node asks for attention without blocking anything (`oversized-is-a-state`).
 
 Updated 2026-10-25: the panel's build rows (`20261025-panel-build-rows`) colour a running subagent amber, like a claim, a finished one green and a failed one rose, each with its glyph (`● ✓ ✗`).
+
+Updated 2026-11-12: `clm machine`'s rows (`machine-load-measured-by-clm`) colour a reading `ok` green, `warn` amber and `critical` rose, and dim `unknown`; each state but `ok` is also written as its word after the figure, so the row reads without colour.
