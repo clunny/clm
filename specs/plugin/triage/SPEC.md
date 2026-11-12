@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: []
 paths: ["plugin/skills/triage/**"]
 successor: ""
-serves: [architecture/method-in-the-plugin]
+serves: [architecture/method-in-the-plugin, capability/work-from-any-harness]
 ---
 
 ## Contract
@@ -280,3 +280,16 @@ It SHALL NOT name a branch `impl/archive` without `/<id>`, which the queue would
 #### Serves
 - capability/wrap-up-session
 - capability/work-concurrently
+
+### Requirement: triage-follows-harness
+`skills/triage/SKILL.md` SHALL hold `plugin/skills-follow-harness`'s rule for its drafts, folds and approvals: it SHALL tell the session to run `clm harness` before its first launch; where `isolated-worktrees` is `no`, to give each draft and fold its own worktree under `.claude/worktrees/` before launching it, as `build` does for a build; where `subagents` is `no`, to run each draft in the session itself, one at a time; and, where `confirm` is `no`, to ask for the human's yes in the conversation and then to have the human run each `clm approve` in their own terminal, never running it from the session.
+
+#### Scenario: approvals under Codex
+- GIVEN `skills/triage/SKILL.md`
+- WHEN a test reads it
+- THEN it names `clm harness`, `confirm` and `own terminal`
+
+
+
+#### Serves
+- capability/work-from-any-harness

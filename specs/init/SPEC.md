@@ -73,12 +73,12 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 ## Requirements
 
 ### Requirement: init-files
-`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `clm.toml` SHALL set `host` (from `--host`, else what `clm-host`'s `host_for_remote` gives for `origin`'s URL, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, `clm guide constraints`, where CLM's carried constraints are. On the result, `clm check` SHALL pass. Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh` and no `az`.
+`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md`, `AGENTS.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `AGENTS.md` SHALL hold the project's instructions for every harness (`platform`), and the `CLAUDE.md` it writes SHALL be the one line `@AGENTS.md`, which Claude Code reads as an import, so every harness reads one text. When the repository already has a `CLAUDE.md` that doesn't hold the line `@AGENTS.md`, `clm init` SHALL keep it, still write a missing `AGENTS.md`, and print a line saying to add `@AGENTS.md` to `CLAUDE.md` so Claude Code reads the same instructions. `clm.toml` SHALL set `host` (from `--host`, else what `clm-host`'s `host_for_remote` gives for `origin`'s URL, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, `clm guide constraints`, where CLM's carried constraints are. On the result, `clm check` SHALL pass. Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh` and no `az`.
 
 #### Scenario: empty repository
 - GIVEN an empty git repository whose `origin` is `https://github.com/o/r.git`
 - WHEN `clm init --lang rust` runs
-- THEN all six files exist, `clm-check.sh` is executable and holds `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, `.github/` doesn't exist, and `clm check` exits 0
+- THEN all seven files exist, `CLAUDE.md` is `@AGENTS.md`, `clm-check.sh` is executable and holds `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, `.github/` doesn't exist, and `clm check` exits 0
 
 #### Scenario: human layers
 - GIVEN an empty git repository, and another holding a `CAPABILITIES.md` of its own
@@ -103,7 +103,7 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 #### Scenario: project files kept
 - GIVEN a repository with its own `CLAUDE.md` and `clm.toml`
 - WHEN `clm init` runs
-- THEN both are unchanged, and the output lists `kept CLAUDE.md` and `kept clm.toml`
+- THEN both are unchanged, the output lists `kept CLAUDE.md` and `kept clm.toml`, `AGENTS.md` is written, and the output says to add `@AGENTS.md` to `CLAUDE.md`
 
 #### Scenario: not a repository
 - GIVEN a directory that isn't in a git repository
@@ -359,12 +359,12 @@ The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".claude/settings.
 - capability/adopt-clm
 
 ### Requirement: claude-md-points-at-guide
-The `CLAUDE.md` that `clm init` writes SHALL point at the guide by naming `clm guide`, and SHALL hold no URL (`http://` or `https://`).
+The `AGENTS.md` that `clm init` writes SHALL point at the guide by naming `clm guide`, and SHALL hold no URL (`http://` or `https://`).
 
 #### Scenario: pointer
 - GIVEN an empty repository
 - WHEN `clm init` runs
-- THEN its `CLAUDE.md` holds `clm guide` and no `https://`
+- THEN its `AGENTS.md` holds `clm guide` and no `https://`
 
 #### Serves
 - architecture/method-in-the-plugin
@@ -557,12 +557,16 @@ The text `clm-init` prints and writes SHALL say component, components, ancestors
 - architecture/plain-terms
 
 ### Requirement: claude-md-names-the-skills
-The `CLAUDE.md` that `clm init` writes SHALL name `/clm:propose`, `/clm:build` and `/clm:help`, and SHALL NOT name `/clm:implement`.
+The `AGENTS.md` that `clm init` writes SHALL name `/clm:propose`, `/clm:build` and `/clm:help`, saying they are the `propose`, `build` and `help` skills whatever the harness calls them, and SHALL NOT name `/clm:implement`. It SHALL tell the session never to run `clm approve` itself, but to have the human run it, through the harness's confirmation or in their own terminal (`approval-policy`).
 
 #### Scenario: a new repository
-- GIVEN a repository with no `CLAUDE.md`
+- GIVEN a repository with no `AGENTS.md`
 - WHEN `clm init` runs
-- THEN its `CLAUDE.md` holds `/clm:propose`, `/clm:build` and `/clm:help`, and not `/clm:implement`
+- THEN its `AGENTS.md` holds `/clm:propose`, `/clm:build`, `/clm:help` and `clm approve`, and not `/clm:implement`
+
+#### Serves
+- architecture/method-in-the-plugin
+- capability/work-from-any-harness
 
 #### Needs
 - plugin.build/skill-named-build

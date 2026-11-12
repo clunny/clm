@@ -398,15 +398,39 @@ A test that the spec graph doesn't connect to a change gives the same result wit
 Whether a test is deterministic, and whether every file it reads is one the graph connects it to, are things CLM can't see before the fact: a gap shows as a failure after the land, which `[verify]` finds, bisects to a land and reports with how that land re-checked, or, in a project that sets no `[verify]`, as the next build's full `clm land --check-only` failing on a `main` it didn't change (`graph-test-selection`'s safeguard), without presuming whether the graph, the code or the test was wrong. A check that runs more than its selection is never wrong, only slower, and the check-time report says where its time went.
 
 ### Constraint: platform
-CLM SHALL be built on git and Claude Code, and may use Claude Code directly. A git host (GitHub, Azure DevOps, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Moving to another agent is a change that needs review.
+CLM SHALL be built on git and the supported agent harnesses: Claude Code and Codex, and, for any other agent that reads `AGENTS.md` and runs shell commands, a generic tier that needs no adapter. A project under CLM can be worked from any of them, by contributors on different tools or one person switching tools, with the same rules and state (`harness-adapters`). CLM may use a supported harness's own features directly where its adapter declares them. A git host (GitHub, Azure DevOps, a bare server, or none) is an optional adapter that holds the remote and, when it has one, a pull request per branch; it runs no checks and makes no decisions (`host-adapters`). Adding or dropping a supported harness is a change that needs review.
 
 #### Scenario: no host
 - GIVEN a repository whose remote is a bare git server
 - WHEN a branch lands
 - THEN `clm land` checks and pushes it, and nothing needed a host
 
+#### Scenario: two harnesses, one change
+- GIVEN a spec branch proposed from a Claude Code session
+- WHEN a Codex session builds it
+- THEN the build reads the same specs, claims and rules, and lands through the same `clm land`
+
 #### Untested
-A choice of foundation, not a behaviour; moving off it is an edit to this file, which needs review.
+A choice of foundation, not a behaviour; changing it is an edit to this file, which needs review.
+
+### Constraint: harness-adapters
+Every rule SHALL live in `clm` and git, never in a harness. A harness adapter only recognises its harness from the environment of the command it runs, translates the harness's hook events into `clm`'s and `clm`'s decisions back into the harness's format, and declares what the harness can do: make the human confirm a command, run a hook before a shell command, run hooks at a session's start and end, launch subagents, give a subagent a worktree of its own, and choose a subagent's model. Where a harness lacks an ability, CLM degrades to a path that keeps every rule (the human's own terminal for an approval, `clm land`'s gate where no guard runs, builds one at a time where there are no subagents), never to one that trusts the agent.
+
+#### Scenario: a harness that can't confirm
+- GIVEN a session under a recognised harness whose adapter declares no confirmation
+- WHEN it runs `clm approve`
+- THEN `clm approve` refuses and says to run it in the human's own terminal
+
+#### Enforced by
+- harness/detect
+- harness/abilities
+- harness/hook-events
+- plugin.hooks.guard/guard-per-harness
+- plugin.hooks/hooks-per-harness
+- land.approval/approve-refuses-unconfirming-harness
+
+#### Untested
+That an adapter holds no rule of its own is a judgement in design and review; that a harness's declared abilities match what it really offers rests on its documentation, which CLM doesn't test.
 
 ### Constraint: yagni
 The project SHALL build what a capability needs now, not what it might need later: no speculative options, adapters, settings or extension points without a capability asking for them. Adding complexity needs a reason.
@@ -548,7 +572,7 @@ A component's build SHALL change only its own `paths`. Four exceptions: a build 
 Accepted: no gate or land check refuses a build's file outside its component's `paths`. The build prompt keeps it there, and the build's review and spec audit read the diff (`path-ownership-by-prompt`).
 
 ### Constraint: approval-policy
-Only a human SHALL approve a change that needs review, through the command the guard asks them to confirm; the conversation alone never counts. Who may approve is the project's `approval` setting.
+Only a human SHALL approve a change that needs review, through the command the harness's guard asks them to confirm, or from the human's own terminal outside any agent; the conversation alone never counts. Under a recognised harness that can't make the human confirm a command, `clm approve` refuses (`harness-adapters`). Who may approve is the project's `approval` setting.
 
 #### Scenario: session tries to approve
 - GIVEN a session that runs `clm approve` on a branch
@@ -564,10 +588,11 @@ Only a human SHALL approve a change that needs review, through the command the g
 - config/approval-setting
 - gate/approval-setting
 - plugin.hooks.guard/approve-guard
+- land.approval/approve-refuses-unconfirming-harness
 - web.worker.review/approve
 
 #### Untested
-That the conversation alone never counts rests on Claude Code's confirmation prompt, which CLM doesn't test.
+That the conversation alone never counts rests on each harness's confirmation prompt, which CLM doesn't test. An agent CLM doesn't recognise looks like the human's terminal to `clm approve`: there, what keeps an approval the human's is the instruction `AGENTS.md` carries, signed approvals where the repository signs (`signed-ledger-records`), and `clm ledger verify` after the fact.
 
 ### Constraint: trunk-named-main
 A CLM repository's trunk SHALL be a branch named `main`: every command, skill and prompt names it so, and no setting names another branch. `clm init` SHALL say so up front in a repository without one, with the command that renames its branch, rather than leave the first `clm land` to find it (`trunk-is-main`).
@@ -615,7 +640,7 @@ In a repository with a remote, `main` SHALL have one copy, the remote's: `clm la
 - land/offline-land
 
 ### Constraint: guard-blocks-push-to-main
-The plugin's guard SHALL block every `git push` from a session whose destination is `main`, by refspec, `--all`, `--mirror` or implicitly from a checkout on `main`, unless the push runs from a git repository that isn't under CLM (one holding no `specs/SPEC.md` at its top or in any subdirectory), where no `clm land` owns `main`; a push whose repository the guard can't tell counts as under CLM. Every unattended build SHALL load the guard. A `clm` command that pushes or deletes a branch for a session, whose own `git push` the guard never sees, SHALL refuse `main` itself.
+Each supported harness's guard SHALL block every `git push` from a session whose destination is `main`, by refspec, `--all`, `--mirror` or implicitly from a checkout on `main`, unless the push runs from a git repository that isn't under CLM (one holding no `specs/SPEC.md` at its top or in any subdirectory), where no `clm land` owns `main`; a push whose repository the guard can't tell counts as under CLM. Every unattended build SHALL load the guard. A `clm` command that pushes or deletes a branch for a session, whose own `git push` the guard never sees, SHALL refuse `main` itself.
 
 #### Scenario: implicit push
 - GIVEN a session on `main` in a repository under CLM
@@ -638,7 +663,9 @@ The plugin's guard SHALL block every `git push` from a session whose destination
 - plugin.hooks.guard.shell/guard-quoted-substitutions
 - plugin.hooks.guard.shell/guard-here-strings
 - plugin.hooks.guard.shell/guard-checkout
+- plugin.hooks.guard/guard-per-harness
 - plugin/hooks-wired
+- plugin/codex-hooks-wired
 - orchestrator.runner/runner-needs-guard
 - host/branch-push
 - host/branch-delete

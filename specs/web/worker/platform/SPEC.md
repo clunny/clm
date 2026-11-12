@@ -59,7 +59,7 @@ It answers no route of its own, and decides nothing a route answers.
 `keys::code_key` SHALL give, for a tree listing, the key `clm_ledger::code_key` gives for the same tree, leaving out exactly the entries whose path `clm_ledger::doc_only` (`ledger/doc-only`) answers true for, by calling it, so a change to `ledger`'s list reaches the Worker's code keys with no edit to this component.
 
 #### Scenario: doc-only paths from the ledger
-- GIVEN a tree listing of `blob` entries (any mode and sha) at `docs/x.md`, `docs/guide/intro.md`, `backlog/y.md`, `CLAUDE.md`, `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`
+- GIVEN a tree listing of `blob` entries (any mode and sha) at `docs/x.md`, `docs/guide/intro.md`, `backlog/y.md`, `CLAUDE.md`, `AGENTS.md`, `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`
 - WHEN `keys::code_key` runs on it
 - THEN it equals `keys::code_key` over only `web/README.md`, `crates/a/src/lib.rs` and `docsy/z.md`, the entries `clm_ledger::doc_only` answers false for, and differs from the key of the listing with any one of those three removed
 

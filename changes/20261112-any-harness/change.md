@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 ---
 
 ## Intent
@@ -50,3 +50,12 @@ Codex (CLI 0.117 and later) and the Antigravity CLI now offer the same kinds of 
 
 - `approval-policy`, `humans-review-intent`, `guard-blocks-push-to-main`, `hook-logic-in-clm`, `method-in-the-plugin`, `expand-contract` (`clm hook guard` without `--harness` keeps meaning Claude Code), `yagni` (no adapter for a harness nobody has asked for; the generic tier needs none).
 - A harness CLM doesn't recognise looks like the human's terminal to `clm approve`. For it, what keeps an approval the human's is the instruction in `AGENTS.md`, signed approvals where the repository signs, and `clm ledger verify` after the fact: no weaker than a Claude Code session with the plugin turned off today. `approval-policy`'s `#### Untested` says so.
+
+## Deferred
+
+`backlog/antigravity-cli-harness` (stage 2), `backlog/runner-per-harness` and `backlog/effort-from-other-harnesses` (stage 3), `backlog/neutral-build-and-draft-prompts` and `backlog/pane-on-other-harnesses`. The decision is `any-harness`.
+
+## Open questions
+
+- Codex's facts come from its documentation, read at build time: the environment marker it sets in every command, its hook event and decision JSON, the variable a plugin's hook command uses for the plugin's own directory, and the file and format of a repository's plugin marketplace (`.agents/plugins/` is assumed in `plugin`'s `paths`). The builds of `harness`, `plugin.hooks` and `plugin` read them, and correct `plugin`'s `paths` through a spec change if the marketplace lives elsewhere.
+- Whether Codex's pre-tool hook can hold a command for the human's yes. Until a build shows it can, `codex`'s `confirm` is false and approvals there go to the human's terminal.
