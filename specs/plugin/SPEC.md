@@ -301,6 +301,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 
 #### Needs
 - clm/renamed-commands
+- plugin.build/build-drafts-bugs
 
 #### Serves
 - capability/report-defects
@@ -455,7 +456,7 @@ The propose and init skills SHALL tell the session that each architectural const
 - model/reserved-ids
 
 ### Requirement: launch-models
-Every subagent the plugin's skills tell Claude to launch SHALL have its model named in the Agent tool's `model` parameter (`model-per-launch`), the session's own model being named in the words `the session's own model`, which Claude reads as the alias of the model its system prompt names. `skills/build/SKILL.md` SHALL tell Claude to run `clm run <component> --review-model <alias>`, `<alias>` the alias of the session's own model, and to launch each build with `model: "sonnet"`, except that a component's build launched again after a build of it stopped without landing, for a reason other than a backlog item or a spec change, runs on the session's own model. `skills/triage/SKILL.md` SHALL tell Claude to launch each draft with the session's own model and the fold with `model: "sonnet"`. `skills/propose/SKILL.md`'s builder check, `skills/health/SKILL.md`'s `spec-slimmer` launches and `skills/init/SKILL.md`'s per-node subagents SHALL be launched with `model: "sonnet"`. `skills/propose/SKILL.md`'s and `skills/contribution/SKILL.md`'s `architecture-auditor` launches SHALL name the session's own model, since the audit is a design review. `agents/spec-auditor.md`, `agents/architecture-auditor.md` and `agents/spec-slimmer.md` SHALL set `model: sonnet` in their frontmatter.
+Every subagent the plugin's skills tell Claude to launch SHALL have its model named in the Agent tool's `model` parameter (`model-per-launch`), the session's own model being named in the words `the session's own model`, which Claude reads as the alias of the model its system prompt names. `skills/build/SKILL.md` SHALL tell Claude to run `clm run <component> --review-model <alias>`, `<alias>` the alias of the session's own model, and to launch each build with `model: "sonnet"`, except that a component's build launched again after a build of it stopped without landing, for a reason other than a backlog item or a spec change, runs on the session's own model. `skills/triage/SKILL.md` and `skills/build/SKILL.md` SHALL each tell Claude to launch each draft with the session's own model and the fold with `model: "sonnet"`. `skills/propose/SKILL.md`'s builder check, `skills/health/SKILL.md`'s `spec-slimmer` launches and `skills/init/SKILL.md`'s per-node subagents SHALL be launched with `model: "sonnet"`. `skills/propose/SKILL.md`'s and `skills/contribution/SKILL.md`'s `architecture-auditor` launches SHALL name the session's own model, since the audit is a design review. `agents/spec-auditor.md`, `agents/architecture-auditor.md` and `agents/spec-slimmer.md` SHALL set `model: sonnet` in their frontmatter.
 
 #### Scenario: skills and agents
 - GIVEN the plugin's skills and agents
@@ -472,6 +473,7 @@ Every subagent the plugin's skills tell Claude to launch SHALL have its model na
 
 #### Needs
 - orchestrator.run/review-model
+- plugin.build/build-drafts-bugs
 
 ### Requirement: recommend-the-right-design
 `skills/triage/SKILL.md` and `skills/propose/SKILL.md` SHALL tell Claude how to choose what it recommends (`recommend-the-right-design`): before recommending an answer, a fix or a design to the human, or offering choices for one (triage's *Needs your input* answers and *Workaround* fixes, and propose's approaches while brainstorming), to read the specs and the code the item or intent concerns, with `clm context <component>` for its components and the files under their `paths` it names or touches; to treat the fix the item itself suggests, or the first one that comes to mind, as one option among the approaches, never as the answer by default; and to recommend the design that is correct and maintainable over the long term, saying why it beats the most convenient one, recommending a cheaper or smaller option only with the reason it is also the right one. It SHALL tell Claude that the order matters: the code is read before any recommendation is shown, not after the human pushes back.
