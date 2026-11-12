@@ -63,6 +63,13 @@ enum CapabilitiesFormat {
     Json,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum MachineFormat {
+    Text,
+    Json,
+    Ansi,
+}
+
 #[derive(Subcommand)]
 enum Command {
     /// Run every deterministic check; exit 1 on any violation.
@@ -557,6 +564,22 @@ enum Command {
         /// Print why the change selects this path: the chain from it to a changed file.
         #[arg(long, value_name = "PATH")]
         why: Option<String>,
+    },
+    /// Print the machine's CPU load, available memory and free disk, judged against what this
+    /// clone's builds use; exits 0 whatever the states.
+    Machine {
+        /// The form: three text lines, the model as JSON, or the chart rows with ANSI colour.
+        #[arg(long, value_enum, default_value = "text")]
+        format: MachineFormat,
+        /// The columns the chart rows fit.
+        #[arg(long, default_value_t = 80)]
+        width: usize,
+        /// Hours after which an unmerged claim has lapsed.
+        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
+        expiry: u64,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long)]
+        root: Option<PathBuf>,
     },
     /// Print one advisory report of the repository's health; exits 0 whatever it finds.
     Health {
@@ -1623,6 +1646,12 @@ fn dispatch() -> ExitCode {
             overlap,
             why,
         } => affected(&repo_root(root), base, readers, overlap, why.as_deref()),
+        Command::Machine {
+            format,
+            width,
+            expiry,
+            root,
+        } => machine(&repo_root(root), format, width, expiry),
         Command::Health { expiry, root } => health(&repo_root(root), expiry),
         Command::Workaround {
             requirement,
@@ -2219,6 +2248,32 @@ fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
 
 /// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
 /// when the settings or the graph can't be loaded, 2 when git fails.
+/// `clm machine`: the readings in the chosen form, with `config`'s `max_builds`; exit 0 whatever
+/// the states, 1 only when its output can't be written (`machine-command`).
+fn machine(root: &Path, format: MachineFormat, width: usize, expiry: u64) -> ExitCode {
+    use std::io::Write;
+    let max_builds = match clm_config::load(Some(root), &clm_config::process_env) {
+        Ok(s) => s.max_builds.value,
+        Err(e) => {
+            eprintln!("clm machine: settings: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let snapshot = clm_machine::read(root, max_builds, expiry, clm_git::now());
+    let out = match format {
+        MachineFormat::Text => clm_machine::text(&snapshot.report),
+        MachineFormat::Json => format!("{}\n", clm_machine::json(&snapshot.report)),
+        MachineFormat::Ansi => clm_machine::rows(&snapshot.report, &snapshot.history, width),
+    };
+    match std::io::stdout().write_all(out.as_bytes()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("clm machine: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn health(root: &Path, expiry: u64) -> ExitCode {
     let settings = match clm_config::load(Some(root), &clm_config::process_env) {
         Ok(s) => s,

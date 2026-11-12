@@ -30,6 +30,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         C::Status { root, .. }
         | C::Backlog { root, .. }
         | C::View { root, .. }
+        | C::Machine { root, .. }
         | C::Setup { root } => at(root.as_deref(), false),
         C::Defect { .. } | C::Config { .. } | C::Init { .. } | C::Upgrade { .. } => at(None, false),
         C::Check { root, .. }
