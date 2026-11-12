@@ -1513,6 +1513,18 @@ fn autosync_snapshots_capabilities() {
 }
 
 #[test]
+fn autosync_snapshots_agents_md() {
+    // req:sync/agents-md-spec-path@353e8eb7
+    let r = repo("spec/x");
+    write(&r.work, "AGENTS.md", "# Agents\n");
+
+    autosync(&r.work).unwrap();
+    let tip = autosync_tip(&r, "spec/x").expect("pushed");
+    let files = git(&r.origin, &["ls-tree", "-r", "--name-only", &tip]);
+    assert!(files.lines().any(|f| f == "AGENTS.md"), "{files}");
+}
+
+#[test]
 fn autosync_pushes_nothing_new() {
     // req:sync/autosync@9720eb37
     let r = repo("spec/x");

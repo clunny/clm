@@ -19,7 +19,7 @@ fn main_ref() -> String {
     format!("{REMOTE}/main")
 }
 /// The paths autosync snapshots (`autosync-policy`), as `clm gate` counts spec paths.
-const SPEC_PATHS: [&str; 7] = [
+const SPEC_PATHS: [&str; 8] = [
     "specs",
     "changes",
     "backlog",
@@ -27,6 +27,7 @@ const SPEC_PATHS: [&str; 7] = [
     "ARCHITECTURE.md",
     "CAPABILITIES.md",
     "CLAUDE.md",
+    "AGENTS.md",
 ];
 
 /// A refusal (`Refused`, exit 1) or a git failure (`Git`, exit 2): `clm-git`'s shared
