@@ -50,6 +50,14 @@ fn agents_md_holds_the_instructions() {
 
 // req:clm/claude-md-pushes-with-clm@af3228bd
 #[test]
+fn claude_md_alone_pushes_through_clm() {
+    let ok = [("CLAUDE.md", "use clm branch push")];
+    assert_eq!(push_violation(&ok), Ok(()));
+    assert!(push_violation(&[("CLAUDE.md", "git push")]).is_err());
+}
+
+// req:clm/claude-md-pushes-with-clm@af3228bd
+#[test]
 fn no_clm_branch_push_fails() {
     let none = [("CLAUDE.md", "@AGENTS.md"), ("AGENTS.md", "nothing")];
     assert!(push_violation(&none).is_err());
