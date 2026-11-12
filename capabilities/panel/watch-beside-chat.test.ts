@@ -56,7 +56,7 @@ const made: string[] = []
 afterAll(() => made.forEach(d => rmSync(d, { recursive: true, force: true })))
 
 test('the pane shows the new state when a build lands, without being asked', async () => {
-  // req:capability/watch-beside-chat@f9f81008
+  // req:capability/watch-beside-chat@9ddcb34b
   const top = realpathSync(mkdtempSync(join(tmpdir(), 'clm-panel-')))
   made.push(top)
   const origin = join(top, 'origin.git')
