@@ -46,6 +46,14 @@ fn switch_tools_mid_change() {
     // From Codex: the same approval counts, and the build claims, builds and lands.
     let land = repo.clm_env(&["land", "spec/cap"], "", &CODEX);
     assert_eq!(repo.origin_main(), landed(&land));
+    let before = repo.clm_env(&["next"], "", &CLAUDE_CODE);
+    assert!(
+        String::from_utf8_lossy(&before.stdout)
+            .lines()
+            .any(|l| l.split_whitespace().next() == Some("a")),
+        "{}",
+        printed(&before)
+    );
     let claim = repo.clm_env(&["claim", "a"], "", &CODEX);
     assert!(claim.status.success(), "{}", printed(&claim));
     // A Claude Code session sees the claim.
@@ -55,7 +63,7 @@ fn switch_tools_mid_change() {
     assert!(
         !String::from_utf8_lossy(&next.stdout)
             .lines()
-            .any(|l| l.starts_with("a ")),
+            .any(|l| l.split_whitespace().next() == Some("a")),
         "{}",
         printed(&next)
     );
@@ -91,7 +99,7 @@ fn switch_tools_mid_change() {
     // The ledger holds both lands in the one form, whichever tool landed.
     let ledger = repo.ledger();
     let lands: Vec<_> = ledger.iter().filter(|r| r[0] == "landed").collect();
-    assert!(lands.len() >= 2, "{ledger:?}");
+    assert_eq!(lands.len(), 2, "{ledger:?}");
     assert!(
         lands.iter().all(|r| r.len() == lands[0].len()),
         "{ledger:?}"
@@ -121,4 +129,9 @@ fn approve_under_a_harness_that_cannot_ask() {
     );
     let land = repo.clm_env(&["land", "spec/cap"], "", &CODEX);
     assert!(!land.status.success(), "{}", printed(&land));
+    assert!(
+        printed(&land).contains("gate/approval"),
+        "{}",
+        printed(&land)
+    );
 }
