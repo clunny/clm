@@ -2,7 +2,7 @@
 
 #[test]
 fn setup_runs_in_the_root_it_is_given() {
-    // req:orchestrator.run/setup-command@44d5d292
+    // req:orchestrator.run/setup-command@fdb7c407
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(
         dir.path().join("clm.toml"),
