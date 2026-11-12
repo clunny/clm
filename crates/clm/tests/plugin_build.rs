@@ -820,12 +820,19 @@ fn build_follows_agent_harness() {
         "--review-model",
     ];
     assert_eq!(text_gaps("build", &body, &must, &[]), Vec::<String>::new());
-    for needle in must {
-        let gaps = text_gaps("build", &body.replace(needle, "elided"), &must, &[]);
-        assert!(
-            gaps.iter().any(|g| g.contains(needle)),
-            "{needle}: {gaps:?}"
-        );
+    // Each rule is tied to the capability that is `no`, in the paragraph that runs the check.
+    let para = body
+        .lines()
+        .find(|l| l.contains("clm agent-harness"))
+        .unwrap();
+    for needle in [
+        "Where `isolated-worktrees` is `no`, add each build's worktree",
+        "tell the build, before the launcher `clm run` printed, to work in that directory",
+        "`clm run --finish` and `clm wrap-up` tidy it",
+        "Where `subagents` is `no`, build the components one at a time in this session itself",
+        "Where `model-choice` is `no`, launch with this session's own model and pass its name as `--review-model`",
+    ] {
+        assert!(para.contains(needle), "{needle}");
     }
     // The check comes before the first launch.
     let step = body
