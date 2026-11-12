@@ -186,6 +186,7 @@ fn slimmer_gaps(fm: &serde_yaml::Value, body: &str) -> Vec<String> {
             "#### Enforced by",
             "docs/decisions/",
             "#### Needs",
+            "say so beside the proposal",
             "Never edit",
             "severity",
         ]
