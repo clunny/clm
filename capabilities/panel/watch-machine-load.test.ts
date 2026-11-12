@@ -47,7 +47,8 @@ test('the pane charts cpu, mem and disk after 30 seconds', async () => {
 
   await engine.advance(30_000)
   const rows = () => engine.pane().split('\n').map(l => l.trim())
-  await expect.poll(() => rows().some(l => l.startsWith('disk'))).toBe(true)
+  // The first run of a debug `clm` can take a while.
+  await expect.poll(() => rows().some(l => l.startsWith('disk')), { timeout: 20_000 }).toBe(true)
   for (const name of ['cpu', 'mem', 'disk']) {
     const row = rows().find(l => l.startsWith(name))
     expect(row, `a ${name} row in:\n${engine.pane()}`).toBeDefined()
