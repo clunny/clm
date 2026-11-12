@@ -1176,12 +1176,19 @@ fn triage_verify_log() {
     for needle in [
         "`check-step-markers`",
         "`::endgroup::`",
+        "the step open as the output ended",
+        "kept no output",
         "culprit and components alone",
     ] {
         assert!(show.contains(needle), "{needle}: {show}");
     }
     let item = sentence_with(&body, "the failing step");
-    for needle in ["the log's path", "culprit land", "`verify-after-land`"] {
+    for needle in [
+        "when a log was kept",
+        "the lines that show the failure",
+        "the log's path",
+        "culprit land and its change (`verify-after-land`), on",
+    ] {
         assert!(item.contains(needle), "{needle}: {item}");
     }
 }
