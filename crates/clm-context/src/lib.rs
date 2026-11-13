@@ -120,13 +120,15 @@ pub fn served_capabilities<'g>(graph: &'g Graph, node: &Node) -> Vec<&'g Require
     capabilities.filter(|c| named.contains(&&c.id)).collect()
 }
 
-/// `target`'s direct dependencies that aren't on its spine, sorted and deduplicated.
+/// `target`'s direct dependencies, `depends_on` and `test_depends_on`, that aren't on its
+/// spine, sorted and deduplicated.
 fn dependencies<'g>(graph: &'g Graph, target: &'g Node) -> Vec<&'g Node> {
     let on_spine: Vec<&str> = spine(graph, target).iter().map(|n| n.id.as_str()).collect();
     let mut deps: Vec<&Node> = target
         .frontmatter
         .depends_on
         .iter()
+        .chain(&target.frontmatter.test_depends_on)
         .filter(|d| !on_spine.contains(&d.as_str()))
         .filter_map(|d| graph.nodes.get(d))
         .collect();
