@@ -1424,6 +1424,8 @@ fn answered_question_that_blocks_nothing_is_no_violation() {
     );
     resolving(d, &["q"]);
     valid_delta(d);
+    let (_, before) = load(d);
+    assert_eq!(rules(&before), ["model/parse-backlog"]);
     apply(d, "c").unwrap();
     assert!(!d.join("backlog/q.md").exists());
     assert_check_clean(d);
