@@ -36,12 +36,12 @@ clm-host.workspace = true
 clm-rename.workspace = true
 clm-upgrade.workspace = true
 clm-machine.workspace = true
+clm-loop.workspace = true
 clap.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-clm-loop.workspace = true
 sha2.workspace = true
 roxmltree = "0.21"
 serde_yaml.workspace = true

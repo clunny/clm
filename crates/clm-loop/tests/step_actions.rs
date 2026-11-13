@@ -1,5 +1,5 @@
-//! `clm build step` and `launched`. These tests cite no requirement: `step-actions` stays unbuilt until the
-//! `clm build` dispatch and the capability test move can land (the backlog item that blocks it).
+//! `clm build step` and `launched` (`step-actions`). The `clm build` dispatch and the capability
+//! test that drains its queue through it are in `crates/clm`.
 
 mod common;
 
@@ -10,6 +10,7 @@ use common::{Fixture, line};
 
 #[test]
 fn an_unreported_launch() {
+    // req:orchestrator.loop/step-actions@c4f86a80
     let fx = Fixture::new();
     fx.set("next", "a\n");
     let first = step(&fx.options()).unwrap();
@@ -29,6 +30,7 @@ fn an_unreported_launch() {
 
 #[test]
 fn launched_records_the_task() {
+    // req:orchestrator.loop/step-actions@c4f86a80
     let fx = Fixture::new();
     fx.set("next", "a\n");
     step(&fx.options()).unwrap();
@@ -43,6 +45,7 @@ fn launched_records_the_task() {
 
 #[test]
 fn the_launcher_names_the_run() {
+    // req:orchestrator.loop/step-actions@c4f86a80
     let fx = Fixture::new();
     fx.set("next", "a\n");
     let actions = step(&fx.options()).unwrap();
@@ -58,6 +61,7 @@ fn the_launcher_names_the_run() {
 
 #[test]
 fn nothing_to_do_waits() {
+    // req:orchestrator.loop/step-actions@c4f86a80
     let fx = Fixture::new();
     assert_eq!(step(&fx.options()).unwrap(), ["wait"]);
     assert!(fx.file().lease.is_some(), "every command renews the lease");
