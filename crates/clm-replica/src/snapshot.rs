@@ -275,9 +275,20 @@ fn backlog(graph: &Graph, files: &Files) -> Vec<BacklogView> {
                 .get(&i.path)
                 .and_then(|bytes| std::str::from_utf8(bytes).ok())
                 .and_then(clm_model::split_frontmatter)
-                .map_or_else(String::new, |(_, body)| body.trim().to_string()),
+                .map_or_else(String::new, |(_, body)| blank_lines_trimmed(body)),
             priority: i.frontmatter.priority.to_string(),
             choices: i.frontmatter.choices.clone(),
         })
         .collect()
+}
+
+/// The text without its leading and trailing blank lines; the first line's indentation stays.
+fn blank_lines_trimmed(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let first = lines.iter().position(|l| !l.trim().is_empty());
+    let last = lines.iter().rposition(|l| !l.trim().is_empty());
+    match (first, last) {
+        (Some(a), Some(b)) => lines[a..=b].join("\n"),
+        _ => String::new(),
+    }
 }
