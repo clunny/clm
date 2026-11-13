@@ -71,7 +71,7 @@ fn repo() -> TempDir {
 
 #[test]
 fn dependency_contract_only() {
-    // req:context/bundle-contents@88b3e0e8
+    // req:context/bundle-contents@1db0ecd6
     let dir = repo();
     write(dir.path(), "specs/b/assets/bm.html", "BM-CONTENT\n");
     let out = clm_context(dir.path(), &["a"]);
@@ -109,7 +109,7 @@ fn dependency_contract_only() {
 
 #[test]
 fn assets_listed_not_included() {
-    // req:context/bundle-contents@88b3e0e8
+    // req:context/bundle-contents@1db0ecd6
     let dir = repo();
     write(dir.path(), "specs/a/assets/mockups/m.html", "M-CONTENT\n");
     write(dir.path(), "specs/a/assets/b.png", "B-CONTENT\n");
@@ -136,7 +136,7 @@ fn assets_listed_not_included() {
 
 #[test]
 fn spine_assets_stay_out() {
-    // req:context/bundle-contents@88b3e0e8
+    // req:context/bundle-contents@1db0ecd6
     let dir = repo();
     write(dir.path(), "specs/a/assets/m.html", "M\n");
     write(dir.path(), "specs/a/n/assets/x.bin", "X\n");
@@ -177,7 +177,7 @@ fn bundle_from_equals_checkout() {
 #[test]
 fn bundle_from_equals_checkout_with_capabilities() {
     // req:context/bundle-from-text@418dfef8
-    // req:context/bundle-contents@88b3e0e8
+    // req:context/bundle-contents@1db0ecd6
     let dir = repo();
     write(
         dir.path(),
@@ -210,7 +210,7 @@ fn bundle_from_equals_checkout_with_capabilities() {
 
 #[test]
 fn nested_node_sees_its_spine_in_order() {
-    // req:context/bundle-contents@88b3e0e8
+    // req:context/bundle-contents@1db0ecd6
     let dir = repo();
     let text = stdout(&clm_context(dir.path(), &["a.n"]));
     let pos = |s: &str| {
