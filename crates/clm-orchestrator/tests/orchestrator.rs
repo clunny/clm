@@ -801,10 +801,10 @@ fn converged() -> Repo {
 #[test]
 fn scenario_next_wait_wait_refused() {
     // req:orchestrator/next-wait@1946593e
-    for args in [["next", "--wait"], ["next", "--interval=5"]] {
+    for args in [vec!["next", "--wait"], vec!["next", "--interval", "5"]] {
         let out = std::process::Command::new(env!("CARGO"))
             .args(["run", "-q", "-p", "clm", "--"])
-            .args(args)
+            .args(&args)
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .output()
             .unwrap();
