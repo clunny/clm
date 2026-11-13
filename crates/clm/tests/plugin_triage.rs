@@ -1192,3 +1192,50 @@ fn triage_verify_log() {
         assert!(item.contains(needle), "{needle}: {item}");
     }
 }
+
+/// What `triage-web-answers` asks of a `triage` skill.
+fn web_answers_gaps(body: &str) -> Vec<String> {
+    text_gaps(
+        "triage",
+        body,
+        &[
+            "answered <slug> <writer> <at> <answer>",
+            "answered in the web app by <writer> at <at>",
+        ],
+        &[],
+    )
+}
+
+#[test]
+fn triage_takes_web_answers() {
+    // req:plugin.triage/triage-web-answers@4b782100
+    let body = skill_body("triage");
+    assert_eq!(web_answers_gaps(&body), Vec::<String>::new());
+    let gaps = web_answers_gaps(&body.replace("answered in the web app by", "elided"));
+    assert_reports(
+        &gaps,
+        "triage",
+        "answered in the web app by <writer> at <at>",
+    );
+    let line = sentence_with(&body, "`answered <slug> <writer> <at> <answer>`");
+    for needle in [
+        "`human` line",
+        "web app",
+        "`web-answers-as-ledger-records`",
+        "`done`",
+        "`human-task`",
+        "show it with the item",
+        "disagree",
+        "ask the human which holds",
+    ] {
+        assert!(line.contains(needle), "{needle}: {line}");
+    }
+    let record = sentence_with(&body, "(answered in the web app by <writer> at <at>)");
+    for needle in [
+        "`.clm/answers.md`",
+        "`<slug>: <answer> (answered",
+        "draft the item",
+    ] {
+        assert!(record.contains(needle), "{needle}: {record}");
+    }
+}
