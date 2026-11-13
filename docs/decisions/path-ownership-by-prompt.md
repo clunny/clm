@@ -25,3 +25,5 @@ Rejected:
 (Amended 2026-11-05, `20261105-capability-harness-move-has`: the exception also covers a build updating a capability test whose observations its requirement changes (`capability-tests-follow-rules`); the edge cases above are unchanged.)
 
 (Amended 2026-11-09, `20261109-land-still-sets-cargo`: the exception also covers a build that changes a file `clm init` writes writing the `upgrade` migration that carries it, as stated (`template-change-ships-its-migration`); the prompt says so (`orchestrator.run/template-migration-fix`), and the edge cases above are unchanged.)
+
+(Amended 2026-11-12, `20261112-path-ownership-names-no`: the exception also covers a build whose requirement a change moved to its component from another, as a split does (`nested-splits`), moving the code and the tests that can move out of the other component's `paths`, rewiring that component's imports to reach the moved code and re-pointing the moved requirement's markers; the prompt says so (`orchestrator.run/split-move-fix`), and the edge cases above are unchanged, the tests kept under another node's `paths` because of Cargo among them.)
