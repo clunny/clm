@@ -258,19 +258,6 @@ fn skill_gaps(skill: &str, body: &str) -> Vec<String> {
             "## Intent",
             REBASE_RULE,
         ],
-        // Each change `clm wrap-up` reports `complete <id>` is archived through a code
-        // branch it lands.
-        "build" => &[
-            "clm next",
-            "clm run",
-            "isolation",
-            "clm rebase",
-            "clm pending",
-            "clm land",
-            "clm wrap-up",
-            "`complete <id>`",
-            "impl/archive",
-        ],
         // `clm rebase`'s outcome is its last line, never its exit code.
         "init" => &[REBASE_RULE],
         _ => &[],
@@ -336,9 +323,6 @@ fn skills() {
         gaps,
         [format!("build: SKILL.md must name `{APPROVE_RULE}`")]
     );
-    // skill without sync
-    let gaps = skill_gaps("build", &build.replace("clm rebase", "elided"));
-    assert_eq!(gaps, ["build: SKILL.md must name `clm rebase`"]);
     // skill without land
     let gaps = skill_gaps("propose", &propose.replace("clm land", "elided"));
     assert!(
@@ -351,13 +335,6 @@ fn skills() {
     let gaps = skill_gaps("propose", &format!("{propose}\nSet `prefer_after`.\n"));
     assert!(
         gaps.len() == 1 && gaps[0].starts_with("propose:") && gaps[0].contains("prefer_after"),
-        "{gaps:?}"
-    );
-    // build without archiving
-    let gaps = skill_gaps("build", &build.replace("complete", "done"));
-    assert!(
-        gaps.iter()
-            .any(|g| g.starts_with("build:") && g.contains("complete")),
         "{gaps:?}"
     );
     // sync read by its exit code
@@ -424,15 +401,6 @@ fn skills() {
         gaps.contains(&"propose: SKILL.md must not name `gh api`".to_owned()),
         "{gaps:?}"
     );
-    // The archive is `clm rebase` on that branch and a code branch it lands, never a push to
-    // main.
-    let sentence = sentence_with(&build, "impl/archive");
-    for needle in ["clm rebase", "code branch", "land"] {
-        assert!(
-            sentence.contains(needle),
-            "build must archive with {needle}: {sentence}"
-        );
-    }
 }
 
 fn names_the_old_hash_command(text: &str) -> bool {
@@ -491,14 +459,23 @@ fn defect_gaps(skill: &str, body: &str) -> Vec<String> {
     let mut gaps = text_gaps(
         skill,
         body,
-        &[
-            "clm defect",
-            "## CLM defects",
-            "neither reported nor fixed",
-            "each fixed one with its fix",
-            "naming with `--component` the component a fix would lie in",
-            "unless the session-start rule has it folded into the branch",
-        ],
+        // `build` opens no pull request: it reports each defect when it happens, and its
+        // loop drafts them (`plugin.build/build-runs-the-loop`).
+        if skill == "build" {
+            &[
+                "clm defect",
+                "naming with `--component` the component a fix would lie in",
+            ]
+        } else {
+            &[
+                "clm defect",
+                "## CLM defects",
+                "neither reported nor fixed",
+                "each fixed one with its fix",
+                "naming with `--component` the component a fix would lie in",
+                "unless the session-start rule has it folded into the branch",
+            ]
+        },
         &[],
     );
     let fix_step = body
@@ -549,9 +526,9 @@ fn skills_check_for_defects_before_a_pr() {
     }
     let build = skill_body("build");
     assert_eq!(defect_gaps("build", &build), Vec::<String>::new());
-    // skill without the check
-    let gaps = defect_gaps("build", &build.replace("## CLM defects", "elided"));
-    assert_reports(&gaps, "build", "## CLM defects");
+    // skill without the report
+    let gaps = defect_gaps("build", &build.replace("clm defect", "elided"));
+    assert_reports(&gaps, "build", "clm defect");
     // skill without fixed defects
     let propose = skill_body("propose");
     let gaps = defect_gaps(
@@ -895,27 +872,6 @@ fn skills_run_a_builder_check() {
         check < pr,
         "skills/propose/SKILL.md must run the builder check before opening the pull request"
     );
-    // `build` lists the blocking items when it stops, in its summary at the end.
-    let (_, body) = frontmatter(&plugin().join("skills/build/SKILL.md"));
-    let end = numbered_steps(&body)
-        .into_iter()
-        .find(|s| s.contains("At the end"))
-        .expect("skills/build/SKILL.md must have a step for the end");
-    for needle in ["`question`", "`human-task`", "requirements they block"] {
-        assert!(
-            end.contains(needle),
-            "skills/build/SKILL.md's last step must mention {needle}"
-        );
-    }
-    // Stopping early still ends with that summary.
-    let stop = body
-        .lines()
-        .find(|l| l.starts_with("Stop and tell the user"))
-        .expect("skills/build/SKILL.md must say when to stop");
-    assert!(
-        stop.contains("step 5's summary"),
-        "skills/build/SKILL.md must end an early stop with step 5's summary"
-    );
 }
 
 #[test]
@@ -1088,7 +1044,7 @@ fn wrap_up_left_lines() {
     assert_eq!(wrap_up_gaps(&skills), Vec::<String>::new());
     // Each skill that runs `clm wrap-up` passes the left lines on, and none of them
     // does it by pruning worktrees itself.
-    for name in ["build", "triage", "propose", "contribution", "init"] {
+    for name in ["triage", "propose", "contribution", "init"] {
         let body = skill_body(name);
         let p = body
             .split("\n\n")
@@ -1122,12 +1078,6 @@ fn worktree_gaps(skill: &str, body: &str) -> Vec<String> {
             "git switch -c spec/<id> origin/main",
         ],
         "init" => &["git worktree add .claude/worktrees/<YYYYMMDD>-init"],
-        "build" => &[
-            "git worktree add .claude/worktrees/archive -b impl/archive/<id> origin/main",
-            "git worktree remove",
-            "git switch -c impl/archive/<id> origin/main",
-            "git switch --detach origin/main",
-        ],
         _ => &[],
     };
     text_gaps(skill, body, must, &[])
@@ -1136,7 +1086,7 @@ fn worktree_gaps(skill: &str, body: &str) -> Vec<String> {
 #[test]
 fn skills_cut_branches_in_worktrees() {
     // req:plugin/session-worktrees@651acb1c
-    for skill in ["propose", "init", "build"] {
+    for skill in ["propose", "init"] {
         let body = skill_body(skill);
         assert_eq!(worktree_gaps(skill, &body), Vec::<String>::new());
         // a skill switching the shared checkout, or leaving its worktree behind
@@ -1207,26 +1157,6 @@ fn skills_cut_branches_in_worktrees() {
         init.find("pushes this one commit").unwrap() < init.find("git worktree add").unwrap(),
         "init: the worktree comes after the bootstrap push"
     );
-    // build removes the archive worktree once it has landed.
-    let build = skill_body("build");
-    let landed = sentence_with(&build, "remove the worktree with `git worktree remove");
-    assert!(landed.contains("landed"), "{landed}");
-    // build archiving with no step for an isolated session
-    let gaps = worktree_gaps(
-        "build",
-        &build.replace("git switch -c impl/archive/<id>", "elided"),
-    );
-    assert_reports(&gaps, "build", "git switch -c impl/archive/<id>");
-    let archive = sentence_with(&build, "git switch -c impl/archive/<id> origin/main");
-    for needle in [
-        "removes no worktree",
-        "git switch --detach origin/main",
-        "or its push was refused",
-        "git branch -D",
-        "clm wrap-up",
-    ] {
-        assert!(archive.contains(needle), "{needle}: {archive}");
-    }
 }
 
 /// The sentences of `text` that tell Claude to push other than with `clm branch push`: a
@@ -1759,7 +1689,8 @@ const OWN_MODEL: &str = "the session's own model";
 /// text it lacks. Empty when it says it all.
 fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
     let must: &[&str] = match skill {
-        "build" => &["--review-model", SONNET, OWN_MODEL],
+        // The launches of `build` are `clm build`'s action lines, which name their models.
+        "build" => &[],
         "triage" | "propose" => &[SONNET, OWN_MODEL],
         "contribution" => &[OWN_MODEL],
         _ => &[SONNET],
@@ -1794,23 +1725,6 @@ fn launch_models() {
             "{agent}: frontmatter must set model: sonnet"
         );
     }
-    // build launched without a model
-    let body = skill_body("build");
-    let gaps = launch_model_gaps("build", &body.replace(SONNET, "elided"));
-    assert_reports(&gaps, "build", SONNET);
-    // A retry after a stop that no backlog item or spec change explains runs on the
-    // session's own model.
-    let retry = sentence_with(&body, "stopped without landing");
-    assert!(retry.contains(OWN_MODEL), "{retry}");
-    // Each launch's own sentence names its model, not just some line of the file.
-    let first = sentence_with(&body, "run `clm run <component> --review-model <alias>`");
-    assert!(
-        first.contains("--review-model") && first.contains(SONNET),
-        "{first}"
-    );
-    // A bug draft designs, so it runs on the session's own model (`build-drafts-bugs`).
-    let draft = sentence_with(&body, "run `clm draft <slug>...`");
-    assert!(draft.contains(OWN_MODEL), "{draft}");
     for (skill, launch) in [
         ("propose", "Launch a fresh subagent"),
         ("health", "launch the `spec-slimmer` subagent"),
@@ -1824,8 +1738,6 @@ fn launch_models() {
     let triage = skill_body("triage");
     assert!(sentence_with(&triage, "clm draft <slug>...").contains(OWN_MODEL));
     assert!(sentence_with(&triage, "clm draft --fold <id>...").contains(SONNET));
-    // The build skill's fold runs on a named model too.
-    assert!(sentence_with(&body, "clm draft --fold <id>...").contains(SONNET));
 }
 
 /// The words that must stand beside any mention of the Agent tool.
@@ -2727,7 +2639,7 @@ fn skills_push_with_clm() {
     for name in &names {
         assert_eq!(raw_push_gaps(name, &skill_body(name)), Vec::<String>::new());
     }
-    for name in ["propose", "contribution", "triage", "build"] {
+    for name in ["propose", "contribution", "triage"] {
         let gaps = text_gaps(name, &skill_body(name), &["clm branch push"], &[]);
         assert_eq!(gaps, Vec::<String>::new());
     }
@@ -2765,20 +2677,10 @@ fn permission_check_gaps(skill: &str, body: &str) -> Vec<String> {
 #[test]
 fn skills_check_the_permission_rules() {
     // req:plugin/unattended-permissions-check@e8390775
-    for name in ["build", "triage"] {
-        assert_eq!(
-            permission_check_gaps(name, &skill_body(name)),
-            Vec::<String>::new()
-        );
-    }
-    let build = skill_body("build");
-    let gaps = text_gaps(
-        "build",
-        &build,
-        &["clm branch push", "clm branch delete"],
-        &[concat!("git", " push --force-with-lease")],
+    assert_eq!(
+        permission_check_gaps("triage", &skill_body("triage")),
+        Vec::<String>::new()
     );
-    assert_eq!(gaps, Vec::<String>::new());
     // the check comes before the first launch
     let triage = skill_body("triage");
     assert!(
@@ -2810,9 +2712,7 @@ fn lacks(skill: &str, body: &str, needles: &[&str]) -> Vec<String> {
 fn skills_run_verify() {
     // req:plugin/skills-run-verify@b8bb7c23
     let run = "clm verify --due --event work-done";
-    let build = skill_text("build");
     let triage = skill_text("triage");
-    assert_eq!(lacks("build", &build, &[run]), Vec::<String>::new());
     let triage_needles = [
         run,
         "clm verify --import",
@@ -2826,12 +2726,11 @@ fn skills_run_verify() {
         lacks("triage", &triage, &triage_needles),
         Vec::<String>::new()
     );
-    // Verify comes before the last wrap-up, in both.
-    for (name, body) in [("build", &build), ("triage", &triage)] {
-        let at = body.find(run).unwrap();
-        let wrap = body.rfind("`clm wrap-up`").unwrap();
-        assert!(at < wrap, "{name}: verify must precede the last wrap-up");
-    }
+    // Verify comes before the last wrap-up. `build`'s loop runs `clm verify` itself
+    // (`orchestrator.loop/plan-verify`), so its skill names neither.
+    let at = triage.find(run).unwrap();
+    let wrap = triage.rfind("`clm wrap-up`").unwrap();
+    assert!(at < wrap, "triage: verify must precede the last wrap-up");
     assert!(triage.find("clm verify --import").unwrap() < triage.find("`clm intake`").unwrap());
     let gaps = lacks(
         "triage",

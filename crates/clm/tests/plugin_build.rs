@@ -108,3 +108,83 @@ fn build_skill_points_at_the_queue() {
         assert!(body.contains(needle), "{needle} missing from the skill");
     }
 }
+
+/// What `build-runs-the-loop` forbids in the skill: the scheduling commands the loop owns.
+fn scheduling_gaps(body: &str) -> Vec<String> {
+    ["clm next", "clm run ", "clm draft ", "clm wrap-up"]
+        .iter()
+        .filter(|word| body.contains(**word))
+        .map(|word| format!("names `{}`", word.trim_end()))
+        .collect()
+}
+
+fn skill_body() -> String {
+    frontmatter(&plugin().join("skills/build/SKILL.md")).1
+}
+
+#[test]
+fn build_skill_runs_the_loop() {
+    // req:plugin.build/build-runs-the-loop@2855dcca
+    let body = skill_body();
+    for needle in [
+        "clm build start --session-model",
+        "clm build launched",
+        "clm build cleared disk",
+        "clm defect",
+        "clm build returned",
+        "clm build wait",
+        "clm build step",
+        "clm build stop --drain",
+        "clm build stop --now",
+        "--take-over",
+        "isolation: \"worktree\"",
+        "--component",
+        "clm view queue",
+        "clm branch delete",
+        "SendMessage",
+        "TaskStop",
+        "--cause tool",
+        "--cause stopped",
+    ] {
+        assert!(body.contains(needle), "{needle} missing from the skill");
+    }
+    assert_eq!(scheduling_gaps(&body), Vec::<String>::new());
+    assert!(!body.contains("fix reported defects"));
+    // A skill that tells Claude to schedule is reported.
+    let scheduling = format!("{body}\nRun `clm next` and launch what it prints.\n");
+    assert_eq!(scheduling_gaps(&scheduling), ["names `clm next`"]);
+}
+
+#[test]
+fn build_skill_reads_the_cause() {
+    // req:plugin.build/build-reads-the-cause@8d547a1d
+    let body = skill_body();
+    for cause in [
+        "limit", "disk", "outage", "tool", "work", "context", "blocked", "stopped",
+    ] {
+        assert!(
+            body.contains(&format!("`{cause}`")),
+            "cause {cause} missing from the skill"
+        );
+    }
+    assert!(body.contains("--until"));
+    assert!(body.contains("--cause running"));
+    assert!(body.contains("one judgement"));
+}
+
+#[test]
+fn build_skill_approves_in_session() {
+    // req:plugin.build/build-approves-in-session@f1d6662e
+    let body = skill_body();
+    for needle in [
+        "clm approve spec/<batch>",
+        "clm build approved",
+        "## Intent",
+        "## Decisions",
+        "## Open questions",
+        "Never push `main` by any means but `clm land`",
+        "Run `clm approve` only after the human says yes in this conversation",
+    ] {
+        assert!(body.contains(needle), "{needle} missing from the skill");
+    }
+}
