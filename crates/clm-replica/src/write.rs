@@ -2,6 +2,7 @@
 //! before the replica held the tip and the ledgers (`replica/validate-writes`).
 
 use clm_ledger::Body;
+use clm_model::BacklogKind;
 
 use crate::State;
 use crate::compute;
@@ -17,6 +18,8 @@ pub enum Write {
     Decision { id: String, version: String },
     /// A proposed backlog item, with the components it names.
     Proposal { title: String, nodes: Vec<String> },
+    /// A person's answer to a backlog item.
+    Answer { item: String, answer: String },
 }
 
 /// What to append for a write that holds.
@@ -26,12 +29,14 @@ pub enum Validated {
     Decision { settles: Vec<String> },
     /// The slug the proposal files under.
     Proposal { slug: String },
+    /// The answer is one its item offers.
+    Answer,
 }
 
 /// Why a write is refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
-    /// A decision on an entry the tip doesn't hold, or a tip whose specs don't load.
+    /// A decision on an entry, or an answer to an item, the tip doesn't hold, or a tip whose specs don't load.
     Unknown,
     /// A decision in a repository that lists its signers.
     Signed,
@@ -39,7 +44,8 @@ pub enum Refusal {
     Stale,
     /// A proposal whose slug a backlog item, a change's `resolves` or an open proposal has.
     Taken,
-    /// A proposal naming a component the graph doesn't hold, or with no slug.
+    /// A proposal naming a component the graph doesn't hold, or with no slug, or an answer
+    /// its item doesn't offer.
     Invalid,
 }
 
@@ -80,6 +86,20 @@ pub(crate) fn validate(state: &State, write: &Write) -> Result<Validated, Refusa
                 return Err(Refusal::Taken);
             }
             Ok(Validated::Proposal { slug })
+        }
+        Write::Answer { item, answer } => {
+            let item = graph.backlog.get(item).ok_or(Refusal::Unknown)?;
+            let fm = &item.frontmatter;
+            let offered = match fm.kind {
+                BacklogKind::Question => fm.choices.contains(answer),
+                BacklogKind::Human => answer == "done",
+                _ => false,
+            };
+            if offered {
+                Ok(Validated::Answer)
+            } else {
+                Err(Refusal::Invalid)
+            }
         }
     }
 }

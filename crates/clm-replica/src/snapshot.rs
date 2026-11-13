@@ -80,6 +80,10 @@ struct BacklogView {
     nodes: Vec<String>,
     origin: Option<String>,
     blocks: Vec<String>,
+    /// The file's text after its frontmatter, trimmed.
+    body: String,
+    priority: String,
+    choices: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -181,7 +185,7 @@ pub(crate) fn build(state: &State, graph: &Graph, violations: &[String], files: 
         spec: serde_json::to_value(spec).unwrap_or(Value::Null),
         nodes: nodes(graph, complete.then_some(&cited)),
         changes: changes(graph, &markers, complete),
-        backlog: backlog(graph),
+        backlog: backlog(graph, files),
         resolved: graph
             .changes
             .values()
@@ -255,7 +259,7 @@ fn changes(graph: &Graph, markers: &[Marker], complete: bool) -> Vec<ChangeView>
 }
 
 /// In `clm backlog`'s order.
-fn backlog(graph: &Graph) -> Vec<BacklogView> {
+fn backlog(graph: &Graph, files: &Files) -> Vec<BacklogView> {
     let mut items: Vec<_> = graph.backlog.values().collect();
     items.sort_by(|a, b| (a.frontmatter.kind, &a.slug).cmp(&(b.frontmatter.kind, &b.slug)));
     items
@@ -267,6 +271,24 @@ fn backlog(graph: &Graph) -> Vec<BacklogView> {
             nodes: i.frontmatter.nodes.clone(),
             origin: i.frontmatter.origin.clone(),
             blocks: i.frontmatter.blocks.clone(),
+            body: files
+                .get(&i.path)
+                .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                .and_then(clm_model::split_frontmatter)
+                .map_or_else(String::new, |(_, body)| blank_lines_trimmed(body)),
+            priority: i.frontmatter.priority.to_string(),
+            choices: i.frontmatter.choices.clone(),
         })
         .collect()
+}
+
+/// The text without its leading and trailing blank lines; the first line's indentation stays.
+fn blank_lines_trimmed(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let first = lines.iter().position(|l| !l.trim().is_empty());
+    let last = lines.iter().rposition(|l| !l.trim().is_empty());
+    match (first, last) {
+        (Some(a), Some(b)) => lines[a..=b].join("\n"),
+        _ => String::new(),
+    }
 }

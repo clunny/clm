@@ -161,6 +161,7 @@ fn implementation(state: &State, graph: &Graph, fold: &Fold, now: u64) -> Value 
         "activity": activity(state, fold),
         "taken": taken(state, graph, now),
         "proposals": proposals(graph, fold),
+        "answers": answers(graph, fold),
     })
 }
 
@@ -213,6 +214,36 @@ fn proposals(graph: &Graph, fold: &Fold) -> Vec<Proposal> {
                 title: title.clone(),
                 body: body.clone(),
                 nodes: nodes.clone(),
+            }),
+            _ => None,
+        })
+        .collect();
+    open.sort_by(|a, b| (&a.at, &a.id).cmp(&(&b.at, &b.id)));
+    open
+}
+
+#[derive(Serialize)]
+struct Answer {
+    id: String,
+    writer: String,
+    at: String,
+    item: String,
+    answer: String,
+}
+
+/// The fold's open answers whose item the tip's backlog holds, by `at` then `id`.
+fn answers(graph: &Graph, fold: &Fold) -> Vec<Answer> {
+    let mut open: Vec<Answer> = fold
+        .answers
+        .values()
+        .flatten()
+        .filter_map(|r| match &r.body {
+            Body::Answered { item, answer } if graph.backlog.contains_key(item) => Some(Answer {
+                id: r.id.clone(),
+                writer: r.writer.clone(),
+                at: r.at.clone(),
+                item: item.clone(),
+                answer: answer.clone(),
             }),
             _ => None,
         })
