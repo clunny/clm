@@ -136,11 +136,15 @@ pub fn size_of(
             .or_default()
             .insert(node);
     }
+    let owners: BTreeMap<&Path, Option<&str>> = files
+        .keys()
+        .map(|f| (f.as_path(), crate::owner(graph, f)))
+        .collect();
     graph
         .nodes
         .values()
         .map(|node| {
-            let owns = |file: &Path| crate::owner(graph, file) == Some(node.id.as_str());
+            let owns = |file: &Path| owners.get(file) == Some(&Some(node.id.as_str()));
             let counts = |file: &Path, in_tests: bool| match cited.get(&(file, in_tests)) {
                 Some(nodes) => nodes.contains(node.id.as_str()),
                 None => owns(file),
