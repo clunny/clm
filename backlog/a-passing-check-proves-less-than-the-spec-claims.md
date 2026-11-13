@@ -60,7 +60,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 **2. Delete.**
 - `clm runner` and `orchestrator.runner`.
-- The prompt-text requirements and their tests.
+- The prompt-text requirements and their tests. `plugin.propose/builder-check` is already answered: deleted whole, with its string-scan tests (`backlog/moving-the-builder-check-rule-builds-tests-the-plan-deletes`, which the change deletes). An instruction that must hold gets a backlog item for the program that will hold it, as `backlog/spec-shapes-the-builder-check-warns-about-are-refused-by-nothing` does for the builder check's rules; nothing of that kind is built in this phase.
 - The superseded decisions; fold the amended ones into one text each.
 - Stale workaround flags and detector allowances, closing the test gaps behind them: `workaround-gate-classify-1` and `workaround-web.views-home-waiting-on-you-1` name blockers that are built, and `clm_upgrade::check_lock`'s stated condition is met.
 
