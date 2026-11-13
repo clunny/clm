@@ -27,3 +27,22 @@ Rejected:
 - **`clm check` failing an exemption whose item is gone or whose files are gone.** The code fix would then fail its own land and need a spec edit beside it, which the gate refuses as `mixed`.
 - **A deadline date per exemption.** When the work is due is the human's call, made by its item's priority; `clm health` shows what is left.
 - **Names:** *waiver* (legalistic), *allowance* (sounds permanent, and the detector allowances already use it), *deferral* (too close to the `deferred` backlog kind).
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `exemptions-end` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+
+A rule `clm check` judges code by SHALL hold for every file a component owns, except a file that one of that component's exemptions names for that rule; each exemption SHALL name its rule, its files and the backlog item whose work ends it, SHALL be added only by a change a human reviews, and SHALL stay in sight until a change removes it (`temporary-exemptions`). Code CLM makes no claims about at all, such as code not adopted yet or vendored code, is the root's `outside` instead (`incremental-adoption`).
+
+**Scenario: adopting a suite that imports the app**
+- GIVEN an existing test suite, adopted into feature components, whose tests import the app's entry point above them
+- WHEN the first spec graph is written
+- THEN each feature that owns such tests holds an exemption from `undeclared-imports` for them, naming the item that has its builds prove its requirements through its own surface, and `clm check` passes
+
+**Scenario: an exemption a build would add**
+- GIVEN a build whose requirement needs an import its component's `depends_on` doesn't allow
+- WHEN it builds
+- THEN it adds no exemption, leaves the requirement unbuilt, and adds a `question` item whose `blocks` names it
+
+**Untested**
+When an exemption's work is done is the human's call, made by ordering its item in the backlog; `clm health` shows each exemption, how much it still covers and whether its item is gone.

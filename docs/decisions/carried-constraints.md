@@ -27,3 +27,22 @@ Rejected:
 - **Supply from the binary and refresh a copy in the file.** A second copy that drifts (`regenerate-dont-merge`, `spec-is-current`).
 - **Let a project switch any constraint off with a warning.** A project without `proven-by-tests` or `land-locally` breaks the mechanisms CLM runs on, so the warning would describe a breakage rather than a choice.
 - **Have the auditor's verdict gate a replacement.** Model judgment advises and never gates; the auditor makes sure the human is asked the right question.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `carried-constraints` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+
+CLM's constraints that govern how any project is built with it SHALL reach every project from the `clm` it runs, never as a copy that can fall behind. Each such entry of CLM's `ARCHITECTURE.md` holds a `#### Carries` block naming its tier: `method`, which a project can't replace; `replaceable`, whose `#### Guarantee` block states what CLM relies on, which a project may replace with its own constraint keeping that guarantee; or `default`, an opinion a project may drop. A project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, an edit a human reviews; the `architecture-auditor` advises whether a replacement keeps the guarantee (`deterministic-enforcement`).
+
+**Scenario: replacing a method constraint**
+- GIVEN a project whose `ARCHITECTURE.md` holds an entry with `#### Replaces` naming `proven-by-tests`
+- WHEN `clm check` runs
+- THEN it fails, naming the entry and `proven-by-tests`
+
+**Scenario: a constraint CLM adds**
+- GIVEN a project set up by an older `clm`, and a newer `clm` whose `ARCHITECTURE.md` carries a new `method` entry
+- WHEN `clm context <component>` runs with the newer `clm`
+- THEN the bundle holds the new entry, with no edit to the project's files
+
+**Untested**
+Whether a replacement keeps the guarantee it replaces is a judgement, which the auditor advises on and the human's approval decides.

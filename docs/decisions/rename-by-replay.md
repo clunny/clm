@@ -18,3 +18,5 @@ Rejected:
 - **Leaving markers to the builds.** A build session per component for string edits, and pending work in the queue that isn't real work.
 - **Every rename landing on checks.** A term swap can change a rule's meaning while its tests stay cited as current; only a human can judge that.
 - **A marker form that names the rename** (`req:a/y@v~a/x`). It keeps the old ID in the code forever and moves the judgement into every coverage read.
+
+(2026-11-13: `hash-based-staleness` stated until now that the one re-cite that isn't a build is a rename's, which the gate replays: an ID rename changes no text a test proves, and a term swap is reviewed. It still holds; the entry was cut to its rule, `human-layer-entries-stay-short`.)

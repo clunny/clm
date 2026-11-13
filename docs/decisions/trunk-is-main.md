@@ -18,3 +18,14 @@ Rejected:
 - Detecting the trunk from `origin/HEAD`: absent with no remote (`host = "none"`), and it can be unset or differ per clone, so two clones could disagree.
 
 Revisit if adopters keep asking for it and renaming is often impossible for them, such as where an outside system they can't change pins the branch name.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `trunk-named-main` until 2026-11-13, when it was merged into `land-locally` (`human-layer-entries-stay-short`). The text still holds:
+
+A CLM repository's trunk SHALL be a branch named `main`: every command, skill and prompt names it so, and no setting names another branch. `clm init` SHALL say so up front in a repository without one, with the command that renames its branch, rather than leave the first `clm land` to find it (`trunk-is-main`).
+
+**Scenario: a repository on master**
+- GIVEN a repository whose only branch is `master`
+- WHEN `clm init` runs
+- THEN its first next step names renaming `master` to `main`

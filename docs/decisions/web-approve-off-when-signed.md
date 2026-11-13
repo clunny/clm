@@ -13,3 +13,14 @@ Rejected:
 - **Keep Approve and write the unsigned record.** It is the problem: a record that looks like an approval and counts for nothing.
 - **Sign in the browser** (a passkey or a key the Worker holds per person). The signature must be by a key `docs/allowed_signers` lists for the person, which the person manages with git's `user.signingkey`; a key held by the operator would make the host vouch for the person, which `signed-ledger-records` rules out (*A host's identity*).
 - **Judge signedness at the branch's merge base or head.** `clm land` judges by the base it lands on, `main`'s tip, so a branch that adds the file is approved under the unsigned rule, as `signed-ledger-records`'s bootstrap says.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `web-approve-off-when-signed` until 2026-11-13, when it was merged into `signed-ledger-records` (`human-layer-entries-stay-short`). The text still holds:
+
+In a signed repository the web app SHALL NOT approve: its approve route refuses and writes nothing, and points to `clm approve`, because the Worker holds no one's SSH key.
+
+**Scenario: approve in browser**
+- GIVEN a signed repository
+- WHEN a reviewer approves from the web app
+- THEN it refuses, names `clm approve`, and writes no record

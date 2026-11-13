@@ -50,10 +50,10 @@ Nothing else works until a repository has specs, and writing them by hand is the
 #### Scenario: existing codebase
 - GIVEN a repository with code and no `specs/`
 - WHEN the person runs `/clm:init` and agrees the component map it shows them
-- THEN a spec branch holds a component per part of the code, describing what it does today, and `clm check` passes on it
+- THEN a spec branch holds a component for each part of the map they agreed, and `clm check` passes on it
 
 ### Capability: propose-intent
-A person can turn an idea into a spec change that a fresh reader has checked can be built.
+A person can turn an idea into a spec change that passes CLM's checks, and lands or waits for their approval.
 
 #### Why
 Intent written down first is what the AI builds from and what the human reviews; an idea that never becomes a checked spec change is lost or built wrong.
@@ -102,7 +102,7 @@ A backlog grows faster than a person drafts changes for it, and reading drafts i
 - THEN the drafts that land on checks land, and the ones that need review are gathered into one branch for one approval
 
 ### Capability: build-from-spec
-A person can have every pending requirement built automatically and continuously, most urgent first: claimed, built test-first in parallel isolated sessions, and landed, by one loop per clone that any new session resumes, and that keeps whatever needs the person in sight until it is dealt with.
+A person can have every pending requirement built automatically and continuously, most urgent first: claimed, built test-first in parallel isolated sessions, and landed, by one loop per clone that any new session resumes, and that keeps whatever needs the person in sight until it is dealt with. The loop runs unattended on the person's own machine, in a session they start with `/clm:build`.
 
 #### Why
 AI writes all the code, so building from the spec has to run without a human driving each step, and without losing its place or the person's open questions when a session ends.
@@ -118,26 +118,26 @@ AI writes all the code, so building from the spec has to run without a human dri
 - THEN the build is relaunched on its branch and lands, with nothing redone that had landed
 
 ### Capability: right-model-per-task
-A person can rely on every agent CLM launches running on a model suited to its work, named explicitly.
+A person can rely on CLM naming the model each kind of work it launches runs on, so that none silently inherits the session's.
 
 #### Why
 An agent launched without a model inherits the session's, so cheap mechanical work runs on the most expensive model and the cost grows unseen.
 
 #### Scenario: a build names its model
-- GIVEN a component ready to build
-- WHEN CLM launches its build
-- THEN the build's agent names its model, a cheaper one than the main session's, and its final review runs on the main session's model
+- GIVEN a component ready to build, in a Claude Code session
+- WHEN the person runs `clm agent-harness`, and CLM writes the build's prompt with the session's model as its review model
+- THEN the first names the model builds run on, and the prompt names the session's model for the final review
 
-### Capability: unattended-runner
-A person can run builds unattended on a machine they own, draining the queue with no session open.
+### Capability: measure-by-evals
+A person can have behaviour that comes from a model, which no program can decide, proven by an eval against a threshold they agreed: the project names its eval command, the evals that are due run on their own schedule within a spend limit, each run says why it ran and what it cost, and one that falls below its threshold becomes a bug on the component that owns it. An eval never holds a land.
 
 #### Why
-Building shouldn't wait for someone to keep a chat window open.
+Some of what a product does comes from a model and is statistical by nature, so a test can't prove it and a sentence in a prompt proves nothing. Measuring it costs money on a recurring basis, so what is measured, and how well it must do, is the person's decision.
 
-#### Scenario: runner drains the queue
-- GIVEN a runner started on the person's machine and a component with pending requirements
-- WHEN the runner runs
-- THEN it builds and lands the component without anyone in a session
+#### Scenario: an eval falls below its threshold
+- GIVEN a project that names its eval command, and a requirement the person agreed to measure whose eval now scores below its threshold
+- WHEN the evals that are due run
+- THEN the result is recorded with why the eval ran and what it cost, a `bug` item names the component that owns the requirement, and `clm land` lands other work as before
 
 ### Capability: prove-by-tests
 A person can see, for every requirement, whether a passing test proves it at its current version, and what is behind or pending.
@@ -303,7 +303,7 @@ Nothing showed what a feature cost, so nothing was ever cut; keeping a capabilit
 - THEN it shows each one's cost and that the second isn't held yet, and records their decision to keep or cut it
 
 ### Capability: guard-sessions
-A person can rely on AI sessions being stopped from unsafe actions, such as approving their own change or pushing to `main`.
+A person can rely on an AI session's unsafe actions, such as approving its own change or pushing to `main`, being stopped and put to them, and on an audit finding afterwards any that got through. The guard prevents accidents; it is not a boundary against a session set on getting round it.
 
 #### Why
 A session that can approve or push for itself makes every other rule optional.
@@ -312,6 +312,11 @@ A session that can approve or push for itself makes every other rule optional.
 - GIVEN a session on `main` in a repository under CLM
 - WHEN it runs `git push`
 - THEN the guard blocks it
+
+#### Scenario: the audit finds a push that got through
+- GIVEN a commit on `main` that no land recorded
+- WHEN the person runs `clm ledger verify`
+- THEN it fails, naming the commit
 
 ### Capability: contribute-from-outside
 A person without write access can suggest what a project should do, from a one-line issue to a spec change in a pull request from a fork, and its maintainer can land what they accept, with the person credited as its author. Issues enter the backlog only on the maintainer's yes, and the maintainer sees which are new, which the backlog has taken in and which are fixed. Code from outside can't land by that route, and landing a suggestion runs none of the person's code.
@@ -341,8 +346,8 @@ A person or session can report a defect in CLM itself from inside a session, whe
 CLM gets in the way most visibly while it is being used, and a defect not filed then is forgotten.
 
 #### Scenario: file a defect
-- GIVEN a session where a check misfired
-- WHEN it runs `clm defect`
+- GIVEN a session in a repository whose defect reports go to its backlog
+- WHEN it runs `clm defect`, naming the component the fix lies in
 - THEN a backlog item of kind `bug` records it, on the component the fix lies in
 
 ### Capability: git-host
@@ -395,9 +400,9 @@ A project under CLM can be worked from any supported agent harness (Claude Code,
 Teams don't share one coding tool, and people change tools; a method tied to one tool locks out everyone else on the project, or splits the project's rules between files each tool reads.
 
 #### Scenario: switch tools mid-change
-- GIVEN a spec branch proposed and approved from Claude Code
-- WHEN a Codex session builds it and lands it
-- THEN the build follows the same `AGENTS.md`, specs and claims, and `clm land` lands it as it would a Claude Code build
+- GIVEN a spec branch proposed and approved under Claude Code
+- WHEN a build's commands run under Codex's environment and land it
+- THEN they read the same `AGENTS.md`, specs and claims, and `clm land` lands it as it would under Claude Code
 
 #### Scenario: approve under an agent harness that can't ask
 - GIVEN a session under a recognised agent harness that can't make the human confirm a command
@@ -419,14 +424,3 @@ A project set up by an older `clm` keeps what that release wrote, and one that s
 - GIVEN a project with a pending `required` migration
 - WHEN the person runs `clm check`
 - THEN it refuses, names the migration and points at `clm upgrade`, while `clm status` and `clm defect` still run
-
-### Capability: pin-working-method
-A person can rely on every build following the same fixed version of the AI's working method.
-
-#### Why
-A working method that changes under a build makes its results impossible to compare or trust.
-
-#### Scenario: pinned method
-- GIVEN the pinned superpowers version
-- WHEN any build starts
-- THEN it runs that version, whatever the session has installed

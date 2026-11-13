@@ -4,7 +4,7 @@ Short answers to the questions people ask first about CLM: what it is, what it n
 
 ## What is CLM?
 
-CLM is a Claude Code plugin and a `clm` command-line tool for spec-driven development with AI. You declare what the system should do as a spec, a graph of components with requirements and scenarios; Claude writes all the code, test-first; and programs check that every requirement is proven by a passing test that cites it. When the spec changes, the code that has fallen behind it is built again until they match. CLM is free and open source under the MIT licence.
+CLM is a plugin for Claude Code and Codex and a `clm` command-line tool for spec-driven development with AI. You declare what the system should do as a spec, a graph of components with requirements and scenarios; Claude writes all the code, test-first; and programs check that every requirement is proven by a passing test that cites it. When the spec changes, the code that has fallen behind it is built again until they match. CLM is free and open source under the MIT licence.
 
 ## Who is it for?
 
@@ -16,7 +16,7 @@ In Claude Code, run `/plugin marketplace add clunny/clm` and then `/plugin insta
 
 ## What do I need?
 
-Claude Code, git and `curl`, on Linux or macOS. The plugin downloads the `clm` binary from the project's public GitHub releases on first use; no GitHub account is needed. A git host such as GitHub is optional: it holds the remote and shows a pull request per branch, but runs no checks.
+Claude Code or Codex, git and `curl`, on Linux or macOS. The plugin downloads the `clm` binary from the project's public GitHub releases on first use; no GitHub account is needed. A git host such as GitHub is optional: it holds the remote and shows a pull request per branch, and decides no land.
 
 ## Do I need superpowers installed?
 
@@ -48,7 +48,7 @@ Any language whose tests can carry a requirement's marker in their source. `clm 
 
 ## Does it work with agents other than Claude Code?
 
-Not today. CLM's method is carried by Claude Code's plugins, hooks and skills. Supporting another agent would be a change to CLM itself.
+Yes. CLM supports Claude Code and Codex with a plugin each, and any other agent that reads `AGENTS.md` and runs shell commands can work a project with the `clm` binary alone. A project can be worked from several of them at once, with the same rules and state. Two things differ: the pane beside the chat is Claude Code's only, and an agent without a plugin runs no guard, so there you approve from your own terminal.
 
 ## How is CLM different from GitHub Spec Kit or Kiro?
 

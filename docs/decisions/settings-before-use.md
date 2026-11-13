@@ -28,3 +28,17 @@ Rejected:
 - **Have `clm land` and `clm sync` run the branch's own `clm`.** It would cover this branch's checks but not the other clones that read `main`'s `clm.toml` after the land, and it builds the tool before every sync.
 - **Put the value in a later change.** It works, but costs a second spec review per key where a backlog item costs none.
 - **The spec branch files the item without `blocks`, and the build adds it.** Editing an existing item makes the build's branch mixed.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `settings-before-use` until 2026-11-13, when it was merged into `checks-relax-before-use` (`human-layer-entries-stay-short`). The text still holds:
+
+A new settings key or value SHALL be read by a landed requirement before this repository's `clm.toml` sets it, and only once the installed `clm` can read it.
+
+**Scenario: new key**
+- GIVEN a change adding a settings key that this repository's `clm.toml` will set
+- WHEN it is built
+- THEN the key's reader lands and is installed before `clm.toml` sets it, since the installed `clm` rejects a key it doesn't know
+
+**Untested**
+The order in which a reader lands, is installed and its key is set is a sequence no program sees; a key the running `clm` doesn't know is refused.

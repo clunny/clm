@@ -14,3 +14,14 @@ Rejected:
 - **The session-start hook pulls or fetches.** Pulling moves the human's checkout under them; fetching makes every session's start wait on the network, and a warning is enough once the views say what they describe.
 
 The warning compares with `origin/main` as of the last fetch, so a checkout that hasn't fetched in a while can still be behind without a warning; that is why the queue's authority stays with `clm next`, which fetches.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `views-name-their-commit` until 2026-11-13, when it moved down here; its rules serve the capability `see-project-state` (`human-layer-entries-stay-short`). The text still holds:
+
+Every view SHALL name the commit it describes and warn when that commit is behind `origin/main`.
+
+**Scenario: stale checkout**
+- GIVEN a checkout behind `origin/main`
+- WHEN `clm status` runs
+- THEN it names its commit and says it is behind
