@@ -5,7 +5,7 @@ mod common;
 use std::fs;
 
 use clm_orchestrator::{
-    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, next, next_look, next_wait,
+    Error, PlaceKind, Placed, State, claim, claim_fix, claim_refs, next, next_look,
     queue_from_refs, status_claims, take_place,
 };
 use common::*;
@@ -789,26 +789,6 @@ fn fix_claims_a_blocked_node_and_reads_items_from_origin_main() {
     assert_eq!(claim_fix(&r.work, "c", "backlog/x", 4).unwrap(), "impl/c");
 }
 
-// `clm next --wait` (`next-wait`): the library call behind it, with intervals of a few
-// hundred milliseconds.
-
-/// A second clone of `r`'s `origin`, for pushing while `next_wait` reads the first.
-fn second_clone(r: &Repo) -> (tempfile::TempDir, std::path::PathBuf) {
-    let dir = tempfile::TempDir::new().unwrap();
-    let work = dir.path().join("other");
-    git(
-        dir.path(),
-        &[
-            "clone",
-            "-q",
-            r.origin.to_str().unwrap(),
-            work.to_str().unwrap(),
-        ],
-    );
-    identify(&work);
-    (dir, work)
-}
-
 /// `r` with every requirement cited, so no node is ready.
 fn converged() -> Repo {
     let r = repo();
@@ -818,113 +798,21 @@ fn converged() -> Repo {
     r
 }
 
-fn wait(r: &Repo, interval: &str, notes: &mut Vec<String>) -> Result<Vec<String>, Error> {
-    next_wait(&r.work, 4, 9, interval, &mut |n| notes.push(n.to_string()))
-}
-
 #[test]
-fn scenario_next_wait_work_arrives() {
-    // req:orchestrator/next-wait@bd4b8159
-    let r = converged();
-    let (_keep, other) = second_clone(&r);
-    let pusher = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        write(&other, "specs/a/SPEC.md", &node("b", &["p", "q", "new"]));
-        push_main(&other, "a gains a requirement");
-    });
-    let mut notes = vec![];
-    let started = std::time::Instant::now();
-    let got = wait(&r, "0.01", &mut notes).unwrap();
-    pusher.join().unwrap();
-    assert_eq!(got, ["a"]);
-    assert!(notes.is_empty(), "{notes:?}");
-    // The interval is in minutes: 0.01 of one is 0.6 s, so the second look is not sooner.
-    assert!(started.elapsed() >= std::time::Duration::from_millis(550));
-}
-
-#[test]
-fn scenario_next_wait_work_already_there() {
-    // req:orchestrator/next-wait@bd4b8159
-    let r = repo();
-    let mut notes = vec![];
-    assert_eq!(wait(&r, "60", &mut notes).unwrap(), ready(&r));
-    assert_eq!(ready(&r), ["a", "b", "c"]);
-}
-
-#[test]
-fn scenario_next_wait_a_place_frees() {
-    // req:orchestrator/next-wait@bd4b8159
-    let r = repo();
-    push_claim(&r.work, "b", 1);
-    hold(&r.work, "b");
-    assert!(next(&r.work, 4, 1).unwrap().is_empty());
-    let (_keep, other) = second_clone(&r);
-    let lander = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(700));
-        merge_claim(&other, "b");
-    });
-    let mut notes = vec![];
-    let got = next_wait(&r.work, 4, 1, "0.005", &mut |n| notes.push(n.to_string())).unwrap();
-    lander.join().unwrap();
-    assert_eq!(got, ["a"]);
-    assert!(
-        notes.is_empty(),
-        "no `no free build place` line while waiting: {notes:?}"
-    );
-}
-
-#[test]
-fn scenario_next_wait_a_later_look_fails() {
-    // req:orchestrator/next-wait@bd4b8159
-    let r = converged();
-    let (_keep, other) = second_clone(&r);
-    let gone = r.origin.with_extension("gone");
-    let origin = r.origin.clone();
-    let flaky = std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        std::fs::rename(&origin, &gone).unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(4500));
-        std::fs::rename(&gone, &origin).unwrap();
-        write(&other, "specs/a/SPEC.md", &node("b", &["p", "q", "new"]));
-        push_main(&other, "a gains a requirement");
-    });
-    let mut notes = vec![];
-    let got = wait(&r, "0.005", &mut notes).unwrap();
-    flaky.join().unwrap();
-    assert_eq!(got, ["a"]);
-    assert!(!notes.is_empty());
-    assert!(
-        notes
-            .iter()
-            .all(|n| n.starts_with("clm next failed: ") && n.contains("origin can't be reached")),
-        "{notes:?}"
-    );
-}
-
-#[test]
-fn scenario_next_wait_first_look_fails() {
-    // req:orchestrator/next-wait@bd4b8159
-    let r = repo();
-    std::fs::rename(&r.origin, r.origin.with_extension("gone")).unwrap();
-    let mut notes = vec![];
-    match wait(&r, "0.005", &mut notes) {
-        Err(Error::Git(m)) => assert!(m.contains("origin can't be reached"), "{m}"),
-        other => panic!("{other:?}"),
-    }
-    assert!(notes.is_empty());
-}
-
-#[test]
-fn scenario_next_wait_bad_interval() {
-    // req:orchestrator/next-wait@bd4b8159
-    // No repository at all: a look would fail with a git error, so a refusal proves the
-    // interval was judged before any look.
-    let dir = tempfile::TempDir::new().unwrap();
-    for bad in ["0", "-1", "abc", "NaN", "inf", "", "1e-300"] {
-        let mut notes = vec![];
-        match next_wait(dir.path(), 4, 9, bad, &mut |n| notes.push(n.to_string())) {
-            Err(Error::Refused(m)) => assert!(m.contains("positive number"), "{bad}: {m}"),
-            other => panic!("{bad}: {other:?}"),
-        }
+fn scenario_next_wait_wait_refused() {
+    // req:orchestrator/next-wait@1946593e
+    for args in [vec!["next", "--wait"], vec!["next", "--interval", "5"]] {
+        let out = std::process::Command::new(env!("CARGO"))
+            .args(["run", "-q", "-p", "clm", "--"])
+            .args(&args)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(2), "{args:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("Usage"),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 }
