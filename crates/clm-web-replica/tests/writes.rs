@@ -180,6 +180,13 @@ fn an_answer_read_back() {
     assert_eq!(ok.status, 200, "{}", ok.body);
     let id = serde_json::from_str::<Value>(&ok.body).unwrap()["id"].clone();
     assert!(id.is_string(), "{}", ok.body);
+    assert!(
+        fake.gh
+            .writes()
+            .iter()
+            .all(|w| matches!(&w.auth, clm_web_platform::platform::Auth::User(t) if t == "tok")),
+        "with the requester's token"
+    );
     let seen = view(&fake, &mut object, "implementation");
     let answers = seen["view"]["answers"]
         .as_array()
