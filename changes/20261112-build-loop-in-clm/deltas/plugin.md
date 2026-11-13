@@ -376,3 +376,17 @@ Each of `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/contributio
 - GIVEN a `SKILL.md` that names `clm wrap-up` and no paragraph naming `left <path>` with it
 - WHEN the test's check runs on it
 - THEN it reports that skill
+
+### Requirement: view-fallback-wording <!-- base: 2ed0320a52812b96 -->
+`plugin/commands/view.md`, the text the model receives when no `clm-panel` hooks module answers `/clm:view`, SHALL NOT say that `clm-panel` isn't installed. It SHALL say that the panel either isn't installed or didn't load, and name `/plugin install clm-panel@clm` for the first case and `claude plugin validate` and `claude --debug` for the second, then go on to the same `clm status` and `clm view <name>` fallbacks as before, its names and argument hint being `status`, `queue`, `spec`, `flight` and `blockers`.
+
+#### Scenario: installed but refused
+- GIVEN `plugin/commands/view.md`
+- WHEN a test reads it
+- THEN it doesn't contain `isn't installed here`, and it contains `/plugin install clm-panel@clm`, `claude plugin validate`, `claude --debug` and `queue`
+
+#### Serves
+- capability/watch-beside-chat
+
+#### Needs
+- view.repo/view-queue
