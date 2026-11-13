@@ -9,7 +9,7 @@ use crate::combined;
 use crate::select::{Changed, Selection};
 
 /// The lines saying why the change selects `path`: its first reason that holds, then the
-/// shortest route (`depends_on`, or a first `tests against` edge) from the component that brought it in to a component owning a
+/// shortest `depends_on` route from the component that brought it in to a component owning a
 /// changed file. `cited` and `reads` are what the scan found, as for `combined`.
 pub fn why_chain(
     graph: &Graph,
