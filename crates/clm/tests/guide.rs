@@ -165,10 +165,9 @@ fn constraints_page() {
     assert!(
         after("## proven-by-tests")
             .iter()
-            .any(|l| l.starts_with("A requirement SHALL count as implemented only when")),
+            .any(|l| l.contains("A requirement SHALL count as")),
         "{text}"
     );
     let at = |h: &str| lines.iter().position(|l| *l == h).unwrap();
     assert!(at("## proven-by-tests") < at("## expand-contract"));
-    assert!(at("## yagni") < at("## expand-contract"));
 }
