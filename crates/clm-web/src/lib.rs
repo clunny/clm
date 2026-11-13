@@ -4,6 +4,7 @@
 //! traits in `clm_web_platform::platform`. The `worker` module, built only for `wasm32`, adapts
 //! `workers-rs` to those traits and does nothing else.
 
+mod answers;
 pub mod assets;
 pub mod auth;
 mod capabilities;
@@ -91,13 +92,15 @@ enum Body {
     /// The fingerprint an approve request names as reviewed.
     Pin(String),
     Proposal(proposals::Proposal),
+    /// An answer to a backlog item.
+    Answer(String),
     Comment(feedback::Comment),
     Request(feedback::Request),
     /// A decision on a capability or an architecture requirement, naming the version seen.
     Decide(capabilities::Decide),
 }
 
-/// The body of an approve, a proposal, a comment, a change request or a decision, checked,
+/// The body of an approve, a proposal, an answer, a comment, a change request or a decision, checked,
 /// and 422 for one that names nothing reviewed or isn't what the route takes.
 fn checked_body(req: &Request, parts: &[&str]) -> Result<Body, Response> {
     match (req.method.as_str(), parts) {
@@ -111,6 +114,7 @@ fn checked_body(req: &Request, parts: &[&str]) -> Result<Body, Response> {
             feedback::parse_request(&req.body).map(Body::Request)
         }
         ("POST", ["proposals"]) => proposals::parse(&req.body).map(Body::Proposal),
+        ("POST", ["backlog", _, "answer"]) => answers::parse(&req.body).map(Body::Answer),
         ("POST", ["capabilities" | "architecture", _, "decide"]) => capabilities::parse(&req.body)
             .map(Body::Decide)
             .ok_or_else(|| Response::empty(422)),
@@ -139,6 +143,9 @@ async fn repo_route<P: Platform + Replicas>(
         ("GET", ["implementation"], _) => views::implementation(p, access, login, fresh).await,
         ("POST", ["proposals"], Body::Proposal(proposal)) => {
             proposals::propose(p, access, login, proposal).await
+        }
+        ("POST", ["backlog", slug, "answer"], Body::Answer(text)) => {
+            answers::answer(p, access, login, &http::percent_decode(slug), text).await
         }
         ("DELETE", ["proposals", id], _) => proposals::withdraw(p, access, login, id).await,
         ("GET", [view @ ("capabilities" | "architecture")], _) => {
