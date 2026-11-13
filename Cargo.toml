@@ -26,6 +26,7 @@ clm-config = { path = "crates/clm-config" }
 clm-init = { path = "crates/clm-init" }
 clm-view = { path = "crates/clm-view" }
 clm-view-repo = { path = "crates/clm-view-repo" }
+clm-loop = { path = "crates/clm-loop" }
 clm-git = { path = "crates/clm-git" }
 clm-run = { path = "crates/clm-run" }
 clm-host = { path = "crates/clm-host" }

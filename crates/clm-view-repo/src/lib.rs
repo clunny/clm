@@ -118,17 +118,12 @@ pub enum Source<'a> {
     },
 }
 
-/// `clm view <name> --format <format> --width <width> [--at <rev>]`, or the spec graph's
-/// violations, or a revision that couldn't be read.
-/// `width` cuts the charts only.
-pub fn view(
-    root: &Path,
-    name: Name,
-    format: Format,
-    width: usize,
-    source: Source,
-) -> Result<String, Error> {
-    let (graph, markers, oversized, head) = match source {
+/// What a view describes: the graph and markers, the oversized nodes and the head the chart
+/// begins with, from the working tree or from a commit.
+type Read = (Graph, Vec<Marker>, Option<BTreeSet<String>>, Option<Head>);
+
+fn read_source(root: &Path, source: Source) -> Result<Read, Error> {
+    Ok(match source {
         Source::Tree(budgets) => {
             let (graph, markers) = load(root).map_err(Error::Violations)?;
             let sized = budgets.and_then(|b| oversized(root, &graph, &markers, b));
@@ -141,7 +136,20 @@ pub fn view(
             }
             (at.graph, at.markers, at.oversized, Some(Head::At(at.head)))
         }
-    };
+    })
+}
+
+/// `clm view <name> --format <format> --width <width> [--at <rev>]`, or the spec graph's
+/// violations, or a revision that couldn't be read.
+/// `width` cuts the charts only.
+pub fn view(
+    root: &Path,
+    name: Name,
+    format: Format,
+    width: usize,
+    source: Source,
+) -> Result<String, Error> {
+    let (graph, markers, oversized, head) = read_source(root, source)?;
     let (refs, now) = (clm_orchestrator::claim_refs(root), clm_git::now());
     let flight = || flight_view(&graph, &markers, &refs, now, DEFAULT_EXPIRY_HOURS);
     let view = match name {
@@ -160,6 +168,65 @@ pub fn view(
         )),
     };
     Ok(render(&view, format, width, head.as_ref()))
+}
+
+/// `clm view queue --format <format> --width <width> [--at <rev>]` (`view-queue`): the plan
+/// the build loop's last step stored, with its runs as the loop file holds them now, never
+/// fetching and writing no file; the checkout line is the only thing `source` changes. With
+/// no plan, a loop that isn't held, whose next section is the queue's ready components in
+/// priority order, read from `source`. A stored plan's time and `origin/main` commit go on
+/// stderr, which the plan's model has no place for.
+pub fn queue(root: &Path, format: Format, width: usize, source: Source) -> Result<String, Error> {
+    let (graph, markers, _, head) = read_source(root, source)?;
+    let (now, file) = (clm_git::now(), clm_loop::read(root));
+    let view = if let Some(plan) = clm_loop::stored_plan(root) {
+        if let Some(stored) = file.as_ref().and_then(|f| f.plan.as_ref()) {
+            let minutes = now.saturating_sub(stored.at) / 60;
+            eprintln!("plan computed {minutes}m ago at {}", stored.main);
+        }
+        plan
+    } else {
+        let reason = if file.is_some() {
+            "no plan stored yet"
+        } else {
+            "no loop has run on this clone"
+        };
+        let refs = clm_orchestrator::claim_refs(root);
+        let queue =
+            clm_orchestrator::queue_from_refs(&graph, &markers, &refs, now, DEFAULT_EXPIRY_HOURS);
+        let next = queue
+            .next()
+            .into_iter()
+            .filter_map(|id| queue.node(&id).map(|n| (id, n.priority)))
+            .map(|(id, priority)| clm_view::Next {
+                name: format!("build:{id}"),
+                kind: "build".to_string(),
+                priority: priority.to_string(),
+                reason: reason.to_string(),
+            })
+            .collect();
+        clm_view::QueueView {
+            view: "queue",
+            // A loop that has started but stored no plan yet is still held.
+            loop_state: match &file {
+                Some(f) if f.stop == Some(clm_loop::StopMode::Drain) => clm_view::Loop::Stop {
+                    mode: clm_view::Stop::Drain,
+                },
+                Some(f) if f.stop == Some(clm_loop::StopMode::Now) => clm_view::Loop::Stop {
+                    mode: clm_view::Stop::Now,
+                },
+                Some(f) if f.held(now) => clm_view::Loop::Held {
+                    renewed_minutes: now.saturating_sub(f.lease.unwrap_or(now)) / 60,
+                },
+                _ => clm_view::Loop::NotHeld,
+            },
+            running: Vec::new(),
+            next,
+            waiting_on_you: Vec::new(),
+            waiting_on_work: Vec::new(),
+        }
+    };
+    Ok(render(&View::Queue(view), format, width, head.as_ref()))
 }
 
 /// The first line of a chart that begins with `head`, as plain text: the line the views

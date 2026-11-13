@@ -25,14 +25,18 @@ enum ViewName {
     Spec,
     Flight,
     Blockers,
+    Queue,
 }
 
-impl From<ViewName> for clm_view::Name {
-    fn from(n: ViewName) -> Self {
-        match n {
-            ViewName::Spec => clm_view::Name::Spec,
-            ViewName::Flight => clm_view::Name::Flight,
-            ViewName::Blockers => clm_view::Name::Blockers,
+impl ViewName {
+    /// The view `clm-view` names; `None` for `queue`, which `clm-view-repo` reads from the
+    /// loop's file.
+    fn named(self) -> Option<clm_view::Name> {
+        match self {
+            ViewName::Spec => Some(clm_view::Name::Spec),
+            ViewName::Flight => Some(clm_view::Name::Flight),
+            ViewName::Blockers => Some(clm_view::Name::Blockers),
+            ViewName::Queue => None,
         }
     }
 }
@@ -150,7 +154,7 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// Print a view of the repository: the architecture, the work in flight or what holds
-    /// it up; never fetches.
+    /// it up, or what the build loop runs next; never fetches.
     View {
         /// The view.
         name: ViewName,
@@ -1056,13 +1060,17 @@ fn dispatch() -> ExitCode {
                     budgets: spec.then_some(&budgets_from as clm_view_repo::BudgetsFrom),
                 },
             };
-            let result = clm_view_repo::view(
-                &root,
-                name.into(),
-                format.into(),
-                usize::from(width),
-                source,
-            );
+            let result = match name.named() {
+                Some(named) => {
+                    clm_view_repo::view(&root, named, format.into(), usize::from(width), source)
+                }
+                // The queue is the loop's plan, which has no layout for a diagram.
+                None if matches!(format, ViewFormat::Svg) => {
+                    eprintln!("clm view: the queue has no svg form");
+                    return ExitCode::from(2);
+                }
+                None => clm_view_repo::queue(&root, format.into(), usize::from(width), source),
+            };
             print_view(result, &mut std::io::stdout(), &mut std::io::stderr())
         }
         Command::Context { node, hash, root } => {
