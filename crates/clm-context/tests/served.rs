@@ -50,7 +50,7 @@ fn bundle(graph: &Graph) -> String {
 
 #[test]
 fn bundle_holds_served_capabilities() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     // `serves` names `a` and an architecture ID; a rule's `#### Serves` block names `b`.
     let g = graph(
         &capabilities(&["a", "b", "c"]),
@@ -74,7 +74,7 @@ fn bundle_holds_served_capabilities() {
 
 #[test]
 fn overridden_node_default_adds_nothing() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let g = graph(&capabilities(&["a", "b"]), "capability/a", SERVES_B);
     let out = bundle(&g);
     assert!(out.contains("B-TEXT"), "{out}");
@@ -83,7 +83,7 @@ fn overridden_node_default_adds_nothing() {
 
 #[test]
 fn served_capabilities_follow_file_order_and_appear_once() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let g = graph(
         &capabilities(&["a", "b", "c"]),
         "capability/b, capability/a",
@@ -99,7 +99,7 @@ fn served_capabilities_follow_file_order_and_appear_once() {
 
 #[test]
 fn no_served_section_when_none() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let g = graph(&capabilities(&["a"]), "architecture/x", PLAIN);
     let out = bundle(&g);
     assert!(!out.contains("# Capabilities served"), "{out}");
@@ -124,7 +124,7 @@ fn holds_every_capability(out: &str) {
 
 #[test]
 fn capability_node_gets_every_capability() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let g = root_graph(true);
     holds_every_capability(
         &clm_context::bundle_from(&g, Some(ARCHITECTURE), "capability").unwrap(),
@@ -156,14 +156,14 @@ fn root_graph(with_capability_node: bool) -> Graph {
 
 #[test]
 fn root_without_capability_node_gets_every_capability() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let g = root_graph(false);
     holds_every_capability(&clm_context::bundle_from(&g, Some(ARCHITECTURE), "clm").unwrap());
 }
 
 #[test]
 fn root_beside_a_capability_node_gets_only_what_it_serves() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let g = root_graph(true);
     let out = clm_context::bundle_from(&g, Some(ARCHITECTURE), "clm").unwrap();
     assert!(out.contains("A-TEXT"), "{out}");
