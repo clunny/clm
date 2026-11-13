@@ -9,7 +9,7 @@ use crate::combined;
 use crate::select::{Changed, Selection};
 
 /// The lines saying why the change selects `path`: its first reason that holds, then the
-/// shortest `depends_on` path from the component that brought it in to a component owning a
+/// shortest `depends_on` (or `test_depends_on`) path from the component that brought it in to a component owning a
 /// changed file. `cited` and `reads` are what the scan found, as for `combined`.
 pub fn why_chain(
     graph: &Graph,
@@ -81,7 +81,7 @@ pub fn why_chain(
     lines
 }
 
-/// The components from `start` to the nearest owner of a changed file along `depends_on`,
+/// The components from `start` to the nearest owner of a changed file along `depends_on` or `test_depends_on`,
 /// among equally short routes the first in ID order.
 fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Vec<&'a str> {
     let owns = |id: &str| changed.iter().any(|(_, owner)| *owner == id);
@@ -97,10 +97,11 @@ fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Vec<
             hops.reverse();
             return hops;
         }
-        let mut deps: Vec<&str> = graph.nodes[id]
-            .frontmatter
+        let f = &graph.nodes[id].frontmatter;
+        let mut deps: Vec<&str> = f
             .depends_on
             .iter()
+            .chain(&f.test_depends_on)
             .map(String::as_str)
             .collect();
         deps.sort();

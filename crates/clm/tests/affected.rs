@@ -89,7 +89,7 @@ fn repo(clm_toml: &str) -> TempDir {
 
 #[test]
 fn prints_the_changed_nodes_dependants_and_files() {
-    // req:check.affected/affected-components@6fdb3e70
+    // req:check.affected/affected-components@f4c3029d
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -104,7 +104,7 @@ fn prints_the_changed_nodes_dependants_and_files() {
 
 #[test]
 fn nothing_changed_prints_nothing() {
-    // req:check.affected/affected-components@6fdb3e70
+    // req:check.affected/affected-components@f4c3029d
     let dir = repo("");
     let out = clm_affected(dir.path(), "main");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
