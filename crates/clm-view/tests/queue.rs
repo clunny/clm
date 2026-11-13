@@ -87,6 +87,7 @@ fn scenario_waiting_on_you_highlighted() {
                     break;
                 }
             }
+            assert!(esc == AMBER || esc == "\x1b[0m", "{esc:?}");
             amber = esc == AMBER;
         } else {
             assert!(amber, "{c:?} outside amber in {fold:?}");
@@ -103,6 +104,11 @@ fn scenario_waiting_on_you_highlighted() {
     }
     let heading = ansi.lines().find(|l| l.contains("waiting on you")).unwrap();
     assert!(!heading.contains(AMBER), "{heading:?}");
+    assert!(fold.ends_with("\x1b[0m"), "{fold:?}");
+    let mut empty = model();
+    empty.waiting_on_you.clear();
+    let ansi = text(empty, Format::Ansi);
+    assert!(!ansi.contains(AMBER), "{ansi:?}");
 }
 
 #[test]
