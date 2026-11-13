@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [path-ownership-names-no-exception-for-a-split-child-s-build]
 ---
 
