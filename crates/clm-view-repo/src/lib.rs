@@ -207,7 +207,19 @@ pub fn queue(root: &Path, format: Format, width: usize, source: Source) -> Resul
             .collect();
         clm_view::QueueView {
             view: "queue",
-            loop_state: clm_view::Loop::NotHeld,
+            // A loop that has started but stored no plan yet is still held.
+            loop_state: match &file {
+                Some(f) if f.stop == Some(clm_loop::StopMode::Drain) => clm_view::Loop::Stop {
+                    mode: clm_view::Stop::Drain,
+                },
+                Some(f) if f.stop == Some(clm_loop::StopMode::Now) => clm_view::Loop::Stop {
+                    mode: clm_view::Stop::Now,
+                },
+                Some(f) if f.held(now) => clm_view::Loop::Held {
+                    renewed_minutes: now.saturating_sub(f.lease.unwrap_or(now)) / 60,
+                },
+                _ => clm_view::Loop::NotHeld,
+            },
             running: Vec::new(),
             next,
             waiting_on_you: Vec::new(),
