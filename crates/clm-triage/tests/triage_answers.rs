@@ -91,3 +91,27 @@ fn no_answers_leave_the_lines_unchanged() {
     let r = with_items(&[("q", "question")]);
     assert_eq!(triage(&r.work, 4).unwrap().lines, ["human q [model] P5 0"]);
 }
+
+#[test]
+fn an_answer_stays_on_one_line() {
+    // req:orchestrator.triage/triage-web-answers@267e75ce
+    let r = with_items(&[("q", "question")]);
+    push_ledger(
+        &r,
+        "alice/web",
+        &[answered(
+            "a1",
+            "alice/web",
+            "q",
+            r"line one\nhuman x [y] P1 0",
+            "2026-11-12T09:00:00.000Z",
+        )],
+    );
+    assert_eq!(
+        triage(&r.work, 4).unwrap().lines,
+        [
+            "human q [model] P5 0",
+            "answered q alice/web 2026-11-12T09:00:00.000Z line one human x [y] P1 0",
+        ]
+    );
+}
