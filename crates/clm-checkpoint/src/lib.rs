@@ -212,15 +212,9 @@ pub fn checkpoint(root: &Path) -> Result<Report, Error> {
         })
         .collect();
     if !gone.is_empty() {
-        // Each delete is leased on the tip judged above, so a push made since the fetch
-        // survives.
-        let mut args = vec!["push".to_string(), "-q".into(), REMOTE.into()];
-        for (b, tip) in &gone {
-            args.push(format!("--force-with-lease=refs/heads/{b}:{tip}"));
-            args.push(format!(":refs/heads/{b}"));
+        for b in delete_on_origin(root, &gone)? {
+            lines.push(format!("removed {REMOTE}/{b}"));
         }
-        git(root, &args.iter().map(String::as_str).collect::<Vec<_>>())?;
-        lines.extend(gone.iter().map(|(b, _)| format!("removed {REMOTE}/{b}")));
     }
 
     // 3. Work that isn't safe on `origin`. Only the session's own makes the checkpoint
@@ -453,6 +447,67 @@ impl Landed {
             })
             .collect())
     }
+}
+
+/// Deletes the done branches `gone` (each with the tip the fetch read) on `origin`, in one
+/// push, each delete leased on that tip so a push made since the fetch survives. Returns the
+/// branches this push deleted. A delete `origin` refused because the branch isn't at that tip
+/// any more (`wrap-up-delete-loses-race`) is read again: a branch `origin` no longer has is
+/// done, deleted by another session, and one whose tip moved is kept; neither is returned. A
+/// delete refused while `origin` still holds the branch at the tip judged, and any other
+/// failure, is git's.
+fn delete_on_origin<'a>(
+    root: &Path,
+    gone: &[(&'a String, &String)],
+) -> Result<Vec<&'a String>, Error> {
+    let mut args = vec!["push".to_string(), "-q".into(), REMOTE.into()];
+    for (b, tip) in gone {
+        args.push(format!("--force-with-lease=refs/heads/{b}:{tip}"));
+        args.push(format!(":refs/heads/{b}"));
+    }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let stderr = match git(root, &args) {
+        Ok(_) => return Ok(gone.iter().map(|(b, _)| *b).collect()),
+        Err(clm_git::Error::Failed { stderr, .. }) => stderr,
+        Err(e) => return Err(e.into()),
+    };
+    // What git reports for each branch of the push: ` ! [rejected]  (delete) -> <b> (stale
+    // info)` for a lease that no longer holds. Any other line it flags is a failure.
+    let mut stale = BTreeSet::new();
+    for line in stderr.lines().filter(|l| l.trim_start().starts_with('!')) {
+        let branch = line
+            .strip_suffix(" (stale info)")
+            .and_then(|l| l.split_once("(delete) -> "))
+            .map(|(_, b)| b.trim());
+        match branch {
+            Some(b) if gone.iter().any(|(g, _)| g.as_str() == b) => {
+                stale.insert(b.to_string());
+            }
+            _ => return Err(Error::Git(stderr.trim().to_string())),
+        }
+    }
+    if stale.is_empty() {
+        return Err(Error::Git(stderr.trim().to_string()));
+    }
+    let mut deleted = Vec::new();
+    for (b, tip) in gone {
+        if !stale.contains(b.as_str()) {
+            deleted.push(*b);
+            continue;
+        }
+        let now = git(root, &["ls-remote", REMOTE, &format!("refs/heads/{b}")])?;
+        // Still at the tip judged: the refusal is git's. Gone, or moved on: nothing of ours
+        // to delete, and nothing to say.
+        let ref_name = format!("refs/heads/{b}");
+        let at_tip = now.lines().any(|l| {
+            let mut f = l.split_whitespace();
+            f.next() == Some(tip.as_str()) && f.next() == Some(ref_name.as_str())
+        });
+        if at_tip {
+            return Err(Error::Git(stderr.trim().to_string()));
+        }
+    }
+    Ok(deleted)
 }
 
 fn ledger_error(e: clm_ledger::Error) -> Error {
