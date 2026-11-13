@@ -74,7 +74,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 ## How it is executed
 
 - **This item is the plan of record.** It lives in git, so no session's memory or conversation holds anything the next one needs. A session that settles something rewrites the sections here.
-- **Each phase is one or a few ordinary changes proposed from this item** (`from:` naming it), and their code is built by `/clm:build`. Progress is CLM's own state: `clm status` shows which changes are applied, pending or archived. No checklist is kept by hand; when a phase's changes have all landed, its paragraph under Plan is deleted.
+- **Each phase is one or a few ordinary changes that names this item in its `## Intent`**, and their code is built by `/clm:build`. No change but the last phase's names it in `from` or `resolves`: `clm apply` deletes the item a change's `from` names (`apply-deletes-promoted-items`), which would delete the plan with its first phase. Progress is CLM's own state: `clm status` shows which changes are applied, pending or archived. No checklist is kept by hand; when a phase's changes have all landed, its paragraph under Plan is deleted.
 - **A fresh session per phase.** It starts from this item and `clm status`, proposes that phase, and ends when the phase's spec branch has landed. Builds then run in the loop, unattended.
 - **Phase 1 is the exception in kind, not in route.** It is written by hand with the human in the conversation, since only they can settle the human layer, on one spec branch through the same `clm land`.
 - **Order between phases is by `#### Needs` and priority, as for any work.** A change that relaxes a check lands before one that relies on it (`checks-relax-before-use`).
