@@ -51,6 +51,8 @@ export interface BacklogView {
   origin: string | null;
   /** The requirements it blocks (`requirement-blocks`). */
   blocks: string[];
+  /** The answers a `question` item offers; absent in a snapshot kept from before the Worker sent it, read as none. */
+  choices?: string[];
 }
 
 /** The `view` node's `spec` model: every node once, parents before children. */
