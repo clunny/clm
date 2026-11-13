@@ -156,6 +156,37 @@ fn scenario_json_is_the_model() {
 }
 
 #[test]
+fn scenario_entries_keep_the_models_order_and_show_their_fields() {
+    // req:view/queue-view@b97e55e3
+    let mut m = model();
+    m.running.insert(
+        0,
+        Running {
+            name: "build:z".into(),
+            kind: "build".into(),
+            model: "opus".into(),
+            round: 2,
+            minutes: 5,
+            taken_over: false,
+        },
+    );
+    let out = text(m.clone(), Format::Text);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(lines[3].starts_with("  build:z") && lines[3].contains("round 2"));
+    assert!(lines[4].starts_with("  build:a") && lines[4].contains("round 1"));
+    let fold = lines.iter().find(|l| l.starts_with("  fold:x")).unwrap();
+    assert!(
+        fold.contains("fold batch x") && fold.contains("since 1h"),
+        "{fold}"
+    );
+    let v: serde_json::Value = serde_json::from_str(&text(m, Format::Json)).unwrap();
+    assert_eq!(v["loop"]["state"], "held");
+    assert_eq!(v["running"][0]["round"], 2);
+    assert_eq!(v["waiting_on_you"][0]["since_minutes"], 90);
+    assert_eq!(v["next"][0]["reason"], "waits for a place");
+}
+
+#[test]
 fn scenario_lines_fit_the_width() {
     // req:view/queue-view@b97e55e3
     let out = render(&View::Queue(model()), Format::Text, 20, None);
