@@ -11,18 +11,18 @@ The skill `build`, `plugin/skills/build/SKILL.md`: run the clone's build loop (`
 
 Each action line maps to one tool call: `launch` to the Agent tool as a background `general-purpose` subagent with `isolation: "worktree"` and the line's model, its prompt the file's text unchanged, then `clm build launched` with the task ID; `resume` to `SendMessage` with the file's text; `stop` to `TaskStop`; `run` to a background Bash command whose last line is reported with `clm build returned`; `wait` to `clm build wait` as a background Bash command; `say` to showing the file's text once; `end` to ending the loop. Deferred tools are loaded with `ToolSearch` first. A subagent's return is reported as it stands, its last line unchanged, with the cause the session reads from its output: reading a stop's cause is the one judgement only a model can make, and `clm` keeps the counts.
 
-Nothing the human must see is kept only in the chat (`build-keeps-the-human-in-sight`): the loop puts it in the human's queue, which `clm view queue` and the panel's Queue tab show until it is resolved. The approval of a fold batch is still asked in the conversation, since `clm approve` must be the human's yes through the guard (`approve-in-session`, `humans-review-intent`).
+Nothing the human must see is kept only in the chat (`build-keeps-the-human-in-sight`): the loop puts it in the human's queue, which `clm view queue` and the panel's Queue tab show until it is resolved. The approval of a fold batch is still asked in the conversation, since `clm approve` must be the human's yes through the guard (`approval-policy`, `humans-review-intent`).
 
 **Tests** (`tests-count-where-cited`). The tests of this component's requirements sit in `crates/clm/tests/plugin_build.rs`; `plugin`'s tests of the shared rules read this component's file too.
 
 ## ADDED Requirements
 ### Requirement: build-runs-the-loop
-`skills/build/SKILL.md` SHALL tell Claude to say once, before starting, that runs launch under the session's permission mode and pause for the human's answers in manual mode, never refusing a mode; to run `clm build start --session-model <alias>`, `<alias>` the alias of the session's own model; and then to carry out each action every `clm build` command prints, in order: `launch` as a background subagent with `isolation: "worktree"` and the line's model, its prompt the named file's text unchanged, followed by `clm build launched <name> <task-id>`; `resume` with `SendMessage`; `stop` with `TaskStop`; `run` as a background Bash command; `wait` as `clm build wait` in the background; `say` by showing the file's text to the human; and `end` by ending. It SHALL tell Claude to report every subagent's or background command's return with `clm build returned <name> --result <last line>` as it stands, and, when `clm build wait` exits, to run `clm build step`. It SHALL tell Claude never to decide a launch, an order, a retry or a resume itself, never to do a run's work in its own context, and never to run a command aimed at a run's worktree. When `clm build start` refuses because another session holds the loop, it SHALL tell Claude to show the human `clm view queue` and to run `clm build start --take-over` only when the human says that session is gone. When the human asks to drain or stop the loop, it SHALL tell Claude to run `clm build stop --drain` or `clm build stop --now`, and when the human says they freed the disk, `clm build cleared disk`. When the human gives up a component for good, it SHALL tell Claude to release its claim with `clm branch delete`. It SHALL NOT name `clm next --wait`, `clm run`, `clm draft` or `clm wrap-up`.
+`skills/build/SKILL.md` SHALL tell Claude to say once, before starting, that runs launch under the session's permission mode and pause for the human's answers in manual mode, never refusing a mode; to run `clm build start --session-model <alias>`, `<alias>` the alias of the session's own model; and then to carry out each action every `clm build` command prints, in order: `launch` as a background subagent with `isolation: "worktree"` and the line's model, its prompt the named file's text unchanged, followed by `clm build launched <name> <task-id>`; `resume` with `SendMessage`; `stop` with `TaskStop`; `run` as a background Bash command; `wait` as `clm build wait` in the background; `say` by showing the file's text to the human; and `end` by ending. It SHALL tell Claude to report every subagent's or background command's return with `clm build returned <name> --result <last line>` as it stands, and, when `clm build wait` exits, to run `clm build step`. It SHALL tell Claude never to decide a launch, an order, a retry or a resume itself, never to do a run's work in its own context, and never to run a command aimed at a run's worktree. When `clm build start` refuses because another session holds the loop, it SHALL tell Claude to show the human `clm view queue` and to run `clm build start --take-over` only when the human says that session is gone. When the human asks to drain or stop the loop, it SHALL tell Claude to run `clm build stop --drain` or `clm build stop --now`, and when the human says they freed the disk, `clm build cleared disk`. When the human gives up a component for good, it SHALL tell Claude to release its claim with `clm branch delete`. It SHALL tell Claude to report each CLM defect it meets with `clm defect` when it happens, naming with `--component` the component a fix would lie in, since the session opens no pull request of its own and the loop drafts reported defects with the backlog's other bugs (`plugin/defect-check-before-pr`); it SHALL have no step holding `fix reported defects`. It SHALL NOT name `clm next --wait`, `clm run`, `clm draft` or `clm wrap-up`.
 
 #### Scenario: the shipped skill
 - GIVEN the plugin's `skills/build/SKILL.md`
 - WHEN a test reads it
-- THEN it contains `clm build start --session-model`, `clm build launched`, `clm build returned`, `clm build wait`, `clm build step`, `clm build stop --drain`, `clm build stop --now`, `--take-over` and `isolation: "worktree"`, and none of `clm next --wait`, `clm run `, `clm draft ` or `clm wrap-up`
+- THEN it contains `clm build start --session-model`, `clm build launched`, `clm build cleared disk`, `clm defect`, `clm build returned`, `clm build wait`, `clm build step`, `clm build stop --drain`, `clm build stop --now`, `--take-over` and `isolation: "worktree"`, and none of `clm next --wait`, `clm run `, `clm draft ` or `clm wrap-up`
 
 #### Scenario: a skill that schedules
 - GIVEN a `skills/build/SKILL.md` that tells Claude to run `clm next` and launch what it prints
@@ -54,12 +54,12 @@ Nothing the human must see is kept only in the chat (`build-keeps-the-human-in-s
 - orchestrator.loop/stop-causes
 
 ### Requirement: build-approves-in-session
-`skills/build/SKILL.md` SHALL tell Claude, when the loop's human queue (`clm view queue`) holds a fold batch waiting for approval, to ask the human once in the conversation whether they approve the intent of every folded change, showing the pull request's link and each change's `## Intent`, `## Decisions` and `## Open questions`; on a yes, to run `clm approve spec/<batch>`, which the guard has them confirm, and then `clm build step`; never to approve or land a change otherwise (`approve-in-session`, `humans-review-intent`). It SHALL keep `plugin`'s shared rules: never push `main` by any means but `clm land`, and run `clm approve` only after the human says yes in this conversation, through the guard's confirmation.
+`skills/build/SKILL.md` SHALL tell Claude, when the loop's human queue (`clm view queue`) holds a fold batch waiting for approval, to ask the human once in the conversation whether they approve the intent of every folded change, showing the pull request's link and each change's `## Intent`, `## Decisions` and `## Open questions`; on a yes, to run `clm approve spec/<batch>`, which the guard has them confirm, and then `clm build approved <batch>`; never to approve or land a change otherwise (`approval-policy`, `humans-review-intent`). It SHALL keep `plugin`'s shared rules: never push `main` by any means but `clm land`, and run `clm approve` only after the human says yes in this conversation, through the guard's confirmation.
 
 #### Scenario: the shipped skill
 - GIVEN the plugin's `skills/build/SKILL.md`
 - WHEN a test reads it
-- THEN it contains `clm approve spec/<batch>`, `## Intent`, `## Decisions` and `## Open questions`
+- THEN it contains `clm approve spec/<batch>`, `clm build approved`, `## Intent`, `## Decisions` and `## Open questions`
 
 #### Serves
 - capability/approve-intent
@@ -83,6 +83,7 @@ Nothing the human must see is kept only in the chat (`build-keeps-the-human-in-s
 #### Needs
 - orchestrator.loop/humans-queue
 - view.repo/view-queue
+- plugin.panel/queue-tab
 
 ## REMOVED Requirements
 ### Requirement: build-subagents <!-- base: 002f1bf49843cdf8 -->

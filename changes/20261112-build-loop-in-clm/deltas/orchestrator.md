@@ -12,7 +12,7 @@ The unit of building is the component, not the change (`node-reconciliation`). `
 
 A proposing session claims a backlog item before designing its fix (`propose-claims`). `clm claim backlog/<slug>` pushes branch `propose/<slug>` to `origin` the way a component claim pushes `impl/*`, with the same expiry and takeover, and prints the branch name. It refuses an item that isn't in `origin/main`'s `backlog/`, or that is already taken: claimed, or named in the `from` or `resolves` of spec work in flight on `origin`. `clm proposals` lists that spec work and the bare claims, each with its components and items, so a session can see what another is already changing. Backlog claims never enter `clm next`.
 
-An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change on any `impl/*` branch (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the `build` skill to archive.
+An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change on any `impl/*` branch (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the build loop to archive (`orchestrator.loop`).
 
 `queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. `land_priority(root, branch, base, head)` gives `land` the priority a land of `branch` carries, which orders the clone's land queue (`land-priority`, `land/lock-queue`). With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
 
@@ -116,5 +116,16 @@ Every fetch of `origin` that `clm-orchestrator` makes, in `clm next`, `clm claim
 #### Serves
 - capability/work-concurrently
 
-## REMOVED Requirements
 ### Requirement: next-wait <!-- base: bd4b8159181127e9 -->
+`clm next` SHALL refuse `--wait` and `--interval` as usage errors, and SHALL hold no code that waits for work: `clm build wait` waits for everything the build loop launches (`orchestrator.loop/build-wait`), and the skill that ran `clm next --wait` runs the loop instead. This is the contract step of moving the wait into the loop (`expand-contract`), so it waits until the skill no longer names `clm next --wait`.
+
+#### Scenario: wait refused
+- WHEN `clm next --wait` runs, and then `clm next --interval 5`
+- THEN each exits 2 with usage
+
+#### Serves
+- capability/build-from-spec
+
+#### Needs
+- plugin.build/build-runs-the-loop
+- orchestrator.loop/build-wait

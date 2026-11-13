@@ -108,10 +108,10 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN each time a test fails naming the skill and `rebase ok`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
 - model/parse-changes
 - model/parse-backlog
-- orchestrator.loop/step-actions
 
 #### Serves
 - capability/propose-intent
@@ -143,8 +143,8 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN a test fails naming the skill and `fix reported defects`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
-- orchestrator.loop/plan-order
 
 #### Serves
 - capability/report-defects
@@ -181,6 +181,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
 
 #### Serves
@@ -201,6 +202,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN `clm verify --due --event work-done` comes before the last `clm wrap-up` in it
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - verify/verify-due
 - verify/verify-import
 - orchestrator.triage/intake-verify-failures
@@ -226,8 +228,8 @@ Every subagent the plugin's skills tell Claude to launch SHALL have its model na
 - capability/right-model-per-task
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - orchestrator.run/review-model
-- orchestrator.loop/plan-order
 
 ### Requirement: unattended-permissions-check <!-- base: e8390775b69b74af -->
 `skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, once, before the first build or draft it launches, to run `clm init --check-permissions` and, when it exits 1, to tell the human that in auto mode Claude Code may deny the unattended steps those rules allow, show the rules it printed, say that they belong in `permissions.allow` in `.claude/settings.json` (or `.claude/settings.local.json` for this clone alone), and go on launching, never refusing to; when it exits with any other code, as a `clm` without the option does, to tell the human the check couldn't run and go on launching; and never to write either file itself. `skills/build/SKILL.md` SHALL tell Claude to release the claim of a component the human gives up for good with `clm branch delete`, and SHALL NOT contain `git push`.
@@ -247,6 +249,7 @@ Every subagent the plugin's skills tell Claude to launch SHALL have its model na
 - capability/triage-unattended
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - init/init-check-permissions
 - host/branch-delete
 
@@ -309,6 +312,7 @@ Every subagent the plugin's skills tell Claude to launch SHALL have its model na
 - architecture/ask-the-architect
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - model/parse-backlog
 
 ### Requirement: skills-follow-agent-harness <!-- base: bd4508d6f22f458e -->
@@ -333,3 +337,42 @@ Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for
 
 #### Serves
 - capability/work-from-any-agent-harness
+
+### Requirement: skills-push-with-clm <!-- base: 69c5495464f2a9ca -->
+No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a skill tells Claude to push a branch to `origin`, attended or not, it SHALL name `clm branch push`, and wherever it tells Claude to delete a branch on `origin`, `clm branch delete`, so that under Claude Code's auto mode every step that writes to `origin` is a `clm` command the project's allow rules cover (`unattended-steps-run-clm`).
+
+#### Scenario: skills push through clm
+- GIVEN the plugin's `skills/*/SKILL.md`
+- WHEN a test reads each
+- THEN none contains `git push`, and `propose`, `contribution` and `triage` each contain `clm branch push`
+
+#### Scenario: skill with a raw push
+- GIVEN a `SKILL.md` that tells Claude to push with `git push --force-with-lease`
+- WHEN the test's check runs on it
+- THEN it reports the skill and `git push`
+
+#### Serves
+- capability/build-from-spec
+- capability/triage-unattended
+
+#### Needs
+- host/branch-push
+- host/branch-delete
+- plugin.build/build-runs-the-loop
+
+### Requirement: wrap-up-left-lines <!-- base: 969152a0e11b1a70 -->
+Each of `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/contribution/SKILL.md` and `skills/init/SKILL.md` that tells Claude to run `clm wrap-up` SHALL tell Claude to pass each `left <path>: ...` line `clm wrap-up` prints to the human as it stands, a build's worktree it couldn't remove, which doesn't make the wrap-up incomplete, and to leave the directory, and any command the line names, to them. No skill SHALL tell Claude to run `git worktree prune` or delete such a directory itself. `skills/build/SKILL.md` runs no `clm wrap-up`: its loop passes those lines on in its `say` actions (`orchestrator.loop/step-housekeeping`).
+
+#### Needs
+- orchestrator.checkpoint/checkpoint
+- plugin.build/build-runs-the-loop
+
+#### Scenario: wrap-up's left lines passed on
+- GIVEN the plugin's skills
+- WHEN a test reads each one that names `clm wrap-up`
+- THEN it holds a paragraph that names both `clm wrap-up` and `left <path>`, and no skill holds `git worktree prune`
+
+#### Scenario: skill without the line
+- GIVEN a `SKILL.md` that names `clm wrap-up` and no paragraph naming `left <path>` with it
+- WHEN the test's check runs on it
+- THEN it reports that skill
