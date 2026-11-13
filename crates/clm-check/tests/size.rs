@@ -80,7 +80,7 @@ fn line(root: &Path, node: &str) -> String {
 
 #[test]
 fn over_its_spec_budget() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[("src/a/x.rs", &[b'a'; 400])]);
     assert_eq!(
         line(dir.path(), "a"),
@@ -90,7 +90,7 @@ fn over_its_spec_budget() {
 
 #[test]
 fn files_that_dont_count() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let mut logo = b"\x89PNG\0".to_vec();
     logo.resize(4000, b'p');
     let dir = repo(
@@ -118,14 +118,14 @@ fn files_that_dont_count() {
 
 #[test]
 fn rounded_once() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[("src/a/p.rs", b"p"), ("src/a/q.rs", b"qqq")]);
     assert!(line(dir.path(), "a").contains("\tcode 1/1000"));
 }
 
 #[test]
 fn attribute_set_to_false() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(
         "",
         &[
@@ -142,7 +142,7 @@ fn attribute_set_to_false() {
 
 #[test]
 fn budget_raised_in_the_spec() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(
         "size_budget: { spec_tokens: 2000 }\n",
         &[("src/a/x.rs", &[b'a'; 400])],
@@ -152,7 +152,7 @@ fn budget_raised_in_the_spec() {
 
 #[test]
 fn code_budget_raised_in_the_spec() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(
         "size_budget: { code_tokens: 50 }\n",
         &[("src/a/x.rs", &[b'a'; 400])],
@@ -165,7 +165,7 @@ fn code_budget_raised_in_the_spec() {
 
 #[test]
 fn exactly_at_budget_is_not_over() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(
         "size_budget: { spec_tokens: 1001, code_tokens: 100 }\n",
         &[("src/a/x.rs", &[b'a'; 400])],
@@ -175,7 +175,7 @@ fn exactly_at_budget_is_not_over() {
 
 #[test]
 fn every_node_sorted_by_id() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[]);
     write(dir.path(), "specs/b/SPEC.md", &spec("[]", "", 200));
     let nodes: Vec<_> = sizes(dir.path()).into_iter().map(|s| s.node).collect();
@@ -184,7 +184,7 @@ fn every_node_sorted_by_id() {
 
 #[test]
 fn a_node_without_paths_has_no_code() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[("src/a/x.rs", &[b'a'; 400])]);
     let bytes = fs::metadata(dir.path().join("specs/SPEC.md"))
         .unwrap()
@@ -197,7 +197,7 @@ fn a_node_without_paths_has_no_code() {
 
 #[test]
 fn a_nul_after_the_first_8000_bytes_still_counts() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let mut text = vec![b't'; 8000];
     text.extend(b"\0tail");
     let dir = repo("", &[("src/a/late.txt", &text)]);
@@ -206,7 +206,7 @@ fn a_nul_after_the_first_8000_bytes_still_counts() {
 
 #[test]
 fn bare_vendored_attribute_excludes() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(
         "",
         &[
@@ -220,7 +220,7 @@ fn bare_vendored_attribute_excludes() {
 
 #[test]
 fn a_conflicted_file_counts_once() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[("src/a/x.rs", &[b'a'; 400])]);
     let root = dir.path();
     // Replace stage 0 with the three stages of a merge conflict on the same file.
@@ -253,7 +253,7 @@ fn a_conflicted_file_counts_once() {
 #[cfg(unix)]
 #[test]
 fn symlinks_and_directories_dont_count() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[("src/a/x.rs", &[b'a'; 400]), ("big", &[b'b'; 4000])]);
     let root = dir.path();
     std::os::unix::fs::symlink("../../big", root.join("src/a/link")).unwrap();
@@ -273,7 +273,7 @@ fn symlinks_and_directories_dont_count() {
 #[cfg(unix)]
 #[test]
 fn file_names_that_arent_utf8_count() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     use std::os::unix::ffi::OsStrExt;
     let dir = repo("", &[]);
     let root = dir.path();
@@ -296,7 +296,7 @@ fn file_names_that_arent_utf8_count() {
 
 #[test]
 fn file_names_with_spaces_count() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("", &[("src/a/my file.rs", &[b'a'; 400])]);
     assert!(line(dir.path(), "a").contains("\tcode 100/1000"));
 }
@@ -326,7 +326,7 @@ const CITES_A_AND_B: &str = concat!("// req", ":a/y req", ":b/x");
 
 #[test]
 fn a_test_counts_where_it_is_cited() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let test = sized(CITES_B, 800);
     let dir = two_nodes(&[("src/a/tests/b.rs", &test), ("src/a/lib.rs", &[b'a'; 400])]);
     assert!(
@@ -343,7 +343,7 @@ fn a_test_counts_where_it_is_cited() {
 
 #[test]
 fn a_test_citing_two_nodes_counts_for_both() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let test = sized(CITES_A_AND_B, 400);
     let dir = two_nodes(&[("tests/both.rs", &test), ("src/a/lib.rs", &[b'a'; 400])]);
     assert!(
@@ -360,7 +360,7 @@ fn a_test_citing_two_nodes_counts_for_both() {
 
 #[test]
 fn budget_outgrown() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(
         "size_budget: { spec_tokens: 2000 }\n",
         &[("src/a/x.rs", &[b'a'; 400])],
@@ -379,7 +379,7 @@ fn budget_outgrown() {
 
 #[test]
 fn markers_naming_no_node_count_nowhere() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let test = sized(concat!("// req", ":zz/x"), 800);
     let dir = two_nodes(&[("src/a/t.rs", &test), ("src/a/lib.rs", &[b'a'; 400])]);
     let sizes = sizes(dir.path());
@@ -392,7 +392,7 @@ fn markers_naming_no_node_count_nowhere() {
 
 #[test]
 fn a_removed_requirement_still_counts() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     // `b` has no requirement `gone`: the marker still names node `b`.
     let test = sized(concat!("// req", ":b/gone"), 800);
     let dir = two_nodes(&[("src/a/t.rs", &test)]);
@@ -409,8 +409,38 @@ fn a_removed_requirement_still_counts() {
 }
 
 #[test]
+fn an_unmarked_file_counts_for_its_owner() {
+    // req:check/node-size@a70a5200
+    // `b`'s `tests` match a file `a`'s `paths` also hold: it is `b`'s, by `owner`.
+    let dir = repo(
+        "",
+        &[
+            ("src/a/t/u.rs", &[b'u'; 400]),
+            ("src/a/lib.rs", &[b'a'; 400]),
+        ],
+    );
+    write(
+        dir.path(),
+        "specs/b/SPEC.md",
+        &spec("[\"src/b/**\"]", "tests: [\"src/a/t/**\"]\n", 200),
+    );
+    // A node below `a` whose `paths` are deeper owns what only paths hold.
+    write(
+        dir.path(),
+        "specs/a.c/SPEC.md",
+        &spec("[\"src/a/c/**\"]", "", 200),
+    );
+    write(dir.path(), "src/a/c/v.rs", &[b'v'; 800]);
+    git(dir.path(), &["add", "src/a/c/v.rs"]);
+    let code = |n: &str| line(dir.path(), n);
+    assert!(code("a").contains("\tcode 100/1000"), "{}", code("a"));
+    assert!(code("b").contains("\tcode 100/1000"), "{}", code("b"));
+    assert!(code("a.c").contains("\tcode 200/1000"), "{}", code("a.c"));
+}
+
+#[test]
 fn markdown_counts_by_paths() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let doc = sized(CITES_B, 400);
     let dir = two_nodes(&[("src/a/notes.md", &doc)]);
     assert!(
@@ -427,7 +457,7 @@ fn markdown_counts_by_paths() {
 
 #[test]
 fn an_excluded_file_with_markers_counts_nowhere() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let generated = sized(CITES_B, 4000);
     let dir = two_nodes(&[
         (".gitattributes", b"src/a/gen.rs linguist-generated\n"),
@@ -447,7 +477,7 @@ fn an_excluded_file_with_markers_counts_nowhere() {
 
 #[test]
 fn untracked_files_with_markers_dont_count() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = two_nodes(&[]);
     write(dir.path(), "src/a/t.rs", &sized(CITES_B, 800));
     assert!(
@@ -470,7 +500,7 @@ fn with_inline_tests(marker: &str) -> Vec<u8> {
 
 #[test]
 fn inline_tests_count_where_they_are_cited() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = two_nodes(&[("src/a/w.rs", &with_inline_tests(CITES_B))]);
     assert!(
         line(dir.path(), "a").contains("\tcode 100/1000"),
@@ -486,7 +516,7 @@ fn inline_tests_count_where_they_are_cited() {
 
 #[test]
 fn inline_tests_without_markers() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let mut text = b"fn a() {}\n    #[cfg(test)]\nmod tests {}\n".to_vec();
     text.resize(400, b'x');
     let dir = two_nodes(&[("src/a/v.rs", &text)]);
@@ -499,7 +529,7 @@ fn inline_tests_without_markers() {
 
 #[test]
 fn only_an_exact_cfg_test_line_splits_a_rust_file() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     // Not exactly `#[cfg(test)]`: one part, holding a marker, so `b`'s only.
     let mut rust = format!("#[cfg(test)] mod t;\n{CITES_B}\n").into_bytes();
     rust.resize(400, b'r');
@@ -525,7 +555,7 @@ fn only_an_exact_cfg_test_line_splits_a_rust_file() {
 
 #[test]
 fn a_marked_source_part_and_an_unmarked_test_part() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let mut text = sized(CITES_B, 399);
     text.push(b'\n');
     let mut tests = b"#[cfg(test)]\n".to_vec();
