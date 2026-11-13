@@ -105,6 +105,8 @@ pub struct Cost {
     pub version: String,
     pub statement: String,
     pub why: String,
+    /// Its entry's Markdown below its heading (`entry-text`).
+    pub text: String,
     /// The rules whose effective serves names it.
     pub rules: Vec<String>,
     /// Those rules' nodes.
@@ -143,6 +145,8 @@ pub struct Constraint {
     pub slug: String,
     pub version: String,
     pub statement: String,
+    /// Its entry's Markdown below its heading (`entry-text`).
+    pub text: String,
     pub enforced_by: Vec<Enforcing>,
     /// Its `#### Untested` text.
     pub untested: Option<String>,
@@ -273,6 +277,12 @@ fn block(entry: &Requirement, name: Option<&str>) -> String {
         .filter(|l| !l.is_empty())
         .collect();
     text.join(" ")
+}
+
+/// An entry's Markdown after its heading, with the blank lines around it removed.
+fn entry_text(entry: &Requirement) -> String {
+    let body: Vec<&str> = entry.text.lines().skip(1).collect();
+    body.join("\n").trim().to_string()
 }
 
 /// The slugs a capability's decisions settled.
@@ -499,6 +509,7 @@ pub fn architecture(inputs: &Inputs, current: Option<&BTreeSet<String>>) -> Vec<
                 slug: id.trim_start_matches("architecture/").into(),
                 version: entry.version().into(),
                 statement: block(entry, None),
+                text: entry_text(entry),
                 enforced_by: entry
                     .enforced_by
                     .iter()
@@ -644,6 +655,7 @@ pub fn report(inputs: &Inputs) -> Report {
                 version: entry.version().into(),
                 statement: block(entry, None),
                 why: block(entry, Some("Why")),
+                text: entry_text(entry),
                 rules: rules.iter().map(|r| r.id.clone()).collect(),
                 nodes: nodes.iter().map(|n| n.to_string()).collect(),
                 spend: spend.get(id).copied().unwrap_or_default(),

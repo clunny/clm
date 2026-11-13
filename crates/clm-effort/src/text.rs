@@ -337,6 +337,7 @@ mod tests {
             version: "00000000".into(),
             statement: "S.".into(),
             why: "W.".into(),
+            text: String::new(),
             rules: Vec::new(),
             nodes: Vec::new(),
             spend: Spend::default(),

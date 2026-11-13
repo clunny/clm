@@ -329,6 +329,7 @@ fn constraint(slug: &str, enforced_by: &[(&str, bool)], untested: Option<&str>) 
         slug: slug.into(),
         version: "00000000".into(),
         statement: "Git SHALL hold it.".into(),
+        text: String::new(),
         enforced_by: enforced_by
             .iter()
             .map(|(rule, current)| Enforcing {
@@ -603,4 +604,46 @@ fn architecture_flags_and_decisions() {
     );
     let e = constraint_of(&list, "e");
     assert!(!e.flags[0].settled && e.flagged);
+}
+
+#[test]
+fn a_capabilitys_text_is_its_whole_entry() {
+    // req:effort/entry-text@c8d13ca6
+    let capabilities = "## Capabilities\n\n### Capability: x\nA person runs `clm land`.\n\n#### Why\nx why\n\n#### Scenario: s\n- ok\n\n### Capability: y\nA person can y.\n\n#### Why\ny why\n\n#### Scenario: s\n- ok\n";
+    let graph = graph(&[("CAPABILITIES.md", capabilities)]);
+    let fold = fold(&[]);
+    let report = run(&graph, &fold);
+    let cost = |slug: &str| report.capabilities.iter().find(|c| c.slug == slug).unwrap();
+    let text = &cost("x").text;
+    assert!(text.starts_with("A person runs `clm land`."), "{text}");
+    assert!(text.contains("#### Why") && text.contains("#### Scenario: s"));
+    assert!(!text.contains("y why") && !text.contains("Capability: y"));
+    assert_eq!(text.trim(), text);
+    // The JSON a client reads carries it.
+    let json = serde_json::to_value(cost("x")).unwrap();
+    assert_eq!(json["text"], *text);
+}
+
+#[test]
+fn a_text_stops_at_the_next_section() {
+    // req:effort/entry-text@c8d13ca6
+    let capabilities = "## Capabilities\n\n### Capability: x\nA person can x.\n\n#### Why\nx why\n\n#### Scenario: s\n- ok\n\n## Notes\n\nOther prose.\n";
+    let graph = graph(&[("CAPABILITIES.md", capabilities)]);
+    let fold = fold(&[]);
+    let report = run(&graph, &fold);
+    let x = report.capabilities.iter().find(|c| c.slug == "x").unwrap();
+    assert!(x.text.ends_with("- ok"), "{}", x.text);
+    assert!(!x.text.contains("Other prose"));
+}
+
+#[test]
+fn a_constraints_text_is_its_whole_entry() {
+    // req:effort/entry-text@c8d13ca6
+    let list = architecture_of(&fold_of_nothing(), None);
+    let e = constraint_of(&list, "e");
+    assert!(e.text.starts_with("Git SHALL hold e."), "{}", e.text);
+    assert!(e.text.contains("#### Enforced by") && e.text.contains("- a/x"));
+    let g = constraint_of(&list, "g");
+    assert!(g.text.contains("#### Untested") && g.text.contains("A judgement."));
+    assert!(!g.text.contains("Constraint: "));
 }
