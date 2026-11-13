@@ -36,7 +36,7 @@ fn clm(root: &Path, args: &[&str]) -> (Option<i32>, String) {
 
 #[test]
 fn gate_prints_kind_and_blocks_mixed_pr() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     let git = |args: &[&str]| {

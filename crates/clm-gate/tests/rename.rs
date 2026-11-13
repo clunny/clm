@@ -64,7 +64,7 @@ const TERM_RENAME: &str = "  - term: spine\n    to: trunk\n";
 
 #[test]
 fn a_rename_branch_is_a_spec_branch() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     let dir = renamed(ID_RENAME, "");
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
     assert_eq!(out.kind, Kind::Spec, "{:?}", out.violations);
@@ -74,7 +74,7 @@ fn a_rename_branch_is_a_spec_branch() {
 
 #[test]
 fn a_rename_branch_with_a_code_edit_is_mixed() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     let dir = renamed(ID_RENAME, "");
     write(dir.path(), "crates/a/src/lib.rs", "pub fn b() {}\n");
     commit(dir.path(), "extra");
