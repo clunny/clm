@@ -46,6 +46,7 @@ fn names(snapshot: &Snapshot) -> Vec<String> {
             Launch::Build { component, .. } => format!("build:{component}"),
             Launch::Draft { key, .. } => format!("draft:{key}"),
             Launch::Relaunch(name) => format!("relaunch:{name}"),
+            Launch::Archive { id, .. } => format!("archive:{id}"),
         })
         .collect()
 }

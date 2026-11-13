@@ -54,6 +54,10 @@ pub struct Snapshot {
     pub unsafe_work: Vec<String>,
     /// The migrations `clm upgrade` lists, by ID.
     pub upgrades: Vec<String>,
+    /// The changes `clm wrap-up` names `complete`, in its order.
+    pub complete: Vec<String>,
+    /// The IDs of the `impl/archive/*` branches on `origin`.
+    pub archive_branches: Vec<String>,
 }
 
 /// What the step does for one entry of the plan.
@@ -68,6 +72,11 @@ pub enum Launch {
     Draft {
         key: String,
         items: Vec<String>,
+        model: String,
+    },
+    /// Archive the complete change `id` on `impl/archive/<id>`; it takes no place.
+    Archive {
+        id: String,
         model: String,
     },
 }
@@ -157,6 +166,15 @@ fn active(file: &LoopFile, name: &str) -> bool {
         .any(|r| r.name == name && r.state != RunState::Returned)
 }
 
+/// The change to archive now: the first complete one, when every `impl/archive/*` branch on
+/// `origin` is held by a run of the loop and that change's run isn't already going
+/// (`plan-archive`).
+fn archive_due(s: &Snapshot) -> Option<String> {
+    let id = s.complete.first()?;
+    let held = |id: &str| active(&s.file, &format!("archive:{id}"));
+    (s.archive_branches.iter().all(|b| held(b)) && !held(id)).then(|| id.clone())
+}
+
 /// The plan for a snapshot: the orphans to relaunch, then, up to the free places, the builds
 /// and drafts in one list sorted by priority, a draft before a build at equal priority, each
 /// keeping its own command's order otherwise (`plan-order`).
@@ -223,6 +241,18 @@ pub fn plan_of(s: &Snapshot) -> Plan {
                     model: s.build_model.clone(),
                 },
             ));
+        }
+        if let Some(id) = archive_due(s) {
+            next.push(StoredNext {
+                name: format!("archive:{id}"),
+                kind: Kind::Archive,
+                priority: "-".to_string(),
+                reason: LAUNCHES_NOW.to_string(),
+            });
+            launches.push(Launch::Archive {
+                id,
+                model: s.build_model.clone(),
+            });
         }
         candidates.sort_by_key(|(rank, build, ..)| (*rank, *build));
         let busy = file

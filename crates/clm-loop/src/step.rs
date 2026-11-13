@@ -147,6 +147,11 @@ fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Sna
         backlog: read_backlog(options)?,
         unsafe_work: unsafe_work(wrap_up),
         upgrades: read_upgrades(options)?,
+        complete: wrap_up
+            .lines()
+            .filter_map(|l| Some(l.trim().strip_prefix("complete ")?.trim().to_string()))
+            .collect(),
+        archive_branches: archive_branches(options)?,
     })
 }
 
@@ -228,6 +233,37 @@ fn read_upgrades(options: &Options) -> Result<Vec<String>, Failure> {
             matches!(words.next()?, "required" | "advised").then(|| id.to_string())
         })
         .collect())
+}
+
+/// The IDs of the `impl/archive/*` branches on `origin`.
+fn archive_branches(options: &Options) -> Result<Vec<String>, Failure> {
+    Ok(clm_git::git(
+        &options.root,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/remotes/origin/impl/archive/",
+        ],
+    )?
+    .lines()
+    .filter_map(|r| r.strip_prefix("refs/remotes/origin/impl/archive/"))
+    .map(str::to_string)
+    .collect())
+}
+
+/// The prompt of the subagent that archives the complete change `id` (`plan-archive`).
+fn archive_prompt(id: &str) -> String {
+    format!(
+        "Archive the complete change `{id}`, in your own checkout.\n\n\
+1. Cut the branch: `git switch -c impl/archive/{id} origin/main`. When `origin` already has \
+`impl/archive/{id}`, continue it instead: `git switch -c impl/archive/{id} origin/impl/archive/{id}`.\n\
+2. Run `clm rebase` until its last line is `rebase ok`, resolving what it reports and \
+committing each fix.\n\
+3. Push with `clm branch push`. When the push is refused because the branch moved on `origin`, \
+another session is archiving it: leave it to that session and stop.\n\
+4. Open the pull request with `clm pr open`, then land with `clm land`.\n\n\
+End with one line: `landed <sha>` or `stopped: <reason>`.\n"
+    )
 }
 
 /// What preparing one launch came to.
@@ -314,6 +350,16 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
             let mut args = vec!["draft"];
             args.extend(items.iter().map(String::as_str));
             launch_run(options, run, &args)
+        }
+        Launch::Archive { id, model } => {
+            let name = format!("archive:{id}");
+            let prompt = write_prompt(options, &name, &archive_prompt(id))?;
+            Ok(Prepared::Run(Box::new(planned(
+                &name,
+                Some(Kind::Archive),
+                model,
+                Some(prompt),
+            ))))
         }
         Launch::Relaunch(name) => {
             let Some(orphan) = file.run(name) else {
