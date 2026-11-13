@@ -251,6 +251,7 @@ dependencies = [
  "clm-init",
  "clm-land",
  "clm-ledger",
+ "clm-loop",
  "clm-machine",
  "clm-model",
  "clm-orchestrator",
@@ -725,6 +726,7 @@ version = "0.26.0"
 dependencies = [
  "clm-check",
  "clm-git",
+ "clm-loop",
  "clm-model",
  "clm-orchestrator",
  "clm-view",

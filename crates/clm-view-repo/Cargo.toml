@@ -11,6 +11,7 @@ clm-model.workspace = true
 clm-check = { workspace = true, features = ["checkout", "detectors"] }
 clm-orchestrator = { workspace = true, features = ["git"] }
 clm-view.workspace = true
+clm-loop.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
