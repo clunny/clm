@@ -21,7 +21,13 @@ fn ready(repo: &Repo) -> Vec<String> {
 
 /// What a build session does in its own worktree `dir`: switch to the node's branch, write
 /// a test citing each of `requirements` (`(slug, version)`) under `tests_dir`, push and land.
-fn build(repo: &Repo, dir: &Path, node: &str, tests_dir: &str, requirements: &[(&str, String)]) {
+fn build(
+    repo: &Repo,
+    dir: &Path,
+    node: &str,
+    tests_dir: &str,
+    requirements: &[(&str, String)],
+) -> String {
     let d = dir.to_str().unwrap();
     repo.git(&["worktree", "add", "-q", "--detach", d, "origin/main"]);
     let git = |args: &[&str]| {
@@ -40,7 +46,7 @@ fn build(repo: &Repo, dir: &Path, node: &str, tests_dir: &str, requirements: &[(
     git(&["commit", "-q", "-m", &format!("build {node}")]);
     git(&["push", "-q", "origin", &format!("impl/{node}")]);
     let session = repo.at(dir);
-    landed(&session.clm(&["land", &format!("impl/{node}")]));
+    landed(&session.clm(&["land", &format!("impl/{node}")]))
 }
 
 #[test]
@@ -73,22 +79,55 @@ fn drain_the_queue() {
     nodes.sort();
     assert_eq!(nodes, ["a", "b"]);
 
-    // Both builds start before either lands, each holding a place of its own.
-    for node in ["a", "b"] {
-        let out = repo.clm(&["run", node, "--review-model", "opus"]);
+    // The loop starts, and prints a launch for each build before either lands, each holding
+    // a place of its own.
+    let build_loop = |args: &[&str]| {
+        let out = repo.clm_env(&[&["build"], args].concat(), "", &[("CLAUDECODE", "1")]);
         assert!(out.status.success(), "{}", printed(&out));
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    let actions = build_loop(&["start", "--session-model", "opus"]);
+    let launches: Vec<&String> = actions
+        .iter()
+        .filter(|l| l.starts_with("launch "))
+        .collect();
+    assert_eq!(launches.len(), 2, "{actions:?}");
+    for node in ["a", "b"] {
+        let prefix = format!("launch build:{node} build sonnet ");
+        let launch = launches.iter().find(|l| l.starts_with(&prefix)).unwrap();
+        let prompt = fs::read_to_string(launch.strip_prefix(&prefix).unwrap()).unwrap();
+        assert!(
+            prompt.starts_with(&format!("loop run build:{node}\n")),
+            "{prompt}"
+        );
         assert!(repo.root.join(format!(".clm/prompts/{node}.md")).exists());
     }
     repo.git(&["fetch", "-q", "origin"]);
     assert!(ready(&repo).is_empty(), "both are claimed");
 
+    // The session launches each build in a subagent and reports its task.
+    for (i, node) in ["a", "b"].iter().enumerate() {
+        build_loop(&["launched", &format!("build:{node}"), &format!("t-{i}")]);
+    }
+
     // Each build session works in its own worktree, and lands.
     let worktrees = repo.root.join(".claude/worktrees");
-    build(&repo, &worktrees.join("build-a"), "a", "tests", &a);
-    build(&repo, &worktrees.join("build-b"), "b", "lib/tests", &b);
-    for node in ["a", "b"] {
-        let out = repo.clm(&["run", "--finish", node]);
-        assert!(out.status.success(), "{}", printed(&out));
+    let sha_a = build(&repo, &worktrees.join("build-a"), "a", "tests", &a);
+    let sha_b = build(&repo, &worktrees.join("build-b"), "b", "lib/tests", &b);
+    for (node, sha) in [("a", sha_a), ("b", sha_b)] {
+        let actions = build_loop(&[
+            "returned",
+            &format!("build:{node}"),
+            "--result",
+            &format!("landed {sha}"),
+        ]);
+        assert!(
+            !actions.iter().any(|l| l.starts_with("launch ")),
+            "{actions:?}"
+        );
     }
 
     // Nothing is left to build.
