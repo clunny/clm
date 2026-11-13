@@ -98,3 +98,13 @@ fn build_skill_is_named_build() {
     let gaps = old_skill_name_gaps(&files);
     assert!(gaps.is_empty(), "{gaps:#?}");
 }
+
+#[test]
+fn build_skill_points_at_the_queue() {
+    // req:plugin.build/build-keeps-the-human-in-sight@1964557c
+    // The skill says what needs the human is in the loop's queue and points at it.
+    let (_, body) = frontmatter(&plugin().join("skills/build/SKILL.md"));
+    for needle in ["clm view queue", "Queue"] {
+        assert!(body.contains(needle), "{needle} missing from the skill");
+    }
+}
