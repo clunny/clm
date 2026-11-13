@@ -1,4 +1,4 @@
-//! The proposal, withdrawal and decide routes pass their writes to the repo's `Replica`
+//! The proposal, withdrawal, answer and decide routes pass their writes to the repo's `Replica`
 //! object in one post and answer what it answers (`writes-to-object`). The object is
 //! scripted here; the routes' own scenarios run against a real one.
 
@@ -179,6 +179,11 @@ fn object_down() {
         propose(&fake, &cookie, "a", &proposal()),
         decide(&fake, &cookie, "capabilities/x", &valid),
         withdraw(&fake, &cookie, "p1"),
+        fake.handle(post(
+            "/api/repos/o/a/backlog/q/answer",
+            &cookie,
+            br#"{"answer": "yes"}"#,
+        )),
     ] {
         assert_eq!(res.status, 503);
         assert_eq!(body_json(&res), json!({"error": "unavailable"}));

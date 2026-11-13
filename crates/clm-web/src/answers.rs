@@ -24,7 +24,7 @@ pub(crate) fn parse(body: &[u8]) -> Result<String, Response> {
 }
 
 /// `POST /api/repos/{o}/{r}/backlog/{slug}/answer`: the checked answer, passed to the
-/// object with the item's slug, percent-decoded by the router.
+/// object with the item's slug, which the caller has percent-decoded.
 pub(crate) async fn answer<P: Replicas>(
     p: &P,
     access: &Access,

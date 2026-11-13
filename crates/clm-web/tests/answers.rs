@@ -137,18 +137,24 @@ fn a_body_that_is_no_answer_is_refused_before_asking_anyone() {
 }
 
 #[test]
-fn the_item_is_percent_decoded() {
+fn no_access() {
     // req:web.worker/answers@7d19919b
-    let (fake, cookie) = setup_as(false);
-    fake.set_write(200, json!({"id": "a1"}));
-    let res = answer(&fake, &cookie, "my%20item", &json!({"answer": "yes"}));
-    assert_eq!(res.status, 200);
-    let asked = fake.replicas.asked("o/a");
-    assert_eq!(asked.len(), 1);
-    let post = asked[0].body.clone().unwrap();
-    assert_eq!(post["kind"], "answer");
-    assert_eq!(post["item"], "my item");
-    assert_eq!(post["answer"], "yes");
+    let (fake, cookie) = setup_as(true);
+    fake.gh
+        .add_repo("o/private", FakeRepo::new("111", clm_repo()));
+    let calls = fake.replicas.calls.borrow().len();
+    let res = fake.handle(post(
+        "/api/repos/o/private/backlog/q/answer",
+        &cookie,
+        json!({"answer": "yes"}).to_string().as_bytes(),
+    ));
+    assert_eq!(res.status, 404);
+    assert!(fake.gh.writes().is_empty());
+    assert_eq!(
+        fake.replicas.calls.borrow().len(),
+        calls,
+        "the object is asked nothing"
+    );
 }
 
 #[test]

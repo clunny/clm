@@ -1,5 +1,5 @@
 //! The writes that need the replica to validate them (`web.worker/writes-to-object`): a
-//! proposal, a withdrawal and a decision. The Worker checks the body and the access, makes
+//! proposal, a withdrawal, an answer and a decision. The Worker checks the body and the access, makes
 //! one post to the repo's `Replica` object and answers what the object answers.
 
 use serde_json::{Value, json};
