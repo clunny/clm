@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [loop-wrap-up-fails-deleting-a-propose-branch-already-gone-from]
 ---
 
