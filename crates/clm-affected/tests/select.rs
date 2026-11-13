@@ -235,27 +235,32 @@ fn doc_only_paths_beside_code_select_what_the_code_does() {
 #[test]
 fn a_component_whose_tests_import_a_changed_one_is_affected() {
     // req:check.affected/affected-components@f4c3029d
-    let doc = |paths: &str, extra: &str| {
+    let doc = |paths: &str, deps: &str, extra: &str| {
         format!(
-            "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n"
+            "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: {deps}\n{extra}---\n"
         )
         .into_bytes()
     };
     let files: clm_model::Files = [
-        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "")),
-        ("specs/app/SPEC.md", doc("[\"crates/app/**\"]", "")),
+        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "[]", "")),
+        (
+            "specs/app/SPEC.md",
+            doc("[\"crates/app/**\"]", "[feat]", ""),
+        ),
         (
             "specs/feat/SPEC.md",
-            doc("[\"crates/feat/**\"]", "test_depends_on: [app]\n"),
+            doc("[\"crates/feat/**\"]", "[]", "test_depends_on: [app]\n"),
         ),
-        ("specs/other/SPEC.md", doc("[\"crates/other/**\"]", "")),
+        (
+            "specs/other/SPEC.md",
+            doc("[\"crates/other/**\"]", "[]", ""),
+        ),
     ]
     .into_iter()
     .map(|(p, t)| (p.into(), t))
     .collect();
-    let (mut graph, violations) = clm_model::load_files(&files);
+    let (graph, violations) = clm_model::load_files(&files);
     assert!(violations.is_empty(), "{violations:?}");
-    graph.nodes.get_mut("app").unwrap().frontmatter.depends_on = vec!["feat".into()];
     let s = select(
         &graph,
         &changed(&["crates/app/src/lib.rs"]),
