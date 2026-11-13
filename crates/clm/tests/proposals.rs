@@ -134,7 +134,7 @@ fn next_with(dir: &Path, max_builds: &str) -> (Option<i32>, String, String) {
 
 #[test]
 fn next_is_capped_by_the_max_builds_setting() {
-    // req:orchestrator/next@f8bdf513
+    // req:orchestrator/next@fd7e1025
     let r = repo();
     let (code, out, err) = next_with(&r.work, "3");
     assert_eq!((code, out.as_str()), (Some(0), "a\nb\nc\n"), "{err}");

@@ -873,7 +873,7 @@ fn backlog_and_archive_commands() {
 
 #[test]
 fn orchestrator_commands_exit_2_when_git_fails() {
-    // req:orchestrator/next@f8bdf513 req:orchestrator/claim@026fab7a
+    // req:orchestrator/next@fd7e1025 req:orchestrator/claim@026fab7a
     // req:orchestrator/backlog-claim@50959cb7 req:orchestrator/proposals@ba5ce6a8
     // req:orchestrator/claim-fix@5a3c119e
     let dir = change_repo("---\ncomponent: clm\n---\n");
