@@ -178,6 +178,11 @@ fn resume_in_a_new_session() {
         &[("CLAUDECODE", "1")],
     );
     assert!(!live.status.success(), "{}", printed(&live));
+    assert!(
+        printed(&live).contains("clm view queue"),
+        "{}",
+        printed(&live)
+    );
     let common = repo.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
     let file = Path::new(common.trim()).join("clm/loop");
     let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
