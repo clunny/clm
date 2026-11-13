@@ -23,7 +23,7 @@ AI SHALL write all code. Humans do not author or review code, and code changes o
 Who wrote a diff isn't visible to a program; the build flow it relies on is enforced through `land-locally` and `humans-review-intent`.
 
 ### Constraint: humans-review-intent
-Humans SHALL review intent, not code. A spec branch needs a human's approval, given with `clm approve` before it lands, exactly when it edits `ARCHITECTURE.md`, `CAPABILITIES.md` or the trusted keys in `docs/allowed_signers`, changes `clm.toml`'s `approval` setting, or adds or edits a change that declares `human_burdens` or whose `change.md` can't be read, which fails closed. A branch whose whole diff `clm rename` reproduces from the base and the renames its change records is a spec branch, its rewritten test markers included, and its replayed edits to `ARCHITECTURE.md` and `CAPABILITIES.md` don't need review, since renaming an ID changes no intent; one that swaps a term does, since only a human can judge that a swapped word keeps a rule's meaning (`rename-by-replay`). Every other change lands on checks, and nothing is reviewed after it lands (`yes-no-review`).
+Humans SHALL review intent, not code. A spec branch needs a human's approval, given with `clm approve` before it lands, exactly when it edits `ARCHITECTURE.md`, `CAPABILITIES.md` or the trusted keys in `docs/allowed_signers`, changes `clm.toml`'s `approval` setting, adds or widens a component's exemption from a code rule (`exemptions-end`), or adds or edits a change that declares `human_burdens` or whose `change.md` can't be read, which fails closed. A branch whose whole diff `clm rename` reproduces from the base and the renames its change records is a spec branch, its rewritten test markers included, and its replayed edits to `ARCHITECTURE.md` and `CAPABILITIES.md` don't need review, since renaming an ID changes no intent; one that swaps a term does, since only a human can judge that a swapped word keeps a rule's meaning (`rename-by-replay`). Every other change lands on checks, and nothing is reviewed after it lands (`yes-no-review`).
 
 #### Scenario: capability edit
 - GIVEN a spec branch that edits only `CAPABILITIES.md`
@@ -34,6 +34,11 @@ Humans SHALL review intent, not code. A spec branch needs a human's approval, gi
 - GIVEN a spec branch that only rewords a component's requirement and declares no `human_burdens`
 - WHEN `clm gate` judges it
 - THEN its first line is `spec`, and it lands on checks
+
+#### Scenario: exemption added
+- GIVEN a spec branch that only adds an exemption to a component's frontmatter, with the backlog item that ends it
+- WHEN `clm gate` judges it
+- THEN its first line is `spec review`
 
 #### Scenario: rename of an architecture entry
 - GIVEN a branch holding only what `clm rename` produced from a change renaming an `ARCHITECTURE.md` entry's slug
@@ -590,6 +595,7 @@ A rule `clm check` judges code by SHALL hold for every file a component owns, ex
 
 #### Enforced by
 - model/exemptions
+- check.affected/affected-files
 - gate/needs-review
 - gate/exemption-names-its-item
 - check.health/exemptions-signal

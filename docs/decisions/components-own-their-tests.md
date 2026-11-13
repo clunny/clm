@@ -22,4 +22,4 @@ Rejected:
 
 This repository's own `crates/clm/tests/` keeps relying on the transitional re-citing exception until its files get `tests` globs (`backlog/clm-s-cli-tests-belong-to-the-root`).
 
-(Amended 2026-11-13, `20261113-temporary-exemptions`: `test_depends_on` is withdrawn. A component's tests import only what its code may; a test of the whole product belongs to the component that holds the entry point, and what doesn't meet a rule at adoption gets an exemption naming the item that ends it (`temporary-exemptions`).)
+(Amended 2026-11-13, `20261113-temporary-exemptions`: `test_depends_on` is withdrawn. A component's tests import only what its code may; a test of the whole product belongs to the component that holds the entry point, and what doesn't meet a rule at adoption gets an exemption naming the item that ends it (`temporary-exemptions`). This repository's own CLI tests move to library tests in each crate instead of `tests` globs in the root crate (`backlog/clm-s-cli-tests-prove-other-components-through-the-binary`), which replaces `backlog/clm-s-cli-tests-belong-to-the-root`.)

@@ -33,7 +33,7 @@ A component's frontmatter MAY set `tests`, a list of globs written as `paths` ar
 ## ADDED Requirements
 
 ### Requirement: test-dependencies-retired
-`test_depends_on` SHALL be a key the model doesn't know, refused as any unknown key is (`valid-frontmatter`), and the graph SHALL expose no test dependencies, since a component's tests import only what its code may (`temporary-exemptions`). It is removed only once no component's code reads it (`coupled-changes-sequence`).
+`test_depends_on` SHALL be a key the model doesn't know, refused as any unknown key is (`valid-frontmatter`), and the graph SHALL expose no test dependencies, since a component's tests import only what its code may (`temporary-exemptions`). It is removed only once no component's code reads it (`coupled-changes-sequence`); until then the model's `test_depends_on` field and its accessor carry the marker `clm:remove-by 20261113-temporary-exemptions` (`expand-contract`).
 
 #### Scenario: test dependencies retired
 - GIVEN `specs/a/SPEC.md` with `test_depends_on: [b]`
@@ -46,11 +46,12 @@ A component's frontmatter MAY set `tests`, a list of globs written as `paths` ar
 #### Needs
 - check/undeclared-imports
 - check.affected/affected-components
+- check.affected/why-chain
 - context/bundle-contents
 - init/survey-components
 
 ### Requirement: exemptions
-A component's frontmatter MAY set `exemptions`, a list of entries that each exempt some of the component's own files from one rule `clm check` judges code by, for a time (`temporary-exemptions`). An entry SHALL hold `rule`, one of `undeclared-imports`, `tests-cite-their-owner` and `skipped-tests`; `files`, a non-empty list of non-empty globs written as `paths` are; `until`, `backlog/<slug>` naming the backlog item whose work ends the exemption; and MAY hold `why`, one line saying why the rule can't be met yet. The model SHALL expose each component's entries in the order written, none when the key is absent. Loading SHALL fail, naming the file, `exemptions` and the entry's position, for an entry that isn't a map, lacks `rule`, `files` or `until`, holds another key, names another rule, or holds a `files` or `until` of the wrong shape, and the model's frontmatter check (`optional-nodes`) SHALL reject the same. Whether `until` names an item that exists SHALL NOT be judged when loading, so the code fix that resolves the item doesn't fail on the exemption a spec change removes after it (`gate/exemption-names-its-item`, `check.health/exemptions-signal`).
+A component's frontmatter MAY set `exemptions`, a list of entries that each exempt some of the component's own files from one rule `clm check` judges code by, for a time (`temporary-exemptions`). An entry SHALL hold `rule`, one of `undeclared-imports`, `tests-cite-their-owner` and `skipped-tests`; `files`, a non-empty list of non-empty globs written as `paths` are; `until`, `backlog/<slug>` naming the backlog item whose work ends the exemption; and MAY hold `why`, one line saying why the rule can't be met yet. The model SHALL expose each component's entries in the order written, none when the key is absent. Loading SHALL fail, naming the file, `exemptions` and the entry's position, for an entry that isn't a map, lacks `rule`, `files` or `until`, holds another key, names another rule, or holds a `files` or `until` of the wrong shape, and the model's frontmatter check (`optional-nodes`) SHALL reject the same. A glob that matches files other components own exempts nothing there, since an exemption covers only its own component's files. Whether `until` names an item that exists SHALL NOT be judged when loading, so the code fix that resolves the item doesn't fail on the exemption a spec change removes after it (`gate/exemption-names-its-item`, `check.health/exemptions-signal`).
 
 #### Scenario: an exemption parsed
 - GIVEN `specs/a/SPEC.md` with `exemptions: [{rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/x, why: "the suite builds the whole app"}]`

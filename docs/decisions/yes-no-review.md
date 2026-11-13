@@ -18,3 +18,5 @@ A `landed` record carries `review`, a bool, in place of `tier`; older records re
 It amends `approval-policy`, `per-writer-ledgers` and `backlog-triage` where they speak of tiers, `## Significant`, `clm review` or `reviewed` records; the rest of them stands. This supersedes `computed-gate-tiers`, `declared-gate-floor`, `significance-rubric`, `significant-nodes`, `web-marks-soft-lands-reviewed`, `modified-delta-tiers-by-element`, `recomputed-land-tiers` and `triage-folds-hard-drafts`; `soft-review-after-merge` was already superseded by `per-writer-ledgers`, whose `reviewed` records go with it.
 
 Rejected: keeping `SOFT` as a lighter review (it is the after-the-fact queue that piled up 31 unread items); keeping the tiers and only removing the rubric (the human would still review rules one by one); having a model judge whether a change needs review (`deterministic-enforcement`).
+
+(Amended 2026-11-13, `20261113-temporary-exemptions`: a spec branch also needs review when it adds or widens a component's exemption from a code rule; removing or narrowing one doesn't (`temporary-exemptions`).)

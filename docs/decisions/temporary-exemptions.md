@@ -9,14 +9,16 @@ status: accepted
 What adoption, or any project at any time, still needs is a way to say "this owned code doesn't meet that rule yet" without switching the rule off, and without pretending the code is unowned. So:
 
 - **An exemption** in a component's frontmatter names one rule (`undeclared-imports`, `tests-cite-their-owner` or `skipped-tests`), the component's own files it covers, the backlog item whose work ends it (`until`), and optionally why. Those rules skip those files, and every other rule still applies to them.
-- **Adding or widening one needs review** (`gate/needs-review`); removing or narrowing one doesn't. A new exemption's item must exist when it's added (`gate/exemption-names-its-item`).
+- **Adding or widening one needs review** (`gate/needs-review`, and `humans-review-intent` and `yes-no-review` list it); removing or narrowing one, or rewording its `why`, doesn't. A new exemption's item must exist when it's added (`gate/exemption-names-its-item`).
 - **It stays in sight**: `clm health` lists every exemption with how many files it still covers, and flags one whose item is gone or whose files are gone, for a change to remove. Neither is a `clm check` failure, so the build that fixes the code lands, and the exemption is removed by a spec change after it.
 - **Builds never add one** (`orchestrator.run/stays-in-its-component`); a build that would need one leaves its requirement unbuilt with a `question` item.
 - **Recovery uses them** (`plugin.init/init-skill-gives-tests-their-component`): what doesn't meet a rule at adoption gets an exemption and an item, never `outside`.
 
 **Exemption, not `outside`.** `outside` is code CLM makes no claims about: no owner, no requirements, no rules, whether not adopted yet or never meant to be, like vendored code (`incremental-adoption`, unchanged). Exempt code is adopted, owned and specified; it just doesn't meet one rule yet. Putting it in `outside` would have CLM look away from code it is responsible for.
 
-**Why the tests still run.** Exempt tests are selected by their owner as any test is. Until a feature's own tests replace them, they are the only thing guarding its behaviour (`proven-by-tests`).
+**Why the tests still run, and on every land.** Until a feature's own tests replace them, exempt tests are the only thing guarding its behaviour (`proven-by-tests`). A file exempt from `undeclared-imports` imports code the graph doesn't connect it to, so any change can break it; test selection runs it whenever any component is affected (`check.affected/affected-files`), keeping `land-checks-stay-fast`'s guarantee. That makes the debt cost land time, which is a reason to pay it down.
+
+**Withdrawing `test_depends_on` follows `expand-contract`.** `check`, `check.affected` and its `why` chain, `context` and `init` stop reading it first; `model/test-dependencies-retired` removes it after them, the field marked `clm:remove-by` this change meanwhile.
 
 Rejected:
 - **`test_depends_on`**, above. Withdrawn.

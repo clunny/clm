@@ -24,14 +24,14 @@ Adopting an existing app still meets code that is owned and specified but doesn'
 
 - `model/exemptions`: the `exemptions` frontmatter key. `model/test-ownership-keys` no longer describes `test_depends_on`, and `model/test-dependencies-retired` makes it an unknown key once `check`, `check.affected`, `context` and `init` no longer read it.
 - `check`: `undeclared-imports`, `tests-cite-their-owner` and `skipped-tests` skip the files an exemption names for them; test files are judged against `depends_on` alone.
-- `check.affected/affected-components` and `context/bundle-contents`: the `test_depends_on` additions are reverted.
+- `check.affected` (`affected-components`, `why-chain`, Contract and Design) and `context` (`bundle-contents`, Contract and Design): the `test_depends_on` additions are reverted. `check.affected/affected-files`: a file exempt from `undeclared-imports` is selected by every land that affects any component, since it can break from a change anywhere (`land-checks-stay-fast`); `why-chain` says so.
 - `init/survey-components`: the component map takes `exemptions` and refuses `test_depends_on`.
 - `gate/needs-review`: adding or widening an exemption needs review. `gate/exemption-names-its-item`: a new exemption's item must exist.
 - `check.health/exemptions-signal`: each exemption, its file count, and whether its item or files are gone.
 - `orchestrator.run/stays-in-its-component`: builds never add an exemption, and add nothing to an exempt file that the exemption would excuse.
 - `plugin.init/init-skill-gives-tests-their-component`: recovery gives whole-product tests to the component that holds the entry point, has features prove their requirements through their own surface, and gives what doesn't meet a rule at adoption an exemption with an item, never `outside`.
-- `ARCHITECTURE.md`: a new carried constraint, `exemptions-end`; `path-ownership`'s shared-suite scenario no longer imports the entry point.
-- Decision `temporary-exemptions`; `components-own-their-tests` and `incremental-adoption` amended.
+- `ARCHITECTURE.md`: a new carried constraint, `exemptions-end`; `humans-review-intent` lists an added or widened exemption among what needs review; `path-ownership`'s shared-suite scenario no longer imports the entry point.
+- Decision `temporary-exemptions`; `components-own-their-tests`, `incremental-adoption` and `yes-no-review` amended.
 - Guide: the glossary gains Exemption and loses `test_depends_on`; `ci-and-deployment` and `spec-format` follow.
 - Backlog: `clm-s-cli-tests-belong-to-the-root` is replaced by `clm-s-cli-tests-prove-other-components-through-the-binary`: each crate offers a library entry point its own tests call, and the binary keeps only tests of dispatch.
 
@@ -39,4 +39,9 @@ Adopting an existing app still meets code that is owned and specified but doesn'
 
 - `outside` is unchanged, and so are projects that use it.
 - `test_depends_on` was never in a release a project adopted, so withdrawing it needs no `upgrade` migration.
-- The withdrawal is sequenced: `check`, `check.affected`, `context` and `init` stop reading `test_depends_on` before `model` removes it (`coupled-changes-sequence`).
+- The withdrawal is sequenced: `check`, `check.affected` (with its `why` chain), `context` and `init` stop reading `test_depends_on` before `model` removes it, the field marked `clm:remove-by` this change meanwhile (`coupled-changes-sequence`, `expand-contract`).
+
+## Builder check and audit
+
+- Builder check: `check.affected/why-chain` also read `test_depends_on` and wasn't ordered before the model's removal, and the `context` Contract and Design still named it; all now modified and needed. It asked whether an exemption's globs must stay in its component (they may match more, but exempt only its own files), what counts as changing an exemption for review (widening its `files` under the same `rule` and `until`; a component new on the branch counts whole; `why` alone doesn't), whether `clm check`'s judging of a change's resulting graph uses that graph's exemptions (it does), and whether the survey map checks an exemption's shape (as the model does). Each is now written into the requirements.
+- Audit: exempt tests importing upward would not have been selected when what they import changed, breaking `land-checks-stay-fast`'s guarantee; they now run on every land. `humans-review-intent` and `yes-no-review` now name the new review trigger. Narrowing an exemption no longer needs review. The withdrawn field carries `clm:remove-by`. `components-own-their-tests` names the replacement backlog item.
