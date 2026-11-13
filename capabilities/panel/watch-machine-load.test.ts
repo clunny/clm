@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, expect, test } from 'vitest'
 
-import { createEngine } from './fake-engine.ts'
+import { createEngine, type Engine } from './fake-engine.ts'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -20,7 +20,12 @@ const git = (cwd: string, ...args: string[]) =>
   })
 
 const made: string[] = []
-afterAll(() => made.forEach(d => rmSync(d, { recursive: true, force: true })))
+const engines: Engine[] = []
+// The pane's `clm` writes under the project, so each engine ends its processes first.
+afterAll(async () => {
+  await Promise.all(engines.map(e => e.close()))
+  made.forEach(d => rmSync(d, { recursive: true, force: true }))
+})
 
 test('the pane charts cpu, mem and disk after 30 seconds', async () => {
   // req:capability/watch-machine-load@0e544722
@@ -42,6 +47,7 @@ test('the pane charts cpu, mem and disk after 30 seconds', async () => {
     filter: from => !from.includes('node_modules'),
   })
   const engine = await createEngine({ pluginRoot, cwd: person, path: process.env.CLM_CAPABILITY_BIN_DIR! })
+  engines.push(engine)
   const opened = await engine.command('clm:view')
   expect(opened.text).toContain('Opened')
 
