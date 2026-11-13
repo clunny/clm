@@ -9,7 +9,7 @@ use crate::combined;
 use crate::select::{Changed, Selection};
 
 /// The lines saying why the change selects `path`: its first reason that holds, then the
-/// shortest `depends_on` (or `test_depends_on`) path from the component that brought it in to a component owning a
+/// shortest route (`depends_on`, or a first `tests against` edge) from the component that brought it in to a component owning a
 /// changed file. `cited` and `reads` are what the scan found, as for `combined`.
 pub fn why_chain(
     graph: &Graph,
@@ -68,22 +68,55 @@ pub fn why_chain(
         }
     };
 
-    let hops = route(graph, start, &changed);
-    for pair in hops.windows(2) {
-        lines.push(format!("{} depends on {}", pair[0], pair[1]));
+    let (edges, last) = route(graph, start, &changed);
+    for (from, to, words) in edges {
+        lines.push(format!("{from} {words} {to}"));
     }
-    let last = hops.last().expect("a route holds its start");
     let (owned, _) = changed
         .iter()
-        .find(|(_, owner)| owner == last)
+        .find(|(_, owner)| *owner == last)
         .expect("a route ends at an owner of a changed file");
     lines.push(format!("{last} owns {owned} (changed)"));
     lines
 }
 
-/// The components from `start` to the nearest owner of a changed file along `depends_on` or `test_depends_on`,
-/// among equally short routes the first in ID order.
-fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Vec<&'a str> {
+/// A route's edges, each `(from, to, words)`, and the owner of a changed file it ends at.
+type Route<'a> = (Vec<(&'a str, &'a str, &'static str)>, &'a str);
+
+/// The shortest `depends_on` route from `start` to an owner of a changed file, among equally
+/// short routes the first in ID order. Only when there is none (`start` owns no changed file and
+/// no `depends_on` path reaches one), its first edge is a `test_depends_on` edge to the first
+/// component, in ID order among the shortest, that has such a route, then that route.
+fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Route<'a> {
+    if let Some(found) = depends_route(graph, start, changed) {
+        return found;
+    }
+    let mut tests: Vec<&str> = graph.nodes[start]
+        .frontmatter
+        .test_depends_on
+        .iter()
+        .map(String::as_str)
+        .collect();
+    tests.sort();
+    let mut best: Option<Route<'a>> = None;
+    for test in tests {
+        let Some((rest, end)) = depends_route(graph, &graph.nodes[test].id, changed) else {
+            continue;
+        };
+        if best.as_ref().is_none_or(|(b, _)| rest.len() < b.len()) {
+            let mut edges = vec![(start, graph.nodes[test].id.as_str(), "tests against")];
+            edges.extend(rest);
+            best = Some((edges, end));
+        }
+    }
+    best.expect("an affected component reaches an owner of a changed file")
+}
+
+fn depends_route<'a>(
+    graph: &'a Graph,
+    start: &'a str,
+    changed: &[(&str, &str)],
+) -> Option<Route<'a>> {
     let owns = |id: &str| changed.iter().any(|(_, owner)| *owner == id);
     let mut parent: BTreeMap<&str, &str> = BTreeMap::new();
     let mut seen = BTreeSet::from([start]);
@@ -95,13 +128,16 @@ fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Vec<
                 hops.push(p);
             }
             hops.reverse();
-            return hops;
+            let edges = hops
+                .windows(2)
+                .map(|pair| (pair[0], pair[1], "depends on"))
+                .collect();
+            return Some((edges, id));
         }
-        let f = &graph.nodes[id].frontmatter;
-        let mut deps: Vec<&str> = f
+        let mut deps: Vec<&str> = graph.nodes[id]
+            .frontmatter
             .depends_on
             .iter()
-            .chain(&f.test_depends_on)
             .map(String::as_str)
             .collect();
         deps.sort();
@@ -112,5 +148,5 @@ fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Vec<
             }
         }
     }
-    unreachable!("an affected component reaches an owner of a changed file")
+    None
 }
