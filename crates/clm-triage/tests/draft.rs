@@ -60,10 +60,7 @@ fn prompt_names_choices_beside_question_items() {
     // req:orchestrator.triage/draft-question-choices@07360a93
     let p = prompt_for(&["a"], &[]);
     let para = paragraph(&p, "`web-answers-as-ledger-records`");
-    assert!(
-        para.contains("`choices`") && para.contains("`question`"),
-        "{para}"
-    );
+    assert!(para.contains("under `choices` of a `question`"), "{para}");
     assert!(para.contains("two to five"), "{para}");
     assert!(
         para.contains("none for a question that needs explaining"),
