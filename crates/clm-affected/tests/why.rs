@@ -70,7 +70,7 @@ fn why(
 
 #[test]
 fn a_dependant_is_owned_through_its_edges() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("b/src/lib.rs", true)],
         &[("a/src/lib.rs", &[])],
@@ -89,14 +89,14 @@ fn a_dependant_is_owned_through_its_edges() {
 
 #[test]
 fn a_changed_file_is_changed_alone() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(&[("b/src/lib.rs", true)], &[], &[], "b/src/lib.rs");
     assert_eq!(lines, ["b/src/lib.rs (changed)"]);
 }
 
 #[test]
 fn a_path_the_selection_lacks_is_not_selected() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("b/src/lib.rs", true)],
         &[("c/src/lib.rs", &[])],
@@ -108,14 +108,14 @@ fn a_path_the_selection_lacks_is_not_selected() {
 
 #[test]
 fn a_deleted_changed_file_is_not_selected() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(&[("b/gone.rs", false)], &[], &[], "b/gone.rs");
     assert_eq!(lines, ["b/gone.rs not selected"]);
 }
 
 #[test]
 fn an_all_selection_says_all() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("b/src/lib.rs", true), ("tools/build.sh", true)],
         &[],
@@ -129,7 +129,7 @@ fn an_all_selection_says_all() {
 
 #[test]
 fn a_reader_reads_the_first_matching_path() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("ARCHITECTURE.md", true), ("docs/a.md", true)],
         &[],
@@ -141,7 +141,7 @@ fn a_reader_reads_the_first_matching_path() {
 
 #[test]
 fn a_reader_beats_a_citation_and_ownership() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("b/src/lib.rs", true), ("ARCHITECTURE.md", true)],
         &[("a/tests/r.rs", &["b/x"])],
@@ -153,7 +153,7 @@ fn a_reader_beats_a_citation_and_ownership() {
 
 #[test]
 fn a_citation_names_the_first_affected_component_by_id() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("b/src/lib.rs", true)],
         &[("c/tests/t.rs", &["c/none", "b/y", "a/x"])],
@@ -172,7 +172,7 @@ fn a_citation_names_the_first_affected_component_by_id() {
 
 #[test]
 fn a_citation_of_the_changed_component_owns_directly() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("b/src/a.rs", true), ("b/src/lib.rs", true)],
         &[("c/tests/t.rs", &["b/y"])],
@@ -187,7 +187,7 @@ fn a_citation_of_the_changed_component_owns_directly() {
 
 #[test]
 fn the_shortest_path_wins_and_ties_go_to_the_first_id() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("w/lib.rs", true), ("y/lib.rs", true)],
         &[("x/src/lib.rs", &[])],
@@ -221,7 +221,7 @@ fn the_shortest_path_wins_and_ties_go_to_the_first_id() {
 
 #[test]
 fn a_doc_only_reader_reads_itself_rather_than_being_changed() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("docs/r.txt", true)],
         &[],
@@ -233,7 +233,7 @@ fn a_doc_only_reader_reads_itself_rather_than_being_changed() {
 
 #[test]
 fn only_affected_components_can_be_cited() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("w/lib.rs", true)],
         &[("c/tests/t.rs", &["c/none", "y/q"])],
@@ -252,7 +252,7 @@ fn only_affected_components_can_be_cited() {
 
 #[test]
 fn a_citation_beats_ownership() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(
         &[("w/lib.rs", true)],
         &[("x/tests/t.rs", &["w/q"])],
@@ -264,7 +264,7 @@ fn a_citation_beats_ownership() {
 
 #[test]
 fn a_shorter_route_beats_an_earlier_id() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let lines = why(&[("w/lib.rs", true)], &[("m/lib.rs", &[])], &[], "m/lib.rs");
     assert_eq!(
         lines,
@@ -272,6 +272,46 @@ fn a_shorter_route_beats_an_earlier_id() {
             "m/lib.rs owned by m",
             "m depends on w",
             "w owns w/lib.rs (changed)"
+        ]
+    );
+}
+
+#[test]
+fn a_test_dependency_is_a_tests_against_edge() {
+    // req:check.affected/why-chain@c7f542ba
+    let doc = |paths: &str, deps: &str, extra: &str| {
+        format!(
+            "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: {deps}\n{extra}---\n"
+        )
+        .into_bytes()
+    };
+    let files: clm_model::Files = [
+        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "[]", "")),
+        ("specs/app/SPEC.md", doc("[\"app/**\"]", "[feat]", "")),
+        (
+            "specs/feat/SPEC.md",
+            doc("[\"feat/**\"]", "[]", "test_depends_on: [app]\n"),
+        ),
+    ]
+    .into_iter()
+    .map(|(p, t)| (p.into(), t))
+    .collect();
+    let (graph, violations) = clm_model::load_files(&files);
+    assert!(violations.is_empty(), "{violations:?}");
+    let lines = why_chain(
+        &graph,
+        &changed(&[("app/src/lib.rs", true)]),
+        &map(&[("feat/tests/t.rs", &[])]),
+        &map(&[]),
+        &[],
+        "feat/tests/t.rs",
+    );
+    assert_eq!(
+        lines,
+        [
+            "feat/tests/t.rs owned by feat",
+            "feat tests against app",
+            "app owns app/src/lib.rs (changed)"
         ]
     );
 }

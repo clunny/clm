@@ -89,7 +89,7 @@ fn repo(clm_toml: &str) -> TempDir {
 
 #[test]
 fn prints_the_changed_nodes_dependants_and_files() {
-    // req:check.affected/affected-components@f4c3029d
+    // req:check.affected/affected-components@3230aae2
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -104,7 +104,7 @@ fn prints_the_changed_nodes_dependants_and_files() {
 
 #[test]
 fn nothing_changed_prints_nothing() {
-    // req:check.affected/affected-components@f4c3029d
+    // req:check.affected/affected-components@3230aae2
     let dir = repo("");
     let out = clm_affected(dir.path(), "main");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -525,7 +525,7 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
 
 #[test]
 fn why_prints_the_chain_through_a_dependency() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     // req:clm/affected-why-command@2b2b52c9
     let dir = repo("");
     let root = dir.path();
@@ -544,7 +544,7 @@ fn why_prints_the_chain_through_a_dependency() {
 
 #[test]
 fn why_says_not_selected_and_all() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -561,7 +561,7 @@ fn why_says_not_selected_and_all() {
 
 #[test]
 fn why_with_readers_exits_1_naming_both_flags() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     // req:clm/affected-why-command@2b2b52c9
     let dir = repo("");
     let out = clm_affected_with(
@@ -577,7 +577,7 @@ fn why_with_readers_exits_1_naming_both_flags() {
 
 #[test]
 fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -591,7 +591,7 @@ fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
 
 #[test]
 fn why_reads_the_scan_for_readers_and_citations() {
-    // req:check.affected/why-chain@7e236f82
+    // req:check.affected/why-chain@c7f542ba
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
