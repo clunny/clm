@@ -14,7 +14,7 @@ fn node(title: &str, extra: &str, contract: &str, design: &str) -> Vec<u8> {
 
 #[test]
 fn test_dependency_contract_only() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let mut files = Files::new();
     files.insert(
         PathBuf::from("specs/SPEC.md"),
@@ -37,7 +37,7 @@ fn test_dependency_contract_only() {
 
 #[test]
 fn bundle_nodes_include_test_dependency() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let mut files = Files::new();
     files.insert(PathBuf::from("specs/SPEC.md"), node("Root", "", "R", "R"));
     files.insert(
@@ -56,7 +56,7 @@ fn bundle_nodes_include_test_dependency() {
 
 #[test]
 fn test_dependency_listed_once_and_spine_skipped() {
-    // req:context/bundle-contents@ec3b6384
+    // req:context/bundle-contents@88b3e0e8
     let mut files = Files::new();
     files.insert(
         PathBuf::from("specs/SPEC.md"),
