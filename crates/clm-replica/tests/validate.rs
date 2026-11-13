@@ -223,3 +223,33 @@ fn slugs_as_clm_defect_does() {
         "a word that doesn't fit is left out"
     );
 }
+
+#[test]
+fn an_answer_is_what_its_item_offers() {
+    // req:replica/validate-answers@78c682ff
+    let mut f = repo();
+    f.extend(files(&[
+        (
+            "backlog/q.md",
+            "---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nQ?\n",
+        ),
+        ("backlog/r.md", "---\ntitle: R\nkind: question\n---\nR?\n"),
+        ("backlog/h.md", "---\ntitle: H\nkind: human-task\n---\nH.\n"),
+        ("backlog/i.md", "---\ntitle: I\nkind: idea\n---\nI.\n"),
+    ]));
+    let r = ready(&f, "111", 100);
+    let answer = |item: &str, answer: &str| {
+        r.validate(&Write::Answer {
+            item: item.into(),
+            answer: answer.into(),
+        })
+    };
+    let ok = Ok(Validated::Answer);
+    assert_eq!(answer("q", "yes"), ok);
+    assert_eq!(answer("q", "maybe"), Err(Refusal::Invalid));
+    assert_eq!(answer("r", "yes"), Err(Refusal::Invalid));
+    assert_eq!(answer("h", "done"), ok);
+    assert_eq!(answer("h", "yes"), Err(Refusal::Invalid));
+    assert_eq!(answer("i", "done"), Err(Refusal::Invalid));
+    assert_eq!(answer("nope", "yes"), Err(Refusal::Unknown));
+}

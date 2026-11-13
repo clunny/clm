@@ -383,3 +383,35 @@ fn a_symlink_never_counts() {
     assert_eq!(marks, clm_size(dir.path()));
     assert!(!marks["a"]);
 }
+
+#[test]
+fn a_backlog_item_in_full() {
+    // req:replica/snapshot-backlog-text@990be0ee
+    let mut f = clm_repo();
+    f.extend(files(&[
+        (
+            "backlog/q.md",
+            "---\ntitle: Q\nkind: question\npriority: P2\nchoices: [yes, no]\n---\n\n\nShould we?\n\n",
+        ),
+        ("backlog/i.md", "---\ntitle: I\nkind: idea\n---\nAn idea.\n"),
+    ]));
+    let r = ready(&f, "111", 100);
+    let snap = view(&r, "snapshot");
+    let item = |slug: &str| {
+        snap["backlog"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["slug"] == slug)
+            .unwrap()
+            .clone()
+    };
+    let q = item("q");
+    assert_eq!(q["body"], "Should we?");
+    assert_eq!(q["priority"], "P2");
+    assert_eq!(q["choices"], json!(["yes", "no"]));
+    let i = item("i");
+    assert_eq!(i["body"], "An idea.");
+    assert_eq!(i["priority"], "P5");
+    assert_eq!(i["choices"], json!([]));
+}

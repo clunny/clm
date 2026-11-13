@@ -437,3 +437,39 @@ fn no_ledger_no_proposals() {
     r.recompute(at(11, 0));
     assert_eq!(view(&r, "implementation")["proposals"], json!([]));
 }
+
+fn answered(id: &str, writer: &str, h: u64, m: u64, item: &str, answer: &str) -> String {
+    record(json!({
+        "id": id, "kind": "answered", "writer": writer, "at": stamp(h, m),
+        "item": item, "answer": answer,
+    }))
+}
+
+#[test]
+fn open_answers_leave_out_items_the_tip_lost() {
+    // req:replica/open-answers@2de5b2ad
+    let mut f = clm_repo();
+    f.insert(
+        "backlog/q.md".into(),
+        b"---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nShould we?\n".to_vec(),
+    );
+    let mut r = scratch(&f, "111");
+    ledger(
+        &mut r,
+        "clm/ledger/alice/web",
+        &[
+            answered("a2", "alice/web", 9, 0, "gone", "yes"),
+            answered("a3", "alice/web", 9, 0, "q", "no"),
+            answered("a1", "bob/web", 8, 0, "q", "yes"),
+        ],
+    );
+    r.recompute(at(11, 0));
+    let imp = view(&r, "implementation");
+    assert_eq!(
+        imp["answers"],
+        json!([
+            {"id": "a1", "writer": "bob/web", "at": stamp(8, 0), "item": "q", "answer": "yes"},
+            {"id": "a3", "writer": "alice/web", "at": stamp(9, 0), "item": "q", "answer": "no"},
+        ])
+    );
+}
