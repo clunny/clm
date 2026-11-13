@@ -26,3 +26,25 @@ Rejected:
 - **Dated deprecations or TODO comments.** A date says nothing about whether the removal is planned, and a TODO isn't checked.
 
 (Amended 2026-11-12, `20261112-components-own-their-tests`: the exception for the fixes a removal forces is withdrawn. Every contract change another component's code or tests use, additions it must handle included, lands as expand, each user's move, then contract, each built in its own component's files (`coupled-changes-sequence`).)
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `expand-contract` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+
+A contract change that another component's code or tests use SHALL land in steps, so that every land leaves `main` green and each step is built in the files of the component it changes (`coupled-changes-sequence`): the provider expands, offering the new beside the old; each user moves in a requirement of its own that needs the expansion; and the provider contracts, removing the old once every move is built. The old path is marked `clm:remove-by <change-id>`. An addition a user must handle counts: a variant it matches exhaustively, which it first meets with a default arm marked `clm:remove-by` the change and removes when it handles the variant, or a field it builds by struct literal, which it first builds through a constructor or defaults.
+
+**Scenario: renamed command**
+- GIVEN a change renaming a command other components call
+- WHEN it lands
+- THEN the old name still works, marked for removal by a named change
+
+**Scenario: added variant**
+- GIVEN a change adding a variant to an enum that component `b` matches exhaustively
+- WHEN it is built
+- THEN `b`'s build first adds a default arm marked `clm:remove-by` the change, the provider's build then adds the variant, and `b`'s next build handles it and removes the arm, each land leaving `main` green
+
+**Guarantee**
+Every land leaves `main` green while the components that use a contract haven't moved off it yet: CLM builds one component at a time and never stacks branches, so no change lands everywhere at once.
+
+**Untested**
+Whether a contract change breaks a caller, and so needs two steps, is a judgement; the markers it leaves are checked.

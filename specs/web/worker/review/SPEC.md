@@ -124,7 +124,7 @@ The Worker SHALL approve a `spec/*` branch that touches spec paths, or that chan
 - capability/approve-intent
 - architecture/approval-policy
 - architecture/humans-review-intent
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - web.worker.platform/shared-layer

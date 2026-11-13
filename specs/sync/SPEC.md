@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [model, apply, check, check.health, context, ledger, vcs, sync.regenerate, rename]
 paths: ["crates/clm-sync/**"]
 successor: ""
-serves: [capability/work-concurrently, architecture/regenerate-dont-merge]
+serves: [capability/work-concurrently, architecture/hash-based-staleness]
 ---
 
 ## Contract
@@ -253,7 +253,6 @@ On a branch named `spec/*`, `clm autosync` SHALL push to `refs/heads/autosync/<b
 
 #### Serves
 - capability/work-concurrently
-- architecture/autosync-policy
 
 ### Requirement: outcome-line
 `clm rebase` SHALL end its stdout with exactly one line stating its outcome: `rebase ok` when it exits 0, `rebase incomplete` when it exits 1, and `rebase failed` when it exits 2. No earlier line SHALL be one of those three.
@@ -472,7 +471,6 @@ On a branch `impl/<component>`, after archiving and filing proposals, `clm rebas
 
 #### Serves
 - capability/know-health
-- architecture/health-advises
 
 #### Needs
 - check.health/reconsider-score

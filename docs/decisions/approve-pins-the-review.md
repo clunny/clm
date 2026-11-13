@@ -17,3 +17,14 @@ Alternatives considered:
 - *Send the head on both routes.* Simpler, but a merge of `main` that leaves the spec diff unchanged would need a fresh look the diff doesn't call for.
 - *Make the field optional and keep the old behaviour without it.* That keeps the gap open for any caller that omits it, which is the bug.
 - *Have the Worker remember which review it served to whom.* Needs per-user server state, which `git-is-truth` and `web-derived-cache` rule out, and buys nothing over the client echoing it.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `approve-pins-the-review` until 2026-11-13, when it was merged into `approval-policy` (`human-layer-entries-stay-short`). The text still holds:
+
+An approval SHALL name the branch fingerprint it was given for, and counts only while the branch still matches it; an approval of a branch that has moved on is refused and writes nothing.
+
+**Scenario: branch moved after review**
+- GIVEN a reviewer viewing a branch that gains a commit changing its spec
+- WHEN they approve the page they read
+- THEN the approval is refused and nothing is recorded

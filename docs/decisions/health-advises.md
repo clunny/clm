@@ -18,3 +18,14 @@ Rejected:
 - **Flags only in the report.** Nothing reaches `waiting on you` unless someone runs the report.
 - **A skill that counts by reading.** Counting in prose drifts; the counting is code, the judgment is the skill.
 - **Spreading the rules over `check`, `sync` and `plugin.hooks`.** All three are over budget, and health rules change for different reasons than the blocking checks, the seam `slim-nodes` splits on.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `health-advises` until 2026-11-13, when it moved down here; its rules serve the capability `know-health` (`human-layer-entries-stay-short`). The text still holds:
+
+`clm health` SHALL be advisory: it exits 0 whatever it finds, and no check, gate or land reads it.
+
+**Scenario: unhealthy repository**
+- GIVEN a repository with oversized components and workaround flags
+- WHEN `clm health` runs
+- THEN it reports them and exits 0

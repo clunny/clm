@@ -211,7 +211,7 @@ The gate SHALL block, with rule `gate/up-to-date` and a message telling the auth
 #### Serves
 - capability/land-safely
 - capability/work-concurrently
-- architecture/regenerate-dont-merge
+- architecture/hash-based-staleness
 
 ### Requirement: archive-move
 Moving `changes/<id>/<file>` to `changes/archive/<id>/<file>` with at most `status:` lines changed SHALL NOT count as a spec change, so a code PR can finish and archive its change.
@@ -433,7 +433,7 @@ When the PR's diff lists `clm.toml` (the path at the top of the repository, matc
 
 #### Serves
 - capability/land-safely
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 ### Requirement: base-specs-as-checkout
 The gate SHALL read `specs/` as committed at the merge base, for the component lookup of `code-fix-resolves-bug`, by loading with `clm_model::load` the temporary directory `clm-git`'s `extract_paths(root, <rev>, paths)` returns, where `paths` holds `specs` unless `git cat-file -e <rev>:specs` fails, and each path of the form `changes/<id>/change.md` that `git ls-tree -r --name-only <rev> -- changes` lists (`declared-keys-loaded`), and is empty when neither gives a path. Each file SHALL then hold the bytes a checkout of `<rev>` writes (`extract-as-checkout`): a path marked `export-ignore` and a file marked `export-subst` in `<rev>`'s `.gitattributes` SHALL load as a checkout writes them. `clm-gate` SHALL start no process itself, `tar` included: its `extract_specs` and the imports only it used are gone, and `tempfile`, which only its tests then use, moves to `[dev-dependencies]` (`no-dead-code`). Paths stay relative to the top of the repository, as the gate's other git calls are.

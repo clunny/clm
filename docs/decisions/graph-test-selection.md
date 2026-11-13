@@ -22,3 +22,20 @@ Rejected:
 - **Running the full suite on a schedule.** Nothing runs on a schedule since `land-locally`: no workflow but the release is left, and a scheduled one would be the second. The full runs above already happen several times a day.
 - **Selecting by the crate graph (`cargo`'s dependency tree) or by coverage.** Language-specific, and a second graph beside the spec graph, which CLM checks already.
 - **Recording in the ledger which tests a `checked` record ran.** A `checked` record names a code key, and two merged trees with one code key hold the same code, so the same tests pass on both; the record stays as it is.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `land-checks-stay-fast` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+
+A project's `[land] check` SHALL run the tests `CLM_SELECTION` names, or every test when it is unset, empty or names `all`, and those tests SHALL be fast, deterministic and able to run beside other runs (`tests-run-concurrently`); every file a test reads SHALL be one the spec graph connects it to: a file of the component that owns it or of one it depends on (`depends_on`), or one a `req:` or `clm:reads` marker in it names. A test that is slow, fails or passes from run to run on the same tree, or needs a resource no other run may share belongs in `[verify]`, after the land (`verify-after-land`). CLM builds a land's verdict from checks of its parts: a land whose branch's head was checked whole runs only the tests the branch and what `main` gained since can both affect (`land/overlap-recheck`), so the tests' honesty about what they read is what that verdict rests on.
+
+**Scenario: an unrelated move of main**
+- GIVEN a project whose build checked its branch whole, and `main` moved since by a land on a component the branch's components neither own nor depend on
+- WHEN the branch lands
+- THEN its land runs no test, and a test that reads a file its markers don't name is the project's defect, which `[verify]` shows after the land, or, in a project without `[verify]`, the next build's full check
+
+**Guarantee**
+A test that the spec graph doesn't connect to a change gives the same result with and without it, so CLM can land a branch on a `main` that moved without re-running the tests the two can't both affect, and slow or exclusive tests never hold a land.
+
+**Untested**
+Whether a test is deterministic, and whether every file it reads is one the graph connects it to, are things CLM can't see before the fact: a gap shows as a failure after the land, which `[verify]` finds, bisects to a land and reports with how that land re-checked, or, in a project that sets no `[verify]`, as the next build's full `clm land --check-only` failing on a `main` it didn't change (`graph-test-selection`'s safeguard), without presuming whether the graph, the code or the test was wrong. A check that runs more than its selection is never wrong, only slower, and the check-time report says where its time went.

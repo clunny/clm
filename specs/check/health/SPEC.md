@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [model, check, orchestrator, vcs, ledger, effort]
 paths: ["crates/clm-health/**"]
 successor: ""
-serves: [capability/know-health, architecture/health-advises]
+serves: [capability/know-health]
 ---
 
 ## Contract
@@ -373,7 +373,7 @@ The field of `Settings` that holds the size budgets SHALL be `component_size`, n
 
 #### Serves
 - architecture/exemptions-end
-- architecture/health-advises
+- capability/know-health
 
 #### Needs
 - model/exemptions

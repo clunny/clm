@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [orchestrator, orchestrator.run, vcs]
 paths: ["crates/clm-runner/**"]
 successor: ""
-serves: [capability/unattended-runner, architecture/git-is-truth]
+serves: [capability/build-from-spec, architecture/git-is-truth]
 ---
 
 ## Contract
@@ -58,7 +58,7 @@ The process-group and signal code sits under `#[cfg(unix)]`; elsewhere the entry
 - THEN it runs `clm run b` and never runs `clm run a` a second time
 
 #### Serves
-- capability/unattended-runner
+- capability/build-from-spec
 - capability/right-model-per-task
 
 #### Needs
@@ -83,7 +83,7 @@ The runner SHALL go by `clm run`'s exit code: on 3 it SHALL start nothing more u
 - THEN it exits 2 and runs no `clm run`
 
 #### Serves
-- capability/unattended-runner
+- capability/build-from-spec
 - capability/work-concurrently
 
 ### Requirement: runner-finish
@@ -126,7 +126,7 @@ When `<main>/.claude/worktrees/agent-runner-<component>` already holds a worktre
 - THEN it starts none, prints a line starting `left ` with the worktree's absolute path and `git worktree prune`, and runs `clm run --finish a`
 
 #### Serves
-- capability/unattended-runner
+- capability/build-from-spec
 
 ### Requirement: runner-prerequisites
 `clm runner` SHALL exit 1, before it runs any other command, naming `--permission-mode` when the option is absent, and otherwise naming `claude` when no `claude` resolves on `PATH`. It SHALL pass the mode's value on unchecked. It SHALL never read, write or pass a Claude credential: it sets no variable for the sessions and reads none of Claude Code's files.
@@ -141,7 +141,7 @@ When `<main>/.claude/worktrees/agent-runner-<component>` already holds a worktre
 - THEN it exits 1 naming `--permission-mode` and runs nothing
 
 #### Serves
-- capability/unattended-runner
+- capability/build-from-spec
 
 ### Requirement: runner-once-and-stop
 With `--once`, the runner SHALL exit 0 once a look starts no session and none of its sessions is running. On an interrupt or terminate signal it SHALL end any wait at once, start nothing more, send each running session's process group a terminate signal, wait up to 30 seconds for it and then kill the group, run `clm run --finish <component>` for each, and exit 0.
@@ -157,7 +157,7 @@ With `--once`, the runner SHALL exit 0 once a look starts no session and none of
 - THEN the session and its child receive a terminate signal, the runner runs `clm run --finish a` after they exit, and the runner exits 0 without running `clm run` again
 
 #### Serves
-- capability/unattended-runner
+- capability/build-from-spec
 
 ### Requirement: runner-needs-guard
 `clm runner` SHALL, after its `runner-prerequisites` checks and before it runs any other command, run `claude plugin list --json` in the clone's main worktree and exit 1, naming the `clm` plugin and saying that its sessions would run without the guard, unless the output holds a plugin whose `id`'s name part, before `@`, is `clm` and that is enabled for that directory (`enabled`, and `projectEnabled` when its `projectPath` is the main worktree), so that every unattended session it starts loads the guard (`guard-blocks-push-to-main`). When `claude plugin list` itself fails, it SHALL exit 1 printing its stderr. It reads none of Claude Code's files to decide.
@@ -178,8 +178,8 @@ With `--once`, the runner SHALL exit 0 once a look starts no session and none of
 - THEN it runs `clm next` and exits 0
 
 #### Serves
-- capability/unattended-runner
-- architecture/guard-blocks-push-to-main
+- capability/build-from-spec
+- architecture/land-locally
 
 ### Requirement: paragraph-says-pull-request
 The fixed paragraph the runner puts before the launcher in each session's prompt SHALL say that a denied `clm defect` is listed under `## CLM defects` in the pull request body, and SHALL NOT hold the word `page`.

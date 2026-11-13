@@ -11,3 +11,14 @@ Spec work on a `spec/*` branch is snapshotted at the end of every Claude turn (a
 - **What: only spec paths**, and only on `spec/*` branches. Code is the implement flow's job, and its sessions push their own claim branches. Leaving out other files means an untracked secret or scratch file never leaves the machine.
 
 Autosync gives backup and visibility. Convergence, which the question also raised, comes from `clm sync` (`regenerate-applied-specs`, `sync-owns-merge-drivers`): rebasing early and often does more to reduce merge pain than pushing often.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `autosync-policy` until 2026-11-13, when it moved down here; its rules serve the capability `work-concurrently` (`human-layer-entries-stay-short`). The text still holds:
+
+Spec-work snapshots SHALL go only to `autosync/<branch>`, never to the spec branch itself, a pull request's head or `main`, so half-finished edits can't land.
+
+**Scenario: end of turn**
+- GIVEN a session editing specs on `spec/x`
+- WHEN its turn ends
+- THEN a snapshot is pushed to `autosync/spec/x`, and `spec/x` is unchanged

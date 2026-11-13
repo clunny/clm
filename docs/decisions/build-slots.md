@@ -16,3 +16,20 @@ Every build place on a clone holds a *slot*: the smallest number from 1 up that 
 - *Widen the check lock to every test run.* Rejected: it serialises builds.
 - *A slot only inside `[land] check`.* Rejected: builds' hand-run tests are where most runs happen.
 - *Only state the rule, give no value.* Rejected: tests that must know a port in advance, such as a browser suite pointed at a server the check starts, have nothing to key it on but a value CLM supplies.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `tests-run-concurrently` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+
+A project's tests, and the check command that runs them, SHALL pass while other runs of them overlap on the same host, each in its own checkout: no test binds a fixed port, writes a fixed path outside its checkout and the system's temporary directory, or relies on a server or database another run shares. A port or path a run must know in advance, such as the port of a server the check starts, is keyed on `CLM_SLOT`, the number CLM gives each build and its checks, distinct among the builds of one clone, and 0 when unset (`build-slots`). CLM runs builds in parallel and runs their tests outside any lock, so making the tests able to overlap is the project's part of that.
+
+**Scenario: a preview server**
+- GIVEN a project whose check starts a preview server for its browser tests, and two builds of it on one clone
+- WHEN both run their tests at once
+- THEN each server listens on a port derived from its own `CLM_SLOT`, or one the system chose, and both runs pass
+
+**Guarantee**
+Two runs of the project's tests on one host, from different build places of a clone, never fail each other through a resource the host holds, so CLM can build in parallel without serialising the tests its builds run.
+
+**Untested**
+Whether a project's tests take a host resource another run shares is something CLM can't see; a collision shows as a test that fails beside another build and passes alone. Runs outside a build place (the human's own checkout, `clm verify`'s local run, a draft's code fix) all have slot 0, so two of them can still collide on a port keyed on it; the check lock keeps their `[land] check` and `[verify] check` runs apart, but not their tests run by hand.

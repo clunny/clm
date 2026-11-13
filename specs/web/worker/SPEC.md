@@ -295,7 +295,7 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 #### Serves
 - capability/propose-intent
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - ledger/proposal-records
@@ -328,7 +328,7 @@ The snapshot, implementation, capabilities and architecture routes, given `?fres
 #### Serves
 - capability/review-capability-cost
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 - architecture/humans-review-intent
 
 #### Needs
@@ -400,7 +400,7 @@ When sign-in completes for an invited login, the callback SHALL send the browser
 #### Serves
 - capability/review-capability-cost
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 - architecture/humans-review-intent
 
 #### Needs
@@ -618,7 +618,7 @@ The Worker adapter's `fetch_asset` SHALL pass the request's method, path, query 
 
 #### Serves
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - ledger/answer-records

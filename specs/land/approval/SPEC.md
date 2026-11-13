@@ -129,7 +129,7 @@ With `approval = "other"`, `clm land` SHALL count an `approved` record only when
 
 #### Serves
 - capability/approve-intent
-- architecture/land-policy-from-base
+- architecture/approval-policy
 
 ### Requirement: signed-land
 When `origin/main`'s tree holds `docs/allowed_signers`, `clm land` SHALL count an `approved` record only when `ledger`'s `signed_by` accepts it under `clm-approve` against that file, and, with `approval = "other"`, only when its writer's person also differs from the lander's writer person; it SHALL exit 1, before running any check or pushing, naming `user.signingkey` when no signing key is configured; and it SHALL append a `landed` record signed under `clm-land`, signed before the push, pushing nothing when signing fails. Without that file it SHALL count, sign and append as it did before.

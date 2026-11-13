@@ -46,7 +46,6 @@ Crate `clm-view-repo`: the `clm status`, `clm view` and `clm pending` commands' 
 
 #### Serves
 - capability/see-project-state
-- architecture/views-name-their-commit
 
 #### Needs
 - vcs/tree-blobs
@@ -81,7 +80,6 @@ Crate `clm-view-repo`: the `clm status`, `clm view` and `clm pending` commands' 
 
 #### Serves
 - capability/see-project-state
-- architecture/views-name-their-commit
 
 #### Needs
 - vcs/tree-blobs

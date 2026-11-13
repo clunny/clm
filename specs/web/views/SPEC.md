@@ -163,7 +163,7 @@ The implementation view SHALL know exactly the queue states `ready`, `claimed` a
 
 #### Serves
 - capability/see-project-state
-- architecture/needs-alone-order
+- architecture/component-reconciliation
 
 ### Requirement: review-intent-first
 The PR view SHALL show the PR's `## Intent` section first, above the per-node changes, next to the approve button.
@@ -220,7 +220,7 @@ Approve intent SHALL send one approve request per tap and none while one is in f
 #### Serves
 - capability/follow-from-browser
 - capability/approve-intent
-- architecture/approve-pins-the-review
+- architecture/approval-policy
 
 ### Requirement: pr-document
 The Document tab SHALL show, per touched component, every changed requirement, Contract, Design, frontmatter and asset the review gives, each with whether it was added, modified or removed, its text with word marks between before and after and a couple of dimmed lines of context from its file, and a link to its file in full; an HTML asset previewed in a sandboxed frame with no permissions; then each decision the review gives with what it says, and the backlog edits.
@@ -291,7 +291,6 @@ When a spec branch's review says `signed`, the PR view SHALL draw Approve disabl
 
 #### Serves
 - capability/follow-from-browser
-- architecture/web-approve-off-when-signed
 - architecture/signed-ledger-records
 
 #### Needs
@@ -338,7 +337,7 @@ The Backlog view SHALL offer New proposal: a form with a title and an intent, an
 #### Serves
 - capability/keep-a-backlog
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - web.worker/proposals
@@ -360,7 +359,7 @@ The PR view's Document tab SHALL carry a Comment control on the intent and on ea
 - capability/approve-intent
 - capability/follow-from-browser
 - architecture/humans-review-intent
-- architecture/approve-pins-the-review
+- architecture/approval-policy
 
 #### Needs
 - web.worker.review/review-feedback
@@ -387,7 +386,7 @@ The PR view SHALL offer Request changes beside Approve, in the Approve bar on ph
 - capability/approve-intent
 - capability/follow-from-browser
 - architecture/humans-review-intent
-- architecture/approve-pins-the-review
+- architecture/approval-policy
 
 #### Needs
 - web.worker.review/review-feedback
@@ -652,7 +651,7 @@ A `question` item with `choices` SHALL offer one button per choice, in their ord
 
 #### Serves
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - web.worker/answers

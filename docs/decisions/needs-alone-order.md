@@ -19,3 +19,14 @@ A node is now ready when it has an unblocked pending requirement, whatever the s
 Refined by `serving-rules-order-capabilities`: a capability, which can hold no `Needs`, also waits on the rules that serve it that are never built, or changed and themselves blocked.
 
 Refined by `builder-check-asks-order`: the builder check asks per requirement what unbuilt work it relies on, as this decision's "would change if" asked.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `needs-alone-order` until 2026-11-13, when it was merged into `component-reconciliation` (`human-layer-entries-stay-short`). The text still holds:
+
+A component SHALL be ready when it has an unblocked pending requirement, whatever the state of the components it depends on; only a requirement's `Needs`, and for a capability the rules serving it that are never built, or changed and themselves blocked (`serving-rules-order-capabilities`), order work between components.
+
+**Scenario: dependency pending**
+- GIVEN component `b` depending on `a`, both with pending requirements and no `Needs` between them
+- WHEN `clm next` runs
+- THEN both are ready

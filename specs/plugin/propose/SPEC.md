@@ -79,7 +79,6 @@ It never hands over to `writing-plans`. Only the skill's text is read; the super
 #### Serves
 - capability/work-concurrently
 - capability/keep-a-backlog
-- architecture/lease-claims
 
 ### Requirement: propose-priority
 `skills/propose/SKILL.md` SHALL tell Claude, when the human names no intent, to suggest only the backlog's `idea` items, highest priority first, as `clm backlog` lists them (`priority-caps`), and to point the human at `/clm:triage` for the `bug`, `question`, `human-task`, `deferred` and `workaround` items, saying so when no `idea` item is left (`triage-owns-backlog-work`); an item of any kind the human names is still taken as the intent. It SHALL also tell Claude to give a change from backlog items the highest `priority` among the items in its `from` and `resolves`, and to leave `priority` out when all of them are `P5`. When `clm check` reports `check/priority-caps`, Claude asks the human which holder to demote, never choosing one itself, since priority is the human's call.

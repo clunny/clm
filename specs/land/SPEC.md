@@ -154,7 +154,7 @@ After a successful push, `clm land` SHALL delete the landed branch on `origin` t
 #### Serves
 - capability/git-host
 - capability/work-concurrently
-- architecture/no-local-land-with-remote
+- architecture/land-locally
 
 ### Requirement: git-through-layer
 `clm-land` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `git`, `run` or repo queries (`git-plumbing-layer`), and host operations through `host`.
@@ -470,7 +470,7 @@ When the head adds a change, as `gate.fingerprint/fingerprint` defines it (`clm-
 
 #### Serves
 - capability/catch-drift
-- architecture/regenerate-dont-merge
+- architecture/hash-based-staleness
 - architecture/humans-review-intent
 
 #### Needs
@@ -858,7 +858,7 @@ When the head adds or applies a change, as `derived-specs` defines both, and a f
 
 #### Serves
 - capability/work-concurrently
-- architecture/regenerate-dont-merge
+- architecture/hash-based-staleness
 
 ### Requirement: lock-queue
 Each of the clone's two locks, `.clm/land.lock` (`land-target-lock`) and `.clm/check.lock` (`check-lock`), SHALL go to the runs waiting for it in an order CLM sets, not in the operating system's: a run that must wait takes a ticket in a queue beside the lock in the main worktree's `.clm/`, and tries the lock only when its turn comes. A ticket SHALL carry a *lane*, priority or ordinary, and a priority from `P1` to `P5`. A `clm land` takes a priority-lane ticket when its merged tree's code key counts as checked and its readers select a test (`selected-tests`), so that its `[land] check` runs only those readers, and an ordinary one otherwise, a land whose readers' selection failed, so that every test runs, included; its priority is `orchestrator`'s `land_priority` for the branch (`orchestrator/land-priority`), `P5` when that can't be computed. Every other run takes an ordinary ticket at `P5`. The turn SHALL go first to the `P1` tickets, a priority-lane one before an ordinary one and otherwise the one taken first; then to the other priority-lane tickets, the highest priority first and then the one taken first; then to the other ordinary tickets in the same order. When six runs in a row below `P1` have taken the lock with priority-lane tickets while an ordinary ticket was waiting, and no `P1` ticket is waiting, the ordinary ticket whose turn would come first among the ordinary ones SHALL take the next turn. A ticket SHALL hold no turn once its run has ended, however it ended, and no ticket of an ended run SHALL stay in the queue past the next run that reads it. A waiting run SHALL print its waiting line on stderr when it begins to wait and again each time the count changes, ending `: <n> ahead`, `<n>` counting the run that holds the lock and the waiting runs whose turn comes before its own. A run that finds the lock free and no ticket waiting SHALL take the lock at once, printing nothing. The order SHALL decide only which run takes the lock next: a run that takes the lock without the queue, such as one by an older `clm`, still never holds it beside another.

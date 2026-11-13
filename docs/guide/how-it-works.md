@@ -22,7 +22,9 @@ Two short files at the repository's root are written for people rather than for 
 
 Each entry has an ID, `capability/<slug>` or `architecture/<slug>`, and a version, as a requirement does: `clm hashes capability` and `clm hashes architecture` print them. A capability is proven by a black-box test at the product's public boundary that cites it, `req:capability/<slug>@<version>`, unless an `#### Untested` block says why no program can check it. An architectural constraint is never cited by a test: it names under `#### Enforced by` the component rules that enforce it, and is current when every rule it names is current; it says what no program can check under `#### Untested`. `clm check` fails a constraint with neither block. A component says which entries its rules serve with `serves` in its frontmatter, and a requirement can override that with a `#### Serves` block.
 
-Any edit to either file needs your review before it lands. Everything below them is the AI's to change.
+Each architectural constraint starts with the kind of rule it is. **Checked**: a program decides it, and only such a rule is enforced. **Measured**: an eval scores it against a threshold you agreed, for behaviour that comes from a model. **Principle**: design judgement, which a review may advise on. Only a program holds a land; an eval or an AI's review never does.
+
+Any edit to either file needs your review before it lands. Everything below them is the AI's to change. Removing behaviour is the exception to that: a scenario, a requirement, a capability or a constraint that states behaviour is never dropped without your yes, so a session that proposes a cut shows you what would be lost and asks first.
 
 ## The spec
 
@@ -56,7 +58,8 @@ A spec branch needs your review when:
 
 - it edits `ARCHITECTURE.md` or `CAPABILITIES.md`, or `docs/allowed_signers`, the keys a signed repository trusts;
 - it changes the `approval` setting in `clm.toml`;
-- a change it adds or edits declares `human_burdens`.
+- it adds or widens a component's exemption from a code rule;
+- a change it adds or edits declares `human_burdens`, or has a `change.md` that can't be read.
 
 Everything else lands on checks, and nothing is reviewed after it lands. When you say yes, Claude runs `clm approve <branch>` and Claude Code asks you to confirm that command, so the approval is yours. It's a record in your ledger, pinned to the files the branch changes: a rebase or merge of `main` that touched only other files keeps it, and any change to the branch's own files drops it, so you review again.
 
@@ -67,6 +70,16 @@ Everything else lands on checks, and nothing is reviewed after it lands. When yo
 ## Building
 
 Work is per component, not per change. `clm next` lists the components ready to build: those with a requirement the code hasn't caught up with, leaving out requirements that wait on a backlog item or on another component's requirement they name under `#### Needs`. `/clm:build` runs `clm run <component>` for each, which claims the component by pushing `impl/<component>` and prints the prompt for an unattended build in its own worktree. The build works through the component's pending requirements, highest priority first, test-first, and lands its branch through `clm land`. A claim with no push for four hours lapses, so someone else can take it.
+
+### What a build may change
+
+A build changes only its own component's files: those its `tests` match, wherever they sit, and those its `paths` match that no other component's `tests` match. A build whose requirement needs an edit outside them leaves it unbuilt and adds a `question` item that blocks it. There are these exceptions:
+
+- **Shared wiring.** A build edits the files its root's Design names as wiring every component into one product, such as a dispatch file, a workspace manifest and its lock file, only to add or change the entry its own component needs.
+- **A capability test follows its rule.** A build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations to what the requirement states, keeps its citation and every check the capability's scenarios state, and names the test in its pull request. When the capability as written would no longer hold, the requirement stays unbuilt until a change edits the capability.
+- **A stale marker.** A build may re-cite, and bring up to the current text, a test in a file no component's `tests` match that cites one of its own requirements at another version.
+
+A contract change that another component's code or tests use lands in steps, each built in the files of the component it changes, and each leaving `main` green: the provider offers the new beside the old, marked `clm:remove-by <change-id>`; each user moves in a requirement of its own that needs the first step; and the provider removes the old once every move is built. An addition a user must handle counts too. A user that matches an enum exhaustively first adds a default arm marked `clm:remove-by` the change, and removes it when it handles the new variant; one that builds a struct by literal first builds it through a constructor or defaults.
 
 ## Proof
 

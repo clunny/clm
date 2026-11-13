@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [model, check, context, gate, vcs]
 paths: ["crates/clm-orchestrator/**"]
 successor: ""
-serves: [capability/build-from-spec, capability/work-concurrently, architecture/component-reconciliation, architecture/lease-claims]
+serves: [capability/build-from-spec, capability/work-concurrently, architecture/component-reconciliation]
 ---
 
 ## Contract
@@ -316,7 +316,7 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 #### Serves
 - capability/keep-a-backlog
 - capability/propose-intent
-- architecture/lease-claims
+- capability/work-concurrently
 
 ### Requirement: proposals
 `clm proposals` SHALL fetch `origin` and print, sorted, one line per change on main whose `resolves` names an item still in `backlog/`, as `<id> main [<components>] <slug>...`, and per change with proposed spec work, as `<id> proposed [<components>] <slug>...`, followed by one line per live `propose/<slug>` claim that no listed change names, as `backlog/<slug> claimed [<components>]`, with components and items as the Design defines. When the checkout is on `spec/<id>`, it SHALL leave out change `<id>`, and the claims of the items its working-tree `changes/<id>/change.md` names in `from` or `resolves`. With `--component <id>`, given one or more times, it SHALL print only the lines whose components include one given. It SHALL exit 0, and 2 when git fails.
@@ -437,7 +437,6 @@ The `clm-orchestrator` crate SHALL build for `wasm32-unknown-unknown` with its d
 #### Serves
 - capability/keep-a-backlog
 - capability/work-concurrently
-- architecture/lease-claims
 
 ### Requirement: nested-branches-not-claims
 `claim_refs`, `queue_from_refs`, `clm next` and `clm status`'s `claims` section SHALL read a ref `origin/impl/<x>` as a claim only when `<x>` contains no `/`: a nested branch such as `origin/impl/archive/<id>` SHALL claim no component, hold no component `claimed` and have no `claims` row.
@@ -496,7 +495,6 @@ A place SHALL be the file `<git common dir>/clm/builds/<name>` in the clone's gi
 - THEN `z` counts
 
 #### Serves
-- capability/unattended-runner
 - capability/build-from-spec
 - architecture/component-reconciliation
 
@@ -640,7 +638,6 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 #### Serves
 - capability/keep-a-backlog
 - capability/work-concurrently
-- architecture/lease-claims
 
 ### Requirement: says-component
 The messages `clm next`, `clm claim`, `clm proposals` and `clm status`'s `claims` rows print SHALL say component and components, never the old words, as `component-words` defines them: among them ``no component `<id>` ``, ``` `<id>` isn't a component ID ```, and the claim refusals that name a component's state. A test reads the string literals in `crates/clm-orchestrator/src/` and fails naming the file, the line and the word for each old word `component-words` doesn't keep.

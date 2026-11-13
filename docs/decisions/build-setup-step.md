@@ -21,3 +21,20 @@ A project declares in `clm.toml`'s `[build] setup` the shell command that makes 
 - *Have CLM install per toolchain.* Rejected: CLM would name toolchains, and get a project's own arrangement wrong.
 - *Run the setup from `clm run`.* Rejected: `clm run` runs in the orchestrating checkout, before Claude Code makes the build's worktree.
 - *A worktree-creation hook of Claude Code.* Rejected: it would tie a rule every project carries to one agent's hook, and drafts' code-fix branches and attended sessions would still need the command.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `tests-run-in-their-own-tree` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+
+A build's tests SHALL run against the code and the dependencies of the tree it builds in, never against another checkout's: a toolchain whose lookup reaches a parent directory, or an environment the clone's checkouts share, must not resolve the main checkout's packages or source in its place. A build's tree is a fresh worktree inside the main checkout with nothing installed, so the project declares in `[build] setup` the command that makes such a tree ready to run its tests, such as one installing its dependencies into it, and every session that tests code in such a tree (a `clm run` build, a draft's code fix, a skill's hand-run fix) runs it with `clm setup` before its first test run there; CLM names no toolchain, and the project's command holds what its toolchains need (`build-setup-step`).
+
+**Scenario: a package lookup that walks up**
+- GIVEN a project whose test runner looks for packages in the parent directories of the tree it runs in, a main checkout with its packages installed, and a build in a fresh worktree under it
+- WHEN the build runs its first test
+- THEN `clm setup` has run the project's `[build] setup` in the worktree, and the test runs against the worktree's own packages and code
+
+**Guarantee**
+A build's red and green test runs exercise the branch's own code with the dependencies its own tree declares, so a test-first build's result means what it says, and what a build saw pass is what its land checks.
+
+**Untested**
+That a session runs `clm setup` before its first test, and again when its dependencies change, rests on the prompts and skills that tell it to, as `path-ownership`'s rule rests on the build prompt: no program sees a session's test runs. Whether a project's toolchains reach outside the tree they run in, and whether its `[build] setup` installs everything its tests need, are things CLM can't see; a gap shows as a test that passes in a build and fails in a fresh tree, or the reverse. `[land] check` stays a command that needs no setup before it, since CI and `[verify]` run it in trees no build prepared.

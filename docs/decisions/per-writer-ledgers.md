@@ -15,3 +15,14 @@ What stays a branch with git's compare-and-swap is what genuinely needs mutual e
 The records replace `pinned-approval`'s bot comment (the `approved` record carries the fingerprint, so a rebase keeps it and a content change orphans it) and `soft-review-after-merge`'s label (a SOFT `landed` record with no `reviewed` record is what awaits review). Writers prune their own superseded `approved` and `checked` records; `landed` and `reviewed` are `main`'s audit trail, and `clm ledger verify` checks `main` against them.
 
 A writer name is a claim, not a proof: a repository that lists its signers makes approvals and lands signed (`signed-ledger-records`); nothing proved who added a label either.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `per-writer-ledgers` until 2026-11-13, when it moved down here; its rules serve `git-is-truth` (`human-layer-entries-stay-short`). The text still holds:
+
+Approvals, checks and lands SHALL be records in per-writer ledger branches that only their writer appends to, so appends never race, rebase or force-push.
+
+**Scenario: two lands at once**
+- GIVEN two people landing at the same time
+- WHEN each records its land
+- THEN each appends to its own ledger branch and neither rewrites the other's

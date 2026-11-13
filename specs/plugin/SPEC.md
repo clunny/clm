@@ -108,7 +108,7 @@ The repo SHALL have `.claude-plugin/marketplace.json` listing a plugin `clm` wit
 
 #### Serves
 - capability/install-and-release
-- architecture/say-guard-is-off
+- capability/guard-sessions
 
 ### Requirement: hooks-wired
 `plugin/hooks/hooks.json` SHALL run `clm hook session-start` on `SessionStart`, `clm hook guard` on `PreToolUse` for `Bash`, and `clm hook autosync` on `Stop`, all through `${CLAUDE_PLUGIN_ROOT}/bin/clm`.
@@ -125,7 +125,7 @@ The repo SHALL have `.claude-plugin/marketplace.json` listing a plugin `clm` wit
 
 #### Serves
 - capability/guard-sessions
-- architecture/guard-blocks-push-to-main
+- architecture/land-locally
 
 ### Requirement: skills
 The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, each with a `description` in its frontmatter. Each SHALL tell Claude never to push `main` by any means but `clm land`, and to run `clm approve` only after the human says yes in the conversation, through the guard's confirmation. No skill or agent SHALL name `clm hash` (the word `hash` as the subcommand), which Claude Code's worktree isolation refuses: they SHALL name `clm hashes`. `propose` SHALL name `clm hashes`, `clm check`, `clm apply`, `clm rebase`, `clm gate`, `spec review`, `human_burdens`, `clm pr open`, `clm approve`, `clm land` and `clm wrap-up`, and the section `## Intent`, and SHALL NOT tell Claude to set `after` or `prefer_after`. It SHALL tell Claude that a branch whose `clm gate` prints `spec review` as its first line lands only after the human's `clm approve`, and that any other spec branch lands on checks (`yes-no-review`). No skill SHALL name `gh pr`, `gh api`, `spec-approved`, `spec-review`, `clm watch`, `clm review`, `clm significant`, `## Significant`, the field `` `gate` ``, `gate: `, or the review tiers `HARD`, `SOFT` and `AUTO`. `build` SHALL name `clm build start`, `clm build step`, `clm build launched`, `clm build returned`, `clm build stop` and `isolation`, since the build loop decides every step and archives the complete changes itself (`orchestrator.loop`). No `SKILL.md` SHALL hold `` `clm rebase` until it exits 0 ``: `propose` and `init` SHALL tell Claude to run `clm rebase` until its last line is `rebase ok`, and to read its outcome from that line, never from its exit code.
@@ -357,7 +357,6 @@ The plugin SHALL ship `skills/health/SKILL.md` with a `description` in its front
 
 #### Serves
 - capability/know-health
-- architecture/health-advises
 
 ### Requirement: skills-write-serves
 The propose and init skills SHALL tell the session that, once either human layer holds an entry, it gives every component it adds or drafts, and every component it adds a rule to that has none, a `serves` list naming entries of `CAPABILITIES.md` or `ARCHITECTURE.md`, and a rule whose purpose differs from its component's a `#### Serves` block, and that `clm check` fails a rule that serves nothing (`check/untraced`).
@@ -753,7 +752,7 @@ The repository SHALL hold a Codex plugin marketplace, in the file and format Cod
 #### Serves
 - capability/guard-sessions
 - capability/work-from-any-agent-harness
-- architecture/guard-blocks-push-to-main
+- architecture/land-locally
 
 ### Requirement: skills-follow-agent-harness
 Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for a build or asks for an approval, except `build`, whose loop reads the agent harness itself and says in each action how to launch (`orchestrator.loop/loop-follows-agent-harness`), SHALL tell the session to run `clm agent-harness` before its first such step and to follow what it prints: where `subagents` is `no`, to do each piece of work a subagent would take in the session itself, one at a time; where `isolated-worktrees` is `no`, to give a build its own worktree with `git worktree add .claude/worktrees/agent-<component>` before launching it, and to tell the build to work there; where `model-choice` is `no`, to launch with the session's own model, the model names the skill gives being Claude Code's; where `confirm` is `no`, to ask the human for their yes in the conversation and then to have them run `clm approve <branch>` in their own terminal, never running it from the session; and, where `named-agents` is `no`, to launch a general subagent told to follow the agent's file under the plugin's `agents/`. A skill SHALL name the Agent tool only beside the words `or the agent harness's own subagent tool`. This component's own skills (`help`, `health`, `configure`, `contribution`, `verify`) SHALL hold it; the children's skills hold it through their own requirements.

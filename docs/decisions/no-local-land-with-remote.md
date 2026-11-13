@@ -11,3 +11,14 @@ Why: two people landing locally while offline make two `main`s. Reconciling them
 This is what keeps a team in step, together with what already holds: every land, sync, claim and run fetches first; a node claim lapses after four hours without a push; spec work is snapshotted to `autosync/` each turn; `clm checkpoint` won't pass with unpushed work. No `mode` setting is needed: `host = "none"` is the only case with no shared `main`.
 
 Refined by `none-keeps-its-own-remote` (2026-11-07): with `host = "none"` the clone keeps a remote of its own, so `clm land` no longer lands on the local `main` alone.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `no-local-land-with-remote` until 2026-11-13, when it was merged into `land-locally` (`human-layer-entries-stay-short`). The text still holds:
+
+In a repository with a remote, `main` SHALL have one copy, the remote's: `clm land` refuses rather than land locally when the remote can't be reached.
+
+**Scenario: remote unreachable**
+- GIVEN a repository with a remote that can't be reached
+- WHEN `clm land` runs
+- THEN it exits non-zero and `main` is unchanged

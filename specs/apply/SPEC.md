@@ -222,7 +222,7 @@ When validation checks the frontmatter a delta produces, from a `## MODIFIED Fro
 
 #### Serves
 - capability/propose-intent
-- architecture/settings-before-use
+- architecture/checks-relax-before-use
 
 #### Needs
 - model/optional-nodes

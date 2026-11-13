@@ -13,3 +13,14 @@ A clone's `clm.local.toml` still sets `approval` for that clone's lands, as `con
 Rejected: having the gate refuse to land a branch that changes `approval` unless it is approved under the stricter of the two values. It needs the gate to read the ledger, which it doesn't (`clm gate` takes `--approved` from `clm land`), and leaves every other branch judged by the checkout. Also rejected: leaving it to `verify`. The audit runs only in signed repositories and after the land, when the record is already dirty.
 
 Refined by `none-keeps-its-own-remote` (2026-11-07): with `host = "none"` the clone keeps a remote of its own, so every land is made on `origin/main` and the policy is read from the `clm.toml` committed there, never from the local `main`.
+
+## The rule in full
+
+`ARCHITECTURE.md` stated this as the entry `land-policy-from-base` until 2026-11-13, when it was merged into `approval-policy` (`human-layer-entries-stay-short`). The text still holds:
+
+`clm land` SHALL take the `approval` setting from the `clm.toml` committed at the base it lands on, so a branch can't weaken the policy it is judged by.
+
+**Scenario: branch relaxes approval**
+- GIVEN a branch that changes `approval` to let its author approve
+- WHEN `clm land` judges it
+- THEN it applies the setting on `main`, not the branch's

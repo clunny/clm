@@ -2,6 +2,7 @@
 title: "A passing check proves less than the spec claims, and the spec keeps growing"
 kind: idea
 components: [clm]
+blocks: [capability/measure-by-evals]
 ---
 
 ## Intent

@@ -430,7 +430,7 @@ A requirement MAY hold one `#### Needs` block among its scenarios: a bullet list
 
 #### Serves
 - capability/build-from-spec
-- architecture/needs-alone-order
+- architecture/component-reconciliation
 
 ### Requirement: size-budget
 A component's frontmatter MAY set `size_budget` to a mapping whose keys `spec_tokens` and `code_tokens` are each optional and each a positive integer: the component's own budget, in place of `config`'s `component_size`, for that count (`node-size-budgets`). The model SHALL reject a component whose `size_budget` isn't such a mapping, has another key, or has a value that isn't a positive integer (zero, negative, a float or a string), with a message naming the file and `size_budget` itself, not only a parser error, and SHALL expose each key on the component, absent when the frontmatter doesn't set it.

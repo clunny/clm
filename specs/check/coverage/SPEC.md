@@ -187,7 +187,6 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - capability/build-from-spec
 - capability/see-project-state
 - architecture/component-reconciliation
-- architecture/needs-alone-order
 
 #### Needs
 - model/human-layers
