@@ -1646,7 +1646,7 @@ fn shim_prefers_clm_bin() {
 
 #[test]
 fn view_command_falls_back_without_claiming_absence() {
-    // req:plugin/view-fallback-wording@2ed0320a
+    // req:plugin/view-fallback-wording@ac3807bc
     let text = fs::read_to_string(plugin().join("commands/view.md")).unwrap();
     // installed but refused: the text can't tell which, so it names both cases.
     assert!(!text.contains("isn't installed here"), "{text}");
@@ -1655,6 +1655,9 @@ fn view_command_falls_back_without_claiming_absence() {
         "/plugin install clm-panel@clm",
         "claude plugin validate",
         "claude --debug",
+        "queue",
+        "argument-hint: \"[status|queue|spec|flight|blockers]\"",
+        "`status`, `queue`, `spec`, `flight` or `blockers`",
         "clm status",
         "clm view $ARGUMENTS",
     ] {
