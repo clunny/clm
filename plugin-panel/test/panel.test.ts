@@ -30,7 +30,7 @@ import {
   unfenced,
   viewArgs,
 } from '../src/panel.ts'
-import { chartLines, modelRuns, pressNode } from '../src/inspector.ts'
+import { chartLines, modelRuns, paneChart, pressNode } from '../src/inspector.ts'
 
 const PANEL = '/plugins/clm/plugin-panel'
 const SHIM = '/plugins/clm/plugin/bin/clm'
@@ -81,7 +81,7 @@ const REPO = { files: ['/work/repo/specs/SPEC.md', SHIM], dirs: ['/work/repo', '
 const ok = (stdout: string): Run => ({ exitCode: 0, stdout, stderr: '' })
 
 describe('view-command-in-chat', () => {
-  // req:plugin.panel/view-command-in-chat@35f95b15
+  // req:plugin.panel/view-command-in-chat@56b47f43
   test('a view in the chat is clm view <name> --at origin/main at the cwd, in a code block', async () => {
     const $ = fake({ ...REPO, answer: () => ok('flight  2 nodes pending\n') })
     const answer = await command($, 'flight', '/work/repo/crates')
@@ -96,7 +96,7 @@ describe('view-command-in-chat', () => {
 
   test('status is clm status; every view name is accepted', async () => {
     const $ = fake({ ...REPO, answer: argv => ok(argv.slice(1).join(' ')) })
-    for (const name of ['status', 'spec', 'flight', 'blockers']) {
+    for (const name of ['status', 'queue', 'spec', 'flight', 'blockers']) {
       const answer = await command($, ` ${name} `, '/work/repo')
       expect(answer).toEqual({ text: `\n\`\`\`\n${name === 'status' ? 'status' : `view ${name} --at origin/main`}\n\`\`\`` })
     }
@@ -125,23 +125,48 @@ describe('view-command-in-chat', () => {
   test('an unknown name lists the names and runs nothing', async () => {
     const $ = fake({ ...REPO, answer: () => ok('') })
     const answer = await command($, 'everything', '/work/repo')
-    expect('text' in answer && answer.text).toContain('status, spec, flight, blockers')
+    expect('text' in answer && answer.text).toContain('status, queue, spec, flight, blockers')
     expect($.calls).toEqual([])
   })
 })
 
 describe('views-panel', () => {
-  // req:plugin.panel/views-panel@2ea8bd17
-  test('the pane is CLM with Spec, Flight and Blockers, Flight first', () => {
+  // req:plugin.panel/views-panel@4f33137b
+  test('the pane is CLM with Queue, Spec, Flight and Blockers, Queue first', () => {
     expect(PANE_TITLE).toBe('CLM')
-    expect(TABS).toEqual(['spec', 'flight', 'blockers'])
-    expect(FIRST_TAB).toBe('flight')
+    expect(TABS).toEqual(['queue', 'spec', 'flight', 'blockers'])
+    expect(FIRST_TAB).toBe('queue')
   })
 
-  test('a kept tab that is none of the three reads as Flight', () => {
-    expect(tabOf('capabilities')).toBe('flight')
-    expect(tabOf(undefined)).toBe('flight')
+  test('a kept tab that is none of the four reads as Queue', () => {
+    expect(tabOf('capabilities')).toBe('queue')
+    expect(tabOf(undefined)).toBe('queue')
     for (const t of TABS) expect(tabOf(t)).toBe(t)
+  })
+
+  // req:plugin.panel/queue-tab@0cb57d23
+  test('the Queue tab runs no JSON model, and its lines are not pressable and draw no inspector', () => {
+    for (const surface of ['terminal', 'desktop'] as const) {
+      expect(modelRuns('queue', surface, null, true)).toEqual({})
+      expect(modelRuns('queue', surface, 'a', true)).toEqual({})
+    }
+    const chart = ansiLines('\x1b[34mqueue\x1b[0m\n  build:git\n')
+    const { lines, inspector } = paneChart({ tab: 'queue', chart, selected: 'a', unfolded: [] })
+    expect(inspector).toBeUndefined()
+    expect(lines.map(l => l.key)).toEqual([undefined, undefined])
+    expect(lines.map(l => l.spans)).toEqual(chart)
+  })
+
+  // req:plugin.panel/views-panel@4f33137b
+  test('the Queue tab has no SVG form: other surfaces run its text chart', () => {
+    expect(viewArgs('queue', 'terminal', 80, true)).toEqual([
+      'view', 'queue', '--at', 'origin/main', '--format', 'ansi', '--width', '80',
+    ])
+    for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
+      expect(viewArgs('queue', surface, 80, true)).toEqual(['view', 'queue', '--at', 'origin/main', '--format', 'text'])
+      expect(viewArgs('queue', surface, 80)).toEqual(['view', 'queue', '--format', 'text'])
+      expect(viewArgs('spec', surface, 80)).toEqual(['view', 'spec', '--format', 'svg'])
+    }
   })
 
   test('the terminal pane asks for ANSI at its width; others for SVG', () => {
@@ -211,7 +236,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
-  // req:plugin.panel/views-panel@2ea8bd17
+  // req:plugin.panel/views-panel@4f33137b
   test('a press changes no run the pane holds for this generation, so no clm command runs again', async () => {
     const cache = new Map<string, Promise<Run>>()
     let started = 0
@@ -275,11 +300,14 @@ describe('views-panel', () => {
     expect(paneBody('terminal', { exitCode: 1, stdout: 'x', stderr: 'violations: 2' })).toEqual({ error: 'violations: 2' })
     expect(paneBody('terminal', ok('\x1b[34mx\x1b[0m'))).toEqual({ ansi: [[{ text: 'x', color: 'blue' }]] })
     expect(paneBody('desktop', ok('<svg/>'))).toEqual({ svg: '<svg/>' })
+    // The Queue tab's text chart is shown as text where the other tabs draw an SVG.
+    expect(paneBody('desktop', ok('queue\n'), 'queue')).toEqual({ text: 'queue\n' })
+    expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })
   })
 
   test('no pictures: no Picture button, no Image, and no png on any tab or surface', () => {
     for (const surface of ['terminal', 'desktop', 'vscode', 'mobile'] as const) {
-      for (const tab of ['spec', 'flight', 'blockers'] as const) {
+      for (const tab of ['queue', 'spec', 'flight', 'blockers'] as const) {
         for (const at of [true, false]) expect(viewArgs(tab, surface, 80, at)).not.toContain('png')
       }
     }

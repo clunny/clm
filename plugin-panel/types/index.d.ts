@@ -30,7 +30,7 @@ export type AgentRun = {
   tasks: Task[]
 }
 
-export type PanelTab = 'spec' | 'flight' | 'blockers'
+export type PanelTab = 'queue' | 'spec' | 'flight' | 'blockers'
 
 declare module 'claude-code' {
   interface PluginState {
