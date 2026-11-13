@@ -80,6 +80,17 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 - **Order between phases is by `#### Needs` and priority, as for any work.** A change that relaxes a check lands before one that relies on it (`checks-relax-before-use`).
 - **Where CLM can't carry a change through itself, that is a finding.** It is reported with `clm defect`, and the step is done by hand on a branch that still lands through `clm land`.
 
+## Safeguards against losing behaviour
+
+This plan deletes requirements on purpose, and code that serves no written requirement is removed by CLM's own rules (`no-dead-code`). The 2026-10-29 re-founding lost behaviour that way. These hold for every phase.
+
+1. **A baseline before anything is deleted.** The commit the freeze began on is tagged, and `.github/scripts/coverage.sh` is run on it once, so `clm health`'s `unexercised` signal lists the code no test runs today. Before phase 5, each run of such lines gets one of three answers: it is behaviour someone relies on, so a scenario states it and a test proves it; it is dead, so it is deleted knowingly; or it is plumbing, such as an error path, that the component's Design covers. On the baseline day 4,257 Rust test functions stood against 4,296 markers, with 15 Rust files and 4 of 54 TypeScript test files holding tests that cite nothing, so the unstated part lies in code no test runs, not in uncited tests.
+2. **A test outlives its requirement's wording.** In phases 2 and 5 a test of real behaviour is re-cited to the requirement that survives, never deleted because the text got shorter. Only a test that solely scans prompt or source text goes.
+3. **Every branch that deletes tests lists them.** A program produces the list from the diff, and the human reads it before the land.
+4. **A change that removes a requirement needs the human's approval while the plan runs.** Such a change lands on checks today. One approval per phase, with the list from point 3.
+5. **A mixed requirement is split before deletion.** The part that states behaviour stays a requirement; only the check that a sentence exists goes.
+6. **A use checklist, run before and after each phase.** What the human actually uses: approving from the phone in the web app, the panel, Azure DevOps, Codex, the overnight build. Capability tests fake the model and would miss some losses.
+
 ## Done means
 
 - An empty test no longer reads as proven.
@@ -92,4 +103,6 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 - **Mutation tool.** Whether `cargo-mutants`' diff-scoped mode fits the verify job hasn't been checked.
 - **Eval results.** Whether `claude plugin eval` returns a case's tags in its JSON isn't documented; the wrapper may have to map case names to requirement IDs.
+- **Details a human asked for.** A small thing a person asked for in use, such as a colour or a view that fills the screen, is intent and must survive the prune, while detail an AI session invented may go. Nothing marks which is which today; phase 5 needs a way to tell before the spec-slimmer runs, the archived changes' intents being one source.
+- **The weight of a small change.** Such a detail belongs as one scenario on an existing requirement, not a requirement of its own, and should reach `main` without the ceremony of a full change. Phase 5's collapse of the routes settles how.
 - **A hard approval boundary.** A separate touch key for approvals alone, with an answer for the web app, is left for when others join the project.
