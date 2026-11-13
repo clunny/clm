@@ -197,10 +197,6 @@ Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `
 - capability/git-host
 - architecture/host-adapters
 
-#### Needs
-- host/azure-pull-requests
-- host/azure-other-operations
-
 ### Requirement: approval-setting
 Loading SHALL take `approval` only from the repository's `clm.toml` or the clone's `clm.local.toml`, defaulting to `any`, SHALL fail naming the file that sets it (`clm.toml` or `clm.local.toml`) and `approval` for a value other than `any` or `other`, and SHALL fail naming the user's `config.toml` and the key when that file sets it.
 
