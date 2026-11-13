@@ -23,7 +23,7 @@ describe('a backlog item page', () => {
     const page = renderBacklogItem(q(), 'q', null, '#/o/a/backlog', answering);
     expect(page.querySelector('h1')!.textContent).toBe('Ship it?');
     const text = page.textContent!;
-    for (const part of ['question', 'P2', 'a/x', 'Origin: c', 'yes by alice']) expect(text).toContain(part);
+    for (const part of ['question', 'P2', 'a/x', 'Origin: c', 'yes by alice', '2026-10-27 10:00 UTC'])expect(text).toContain(part);
     expect([...page.querySelectorAll('.meta .chip')].map((c) => c.textContent)).toEqual(['question', 'P2', 'a']);
     expect(text).not.toContain('bob');
     expect(page.querySelector('.md strong')!.textContent).toBe('ship');
@@ -45,7 +45,7 @@ describe('a backlog item page', () => {
     expect(page.innerHTML).not.toContain('onerror');
   });
 
-  it('an item with no priority or answers shows none, and no buttons without an answerer', () => {
+  it('an item with no priority or answers shows none', () => {
     const snap = snapshot();
     const page = renderBacklogItem(snap, 'crash', null, '#/o/a/backlog');
     expect(page.querySelector('.prio')).toBeNull();
