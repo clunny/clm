@@ -449,7 +449,7 @@ export function componentRange(texts: readonly string[]): [number, number] {
 
 /**
  * The queue chart's running entries (`view/queue-view`) by line index: the lines under the
- * `running` heading that start with two spaces and a name, up to the next heading, but `  none`.
+ * `running` heading that start with two spaces and a name, up to the next heading.
  */
 function runningEntries(texts: readonly string[]): Map<number, string> {
   const out = new Map<number, string>()
@@ -457,7 +457,7 @@ function runningEntries(texts: readonly string[]): Map<number, string> {
   if (from < 0) return out
   for (let i = from + 1; i < texts.length && texts[i]!.startsWith(' '); i++) {
     const name = /^ {2}([^ ]+)/.exec(texts[i]!)?.[1]
-    if (name !== undefined && name !== 'none') out.set(i, name)
+    if (name !== undefined) out.set(i, name)
   }
   return out
 }
