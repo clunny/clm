@@ -1035,3 +1035,74 @@ fn clm_draft_passes_the_declared_setup_into_the_prompt() {
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert!(prompt_of(&r, &ran).contains("clm setup"));
 }
+
+#[test]
+fn scenario_a_draft_that_pushed() {
+    // req:orchestrator.triage/draft-resume@62d8d617
+    let r = with_items();
+    let id = "20261112-x";
+    push_files(
+        &r.work,
+        &format!("spec/{id}"),
+        &[(&format!("changes/{id}/change.md"), &change("proposed"))],
+    );
+    let ran = clm_draft_env(&r, &fake(), &["--resume", id], &[]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    assert_eq!(drafted_id(&ran), id);
+    assert!(ran.stdout.contains(".clm/prompts/draft/20261112-x.md"));
+    let prompt = fs::read_to_string(r.work.join(".clm/prompts/draft/20261112-x.md")).unwrap();
+    assert!(prompt.contains("git switch -c spec/20261112-x origin/spec/20261112-x"));
+    assert!(prompt.contains("clm gate --base origin/main"), "same steps");
+    assert!(prompt.contains("`left <slug>: <reason>`"), "same rules");
+    assert_eq!(place_names(&r), vec![id.to_string()]);
+    assert!(local_branches(&r).lines().all(|b| !b.contains("spec/")));
+}
+
+#[test]
+fn resume_takes_the_newer_of_the_two_spec_branches() {
+    // req:orchestrator.triage/draft-resume@62d8d617
+    let r = with_items();
+    let id = "20261112-w";
+    let path = format!("changes/{id}/change.md");
+    let text = change("proposed");
+    push_files(&r.work, &format!("spec/{id}"), &[(&path, &text)]);
+    std::thread::sleep(std::time::Duration::from_millis(2100));
+    push_files(&r.work, &format!("autosync/spec/{id}"), &[(&path, &text)]);
+    let ran = clm_draft_env(&r, &fake(), &["--resume", id], &[]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let prompt = fs::read_to_string(r.work.join(format!(".clm/prompts/draft/{id}.md"))).unwrap();
+    assert!(prompt.contains(&format!(
+        "git switch -c spec/{id} origin/autosync/spec/{id}"
+    )));
+}
+
+#[test]
+fn scenario_nothing_pushed() {
+    // req:orchestrator.triage/draft-resume@62d8d617
+    let r = with_items();
+    let ran = clm_draft_env(&r, &fake(), &["--resume", "20261112-y"], &[]);
+    assert_eq!(ran.code, Some(1), "{}", ran.stderr);
+    assert!(
+        ran.stderr.contains("left nothing to resume"),
+        "{}",
+        ran.stderr
+    );
+    assert!(place_names(&r).is_empty(), "{:?}", place_names(&r));
+}
+
+#[test]
+fn resume_with_no_free_place_takes_nothing() {
+    // req:orchestrator.triage/draft-resume@62d8d617
+    let r = with_items();
+    let id = "20261112-z";
+    push_files(
+        &r.work,
+        &format!("spec/{id}"),
+        &[(&format!("changes/{id}/change.md"), &change("proposed"))],
+    );
+    place_taken(&r, "other", 1, &["spec/other"]);
+    let ran = clm_draft_env(&r, &fake(), &["--resume", id], &[("CLM_MAX_BUILDS", "1")]);
+    assert_eq!(ran.code, Some(3), "{}", ran.stderr);
+    assert_eq!(ran.stdout, "");
+    assert_eq!(place_names(&r), vec!["other".to_string()]);
+}

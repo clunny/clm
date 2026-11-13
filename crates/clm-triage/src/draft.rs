@@ -122,6 +122,91 @@ pub fn draft(
     Ok(drafted?)
 }
 
+/// `clm draft --resume <change>`: takes the place `change`, reusing it while it counts, and
+/// writes the prompt for a session that carries on the draft pushed as `spec/<change>` or
+/// `autosync/spec/<change>`, the newer when both exist (`draft-resume`). A draft that left
+/// no branch frees the place it took and refuses; nothing is claimed, since the draft's
+/// items stay held until their claims lapse.
+pub fn resume(
+    root: &Path,
+    change: &str,
+    setup: Option<&str>,
+    max_builds: u64,
+    expiry_hours: u64,
+) -> Result<Drafted, DraftError> {
+    if change.is_empty() || change.contains('/') {
+        return Err(Error::Refused(format!("`{change}` isn't a change ID")).into());
+    }
+    fetch_origin(root)?;
+    let prompts = prompts_dir(root, PROMPTS)?;
+    let kept = places(root, expiry_hours)?
+        .into_iter()
+        .find(|p| p.name == change && p.counts)
+        .and_then(|p| p.file.ok())
+        .map(|f| f.branches);
+    let mut branches = kept.unwrap_or_default();
+    let own = format!("spec/{change}");
+    if !branches.contains(&own) {
+        branches.insert(0, own);
+    }
+    let placed = take_place(
+        root,
+        change,
+        PlaceKind::Draft,
+        &branches,
+        max_builds,
+        expiry_hours,
+    )?;
+    if let Placed::Full { held, max_builds } = placed {
+        return Err(DraftError::NoPlace(format!(
+            "no free build place: {held} of max_builds = {max_builds} in use; wait for a \
+             draft or build to land, or finish one whose session has returned"
+        )));
+    }
+    let written = resume_prompt(root, change, setup, &prompts);
+    if written.is_err() {
+        let _ = free_place(root, change);
+    }
+    Ok(written?)
+}
+
+/// Writes the resume prompt for `change` into `prompts`, from the newer of its two spec
+/// branches on `origin` (`spec/` on a tie), or refuses when neither exists.
+fn resume_prompt(
+    root: &Path,
+    change: &str,
+    setup: Option<&str>,
+    prompts: &Path,
+) -> Result<Drafted, Error> {
+    let tip = |prefix: &str| {
+        let rf = format!("refs/remotes/{REMOTE}/{prefix}/{change}");
+        git(root, &["log", "-1", "--format=%ct", &rf])
+            .ok()
+            .and_then(|t| t.trim().parse::<u64>().ok())
+    };
+    let remote = match (tip("spec"), tip("autosync/spec")) {
+        (Some(a), Some(b)) if b > a => format!("autosync/spec/{change}"),
+        (Some(_), _) => format!("spec/{change}"),
+        (None, Some(_)) => format!("autosync/spec/{change}"),
+        (None, None) => {
+            return Err(Error::Refused(format!(
+                "the draft `{change}` left nothing to resume: no `spec/{change}` or \
+                 `autosync/spec/{change}` on `{REMOTE}`; its items stay held until their \
+                 claims lapse"
+            )));
+        }
+    };
+    let file = prompts.join(format!("{change}.md"));
+    fs::write(&file, prompt_for(&[], "", setup, change, Some(&remote)))
+        .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
+    let launcher = crate::launcher(&file, &format!("resuming the draft `{change}`"));
+    Ok(Drafted {
+        id: change.to_string(),
+        file,
+        launcher,
+    })
+}
+
 /// What `draft` does once it holds the place `place`, which it renames to the change ID,
 /// writing the prompt, with the trimmed `answers`, into `prompts`. `limits` are
 /// `max_builds` and the expiry in hours.
@@ -261,6 +346,19 @@ fn prompt(
     setup: Option<&str>,
     id: &str,
 ) -> String {
+    prompt_for(items, answers, setup, id, None)
+}
+
+/// The prompt for the change `id`: for the claimed `items` when `resume` is `None`, and
+/// otherwise for a session that carries on the draft pushed as the remote branch `resume`
+/// (`draft-resume`), under the same steps.
+fn prompt_for(
+    items: &[(&BacklogItem, String)],
+    answers: &str,
+    setup: Option<&str>,
+    id: &str,
+    resume: Option<&str>,
+) -> String {
     let list = |v: &[String]| format!("[{}]", v.join(", "));
     let slugs: Vec<String> = items.iter().map(|(i, _)| i.slug.clone()).collect();
     let highest = items
@@ -275,10 +373,15 @@ fn prompt(
     };
     let rebase = "run `clm rebase` and resolve what it reports (conflicted files, stale deltas, \
                 check failures), committing each fix, until its last line is `rebase ok`";
-    let mut p = String::from(
+    let mut p = String::from(if resume.is_some() {
+        "You are continuing the design of one CLM spec change, unattended, whose draft's \
+         session ended before it returned: `clm draft --resume` wrote this prompt for you. \
+         The draft's commits are on its spec branch on `origin`, and the backlog items it \
+         claimed are the ones its `change.md` names in `resolves`.\n"
+    } else {
         "You are designing one CLM spec change, unattended, from the backlog items below, \
-         which `clm draft` claimed for you as `propose/<slug>` on `origin`.\n\n## Items\n",
-    );
+         which `clm draft` claimed for you as `propose/<slug>` on `origin`.\n\n## Items\n"
+    });
     for (item, body) in items {
         let fm = &item.frontmatter;
         let requirement = fm
@@ -354,14 +457,31 @@ fn prompt(
     } else {
         ""
     };
+    let start = match resume {
+        None => format!(
+            "Your change ID, `<id>` below, is `{id}`: `clm draft` chose it and holds this \
+             clone's place by it. First check `git branch --show-current`, then run \
+             `git switch -c spec/{id} origin/main`. Write `changes/{id}/change.md` with \
+             `status: proposed`, `resolves` naming every item above ({resolves}), and \
+             {priority}. Commit it and push it with `clm branch push`: the spec work then \
+             holds the items past their claims' expiry (`propose-claims`). Never rename \
+             `<id>` after that.",
+            resolves = slugs.join(", "),
+        ),
+        Some(remote) => format!(
+            "Your change ID, `<id>` below, is `{id}`: `clm draft` holds this clone's place by \
+             it. First check `git branch --show-current`, then run \
+             `git switch -c spec/{id} {REMOTE}/{remote}`. Read `changes/{id}/change.md` and \
+             `git log {REMOTE}/main..HEAD`, then each backlog item its `resolves` names in \
+             `backlog/<slug>.md` on `{REMOTE}/main`, and carry the draft on from where its \
+             commits leave off: the steps below say what a draft does, so do the ones its \
+             commits and files don't already show done, and repeat none that is. Never \
+             rename `<id>`."
+        ),
+    };
     p.push_str(&format!(
         "\n## Steps\n\n\
-         Your change ID, `<id>` below, is `{id}`: `clm draft` chose it and holds this \
-         clone's place by it. First check `git branch --show-current`, then run \
-         `git switch -c spec/{id} origin/main`. Write `changes/{id}/change.md` with `status: proposed`, `resolves` naming \
-         every item above ({resolves}), and {priority}. Commit it and push it with \
-         `clm branch push`: the spec work then holds the items past their \
-         claims' expiry (`propose-claims`). Never rename `<id>` after that.\n\n\
+         {start}\n\n\
          {answered}Before the job, check each item against `origin/main`: an item filed while another \
          change was fixing the same thing outlives that change, and drafting it costs a whole \
          session that ends by deleting it. Take the date the item was filed, \
@@ -659,7 +779,7 @@ fn prompt(
          monitors, watches) and wait for every subagent you launched, the builder check \
          among them, to return, so that no task of a finished draft wakes the triage \
          session later.\n",
-        resolves = slugs.join(", "),
+        start = start,
     ));
     p
 }
