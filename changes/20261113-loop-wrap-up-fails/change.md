@@ -37,8 +37,10 @@ The item names `orchestrator.triage`; the failure it reports is in `orchestrator
 
 ## Edge cases and workarounds
 
-- One push deletes several branches in wrap-up. Without `--atomic` git updates the refs it can and reports the refused ones, so the others are deleted by the same push; the build must confirm that, or push again without the refused branches.
-- The tests need a `git` on `PATH` that changes `origin` just before the push, as the fetch-race tests of both components already do for `fetch`.
+- One push deletes several branches in wrap-up. Without `--atomic` git updates the refs it can and reports the refused ones, so the others are deleted by the same push. The builder check confirmed it with real git: the push exits 1 and reports `! [rejected] (delete) -> <branch> (stale info)` for a branch that moved and for one already gone alike, also with `-q`.
+- After such a push a branch absent from `origin` may be one the push deleted or one deleted before it, and reading `origin` again can't tell which. Wrap-up tells them apart by git's per-branch report of the push, so only the branches it deleted get a `removed` line.
+- The tests need a `git` on `PATH` that changes `origin` just before the push. `crates/clm/tests/checkpoint.rs` already runs `clm wrap-up` with a fake program first on `PATH`; `crates/clm-triage/tests/fetch_retry.rs` does it in-process for the finish, and sets the process's `PATH` once, so the finish's race test needs a file of its own.
+- In the finish's scenarios the fake `git` must call the real one for its own push, or it recurses.
 
 ## Open questions
 
