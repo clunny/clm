@@ -22,7 +22,7 @@ Crate `clm-context` with `bundle(graph, root, node_id) -> String`, built on the 
 4. `# Ancestors`, then for each component from the root `clm` down to the target, the target last: `## <id>: <title>`, `### Contract`, `### Design`. The target also gets `### Frontmatter`, its YAML in a fenced `yaml` code block, before its contract, and `### Requirements`, its requirement blocks, after its design, then `### Assets`, one line `- specs/<path>/assets/<asset> <hash>` per asset sorted by path, when it has any.
 5. `# Dependencies`, then for each component named in the target's `depends_on` or `test_depends_on` that isn't among its ancestors, sorted by ID and each once: `## <id>: <title>` and `### Contract`. The section is omitted when there is none.
 
-Each part loses its trailing whitespace, and the parts are joined by a blank line. `bundle_nodes` lists the components whose specs make up the bundle: the ancestors, then the dependencies.
+Every line of every part loses its trailing whitespace, and the parts are joined by a blank line. `bundle_nodes` lists the components whose specs make up the bundle: the ancestors, then the dependencies.
 
 ## Requirements
 
