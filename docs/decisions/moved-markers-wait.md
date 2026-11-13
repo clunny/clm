@@ -18,3 +18,5 @@ Rejected:
 - **Counting the moved markers on the node the move took them to.** The work is in the right place, but an `obsolete` line would then mean "remove" on one node and "re-point" on another, which needs a new pending state or line shape, a new instruction in the build prompt, and a change to how the views count obsolete markers. The block reuses the needs machinery and changes none of them.
 - **A written `#### Needs` on the parent.** A removed requirement has no block to hold one, and the spec author would have to write it on every split.
 - **Leaving it to each split's Design** (`plugin.hooks` told its build to leave the markers alone). The queue still offered the node, so a build was launched only to stop.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: the child's build no longer re-points the parent's markers or moves its tests. It writes its own tests in its own files; the parent's obsolete lines still wait for it, and then a requirement of the parent's deletes its markers, tests and code (`coupled-changes-sequence`).)

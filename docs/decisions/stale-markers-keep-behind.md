@@ -18,3 +18,5 @@ Known edge cases:
 Rejected:
 - **Counting a stale marker as pending on the component whose `paths` hold its file**, as an obsolete marker of a removed component is. That build's context doesn't hold the cited requirement's text (`ancestor-scoped-context`), so it could re-cite the test but not judge whether the test proves the new text. It would also need a new pending line shape and state for the views to count.
 - **A `clm check` rule failing a stale marker beside a current one.** That would fail every tree between a reword and the build that re-cites, including the spec branch that rewords. It would also say nothing about which build fixes it.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: re-citing a test in another component's files is now a transitional exception of `path-ownership`, for files no `tests` glob owns, and no longer compared to a removal's forced fix, which is withdrawn (`coupled-changes-sequence`, `components-own-their-tests`).)

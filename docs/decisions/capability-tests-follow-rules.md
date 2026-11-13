@@ -22,3 +22,5 @@ Why not the alternatives:
 - **Leave it to each change's requirement text, as `web/app-at-app-path` did.** That works only when the draft saw it; a change whose builder check missed a test leaves its build stuck, as `forced-fixes-cover-additions` found for struct literals. The build sees the failing test, so the rule belongs with the build, and the design-time naming is for the reviewer.
 
 Refines `path-ownership`, `dependency-work-is-a-requirement` and `human-layer-proof`.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: the forced fixes this exception was likened to are withdrawn (`coupled-changes-sequence`); this is now `path-ownership`'s one permanent exception for tests, because a capability test and the behaviour it observes can't land apart.)

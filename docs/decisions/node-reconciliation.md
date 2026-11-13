@@ -20,3 +20,5 @@ Rejected:
 - **Keeping change-scoped tasks and pruning the waits** to requirement-level dependencies declared by the author. Smaller, but a task still builds other changes' text by accident, so staleness and re-plans stay, and the author has to know the code's wiring.
 - **A task per requirement.** Finer than the paths that keep parallel sessions apart, and many more PRs for the same code.
 - **Design-only changes making a node pending.** A node is pending on requirements only; a Design edit alone builds nothing, as `archive-in-spec-pr` already treats it. Reopen if Design edits that should drive refactors turn out common.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: builds no longer share files through a removal's forced fix in another node; they do only under `path-ownership`'s remaining exceptions (`coupled-changes-sequence`).)

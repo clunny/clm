@@ -24,3 +24,5 @@ The specs describe both contracts while both exist, since both are current (`spe
 Rejected:
 - **One PR spanning the provider and its dependents.** It needs multi-node tasks, which break spine-scoped planning (`spine-scoped-context`).
 - **Dated deprecations or TODO comments.** A date says nothing about whether the removal is planned, and a TODO isn't checked.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: the exception for the fixes a removal forces is withdrawn. Every contract change another component's code or tests use, additions it must handle included, lands as expand, each user's move, then contract, each built in its own component's files (`coupled-changes-sequence`).)

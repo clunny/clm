@@ -23,7 +23,12 @@ Crate `clm-context` with `bundle(graph, root, node_id) -> String`, built on the 
 ## Requirements
 
 ### Requirement: bundle-contents
-`clm context <component>` SHALL print `ARCHITECTURE.md`, the block of each capability `<component>`'s requirements serve (each requirement's `#### Serves` block, else `<component>`'s `serves`; each once, in `CAPABILITIES.md`'s order), or every capability's block when `<component>` builds the capability tests (the graph's capability component, or its root when the graph has none), the contract and design of each component among the ancestors from the root to `<component>`, `<component>`'s frontmatter and requirements, the path and hash of each of `<component>`'s assets, and the contract of each component in `<component>`'s `depends_on`. It SHALL NOT print any other component's design, requirements or assets, any asset's content, any capability none of `<component>`'s requirements serves (unless `<component>` builds the capability tests), or anything from `changes/`, `backlog/` or `docs/`.
+`clm context <component>` SHALL print `ARCHITECTURE.md`, the block of each capability `<component>`'s requirements serve (each requirement's `#### Scenario: test dependency's contract
+- GIVEN component `feat` with `test_depends_on: [app]` and no `depends_on`
+- WHEN `clm context feat` runs
+- THEN it prints `app`'s contract and not its design
+
+#### Serves` block, else `<component>`'s `serves`; each once, in `CAPABILITIES.md`'s order), or every capability's block when `<component>` builds the capability tests (the graph's capability component, or its root when the graph has none), the contract and design of each component among the ancestors from the root to `<component>`, `<component>`'s frontmatter and requirements, the path and hash of each of `<component>`'s assets, and the contract of each component in `<component>`'s `depends_on` or its `test_depends_on` (`model/test-ownership-keys`), each once, since its tests lean on the latter's. It SHALL NOT print any other component's design, requirements or assets, any asset's content, any capability none of `<component>`'s requirements serves (unless `<component>` builds the capability tests), or anything from `changes/`, `backlog/` or `docs/`.
 
 #### Scenario: dependency stays private
 - GIVEN component `a` depending on `b`, where `b` has design text `B-DESIGN`, requirement `b/y` and asset `bm.html`
@@ -66,6 +71,7 @@ Crate `clm-context` with `bundle(graph, root, node_id) -> String`, built on the 
 - THEN the output holds `b`'s block and nothing of `a`
 
 #### Needs
+- model/test-ownership-keys
 - model/capability-tests-component
 
 ### Requirement: bundle-deterministic

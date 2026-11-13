@@ -22,3 +22,5 @@ Rejected:
 - **Allow a build to edit its users' code for a rename.** `architecture/path-ownership` keeps each build inside its component; `clm run`'s compile-only fixes cover only what a removal forces, not a move to a name the users choose to read.
 
 (Amended 2026-11-04, `20261104-clm-run-allows-compile`: `clm run`'s compile-only fixes now cover what an addition forces too (`forced-fixes-cover-additions`), so the rejected option above reads "cover only what a removal or an addition forces". A rename's adding requirement that adds a struct field may rely on that fix, setting the field in users' struct literals to the value under which the provider behaves as before, since their behaviour stays as it stands; a user's move to the new name is still never such a fix.)
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: a rename's adding requirement that adds a struct field no longer relies on a forced fix in users' struct literals; the provider first offers a constructor or defaults and each user moves to them in a requirement of its own (`coupled-changes-sequence`).)
