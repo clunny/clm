@@ -550,7 +550,7 @@ fn check_frontmatter(
             format!("`outside` must be a list of non-empty globs, not `{bad}`"),
         ));
     }
-    if let Some((key, bad)) = bad_test_keys(&fm) {
+    for (key, bad) in bad_test_keys(&fm) {
         let items = if key == "tests" {
             "non-empty strings"
         } else {
@@ -633,12 +633,12 @@ pub fn check_node_frontmatter(
 const OUTSIDE: &str = "model/outside-globs";
 const TEST_KEYS: &str = "model/test-ownership-keys";
 
-/// The first of `tests` and `test_depends_on` whose value is present and not a list of
+/// Each of `tests` and `test_depends_on` whose value is present and not a list of
 /// strings (`tests`: non-empty ones), with the value as one line of YAML. A null counts.
-fn bad_test_keys(fm: &serde_yaml::Value) -> Option<(&'static str, String)> {
+fn bad_test_keys(fm: &serde_yaml::Value) -> Vec<(&'static str, String)> {
     [("tests", true), ("test_depends_on", false)]
         .into_iter()
-        .find_map(|(key, non_empty)| {
+        .filter_map(|(key, non_empty)| {
             let value = fm.get(key)?;
             let ok = value.as_sequence().is_some_and(|items| {
                 items
@@ -647,6 +647,7 @@ fn bad_test_keys(fm: &serde_yaml::Value) -> Option<(&'static str, String)> {
             });
             (!ok).then(|| (key, one_line(value)))
         })
+        .collect()
 }
 
 /// The frontmatter's `outside` value, as one line of YAML, when it is present and not a

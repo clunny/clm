@@ -85,6 +85,13 @@ fn bad_shape() {
 }
 
 #[test]
+fn both_bad_keys_are_reported() {
+    // req:model/test-ownership-keys@baebdbff
+    let (_, violations) = load(repo("\ntests: x\ntest_depends_on: 5", "").path());
+    assert_eq!(violations.len(), 2, "{violations:?}");
+}
+
+#[test]
 fn unknown_or_own_component() {
     // req:model/test-ownership-keys@baebdbff
     for id in ["ghost", "a"] {
