@@ -91,6 +91,20 @@ fn a_drain_launches_nothing_new_and_lets_runs_finish() {
 }
 
 #[test]
+fn the_summary_lists_only_landed_runs_as_landed() {
+    // req:orchestrator.loop/end-summary@512bea55
+    let fx = Fixture::new();
+    running(&fx, "build:a", Kind::Build, "t-1");
+    stop(&fx.options(), StopMode::Drain).unwrap();
+    let actions = returned(&fx.options(), "build:a", "stopped: check fails", None).unwrap();
+    let text = said(line(&actions, "say "));
+    assert!(
+        text.contains("Landed since the loop started:\n  nothing"),
+        "{text}"
+    );
+}
+
+#[test]
 fn summary_with_a_workaround() {
     // req:orchestrator.loop/end-summary@512bea55
     let fx = Fixture::new();
