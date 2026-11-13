@@ -66,7 +66,7 @@ fn files(selection: &Selection) -> Vec<&str> {
 
 #[test]
 fn owners_and_their_dependants() {
-    // req:check.affected/affected-components@3230aae2
+    // req:check.affected/affected-components@b287ecd8
     let s = select(
         &graph(),
         &changed(&["crates/a/src/lib.rs"]),
@@ -78,7 +78,7 @@ fn owners_and_their_dependants() {
 
 #[test]
 fn a_dependant_alone_affects_no_dependency() {
-    // req:check.affected/affected-components@3230aae2
+    // req:check.affected/affected-components@b287ecd8
     let s = select(
         &graph(),
         &changed(&["crates/b/src/lib.rs"]),
@@ -90,7 +90,7 @@ fn a_dependant_alone_affects_no_dependency() {
 
 #[test]
 fn nothing_changed_selects_nothing() {
-    // req:check.affected/affected-components@3230aae2
+    // req:check.affected/affected-components@b287ecd8
     let s = select(&graph(), &[], &scanned(&[("crates/a/x.rs", &[])]), &[]);
     assert_eq!(
         s,
@@ -233,27 +233,18 @@ fn doc_only_paths_beside_code_select_what_the_code_does() {
 }
 
 #[test]
-fn a_component_whose_tests_import_a_changed_one_is_affected() {
-    // req:check.affected/affected-components@3230aae2
-    let doc = |paths: &str, deps: &str, extra: &str| {
-        format!(
-            "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: {deps}\n{extra}---\n"
-        )
-        .into_bytes()
+fn a_component_whose_tests_name_a_changed_one_is_not_affected() {
+    // req:check.affected/affected-components@b287ecd8
+    let doc = |paths: &str, extra: &str| {
+        format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n")
+            .into_bytes()
     };
     let files: clm_model::Files = [
-        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "[]", "")),
-        (
-            "specs/app/SPEC.md",
-            doc("[\"crates/app/**\"]", "[feat]", ""),
-        ),
+        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "")),
+        ("specs/app/SPEC.md", doc("[\"crates/app/**\"]", "")),
         (
             "specs/feat/SPEC.md",
-            doc("[\"crates/feat/**\"]", "[]", "test_depends_on: [app]\n"),
-        ),
-        (
-            "specs/other/SPEC.md",
-            doc("[\"crates/other/**\"]", "[]", ""),
+            doc("[\"crates/feat/**\"]", "test_depends_on: [app]\n"),
         ),
     ]
     .into_iter()
@@ -267,43 +258,5 @@ fn a_component_whose_tests_import_a_changed_one_is_affected() {
         &scanned(&[]),
         &[],
     );
-    assert_eq!(nodes(&s), ["app", "feat"]);
-}
-
-#[test]
-fn the_walk_stops_at_a_component_whose_tests_import_a_changed_one() {
-    // req:check.affected/affected-components@3230aae2
-    let doc = |paths: &str, deps: &str, extra: &str| {
-        format!(
-            "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: {deps}\n{extra}---\n"
-        )
-        .into_bytes()
-    };
-    let files: clm_model::Files = [
-        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "[]", "")),
-        (
-            "specs/app/SPEC.md",
-            doc("[\"crates/app/**\"]", "[feat]", ""),
-        ),
-        (
-            "specs/feat/SPEC.md",
-            doc("[\"crates/feat/**\"]", "[]", "test_depends_on: [app]\n"),
-        ),
-        (
-            "specs/other/SPEC.md",
-            doc("[\"crates/other/**\"]", "[feat]", ""),
-        ),
-    ]
-    .into_iter()
-    .map(|(p, t)| (p.into(), t))
-    .collect();
-    let (graph, violations) = clm_model::load_files(&files);
-    assert!(violations.is_empty(), "{violations:?}");
-    let s = select(
-        &graph,
-        &changed(&["crates/app/src/lib.rs"]),
-        &scanned(&[]),
-        &[],
-    );
-    assert_eq!(nodes(&s), ["app", "feat"]);
+    assert_eq!(nodes(&s), ["app"]);
 }
