@@ -464,6 +464,72 @@ fn verify_due(options: &Options, s: &Snapshot) -> Result<Option<bool>, Failure> 
     Ok((ran.code == 0 && ran.stdout.trim_start().starts_with("verify due")).then_some(idle))
 }
 
+/// How long an orphan's branch must stay still before a session taken over is judged gone.
+const STILL_SECONDS: u64 = 15 * 60;
+
+/// The branch an orphan's work is on, on `origin`.
+fn run_branch(run: &Run) -> Option<String> {
+    match run.kind? {
+        Kind::Build => Some(format!("impl/{}", run.name.strip_prefix("build:")?)),
+        Kind::Draft => Some(format!("spec/{}", run.name.strip_prefix("draft:")?)),
+        Kind::Fold | Kind::Archive => None,
+    }
+}
+
+/// The tip of `origin/<branch>` and when it was committed, Unix seconds; none when it isn't
+/// there.
+fn tip(options: &Options, branch: &str) -> Option<(String, u64)> {
+    let found = clm_git::git(
+        &options.root,
+        &[
+            "log",
+            "-1",
+            "--format=%H %ct",
+            &format!("refs/remotes/origin/{branch}"),
+        ],
+    )
+    .ok()?;
+    let (sha, time) = found.split_once(' ')?;
+    Some((sha.to_string(), time.parse().ok()?))
+}
+
+/// Keeps each hold up to date: a branch that moved restarts its quiet time, and one that stayed
+/// at the same commit for 15 minutes lets its orphan go (`take-over-holds-moving-orphans`).
+fn refresh_holds(options: &Options) -> Result<(), Failure> {
+    let Some(file) = state::read(&options.root) else {
+        return Ok(());
+    };
+    let seen: Vec<(String, Option<(String, u64)>)> = file
+        .runs
+        .iter()
+        .filter(|r| r.hold.is_some())
+        .map(|r| (r.name.clone(), run_branch(r).and_then(|b| tip(options, &b))))
+        .collect();
+    if seen.is_empty() {
+        return Ok(());
+    }
+    let at = now();
+    state::update(&options.root, |f| {
+        for (name, tip) in seen {
+            let Some(run) = f.run_mut(&name) else {
+                continue;
+            };
+            let Some(hold) = run.hold.as_mut() else {
+                continue;
+            };
+            match tip {
+                Some((sha, _)) if sha != hold.tip => {
+                    hold.tip = sha;
+                    hold.since = at;
+                }
+                Some(_) if at.saturating_sub(hold.since) < STILL_SECONDS => {}
+                _ => run.hold = None,
+            }
+        }
+        Ok(())
+    })
+}
+
 /// Lands again each escalation an earlier land of its item failed; true when one landed.
 fn retry_escalations(options: &Options) -> Result<bool, Failure> {
     let Some(file) = state::read(&options.root) else {
@@ -541,6 +607,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     if retry_escalations(options)? {
         clm_git::fetch(&options.root)?;
     }
+    refresh_holds(options)?;
     let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
     // Each `left` line of the wrap-up is said once.
@@ -706,6 +773,29 @@ pub fn start(
     clm_git::fetch(&options.root)?;
     let main = clm_git::git(&options.root, &["rev-parse", "origin/main"])?;
     let at = now();
+    // A session taken over may still run its subagents: an orphan whose branch advanced within
+    // the 15 minutes before the fetch is held until the branch has stayed still that long.
+    let mut holds = BTreeMap::new();
+    if take_over && let Some(file) = state::read(&options.root) {
+        for run in file.runs.iter().filter(|r| {
+            matches!(
+                r.state,
+                RunState::Planned | RunState::Running | RunState::Stopped
+            )
+        }) {
+            if let Some((sha, committed)) = run_branch(run).and_then(|b| tip(options, &b))
+                && at.saturating_sub(committed) < STILL_SECONDS
+            {
+                holds.insert(
+                    run.name.clone(),
+                    state::Hold {
+                        tip: sha,
+                        since: committed,
+                    },
+                );
+            }
+        }
+    }
     state::update(&options.root, |f| {
         if f.held(at) && !take_over {
             let ago = at.saturating_sub(f.lease.unwrap_or(at)) / 60;
@@ -726,6 +816,7 @@ pub fn start(
                 RunState::Planned | RunState::Running | RunState::Stopped
             ) {
                 run.orphan = true;
+                run.hold = holds.remove(&run.name);
             }
         }
         Ok(())
