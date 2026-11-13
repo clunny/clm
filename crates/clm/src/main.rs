@@ -438,6 +438,15 @@ enum Command {
         #[command(subcommand)]
         branch: Branch,
     },
+    /// The clone's build loop: decide each step of draining the queue and print the actions the
+    /// session carries out with the agent harness's subagents.
+    Build {
+        #[command(subcommand)]
+        build: Build,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long, global = true)]
+        root: Option<PathBuf>,
+    },
     /// The ledger of approvals, checks and lands: print it, audit `main` against it,
     /// or prune your own superseded records.
     Ledger {
@@ -877,6 +886,38 @@ enum DecisionArg {
     Cut,
     Redesign,
     Accept,
+}
+
+#[derive(Subcommand)]
+enum Build {
+    /// Begin or adopt the loop and print the first actions.
+    Start {
+        /// The alias of the session's model: drafts, rebuilds and reviews run on it.
+        #[arg(long)]
+        session_model: String,
+        /// Take a live lease, on your word that its session is gone.
+        #[arg(long)]
+        take_over: bool,
+    },
+    /// Print the actions to take now.
+    Step,
+    /// Record the agent harness's task ID for a run the session launched.
+    Launched {
+        /// The run, such as `build:<component>`.
+        name: String,
+        task_id: String,
+    },
+    /// Record a run's return and print the actions to take now.
+    Returned {
+        /// The run, such as `build:<component>`.
+        name: String,
+        /// The run's last line as it stands, or `none`.
+        #[arg(long)]
+        result: String,
+        /// Why a run that didn't land ended.
+        #[arg(long, value_parser = ["limit", "disk", "outage", "tool", "work", "context", "blocked", "stopped", "running"])]
+        cause: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1692,6 +1733,7 @@ fn dispatch() -> ExitCode {
             expiry,
             root,
         } => machine(&repo_root(root), format, width, expiry),
+        Command::Build { build, root } => build_loop(&repo_root(root), build),
         Command::Health { expiry, root } => health(&repo_root(root), expiry),
         Command::Workaround {
             requirement,
@@ -2284,6 +2326,47 @@ fn agent_harness_report(env: &dyn Fn(&str) -> Option<String>) -> String {
         out.push_str(&format!("build-model {model}\n"));
     }
     out
+}
+
+/// `clm build`: the loop's commands, each printing the actions to take now.
+fn build_loop(root: &Path, build: Build) -> ExitCode {
+    let max_builds = match clm_config::load(Some(root), &clm_config::process_env) {
+        Ok(s) => s.max_builds.value,
+        Err(e) => {
+            eprintln!("clm build: settings: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let options = clm_loop::Options {
+        clm: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("clm")),
+        root: root.to_path_buf(),
+        max_builds,
+        agent_harness: clm_agent_harness::detect(|k| std::env::var(k).ok()),
+    };
+    let actions = match build {
+        Build::Start {
+            session_model,
+            take_over,
+        } => clm_loop::start(&options, &session_model, take_over),
+        Build::Step => clm_loop::step(&options),
+        Build::Launched { name, task_id } => {
+            clm_loop::launched(&options, &name, &task_id).map(|()| Vec::new())
+        }
+        Build::Returned {
+            name,
+            result,
+            cause,
+        } => clm_loop::returned(&options, &name, &result, cause.as_deref()),
+    };
+    match actions {
+        Ok(lines) => {
+            for line in lines {
+                println!("{line}");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => failed("build", &e),
+    }
 }
 
 /// `clm machine`: the readings in the chosen form, with `config`'s `max_builds`; exit 0 whatever

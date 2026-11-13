@@ -251,6 +251,7 @@ dependencies = [
  "clm-init",
  "clm-land",
  "clm-ledger",
+ "clm-loop",
  "clm-machine",
  "clm-model",
  "clm-orchestrator",
@@ -516,6 +517,19 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "clm-loop"
+version = "0.26.0"
+dependencies = [
+ "clm-agent-harness",
+ "clm-git",
+ "clm-orchestrator",
+ "clm-view",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

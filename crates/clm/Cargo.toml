@@ -27,6 +27,7 @@ clm-land.workspace = true
 clm-verify.workspace = true
 clm-triage.workspace = true
 clm-runner.workspace = true
+clm-loop.workspace = true
 clm-unreferenced.workspace = true
 clm-affected.workspace = true
 clm-health.workspace = true
