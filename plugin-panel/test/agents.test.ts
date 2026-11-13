@@ -1,4 +1,4 @@
-// req:plugin.panel/build-rows@2a02f823
+// req:plugin.panel/build-rows@64fc6eb9
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 
@@ -9,11 +9,9 @@ import {
   applyStep,
   applyTool,
   bar,
-  buildNode,
   dismiss,
   costOf,
-  flightLines,
-  flightRows,
+  followingLines,
   fmtCost,
   fmtTime,
   fmtTokens,
@@ -32,13 +30,15 @@ import {
   reconcile,
   resetsOn,
   startRun,
-  svgLines,
+  queueLines,
+  queueRows,
+  runEntry,
   windowOf,
 } from '../src/agents.ts'
 import { keyTarget } from '../src/inspector.ts'
 import { type Host, type Run, type Span, ansiLines, cachedRun, command, viewKey } from '../src/panel.ts'
 
-const PROMPT = (node: string) => `Run \`git switch impl/${node}\` and check that it prints.\nMore.`
+const PROMPT = (node: string) => `loop run build:${node}\nMore.`
 
 /** Starts runs in order, a second apart, from `[id, description, prompt, parentId?]`. */
 function started(...specs: [string, string, string, string?][]): AgentRun[] {
@@ -50,16 +50,17 @@ function started(...specs: [string, string, string, string?][]): AgentRun[] {
 }
 
 describe('runs', () => {
-  test('a build is named by the first of its first five lines that names a step, never its description', () => {
-    expect(buildNode(PROMPT('git'))).toBe('git')
-    expect(buildNode(PROMPT('plugin.panel'))).toBe('plugin.panel')
-    expect(buildNode('Review this.\nRun `git switch impl/git` first.')).toBe('git')
-    expect(buildNode('a\nb\nc\nd\ne\nRun `git switch impl/git` first.')).toBeUndefined()
-    expect(buildNode('x `git switch impl/a`\ny `git switch impl/b`')).toBe('a')
-    expect(buildNode('build git')).toBeUndefined()
+  test('a run is named by the first of its first five lines that is a loop run line, never its description', () => {
+    expect(runEntry(PROMPT('git'))).toBe('build:git')
+    expect(runEntry('loop run build:plugin.panel')).toBe('build:plugin.panel')
+    expect(runEntry('Review this.\nloop run build:git')).toBe('build:git')
+    expect(runEntry('a\nb\nc\nd\ne\nloop run build:git')).toBeUndefined()
+    expect(runEntry('loop run a\nloop run b')).toBe('a')
+    expect(runEntry('Quote: loop run build:git')).toBeUndefined()
+    expect(runEntry('build git')).toBeUndefined()
     const [run] = started(['a1', 'build git', 'Look around.'])
-    expect(run?.node).toBeUndefined()
-    expect(started(['a1', 'anything', PROMPT('git')])[0]?.node).toBe('git')
+    expect(run?.entry).toBeUndefined()
+    expect(started(['a1', 'anything', PROMPT('git')])[0]?.entry).toBe('build:git')
   })
 
   test('a run records what the spawn said, running from its start', () => {
@@ -90,7 +91,7 @@ describe('runs', () => {
     list = applyComplete(list, 'b1', true, 5_000, usage(1_000))
     list = startRun(list, { id: 'b1', type: 'general-purpose', description: 'build git', model: 'claude-opus-5-5', prompt: 'Carry on.', at: 9_000 })
     expect(list).toHaveLength(1)
-    expect(list[0]).toMatchObject({ node: 'git', status: 'running', startedAt: 0, round: 1, tokens: 1_000 })
+    expect(list[0]).toMatchObject({ entry: 'build:git', status: 'running', startedAt: 0, round: 1, tokens: 1_000 })
     expect(list[0]?.endedAt).toBeUndefined()
     expect(list[0]?.tasks).toHaveLength(1)
   })
@@ -235,16 +236,17 @@ describe('cost and formatting', () => {
   })
 })
 
-/** A flight chart as `clm view flight --format ansi` draws it, cut to `width`-ish node IDs. */
+/** A queue chart as `clm view queue --format ansi` draws it. */
 const CHART = ansiLines(
   [
-    '\x1b[34mflight\x1b[0m  2 nodes pending',
-    '\x1b[34mnodes\x1b[0m',
-    '  git    P5  \x1b[33mclaimed\x1b[0m  ░ 1 pending',
-    '  init   P5  \x1b[36mready\x1b[0m  ░ 1 pending',
-    '\x1b[34mchanges\x1b[0m',
-    '  applied',
-    '    20261025-x  P5  ███░ 1/2',
+    'loop not held',
+    '\x1b[34mrunning\x1b[0m',
+    '  build:git    P5  \x1b[33mrunning\x1b[0m',
+    '  build:init   P5  \x1b[33mrunning\x1b[0m',
+    '\x1b[34mnext up\x1b[0m',
+    '  build:web    P5  no loop has run on this clone',
+    '\x1b[34mwaiting on you\x1b[0m',
+    '  none',
     '',
   ].join('\n'),
 )
@@ -279,8 +281,8 @@ function gitBuild(): AgentRun[] {
 const glyphs = (lines: Span[][]) => lines.flat().filter(s => ['●', '✓', '✗'].includes(s.text))
 
 describe('drawing', () => {
-  test('a build is drawn under its node line, with its facts', () => {
-    const rows = between(text(flightLines(CHART, gitBuild(), 61_000)), '  git ', '  init ')
+  test('a build is drawn under its entry line, with its facts', () => {
+    const rows = between(text(queueLines(CHART, gitBuild(), 61_000)), '  build:git ', '  build:init ')
     const joined = rows.join('\n')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toMatch(/●.*build git/)
@@ -290,12 +292,12 @@ describe('drawing', () => {
     expect(joined).toMatch(/ctx \d+% · /)
     expect(joined).toContain('tok ≈$')
     expect(joined).toContain('1:01')
-    expect(glyphs(flightLines(CHART, gitBuild(), 61_000))).toEqual([{ text: '●', color: 'yellow' }])
+    expect(glyphs(queueLines(CHART, gitBuild(), 61_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
   test('a nested subagent follows its build, indented and prefixed └, before the next node', () => {
     const list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-sonnet-5-0', prompt: 'Review.', at: 30_000 })
-    const rows = between(text(flightLines(CHART, list, 61_000)), '  git ', '  init ')
+    const rows = between(text(queueLines(CHART, list, 61_000)), '  build:git ', '  build:init ')
     expect(rows).toHaveLength(6)
     expect(rows[3]).toMatch(/^ +└ ● code review$/)
     const indent = (s: string) => s.length - s.trimStart().length
@@ -313,7 +315,7 @@ describe('drawing', () => {
     child('d2', 'd1', 'depth 3', 22_000)
     child('d3', 'd2', 'depth 4', 23_000)
     child('d4', 'd3', 'depth 5', 24_000)
-    const rows = between(text(flightLines(CHART, list, 61_000)), '  git ', '  init ')
+    const rows = between(text(queueLines(CHART, list, 61_000)), '  build:git ', '  build:init ')
     const firsts = rows.filter((_, i) => i % 3 === 0)
     expect(firsts.map(l => l.replace(/^.*[●✓✗] /, ''))).toEqual([
       'build git',
@@ -333,7 +335,7 @@ describe('drawing', () => {
   test('the totals name the most used model first', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look one', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'x2', type: 'Explore', description: 'look two', model: 'claude-haiku-4-5', prompt: 'Look.', at: 11_000 })
-    expect(text(flightLines(CHART, list, 61_000)).at(-1)).toMatch(/· Haiku 4\.5 ×2 · Opus 5\.5 ×1$/)
+    expect(text(queueLines(CHART, list, 61_000)).at(-1)).toMatch(/· Haiku 4\.5 ×2 · Opus 5\.5 ×1$/)
   })
 
   // req:plugin.panel/build-row-lifecycle@f82ccf35
@@ -342,31 +344,31 @@ describe('drawing', () => {
     list = applyStep(list, 'c1', 'claude-opus-5-5', undefined, usage(10_000))
     list = applyComplete(list, 'c1', true, 80_000)
     list = applyComplete(list, 'b1', true, 90_000)
-    const all = text(flightLines(CHART, list, 90_000))
+    const all = text(queueLines(CHART, list, 90_000))
     expect(all.join('\n')).not.toContain('build git')
     expect(all.join('\n')).not.toContain('code review')
-    expect(all[all.findIndex(l => l.startsWith('  git ')) + 1]).toMatch(/^ {2}init /)
+    expect(all[all.findIndex(l => l.startsWith('  build:git ')) + 1]).toMatch(/^ {2}build:init /)
     expect(all).not.toContain('agents')
     // 113k of the build and 10k of the review, both on Opus 5.5.
     expect(all.at(-1)).toMatch(/^≈\$\d+\.\d\d · 123k tokens · 1:30 · Opus 5\.5 ×2$/)
-    expect(glyphs(flightLines(CHART, list, 0))).toEqual([])
+    expect(glyphs(queueLines(CHART, list, 0))).toEqual([])
   })
 
   // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('a failed build shows ✗ in rose and a Dismiss button, until the button is pressed', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
-    const lines = flightLines(CHART, list, 0)
+    const lines = queueLines(CHART, list, 0)
     expect(glyphs(lines)).toEqual([{ text: '✗', color: 'red' }])
     const first = lines.find(l => lineText(l).includes('build git'))
     expect(first?.at(-1)).toEqual({ text: 'Dismiss', button: 'dismiss:b1' })
     expect(keyTarget('dismiss:b1')).toEqual({ dismiss: 'b1' })
     const gone = dismiss(list, 'b1')
-    const after = text(flightLines(CHART, gone, 0))
+    const after = text(queueLines(CHART, gone, 0))
     expect(after.join('\n')).not.toContain('build git')
     expect(after.at(-1)).toMatch(/^≈\$\d+\.\d\d · 113k tokens · 1:30 · Opus 5\.5 ×1$/)
     // A run the engine resumes is running again, and drawn again.
     const resumed = startRun(gone, { id: 'b1', type: 'general-purpose', description: 'build git', model: 'claude-opus-5-5', prompt: 'Go on.', at: 95_000 })
-    expect(glyphs(flightLines(CHART, resumed, 95_000))).toEqual([{ text: '●', color: 'yellow' }])
+    expect(glyphs(queueLines(CHART, resumed, 95_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
   // req:plugin.panel/build-row-lifecycle@f82ccf35
@@ -374,7 +376,7 @@ describe('drawing', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyComplete(list, 'c1', false, 80_000)
     list = applyComplete(list, 'b1', true, 90_000)
-    const rows = between(text(flightLines(CHART, list, 90_000)), '  git ', '  init ')
+    const rows = between(text(queueLines(CHART, list, 90_000)), '  build:git ', '  build:init ')
     expect(rows).toHaveLength(3)
     expect(rows[0]).toMatch(/^ {4}✗ code review/)
     expect(rows[0]).not.toContain('└')
@@ -382,29 +384,29 @@ describe('drawing', () => {
     let deep = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'x', description: 'middle', model: 'm', prompt: 'x', at: 30_000 })
     deep = startRun(deep, { id: 'd1', parentId: 'c1', type: 'x', description: 'leaf', model: 'm', prompt: 'x', at: 31_000 })
     deep = applyComplete(applyComplete(deep, 'd1', false, 40_000), 'c1', true, 41_000)
-    const under = between(text(flightLines(CHART, deep, 61_000)), '  git ', '  init ')
+    const under = between(text(queueLines(CHART, deep, 61_000)), '  build:git ', '  build:init ')
     expect(under[0]).toMatch(/● build git/)
     expect(under[3]).toMatch(/^ {6}└ ✗ leaf/)
   })
 
   test('clearing the session draws no build row and no totals', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
-    expect(flightLines(CHART, onSessionEnd(list, 'clear'), 0)).toEqual(CHART)
-    expect(svgLines(onSessionEnd(list, 'clear'), 0)).toEqual([])
+    expect(queueLines(CHART, onSessionEnd(list, 'clear'), 0)).toEqual(CHART)
+    expect(followingLines(onSessionEnd(list, 'clear'), 0)).toEqual([])
   })
 
   test('a subagent that is not a build follows the chart under agents while it runs, and the totals count it', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = applyStep(list, 'x1', 'claude-haiku-4-5', undefined, usage(1_000))
-    const lines = flightLines(CHART, list, 61_000)
+    const lines = queueLines(CHART, list, 61_000)
     const all = text(lines)
     const heading = all.indexOf('agents')
-    expect(heading).toBeGreaterThan(all.findIndex(l => l.startsWith('    20261025-x')))
+    expect(heading).toBeGreaterThan(all.indexOf('waiting on you'))
     expect(lines[heading]).toEqual([{ text: 'agents', color: 'blue' }])
     expect(all[heading + 1]).toMatch(/● look around/)
-    expect(between(all, '  git ', '  init ').join('\n')).not.toContain('look around')
+    expect(between(all, '  build:git ', '  build:init ').join('\n')).not.toContain('look around')
     expect(all.at(-1)).toMatch(/^≈\$\d+\.\d\d · 114k tokens · 1:01 · Opus 5\.5 ×1 · Haiku 4\.5 ×1$/)
-    const done = text(flightLines(CHART, applyComplete(list, 'x1', true, 20_000), 61_000))
+    const done = text(queueLines(CHART, applyComplete(list, 'x1', true, 20_000), 61_000))
     expect(done).not.toContain('agents')
     expect(done.join('\n')).not.toContain('look around')
     expect(done.at(-1)).toMatch(/^≈\$\d+\.\d\d · 114k tokens · 1:01 · Opus 5\.5 ×1 · Haiku 4\.5 ×1$/)
@@ -413,7 +415,7 @@ describe('drawing', () => {
   test('a later round of a build sits above the first under its node', () => {
     let list = applyComplete(gitBuild(), 'b1', false, 20_000)
     list = startRun(list, { id: 'b2', type: 'general-purpose', description: 'build git', model: 'claude-opus-5-5', prompt: PROMPT('git'), at: 30_000 })
-    const rows = between(text(flightLines(CHART, list, 61_000)), '  git ', '  init ')
+    const rows = between(text(queueLines(CHART, list, 61_000)), '  build:git ', '  build:init ')
     expect(rows[0]).toMatch(/● build git/)
     expect(rows[1]).toContain('round 2')
     expect(rows[3]).toMatch(/✗ build git/)
@@ -422,7 +424,7 @@ describe('drawing', () => {
 
   // req:plugin.panel/build-row-cost@5e68018b
   test('a second later the rows show a larger elapsed time, and clm has not run again', async () => {
-    const at = (ms: number) => text(flightLines(CHART, gitBuild(), ms)).join('\n')
+    const at = (ms: number) => text(queueLines(CHART, gitBuild(), ms)).join('\n')
     expect(at(61_000)).toContain('1:01')
     expect(at(62_000)).toContain('1:02')
     const cache = new Map<string, Promise<Run>>()
@@ -469,49 +471,49 @@ describe('drawing', () => {
   // req:plugin.panel/build-row-cost@5e68018b
   test('a million input tokens cost the model\'s input rate', () => {
     const list = applyStep(started(['b1', 'build git', PROMPT('git')]), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
-    const row = between(text(flightLines(CHART, list, 0)), '  git ', '  init ').join('\n')
+    const row = between(text(queueLines(CHART, list, 0)), '  build:git ', '  build:init ').join('\n')
     expect(row).toContain('1.0M tok ≈$4.00')
     expect(row).toContain('ctx 100%')
   })
 
-  test('a node ID the chart cut with … still finds its builds', () => {
-    const cut = ansiLines('nodes\n  plugin.p…  P5  claimed\n  plugin     P5  blocked\nchanges\n')
+  test('an entry name the chart cut with … still finds its runs', () => {
+    const cut = ansiLines('running\n  build:plugin.p…  P5\n  build:plugin     P5\nnext up\n')
     const list = startRun([], { id: 'b1', type: 'general-purpose', description: 'build panel', model: 'm', prompt: PROMPT('plugin.panel'), at: 0 })
-    expect(between(text(flightLines(cut, list, 0)), '  plugin.p…', '  plugin ')[0]).toMatch(/build panel/)
+    expect(between(text(queueLines(cut, list, 0)), '  build:plugin.p…', '  build:plugin ')[0]).toMatch(/build panel/)
   })
 
   test('a build of a node the chart no longer lists goes under agents', () => {
     const list = startRun([], { id: 'b1', type: 'general-purpose', description: 'build web', model: 'm', prompt: PROMPT('web'), at: 0 })
-    const all = text(flightLines(CHART, list, 0))
+    const all = text(queueLines(CHART, list, 0))
     expect(all[all.indexOf('agents') + 1]).toMatch(/build web/)
   })
 
   test('a run whose parent dropped off the list is drawn at the top level', () => {
     const list = startRun([], { id: 'c1', parentId: 'gone', type: 'x', description: 'orphan', model: 'm', prompt: 'x', at: 0 })
-    const all = text(flightLines(CHART, list, 0))
+    const all = text(queueLines(CHART, list, 0))
     expect(all[all.indexOf('agents') + 1]).toMatch(/^ +● orphan$/)
   })
 
-  test('on a surface that draws the SVG, the rows follow it grouped under node lines', () => {
+  test('on a surface that draws the SVG, the rows follow it grouped under entry lines', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'i1', type: 'general-purpose', description: 'build init', model: 'claude-opus-5-5', prompt: PROMPT('init'), at: 20_000 })
-    const all = text(svgLines(list, 61_000))
-    expect(all[0]).toBe('git')
+    const all = text(followingLines(list, 61_000))
+    expect(all[0]).toBe('build:git')
     expect(all[1]).toMatch(/● build git/)
-    expect(all[4]).toBe('init')
+    expect(all[4]).toBe('build:init')
     expect(all[5]).toMatch(/● build init/)
     expect(all[8]).toBe('agents')
     expect(all[9]).toMatch(/● look around/)
     expect(all.at(-1)).toMatch(/^≈\$/)
-    expect(svgLines([], 0)).toEqual([])
+    expect(followingLines([], 0)).toEqual([])
   })
 
   test('after the SVG, only drawn runs follow, a failed child of a finished build under its node', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'm', prompt: 'x', at: 30_000 })
     list = startRun(list, { id: 'x1', type: 'Explore', description: 'look around', model: 'm', prompt: 'x', at: 31_000 })
     list = applyComplete(applyComplete(applyComplete(list, 'c1', false, 40_000), 'b1', true, 50_000), 'x1', true, 50_000)
-    const all = text(svgLines(list, 61_000))
-    expect(all[0]).toBe('git')
+    const all = text(followingLines(list, 61_000))
+    expect(all[0]).toBe('build:git')
     expect(all[1]).toMatch(/^ {2}✗ code review/)
     expect(all).not.toContain('agents')
     expect(all).toHaveLength(5)
@@ -537,7 +539,7 @@ describe('hooks events', () => {
 
   test('agent.spawn records a started run from the event and what next answered', () => {
     const list = onSpawn([], { ...spawn, parentAgentId: 'p0' }, { agentId: 'b1', model: 'claude-opus-5-5' }, 5)
-    expect(list[0]).toMatchObject({ id: 'b1', parentId: 'p0', type: 'general-purpose', node: 'git', model: 'claude-opus-5-5', startedAt: 5 })
+    expect(list[0]).toMatchObject({ id: 'b1', parentId: 'p0', type: 'general-purpose', entry: 'build:git', model: 'claude-opus-5-5', startedAt: 5 })
     expect(onSpawn([], spawn, { deny: 'no' }, 0)).toEqual([])
     expect(onSpawn([], spawn, { model: 'm' }, 0)).toEqual([])
   })
@@ -580,30 +582,30 @@ describe('hooks events', () => {
 })
 
 describe('build-rows', () => {
-  test('after the SVG, the build rows follow it grouped under lines holding the node IDs', () => {
-    const all = text(flightRows(undefined, gitBuild(), 61_000))
-    expect(all[0]).toBe('git')
+  test('after the SVG, the build rows follow it grouped under lines holding the entry names', () => {
+    const all = text(queueRows(undefined, gitBuild(), 61_000))
+    expect(all[0]).toBe('build:git')
     expect(all[1]).toMatch(/● build git/)
-    expect(text(flightRows(CHART, gitBuild(), 61_000))).toEqual(text(flightLines(CHART, gitBuild(), 61_000)))
+    expect(text(queueRows(CHART, gitBuild(), 61_000))).toEqual(text(queueLines(CHART, gitBuild(), 61_000)))
   })
 })
 
 describe('waiting', () => {
   const spawn = { prompt: PROMPT('git'), description: 'build git', subagentType: 'general-purpose' }
   const build = () => onSpawn([], spawn, { agentId: 'b1', model: 'claude-opus-5-5' }, 0)
-  const rows = (list: AgentRun[], at: number) => between(text(flightLines(CHART, list, at)), '  git ', '  init ')
+  const rows = (list: AgentRun[], at: number) => between(text(queueLines(CHART, list, at)), '  build:git ', '  build:init ')
 
-  test('a launcher prompt names its node on the second line', () => {
-    const launcher = 'Read the file `.clm/prompts/git.md` with the Read tool.\nIts first step is `git switch impl/git`.'
+  test('a launcher prompt names its entry on its first line', () => {
+    const launcher = 'loop run build:git\nRead the file `.clm/prompts/git.md` with the Read tool.'
     const list = started(['b1', 'build git', launcher])
     expect(rows(list, 5_000)[0]).toMatch(/●.*build git/)
-    expect(text(flightLines(CHART, list, 5_000))).not.toContain('agents')
+    expect(text(queueLines(CHART, list, 5_000))).not.toContain('agents')
   })
 
-  test('a build step quoted past the fifth line is no build', () => {
-    const quoted = 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\n`git switch impl/git`'
-    const all = text(flightLines(CHART, started(['x1', 'review', quoted]), 5_000))
-    expect(between(all, '  git ', '  init ')).toEqual([])
+  test('a loop run line past the fifth line is no run', () => {
+    const quoted = 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nloop run build:git'
+    const all = text(queueLines(CHART, started(['x1', 'review', quoted]), 5_000))
+    expect(between(all, '  build:git ', '  build:init ')).toEqual([])
     expect(all).toContain('agents')
   })
 
@@ -616,7 +618,7 @@ describe('waiting', () => {
     expect(first[0]).toMatch(/● build git · waiting$/)
     expect(first[2]).toContain('0:10')
     expect(rows(list, 20_000)[2]).toContain('0:20')
-    expect(glyphs(flightLines(CHART, list, 0))).toEqual([{ text: '●', color: 'yellow' }])
+    expect(glyphs(queueLines(CHART, list, 0))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
   test('an answer while the agent is listed any other way finishes the run', () => {
@@ -662,7 +664,7 @@ describe('waiting', () => {
     const ended = reconcileWaiting(waiting, [{ id: 'b1', status: 'completed' }], 40_000)
     expect(ended[0]).toMatchObject({ status: 'done', endedAt: 40_000 })
     expect(rows(ended, 41_000)).toEqual([])
-    expect(text(flightLines(CHART, ended, 41_000)).at(-1)).toMatch(/^≈\$/)
+    expect(text(queueLines(CHART, ended, 41_000)).at(-1)).toMatch(/^≈\$/)
     expect(reconcileWaiting(waiting, [], 40_000)[0]?.status).toBe('done')
     expect(reconcileWaiting(waiting, [{ id: 'b1', status: 'waiting' }], 40_000)).toEqual(waiting)
     expect(reconcileWaiting(waiting, [{ id: 'b1', status: 'running' }], 40_000)).toEqual(waiting)
@@ -676,14 +678,4 @@ describe('waiting', () => {
     const failed = onComplete(build(), { agentId: 'b1', reason: 'max_turns' }, 9_000)
     expect(reconcileWaiting(failed, [{ id: 'b1', status: 'waiting' }], 40_000)).toEqual(failed)
   })
-})
-
-describe('component-heading', () => {
-  for (const heading of ['components', 'nodes']) {
-    test(`build rows sit under the lines after the ${heading} heading`, () => {
-      const chart = ansiLines(`${heading}\n  git  P5\n  init  P5\nchanges\n`)
-      const rows = between(text(flightLines(chart, gitBuild(), 61_000)), '  git ', '  init ')
-      expect(rows.some(r => r.includes('build git'))).toBe(true)
-    })
-  }
 })

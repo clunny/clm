@@ -12,13 +12,16 @@ export type { AgentRun, RunStatus, Task, TaskStatus } from '../types'
 export const MAX_RUNS = 200
 
 /**
- * The node a prompt builds: one of its first five lines names `git switch impl/<node>`, the
- * first such line deciding. `clm run` prints a launcher naming it on its second line, and a
- * whole build prompt names it on its first; a step quoted further down names no build.
+ * The queue entry a prompt runs: one of its first five lines is `loop run <name>`, the first
+ * such line deciding. The loop's launcher puts it on its first line; a launcher quoted further
+ * down names no run.
  */
-export function buildNode(prompt: string): string | undefined {
-  const head = prompt.split('\n', 5).join('\n')
-  return /git switch impl\/([A-Za-z0-9._-]*[A-Za-z0-9_-])/.exec(head)?.[1]
+export function runEntry(prompt: string): string | undefined {
+  for (const line of prompt.split('\n', 5)) {
+    const name = /^loop run (\S+)$/.exec(line.trim())?.[1]
+    if (name !== undefined) return name
+  }
+  return undefined
 }
 
 const normalised = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -41,14 +44,14 @@ export function startRun(
   if (list.some(a => a.id === r.id)) return resumed(list, r.id)
   const key = normalised(r.description)
   const earlier = key === '' ? 0 : list.filter(a => normalised(a.description) === key).length
-  const node = buildNode(r.prompt)
+  const entry = runEntry(r.prompt)
   const run: AgentRun = {
     id: r.id,
     ...(r.parentId !== undefined && { parentId: r.parentId }),
     type: r.type,
     description: r.description,
     model: r.model,
-    ...(node !== undefined && { node }),
+    ...(entry !== undefined && { entry }),
     status: 'running',
     startedAt: r.at,
     round: earlier + 1,
@@ -346,10 +349,10 @@ const elapsed = (a: AgentRun, at: number): number => (a.endedAt ?? Math.max(at, 
 
 /**
  * The drawn runs as a tree: each under its nearest drawn ancestor, so a drawn run whose parent
- * isn't drawn takes the parent's place. One with no drawn ancestor is at the top, with the node
+ * isn't drawn takes the parent's place. One with no drawn ancestor is at the top, with the entry
  * of its top-level ancestor, the one whose parent isn't listed.
  */
-type Forest = { tops: { run: AgentRun; node?: string }[]; children: Map<string, AgentRun[]> }
+type Forest = { tops: { run: AgentRun; entry?: string }[]; children: Map<string, AgentRun[]> }
 
 function forest(list: readonly AgentRun[]): Forest {
   const byId = new Map(list.map(a => [a.id, a]))
@@ -370,7 +373,7 @@ function forest(list: readonly AgentRun[]): Forest {
       top = p
     }
     if (under) children.set(under.id, [...(children.get(under.id) ?? []), a])
-    else tops.push({ run: a, ...(top.node !== undefined && { node: top.node }) })
+    else tops.push({ run: a, ...(top.entry !== undefined && { entry: top.entry }) })
   }
   return { tops, children }
 }
@@ -445,31 +448,43 @@ export function componentRange(texts: readonly string[]): [number, number] {
 }
 
 /**
- * The flight chart's lines with each node line followed by the rows of its builds, newest
- * first, then the runs under no node line and the totals. A node line (`view/flight-component-lines`)
- * sits between the `components` and `changes` headings (`componentRange`) and starts with two spaces and the node's
- * ID, or a prefix of it followed by `…`.
+ * The queue chart's running entries (`view/queue-view`) by line index: the lines under the
+ * `running` heading that start with two spaces and a name, up to the next heading.
  */
-export function flightLines(chart: readonly Span[][], list: readonly AgentRun[], at: number): Span[][] {
-  const texts = chart.map(lineText)
-  const [nodes, changes] = componentRange(texts)
-  const ids = texts.map((t, i) => (i > nodes && i < changes ? /^ {2}([^ ]+)/.exec(t)?.[1] : undefined))
-  const exact = new Set(ids.filter(id => id !== undefined && !id.endsWith('…')))
+function runningEntries(texts: readonly string[]): Map<number, string> {
+  const out = new Map<number, string>()
+  const from = texts.indexOf('running')
+  if (from < 0) return out
+  for (let i = from + 1; i < texts.length && texts[i]!.startsWith(' '); i++) {
+    const name = /^ {2}([^ ]+)/.exec(texts[i]!)?.[1]
+    if (name !== undefined) out.set(i, name)
+  }
+  return out
+}
+
+/**
+ * The queue chart's lines with each running entry's line followed by the rows of its runs,
+ * newest first, then the runs under no running entry and the totals. An entry's line starts
+ * with two spaces and its name, or a prefix of it followed by `…`.
+ */
+export function queueLines(chart: readonly Span[][], list: readonly AgentRun[], at: number): Span[][] {
+  const entries = runningEntries(chart.map(lineText))
+  const exact = new Set([...entries.values()].filter(id => !id.endsWith('…')))
   const trees = forest(list)
-  const builds = [...trees.tops].sort((x, y) => y.run.startedAt - x.run.startedAt)
+  const runs = [...trees.tops].sort((x, y) => y.run.startedAt - x.run.startedAt)
   const placed = new Set<string>()
   const out: Span[][] = []
   chart.forEach((line, i) => {
     out.push(line)
-    const id = ids[i]
+    const id = entries.get(i)
     if (id === undefined) return
     const prefix = id.endsWith('…') ? id.slice(0, -1) : undefined
-    const mine = builds
+    const mine = runs
       .filter(
-        ({ run, node }) =>
-          node !== undefined &&
+        ({ run, entry }) =>
+          entry !== undefined &&
           !placed.has(run.id) &&
-          (prefix === undefined ? node === id : node.startsWith(prefix) && !exact.has(node)),
+          (prefix === undefined ? entry === id : entry.startsWith(prefix) && !exact.has(entry)),
       )
       .map(t => t.run)
     for (const b of mine) placed.add(b.id)
@@ -480,23 +495,22 @@ export function flightLines(chart: readonly Span[][], list: readonly AgentRun[],
 }
 
 /**
- * The Flight tab's text lines: an ANSI `chart` with the build rows under its node lines, or,
- * when an SVG is drawn instead (`undefined`), which holds no lines to put them
- * under, the rows that follow it, grouped under lines holding the node IDs.
+ * The Queue tab's text lines: an ANSI `chart` with the run rows under its running entries, or,
+ * when the text chart is drawn instead (`undefined`), which the pane can't read entries from,
+ * the rows that follow it.
  */
-export const flightRows = (chart: readonly Span[][] | undefined, list: readonly AgentRun[], at: number): Span[][] =>
-  chart === undefined ? svgLines(list, at) : flightLines(chart, list, at)
+export const queueRows = (chart: readonly Span[][] | undefined, list: readonly AgentRun[], at: number): Span[][] =>
+  chart === undefined ? followingLines(list, at) : queueLines(chart, list, at)
 
 /**
- * The rows that follow the SVG, which the pane can't read node lines from: every build under
- * a line holding its node's ID, nodes in the order of their first build, then the runs that
- * aren't builds and the totals.
+ * The rows that follow a text chart: every run under a line holding its entry's name, entries in
+ * the order of their first run, then the runs that belong to none and the totals.
  */
-export function svgLines(list: readonly AgentRun[], at: number): Span[][] {
+export function followingLines(list: readonly AgentRun[], at: number): Span[][] {
   const trees = forest(list)
   const { tops } = trees
-  const order = [...tops].sort((x, y) => x.run.startedAt - y.run.startedAt).flatMap(t => (t.node === undefined ? [] : [t.node]))
-  const of = (node: string | undefined) => newestFirst(tops.filter(t => t.node === node).map(t => t.run))
-  const out = [...new Set(order)].flatMap(node => [[{ text: node, bold: true }], ...treeLines(trees.children, of(node), at, 2)])
+  const order = [...tops].sort((x, y) => x.run.startedAt - y.run.startedAt).flatMap(t => (t.entry === undefined ? [] : [t.entry]))
+  const of = (entry: string | undefined) => newestFirst(tops.filter(t => t.entry === entry).map(t => t.run))
+  const out = [...new Set(order)].flatMap(entry => [[{ text: entry, bold: true }], ...treeLines(trees.children, of(entry), at, 2)])
   return [...out, ...tailLines(list, trees, of(undefined), at)]
 }
