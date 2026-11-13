@@ -21,7 +21,7 @@ When a change carves a child out of a component (`nested-splits`), the child's b
 
 - `ARCHITECTURE.md`'s `path-ownership` (hand edit) reads "Five exceptions", adds the split move (moving the carved-out code and tests into the moving component's `paths`, deleting the other's copy, rewiring the other component's imports, entry module and wiring only to reach the moved code, re-pointing the moved requirement's markers), a scenario `split moves carved-out code`, and `orchestrator.run/split-move-fix` under `#### Enforced by`.
 - `orchestrator.run/split-move-fix`: the prompt text, in every prompt, beside the other three exception texts. Its build adds the paragraph to `crates/clm-run/src/lib.rs` and a test in `crates/clm-run/tests/prompt.rs` citing it.
-- `nested-splits` gains one sentence pointing at the exception.
+- `nested-splits` gains one sentence pointing at the exception, and `path-ownership-by-prompt` an amendment naming it.
 
 ## Constraints
 
@@ -31,3 +31,9 @@ When a change carves a child out of a component (`nested-splits`), the child's b
 ## Edge cases and workarounds
 
 None.
+
+## Settled by the builder check and the audit
+
+- The builder check found nothing the requirement relies on that isn't current, no code work the outcome promises beyond `split-move-fix`, and no capability test that sees a difference.
+- The audit found that "moves the code and tests" contradicted `tests-count-where-cited`, which keeps the CLI's integration tests in `crates/clm/tests`; the exception, its scenario and the requirement now move only the tests that can run from the moving component's `paths` and leave the rest in place, re-cited.
+- The audit asked for an amendment note on `path-ownership-by-prompt`, as each earlier exception has; added.
