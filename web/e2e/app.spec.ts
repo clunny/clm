@@ -790,6 +790,25 @@ test.describe('PWA', () => {
     await expect(page.locator('.repo-meta')).toContainText('3 components');
     await expect(page.locator('button.approve')).toBeDisabled();
   });
+
+  // req:web/answer-from-app@074f7d4c
+  test('offline: an item page drawn from the kept copy has its answer buttons disabled', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    await page.goto('/app/#/o/a/backlog/q');
+    await expect(page.locator('button.answer[data-answer=yes]')).toBeEnabled();
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) {
+        await new Promise((r) => navigator.serviceWorker.addEventListener('controllerchange', r, { once: true }));
+      }
+    });
+    await context.unroute('**/api/**');
+    await context.setOffline(true);
+    await page.reload();
+    await expect(page.locator('.offline')).toBeVisible();
+    await expect(page.locator('button.answer[data-answer=yes]')).toBeDisabled();
+  });
 });
 
 // req:web.views/comment-on-review@1279617c
@@ -1049,6 +1068,7 @@ test.describe('a backlog item opens its page', () => {
 });
 
 // req:web/home-first@3681eee1
+// req:web/answer-from-app@074f7d4c
 test.describe('Home first', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -1099,6 +1119,7 @@ test.describe('Home first', () => {
     await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
     // The implementation state is asked for again, so the answer shows from its `answers`.
     await expect.poll(() => mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBeGreaterThan(1);
+    expect(mock.urls.filter((k) => k.startsWith('GET /api/repos/o/a/implementation?fresh=')).length).toBeGreaterThan(0);
   });
 
   test('an answer the Worker refuses says why and keeps the buttons enabled', async ({ page, context }) => {
@@ -1106,9 +1127,13 @@ test.describe('Home first', () => {
     mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
     mock.fail(ANSWER, 422, { error: 'answer' });
     await page.goto('/app/#/o/a');
+    await expect(page.locator('button.answer[data-answer=no]')).toBeVisible();
+    const before = mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length;
     await page.locator('button.answer[data-answer=no]').click();
-    await expect(page.locator('.hent-row', { hasText: 'Ship it?' }).locator('.err')).toContainText('refused the answer');
+    await expect(page.locator('.hent-row', { hasText: 'Ship it?' }).locator('.err')).toContainText('The answer was refused.');
     await expect(page.locator('button.answer[data-answer=no]')).toBeEnabled();
+    // A refused answer asks for nothing again.
+    expect(mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBe(before);
   });
 
   test('an answer shows on Home, drawn chosen, from the next implementation state', async ({ page, context }) => {

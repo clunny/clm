@@ -2,6 +2,7 @@
 
 import { expect, test } from '@playwright/test';
 import { APPROVE, PROPOSALS, REVIEW, mockApi } from './mock';
+import { snapshot } from '../src/views/fixtures';
 
 const IMPL = 'GET /api/repos/o/a/implementation';
 const UUID = /^[0-9a-f-]+$/;
@@ -12,7 +13,7 @@ const freshOf = (urls: string[], key: string) =>
     .filter((u) => u.startsWith(`${key}?`) || u === key)
     .map((u) => new URL(`http://x${u.slice(u.indexOf(' ') + 1)}`).searchParams.get('fresh'));
 
-// req:web/fresh-after-write@0e8d2143
+// req:web/fresh-after-write@8dea8909
 test.describe('fresh after write', () => {
   test('approve: the review is requested again with a UUID, and the offline copy has no fresh', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -25,6 +26,17 @@ test.describe('fresh after write', () => {
     const kept = await page.evaluate(async () => (await (await caches.open('clm-api')).keys()).map((r) => new URL(r.url).pathname + new URL(r.url).search));
     expect(kept).toContain('/api/repos/o/a/branches/spec/c/review');
     expect(kept.filter((k) => k.includes('fresh'))).toEqual([]);
+  });
+
+  test('an answer to a backlog item: the implementation state is requested again with a UUID', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    const snap = snapshot();
+    snap.backlog.push({ slug: 'q', kind: 'question', title: 'Ship it?', nodes: ['a'], origin: null, blocks: [], choices: ['yes', 'no'] });
+    mock.routes['GET /api/repos/o/a/snapshot'] = snap;
+    await page.goto('/app/#/o/a/backlog/q');
+    await page.locator('button.answer[data-answer=yes]').click();
+    await expect.poll(() => freshOf(mock.urls, IMPL).filter((f) => f !== null).length).toBeGreaterThanOrEqual(1);
+    expect(freshOf(mock.urls, IMPL).filter((f) => f !== null)[0]).toMatch(UUID);
   });
 
   test('a new delivery per write: two proposals, two different values', async ({ page, context }) => {

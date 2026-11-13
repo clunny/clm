@@ -627,8 +627,8 @@ function answerItem(base: string, slug: string, answer: string): Promise<string 
         return null;
       }
       if (res.status === 404) return 'That item is no longer in the backlog.';
-      if (res.status === 422) return `Not sent: the Worker refused the ${await refusedField(res)}.`;
-      return `Not sent (${res.status}).`;
+      if (res.status === 422) return 'The answer was refused.';
+      return `The answer wasn't recorded (${res.status}).`;
     } catch (e) {
       if (e instanceof SignedOut) showSignIn();
       return notSent(e);
