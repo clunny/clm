@@ -267,7 +267,7 @@ fn skill_gaps(skill: &str, body: &str) -> Vec<String> {
             "clm build launched",
             "clm build returned",
             "clm build stop",
-            "isolation: \"worktree\"",
+            "isolation",
         ],
         _ => &[],
     };
@@ -1706,7 +1706,7 @@ const OWN_MODEL: &str = "the session's own model";
 fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
     let must: &[&str] = match skill {
         // `build` starts the loop with the session's model; the loop's `launch` lines name the rest.
-        "build" => &["--session-model"],
+        "build" => &["--session-model", OWN_MODEL],
         "triage" | "propose" => &[SONNET, OWN_MODEL],
         "contribution" => &[OWN_MODEL],
         _ => &[SONNET],
