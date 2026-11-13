@@ -170,7 +170,16 @@ fn delete_on_origin(root: &Path, name: &str, tip: &str) -> Result<bool, Error> {
     let Err(e) = git(root, &["push", "--quiet", &lease, REMOTE, &target]) else {
         return Ok(true);
     };
-    let now = git(root, &["ls-remote", "--heads", REMOTE, name])?;
+    // The full ref: a bare name also matches `autosync/<name>` as a path suffix.
+    let now = git(
+        root,
+        &[
+            "ls-remote",
+            "--heads",
+            REMOTE,
+            &format!("refs/heads/{name}"),
+        ],
+    )?;
     if now.split_whitespace().next() == Some(tip) {
         return Err(e.into());
     }
