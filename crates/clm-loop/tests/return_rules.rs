@@ -116,3 +116,16 @@ fn an_unknown_run_is_refused() {
     let fx = Fixture::new();
     assert!(returned(&fx.options(), "build:nope", "none", None).is_err());
 }
+
+#[test]
+fn a_closing_line_decides_landed_not_the_finish() {
+    // req:orchestrator.loop/return-rules@03218c86
+    let fx = Fixture::new();
+    running(&fx, "build:a", Kind::Build, "t-1");
+    fx.set("finish-a", "landed impl/a\n");
+    returned(&fx.options(), "build:a", "stopped: check fails", None).unwrap();
+    assert!(!fx.file().run("build:a").unwrap().landed);
+    running(&fx, "draft:d2", Kind::Draft, "t-2");
+    returned(&fx.options(), "draft:d2", "proposed d2 review", None).unwrap();
+    assert_eq!(fx.file().review, ["d2"]);
+}
