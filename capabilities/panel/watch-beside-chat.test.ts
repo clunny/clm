@@ -130,6 +130,11 @@ test('Drain on the Queue tab stops the loop launching anything new, and the tab 
   // The build loop runs: it holds the clone's lease and has a build of `a` running.
   expect(clm(person, 'build', 'start', '--session-model', 'opus')).toMatch(/^launch build:a /m)
   clm(person, 'build', 'launched', 'build:a', 'task-1')
+  // A second component becomes ready on `main` meanwhile: a build the loop would launch next.
+  write(person, 'specs/b/SPEC.md', NODE_A.replace('title: A', 'title: B'))
+  git(person, 'add', '-A')
+  git(person, 'commit', '-q', '-m', 'b')
+  git(person, 'push', '-q', 'origin', 'main')
   await engine.command('clm:view')
   await engine.press('Queue')
   const slow = { timeout: 20_000 }
@@ -140,6 +145,7 @@ test('Drain on the Queue tab stops the loop launching anything new, and the tab 
   await expect.poll(() => engine.pane(), slow).toContain('stop requested: drain')
   await expect.poll(() => engine.pane(), slow).toContain('Drain · requested')
 
-  // The loop obeys it: its next step launches nothing.
+  // The loop obeys it: its next step launches nothing, though `b` is ready.
+  expect(clm(person, 'view', 'flight')).toMatch(/\bb +P5 +ready/)
   expect(clm(person, 'build', 'step')).not.toMatch(/^launch /m)
 })
