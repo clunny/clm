@@ -31,8 +31,26 @@ fn a_later_answer_replaces_an_earlier_one() {
                 (r.id.as_str(), r.writer.as_str(), answer.as_str())
             })
             .collect();
-        assert_eq!(open, [("b1", "bob/web", "yes"), ("a2", "alice/web", "no")]);
+        let mut open = open;
+        open.sort();
+        assert_eq!(open, [("a2", "alice/web", "no"), ("b1", "bob/web", "yes")]);
     }
+}
+
+#[test]
+fn the_newer_answer_may_be_read_first_or_last_and_items_are_apart() {
+    // req:ledger/answer-records@96b5bcca
+    let text = [
+        line("alice/web", "a1", "q", "yes", "09:00:00"),
+        line("alice/web", "a2", "q", "no", "10:00:00"),
+        line("alice/web", "a3", "r", "yes", "08:00:00"),
+    ]
+    .join("\n");
+    let fold = fold_records(&[("alice/web", &text)]);
+    let ids =
+        |item: &str| -> Vec<&str> { fold.answers[item].iter().map(|r| r.id.as_str()).collect() };
+    assert_eq!(ids("q"), ["a2"]);
+    assert_eq!(ids("r"), ["a3"]);
 }
 
 #[test]
