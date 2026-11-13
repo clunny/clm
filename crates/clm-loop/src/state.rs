@@ -200,9 +200,14 @@ impl LoopFile {
     }
 }
 
-/// Where the loop file and its lock live: `<git common dir>/clm/`.
+/// Where the loop file and its lock live: `<git common dir>/clm/`, not created.
+fn dir_path(root: &Path) -> Result<PathBuf, Failure> {
+    Ok(clm_git::common_dir(root)?.join("clm"))
+}
+
+/// `dir_path`, created: only what writes the loop file creates it.
 fn dir(root: &Path) -> Result<PathBuf, Failure> {
-    let dir = clm_git::common_dir(root)?.join("clm");
+    let dir = dir_path(root)?;
     fs::create_dir_all(&dir).map_err(|e| Failure::Git(format!("{}: {e}", dir.display())))?;
     Ok(dir)
 }
@@ -219,7 +224,7 @@ fn parse(bytes: &[u8]) -> Result<LoopFile, String> {
 /// The loop file as it stands, read without a lock or a write: none when the clone has none
 /// or it can't be read.
 pub fn read(root: &Path) -> Option<LoopFile> {
-    let path = dir(root).ok()?.join("loop");
+    let path = dir_path(root).ok()?.join("loop");
     parse(&fs::read(path).ok()?).ok()
 }
 
