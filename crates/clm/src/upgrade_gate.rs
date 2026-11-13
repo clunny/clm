@@ -51,6 +51,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Intake { root, .. }
         | C::Draft { root, .. }
         | C::Runner { root, .. }
+        | C::Build { root, .. }
         | C::WrapUp { root }
         | C::Rebase { root }
         | C::Autosync { root }

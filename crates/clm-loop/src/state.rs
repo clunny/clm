@@ -76,6 +76,45 @@ pub struct Run {
     /// Whether a returned run landed.
     #[serde(default)]
     pub landed: bool,
+    /// Stopped for a cause that clears, waiting to be resumed in the same subagent.
+    #[serde(default)]
+    pub resume: Option<Pending>,
+    /// A `resume` the session was told to deliver and hasn't reported on since.
+    #[serde(default)]
+    pub resumed: bool,
+    /// The run was resumed in the one-at-a-time mode a recurring limit or disk calls for.
+    #[serde(default)]
+    pub serial: bool,
+    /// The cause of the stop that rebuilt the run, for a run in round 2 or more.
+    #[serde(default)]
+    pub rebuilt_for: Option<String>,
+    /// Each stop, `<cause>: <result>`, for an escalation's body.
+    #[serde(default)]
+    pub log: Vec<String>,
+    /// The slug of the question item the loop filed for the run.
+    #[serde(default)]
+    pub escalated: Option<String>,
+    /// An orphan whose branch moved lately, held by a session taken over.
+    #[serde(default)]
+    pub hold: Option<Hold>,
+}
+
+/// A run stopped for a cause that clears.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pending {
+    pub cause: String,
+    /// The time from which the run may be resumed, Unix seconds; none for a `disk` stop, which
+    /// waits for `clm build cleared disk`.
+    pub after: Option<u64>,
+}
+
+/// An orphan held while its branch on `origin` still moves.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hold {
+    /// The branch's tip when last read.
+    pub tip: String,
+    /// When the tip was last seen to advance, Unix seconds.
+    pub since: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +129,9 @@ pub enum StopMode {
 pub struct Batch {
     pub id: String,
     pub approved: bool,
+    /// The drafts folded into it, finished once it lands.
+    #[serde(default)]
+    pub drafts: Vec<String>,
     /// When the batch went to the human, Unix seconds.
     #[serde(default)]
     pub since: u64,
@@ -108,6 +150,9 @@ pub struct Conditions {
     pub disk: bool,
     /// Unix seconds at which a `limit` lifts.
     pub limit_until: Option<u64>,
+    /// A recurring `limit` or `disk` stop: the runs it stopped resume one at a time.
+    #[serde(default)]
+    pub serial: bool,
 }
 
 /// What an entry of the plan's `next` section stores.
@@ -162,6 +207,12 @@ pub struct LoopFile {
     pub conditions: Conditions,
     pub stop: Option<StopMode>,
     pub plan: Option<StoredPlan>,
+    /// The `left` lines of `clm wrap-up` already said.
+    #[serde(default)]
+    pub said: Vec<String>,
+    /// A run of the loop landed since the last verify run.
+    #[serde(default)]
+    pub landed_since_verify: bool,
 }
 
 impl Default for LoopFile {
@@ -180,6 +231,8 @@ impl Default for LoopFile {
             conditions: Conditions::default(),
             stop: None,
             plan: None,
+            said: Vec::new(),
+            landed_since_verify: false,
         }
     }
 }

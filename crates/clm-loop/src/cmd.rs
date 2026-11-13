@@ -28,9 +28,18 @@ impl Ran {
 
 /// Runs `clm <args>` in the loop's repository with nothing on standard input.
 pub(crate) fn clm(options: &Options, args: &[&str]) -> Result<Ran, Failure> {
+    clm_in(options, &options.root, args)
+}
+
+/// Runs `clm <args>` in `dir` with nothing on standard input.
+pub(crate) fn clm_in(
+    options: &Options,
+    dir: &std::path::Path,
+    args: &[&str],
+) -> Result<Ran, Failure> {
     let out = Command::new(&options.clm)
         .args(args)
-        .current_dir(&options.root)
+        .current_dir(dir)
         .stdin(Stdio::null())
         .output()
         .map_err(|e| Failure::Git(format!("{}: {e}", options.clm.display())))?;

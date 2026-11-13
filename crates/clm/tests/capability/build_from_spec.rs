@@ -43,6 +43,16 @@ fn build(repo: &Repo, dir: &Path, node: &str, tests_dir: &str, requirements: &[(
     landed(&session.clm(&["land", &format!("impl/{node}")]));
 }
 
+/// Runs `clm <args>` as a session under Claude Code would, and returns the actions it printed.
+fn loop_command(repo: &Repo, args: &[&str]) -> Vec<String> {
+    let out = repo.clm_env(args, "", &[("CLAUDECODE", "1")]);
+    assert!(out.status.success(), "{}", printed(&out));
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect()
+}
+
 #[test]
 fn drain_the_queue() {
     // req:capability/build-from-spec@4bf37ced
@@ -73,22 +83,43 @@ fn drain_the_queue() {
     nodes.sort();
     assert_eq!(nodes, ["a", "b"]);
 
-    // Both builds start before either lands, each holding a place of its own.
+    // The loop launches both builds before either lands, each holding a place of its own, and
+    // the session reports each subagent's task.
+    let started = loop_command(&repo, &["build", "start", "--session-model", "opus"]);
     for node in ["a", "b"] {
-        let out = repo.clm(&["run", node, "--review-model", "opus"]);
-        assert!(out.status.success(), "{}", printed(&out));
+        let launch = started
+            .iter()
+            .find(|l| l.starts_with(&format!("launch build:{node} build ")))
+            .unwrap_or_else(|| panic!("no launch for {node}: {started:?}"));
+        let prompt = fs::read_to_string(launch.rsplit(' ').next().unwrap()).unwrap();
+        assert!(
+            prompt.starts_with(&format!("loop run build:{node}\n")),
+            "{prompt}"
+        );
         assert!(repo.root.join(format!(".clm/prompts/{node}.md")).exists());
+        loop_command(
+            &repo,
+            &["build", "launched", &format!("build:{node}"), "t-1"],
+        );
     }
     repo.git(&["fetch", "-q", "origin"]);
     assert!(ready(&repo).is_empty(), "both are claimed");
 
-    // Each build session works in its own worktree, and lands.
+    // Each build session works in its own worktree, and lands; the session reports its return.
     let worktrees = repo.root.join(".claude/worktrees");
     build(&repo, &worktrees.join("build-a"), "a", "tests", &a);
     build(&repo, &worktrees.join("build-b"), "b", "lib/tests", &b);
     for node in ["a", "b"] {
-        let out = repo.clm(&["run", "--finish", node]);
-        assert!(out.status.success(), "{}", printed(&out));
+        loop_command(
+            &repo,
+            &[
+                "build",
+                "returned",
+                &format!("build:{node}"),
+                "--result",
+                "landed 1a2b3c4",
+            ],
+        );
     }
 
     // Nothing is left to build.

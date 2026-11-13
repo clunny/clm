@@ -66,11 +66,13 @@ fn every_kind_of_entry_oldest_first() {
     file.batches.push(Batch {
         id: "b".to_string(),
         approved: false,
+        drafts: Vec::new(),
         since: 90_000,
     });
     file.batches.push(Batch {
         id: "done".to_string(),
         approved: true,
+        drafts: Vec::new(),
         since: 1,
     });
     file.escalations.push(Escalation {
@@ -166,7 +168,8 @@ fn the_summary_withholds_the_all_clear_while_work_is_unsafe() {
     fx.set("wrap-up", "unpushed spec/x\n");
     stop(&fx.options(), StopMode::Now).unwrap();
     step(&fx.options()).unwrap();
-    let actions = clm_loop::returned(&fx.options(), "build:a", "none", Some("stopped")).unwrap();
+    let actions =
+        clm_loop::returned(&fx.options(), "build:a", "none", Some("stopped"), None).unwrap();
     let text = fs::read_to_string(line(&actions, "say ").strip_prefix("say ").unwrap()).unwrap();
     assert!(text.contains("build:a"), "{text}");
     assert!(text.contains("stopped"), "{text}");

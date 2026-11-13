@@ -9,9 +9,10 @@ use clm_git::{Failure, now};
 use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 
 use crate::Options;
-use crate::cmd::{clm, clm_ok, say};
+use crate::cmd::{clm, clm_in, clm_ok, say};
 use crate::plan::{BacklogRow, Group, Launch, Snapshot, plan_of};
 use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
+use crate::stops;
 
 /// The prompt file of a run: `.clm/prompts/loop/<name>.md`, with `:` written `-`.
 fn prompt_path(options: &Options, name: &str) -> Result<PathBuf, Failure> {
@@ -148,6 +149,13 @@ fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Sna
             .filter_map(|l| Some(l.trim().strip_prefix("complete ")?.trim().to_string()))
             .collect(),
         archive_branches: archive_branches(options)?,
+        verify: None,
+        left: wrap_up
+            .lines()
+            .map(str::trim)
+            .filter(|l| l.starts_with("left "))
+            .map(str::to_string)
+            .collect(),
     })
 }
 
@@ -172,7 +180,7 @@ fn read_backlog(options: &Options) -> Result<Vec<BacklogRow>, Failure> {
             fm.kind,
             clm_model::BacklogKind::Question | clm_model::BacklogKind::Human
         );
-        if !(human && !fm.blocks.is_empty() || !fm.verify_failures.is_empty()) {
+        if !(human || !fm.verify_failures.is_empty()) {
             continue;
         }
         let since = clm_git::git(
@@ -291,6 +299,13 @@ fn planned(name: &str, kind: Option<Kind>, model: &str, prompt: Option<String>) 
         prompt,
         command: None,
         landed: false,
+        resume: None,
+        resumed: false,
+        serial: false,
+        rebuilt_for: None,
+        log: Vec::new(),
+        escalated: None,
+        hold: None,
     }
 }
 
@@ -359,6 +374,28 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
                 Some(prompt),
             ))))
         }
+        Launch::Fold { ids, model } => {
+            let first = ids.first().cloned().unwrap_or_default();
+            let mut run = planned(&format!("fold:{first}"), Some(Kind::Fold), model, None);
+            run.items = ids.clone();
+            let mut args = vec!["draft", "--fold"];
+            args.extend(ids.iter().map(String::as_str));
+            launch_run(options, run, &args)
+        }
+        Launch::Land { batch } => {
+            let mut run = planned(&format!("land:{batch}"), None, "", None);
+            run.command = Some(format!("clm land spec/{batch}"));
+            Ok(Prepared::Run(Box::new(run)))
+        }
+        Launch::Verify { work_done } => {
+            let mut run = planned("verify", None, "", None);
+            run.command = Some(if *work_done {
+                "clm verify --due --event work-done".to_string()
+            } else {
+                "clm verify --due".to_string()
+            });
+            Ok(Prepared::Run(Box::new(run)))
+        }
         Launch::Relaunch(name) => {
             let Some(orphan) = file.run(name) else {
                 return Ok(Prepared::Nothing);
@@ -391,12 +428,160 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
 pub(crate) fn fresh_snapshot(options: &Options) -> Result<Snapshot, Failure> {
     // `clm wrap-up` removes landed worktrees and branches and frees the places that don't
     // count; its report is for the housekeeping requirements, which come later.
-    let wrap_up = clm(options, &["wrap-up"])?;
+    let wrap_up = clm_in(options, &options.cwd, &["wrap-up"])?;
     if wrap_up.code == 2 {
         return Err(Failure::Git(format!("clm wrap-up: {}", wrap_up.reason())));
     }
     let file = state::read(&options.root).unwrap_or_default();
-    read_snapshot(options, file, &wrap_up.stdout)
+    let mut snapshot = read_snapshot(options, file, &wrap_up.stdout)?;
+    snapshot.verify = verify_due(options, &snapshot)?;
+    Ok(snapshot)
+}
+
+/// Whether a verify run is due, asked after a run of the loop landed and when the loop is idle,
+/// and whether it was asked with the idle event (`plan-verify`).
+fn verify_due(options: &Options, s: &Snapshot) -> Result<Option<bool>, Failure> {
+    let file = &s.file;
+    if file.stop == Some(StopMode::Now)
+        || file
+            .runs
+            .iter()
+            .any(|r| r.name == "verify" && r.state != RunState::Returned)
+    {
+        return Ok(None);
+    }
+    let idle = !file.runs.iter().any(|r| {
+        matches!(r.state, RunState::Planned | RunState::Running) || r.resume.is_some() || r.orphan
+    }) && plan_of(s).launches.is_empty();
+    if !idle && !file.landed_since_verify {
+        return Ok(None);
+    }
+    let mut args = vec!["verify", "--due", "--dry-run"];
+    if idle {
+        args.extend(["--event", "work-done"]);
+    }
+    let ran = clm(options, &args)?;
+    Ok((ran.code == 0 && ran.stdout.trim_start().starts_with("verify due")).then_some(idle))
+}
+
+/// How long an orphan's branch must stay still before a session taken over is judged gone.
+const STILL_SECONDS: u64 = 15 * 60;
+
+/// The branch an orphan's work is on, on `origin`.
+fn run_branch(run: &Run) -> Option<String> {
+    match run.kind? {
+        Kind::Build => Some(format!("impl/{}", run.name.strip_prefix("build:")?)),
+        Kind::Draft => Some(format!("spec/{}", run.name.strip_prefix("draft:")?)),
+        Kind::Fold | Kind::Archive => None,
+    }
+}
+
+/// The tip of `origin/<branch>` and when it was committed, Unix seconds; none when it isn't
+/// there.
+fn tip(options: &Options, branch: &str) -> Option<(String, u64)> {
+    let found = clm_git::git(
+        &options.root,
+        &[
+            "log",
+            "-1",
+            "--format=%H %ct",
+            &format!("refs/remotes/origin/{branch}"),
+        ],
+    )
+    .ok()?;
+    let (sha, time) = found.split_once(' ')?;
+    Some((sha.to_string(), time.parse().ok()?))
+}
+
+/// Keeps each hold up to date: a branch that moved restarts its quiet time, and one that stayed
+/// at the same commit for 15 minutes lets its orphan go (`take-over-holds-moving-orphans`).
+fn refresh_holds(options: &Options) -> Result<(), Failure> {
+    let Some(file) = state::read(&options.root) else {
+        return Ok(());
+    };
+    let seen: Vec<(String, Option<(String, u64)>)> = file
+        .runs
+        .iter()
+        .filter(|r| r.hold.is_some())
+        .map(|r| (r.name.clone(), run_branch(r).and_then(|b| tip(options, &b))))
+        .collect();
+    if seen.is_empty() {
+        return Ok(());
+    }
+    let at = now();
+    state::update(&options.root, |f| {
+        for (name, tip) in seen {
+            let Some(run) = f.run_mut(&name) else {
+                continue;
+            };
+            let Some(hold) = run.hold.as_mut() else {
+                continue;
+            };
+            match tip {
+                Some((sha, _)) if sha != hold.tip => {
+                    hold.tip = sha;
+                    hold.since = at;
+                }
+                Some(_) if at.saturating_sub(hold.since) < STILL_SECONDS => {}
+                _ => run.hold = None,
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Lands again each escalation an earlier land of its item failed; true when one landed.
+fn retry_escalations(options: &Options) -> Result<bool, Failure> {
+    let Some(file) = state::read(&options.root) else {
+        return Ok(false);
+    };
+    let mut landed = Vec::new();
+    for escalation in &file.escalations {
+        if crate::escalate::land(options, &escalation.slug, &escalation.body).is_ok() {
+            landed.push(escalation.slug.clone());
+        }
+    }
+    if landed.is_empty() {
+        return Ok(false);
+    }
+    state::update(&options.root, |f| {
+        f.escalations.retain(|e| !landed.contains(&e.slug));
+        Ok(())
+    })?;
+    Ok(true)
+}
+
+/// `clm build approved <batch>`: the human approved a fold batch through `clm approve`, so the
+/// session may land it.
+pub fn approved(options: &Options, batch: &str) -> Result<Vec<String>, Failure> {
+    clm_git::fetch(&options.root)?;
+    state::update(&options.root, |f| {
+        f.lease = Some(now());
+        let found = f
+            .batches
+            .iter_mut()
+            .find(|b| b.id == batch)
+            .ok_or_else(|| Failure::Refused(format!("the loop has no fold batch {batch}")))?;
+        found.approved = true;
+        Ok(())
+    })?;
+    actions(options)
+}
+
+/// `clm build cleared disk`: the human freed the disk, so the runs it stopped may resume.
+pub fn cleared(options: &Options, what: &str) -> Result<Vec<String>, Failure> {
+    if what != "disk" {
+        return Err(Failure::Refused(format!(
+            "`{what}` isn't a condition the human clears: say `disk`"
+        )));
+    }
+    clm_git::fetch(&options.root)?;
+    state::update(&options.root, |f| {
+        f.lease = Some(now());
+        f.conditions.disk = false;
+        Ok(())
+    })?;
+    actions(options)
 }
 
 /// The names of the clone's places that count.
@@ -419,8 +604,23 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         f.lease = Some(now());
         Ok(())
     })?;
+    if retry_escalations(options)? {
+        clm_git::fetch(&options.root)?;
+    }
+    refresh_holds(options)?;
     let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
+    // Each `left` line of the wrap-up is said once.
+    let mut said = Vec::new();
+    for left in &snapshot.left {
+        if !snapshot.file.said.contains(left) && !said.contains(left) {
+            said.push(left.clone());
+        }
+    }
+    let mut say_lines = Vec::new();
+    for left in &said {
+        say_lines.push(say(options, left)?);
+    }
     let mut changes = Vec::new();
     let mut stored_file = snapshot.file.clone();
     for launch in &plan.launches {
@@ -446,13 +646,50 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     let (lines, ended, file) = state::update(&options.root, |f| {
         for change in changes {
             match change {
-                Prepared::Run(run) => match f.run_mut(&run.name) {
-                    Some(existing) => *existing = *run,
-                    None => f.runs.push(*run),
-                },
+                Prepared::Run(run) => {
+                    if run.kind == Some(Kind::Fold) {
+                        // The changes the fold takes leave the fold list.
+                        f.review.retain(|id| !run.items.contains(id));
+                    }
+                    match f.run_mut(&run.name) {
+                        Some(existing) => *existing = *run,
+                        None => f.runs.push(*run),
+                    }
+                }
                 Prepared::Drop(name) => f.runs.retain(|r| r.name != name),
                 Prepared::Nothing | Prepared::NoPlace => {}
             }
+        }
+        f.said.extend(said);
+        // The runs a stop paused go on once what stopped them has cleared, which is also what a
+        // plan reads from the loop file as it stands.
+        let at = now();
+        if f.conditions.limit_until.is_some_and(|until| at >= until) {
+            f.conditions.limit_until = None;
+        }
+        let mut resumes = Vec::new();
+        if f.stop != Some(StopMode::Now) {
+            let serial = f.conditions.serial;
+            for name in stops::resumable(f, at) {
+                let Some(run) = f.run_mut(&name) else {
+                    continue;
+                };
+                let (Some(pending), Some(task)) = (run.resume.take(), run.task_id.clone()) else {
+                    continue;
+                };
+                let message = crate::returned::message_file(
+                    options,
+                    &name,
+                    &stops::resume_message(run, &pending),
+                )?;
+                run.state = RunState::Running;
+                run.resumed = true;
+                run.serial = serial && matches!(pending.cause.as_str(), "limit" | "disk");
+                resumes.push(format!("resume {name} {task} {}", message.display()));
+            }
+        }
+        if f.conditions.serial && !stops::serial_hold(f) {
+            f.conditions.serial = false;
         }
         f.plan = Some(state::StoredPlan {
             main,
@@ -460,7 +697,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
             next,
             humans,
         });
-        let lines = if f.stop == Some(StopMode::Now) {
+        let mut lines: Vec<String> = if f.stop == Some(StopMode::Now) {
             // A run never launched is stopped with its claim, branch and place kept.
             for run in f.runs.iter_mut().filter(|r| r.state == RunState::Planned) {
                 run.state = RunState::Stopped;
@@ -477,10 +714,12 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
                 .filter_map(action_line)
                 .collect::<Vec<_>>()
         };
-        let busy = f
-            .runs
-            .iter()
-            .any(|r| matches!(r.state, RunState::Planned | RunState::Running));
+        lines.extend(resumes);
+        let busy = f.runs.iter().any(|r| {
+            matches!(r.state, RunState::Planned | RunState::Running)
+                || r.resume.is_some()
+                || r.orphan
+        });
         let ended = f.stop.is_some() && !busy && no_launches;
         if ended {
             // The loop is over: the next `start` takes the lease at once.
@@ -490,12 +729,17 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     })?;
     if ended {
         let text = crate::summary::summary(options, &file, &plan.view)?;
-        return Ok(vec![say(options, &text)?, "end".to_string()]);
+        let mut out = say_lines;
+        out.push(say(options, &text)?);
+        out.push("end".to_string());
+        return Ok(out);
     }
-    if lines.is_empty() {
+    let mut out = say_lines;
+    out.extend(lines);
+    if out.is_empty() {
         Ok(vec!["wait".to_string()])
     } else {
-        Ok(lines)
+        Ok(out)
     }
 }
 
@@ -532,6 +776,29 @@ pub fn start(
     clm_git::fetch(&options.root)?;
     let main = clm_git::git(&options.root, &["rev-parse", "origin/main"])?;
     let at = now();
+    // A session taken over may still run its subagents: an orphan whose branch advanced within
+    // the 15 minutes before the fetch is held until the branch has stayed still that long.
+    let mut holds = BTreeMap::new();
+    if take_over && let Some(file) = state::read(&options.root) {
+        for run in file.runs.iter().filter(|r| {
+            matches!(
+                r.state,
+                RunState::Planned | RunState::Running | RunState::Stopped
+            )
+        }) {
+            if let Some((sha, committed)) = run_branch(run).and_then(|b| tip(options, &b))
+                && at.saturating_sub(committed) < STILL_SECONDS
+            {
+                holds.insert(
+                    run.name.clone(),
+                    state::Hold {
+                        tip: sha,
+                        since: committed,
+                    },
+                );
+            }
+        }
+    }
     state::update(&options.root, |f| {
         if f.held(at) && !take_over {
             let ago = at.saturating_sub(f.lease.unwrap_or(at)) / 60;
@@ -552,6 +819,7 @@ pub fn start(
                 RunState::Planned | RunState::Running | RunState::Stopped
             ) {
                 run.orphan = true;
+                run.hold = holds.remove(&run.name);
             }
         }
         Ok(())

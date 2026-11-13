@@ -58,6 +58,11 @@ pub struct Snapshot {
     pub complete: Vec<String>,
     /// The IDs of the `impl/archive/*` branches on `origin`.
     pub archive_branches: Vec<String>,
+    /// The `left <path>: ...` lines of `clm wrap-up`.
+    pub left: Vec<String>,
+    /// A `clm verify --due --dry-run` that found a run due, and whether it was asked with
+    /// `--event work-done`.
+    pub verify: Option<bool>,
 }
 
 /// What the step does for one entry of the plan.
@@ -78,6 +83,19 @@ pub enum Launch {
     Archive {
         id: String,
         model: String,
+    },
+    /// Fold the changes drafts left for review into one spec branch; it takes no place.
+    Fold {
+        ids: Vec<String>,
+        model: String,
+    },
+    /// The session lands an approved fold batch.
+    Land {
+        batch: String,
+    },
+    /// The session runs `clm verify --due`, with `--event work-done` when `work_done`.
+    Verify {
+        work_done: bool,
     },
 }
 
@@ -101,6 +119,7 @@ fn rank(priority: &str) -> u8 {
 
 const LAUNCHES_NOW: &str = "launches now";
 const WAITS_FOR_A_PLACE: &str = "waits for a place";
+const WAITS_FOR_RESUMES: &str = "waits for stopped runs to resume";
 
 /// The queue model for `file` at `now`, with `next` as its next-up section.
 pub(crate) fn view(
@@ -129,7 +148,7 @@ pub(crate) fn view(
             model: r.model.clone(),
             round: r.round,
             minutes: now.saturating_sub(r.started) / 60,
-            taken_over: false,
+            taken_over: r.hold.is_some(),
         })
         .collect();
     QueueView {
@@ -166,6 +185,50 @@ fn active(file: &LoopFile, name: &str) -> bool {
         .any(|r| r.name == name && r.state != RunState::Returned)
 }
 
+/// Whether a build of the component was escalated, its question item still there.
+fn escalated(s: &Snapshot, name: &str) -> bool {
+    s.file.runs.iter().any(|r| {
+        r.name == name
+            && r.state == RunState::Returned
+            && r.escalated.as_ref().is_some_and(|slug| {
+                s.backlog.iter().any(|b| &b.slug == slug)
+                    || s.file.escalations.iter().any(|e| &e.slug == slug)
+            })
+    })
+}
+
+/// The changes to fold now, in the order their drafts were launched: the fold list, once no
+/// draft of the loop runs and no fold does (`plan-fold`).
+fn fold_due(s: &Snapshot, resuming: bool) -> Option<Vec<String>> {
+    let file = &s.file;
+    if file.review.is_empty() || resuming {
+        return None;
+    }
+    let busy = |r: &crate::state::Run| {
+        r.state != RunState::Returned && matches!(r.kind, Some(Kind::Draft | Kind::Fold))
+    };
+    if file.runs.iter().any(busy) {
+        return None;
+    }
+    if s.one_at_a_time
+        && file
+            .runs
+            .iter()
+            .any(|r| matches!(r.state, RunState::Planned | RunState::Running))
+    {
+        return None;
+    }
+    let mut ids = file.review.clone();
+    let position = |id: &String| {
+        file.runs
+            .iter()
+            .position(|r| r.name == format!("draft:{id}"))
+            .unwrap_or(usize::MAX)
+    };
+    ids.sort_by_key(position);
+    Some(ids)
+}
+
 /// The change to archive now: the first complete one, when every `impl/archive/*` branch on
 /// `origin` is held by a run of the loop and that change's run isn't already going
 /// (`plan-archive`).
@@ -192,10 +255,11 @@ pub fn plan_of(s: &Snapshot) -> Plan {
     let mut launches: Vec<Launch> = file
         .runs
         .iter()
-        .filter(|r| r.orphan && file.stop != Some(StopMode::Now))
+        .filter(|r| r.orphan && r.hold.is_none() && file.stop != Some(StopMode::Now))
         .map(|r| Launch::Relaunch(r.name.clone()))
         .collect();
     let mut next: Vec<StoredNext> = Vec::new();
+    let resuming = crate::stops::serial_hold(file);
     if file.stop.is_none() {
         let held_items: Vec<&String> = file
             .runs
@@ -228,7 +292,7 @@ pub fn plan_of(s: &Snapshot) -> Plan {
         }
         for component in &s.ready {
             let name = format!("build:{component}");
-            if active(file, &name) {
+            if active(file, &name) || escalated(s, &name) {
                 continue;
             }
             let priority = s
@@ -263,7 +327,9 @@ pub fn plan_of(s: &Snapshot) -> Plan {
             s.free_places
         };
         for (i, (_, _, mut entry, launch)) in candidates.into_iter().enumerate() {
-            if (i as u64) < places {
+            if resuming {
+                entry.reason = WAITS_FOR_RESUMES.to_string();
+            } else if (i as u64) < places {
                 entry.reason = LAUNCHES_NOW.to_string();
                 launches.push(launch);
             } else {
@@ -274,7 +340,7 @@ pub fn plan_of(s: &Snapshot) -> Plan {
         // Where the agent harness has no subagents, an archive waits for a step that launches
         // no other run.
         let launching = launches.iter().any(|l| !matches!(l, Launch::Relaunch(_)));
-        if let Some(id) = archive_due(s).filter(|_| !(s.one_at_a_time && launching)) {
+        if let Some(id) = archive_due(s).filter(|_| !(s.one_at_a_time && launching) && !resuming) {
             next.insert(
                 0,
                 StoredNext {
@@ -288,6 +354,35 @@ pub fn plan_of(s: &Snapshot) -> Plan {
                 id,
                 model: s.build_model.clone(),
             });
+        }
+    }
+    if file.stop != Some(StopMode::Now) {
+        if let Some(fold) = fold_due(s, resuming) {
+            next.insert(
+                0,
+                StoredNext {
+                    name: format!("fold:{}", fold.first().cloned().unwrap_or_default()),
+                    kind: Kind::Fold,
+                    priority: "-".to_string(),
+                    reason: LAUNCHES_NOW.to_string(),
+                },
+            );
+            launches.push(Launch::Fold {
+                ids: fold,
+                model: s.build_model.clone(),
+            });
+        }
+        for batch in file.batches.iter().filter(|b| b.approved) {
+            if !active(file, &format!("land:{}", batch.id)) {
+                launches.push(Launch::Land {
+                    batch: batch.id.clone(),
+                });
+            }
+        }
+        if let Some(work_done) = s.verify
+            && !active(file, "verify")
+        {
+            launches.push(Launch::Verify { work_done });
         }
     }
     let humans = crate::humans::queue(s);

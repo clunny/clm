@@ -1,6 +1,6 @@
 ---
 title: Build loop
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: [orchestrator, orchestrator.run, orchestrator.triage, orchestrator.checkpoint, verify, upgrade, land, view, agent-harness, config, vcs, model]
 paths: ["crates/clm-loop/**"]

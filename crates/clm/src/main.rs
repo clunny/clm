@@ -357,6 +357,15 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+    /// Run the clone's build loop: decide every step of draining the queue and print the
+    /// actions the session carries out with the agent harness's subagents.
+    Build {
+        #[command(subcommand)]
+        action: BuildAction,
+        /// Repository root (default: the CLM repository holding the current directory).
+        #[arg(long, global = true)]
+        root: Option<PathBuf>,
+    },
     /// Remove merged work, report work that isn't safe on origin, and say whether the
     /// session can end.
     #[command(name = "wrap-up")]
@@ -654,6 +663,54 @@ enum Command {
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
+    },
+}
+
+#[derive(Subcommand)]
+enum BuildAction {
+    /// Begin or adopt the loop, and print the first actions.
+    Start {
+        /// The alias of the model the session runs on.
+        #[arg(long)]
+        session_model: String,
+        /// Take the loop although another session's lease is live.
+        #[arg(long)]
+        take_over: bool,
+    },
+    /// Print the actions to take now.
+    Step,
+    /// Record the agent harness's task ID for a run the session launched.
+    Launched { name: String, task_id: String },
+    /// Record a run's return and print the actions to take now.
+    Returned {
+        name: String,
+        /// The run's last line, as it stands.
+        #[arg(long, allow_hyphen_values = true)]
+        result: String,
+        /// Why a run that didn't land ended.
+        #[arg(long)]
+        cause: Option<String>,
+        /// When a `limit` lifts, as an RFC 3339 time.
+        #[arg(long)]
+        until: Option<String>,
+    },
+    /// Record that the human approved a fold batch with `clm approve`.
+    Approved { batch: String },
+    /// Record that the human cleared a condition (`disk`).
+    Cleared { condition: String },
+    /// Wait until a step would act, renewing the lease, and print why it woke.
+    Wait {
+        /// Minutes between looks at `origin`: a positive number of at most 7.
+        #[arg(long, default_value = "5")]
+        interval: String,
+    },
+    /// Record a request to drain or to stop the loop.
+    #[command(group(clap::ArgGroup::new("mode").required(true).args(["drain", "now"])))]
+    Stop {
+        #[arg(long, conflicts_with = "now")]
+        drain: bool,
+        #[arg(long)]
+        now: bool,
     },
 }
 
@@ -1383,6 +1440,7 @@ fn dispatch() -> ExitCode {
             once,
             expiry,
         })),
+        Command::Build { action, root } => build(repo_root(root), cwd, action),
         Command::WrapUp { root } => wrap_up(root),
         Command::Rebase { root } => rebase(root),
         Command::Autosync { root } => match clm_sync::autosync(&repo_root(root)) {
@@ -2003,6 +2061,67 @@ fn repo_root(given: Option<PathBuf>) -> PathBuf {
             Err(_) => found.to_path_buf(),
         },
         _ => here,
+    }
+}
+
+/// `clm build`: the loop's own commands, each printing the actions it returns, one per line.
+/// `cwd` is the directory `clm build` was started in, where `clm wrap-up` looks at the caller's
+/// own work. Exit 0 on success, 1 when the work isn't possible and 2 when git fails.
+fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
+    let settings = match clm_config::load(Some(&root), &clm_config::process_env) {
+        Ok(settings) => settings,
+        Err(e) => {
+            eprintln!("clm build: settings: {e}");
+            return ExitCode::from(1);
+        }
+    };
+    let options = clm_loop::Options {
+        clm: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("clm")),
+        root,
+        cwd,
+        max_builds: settings.max_builds.value,
+        agent_harness: clm_agent_harness::detect(clm_config::process_env),
+    };
+    let actions = match action {
+        BuildAction::Start {
+            session_model,
+            take_over,
+        } => clm_loop::start(&options, &session_model, take_over),
+        BuildAction::Step => clm_loop::step(&options),
+        BuildAction::Launched { name, task_id } => {
+            clm_loop::launched(&options, &name, &task_id).map(|()| Vec::new())
+        }
+        BuildAction::Returned {
+            name,
+            result,
+            cause,
+            until,
+        } => clm_loop::returned(&options, &name, &result, cause.as_deref(), until.as_deref()),
+        BuildAction::Approved { batch } => clm_loop::approved(&options, &batch),
+        BuildAction::Cleared { condition } => clm_loop::cleared(&options, &condition),
+        BuildAction::Wait { interval } => match interval.parse::<f64>() {
+            Ok(minutes) => clm_loop::wait(&options, minutes).map(|why| vec![why]),
+            Err(_) => Err(clm_git::Failure::Refused(format!(
+                "--interval `{interval}` isn't a number of minutes"
+            ))),
+        },
+        BuildAction::Stop { drain, now: _ } => {
+            let mode = if drain {
+                clm_loop::StopMode::Drain
+            } else {
+                clm_loop::StopMode::Now
+            };
+            clm_loop::stop(&options, mode).map(|()| Vec::new())
+        }
+    };
+    match actions {
+        Ok(lines) => {
+            for line in lines {
+                println!("{line}");
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => failed("build", &e),
     }
 }
 

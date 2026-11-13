@@ -42,7 +42,7 @@ fn no_subagents() {
     clm_loop::launched(&options, "build:a", "t-1").unwrap();
     fx.set("finish-a", "landed impl/a\n");
     fx.set("next", "b\n");
-    let after = returned(&options, "build:a", "landed 1a2b3c4", None).unwrap();
+    let after = returned(&options, "build:a", "landed 1a2b3c4", None, None).unwrap();
     line(&after, "launch build:b ");
 }
 
