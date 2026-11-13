@@ -5,6 +5,7 @@
 
 import { ListOptions, PageOptions, decideBar, decisionsSection, latest, section, tokens, unsettled, usd, without, withoutSection, workarounds } from './capabilities';
 import { chip, code, div, el } from './dom';
+import { md } from './markdown';
 import type { Architecture, Constraint, Enforcing } from './types';
 
 /** An enforcing rule's state: unknown while the report is indexing. */
@@ -42,7 +43,7 @@ export function renderArchitecture(data: Architecture, o: ListOptions): HTMLElem
         el(
           'tr',
           { class: c.flagged ? 'cap flag' : 'cap', 'data-slug': c.slug },
-          el('td', {}, el('a', { href: o.link(c.slug) }, ...name(c)), div('note', c.statement)),
+          el('td', {}, el('a', { href: o.link(c.slug) }, ...name(c)), div('note', md(c.statement))),
           el('td', {}, proof(c, data.indexing)),
           el('td', {}, bar(c), spend(c)),
           el('td', {}, String(unsettled(c))),
@@ -59,7 +60,7 @@ export function renderArchitecture(data: Architecture, o: ListOptions): HTMLElem
         'a',
         { class: c.flagged ? 'ccard card flag' : 'ccard card', href: o.link(c.slug), 'data-slug': c.slug },
         div('row', el('span', {}, ...name(c)), proof(c, data.indexing)),
-        div('note', c.statement),
+        div('note', md(c.statement)),
         bar(c),
         div('row note', el('span', {}, spend(c)), el('span', {}, `${unsettled(c)} workarounds`)),
         div('note', `Live without? ${without(c)} · ${latest(c)}`),
@@ -89,7 +90,7 @@ export function renderConstraint(data: Architecture, slug: string, o: PageOption
     'capage',
     back,
     div('head', div('', el('h1', {}, `${c.slug}${c.flagged ? ' ⚑' : ''}`), div('meta', `${c.rules.length} rules`, ...c.nodes.map((n) => chip('node', n))))),
-    el('p', { class: 'statement' }, c.statement),
+    section('entry', 'The constraint', md(c.text)),
     section(
       'held',
       'Is it held?',
@@ -104,7 +105,6 @@ export function renderConstraint(data: Architecture, slug: string, o: PageOption
             }),
           )
         : el('p', { class: 'note' }, 'No rule enforces it.'),
-      c.untested !== null ? div('untested', el('b', {}, 'Untested: '), c.untested) : '',
     ),
     section(
       'cost',

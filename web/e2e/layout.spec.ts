@@ -112,9 +112,6 @@ test.describe('the graph fills the height', () => {
     await expect.poll(() => edge(page, '.canvas')).toBeGreaterThanOrEqual(1000 - 32);
     expect(await edge(page, '.canvas')).toBeLessThanOrEqual(1000);
     expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
-    // The inspector scrolls within the canvas's height.
-    const height = await page.locator('.canvas').evaluate((e) => e.getBoundingClientRect().height);
-    expect(await page.locator('.insp').evaluate((e) => parseFloat(getComputedStyle(e).maxHeight))).toBe(height);
   });
 
   test('a short window: the canvas stays at least 320 px tall', async ({ page, context }) => {
@@ -167,5 +164,46 @@ test.describe('the graph fills the height', () => {
       await expect.poll(gap).toBeLessThanOrEqual(16);
       expect(await gap()).toBeGreaterThanOrEqual(0);
     });
+  });
+});
+
+// req:web.views/inspector-overlay@ca741eb0
+test.describe('the inspector is an overlay', () => {
+  test('desktop: the canvas keeps its width, the drawer overlaps it from the right edge, at most 640 px wide, and Escape closes it', async ({ page, context }) => {
+    await mockApi(context);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/app/#/o/a/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    const before = (await page.locator('.canvas').boundingBox())!;
+    await page.locator('.n[data-node=b]').click();
+    const drawer = page.locator('.insp:not(.closed)');
+    await expect(drawer).toContainText('The b contract.');
+    const after = (await page.locator('.canvas').boundingBox())!;
+    expect(after.width).toBe(before.width);
+    const box = (await drawer.boundingBox())!;
+    expect(box.width).toBeLessThanOrEqual(640);
+    expect(Math.round(box.x + box.width)).toBe(1280);
+    expect(box.x).toBeLessThan(after.x + after.width);
+    expect(box.height).toBeLessThanOrEqual(900);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.insp.closed')).toHaveCount(1);
+  });
+
+  test('selecting the selected component again clears the selection, and the × button closes', async ({ page, context }) => {
+    await mockApi(context);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/app/#/o/a/graph');
+    await page.locator('.n[data-node=b]').click();
+    await expect(page.locator('.insp:not(.closed)')).toBeVisible();
+    await expect(page.locator('.e.ein, .e.eout')).not.toHaveCount(0);
+    await page.locator('.insp .close').click();
+    await expect(page.locator('.insp.closed')).toHaveCount(1);
+    await expect(page.locator('.n.sel')).toHaveCount(0);
+    await expect(page.locator('.e.ein, .e.eout')).toHaveCount(0);
+    // With the drawer closed the card is tappable again; with it open, a click on the card still reaches it.
+    await page.locator('.n[data-node=b]').click();
+    await expect(page.locator('.insp:not(.closed)')).toBeVisible();
+    await page.locator('.n[data-node=b]').dispatchEvent('click');
+    await expect(page.locator('.insp.closed')).toHaveCount(1);
   });
 });

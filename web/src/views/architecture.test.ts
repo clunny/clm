@@ -69,13 +69,15 @@ describe('architecture list', () => {
 
 });
 
-// req:web/architecture-page@d01678bd
+// req:web.views/architecture-page@b9446399
 describe('architecture page', () => {
-  it('sections in order: statement, held with each rule and its untested text, cost, workarounds, without, decisions, then the buttons', () => {
+  it('sections in order: the entry in full, held with each rule, cost, workarounds, without, decisions, then the buttons', () => {
     const view = renderConstraint(architecture(), 'e', page());
     const secs = [...view.querySelectorAll<HTMLElement>('section[data-sec]')].map((s) => s.dataset.sec);
-    expect(secs).toEqual(['held', 'cost', 'workarounds', 'without', 'decisions']);
-    expect(view.querySelector('.statement')!.textContent).toBe('CLM SHALL e.');
+    expect(secs).toEqual(['entry', 'held', 'cost', 'workarounds', 'without', 'decisions']);
+    expect(view.querySelector('section[data-sec=entry]')!.textContent).toContain('Partly judgement.');
+    expect(view.querySelector('.statement')).toBeNull();
+    expect(view.querySelector('.untested')).toBeNull();
     const held = view.querySelector('section[data-sec=held]')!;
     const rules = [...held.querySelectorAll<HTMLElement>('li.rule')].map((r) => [r.dataset.rule, r.dataset.state]);
     expect(rules).toEqual([
@@ -84,9 +86,6 @@ describe('architecture page', () => {
     ]);
     expect(held.querySelector('li.rule[data-rule="a/x"] .chip')!.classList.contains('ok')).toBe(true);
     expect(held.querySelector('li.rule[data-rule="a/y"] .chip')!.classList.contains('wait')).toBe(true);
-    const untested = held.querySelector('.untested')!;
-    expect(untested.textContent).toContain('Partly judgement.');
-    expect(held.querySelector('ul')!.compareDocumentPosition(untested) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(view.querySelector('section[data-sec=cost]')!.textContent).toContain('counted apart from the capabilities');
     const d = view.querySelector<HTMLDetailsElement>('section[data-sec=workarounds] details')!;
     expect(d.querySelector('summary')!.textContent).toBe('Gate misfires');
@@ -109,10 +108,10 @@ describe('architecture page', () => {
     expect([...known.querySelectorAll<HTMLElement>('li.rule')].map((r) => r.dataset.state)).toEqual(['unknown', 'unknown']);
   });
 
-  it('an entry without rules or untested text, and an unknown slug', () => {
+  it('an entry without rules, and an unknown slug', () => {
     const held = renderConstraint(architecture(), 'g', page()).querySelector('section[data-sec=held]')!;
     expect(held.querySelectorAll('li.rule')).toHaveLength(0);
-    expect(held.textContent).toContain('A judgement.');
+    expect(held.textContent).toContain('No rule enforces it.');
     expect(renderConstraint(architecture(), 'zzz', page()).textContent).toContain('zzz');
   });
 });
@@ -168,5 +167,19 @@ describe('architecture decide', () => {
     // Without the Worker's command, the note still gives one.
     const bare = await decide('/b', 'architecture', 'e', 'v', 'low', 'cut', { post: async () => answer(422, { error: 'signed' }), reload: vi.fn(async () => false) });
     expect(bare.command).toBe('clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept');
+  });
+});
+
+// req:web.views/repo-markdown@53adc355
+describe('repo markdown in the architecture views', () => {
+  it('a statement in the list and the entry on the page show code, no backtick and no onerror', () => {
+    const a = architecture();
+    a.architecture[0].statement = 'Run `clm land` <img src=x onerror=alert(1)>';
+    a.architecture[0].text = '### Constraint: e\nRun `clm land` <img src=x onerror=alert(1)>';
+    for (const view of [renderArchitecture(a, list()), renderConstraint(a, 'e', page())]) {
+      expect(view.querySelector('code')?.textContent).toBe('clm land');
+      expect(view.textContent).not.toContain('`');
+      expect(view.innerHTML).not.toContain('onerror');
+    }
   });
 });

@@ -6,7 +6,7 @@
   --accent:#8b9cff;--accent-bg:#8b9cff1f;--accent-ring:#8b9cff2e;--on-accent:#0b0e14;--accent-grad:linear-gradient(180deg,#9aa9ff,#7d8ff7);
   --green:#3ddc97;--green-bg:#3ddc971a;--amber:#f5b942;--amber-bg:#f5b9421c;
   --sky:#5cc8ff;--sky-bg:#5cc8ff1a;--rose:#ff6b8a;--rose-bg:#ff6b8a1c;
-  --del-text:#ffb1c1;--ins-text:#a6f3cf;--edge:#3a4559;--grid:#ffffff10;--shadow:0 8px 24px #0008;--tabshadow:0 1px 3px #0006;
+  --del-text:#ffb1c1;--ins-text:#a6f3cf;--edge:#3a4559;--edge-in:#c084fc;--edge-out:#ff8a4c;--grid:#ffffff10;--shadow:0 8px 24px #0008;--tabshadow:0 1px 3px #0006;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -16,7 +16,7 @@
   --accent:#4f5fe8;--accent-bg:#4f5fe814;--accent-ring:#4f5fe826;--on-accent:#ffffff;--accent-grad:linear-gradient(180deg,#6170f0,#4757e0);
   --green:#0e9f65;--green-bg:#0e9f6514;--amber:#b7791f;--amber-bg:#d9921a17;
   --sky:#0a8bd0;--sky-bg:#0a8bd014;--rose:#dc3558;--rose-bg:#dc355812;
-  --del-text:#b4233f;--ins-text:#0b7a4c;--edge:#c3cad8;--grid:#0000000d;--shadow:0 8px 24px #1a22381a;--tabshadow:0 1px 3px #1a223822;
+  --del-text:#b4233f;--ins-text:#0b7a4c;--edge:#c3cad8;--edge-in:#9333ea;--edge-out:#ea580c;--grid:#0000000d;--shadow:0 8px 24px #1a22381a;--tabshadow:0 1px 3px #1a223822;
   color-scheme: light;
 }
 }
@@ -92,7 +92,7 @@ del{background:var(--rose-bg);color:var(--del-text);text-decoration:line-through
 ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border-radius:3px;padding:0 2px}
 
 /* graph */
-.gwrap{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:18px;align-items:start}
+.gwrap{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;align-items:start}
 /* --graph-h is set by fit.ts: from the canvas's top to the window's bottom, or the bar's
    top on phones (web/graph-fills-height). */
 .canvas{position:relative;height:var(--graph-h,520px);border-radius:14px;background:var(--surface);border:1px solid var(--border);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:18px 18px;overflow:hidden;touch-action:none}
@@ -100,6 +100,10 @@ ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border
 .stage svg{position:absolute;inset:0;overflow:visible}
 .e{fill:none;stroke:var(--edge);stroke-width:1.4}
 .e.eh{stroke:var(--accent);stroke-width:1.8;opacity:.9}
+/* A selected component's edges: from what depends on it, to what it depends on, the rest dimmed. */
+.e.ein{stroke:var(--edge-in);stroke-width:2;opacity:1}
+.e.eout{stroke:var(--edge-out);stroke-width:2;opacity:1}
+.e.edim{opacity:.2}
 .n{position:absolute;width:150px;height:66px;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:7px 10px;cursor:pointer;transition:border-color .15s;text-align:left;color:var(--text)}
 .n:hover,.n.sel{border-color:var(--accent)}
 .n .t,.gh .t{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px;overflow:hidden;white-space:nowrap}
@@ -130,6 +134,10 @@ ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border
 .root{position:absolute;left:14px;top:12px;font-size:12px;color:var(--muted)}
 .zoom{position:absolute;right:12px;top:10px;display:flex;flex-direction:column;gap:6px}
 .zoom button{width:32px;height:32px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--muted);cursor:pointer}
+.insp.closed{display:none}
+.insp .close{position:absolute;top:8px;right:10px;width:32px;height:32px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-size:18px;line-height:1;cursor:pointer;z-index:1}
+.insp a.mini{display:block;color:inherit;text-decoration:none}
+.insp a.mini:hover{border-color:var(--accent)}
 .insp .sec{padding:16px 18px}
 .insp .sec+.sec{border-top:1px solid var(--border)}
 .mini{border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-top:8px;font-size:12.5px;color:var(--body)}
@@ -173,9 +181,6 @@ ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border
 .fbform .err:empty{display:none}
 .newprop{margin:0 0 14px}
 .newprop .btn.propose{padding:8px 14px;font-size:13.5px}
-.picker{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px}
-.picker .note{margin:0 4px 0 0;flex-basis:100%}
-.picker label{cursor:pointer}
 .proposed .prop{margin-top:10px}
 .proposed .prop .btn.withdraw{margin-top:8px;padding:4px 10px;font-size:12.5px}
 .changes-held{margin-top:8px;padding:8px 10px;border-radius:9px;background:var(--rose-bg);color:var(--rose);font-size:13px}
@@ -251,7 +256,10 @@ ins{background:var(--green-bg);color:var(--ins-text);text-decoration:none;border
 .colh{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;margin:0 4px 10px}
 .colh .c{color:var(--muted);font-weight:500}
 .bi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px}
-.bi .ttl{font-weight:550;font-size:13.5px;margin-bottom:8px}
+.bi .ttl{display:block;font-weight:550;font-size:13.5px;margin-bottom:8px;color:var(--text);text-decoration:none}
+.bi a.ttl:hover{color:var(--accent)}
+.bipage .back{color:var(--muted);font-size:13px;text-decoration:none}
+.capage .md{margin:8px 0}
 .bi .slug{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--faint)}
 .bi .blocks{font-size:12px;color:var(--amber);margin-top:6px}
 .filter{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
@@ -277,7 +285,6 @@ table.caps td a{color:var(--text);text-decoration:none}
 .cbar i{display:block;height:100%;background:var(--accent)}
 .cbar.flag i{background:var(--rose)}
 .capage .back{color:var(--muted);font-size:13px;text-decoration:none}
-.capage .statement{color:var(--body);margin:0 0 8px}
 .csec{margin:16px 0}
 .csec h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 6px;font-weight:650}
 .csec p,.csec ul{margin:4px 0;color:var(--body)}
@@ -329,11 +336,11 @@ table.caps td a{color:var(--text);text-decoration:none}
   .capage .note code,.capabilities .note{overflow-wrap:anywhere}
   /* The inspector is a bottom sheet. */
   .insp{position:fixed;left:0;right:0;bottom:calc(62px + env(safe-area-inset-bottom));max-height:55vh;overflow-y:auto;border-radius:20px 20px 0 0;box-shadow:0 -10px 30px #0006;z-index:18}
-  .insp.closed{display:none}
   .insp .grab{width:38px;height:4px;border-radius:4px;background:var(--border2);margin:8px auto 0}
 }
 @media (min-width: 900px) {
   .mtop{display:none}
   .insp .grab{display:none}
-  .insp{max-height:var(--graph-h,520px);overflow-y:auto}
+  /* The inspector is a drawer over the graph from the right edge, never beside it. */
+  .insp{position:fixed;top:0;right:0;bottom:0;width:min(640px,90vw);max-height:100vh;overflow-y:auto;border-radius:0;box-shadow:var(--shadow);z-index:18}
 }

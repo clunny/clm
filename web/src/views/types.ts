@@ -426,6 +426,8 @@ export interface Cost {
   decisions: Decided[];
   /** At least one flag is unsettled. */
   flagged: boolean;
+  /** Its entry's Markdown (`effort/entry-text`), shown in full on its page. */
+  text: string;
 }
 
 /** `GET .../capabilities` (web.worker/capabilities). */
@@ -471,6 +473,8 @@ export interface Constraint {
   decisions: Decided[];
   /** At least one flag is unsettled. */
   flagged: boolean;
+  /** Its entry's Markdown (`effort/entry-text`), shown in full on its page. */
+  text: string;
 }
 
 /** `GET .../architecture` (web.worker/architecture). */

@@ -7,14 +7,14 @@
 
 import './styles.css';
 import { Fetched, HttpError, SignedOut, apiBase, get, post, send } from './views/api';
-import { Proposing, renderBacklog, waiting } from './views/backlog';
+import { Proposing, renderBacklog, renderBacklogItem, waiting } from './views/backlog';
 import { renderArchitecture, renderConstraint } from './views/architecture';
 import { Layer, ListOptions, Note, PageOptions, decide, renderCapabilities, renderCapability } from './views/capabilities';
 import { chip, div, el } from './views/dom';
 import { PREPARING_MS, STALE_MS, classify, failureText, retryDelay } from './errors';
 import { fitGraphs } from './fit';
 import { FullDocument, FullState, renderFullDocument } from './views/full-document';
-import { Viewport, layoutGraph, queueStates, renderGraph, ringGraph } from './views/graph';
+import { Viewport, layoutGraph, queueStates, renderGraph, ringGraph, traceEdges } from './views/graph';
 import { Switch, renderImplementation } from './views/implementation';
 import { renderInspector } from './views/inspector';
 import { LiveSocket } from './live/live';
@@ -306,9 +306,11 @@ async function graphPage(base: string, snap: Snapshot, touched: Set<string>, key
   const layout = await layoutGraph(snap.spec);
   let prs: Review[] = [];
   let loading: Promise<void> | null = null;
+  const [owner = '', name = ''] = snap.repo.split('/');
+  const itemHref = (slug: string) => href(owner, name, 'backlog', slug);
   const inspector = () =>
     selectedNode
-      ? renderInspector(snap, held.impl, prs, selectedNode, () => select(null))
+      ? renderInspector(snap, held.impl, prs, selectedNode, () => select(null), itemHref)
       : el('aside', { class: 'insp card closed' }, div('sec', div('note', 'Select a component to see its contract, changes, work and backlog.')));
   // Selecting a node swaps only the inspector, so the graph keeps its pan and zoom.
   const graph = renderGraph(snap, touched, layout, (id) => select(id), selectedNode ?? undefined, viewports.get(key), (v) => viewports.set(key, v), queueStates(held.impl));
@@ -321,6 +323,7 @@ async function graphPage(base: string, snap: Snapshot, touched: Set<string>, key
   function select(id: string | null) {
     selectedNode = id;
     graph.querySelectorAll<HTMLElement>('.n, .grp').forEach((n) => n.classList.toggle('sel', n.dataset.node === id));
+    traceEdges(graph, id);
     redraw();
     loading ??= openPrs()
       .then((r) => {
@@ -527,10 +530,10 @@ async function reloadImpl(base: string) {
 
 /** Proposes an item for the backlog (web/propose-from-backlog): null once the Worker took it
  * and the implementation state was asked for again, else why not, for the form to show. */
-function propose(base: string, title: string, body: string, nodes: string[]): Promise<string | null> {
+function propose(base: string, title: string, body: string): Promise<string | null> {
   return whileWriting(async () => {
     try {
-      const res = await post(`${base}/proposals`, { title, body, nodes });
+      const res = await post(`${base}/proposals`, { title, body, nodes: [] });
       if (res.ok) {
         await reloadImpl(base);
         return null;
@@ -564,14 +567,20 @@ function withdraw(base: string, id: string): Promise<string | null> {
 /** The backlog, drawn from the snapshot first and marked with what holds each item once
  * the implementation state arrives (web/backlog-taken), with New proposal and Proposed
  * (web/propose-from-backlog). */
-function backlogPage(base: string, snap: Snapshot): HTMLElement {
+function backlogPage(base: string, snap: Snapshot, route: Route): HTMLElement {
+  const { owner = '', repo = '' } = route;
+  const back = href(owner, repo, 'backlog');
+  if (route.item !== undefined) {
+    const slug = route.item;
+    return withImpl(base, (impl) => renderBacklogItem(snap, slug, impl?.taken ?? null, back));
+  }
   if (backlogFilter.repo !== snap.repo) backlogFilter = { repo: snap.repo, node: null };
   return withImpl(base, (impl) => {
     const wrap = div('');
     const proposing: Proposing = {
       proposals: impl ? (impl.proposals ?? []) : null,
       offline: offline(),
-      onPropose: (title, body, nodes) => propose(base, title, body, nodes),
+      onPropose: (title, body) => propose(base, title, body),
       onWithdraw: (id) => withdraw(base, id),
     };
     // Filtering redraws only the backlog, from what is already loaded.
@@ -586,6 +595,7 @@ function backlogPage(base: string, snap: Snapshot): HTMLElement {
             draw();
           },
           proposing,
+          (slug) => href(owner, repo, 'backlog', slug),
         ),
       );
     draw();
@@ -716,7 +726,7 @@ async function page(route: Route, snap: Snapshot, branches: SpecBranch[], ctx: P
     case 'build':
       return held.impl ? buildPage(held.impl, snap) : errorView(new Error('no implementation state'));
     case 'backlog':
-      return backlogPage(base, snap);
+      return backlogPage(base, snap, route);
     case 'capabilities':
       return held.caps ? reviewPage('capabilities', route, base) : errorView(new Error('no capabilities report'));
     case 'architecture':

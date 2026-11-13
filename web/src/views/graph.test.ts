@@ -1,6 +1,6 @@
 // req:web.views/graph-view@7bdf4eb6
 import { describe, expect, it } from 'vitest';
-import { layoutGraph, queueStates, renderGraph, ringGraph } from './graph';
+import { layoutGraph, queueStates, renderGraph, ringGraph, traceEdges } from './graph';
 import { flight, implementation, nestedSnapshot, node, snapshot, spec } from './fixtures';
 import type { FlightNode, RequirementView } from './types';
 
@@ -100,7 +100,7 @@ describe('graph view', () => {
   it('selecting a node reports it, a nested group too', async () => {
     const snap = nestedSnapshot();
     let picked = '';
-    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), (id) => (picked = id));
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), (id) => (picked = id ?? ''));
     g.querySelector<HTMLElement>('.n[data-node="check.drift"]')!.click();
     expect(picked).toBe('check.drift');
     g.querySelector<HTMLElement>('.grp[data-node=check] .gh')!.click();
@@ -361,3 +361,69 @@ describe('zoom at the pointer', () => {
     expect(view().scale).toBe(0.3);
   });
 });
+
+// req:web.views/edge-direction@f5c19585
+describe('edge direction', () => {
+  /** `b` depends on `a`, `a` on `c`, and `d` on `c`. */
+  function chain() {
+    const nodes = [
+      node('root', { parent: null }),
+      node('a', { depends_on: ['c'] }),
+      node('b', { depends_on: ['a'] }),
+      node('c'),
+      node('d', { depends_on: ['c'] }),
+    ];
+    return snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
+  }
+  const kind = (g: HTMLElement, from: string, to: string) => {
+    const p = g.querySelector(`path.e[data-from=${from}][data-to=${to}]`)!;
+    return ['ein', 'eout', 'edim'].filter((c) => p.classList.contains(c));
+  };
+  const legend = (g: HTMLElement) => [...g.querySelectorAll('.legend .edge-in, .legend .edge-out')].filter((e) => !(e as HTMLElement).hidden).map((e) => e.textContent);
+
+  it('traced: a selected component draws its dependents incoming, its dependencies outgoing, the rest dimmed, and the legend names both', async () => {
+    const snap = chain();
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {}, 'a');
+    expect(kind(g, 'b', 'a')).toEqual(['ein']);
+    expect(kind(g, 'a', 'c')).toEqual(['eout']);
+    expect(kind(g, 'd', 'c')).toEqual(['edim']);
+    expect(legend(g)).toHaveLength(2);
+    expect(g.querySelector('path[data-from=b][data-to=a]')!.getAttribute('marker-end')).toBe('url(#arr-in)');
+  });
+
+  it('nothing selected: no edge is in either colour or dimmed, and the legend names neither', async () => {
+    const snap = chain();
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
+    for (const [f, t] of [['b', 'a'], ['a', 'c'], ['d', 'c']]) expect(kind(g, f, t)).toEqual([]);
+    expect(legend(g)).toEqual([]);
+  });
+
+  it('selecting and deselecting in place retraces the edges', async () => {
+    const snap = chain();
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), () => {});
+    traceEdges(g, 'c');
+    expect(kind(g, 'a', 'c')).toEqual(['ein']);
+    expect(kind(g, 'd', 'c')).toEqual(['ein']);
+    expect(kind(g, 'b', 'a')).toEqual(['edim']);
+    traceEdges(g, null);
+    expect(kind(g, 'a', 'c')).toEqual([]);
+    expect(legend(g)).toEqual([]);
+  });
+});
+
+// req:web.views/inspector-overlay@ca741eb0 (selecting the selected component again)
+describe('selecting the selected component again', () => {
+  it('asks to clear the selection, and a different component selects it', async () => {
+    const snap = chain3();
+    const picks: (string | null)[] = [];
+    const g = renderGraph(snap, new Set(), await layoutGraph(snap.spec), (id) => picks.push(id), 'a');
+    g.querySelector<HTMLElement>('.n[data-node=a]')!.click();
+    g.querySelector<HTMLElement>('.n[data-node=b]')!.click();
+    expect(picks).toEqual([null, 'b']);
+  });
+});
+
+function chain3() {
+  const nodes = [node('root', { parent: null }), node('a'), node('b', { depends_on: ['a'] })];
+  return snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
+}

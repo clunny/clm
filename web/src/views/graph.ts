@@ -140,6 +140,24 @@ const LEGEND: [string, string][] = [
   ['var(--accent)', 'touched by PR'],
 ];
 
+/** Traces the edges of `selected` (web.views/edge-direction): each edge from a component
+ * that depends on it in the incoming colour, each edge to a component it depends on in the
+ * outgoing colour, the others dimmed, and the legend naming the two colours; with none
+ * selected, every edge alike. Clears what an earlier call drew, so selecting redraws nothing
+ * and the graph keeps its pan and zoom. */
+export function traceEdges(graph: HTMLElement, selected: string | null) {
+  for (const p of graph.querySelectorAll<SVGPathElement>('path.e')) {
+    p.classList.remove('ein', 'eout', 'edim');
+    const kind = selected === null ? null : p.getAttribute('data-to') === selected ? 'in' : p.getAttribute('data-from') === selected ? 'out' : 'dim';
+    if (kind) p.classList.add(`e${kind}`);
+    p.setAttribute('marker-end', kind === 'in' || kind === 'out' ? `url(#arr-${kind})` : 'url(#arr)');
+  }
+  for (const k of ['in', 'out']) {
+    const entry = graph.querySelector<HTMLElement>(`.legend .edge-${k}`);
+    if (entry) entry.hidden = selected === null;
+  }
+}
+
 /** The queue state of each node that isn't converged, as the `flight` model gives it; none
  * before the implementation state arrives or while its coverage is indexing. */
 export function queueStates(impl: Implementation | null): Map<string, string> {
@@ -207,7 +225,7 @@ export function renderGraph(
   snap: Snapshot,
   touched: Set<string>,
   layout: Layout,
-  onSelect: (id: string) => void,
+  onSelect: (id: string | null) => void,
   selected?: string,
   view?: Viewport,
   onView?: (v: Viewport) => void,
@@ -225,6 +243,13 @@ export function renderGraph(
         'marker',
         { id: 'arr', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto' },
         svg('path', { d: 'M0,1L9,5L0,9z', style: 'fill:var(--edge)' }),
+      ),
+      ...(['in', 'out'] as const).map((k) =>
+        svg(
+          'marker',
+          { id: `arr-${k}`, viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto' },
+          svg('path', { d: 'M0,1L9,5L0,9z', style: `fill:var(--edge-${k})` }),
+        ),
       ),
     ),
     layout.edges.map((e) =>
@@ -244,6 +269,8 @@ export function renderGraph(
     if (n.node === selected) cls.push('sel');
     return cls.join(' ');
   };
+  /** Selecting the selected component again clears the selection; the shell moves the `sel` class. */
+  const pick = (id: string) => onSelect(canvas.querySelector<HTMLElement>('.sel')?.dataset.node === id ? null : id);
   const at = (id: string): Rect => layout.nodes.get(id) ?? { x: 0, y: 0, width: W, height: H };
   const label = (n: SpecNode) =>
     `${n.node}, ${n.status}, ${proven(snap, n)}${n.oversized === true ? ', oversized' : ''}${n.owners.length ? `, ${n.owners.join(' ')}` : ''}${touched.has(n.node) ? ', touched' : ''}`;
@@ -254,7 +281,7 @@ export function renderGraph(
     .map((n) => {
       const r = at(n.node);
       const head = el('div', { class: 'gh', role: 'button', tabindex: 0, title: n.title, 'aria-label': label(n), 'data-label': label(n) }, div('t', el('span', {}, cardName(n)), el('span', { class: 's' })), ...face(snap, n));
-      head.addEventListener('click', () => onSelect(n.node));
+      head.addEventListener('click', () => pick(n.node));
       return el('div', { class: classes(n, 'grp'), 'data-node': n.node, style: `left:${r.x}px;top:${r.y}px;width:${r.width}px;height:${r.height}px` }, head);
     });
   const cards = nodes
@@ -267,7 +294,7 @@ export function renderGraph(
         div('t', el('span', {}, cardName(n)), el('span', { class: 's' })),
         ...face(snap, n),
       );
-      card.addEventListener('click', () => onSelect(n.node));
+      card.addEventListener('click', () => pick(n.node));
       return card;
     });
   const stage = el('div', { class: 'stage', style: `width:${layout.width}px;height:${layout.height}px` }, lines, boxes, cards);
@@ -280,11 +307,14 @@ export function renderGraph(
       ...LEGEND.map(([colour, meaning]) =>
         el('span', {}, el('span', { class: 'dot', style: `background:${colour};margin:0` }), colour === 'var(--amber)' && nodes.some((n) => n.oversized === true) ? `${meaning} · oversized` : meaning),
       ),
+      el('span', { class: 'edge-in', hidden: true }, el('span', { class: 'dot', style: 'background:var(--edge-in);margin:0' }), 'depends on the selected'),
+      el('span', { class: 'edge-out', hidden: true }, el('span', { class: 'dot', style: 'background:var(--edge-out);margin:0' }), 'the selected depends on'),
       el('span', { class: 'other', hidden: true }, el('span', { class: 'dot', style: `background:${OTHER};margin:0` }), 'other queue state'),
       el('span', {}, '→ depends on'),
     ),
   );
   ringGraph(canvas, states);
+  traceEdges(canvas, selected ?? null);
   panZoom(canvas, stage, view, onView);
   return canvas;
 }

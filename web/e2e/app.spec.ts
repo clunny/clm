@@ -143,7 +143,7 @@ test('capabilities from 900 px: a table in the report order, ⚑ only filters, a
   await expect(page.locator('table.caps tr.cap')).toHaveCount(1);
   await page.locator('tr.cap[data-slug=a] a').click();
   await expect(page).toHaveURL(/#\/o\/a\/capabilities\/a$/);
-  await expect(page.locator('section[data-sec=why]')).toContainText('Without a, nothing works.');
+  await expect(page.locator('section[data-sec=entry]')).toContainText('Without a, nothing works.');
   await expect(page.locator('.sidebar .nv[data-view=capabilities]')).toHaveClass(/on/);
 });
 
@@ -188,7 +188,7 @@ test.describe('architecture list', () => {
     await expect(page.locator('table.caps tr.cap')).toHaveCount(1);
     await page.locator('tr.cap[data-slug=e] a').click();
     await expect(page).toHaveURL(/#\/o\/a\/architecture\/e$/);
-    await expect(page.locator('section[data-sec=held]')).toContainText('Partly judgement.');
+    await expect(page.locator('section[data-sec=entry]')).toContainText('Partly judgement.');
   });
 
   test('indexing: the proof reads ? / 2 and the note says coverage is still indexing', async ({ page, context }) => {
@@ -230,7 +230,7 @@ test.describe('deciding an architectural constraint', () => {
     mock.fail(ARCH_DECIDE, 409);
     mock.onPost = () => {
       const a = architecture();
-      a.architecture[0] = { ...a.architecture[0], version: 'feedbeef', statement: 'CLM SHALL e, reworded.' };
+      a.architecture[0] = { ...a.architecture[0], version: 'feedbeef', text: '### Constraint: e\nCLM SHALL e, reworded.' };
       mock.routes[ARCHITECTURE] = a;
     };
     await page.goto('/app/#/o/a/architecture/e');
@@ -318,7 +318,7 @@ test.describe('deciding a capability', () => {
     mock.fail(DECIDE, 409);
     mock.onPost = () => {
       const c = capabilities();
-      c.report.capabilities[1] = cost('a', 2, { version: 'feedbeef', statement: 'A person can a, reworded.' });
+      c.report.capabilities[1] = cost('a', 2, { version: 'feedbeef', text: '### Capability: a\nA person can a, reworded.' });
       mock.routes[CAPABILITIES] = c;
     };
     await page.goto('/app/#/o/a/capabilities/a');
@@ -446,7 +446,8 @@ test.describe('graph', () => {
     await page.goto('/app/#/o/a/graph');
     await page.locator('.n[data-node=b]').click();
     await expect(page.locator('.insp .inpr')).toContainText('spec/c');
-    await page.locator('.n[data-node=a]').click();
+    // The drawer may cover the card, so tap it without a pointer.
+    await page.locator('.n[data-node=a]').dispatchEvent('click');
     await expect(page.locator('.insp .inpr')).toContainText('No open PR changes it.');
   });
 });
@@ -858,7 +859,7 @@ test.describe('Request changes', () => {
   });
 });
 
-// req:web/propose-from-backlog@9b8191c8
+// req:web.views/propose-from-backlog@9531d23b
 test.describe('proposals', () => {
   const IMPL = 'GET /api/repos/o/a/implementation';
   const proposal = (over = {}) => ({ id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true, ...over });
@@ -871,7 +872,6 @@ test.describe('proposals', () => {
     const form = page.locator('.fbform.proposal');
     await form.locator('input[name=title]').fill('Export CSV');
     await form.locator('textarea').fill('Let me export.');
-    await form.locator('.picker input[value="a"]').check();
     // The answer is held, so the second tap lands while the first is in flight.
     mock.hold(PROPOSALS);
     await form.locator('button.send').click();
@@ -883,8 +883,7 @@ test.describe('proposals', () => {
     await expect(row).toContainText('Export CSV');
     await expect(row).toContainText('alice');
     await expect(row).toContainText('next build files it');
-    await expect(row.locator('.pill')).toHaveText(['a']);
-    expect(mock.posts).toEqual([{ key: PROPOSALS, body: '{"title":"Export CSV","body":"Let me export.","nodes":["a"]}' }]);
+    expect(mock.posts).toEqual([{ key: PROPOSALS, body: '{"title":"Export CSV","body":"Let me export.","nodes":[]}' }]);
     expect(mock.requests.filter((r) => r === IMPL).length).toBeGreaterThanOrEqual(2);
   });
 
@@ -996,4 +995,24 @@ test('the sign-in page says CLM works without the web app and links to early acc
   await expect(card.locator('a', { hasText: 'Request early access' })).toHaveAttribute('href', 'https://github.com/clunny/clm/issues/new?template=early-access.yml');
   await expect(card.locator('a', { hasText: 'Sign in with GitHub' })).toHaveAttribute('href', '/auth/login');
   await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
+});
+
+// req:web.views/backlog-view@c6475681
+test.describe('a backlog item opens its page', () => {
+  test('tapping an item in the Backlog and in the inspector shows its page', async ({ page, context }) => {
+    await mockApi(context);
+    await page.goto('/app/#/o/a/backlog');
+    await page.locator('.bi[data-slug=later] a.ttl').click();
+    await expect(page).toHaveURL(/#\/o\/a\/backlog\/later$/);
+    await expect(page.locator('.bipage h1')).toHaveText('Do it later');
+    await page.goto('/app/#/o/a/backlog/gone');
+    await expect(page.locator('.bipage')).toContainText("isn't in the backlog");
+    await page.locator('.bipage .empty a').click();
+    await expect(page).toHaveURL(/#\/o\/a\/backlog$/);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/app/#/o/a/graph');
+    await page.locator('.n[data-node=b]').click();
+    await page.locator('.insp .backlog a.mini').click();
+    await expect(page).toHaveURL(/#\/o\/a\/backlog\/later$/);
+  });
 });

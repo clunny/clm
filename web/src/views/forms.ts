@@ -9,7 +9,6 @@ import { div, el } from './dom';
 export interface Draft {
   text: string;
   title?: string;
-  nodes?: string[];
 }
 
 /** The open forms' drafts, by form key: a form is open while it has one. */

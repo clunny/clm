@@ -25,6 +25,8 @@ export function renderInspector(
   prs: Review[],
   id: string,
   onClose?: () => void,
+  /** The in-app link to a backlog item's page; without it an item is plain text. */
+  itemHref?: (slug: string) => string,
 ): HTMLElement {
   const n = snap.nodes.find((x) => x.id === id);
   const s = snap.spec.nodes.find((x) => x.node === id);
@@ -52,13 +54,11 @@ export function renderInspector(
   const changes = snap.changes.filter((c) => c.nodes.includes(id));
   const backlog = snap.backlog.filter((b) => b.nodes.includes(id));
 
-  return el(
+  const aside = el(
     'aside',
     { class: 'insp card' },
     div('grab'),
-    onClose
-      ? el('button', { type: 'button', class: 'btn', style: 'float:right;margin:8px', onclick: onClose as EventListener }, 'Close')
-      : '',
+    onClose ? el('button', { type: 'button', class: 'close', 'aria-label': 'Close', onclick: onClose as EventListener }, '×') : '',
     head,
     sec('In open PRs', 'inpr', ...(inPrs.length ? inPrs : [none('No open PR changes it.')])),
     sec('Contract', 'contract', n ? md(n.contract) : none('Not in this snapshot.')),
@@ -80,9 +80,26 @@ export function renderInspector(
     sec(
       'Backlog',
       'backlog',
-      ...(backlog.length ? backlog.map((b) => div('mini', el('b', {}, b.slug, chip('mute', b.kind)), b.title)) : [none('None.')]),
+      ...(backlog.length
+        ? backlog.map((b) => {
+            const name = el('b', {}, b.slug, chip('mute', b.kind));
+            return itemHref ? el('a', { class: 'mini', href: itemHref(b.slug) }, name, b.title) : div('mini', name, b.title);
+          })
+        : [none('None.')]),
     ),
   );
+  if (onClose) closeOnEscape(aside, onClose);
+  return aside;
+}
+
+/** Closes `aside` on Escape for as long as it is on the page: a listener whose inspector
+ * has been replaced or removed takes itself off at the next key. */
+function closeOnEscape(aside: HTMLElement, onClose: () => void) {
+  const onKey = (e: KeyboardEvent) => {
+    if (!aside.isConnected) return document.removeEventListener('keydown', onKey);
+    if (e.key === 'Escape') onClose();
+  };
+  document.addEventListener('keydown', onKey);
 }
 
 /** Node `id`'s queue state and pending count as the `flight` model gives them, and each

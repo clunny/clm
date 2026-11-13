@@ -2,7 +2,8 @@
 // review under `prs` (a spec branch's, `prs/<branch>` with the branch name as one encoded
 // segment), followed by `/graph` or `/full/<path>`
 // for its Graph tab or a file in full, `build`, `backlog`, `capabilities`, with a
-// capability's page under it (`capabilities/<slug>`), or `architecture`, with an
+// capability's page under it (`capabilities/<slug>`), or `backlog`, with a backlog item's
+// page under it (`backlog/<slug>`), or `architecture`, with an
 // architectural constraint's page under it (`architecture/<slug>`).
 
 export type View = 'graph' | 'prs' | 'build' | 'backlog' | 'capabilities' | 'architecture';
@@ -23,6 +24,8 @@ export interface Route {
   capability?: string;
   /** The architectural constraint whose page is shown (web/architecture-page). */
   entry?: string;
+  /** The backlog item whose page is shown. */
+  item?: string;
 }
 
 function decode(part: string): string {
@@ -40,6 +43,7 @@ export function parseRoute(hash: string): Route {
   const route: Route = { owner, repo, view: VIEWS.includes(view as View) ? (view as View) : 'graph' };
   if (route.view === 'capabilities' && target) route.capability = target;
   if (route.view === 'architecture' && target) route.entry = target;
+  if (route.view === 'backlog' && target) route.item = target;
   if (route.view !== 'prs' || !target) return route;
   if (!target.startsWith('spec/')) return route;
   route.review = { branch: target };

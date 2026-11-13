@@ -6,6 +6,7 @@
 
 import { SignedOut } from './api';
 import { Child, chip, code, div, el } from './dom';
+import { md } from './markdown';
 import type { Capabilities, Cost, Decided, DecisionKind, Flag, Rating } from './types';
 
 /** `850`, `85k` or `1.3M`, as `clm capabilities` prints them. */
@@ -70,7 +71,7 @@ export function renderCapabilities(data: Capabilities, o: ListOptions): HTMLElem
         el(
           'tr',
           { class: c.flagged ? 'cap flag' : 'cap', 'data-slug': c.slug },
-          el('td', {}, el('a', { href: o.link(c.slug) }, ...name(c)), div('note', c.statement)),
+          el('td', {}, el('a', { href: o.link(c.slug) }, ...name(c)), div('note', md(c.statement))),
           el('td', {}, bar(c), spend(c)),
           el('td', {}, String(unsettled(c))),
           el('td', {}, without(c)),
@@ -86,7 +87,7 @@ export function renderCapabilities(data: Capabilities, o: ListOptions): HTMLElem
         'a',
         { class: c.flagged ? 'ccard card flag' : 'ccard card', href: o.link(c.slug), 'data-slug': c.slug },
         div('row', el('span', {}, ...name(c)), el('small', {}, `${c.rules.length} rules`)),
-        div('note', c.statement),
+        div('note', md(c.statement)),
         bar(c),
         div('row note', el('span', {}, spend(c)), el('span', {}, `${unsettled(c)} workarounds`)),
         div('note', `Live without? ${without(c)} · ${latest(c)}`),
@@ -236,8 +237,7 @@ export function renderCapability(data: Capabilities, slug: string, o: PageOption
     'capage',
     back,
     div('head', div('', el('h1', {}, `${c.slug}${c.flagged ? ' ⚑' : ''}`), div('meta', `${c.rules.length} rules`, ...c.nodes.map((n) => chip('node', n))))),
-    el('p', { class: 'statement' }, c.statement),
-    section('why', 'Why we need it', el('p', {}, c.why)),
+    section('entry', 'The capability', md(c.text)),
     section(
       'cost',
       'What it costs',
