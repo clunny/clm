@@ -12,7 +12,9 @@ A `clm land` whose check passed used to throw it away when `main` had moved befo
 
 **Why lands with nothing to check don't queue behind checks.** Making every land wait for the land lock would also stop `main` moving under a check, and is simpler. But a land with nothing to check lands in seconds today and would then wait minutes; the human asked for a way to let it through without starving the others (2026-11-13). With the overlap rule its push costs the land that is checking nothing, or a few tests.
 
-**Why the turn is in arrival order.** A land that has finished its check must not lose the turn again and again to lands arriving after it, which an operating system's lock allows.
+**Why the turn is in arrival order.** A land that has finished its check must not lose the turn again and again to lands arriving after it, which an operating system's lock allows. `ordered-lock-queue` puts `P1` work first on the land and check locks; that is deliberately not applied here, since a turn lasts seconds.
+
+**An older `clm`.** It takes no push turn, so its lands can still move `main` under one. The land holding the turn then goes on as for a push from another clone: it re-checks the overlap.
 
 **A waiting land prepares again.** A land that waited for the land lock merges with `main` as it is once it holds the lock, on the readers' path too. It checked a stale merge there before, which is what made every attempt of the starved land lose.
 

@@ -85,6 +85,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Backlog kinds:** `idea` (a possible change), `bug` (behaviour that's wrong), `question` (a fact a human must give), `human-task` (a step only a human can take, such as creating an account), `deferred` (decided work left for later) and `workaround` (a build's flag that a requirement needed a workaround, `clm workaround`).
 - **Priority:** `P1` to `P5` on items and changes, with few slots at the top; it orders work and never makes work ready or unready; in the land queue, higher-priority lands take their turns first (`P1` before everything).
 - **Triage:** grouping the backlog into units of design work, most urgent first (`clm triage`).
+- **Push turn:** the short turn every `clm land` on a clone holds from its last fetch of `main` to its push, one land at a time, so no other land of the clone moves `main` in between; a land waiting for it prints `waiting for another land's push`.
 - **Proposals:** the changes that hold backlog items, and the live claims on items (`clm proposals`).
 - **Defect:** a problem with CLM itself, reported with `clm defect`.
 - **Health:** one advisory report on the project: checks, pending work, sizes, stale questions and what to reconsider (`clm health`).
