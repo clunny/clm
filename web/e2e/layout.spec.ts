@@ -2,6 +2,7 @@
 
 import { Page, expect, test } from '@playwright/test';
 import { ARCHITECTURE, CAPABILITIES, mockApi } from './mock';
+import { capabilities, cost } from '../src/views/fixtures';
 
 const SNAPSHOT = 'GET /api/repos/o/a/snapshot';
 
@@ -205,5 +206,42 @@ test.describe('the inspector is an overlay', () => {
     await expect(page.locator('.insp:not(.closed)')).toBeVisible();
     await page.locator('.n[data-node=b]').dispatchEvent('click');
     await expect(page.locator('.insp.closed')).toHaveCount(1);
+  });
+});
+
+// req:web/markdown-styles@cf566a22
+test.describe('Markdown from the repository', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('a long code line and a wide table scroll within their boxes, in JetBrains Mono, and the page does not scroll sideways', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
+    const wide = ['alphabetical', 'bravo-column', 'charlie-column', 'delta-column', 'echo-column'];
+    const text = ['### Capability: a', '', 'A person can a, with `inline` code.', '', '```', 'x'.repeat(300), '```', '', row(wide), row(wide.map(() => '---')), row(wide.map((w) => w.repeat(2))), '', '> quoted', '', '- one', '- two', '', '[a link](https://example.com/x)'].join('\n');
+    const c = capabilities();
+    c.report.capabilities[1] = cost('a', 2, { text });
+    mock.routes[CAPABILITIES] = c;
+    await page.goto('/app/#/o/a/capabilities/a');
+    const pre = page.locator('.md pre').first();
+    await expect(pre).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // The code block is wider than its box and scrolls inside it.
+    const box = await pre.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth, overflowX: getComputedStyle(e).overflowX }));
+    expect(box.scroll).toBeGreaterThan(box.client);
+    expect(['auto', 'scroll']).toContain(box.overflowX);
+    // The table is wider than its box and scrolls inside it.
+    const table = await page.locator('.md table').first().evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth, overflowX: getComputedStyle(e).overflowX }));
+    expect(table.scroll).toBeGreaterThan(table.client);
+    expect(['auto', 'scroll']).toContain(table.overflowX);
+    // Headings, lists, quotes and links carry their own styles.
+    const style = (sel: string, prop: string) => page.locator(sel).first().evaluate((e, p) => getComputedStyle(e).getPropertyValue(p), prop);
+    expect(await style('.md h3', 'font-weight')).toBe('600');
+    expect(parseFloat(await style('.md ul', 'padding-left'))).toBeGreaterThan(0);
+    expect(parseFloat(await style('.md blockquote', 'border-left-width'))).toBeGreaterThan(0);
+    expect(await style('.md a', 'text-decoration-line')).toBe('underline');
+    // Code is set in JetBrains Mono.
+    expect(await page.locator('.md code').first().evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
+    expect(await pre.evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
+    expect(await pre.locator('code').evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
   });
 });
