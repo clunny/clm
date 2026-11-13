@@ -251,7 +251,6 @@ dependencies = [
  "clm-init",
  "clm-land",
  "clm-ledger",
- "clm-loop",
  "clm-machine",
  "clm-model",
  "clm-orchestrator",

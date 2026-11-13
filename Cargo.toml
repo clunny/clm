@@ -48,7 +48,6 @@ clm-agent-harness = { path = "crates/clm-agent-harness" }
 clm-rename = { path = "crates/clm-rename" }
 clm-upgrade = { path = "crates/clm-upgrade" }
 clm-machine = { path = "crates/clm-machine" }
-clm-loop = { path = "crates/clm-loop" }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1"

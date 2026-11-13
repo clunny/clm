@@ -178,7 +178,7 @@ impl LoopFile {
         self.runs.iter().find(|r| r.name == name)
     }
 
-    pub fn run_mut(&mut self, name: &str) -> Option<&mut Run> {
+    pub(crate) fn run_mut(&mut self, name: &str) -> Option<&mut Run> {
         self.runs.iter_mut().find(|r| r.name == name)
     }
 }
