@@ -101,6 +101,7 @@ describe('runs', () => {
     expect(list[0]?.id).toBe('a1')
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('clear and resume empty the list; quitting does not', () => {
     expect(resetsOn('clear')).toBe(true)
     expect(resetsOn('resume')).toBe(true)
@@ -335,7 +336,7 @@ describe('drawing', () => {
     expect(text(flightLines(CHART, list, 61_000)).at(-1)).toMatch(/· Haiku 4\.5 ×2 · Opus 5\.5 ×1$/)
   })
 
-  // req:plugin.panel/build-row-lifecycle@2de7d406
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('a finished build and its subagents leave the rows at once; the totals still count them', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyStep(list, 'c1', 'claude-opus-5-5', undefined, usage(10_000))
@@ -351,7 +352,7 @@ describe('drawing', () => {
     expect(glyphs(flightLines(CHART, list, 0))).toEqual([])
   })
 
-  // req:plugin.panel/build-row-lifecycle@2de7d406
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('a failed build shows ✗ in rose and a Dismiss button, until the button is pressed', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
     const lines = flightLines(CHART, list, 0)
@@ -368,6 +369,7 @@ describe('drawing', () => {
     expect(glyphs(flightLines(CHART, resumed, 95_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test("a failed child of a finished build takes its parent's place, at the top level under its node", () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyComplete(list, 'c1', false, 80_000)
@@ -565,6 +567,7 @@ describe('hooks events', () => {
     expect(onToolCall(list, { tool: 'TodoWrite', todos: [] }, {})).toEqual(list)
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('session.end empties the list on clear and resume only; the rows tick while one runs', () => {
     const list = onSpawn([], spawn, { agentId: 'b1', model: 'm' }, 0)
     expect(onSessionEnd(list, 'clear')).toEqual([])
@@ -604,7 +607,7 @@ describe('waiting', () => {
     expect(all).toContain('agents')
   })
 
-  // req:plugin.panel/build-row-lifecycle@2de7d406
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('an answer while the engine lists the agent waiting leaves a waiting row whose time grows', () => {
     const list = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     expect(list[0]).toMatchObject({ status: 'waiting' })
@@ -623,7 +626,7 @@ describe('waiting', () => {
     expect(onComplete(build(), { agentId: 'b1', reason: 'max_turns' }, 9_000, 'waiting')[0]?.status).toBe('failed')
   })
 
-  // req:plugin.panel/build-row-lifecycle@2de7d406
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('a turn.start of a listed agent runs it again, drawn, keeping its tokens, dismissed or not', () => {
     let list = applyStep(build(), 'b1', 'claude-opus-5-5', undefined, usage(1_000_000))
     list = onComplete(list, { agentId: 'b1', reason: 'answer' }, 9_000, 'completed')
@@ -653,6 +656,7 @@ describe('waiting', () => {
     expect(stepped?.endedAt).toBeUndefined()
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('the 30-second reconciliation ends a waiting run the engine lists otherwise, and revives a lagging done one', () => {
     const waiting = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     const ended = reconcileWaiting(waiting, [{ id: 'b1', status: 'completed' }], 40_000)
@@ -676,7 +680,6 @@ describe('waiting', () => {
 
 describe('component-heading', () => {
   for (const heading of ['components', 'nodes']) {
-    // req:plugin.panel/component-heading@900ca215
     test(`build rows sit under the lines after the ${heading} heading`, () => {
       const chart = ansiLines(`${heading}\n  git  P5\n  init  P5\nchanges\n`)
       const rows = between(text(flightLines(chart, gitBuild(), 61_000)), '  git ', '  init ')
