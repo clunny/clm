@@ -526,7 +526,7 @@ Every implementation rule SHALL name what it serves: a capability or an architec
 - model/serves
 
 ### Constraint: path-ownership
-A component's build SHALL change only its own `paths`. Four exceptions: a build that removes from or adds to its component's Contract may make the compile-only and test-fixture fixes the removal or addition forces in other components' code, where that code's behaviour doesn't change, or, for a variant added to a type the other component matches exhaustively, the arm that selects the built code a requirement of that component names for that variant, naming each one in its pull request (`forced-fixes-cover-additions`); a build may re-cite, and bring up to the current text, a test in another component's `paths` that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`); and a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`); and a build whose requirement changes the text of a file `clm init` writes writes the `upgrade` migration that carries the change, as the `upgrade` requirement that needs it states it, brings `upgrade`'s tests that the new migration makes fail to what `upgrade`'s requirements as applied state, and names both in its pull request, since the upgrade corpus test fails a land of either half alone (`template-change-ships-its-migration`).
+A component's build SHALL change only its own `paths`. Five exceptions: a build that removes from or adds to its component's Contract may make the compile-only and test-fixture fixes the removal or addition forces in other components' code, where that code's behaviour doesn't change, or, for a variant added to a type the other component matches exhaustively, the arm that selects the built code a requirement of that component names for that variant, naming each one in its pull request (`forced-fixes-cover-additions`); a build may re-cite, and bring up to the current text, a test in another component's `paths` that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`); and a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`); and a build whose requirement changes the text of a file `clm init` writes writes the `upgrade` migration that carries the change, as the `upgrade` requirement that needs it states it, brings `upgrade`'s tests that the new migration makes fail to what `upgrade`'s requirements as applied state, and names both in its pull request, since the upgrade corpus test fails a land of either half alone (`template-change-ships-its-migration`); and a build whose requirement a change moved to its component from another, as a split moves one from a component to the child it carves out, moves the code and tests that build it out of the other component's `paths` into its own, deletes the other's copy, changes the other component's imports, entry module and wiring only so they reach the moved code where it now lives, and re-points the moved requirement's markers, wherever they sit, to its new ID, naming each edit in its pull request, since the requirement's text and its build moved with it and the other component holds nothing left to build there (`nested-splits`, `moved-markers-wait`).
 
 #### Scenario: removal forces a fix
 - GIVEN a build removing an enum variant that another component's `match` names
@@ -558,6 +558,11 @@ A component's build SHALL change only its own `paths`. Four exceptions: a build 
 - WHEN it builds
 - THEN it writes that migration as stated, and its pull request names the fix
 
+#### Scenario: split moves carved-out code
+- GIVEN a change that moved requirement `a/x` to `a.b/x`, and a build of `a.b` while `a`'s files hold the code and tests that build it and `a`'s entry module imports that code
+- WHEN it builds
+- THEN it moves that code and those tests into `a.b`'s `paths`, deletes `a`'s copy, points `a`'s import at the moved code, re-points the markers of `a/x` to `a.b/x`, and its pull request names each edit
+
 #### Carries
 - method
 
@@ -566,6 +571,7 @@ A component's build SHALL change only its own `paths`. Four exceptions: a build 
 - orchestrator.run/pending-prompt
 - orchestrator.run/capability-tests-follow-rule
 - orchestrator.run/template-migration-fix
+- orchestrator.run/split-move-fix
 
 #### Untested
 Accepted: no gate or land check refuses a build's file outside its component's `paths`. The build prompt keeps it there, and the build's review and spec audit read the diff (`path-ownership-by-prompt`).
