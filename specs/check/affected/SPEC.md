@@ -132,6 +132,11 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - WHEN `clm affected --base main` runs on the branch
 - THEN it prints the component lines of `app` and `feat`
 
+#### Scenario: not through a test dependency's dependants
+- GIVEN components `app` depending on `feat`, `feat` with `test_depends_on: [app]`, and `other` depending on `feat`, and a branch that changes only a file `app`'s `paths` hold
+- WHEN `clm affected --base main` runs on the branch
+- THEN it prints the component lines of `app` and `feat`, and not `other`
+
 #### Scenario: nothing changed
 - GIVEN a branch with no commits beyond `main` and a clean working tree
 - WHEN `clm affected --base main` runs
@@ -175,17 +180,12 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - ledger/doc-only
 
 ### Requirement: why-chain
-`clm-affected`'s `why(root, base, path)`, and `clm affected --why <path> [--base <ref>]`, SHALL give the chain by which the change selects `<path>`, one link per line, from `<path>` to a changed file, taking the first reason that holds in this order: `<path> (changed)` alone when `<path>` is a changed file that still exists; `<path> reads <changed path>` when it is a reader, naming the first such path in path order; `<path> cites <component>` when its `req:` marker names an affected component, the first by ID; `<path> owned by <component>` otherwise. After a `cites` or `owned by` line come the edges of the shortest path from that component to a component that owns a changed file, choosing among equally short paths the first in ID order: the path follows `depends_on` edges, each printed `<x> depends on <y>`, and only as its first edge, when no `depends_on` path reaches such a component, a `test_depends_on` edge, printed `<x> tests against <y>`, and then `<y> owns <changed path> (changed)`, naming that component's first changed path in path order. It SHALL print `<path> not selected` for a path the selection doesn't hold, a deleted changed file among them, and `all: <file>` when the selection is `all <file>`, exiting 0 in each case and as the selection does otherwise. Its lines SHALL say component, never node (`component-words`).
+`clm-affected`'s `why(root, base, path)`, and `clm affected --why <path> [--base <ref>]`, SHALL give the chain by which the change selects `<path>`, one link per line, from `<path>` to a changed file, taking the first reason that holds in this order: `<path> (changed)` alone when `<path>` is a changed file that still exists; `<path> reads <changed path>` when it is a reader, naming the first such path in path order; `<path> cites <component>` when its `req:` marker names an affected component, the first by ID; `<path> owned by <component>` otherwise. After a `cites` or `owned by` line come the edges of the shortest path from that component to a component that owns a changed file, choosing among equally short paths the first in ID order: the path follows `depends_on` edges, each printed `<x> depends on <y>`, except that, only when that component owns no changed file and no `depends_on` path reaches such an owner, its first edge is a `test_depends_on` edge to a component that owns a changed file or depends on one, directly or indirectly, printed `<x> tests against <y>`, followed by that component's shortest `depends_on` path, and then `<y> owns <changed path> (changed)`, naming that component's first changed path in path order. It SHALL print `<path> not selected` for a path the selection doesn't hold, a deleted changed file among them, and `all: <file>` when the selection is `all <file>`, exiting 0 in each case and as the selection does otherwise. Its lines SHALL say component, never node (`component-words`).
 
 #### Scenario: through a dependency
 - GIVEN components `a`, owning `a/src/lib.rs`, and `b`, owning `b/src/lib.rs`, with `a` depending on `b`, and a branch that changes only `b/src/lib.rs`
 - WHEN `clm affected --why a/src/lib.rs` runs
 - THEN it prints `a/src/lib.rs owned by a`, `a depends on b` and `b owns b/src/lib.rs (changed)`, and exits 0
-
-#### Scenario: through a test dependency
-- GIVEN components `app`, owning `app/src/lib.rs`, depending on `feat`, and `feat`, owning `feat/tests/t.rs`, with `test_depends_on: [app]`, and a branch that changes only `app/src/lib.rs`
-- WHEN `clm affected --why feat/tests/t.rs` runs
-- THEN it prints `feat/tests/t.rs owned by feat`, `feat tests against app` and `app owns app/src/lib.rs (changed)`, and exits 0
 
 #### Scenario: a changed file
 - GIVEN the same graph and branch
@@ -201,6 +201,11 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - GIVEN the same graph and branch
 - WHEN `clm affected --readers --why a/src/lib.rs` runs
 - THEN it exits 1 naming both flags
+
+#### Scenario: through a test dependency
+- GIVEN components `app`, owning `app/src/lib.rs`, depending on `feat`, and `feat`, owning `feat/tests/t.rs`, with `test_depends_on: [app]`, and a branch that changes only `app/src/lib.rs`
+- WHEN `clm affected --why feat/tests/t.rs` runs
+- THEN it prints `feat/tests/t.rs owned by feat`, `feat tests against app` and `app owns app/src/lib.rs (changed)`, and exits 0
 
 ### Requirement: overlap-selection
 `clm affected --overlap <a> <b>` SHALL print what both changes can break. With `<m>` the merge base of the commits `<a>` and `<b>` name, each *side* is the selection, readers included, of the paths that differ between `<m>` and that side's commit, computed as `affected-files`, `affected-all`, `affected-components` and `affected-readers` compute it but from the two commits alone, with no working tree and no untracked file: each side's changed paths come from `git diff --name-only --no-renames <m> <commit>`, and its markers (`req:` and `clm:reads`) and the files the coverage scan would read are read from that side's commit through `git` (`git-plumbing-layer`), not from any checkout. Its output SHALL be:
