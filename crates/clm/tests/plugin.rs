@@ -260,6 +260,15 @@ fn skill_gaps(skill: &str, body: &str) -> Vec<String> {
         ],
         // `clm rebase`'s outcome is its last line, never its exit code.
         "init" => &[REBASE_RULE],
+        // The build loop decides every step and archives the complete changes itself.
+        "build" => &[
+            "clm build start",
+            "clm build step",
+            "clm build launched",
+            "clm build returned",
+            "clm build stop",
+            "isolation",
+        ],
         _ => &[],
     };
     let mut gaps: Vec<String> = [LAND_RULE, APPROVE_RULE]
@@ -292,7 +301,7 @@ fn skill_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills() {
-    // req:plugin/skills@b943c3b9
+    // req:plugin/skills@c316b655
     let skills: Vec<String> = fs::read_dir(plugin().join("skills"))
         .unwrap()
         .map(Result::unwrap)
@@ -323,6 +332,9 @@ fn skills() {
         gaps,
         [format!("build: SKILL.md must name `{APPROVE_RULE}`")]
     );
+    // build without the loop
+    let gaps = skill_gaps("build", &build.replace("clm build returned", "elided"));
+    assert_eq!(gaps, ["build: SKILL.md must name `clm build returned`"]);
     // skill without land
     let gaps = skill_gaps("propose", &propose.replace("clm land", "elided"));
     assert!(
@@ -414,7 +426,7 @@ fn names_the_old_hash_command(text: &str) -> bool {
 
 #[test]
 fn skills_name_clm_hashes() {
-    // req:plugin/skills@b943c3b9
+    // req:plugin/skills@c316b655
     // Claude Code's worktree isolation refuses `clm hash`, reading it as the shell builtin.
     assert!(names_the_old_hash_command(
         "rebase stale deltas on `clm hash`."
@@ -499,7 +511,7 @@ fn defect_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_check_for_defects_before_a_pr() {
-    // req:plugin/defect-check-before-pr@abdfad5c
+    // req:plugin/defect-check-before-pr@246594cd
     for skill in ["propose"] {
         let body = skill_body(skill);
         assert_eq!(defect_gaps(skill, &body), Vec::<String>::new());
@@ -701,7 +713,7 @@ fn skills_point_at_the_guide() {
 
 #[test]
 fn skills_run_a_builder_check() {
-    // req:plugin/builder-check@43c9efb5
+    // req:plugin/builder-check@2cf8bddc
     // The check is a numbered step of its own, which says all of this itself, so text
     // elsewhere in the skill can't stand in for it.
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
@@ -876,7 +888,7 @@ fn skills_run_a_builder_check() {
 
 #[test]
 fn builder_check_reapplies_through_rebase() {
-    // req:plugin/builder-check@43c9efb5
+    // req:plugin/builder-check@2cf8bddc
     // By the builder check the change is `applied`, and `clm apply` refuses an applied
     // change (`apply/change-status`): a delta edited then reaches `specs/` through
     // `clm rebase`, which regenerates it from the applied deltas.
@@ -1032,7 +1044,7 @@ fn wrap_up_gaps(skills: &[(String, String)]) -> Vec<String> {
 
 #[test]
 fn wrap_up_left_lines() {
-    // req:plugin/wrap-up-left-lines@969152a0
+    // req:plugin/wrap-up-left-lines@655a7df1
     let mut names: Vec<String> = fs::read_dir(plugin().join("skills"))
         .unwrap()
         .map(|e| e.unwrap())
@@ -1062,6 +1074,8 @@ fn wrap_up_left_lines() {
             assert!(sentence.contains(needle), "{name}: {needle}: {sentence}");
         }
     }
+    // `build` runs no `clm wrap-up`: its loop passes the lines on in its `say` actions.
+    assert!(!skill_body("build").contains("clm wrap-up"));
     // A skill that names `clm wrap-up` and no paragraph naming `left <path>` with it.
     let bare = vec![("build".to_string(), "Run `clm wrap-up`.".to_string())];
     assert_reports(&wrap_up_gaps(&bare), "build", "left <path>");
@@ -1085,7 +1099,7 @@ fn worktree_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_cut_branches_in_worktrees() {
-    // req:plugin/session-worktrees@651acb1c
+    // req:plugin/session-worktrees@36e7721a
     for skill in ["propose", "init"] {
         let body = skill_body(skill);
         assert_eq!(worktree_gaps(skill, &body), Vec::<String>::new());
@@ -1097,6 +1111,8 @@ fn skills_cut_branches_in_worktrees() {
             assert_reports(&gaps, skill, "git worktree remove");
         }
     }
+    // `build` cuts no branch: its loop's runs work in worktrees of their own.
+    assert!(!skill_body("build").contains("git worktree add"));
     // propose works in the worktree, never switching the checkout it started in, and
     // removes the worktree once the branch has landed, before `clm wrap-up`.
     let propose = skill_body("propose");
@@ -1171,7 +1187,7 @@ fn plain_pushes(text: &str) -> Vec<&str> {
 
 #[test]
 fn propose_pushes_with_lease_after_rebase() {
-    // req:plugin/skills@b943c3b9
+    // req:plugin/skills@c316b655
     // The skills push with `clm branch push` (`skills-push-with-clm`)
     // after `clm rebase`. Steps 10 and 12 and the code-fix path push after a rebase.
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
@@ -1690,7 +1706,7 @@ const OWN_MODEL: &str = "the session's own model";
 fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
     let must: &[&str] = match skill {
         // The launches of `build` are `clm build`'s action lines, which name their models.
-        "build" => &[],
+        "build" => &["--session-model"],
         "triage" | "propose" => &[SONNET, OWN_MODEL],
         "contribution" => &[OWN_MODEL],
         _ => &[SONNET],
@@ -1700,11 +1716,15 @@ fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn launch_models() {
-    // req:plugin/launch-models@030ff83e
+    // req:plugin/launch-models@b048204d
     for skill in ["build", "triage", "propose", "health", "init"] {
         let body = skill_body(skill);
         assert_eq!(launch_model_gaps(skill, &body), Vec::<String>::new());
     }
+    // build launched without the session's model
+    let build = skill_body("build");
+    let gaps = launch_model_gaps("build", &build.replace("--session-model", "elided"));
+    assert_reports(&gaps, "build", "--session-model");
     let contribution = skill_body("contribution");
     assert_eq!(
         launch_model_gaps("contribution", &contribution),
@@ -2628,7 +2648,7 @@ fn raw_push_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_push_with_clm() {
-    // req:plugin/skills-push-with-clm@69c54954
+    // req:plugin/skills-push-with-clm@76ab4ceb
     let skills = plugin().join("skills");
     let mut names: Vec<String> = std::fs::read_dir(&skills)
         .unwrap()
@@ -2676,7 +2696,7 @@ fn permission_check_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_check_the_permission_rules() {
-    // req:plugin/unattended-permissions-check@e8390775
+    // req:plugin/unattended-permissions-check@2663670e
     for name in ["build", "triage"] {
         assert_eq!(
             permission_check_gaps(name, &skill_body(name)),
@@ -2721,7 +2741,7 @@ fn lacks(skill: &str, body: &str, needles: &[&str]) -> Vec<String> {
 
 #[test]
 fn skills_run_verify() {
-    // req:plugin/skills-run-verify@b8bb7c23
+    // req:plugin/skills-run-verify@0f5313c0
     let run = "clm verify --due --event work-done";
     let triage = skill_text("triage");
     let triage_needles = [
