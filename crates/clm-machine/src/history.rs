@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crate::record::write_atomically;
-use crate::{Report, time};
+use crate::{Report, State, time};
 
 /// Samples older than this are dropped.
 const KEEP_SECONDS: u64 = 30 * 60;
@@ -22,6 +22,10 @@ pub struct Sample {
     pub cpu: Option<f64>,
     pub memory: Option<f64>,
     pub disk: Option<f64>,
+    /// The state each reading was judged at, which can't be judged again from the share.
+    pub cpu_state: State,
+    pub memory_state: State,
+    pub disk_state: State,
 }
 
 impl Sample {
@@ -39,30 +43,38 @@ impl Sample {
                 .map(|load| load / report.cpu.cores.max(1) as f64 / 2.0),
             memory: used(report.memory.space),
             disk: used(report.disk.space),
+            cpu_state: report.cpu.state,
+            memory_state: report.memory.state,
+            disk_state: report.disk.state,
         }
     }
 
     fn render(&self) -> String {
         let share = |s: Option<f64>| s.map_or("-".to_string(), |s| format!("{s:.4}"));
         format!(
-            "{} {} {} {}\n",
+            "{} {} {} {} {} {} {}\n",
             time::format(self.time),
             share(self.cpu),
+            self.cpu_state.word(),
             share(self.memory),
-            share(self.disk)
+            self.memory_state.word(),
+            share(self.disk),
+            self.disk_state.word()
         )
     }
 
     fn parse(line: &str) -> Option<Sample> {
         let mut fields = line.split_whitespace();
         let time = time::parse(fields.next()?)?;
-        let mut share = || -> Option<Option<f64>> {
-            match fields.next()? {
-                "-" => Some(None),
-                text => text.parse().ok().map(Some),
-            }
+        let mut reading = || -> Option<(Option<f64>, State)> {
+            let share = match fields.next()? {
+                "-" => None,
+                text => Some(text.parse().ok()?),
+            };
+            Some((share, State::from_word(fields.next()?)?))
         };
-        let (cpu, memory, disk) = (share()?, share()?, share()?);
+        let ((cpu, cpu_state), (memory, memory_state), (disk, disk_state)) =
+            (reading()?, reading()?, reading()?);
         if fields.next().is_some() {
             return None;
         }
@@ -71,6 +83,9 @@ impl Sample {
             cpu,
             memory,
             disk,
+            cpu_state,
+            memory_state,
+            disk_state,
         })
     }
 }

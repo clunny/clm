@@ -13,7 +13,7 @@ fn record(peak: u64, builds: &[(&str, u64)]) -> Record {
 
 #[test]
 fn scenario_the_json() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let dir = repo();
     let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
     let json = clm_machine::json(&snapshot.report);
@@ -30,20 +30,21 @@ fn scenario_the_json() {
 
 #[test]
 fn scenario_sustained_cpu() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let cpu = |load1, load5| {
         let mut r = readings();
         (r.load1, r.load5) = (Some(load1), Some(load5));
         judged(&r, &Record::default(), &[], 3).cpu.state
     };
-    assert_eq!(cpu(20.0, 11.0), State::Warn);
-    assert_eq!(cpu(20.0, 16.0), State::Critical);
-    assert_eq!(cpu(20.0, 6.0), State::Ok);
+    assert_eq!(cpu(10.0, 6.0), State::Warn);
+    assert_eq!(cpu(10.0, 10.0), State::Critical);
+    assert_eq!(cpu(4.0, 10.0), State::Critical);
+    assert_eq!(cpu(9.9, 9.9), State::Ok);
 }
 
 #[test]
 fn scenario_available_not_free() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let memory = |available_gib: f64| {
         let mut r = readings();
         r.memory = space(16 * GIB, (available_gib * GIB as f64) as u64);
@@ -56,7 +57,7 @@ fn scenario_available_not_free() {
 
 #[test]
 fn scenario_disk_against_the_builds() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
     let judge = |free_gib: u64| {
         let mut r = readings();
@@ -79,7 +80,7 @@ fn scenario_disk_against_the_builds() {
 
 #[test]
 fn scenario_disk_before_any_measurement() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let judge = |free_gib: u64| {
         let mut r = readings();
         r.disk = space(100 * GIB, free_gib * GIB);
@@ -94,7 +95,7 @@ fn scenario_disk_before_any_measurement() {
 
 #[test]
 fn scenario_no_load_average() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.load1, r.load5) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -108,15 +109,15 @@ fn scenario_no_load_average() {
 
 #[test]
 fn scenario_text() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
-    (r.load1, r.load5) = (Some(8.0), Some(11.0));
+    (r.load1, r.load5) = (Some(12.0), Some(8.0));
     r.memory = space(16 * GIB, 4 * GIB);
     r.disk = space(100 * GIB, 20 * GIB);
     let text = clm_machine::text(&judged(&r, &Record::default(), &[], 3));
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 3);
-    assert!(lines[0].starts_with("cpu  1.0× of 8 cores, 1.4× over 5 min"));
+    assert!(lines[0].starts_with("cpu  1.5× of 8 cores, 1.0× over 5 min"));
     assert!(lines[1].starts_with("mem  4.0G available of 16G"));
     assert!(lines[2].starts_with("disk 20G free of 100G"));
     assert!(lines[0].ends_with("  warn"));

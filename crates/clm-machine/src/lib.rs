@@ -35,6 +35,13 @@ impl State {
             State::Unknown => "unknown",
         }
     }
+
+    /// The state a word names, `None` for any other word.
+    pub(crate) fn from_word(word: &str) -> Option<State> {
+        [State::Ok, State::Warn, State::Critical, State::Unknown]
+            .into_iter()
+            .find(|s| s.word() == word)
+    }
 }
 
 /// A filesystem's or memory's total and what is still available, in bytes.
@@ -106,12 +113,12 @@ pub struct Snapshot {
 /// The states of `readings`, given the record and the names of the builds that count: a pure
 /// function (`machine-report`).
 pub fn judge(readings: &Readings, record: &Record, counting: &[String], max_builds: u64) -> Report {
+    let cores = readings.cores.max(1) as f64;
     let cpu_state = match (readings.load1, readings.load5) {
-        (Some(_), Some(load5)) => {
-            let ratio = load5 / readings.cores.max(1) as f64;
-            if ratio >= 2.0 {
+        (Some(load1), Some(load5)) => {
+            if load5 / cores >= 1.25 {
                 State::Critical
-            } else if ratio >= 1.25 {
+            } else if load1 / cores >= 1.25 {
                 State::Warn
             } else {
                 State::Ok

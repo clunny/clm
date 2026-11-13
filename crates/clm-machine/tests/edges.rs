@@ -21,7 +21,7 @@ fn plain(line: &str) -> String {
 
 #[test]
 fn a_row_is_cut_to_a_narrow_width() {
-    // req:machine/machine-history@48d41228
+    // req:machine/machine-history@67a1a6a6
     let mut r = readings();
     r.load5 = Some(40.0);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -30,6 +30,9 @@ fn a_row_is_cut_to_a_narrow_width() {
         cpu: Some(0.5),
         memory: Some(0.5),
         disk: Some(0.5),
+        cpu_state: State::Ok,
+        memory_state: State::Ok,
+        disk_state: State::Ok,
     }];
     let out = clm_machine::rows(&report, &history, 10);
     for line in out.lines() {
@@ -39,7 +42,7 @@ fn a_row_is_cut_to_a_narrow_width() {
 
 #[test]
 fn the_sample_holds_the_shares() {
-    // req:machine/machine-history@48d41228
+    // req:machine/machine-history@67a1a6a6
     let dir = repo();
     let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
     let report = &snapshot.report;
@@ -54,7 +57,7 @@ fn the_sample_holds_the_shares() {
 
 #[test]
 fn a_reading_the_system_refuses_is_unknown() {
-    // req:machine/machine-report@6fa452c0
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.memory, r.disk) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
