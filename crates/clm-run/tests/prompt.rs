@@ -373,6 +373,8 @@ fn scenario_no_legal_home() {
         "keep every component building as it stands, leave the requirement unbuilt",
         "add a `question` backlog item whose `components` name the components concerned, with `blocks` naming the requirement",
         "what spec change it waits on: a glob, a dependency, or another component's requirement",
+        "as when what it removes from or adds to its Contract breaks a component that still uses it",
+        "that moves that component first",
         "`coupled-changes-sequence`",
         "never move an import, hide a file, edit a spec path or ask for a history rewrite to get past a check, and never add or widen an exemption, which only a change a human reviews does (`temporary-exemptions`)",
         "A file of your component that an exemption names still holds every other rule, and you add nothing to such a file that the exemption would excuse",
