@@ -4,31 +4,28 @@
 
 use std::path::PathBuf;
 
-use clm_model::{Graph, Node, Violation};
+use clm_model::{Graph, Violation};
+
+use crate::ownership::{is_test_of, owner};
 
 /// One undeclared import: importing file, imported file, and the IDs of nodes `a` and `b`.
 type Pair = (String, String, String, String);
 
-/// Each pair among `edges` that `graph` leaves undeclared: from a file of component `a` to a file of
-/// another node `b` that `a`'s `depends_on` doesn't list. An edge with an end in no node's
-/// `paths` is skipped; a file in several nodes' `paths` is judged for each.
+/// Each pair among `edges` that `graph` leaves undeclared: from a file of component `a` to a file
+/// of another component `b`, owners of their files (`paths-disjoint`), that `a`'s `depends_on`
+/// doesn't list; for a file `a`'s `tests` match, `depends_on` and `test_depends_on` together. An
+/// edge with an end no component owns is skipped.
 fn pairs(graph: &Graph, edges: &[(String, String)]) -> Vec<Pair> {
-    let nodes_of = |file: &str| -> Vec<&Node> {
-        graph
-            .nodes
-            .values()
-            .filter(|n| n.frontmatter.paths.iter().any(|g| crate::matches(g, file)))
-            .collect()
-    };
     let mut out = Vec::new();
     for (from, to) in edges {
-        let targets = nodes_of(to);
-        for a in nodes_of(from) {
-            for b in &targets {
-                if b.id != a.id && !a.frontmatter.depends_on.contains(&b.id) {
-                    out.push((from.clone(), to.clone(), a.id.clone(), b.id.clone()));
-                }
-            }
+        let (Some(a), Some(b)) = (owner(graph, from), owner(graph, to)) else {
+            continue;
+        };
+        let declared = |deps: &Vec<String>| deps.contains(&b.id);
+        let allowed = declared(&a.frontmatter.depends_on)
+            || (is_test_of(a, from) && declared(&a.frontmatter.test_depends_on));
+        if b.id != a.id && !allowed {
+            out.push((from.clone(), to.clone(), a.id.clone(), b.id.clone()));
         }
     }
     out

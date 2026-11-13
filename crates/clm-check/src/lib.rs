@@ -13,6 +13,8 @@ mod attributes;
 #[cfg(feature = "checkout")]
 mod caps;
 #[cfg(feature = "checkout")]
+mod cites;
+#[cfg(feature = "checkout")]
 mod dangling;
 #[cfg(feature = "detectors")]
 mod detectors;
@@ -21,6 +23,7 @@ mod disjoint;
 #[cfg(feature = "checkout")]
 mod entries;
 mod imports;
+mod ownership;
 #[cfg(feature = "checkout")]
 mod remove_by;
 #[cfg(feature = "checkout")]
@@ -105,6 +108,7 @@ fn run_with(
     violations.extend(unowned::violations(root, &graph, &tracked));
     let markers = scan(root);
     violations.extend(dangling::violations(&graph, &markers.req, &removed));
+    violations.extend(cites::violations(&graph, &markers.req));
     violations.extend(remove_by::violations(&graph, &markers.remove_by));
     violations.extend(skipped::violations(root, &markers.req));
     violations

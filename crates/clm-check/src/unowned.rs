@@ -41,11 +41,7 @@ pub fn violations(
         .into_iter()
         .filter(|f| {
             let name = f.to_string_lossy();
-            !is_spec_path(&name)
-                && !graph
-                    .nodes
-                    .values()
-                    .any(|n| n.frontmatter.paths.iter().any(|g| matches(g, &name)))
+            !is_spec_path(&name) && crate::ownership::owner(graph, &name).is_none()
         })
         .collect();
     let in_outside = |f: &PathBuf, g: &str| matches(g, &f.to_string_lossy());

@@ -46,7 +46,7 @@ fn lines(graph: &clm_model::Graph, list: &[(&str, &str)]) -> Vec<String> {
 
 #[test]
 fn undeclared_dependency() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let graph = graph("[]");
     assert_eq!(
         lines(&graph, &[("crates/a/Cargo.toml", "crates/b/Cargo.toml")]),
@@ -58,7 +58,7 @@ fn undeclared_dependency() {
 
 #[test]
 fn declared() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let graph = graph("[b]");
     assert_eq!(
         lines(&graph, &[("crates/a/Cargo.toml", "crates/b/Cargo.toml")]),
@@ -68,7 +68,7 @@ fn declared() {
 
 #[test]
 fn unowned_ends_and_imports_within_a_node() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let graph = graph("[]");
     let list = [
         ("crates/a/src/lib.rs", "tools/x.rs"),
@@ -80,7 +80,7 @@ fn unowned_ends_and_imports_within_a_node() {
 
 #[test]
 fn a_parent_gets_no_exemption() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let graph = graph("[b]");
     // `a` depends on `b`, not on its child `b.c`; `b` doesn't depend on its child either.
     assert_eq!(
@@ -100,7 +100,7 @@ fn a_parent_gets_no_exemption() {
 
 #[test]
 fn not_in_run() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &node("[]", "[]"));
@@ -172,9 +172,90 @@ fn pending(a_deps: &str, contract: bool, fm_base: Option<&str>) -> (TempDir, clm
 
 const A_TO_B: [(&str, &str); 1] = [("crates/a/Cargo.toml", "crates/b/Cargo.toml")];
 
+/// `app` (`app/main.py`, depending on `feat`) and `feat` (`app/feat.py`, tests
+/// `tests/feat/**`, `test_depends_on: [app]`).
+fn app_and_feat() -> clm_model::Graph {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(root, "specs/SPEC.md", &node("[]", "[]"));
+    write(
+        root,
+        "specs/app/SPEC.md",
+        &node("[\"app/main.py\"]", "[feat]"),
+    );
+    write(
+        root,
+        "specs/feat/SPEC.md",
+        &format!(
+            "{}\n",
+            node("[\"app/feat.py\"]", "[]").replace(
+                "---\n## Contract",
+                "tests: [\"tests/feat/**\"]\ntest_depends_on: [app]\n---\n## Contract"
+            )
+        ),
+    );
+    let (graph, violations) = clm_model::load(root);
+    assert!(violations.is_empty(), "{violations:?}");
+    graph
+}
+
+#[test]
+fn a_test_imports_the_entry_point() {
+    // req:check/undeclared-imports@1e2f49ba
+    let graph = app_and_feat();
+    assert_eq!(
+        lines(&graph, &[("tests/feat/test_x.py", "app/main.py")]),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn a_test_among_its_components_paths_imports_the_entry_point() {
+    // req:check/undeclared-imports@1e2f49ba
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(root, "specs/SPEC.md", &node("[]", "[]"));
+    write(
+        root,
+        "specs/app/SPEC.md",
+        &node("[\"app/main.py\"]", "[feat]"),
+    );
+    let feat = node("[\"feat/**\"]", "[]").replace(
+        "---\n## Contract",
+        "tests: [\"feat/test_*.py\"]\ntest_depends_on: [app]\n---\n## Contract",
+    );
+    write(root, "specs/feat/SPEC.md", &feat);
+    let (graph, violations) = clm_model::load(root);
+    assert!(violations.is_empty(), "{violations:?}");
+    assert_eq!(
+        lines(
+            &graph,
+            &[
+                ("feat/test_x.py", "app/main.py"),
+                ("feat/x.py", "app/main.py")
+            ]
+        ),
+        [
+            "feat/x.py: check/undeclared-imports: imports app/main.py of component `app`, and `feat` doesn't depend on `app`"
+        ]
+    );
+}
+
+#[test]
+fn production_code_still_judged() {
+    // req:check/undeclared-imports@1e2f49ba
+    let graph = app_and_feat();
+    assert_eq!(
+        lines(&graph, &[("app/feat.py", "app/main.py")]),
+        [
+            "app/feat.py: check/undeclared-imports: imports app/main.py of component `app`, and `feat` doesn't depend on `app`"
+        ]
+    );
+}
+
 #[test]
 fn not_applied_yet() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let (_dir, graph) = pending("[b]", false, None);
     assert_eq!(
         lines(&graph, &A_TO_B),
@@ -186,7 +267,7 @@ fn not_applied_yet() {
 
 #[test]
 fn not_applied_yet_already_undeclared() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let (dir, graph) = pending("[]", true, None);
     // The delta applies, so the dedup is what keeps the second line out.
     let apply: Vec<_> = clm_check::run(dir.path())
@@ -204,7 +285,7 @@ fn not_applied_yet_already_undeclared() {
 
 #[test]
 fn not_applied_yet_stale_delta() {
-    // req:check/undeclared-imports@f84e6527
+    // req:check/undeclared-imports@1e2f49ba
     let (dir, graph) = pending("[b]", false, Some("0123456789abcdef"));
     assert_eq!(lines(&graph, &A_TO_B), Vec::<String>::new());
     let stale: Vec<_> = clm_check::run(dir.path())

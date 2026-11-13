@@ -37,6 +37,10 @@ name = "paths_disjoint"
 required-features = ["checkout"]
 
 [[test]]
+name = "tests_cite_their_owner"
+required-features = ["checkout"]
+
+[[test]]
 name = "undeclared_imports"
 required-features = ["checkout"]
 
