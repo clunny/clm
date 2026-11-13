@@ -1,7 +1,7 @@
 // Home: what waits on the person (web.views/home-waiting-on-you). Sections in order, each
 // left out when empty: Review, Answer, Flagged, Answer in a session.
 
-import { answerButtons, type Answering } from './answers';
+import { answerButtons, offered, type Answering } from './answers';
 import { div, el } from './dom';
 import type { Architecture, BacklogView, Capabilities, Review, Snapshot } from './types';
 
@@ -21,7 +21,7 @@ export interface HomeInput {
 }
 
 /** Whether the person can answer the item from the app: a `question` with choices, or a `human-task`. */
-const answerable = (b: BacklogView) => b.kind === 'human-task' || (b.kind === 'question' && (b.choices ?? []).length > 0);
+const answerable = (b: BacklogView) => offered(b) !== null;
 
 /** The reviews that need review and hold no approval. */
 const toReview = (reviews: Review[]) => reviews.filter((r) => r.review && r.approvals.length === 0);
