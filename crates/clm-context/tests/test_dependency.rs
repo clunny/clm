@@ -34,3 +34,31 @@ fn test_dependency_contract_only() {
     assert!(out.contains("APP-CONTRACT"), "{out}");
     assert!(!out.contains("APP-DESIGN"), "{out}");
 }
+
+#[test]
+fn test_dependency_listed_once_and_spine_skipped() {
+    // req:context/bundle-contents@ec3b6384
+    let mut files = Files::new();
+    files.insert(
+        PathBuf::from("specs/SPEC.md"),
+        node("Root", "", "ROOT-C", "ROOT-D"),
+    );
+    files.insert(
+        PathBuf::from("specs/app/SPEC.md"),
+        node("App", "", "APP-CONTRACT", "APP-DESIGN"),
+    );
+    files.insert(
+        PathBuf::from("specs/feat/SPEC.md"),
+        node(
+            "Feat",
+            "depends_on: [app]\ntest_depends_on: [app, clm]\n",
+            "FEAT-C",
+            "FEAT-D",
+        ),
+    );
+    let (graph, violations) = load_files(&files);
+    assert!(violations.is_empty(), "{violations:?}");
+    let out = clm_context::bundle_from(&graph, None, "feat").unwrap();
+    assert_eq!(out.matches("APP-CONTRACT").count(), 1, "{out}");
+    assert_eq!(out.matches("ROOT-C").count(), 1, "{out}");
+}
