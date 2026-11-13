@@ -41,3 +41,7 @@ CPU thresholds (the human's call, after being told a parallel cargo build fills 
 - The JSON and text forms keep their fields; only the CPU state they report moves with the new thresholds.
 - The pane draws the rows as their escapes say, run by run (`plugin.panel/machine-charts`, whose `ansiLines` already reads several styled runs per line), so `plugin.panel` needs no change; each coloured run ends with a reset so a dimmed cell's style never carries into the next.
 - The history file is clone-local state that lives 30 minutes, not a format projects keep, so no `upgrade` migration is owed (`upgrades-carry-migrations`).
+
+## Open questions
+
+- The architecture audit noted that a past cell's state is shown by colour alone, against `colour-meanings`' "colour is never the only cue". The change records it as an exception (`machine-cells-keep-their-state`, with a dated update to `colour-meanings`): the block's height already carries the share, and before this change a past cell carried no state at all. A second cue per cell (a different glyph for non-`ok` cells) would be the alternative, if the human wants one.
