@@ -305,8 +305,15 @@ enum Command {
     Draft {
         /// The items' slugs, as a `clm triage` group line lists them; with `--fold`, the
         /// change IDs to fold.
-        #[arg(required_unless_present = "finish", conflicts_with = "finish")]
+        #[arg(
+            required_unless_present_any = ["finish", "resume"],
+            conflicts_with_all = ["finish", "resume"]
+        )]
         slugs: Vec<String>,
+        /// Write the prompt for a session that continues the draft of this change, whose
+        /// session ended before it returned, from the spec branch it pushed.
+        #[arg(long, value_name = "CHANGE", conflicts_with_all = ["finish", "fold", "answers"])]
+        resume: Option<String>,
         /// Finish the draft of this change, whose subagent has returned, instead of starting
         /// one.
         #[arg(long, value_name = "CHANGE")]
@@ -1267,6 +1274,39 @@ fn dispatch() -> ExitCode {
             }
             Err(e) => orchestrated("draft", Err(e)),
         },
+        Command::Draft {
+            resume: Some(change),
+            expiry,
+            root,
+            ..
+        } => {
+            let root = repo_root(root);
+            let settings = match clm_config::load(Some(&root), &clm_config::process_env) {
+                Ok(s) => s,
+                Err(e) => {
+                    let e = clm_orchestrator::Error::Refused(format!("settings: {e}"));
+                    return orchestrated("draft", Err(e));
+                }
+            };
+            match clm_triage::resume(
+                &root,
+                &change,
+                settings.build.value.as_ref().map(|b| b.setup.as_str()),
+                settings.max_builds.value,
+                expiry,
+            ) {
+                Ok(d) => {
+                    let code = orchestrated("draft", Ok(d.launcher));
+                    eprintln!("draft {}", d.id);
+                    code
+                }
+                Err(clm_triage::DraftError::NoPlace(why)) => {
+                    eprintln!("clm draft: {why}");
+                    ExitCode::from(3)
+                }
+                Err(clm_triage::DraftError::Failed(e)) => orchestrated("draft", Err(e)),
+            }
+        }
         Command::Draft {
             slugs,
             finish: None,

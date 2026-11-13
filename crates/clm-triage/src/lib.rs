@@ -24,7 +24,7 @@ use clm_model::{
 pub use clm_orchestrator::Error;
 use clm_orchestrator::{Holding, REMOTE, taken_items};
 
-pub use draft::{Clock, Draft, DraftError, Drafted, draft};
+pub use draft::{Clock, Draft, DraftError, Drafted, draft, resume};
 pub use finish::finish;
 pub use fold::{Fold, fold};
 pub use intake::intake;
