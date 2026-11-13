@@ -19,6 +19,7 @@ Record kinds:
 - `unsubscribed`: `subscription` (the `id` of a `subscribed` record). That subscription's end.
 - `proposed`: `slug`, `title`, `body`, and the components at `/nodes`. A backlog item proposed from the web app, which `clm rebase` files as `backlog/<slug>.md` on the next `impl/*` branch (`web-proposals-as-ledger-records`).
 - `withdrawn`: `proposal` (the `id` of a `proposed` record). That proposal's withdrawal by its proposer.
+- `answered`: `item` (a backlog item's slug) and `answer`. A person's answer from the web app to a `question` item that lists it in `choices`, or `done` for a `human-task` item, which `clm triage` prints under the item (`web-answers-as-ledger-records`).
 - `commented`: `branch`, `fingerprint`, `target` (always present: a requirement ID `<component>/<slug>`, or null for the change as a whole), `text`. A reviewer's comment on a spec branch's diff, made in the web app (`web-review-feedback-as-ledger-records`).
 - `changes_requested`: `branch`, `fingerprint`, `text`. A reviewer's request, made in the web app, that the branch change before it lands; `clm land` holds the branch while its fingerprint is the one named (`land`).
 - `effort`: `branch`, `session`, `models` (a map from a model's name to its `input`, `output`, `cache_read` and `cache_write` token counts), `active_seconds`. The work one Claude Code session spent on one branch, as `clm effort record` read it from this machine's transcripts (`effort`). Its `id` is `effort_id(session, branch)`, not random, so a later record of the same session and branch supersedes the earlier one (`effort-accounted`).
@@ -754,3 +755,20 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 - GIVEN a `landed` record with neither field
 - WHEN the ledger is folded
 - THEN the land holds neither, and nothing fails
+
+### Requirement: answer-records
+The fold, `fold` and `fold_records` alike, SHALL parse `answered` records and hold as its open answers, for each item and writer, the one record of that writer naming that item with the latest `at`, ties broken by the greater `id`, whatever order the records are read in, each with its `id`, `writer`, `at`, `item` and `answer`. Whether its item is still in the backlog is the reader's to judge from the tree. `clm ledger show` SHALL print an `answered` record as `answered <id> <item> <writer> <at>`. `clm ledger compact` SHALL keep `answered` records when they are in the caller's own ledger.
+
+#### Scenario: a later answer replaces an earlier one
+- GIVEN `clm/ledger/alice/web` holding `answered` `a2` naming `q` with answer `no` at 10:00, then `answered` `a1` naming `q` with answer `yes` at 09:00, and `clm/ledger/bob/web` holding `answered` `b1` naming `q` with answer `yes` at 08:00
+- WHEN `fold_records` runs over them
+- THEN its open answers are `a2` (`alice/web`, `no`) and `b1` (`bob/web`, `yes`), and not `a1`
+
+#### Scenario: shown
+- GIVEN a ledger holding `answered` `a2` naming `q` by `alice/web`
+- WHEN `clm ledger show` runs
+- THEN it prints a line starting `answered a2 q alice/web`
+
+#### Serves
+- capability/follow-from-browser
+- architecture/per-writer-ledgers
