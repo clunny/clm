@@ -642,7 +642,11 @@ fn prompt_for(
          a Contract or Design edit builds nothing, and name it in the relying requirement's \
          `#### Needs` (`dependency-work-is-a-requirement`); turn facts and steps only a human \
          can supply into `question` or `human-task` backlog items whose `blocks` name the \
-         requirements that wait (`requirement-blocks`); and list the rest under \
+         requirements that wait (`requirement-blocks`), listing under `choices` of a `question` \
+         item that a short answer settles the two to five answers that settle it, each a short \
+         line, so the human can answer it with a tap in the web app \
+         (`web-answers-as-ledger-records`), and listing none for a question that needs \
+         explaining; and list the rest under \
          `## Open questions`. Ask the builder check's subagent, too, which capability tests see something different at the product's boundary because of each \
          requirement the change adds or modifies: such work is neither a requirement of `capability`, which holds none of its \
          own, nor a `#### Needs`, nor a backlog item, since the requirement's own build updates \
