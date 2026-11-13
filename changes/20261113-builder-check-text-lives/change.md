@@ -21,14 +21,14 @@ A requirement of `plugin` constrains text in a file only `plugin.propose` may ed
 
 ## Outcome
 
-- `plugin.propose/builder-check`: the text of `plugin/builder-check` as it stands, without its last sentence about the build loop's queue (that is `orchestrator.loop/humans-queue`, which `plugin`'s Contract still points to). Five scenarios: the check's own step before `clm pr open` with `## Open questions`; `blocks` and `Needs`; the four sequencing names (`contract-removal-needs`, `rename-adds-then-removes`, `coupled-changes-sequence`, `contract-step-deferred`); `builds nothing`; `builder-check-asks-order` and `its own component`. Its build replaces the skill's `forced-fixes-cover-additions` paragraph with the `path-ownership` and `coupled-changes-sequence` one, and moves `skills_run_a_builder_check` and `builder_check_reapplies_through_rebase` from `crates/clm/tests/plugin.rs` to `crates/clm/tests/plugin_propose.rs`, citing the new requirement (the Design's `Tests` paragraph).
+- `plugin.propose/builder-check`: the text of `plugin/builder-check` as it stands, without its last sentence about the build loop's queue (that is `orchestrator.loop/humans-queue`, which `plugin`'s Contract still points to). Five scenarios: the check's own step before `clm pr open` with `## Open questions`; `blocks` and `Needs`; the four sequencing names (`contract-removal-needs`, `rename-adds-then-removes`, `coupled-changes-sequence`, `contract-step-deferred`); `builds nothing`; `builder-check-asks-order` and `its own component`. Its build replaces the skill's `forced-fixes-cover-additions` paragraph with the `path-ownership` and `coupled-changes-sequence` one, and writes its own tests of it in `crates/clm/tests/plugin_propose.rs`, citing the new requirement, leaving `crates/clm/tests/plugin.rs` alone (`path-ownership`, `moved-markers-wait`). `plugin`'s build then deletes `skills_run_a_builder_check` and `builder_check_reapplies_through_rebase`, whose markers cite the removed requirement and are `obsolete` on `plugin` (`coupled-changes-sequence`).
 - `plugin/builder-check` is removed. `plugin`'s Contract bullet becomes `architecture-audit`, pointing at `plugin.propose/builder-check`, and its paragraph on children's files says a rule that asks something of one child's file alone is that child's requirement.
 - `plugin.propose`'s Contract says the rules that ask something of its file alone are its own, the builder check's among them.
 - The live change `20261112-components-own-their-tests` modified `plugin/builder-check`; the removal and the addition in this change are a move (`progress-follows-moves`), so that change counts `plugin.propose/builder-check` in its place.
 
 ## Edge cases and workarounds
 
-- Between the two builds the old tests' markers in `plugin.rs` are `obsolete` and the new requirement is `unbuilt`; whichever builds first, the other's tests keep passing, since both read the same skill.
+- `plugin.propose` builds first: `clm pending` lists `plugin/builder-check` as `obsolete`, `blocked plugin.propose/builder-check`, so `plugin`'s obsolete line waits for the new requirement (`moved-markers-wait`). Until `plugin` builds, the old tests in `plugin.rs` still read the skill; the `forced-fixes-cover-additions` needle in them fails once `plugin.propose`'s build replaces that paragraph, so that build must keep them passing until `plugin`'s build deletes them, the obligation `plugin.propose`'s Design already states for `plugin`'s tests of its file.
 - The question item's `blocks: [plugin/builder-check]` is dropped on this branch: `clm check` models the resulting graph without `clm apply`'s deletion of answered questions, so a `blocks` naming the removed requirement fails it.
 
 ## The human's answers
@@ -39,4 +39,4 @@ A requirement of `plugin` constrains text in a file only `plugin.propose` may ed
 
 ## Open questions
 
-None.
+- `plugin.propose`'s Design `Tests` paragraph says its build moves the tests citing its requirements out of `plugin.rs`, which `path-ownership` and `moved-markers-wait` (amended 2026-11-12) no longer allow for a file the root's `paths` hold. This change doesn't rely on it; rewording that paragraph is left to a change that edits `plugin.propose`'s Design (raised by the architecture audit).
