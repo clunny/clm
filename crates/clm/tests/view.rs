@@ -131,7 +131,7 @@ fn json(out: &Output) -> serde_json::Value {
 
 #[test]
 fn scenario_plain_chart() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     let out = clm(dir.path(), &["view", "spec"]);
     let text = stdout(&out);
@@ -143,7 +143,7 @@ fn scenario_plain_chart() {
 
 #[test]
 fn scenario_coloured_chart() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     let plain = stdout(&clm(dir.path(), &["view", "spec"]));
     let ansi = stdout(&clm(dir.path(), &["view", "spec", "--format", "ansi"]));
@@ -166,7 +166,7 @@ fn scenario_coloured_chart() {
 
 #[test]
 fn scenario_width() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = TempDir::new().unwrap();
     let long = "n".repeat(60);
     write(dir.path(), "specs/SPEC.md", ROOT);
@@ -198,7 +198,7 @@ fn scenario_width() {
 
 #[test]
 fn scenario_svg() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     let out = clm(dir.path(), &["view", "spec", "--format", "svg"]);
     let text = stdout(&out);
@@ -222,7 +222,7 @@ fn scenario_svg() {
 
 #[test]
 fn scenario_offline() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/x/SPEC.md", &node("", &["p"]));
@@ -251,25 +251,27 @@ fn scenario_offline() {
 
 #[test]
 fn scenario_unknown_view() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     let out = clm(dir.path(), &["view", "everything"]);
     assert_eq!(out.status.code(), Some(2));
     let err = String::from_utf8(out.stderr).unwrap();
-    for name in ["spec", "flight", "blockers"] {
+    for name in ["spec", "flight", "blockers", "queue"] {
         assert!(err.contains(name), "{err}");
     }
     for format in ["pdf", "png"] {
         let out = clm(dir.path(), &["view", "spec", "--format", format]);
         assert_eq!(out.status.code(), Some(2), "{format}");
     }
+    let out = clm(dir.path(), &["view", "queue", "--format", "svg"]);
+    assert_eq!(out.status.code(), Some(2));
     let out = clm(dir.path(), &["view", "spec", "--width", "0"]);
     assert_eq!(out.status.code(), Some(2));
 }
 
 #[test]
 fn violations_exit_1() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     write(dir.path(), "specs/c/SPEC.md", "---\ntitle: C\n---\n");
     let out = clm(dir.path(), &["view", "spec"]);
@@ -591,7 +593,7 @@ fn behind_origin(root: &Path, n: usize) {
 
 #[test]
 fn scenario_checkout_behind_on_the_chart() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     let d = dir.path();
     init(d);
@@ -625,7 +627,7 @@ fn scenario_checkout_behind_on_the_chart() {
 
 #[test]
 fn scenario_checkout_current() {
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = two_nodes();
     let d = dir.path();
     init(d);
