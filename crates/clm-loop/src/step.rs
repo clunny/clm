@@ -26,9 +26,43 @@ fn prompt_path(options: &Options, name: &str) -> Result<PathBuf, Failure> {
 /// printed it.
 fn write_prompt(options: &Options, name: &str, launcher: &str) -> Result<String, Failure> {
     let path = prompt_path(options, name)?;
-    let text = format!("loop run {name}\n{launcher}");
+    let abilities = clm_agent_harness::abilities(options.agent_harness);
+    let mut text = format!("loop run {name}\n{launcher}");
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    if !abilities.subagents {
+        text.push_str(
+            "\nThis agent harness has no subagents: run the prompt above in the session itself.\n",
+        );
+    }
+    if !abilities.isolated_worktrees {
+        let worktree = add_worktree(options, name)?;
+        text.push_str(&format!(
+            "\nThis agent harness makes no worktree for a subagent: work in {}, a worktree of origin/main the loop added for this run.\n",
+            worktree.display()
+        ));
+    }
     fs::write(&path, text).map_err(|e| Failure::Git(format!("{}: {e}", path.display())))?;
     Ok(path.display().to_string())
+}
+
+/// The worktree of a run at `.claude/worktrees/agent-<name>`, `:` written `-`, added from
+/// `origin/main` unless it stands (`loop-follows-agent-harness`).
+fn add_worktree(options: &Options, name: &str) -> Result<PathBuf, Failure> {
+    let root = std::path::absolute(&options.root)
+        .map_err(|e| Failure::Git(format!("{}: {e}", options.root.display())))?;
+    let path = root
+        .join(".claude/worktrees")
+        .join(format!("agent-{}", name.replace(':', "-")));
+    if !path.exists() {
+        let dir = path.display().to_string();
+        clm_git::git(
+            &options.root,
+            &["worktree", "add", "--detach", &dir, "origin/main"],
+        )?;
+    }
+    Ok(path)
 }
 
 /// `clm next`'s components, in its order.
@@ -94,9 +128,12 @@ fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Sna
     } else {
         read_priorities(options)?
     };
-    let build_model = clm_agent_harness::abilities(options.agent_harness)
-        .build_model
-        .map_or_else(|| file.session_model.clone(), str::to_string);
+    let abilities = clm_agent_harness::abilities(options.agent_harness);
+    // Where the agent harness can't choose a subagent's model, every run is on the session's.
+    let build_model = match abilities.build_model {
+        Some(model) if abilities.model_choice => model.to_string(),
+        _ => file.session_model.clone(),
+    };
     Ok(Snapshot {
         now: now(),
         main,
@@ -105,6 +142,7 @@ fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Sna
         priorities,
         groups: read_groups(options)?,
         build_model,
+        one_at_a_time: !abilities.subagents,
         file,
         backlog: read_backlog(options)?,
         unsafe_work: unsafe_work(wrap_up),

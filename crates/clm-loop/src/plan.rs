@@ -45,6 +45,8 @@ pub struct Snapshot {
     pub groups: Vec<Group>,
     /// The model builds launch on.
     pub build_model: String,
+    /// The agent harness has no subagents: the loop launches one run at a time.
+    pub one_at_a_time: bool,
     pub file: LoopFile,
     /// The backlog items of `origin/main` that block requirements or took in a red verify.
     pub backlog: Vec<BacklogRow>,
@@ -223,8 +225,18 @@ pub fn plan_of(s: &Snapshot) -> Plan {
             ));
         }
         candidates.sort_by_key(|(rank, build, ..)| (*rank, *build));
+        let busy = file
+            .runs
+            .iter()
+            .filter(|r| matches!(r.state, RunState::Planned | RunState::Running))
+            .count() as u64;
+        let places = if s.one_at_a_time {
+            s.free_places.min(1u64.saturating_sub(busy))
+        } else {
+            s.free_places
+        };
         for (i, (_, _, mut entry, launch)) in candidates.into_iter().enumerate() {
-            if (i as u64) < s.free_places {
+            if (i as u64) < places {
                 entry.reason = LAUNCHES_NOW.to_string();
                 launches.push(launch);
             } else {
