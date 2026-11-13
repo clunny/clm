@@ -2300,3 +2300,12 @@ fn env_is_in_byte_order_of_the_names_across_files() {
         .collect();
     assert_eq!(names, ["A", "Z", "b"]);
 }
+
+#[test]
+fn host_from_the_local_file() {
+    // req:config/host-setting@5ef6c885
+    let f = Fixture::new(None, Some("host = \"github\"\n")).local("host = \"none\"\n");
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.host.value, Host::None);
+    assert_eq!(s.host.layer, Layer::File(f.local_file()));
+}
