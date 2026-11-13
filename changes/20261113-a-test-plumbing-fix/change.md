@@ -21,10 +21,17 @@ The draft prompt's test-plumbing route has the session fix the plumbing on a bra
 ## Outcome
 
 - `orchestrator.triage/draft-corrects-bug-components`: the prompt's code-only paragraph says a `bug` or `deferred` item whose work is test plumbing, and whose fix changes only files belonging to no component the item names, has its `components` corrected on `spec/<id>` and is left, with the reason: the gate passes a trailer's deletion only for an item naming a component the branch's code belongs to, and otherwise prints `mixed`. A file belongs to a component whose `paths` hold it or whose requirement it cites, as the gate counts it (`fixes-count-where-cited`).
-- `docs/decisions/small-change-no-claim.md` gains an amendment saying the same, and that "on any branch" in `human-layer-proof` speaks of the branch's name.
+- `docs/decisions/small-change-no-claim.md` gains an amendment saying the same, and that "on any branch" in `human-layer-proof` speaks of the branch's name; `docs/decisions/human-layer-proof.md` gains a line saying so too, and the glossary's **Test plumbing** entry states the bound, so an attended session reads it in the guide (`method-in-the-plugin`).
 
 ## Constraints
+
+- Build order (builder check): `draft-corrects-bug-components` relies on no requirement that isn't current. Its new sentence goes in the prompt paragraph that already holds `components corrected to <components>`, worded as the exception to the branch of its own, and the phrases the new scenario names appear in no other paragraph. `scenario_draft_corrects_bug_components` is re-cited at the new version.
 
 - The Design of `orchestrator.triage` (**The job**) already says an item filed on the wrong component is corrected and cites this requirement; it stays true as written and is not edited.
 - No capability test sees anything different: the prompt's text is checked by `orchestrator.triage`'s own tests.
 - Edge cases and workarounds known: none.
+
+## Open questions
+
+- The architecture audit found that `plugin/skills/propose/SKILL.md` and `docs/guide/how-it-works.md` state the test-plumbing route without the gate's bound (`method-in-the-plugin`). Left: the glossary entry now states it for attended sessions, and a `plugin.propose` requirement would add a build for a case met once. Worth a requirement if an attended session meets the `mixed` gate.
+- The audit found that `plugin/skills/triage/SKILL.md` calls a `left <slug>: components corrected to <components>` line "a bug the draft found filed on the wrong component", and the line can now come from a `deferred` plumbing item. Left: what the skill does with the line is the same for either kind, and one word doesn't earn a `plugin.triage` build.
