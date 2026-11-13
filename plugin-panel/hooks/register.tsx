@@ -324,7 +324,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
         const failed = await pressStop($, key, await $.session.cwd())
         if (failed !== undefined) await update($, stopError, () => failed)
         await update($, generation, n => n + 1)
-      })()
+      })().catch(() => undefined)
     }
   }
   const lines = (drawn: PaneLine[], wrap: 'wrap' | 'truncate-end' = 'truncate-end') =>
@@ -436,7 +436,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
       {tabs}
       {machine}
       {fetchLine}
-        {stopRow}
+      {stopRow}
       {head && (
         <Box flexDirection="row" gap={2}>
           <Text wrap="truncate-end">{runsOf(head)}</Text>
