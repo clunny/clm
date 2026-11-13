@@ -408,6 +408,90 @@ fn the_setup_note_lists_the_rules_and_the_ways_out() {
     );
 }
 
+const BUILD_ID: &str = "20261112-build-loop-in-clm";
+const BUILD_NOTE: &str =
+    "Unattended sessions need clm's allow rules for clm build in .claude/settings.json";
+
+fn rules_without_build() -> Vec<String> {
+    all_rules()
+        .into_iter()
+        .filter(|r| !r.starts_with("Bash(clm build"))
+        .collect()
+}
+
+// req:upgrade/migration-build-allow-rules@1c2d0022
+#[test]
+fn a_project_lacking_the_build_rules_is_offered_them_and_keeps_its_settings() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    write_settings(dir.path(), "settings.json", &rules_without_build());
+    let before = fs::read_to_string(dir.path().join(".claude/settings.json")).unwrap();
+    let listed = list(dir.path()).unwrap();
+    assert!(
+        listed.contains(&format!("{BUILD_ID} advised note {BUILD_NOTE}\n")),
+        "{listed}"
+    );
+    let out = apply(dir.path()).unwrap();
+    assert!(out.contains(&format!("note {BUILD_ID}\n")), "{out}");
+    assert!(!out.contains("applied"), "{out}");
+    let after = fs::read_to_string(dir.path().join(".claude/settings.json")).unwrap();
+    assert_eq!(before, after);
+}
+
+// req:upgrade/migration-build-allow-rules@1c2d0022
+#[test]
+fn each_build_rule_is_needed_and_the_two_files_are_read_together() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    for keep in ["Bash(clm build)", "Bash(clm build *)"] {
+        let mut rules = rules_without_build();
+        rules.push(keep.to_string());
+        write_settings(dir.path(), "settings.json", &rules);
+        assert!(list(dir.path()).unwrap().contains(BUILD_ID), "{keep}");
+    }
+    write_settings(
+        dir.path(),
+        "settings.json",
+        &[rules_without_build(), vec!["Bash(clm build)".to_string()]].concat(),
+    );
+    write_settings(
+        dir.path(),
+        "settings.local.json",
+        &["Bash(clm build *)".to_string()],
+    );
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-build-allow-rules@1c2d0022
+#[test]
+fn a_declined_build_rules_migration_is_not_listed() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    write_settings(dir.path(), "settings.json", &rules_without_build());
+    fs::write(
+        dir.path().join("clm.toml"),
+        stamped(&format!("declined_migrations = [\"{BUILD_ID}\"]\n")),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-build-allow-rules@1c2d0022
+#[test]
+fn the_build_note_lists_the_rules_and_the_ways_out() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    write_settings(dir.path(), "settings.json", &rules_without_build());
+    let note = crate::note(dir.path(), BUILD_ID).unwrap();
+    assert!(note.starts_with(BUILD_NOTE), "{note}");
+    assert!(note.contains("`Bash(clm build)`"), "{note}");
+    assert!(note.contains("`Bash(clm build *)`"), "{note}");
+    assert!(note.contains("/clm:build"), "{note}");
+    assert!(note.contains("auto mode"), "{note}");
+    assert!(note.contains("`.claude/settings.json` by hand"), "{note}");
+    assert!(note.contains("clm init --check-permissions"), "{note}");
+    assert!(
+        note.contains(&format!("clm upgrade --decline {BUILD_ID}")),
+        "{note}"
+    );
+}
+
 const VERIFY_ID: &str = "20261107-slow-tests-after-land";
 const VERIFY_LINE: &str = "advised apply Slow tests can run after the land: offer [verify]";
 const OVERLAP_ID: &str = "20261107-projects-upgrading-past-the";
