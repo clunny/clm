@@ -53,13 +53,12 @@ fn loop_command(repo: &Repo, args: &[&str]) -> Vec<String> {
         .collect()
 }
 
+/// A node's requirement slugs with the versions a test cites them at.
+type Versions = Vec<(&'static str, String)>;
+
 /// A repository with nodes `a` (requirements `x`, `y`) and `b` (`z`) pending and nothing else,
 /// and the versions each build cites.
-fn queue() -> (
-    Repo,
-    Vec<(&'static str, String)>,
-    Vec<(&'static str, String)>,
-) {
+fn queue() -> (Repo, Versions, Versions) {
     let repo = Repo::init();
     repo.write("specs/b/SPEC.md", NODE_B);
     // The fixture's capability is already proven, so only `a` and `b` are pending.
