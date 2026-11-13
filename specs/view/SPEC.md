@@ -10,10 +10,11 @@ size_budget: { code_tokens: 55000 }
 ---
 
 ## Contract
-Views of a CLM repository for people to read (`views-rendered-by-clm`). `clm view <name>` prints one of three views:
+Views of a CLM repository for people to read (`views-rendered-by-clm`). `clm view <name>` prints one of four views:
 - **`spec`**: the architecture. Every component nested under its parent, with its status, its requirements counted by coverage state and drawn as a bar segmented by state with `n/m` current of total, owners and `depends_on` edges; its chart and SVG also show each pending component's queue state, and mark a component that is over its size budget (`oversized-is-a-state`).
 - **`flight`**: the work in flight. Every component with pending work and its queue state (`ready`, `claimed`, `blocked`), who holds its claim and for how long, and its pending requirements; then every live change with its requirements current of those its deltas add or modify, and whether it is complete.
 - **`blockers`**: what holds work up. Every component that can't start, grouped under the blocker at the end of its chain of waits, ranked by how many components that blocker holds up, with what waits on the human first.
+- **`queue`**: the build loop's plan (`orchestrator.loop`): what runs, what the loop launches next in its order with each entry's priority and why it is there, what waits on the human, and what waits on other work. It has no `svg` form.
 
 `--format text` (the default) draws a chart in box-drawing characters for a terminal or the chat; `--format ansi` draws the same chart coloured with ANSI escapes; `--format svg` prints a standalone SVG document; `--format json` prints the view's model. `--width <columns>` fits the chart to a width. `clm status` prints a grouped summary of the repository: totals first, then components, changes and claims.
 
@@ -35,6 +36,8 @@ Crate `clm-view`, with a model per view and a renderer per format. The commands 
 **Charts.** Long names are cut with `…`. The spec chart is an indented tree drawn with `├─ └─ │`, each component's line holding, in order, its ID, status, queue state, `⚠ oversized`, bar and `n/m`, owners, and `→` with its dependencies. The bar is ten cells shared in proportion among the component's current (`█`), behind (`▓`) and unbuilt (`░`) requirements, each non-zero count getting at least one cell and the rest going by largest remainder, ties in the order current, behind, unbuilt. `spec_view` takes the obsolete counts from `clm_check::pending` rather than from the requirement's ID, so the spec chart, the `flight` view and `clm next` agree on which component holds a removed requirement (`node-removal`). The flight chart draws each component's pending requirements as a bar of behind, unbuilt and obsolete, and each change's requirements as a bar with `complete` where it applies. The pinned line shapes (`flight-component-lines`, `spec-component-lines`, `blockers-root-lines`) exist because the `clm-panel` plugin finds a component's line by its prefix to add its own rows beneath and presses lines by position, the nth such line being the model's nth component or root (`plugin.panel`'s `component-inspector` and `blocker-chains`); they change only with this spec. Colours, in `ansi` and SVG, are `colour-meanings`, shared with the `web` app. The SVG lays components out in layers, dependents above their dependencies, with children inside their parent's box; it embeds its own styles and fonts fall back to the system's. Each box holds its label, its bar as coloured segments and `n/m`; a `converged` component keeps the outline of its status.
 
 **Size budget** (`slim-components`, `node-size-budgets`). The code budget is 55000 tokens, over the default 40000, because the three views and `clm status` share one chart and SVG shell (`chart.rs`, `svg.rs` and the head line every form begins with), which a split by view would leave in the parent while each child held a third of its callers.
+
+**Queue** (`queue-view`). The `queue` model is a plain type this crate defines, with no git and no dependency on `orchestrator.loop`, which computes it (`plan`); `view.repo` hands it to the renderers, so imports run one way, `view` below `orchestrator.loop` below `view.repo`, and the crate still builds for `wasm32-unknown-unknown`. Its chart has no layout of its own beyond sections of lines, so it has no `svg` form: the web app shows no loop, which is one clone's.
 
 ## Requirements
 
@@ -109,7 +112,7 @@ A blank line follows the summary and each section. A section is its name on a li
 - plugin.hooks/session-status
 
 ### Requirement: view-command
-`clm view <name>` SHALL print the `spec`, `flight` or `blockers` view of the repository, from the working tree and the local refs only and without fetching, and exit 0, or print the spec graph's violations and exit 1. `--format` SHALL select the form: `text` (the default), a chart in box-drawing characters with no escape sequences; `ansi`, the same characters with ANSI colour escapes added; `svg`, a standalone SVG document; and `json`, the view's model. In `text` and `ansi`, no line SHALL be wider than `--width` columns (default 100), and every state the chart shows SHALL be written as a word or symbol, not only as a colour. When `HEAD` can be read, the `text` and `ansi` charts SHALL begin with the checkout line as `status-report` defines it, the `svg` document SHALL hold the same words, and the `json` model SHALL carry a top-level `checkout` with the line's `commit` and, when `refs/remotes/origin/main` exists, its count as `behind`, 0 included (`views-name-their-commit`). An unknown name or format, `png` among them, SHALL exit 2 with usage.
+`clm view <name>` SHALL print the `spec`, `flight`, `blockers` or `queue` view of the repository, from the working tree and the local refs only and without fetching, and exit 0, or print the spec graph's violations and exit 1. `--format` SHALL select the form: `text` (the default), a chart in box-drawing characters with no escape sequences; `ansi`, the same characters with ANSI colour escapes added; `svg`, a standalone SVG document; and `json`, the view's model. In `text` and `ansi`, no line SHALL be wider than `--width` columns (default 100), and every state the chart shows SHALL be written as a word or symbol, not only as a colour. When `HEAD` can be read, the `text` and `ansi` charts SHALL begin with the checkout line as `status-report` defines it, the `svg` document SHALL hold the same words, and the `json` model SHALL carry a top-level `checkout` with the line's `commit` and, when `refs/remotes/origin/main` exists, its count as `behind`, 0 included (`views-name-their-commit`). An unknown name or format, `png` among them, and `--format svg` for `queue`, SHALL exit 2 with usage.
 
 #### Scenario: plain chart
 - GIVEN a repository with components `a` and `b`, `b` depending on `a`
@@ -132,7 +135,7 @@ A blank line follows the summary and each section. A section is its name on a li
 - THEN it exits 0 and shows `x` as claimed
 
 #### Scenario: unknown view
-- WHEN `clm view everything` runs, and then `clm view spec --format png`
+- WHEN `clm view everything` runs, then `clm view spec --format png`, and then `clm view queue --format svg`
 - THEN each exits 2
 
 #### Scenario: checkout behind on the chart
@@ -354,3 +357,19 @@ Each component of the `spec` model SHALL also carry `contract`, the text of its 
 
 #### Serves
 - capability/watch-beside-chat
+
+### Requirement: queue-view
+`clm-view` SHALL offer the `queue` model, a plain type with the sections `running`, `next`, `waiting_on_you` and `waiting_on_work`, each a list of entries carrying a name, a kind, and the fields its section shows: for a running entry its model, round, how long it has run and whether it is held by a session taken over; for a next entry its priority and the reason for its place; for an entry waiting on the human what it is, since when, and what the human does about it; for an entry waiting on work what it waits on. Its `text` and `ansi` charts SHALL begin with the checkout line, then a line `loop held, renewed <n>m ago`, `loop not held` or `stop requested: drain|now`, then each section under its heading (`running`, `next up`, `waiting on you`, `waiting on work`) with `  none` under an empty one, one entry per line starting with two spaces and its name, in the model's order; `json` SHALL be the model with `"view": "queue"`.
+
+#### Scenario: chart sections
+- GIVEN a queue model with running `build:a` on `sonnet` for 12 minutes, next `build:b` at `P2` waiting for a place, a fold batch `x` waiting on the human, and nothing waiting on work
+- WHEN it is rendered as `text`
+- THEN the lines after the checkout line are the loop line, `running`, `  build:a` with `sonnet` and `12m`, `next up`, `  build:b` with `P2` and `waits for a place`, `waiting on you`, `  fold:x` with `say "approve x"`, `waiting on work` and `  none`
+
+#### Scenario: wasm
+- WHEN `cargo build --target wasm32-unknown-unknown --no-default-features -p clm-view` runs
+- THEN it builds
+
+#### Serves
+- capability/watch-beside-chat
+- capability/build-from-spec

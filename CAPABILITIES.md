@@ -102,15 +102,20 @@ A backlog grows faster than a person drafts changes for it, and reading drafts i
 - THEN the drafts that land on checks land, and the ones that need review are gathered into one branch for one approval
 
 ### Capability: build-from-spec
-A person can have every pending requirement built automatically: claimed, built test-first in parallel isolated sessions, and landed.
+A person can have every pending requirement built automatically and continuously, most urgent first: claimed, built test-first in parallel isolated sessions, and landed, by one loop per clone that any new session resumes, and that keeps whatever needs the person in sight until it is dealt with.
 
 #### Why
-AI writes all the code, so building from the spec has to run without a human driving each step.
+AI writes all the code, so building from the spec has to run without a human driving each step, and without losing its place or the person's open questions when a session ends.
 
 #### Scenario: drain the queue
 - GIVEN two components with pending requirements and no `Needs` between them
 - WHEN the person runs `/clm:build`
 - THEN both are built in parallel and landed, and `clm pending` is empty
+
+#### Scenario: resume in a new session
+- GIVEN a `/clm:build` session that ended while a build was running
+- WHEN the person runs `/clm:build` in a new session once the old one's lease has lapsed
+- THEN the build is relaunched on its branch and lands, with nothing redone that had landed
 
 ### Capability: right-model-per-task
 A person can rely on every agent CLM launches running on a model suited to its work, named explicitly.
@@ -228,7 +233,7 @@ People decide what to do next from what they can see, and the state lives scatte
 - THEN it shows each, and names the commit it describes
 
 ### Capability: watch-beside-chat
-A person can watch the project's state update in a pane beside their Claude Code chat. The pane is Claude Code's alone, since no other supported agent harness lets a plugin draw one; there `/clm:view` answers in the chat and `clm view` runs beside it.
+A person can watch the project's state update in a pane beside their Claude Code chat, including the build loop's queue (what runs, what runs next, and what waits on them), and drain or stop the loop from it. The pane is Claude Code's alone, since no other supported agent harness lets a plugin draw one; there `/clm:view` answers in the chat and `clm view` runs beside it.
 
 #### Why
 Switching to a terminal to ask for the state breaks the conversation it informs.
@@ -237,6 +242,11 @@ Switching to a terminal to ask for the state breaks the conversation it informs.
 - GIVEN the CLM pane open in Claude Code
 - WHEN a build lands
 - THEN the pane shows the new state without the person asking
+
+#### Scenario: stop from the pane
+- GIVEN the CLM pane open on its Queue tab while the build loop runs
+- WHEN the person presses Drain
+- THEN the loop launches nothing new, and the Queue tab says a drain is requested
 
 ### Capability: watch-machine-load
 A person can watch, beside their Claude Code chat, how the machine's CPU load, available memory and free disk have moved over the last half hour while builds run, and see when one is running short of what the builds need.

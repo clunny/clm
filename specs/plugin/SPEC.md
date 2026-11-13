@@ -23,15 +23,15 @@ The plugin `clm`, one set of files packaged for Claude Code and for Codex (`agen
 
 The rules several skills share are this component's, though the files they constrain are its children's. What each asks of the skills:
 - `skills`: `propose` and `build` never push `main` by any means but `clm land`, and run `clm approve` only after the human's yes, through the guard; no skill or agent names `clm hash`, only `clm hashes`;
-- `builder-check` and `architecture-audit`: `propose` runs a builder check and, beside it, the `architecture-auditor` before its pull request; `build` lists the `question` and `human-task` items that block what it leaves; `contribution` launches the auditor too;
-- `session-worktrees`: `propose`, `init` and `build` cut each branch in a worktree of its own under `.claude/worktrees/`, never switching the checkout the session started in, except in a session already isolated there; `triage` cuts its archive branch the same way, a rule its own requirement states (`plugin.triage/triage-archives-complete`);
-- `defect-check-before-pr`: `propose` and `build` review the session for CLM defects before any pull request; `propose` fixes the reported ones once its branches have landed, and `build` drafts them with the backlog's other bugs (`plugin.build/build-drafts-bugs`);
+- `builder-check` and `architecture-audit`: `propose` runs a builder check and, beside it, the `architecture-auditor` before its pull request; `build`'s loop keeps the `question` and `human-task` items that block what it leaves in the human's queue (`orchestrator.loop/humans-queue`); `contribution` launches the auditor too;
+- `session-worktrees`: `propose` and `init` cut each branch in a worktree of its own under `.claude/worktrees/`, never switching the checkout the session started in, except in a session already isolated there; `triage` cuts its archive branch the same way, a rule its own requirement states (`plugin.triage/triage-archives-complete`);
+- `defect-check-before-pr`: `propose` reviews the session for CLM defects before any pull request and fixes the reported ones once its branches have landed; `build`, which opens no pull request, reports each when it happens, and its loop drafts them with the backlog's other bugs (`orchestrator.loop/plan-order`);
 - `recommend-the-right-design`: `triage` and `propose` read the specs and code before recommending, and recommend the correct design over the convenient one;
 - `skills-write-serves` and `skills-write-enforcement`: `propose` and `init` give components `serves`, and constraints `#### Enforced by` or `#### Untested`;
 - `launch-models`: every subagent a skill launches has its model named;
 - `skills-follow-agent-harness`: every skill reads `clm agent-harness` and follows what the agent harness can do, in words no single agent harness owns;
 - `skills-push-with-clm`: no skill says `git push`; pushes and remote deletes go through `clm branch push` and `clm branch delete`;
-- `unattended-permissions-check` and `skills-run-verify`: `build` and `triage` check the allow rules before their first launch, and run `clm verify --due --event work-done` before `clm wrap-up`;
+- `unattended-permissions-check` and `skills-run-verify`: `build` and `triage` check the allow rules before their first launch; `triage` runs `clm verify --due --event work-done` before `clm wrap-up`, and `build`'s loop runs `clm verify` when the project's triggers say (`orchestrator.loop/plan-verify`);
 - `wrap-up-left-lines`: a skill that runs `clm wrap-up` passes each `left` line to the human and never prunes a worktree itself;
 - `method-pointers`: no skill or agent names `docs/guide/` but `propose`'s two pages, each `clm guide <page>` named is a page, and `init` explains graph shape before the first component map;
 - `renamed-commands`, `says-architectural-constraint`, `skills-say-new-words` and `skills-say-component`: every file under `plugin/` uses the current command names, terms and words.
@@ -59,7 +59,7 @@ The plugin is `plugin/` in this repository: `.claude-plugin/plugin.json` (`clm`,
 
 A session whose checkout already lies under `.claude/worktrees/` (its `git rev-parse --show-toplevel` says so), in a directory the skills don't add, is the exception. Claude Code names a subagent's worktree `agent-<id>`, while the skills name theirs by change ID or `archive`; a human session started in one of the skills' worktrees is no more isolated than the checkout that made it, so it adds a worktree as any other session does. Claude Code isolates a subagent's session in its worktree, refusing every write and every git operation that targets another worktree, so such a session can't use a worktree it adds, even when the `git worktree add` itself goes through, and needs none, since a worktree there is one session's own and no other session's `HEAD` moves when it switches. Builds and drafts need none of this: they already run in the worktree the Agent tool's `isolation: "worktree"` gives them (`builds-in-subagents`).
 
-**Shared steps** (`defect-check-before-pr`). Both skills resolve what `clm rebase` leaves them the same way: a `spec changed` report by reading it and `clm pending <component>` and adapting the work, conflicted files by hand, stale deltas by rebasing them on `clm hashes`, check failures by fixing them. Both skills review the session for CLM defects before opening any pull request (`defect-check-before-pr`). Where `clm defect` writes to the backlog, `propose` then **fixes reported defects** once its branch has landed, before `clm wrap-up` and the summary (`defect-reports`), in the branch's worktree switched with `git switch --detach origin/main`; the fix branch's pull request lists the defect as fixed, and the landed pull request that reported it isn't edited. `build` has no such step: the defects its builds report are `kind: bug` items, which its drain drafts with the backlog's other bugs once they reach `origin/main` (`plugin.build/build-drafts-bugs`).
+**Shared steps** (`defect-check-before-pr`). `propose` resolves what `clm rebase` leaves it, as the runs of `build`'s loop do: a `spec changed` report by reading it and `clm pending <component>` and adapting the work, conflicted files by hand, stale deltas by rebasing them on `clm hashes`, check failures by fixing them. `propose` reviews the session for CLM defects before opening any pull request, and `build` reports each when it happens (`defect-check-before-pr`). Where `clm defect` writes to the backlog, `propose` then **fixes reported defects** once its branch has landed, before `clm wrap-up` and the summary (`defect-reports`), in the branch's worktree switched with `git switch --detach origin/main`; the fix branch's pull request lists the defect as fixed, and the landed pull request that reported it isn't edited. `build` has no such step: the defects its runs report are `kind: bug` items, which its loop drafts with the backlog's other bugs once they reach `origin/main` (`orchestrator.loop/plan-order`).
 
 **The method** (`method-in-the-plugin`, `first-graph-teaches-shape`). An adopter's project has none of this repository's `docs/`, `ARCHITECTURE.md` rationale or specs, so the skills are where it learns the method. `clm guide <page>` prints a page from the binary the shim runs, offline and at the plugin's version (`guide-in-the-binary`), so a skill names it and not `docs/guide/...`, a path only this repository has, except the two pages a spec branch edits that `method-pointers` lets `propose` name. A test per skill keeps its pointers, and a test checks that each page a skill names is a file in `docs/guide/`.
 
@@ -128,17 +128,17 @@ The repo SHALL have `.claude-plugin/marketplace.json` listing a plugin `clm` wit
 - architecture/guard-blocks-push-to-main
 
 ### Requirement: skills
-The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, each with a `description` in its frontmatter. Each SHALL tell Claude never to push `main` by any means but `clm land`, and to run `clm approve` only after the human says yes in the conversation, through the guard's confirmation. No skill or agent SHALL name `clm hash` (the word `hash` as the subcommand), which Claude Code's worktree isolation refuses: they SHALL name `clm hashes`. `propose` SHALL name `clm hashes`, `clm check`, `clm apply`, `clm rebase`, `clm gate`, `spec review`, `human_burdens`, `clm pr open`, `clm approve`, `clm land` and `clm wrap-up`, and the section `## Intent`, and SHALL NOT tell Claude to set `after` or `prefer_after`. It SHALL tell Claude that a branch whose `clm gate` prints `spec review` as its first line lands only after the human's `clm approve`, and that any other spec branch lands on checks (`yes-no-review`). No skill SHALL name `gh pr`, `gh api`, `spec-approved`, `spec-review`, `clm watch`, `clm review`, `clm significant`, `## Significant`, the field `` `gate` ``, `gate: `, or the review tiers `HARD`, `SOFT` and `AUTO`. `build` SHALL name `clm next`, `clm run`, `isolation`, `clm rebase`, `clm pending`, `clm land` and `clm wrap-up`, and SHALL tell Claude to archive each change `clm wrap-up` reports `complete` through a code branch it lands. No `SKILL.md` SHALL hold `` `clm rebase` until it exits 0 ``: `propose` and `init` SHALL tell Claude to run `clm rebase` until its last line is `rebase ok`, and to read its outcome from that line, never from its exit code.
+The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, each with a `description` in its frontmatter. Each SHALL tell Claude never to push `main` by any means but `clm land`, and to run `clm approve` only after the human says yes in the conversation, through the guard's confirmation. No skill or agent SHALL name `clm hash` (the word `hash` as the subcommand), which Claude Code's worktree isolation refuses: they SHALL name `clm hashes`. `propose` SHALL name `clm hashes`, `clm check`, `clm apply`, `clm rebase`, `clm gate`, `spec review`, `human_burdens`, `clm pr open`, `clm approve`, `clm land` and `clm wrap-up`, and the section `## Intent`, and SHALL NOT tell Claude to set `after` or `prefer_after`. It SHALL tell Claude that a branch whose `clm gate` prints `spec review` as its first line lands only after the human's `clm approve`, and that any other spec branch lands on checks (`yes-no-review`). No skill SHALL name `gh pr`, `gh api`, `spec-approved`, `spec-review`, `clm watch`, `clm review`, `clm significant`, `## Significant`, the field `` `gate` ``, `gate: `, or the review tiers `HARD`, `SOFT` and `AUTO`. `build` SHALL name `clm build start`, `clm build step`, `clm build launched`, `clm build returned`, `clm build stop` and `isolation`, since the build loop decides every step and archives the complete changes itself (`orchestrator.loop`). No `SKILL.md` SHALL hold `` `clm rebase` until it exits 0 ``: `propose` and `init` SHALL tell Claude to run `clm rebase` until its last line is `rebase ok`, and to read its outcome from that line, never from its exit code.
 
 #### Scenario: skill without the rule
 - GIVEN a `SKILL.md` that doesn't mention `clm approve`
 - WHEN the tests run
 - THEN a test fails naming the skill
 
-#### Scenario: skill without sync
-- GIVEN an `build` `SKILL.md` that doesn't mention `clm rebase`
+#### Scenario: build without the loop
+- GIVEN a `build` `SKILL.md` that doesn't mention `clm build returned`
 - WHEN the tests run
-- THEN a test fails naming the skill and `clm rebase`
+- THEN a test fails naming the skill and `clm build returned`
 
 #### Scenario: skill without land
 - GIVEN a `propose` `SKILL.md` that doesn't mention `clm land`
@@ -150,10 +150,6 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - WHEN the tests run
 - THEN a test fails naming the skill and `prefer_after`
 
-#### Scenario: build without archiving
-- GIVEN an `build` `SKILL.md` that doesn't mention `complete`
-- WHEN the tests run
-- THEN a test fails naming the skill and `complete`
 
 #### Scenario: skill naming a label
 - GIVEN a `propose` `SKILL.md` whose approval step says `gh api -X POST repos/{owner}/{repo}/issues/<pr>/labels -f 'labels[]=spec-approved'`
@@ -166,7 +162,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN each time a test fails naming the skill and `SOFT` or `gate: `
 
 #### Scenario: skill naming the old command
-- GIVEN an `build` `SKILL.md` that says to rebase stale deltas on `clm hash`
+- GIVEN a `propose` `SKILL.md` that says to rebase stale deltas on `clm hash`
 - WHEN the tests run
 - THEN a test fails naming the skill and `clm hash`
 
@@ -176,6 +172,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN each time a test fails naming the skill and `rebase ok`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
 - model/parse-changes
 - model/parse-backlog
@@ -187,7 +184,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - architecture/approval-policy
 
 ### Requirement: builder-check
-`skills/propose/SKILL.md` SHALL tell Claude to run a builder check with a fresh subagent before opening the spec PR, to list the questions it leaves open under `## Open questions` in the PR body, to record facts and steps only a human can supply as `question` or `human-task` backlog items whose `blocks` name the requirements that wait on them, and to give a requirement that can't be built until another component's pending requirement is built a `#### Needs` block naming it (`requirement-needs`). It SHALL tell Claude that a requirement that removes or renames part of a component's Contract that another component's code uses is such a requirement: it needs the requirements that move each such component off the old contract, and a removal written only as `REMOVED Requirements` can't carry them, so it is stated as an added or modified requirement or split per `expand-contract` (`contract-removal-needs`); that a rename is written as two requirements of the provider in the same change (`rename-adds-then-removes`): an adding one that offers the new name beside the old, needs nothing and leaves every user's code building as it stands (a second name, never a widened type a user matches exhaustively), and a removing one, stated as an added or modified requirement, that needs each user's move, each move needing the adding one, so the needs form no cycle, the adding one's build marking the old name `clm:remove-by` the change, which stays live until the removal is built (`expand-contract`); and to ask the builder-check subagent to search the code of the other components for uses of each part of a Contract the change removes or renames, exhaustive ones (a `match`, a `switch` with no default, a map keyed by the type) included, and for exhaustive uses of each type the change widens. It SHALL tell Claude that a requirement that widens a type another component matches exhaustively (an added enum variant) needs that component's requirements that build and name the code the new value selects there, which need nothing of the widening and are tested by calling that code directly, so the widening's build adds the arm as a forced fix, and that component's requirements that reach the code through the new value need the widening (`forced-fixes-cover-additions`). It SHALL tell Claude that when the removal can't carry that `#### Needs` (the removing component is required and the component that must move is optional, or the removed text is a whole requirement), the contract step goes in a second change on the same branch, left `proposed`, and the branch also adds a `kind: deferred` backlog item for it whose `components` are the contract change's components and whose body names the contract change and each requirement it waits on with the version it must be current at, which the contract change's `resolves` doesn't name, so `clm triage` shows it until the human judges it due (`contract-step-deferred`). It SHALL tell Claude to have the builder name the work a requirement relies on from another component that no requirement of that component states, since a Contract or Design edit alone builds nothing, adding that component's requirement to the change and naming it in the relying requirement's `#### Needs` (`dependency-work-is-a-requirement`). It SHALL tell Claude to ask the builder-check subagent, for each requirement the change adds or modifies, which requirements not yet current it relies on, of any component, among the change's own and those `clm pending` lists, answering `none` for a requirement that relies on none (`builder-check-asks-order`), so a missing order shows as a named pair rather than a question the subagent may not think to ask; and that a requirement relying on a pending requirement of its own component that has a `#### Needs` block carries that block's needs too, since a need may not name its own component and the build's order within the component can't wait on another component's work. `skills/build/SKILL.md` SHALL tell Claude to list, when it stops, the `question` and `human-task` items that block requirements, with the requirements they block.
+`skills/propose/SKILL.md` SHALL tell Claude to run a builder check with a fresh subagent before opening the spec PR, to list the questions it leaves open under `## Open questions` in the PR body, to record facts and steps only a human can supply as `question` or `human-task` backlog items whose `blocks` name the requirements that wait on them, and to give a requirement that can't be built until another component's pending requirement is built a `#### Needs` block naming it (`requirement-needs`). It SHALL tell Claude that a requirement that removes or renames part of a component's Contract that another component's code uses is such a requirement: it needs the requirements that move each such component off the old contract, and a removal written only as `REMOVED Requirements` can't carry them, so it is stated as an added or modified requirement or split per `expand-contract` (`contract-removal-needs`); that a rename is written as two requirements of the provider in the same change (`rename-adds-then-removes`): an adding one that offers the new name beside the old, needs nothing and leaves every user's code building as it stands (a second name, never a widened type a user matches exhaustively), and a removing one, stated as an added or modified requirement, that needs each user's move, each move needing the adding one, so the needs form no cycle, the adding one's build marking the old name `clm:remove-by` the change, which stays live until the removal is built (`expand-contract`); and to ask the builder-check subagent to search the code of the other components for uses of each part of a Contract the change removes or renames, exhaustive ones (a `match`, a `switch` with no default, a map keyed by the type) included, and for exhaustive uses of each type the change widens. It SHALL tell Claude that a requirement that widens a type another component matches exhaustively (an added enum variant) needs that component's requirements that build and name the code the new value selects there, which need nothing of the widening and are tested by calling that code directly, so the widening's build adds the arm as a forced fix, and that component's requirements that reach the code through the new value need the widening (`forced-fixes-cover-additions`). It SHALL tell Claude that when the removal can't carry that `#### Needs` (the removing component is required and the component that must move is optional, or the removed text is a whole requirement), the contract step goes in a second change on the same branch, left `proposed`, and the branch also adds a `kind: deferred` backlog item for it whose `components` are the contract change's components and whose body names the contract change and each requirement it waits on with the version it must be current at, which the contract change's `resolves` doesn't name, so `clm triage` shows it until the human judges it due (`contract-step-deferred`). It SHALL tell Claude to have the builder name the work a requirement relies on from another component that no requirement of that component states, since a Contract or Design edit alone builds nothing, adding that component's requirement to the change and naming it in the relying requirement's `#### Needs` (`dependency-work-is-a-requirement`). It SHALL tell Claude to ask the builder-check subagent, for each requirement the change adds or modifies, which requirements not yet current it relies on, of any component, among the change's own and those `clm pending` lists, answering `none` for a requirement that relies on none (`builder-check-asks-order`), so a missing order shows as a named pair rather than a question the subagent may not think to ask; and that a requirement relying on a pending requirement of its own component that has a `#### Needs` block carries that block's needs too, since a need may not name its own component and the build's order within the component can't wait on another component's work. The build loop keeps those items in the human's queue, with the requirements they block (`orchestrator.loop/humans-queue`).
 
 #### Scenario: skill without the check
 - GIVEN a `skills/propose/SKILL.md` that doesn't mention `## Open questions`
@@ -245,6 +242,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - architecture/ask-the-architect
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - model/parse-backlog
 
 ### Requirement: shim-targets
@@ -277,12 +275,12 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - ci/release
 
 ### Requirement: defect-check-before-pr
-`skills/propose/SKILL.md` and `skills/build/SKILL.md` SHALL tell Claude, before opening any PR, to review the session for CLM defects neither reported nor fixed, report each with `clm defect` unless the session-start rule has it folded into the branch, naming with `--component` the component a fix would lie in, and list every defect of the session under `## CLM defects` in the PR body, each fixed one with its fix. `skills/propose/SKILL.md` SHALL also have a step, **fix reported defects**, for when `clm defect` writes to the backlog: once the session's branch has landed and before `clm wrap-up` and the summary, fix each small defect the session reported whose item is on `origin/main`, one at a time and one round only, with `clm claim <component> --fix backlog/<slug>` as `propose`'s code fixes do, in the branch's worktree and never in the checkout the session started in, unless that checkout is an isolated session's own under `.claude/worktrees/` (`session-worktrees`), where the fix is made in it; fold a defect met during such a fix when it lies in that fix's component and leave it filed otherwise; and when a claim is refused or a fix turns out large, leave the item filed, release a claim it took by deleting its branch on `origin`, and name the item in the summary. `skills/build/SKILL.md` SHALL have no such step, and no paragraph holding `fix reported defects`: its drain drafts the defects its builds report with the backlog's other bugs (`plugin.build/build-drafts-bugs`).
+`skills/propose/SKILL.md` SHALL tell Claude, before opening any PR, to review the session for CLM defects neither reported nor fixed, report each with `clm defect` unless the session-start rule has it folded into the branch, naming with `--component` the component a fix would lie in, and list every defect of the session under `## CLM defects` in the PR body, each fixed one with its fix. `skills/propose/SKILL.md` SHALL also have a step, **fix reported defects**, for when `clm defect` writes to the backlog: once the session's branch has landed and before `clm wrap-up` and the summary, fix each small defect the session reported whose item is on `origin/main`, one at a time and one round only, with `clm claim <component> --fix backlog/<slug>` as `propose`'s code fixes do, in the branch's worktree and never in the checkout the session started in, unless that checkout is an isolated session's own under `.claude/worktrees/` (`session-worktrees`), where the fix is made in it; fold a defect met during such a fix when it lies in that fix's component and leave it filed otherwise; and when a claim is refused or a fix turns out large, leave the item filed, release a claim it took by deleting its branch on `origin`, and name the item in the summary. `skills/build/SKILL.md` SHALL tell Claude to report each CLM defect it meets with `clm defect` when it happens, naming with `--component` the component a fix would lie in, since the session opens no pull request of its own; it SHALL have no step holding `fix reported defects`: its loop drafts the defects reported to the backlog with the backlog's other bugs (`orchestrator.loop/plan-order`).
 
 #### Scenario: skill without the check
-- GIVEN a `skills/build/SKILL.md` that doesn't mention `## CLM defects`
+- GIVEN a `skills/propose/SKILL.md` that doesn't mention `## CLM defects`, and in a second run a `skills/build/SKILL.md` that doesn't mention `clm defect`
 - WHEN the tests run
-- THEN a test fails naming the skill and `## CLM defects`
+- THEN each time a test fails naming the skill and `## CLM defects` or `clm defect`
 
 #### Scenario: skill without fixed defects
 - GIVEN a `skills/propose/SKILL.md` whose defect check doesn't say `each fixed one with its fix`
@@ -300,14 +298,14 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN a test fails naming the skill and `fix reported defects`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
-- plugin.build/build-drafts-bugs
 
 #### Serves
 - capability/report-defects
 
 ### Requirement: session-worktrees
-`skills/propose/SKILL.md` SHALL tell Claude to cut `spec/<id>` with `git worktree add .claude/worktrees/<id> -b spec/<id> origin/main`, to change into that worktree and do all later work there, never switching the checkout the session started in onto another branch, and, once the branch has landed, to change back to that checkout and remove the worktree with `git worktree remove` before `clm wrap-up`. `skills/init/SKILL.md` SHALL tell Claude to cut its spec branch the same way, in `.claude/worktrees/<YYYYMMDD>-init`, after the bootstrap push, and `skills/build/SKILL.md` to cut its archive branch with `git worktree add` and remove that worktree with `git worktree remove` once it has landed (`session-worktrees`). `skills/propose/SKILL.md` SHALL also tell Claude that when the checkout the session started in already lies under `.claude/worktrees/`, where Claude Code isolates a subagent's session and refuses every git command aimed at another worktree, in a directory the skills don't add themselves (they name theirs by a change ID, `<YYYYMMDD>-<slug>` or `archive`), it cuts `spec/<id>` in that checkout instead, with `git switch -c spec/<id> origin/main`, does all later work there, removes no worktree, and switches it off the branch with `git switch --detach origin/main` once the branch has landed, before `clm wrap-up`; and that a session started in one of the skills' own worktrees adds its worktree under the clone's main checkout, the first path `git worktree list` prints, as `git worktree add <main>/.claude/worktrees/<id>`, never nested in the worktree it started in. `skills/build/SKILL.md` SHALL tell Claude, in its archive step, that a session isolated under `.claude/worktrees/` in that sense cuts its archive branch in the checkout it has instead of in `.claude/worktrees/archive`: it cuts it with `git switch -c impl/archive/<id> origin/main`, removes no worktree, and switches the checkout off the branch with `git switch --detach origin/main` once it has landed, or its push was refused, before deleting a local branch with `git branch -D` and before `clm wrap-up`.
+`skills/propose/SKILL.md` SHALL tell Claude to cut `spec/<id>` with `git worktree add .claude/worktrees/<id> -b spec/<id> origin/main`, to change into that worktree and do all later work there, never switching the checkout the session started in onto another branch, and, once the branch has landed, to change back to that checkout and remove the worktree with `git worktree remove` before `clm wrap-up`. `skills/init/SKILL.md` SHALL tell Claude to cut its spec branch the same way, in `.claude/worktrees/<YYYYMMDD>-init`, after the bootstrap push (`session-worktrees`). `skills/build/SKILL.md` cuts no branch: its loop's runs work in worktrees of their own (`orchestrator.loop`). `skills/propose/SKILL.md` SHALL also tell Claude that when the checkout the session started in already lies under `.claude/worktrees/`, where Claude Code isolates a subagent's session and refuses every git command aimed at another worktree, in a directory the skills don't add themselves (they name theirs by a change ID, `<YYYYMMDD>-<slug>`, or `archive`, which earlier versions of `build` made), it cuts `spec/<id>` in that checkout instead, with `git switch -c spec/<id> origin/main`, does all later work there, removes no worktree, and switches it off the branch with `git switch --detach origin/main` once the branch has landed, before `clm wrap-up`; and that a session started in one of the skills' own worktrees adds its worktree under the clone's main checkout, the first path `git worktree list` prints, as `git worktree add <main>/.claude/worktrees/<id>`, never nested in the worktree it started in.
 
 #### Scenario: propose with no step for an isolated session
 - GIVEN a `skills/propose/SKILL.md` that doesn't mention `git switch -c spec/<id> origin/main`
@@ -329,27 +327,16 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - WHEN the tests run
 - THEN a test fails naming the skill and `git worktree remove`
 
-#### Scenario: archive in the shared checkout
-- GIVEN a `skills/build/SKILL.md` that doesn't mention `git worktree add`
-- WHEN the tests run
-- THEN a test fails naming the skill and `git worktree add`
 
 #### Scenario: init without a worktree
 - GIVEN a `skills/init/SKILL.md` that doesn't mention `git worktree add`
 - WHEN the tests run
 - THEN a test fails naming the skill and `git worktree add`
 
-#### Scenario: archive worktree left behind
-- GIVEN a `skills/build/SKILL.md` that doesn't mention `git worktree remove`
-- WHEN the tests run
-- THEN a test fails naming the skill and `git worktree remove`
 
-#### Scenario: build archiving with no step for an isolated session
-- GIVEN a `skills/build/SKILL.md` that doesn't mention `git switch -c impl/archive/<id> origin/main`
-- WHEN the tests run
-- THEN a test fails naming the skill and `git switch -c impl/archive/<id>`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
 
 #### Serves
@@ -394,15 +381,18 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN a test fails naming the skill and `no-such-page`
 
 ### Requirement: view-fallback-wording
-`plugin/commands/view.md`, the text the model receives when no `clm-panel` hooks module answers `/clm:view`, SHALL NOT say that `clm-panel` isn't installed. It SHALL say that the panel either isn't installed or didn't load, and name `/plugin install clm-panel@clm` for the first case and `claude plugin validate` and `claude --debug` for the second, then go on to the same `clm status` and `clm view <name>` fallbacks as before.
+`plugin/commands/view.md`, the text the model receives when no `clm-panel` hooks module answers `/clm:view`, SHALL NOT say that `clm-panel` isn't installed. It SHALL say that the panel either isn't installed or didn't load, and name `/plugin install clm-panel@clm` for the first case and `claude plugin validate` and `claude --debug` for the second, then go on to the same `clm status` and `clm view <name>` fallbacks as before, its names and argument hint being `status`, `queue`, `spec`, `flight` and `blockers`.
 
 #### Scenario: installed but refused
 - GIVEN `plugin/commands/view.md`
 - WHEN a test reads it
-- THEN it doesn't contain `isn't installed here`, and it contains `/plugin install clm-panel@clm`, `claude plugin validate` and `claude --debug`
+- THEN it doesn't contain `isn't installed here`, and it contains `/plugin install clm-panel@clm`, `claude plugin validate`, `claude --debug` and `queue`
 
 #### Serves
 - capability/watch-beside-chat
+
+#### Needs
+- view.repo/view-queue
 
 ### Requirement: health-skill
 The plugin SHALL ship `skills/health/SKILL.md` with a `description` in its frontmatter. It SHALL tell Claude to run `clm health`, to summarise each section for the human, naming the reconsider candidates with their scores and what each signal means, to launch the `spec-slimmer` subagent for each component a `design-heavy`, `history-words`, `outlier-size` or `unexercised` line names, to list the cuts it proposes, and to end by pointing at `/clm:propose` for acting on any of it and at `clm guide using-clm` for what the signals mean. It SHALL tell Claude to edit no spec, file no backlog item and land nothing from this skill.
@@ -456,24 +446,24 @@ The propose and init skills SHALL tell the session that each architectural const
 - model/reserved-ids
 
 ### Requirement: launch-models
-Every subagent the plugin's skills tell Claude to launch SHALL have its model named in the Agent tool's `model` parameter (`model-per-launch`), the session's own model being named in the words `the session's own model`, which Claude reads as the alias of the model its system prompt names. `skills/build/SKILL.md` SHALL tell Claude to run `clm run <component> --review-model <alias>`, `<alias>` the alias of the session's own model, and to launch each build with `model: "sonnet"`, except that a component's build launched again after a build of it stopped without landing, for a reason other than a backlog item or a spec change, runs on the session's own model. `skills/triage/SKILL.md` and `skills/build/SKILL.md` SHALL each tell Claude to launch each draft with the session's own model and the fold with `model: "sonnet"`. `skills/propose/SKILL.md`'s builder check, `skills/health/SKILL.md`'s `spec-slimmer` launches and `skills/init/SKILL.md`'s per-node subagents SHALL be launched with `model: "sonnet"`. `skills/propose/SKILL.md`'s and `skills/contribution/SKILL.md`'s `architecture-auditor` launches SHALL name the session's own model, since the audit is a design review. `agents/spec-auditor.md`, `agents/architecture-auditor.md` and `agents/spec-slimmer.md` SHALL set `model: sonnet` in their frontmatter.
+Every subagent the plugin's skills tell Claude to launch SHALL have its model named in the Agent tool's `model` parameter (`model-per-launch`), the session's own model being named in the words `the session's own model`, which Claude reads as the alias of the model its system prompt names. `skills/build/SKILL.md` SHALL tell Claude to start the loop with `clm build start --session-model <alias>`, `<alias>` the alias of the session's own model, and to launch each run with the model its `launch` line names, since the loop chooses each run's model (`orchestrator.loop/plan-order`). `skills/triage/SKILL.md` SHALL tell Claude to launch each draft with the session's own model and the fold with `model: "sonnet"`. `skills/propose/SKILL.md`'s builder check, `skills/health/SKILL.md`'s `spec-slimmer` launches and `skills/init/SKILL.md`'s per-node subagents SHALL be launched with `model: "sonnet"`. `skills/propose/SKILL.md`'s and `skills/contribution/SKILL.md`'s `architecture-auditor` launches SHALL name the session's own model, since the audit is a design review. `agents/spec-auditor.md`, `agents/architecture-auditor.md` and `agents/spec-slimmer.md` SHALL set `model: sonnet` in their frontmatter.
 
 #### Scenario: skills and agents
 - GIVEN the plugin's skills and agents
 - WHEN a test reads them
-- THEN `skills/build/SKILL.md` contains `--review-model` and `model: "sonnet"`; `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/health/SKILL.md` and `skills/init/SKILL.md` each contain `model: "sonnet"`; `skills/build/SKILL.md`, `skills/triage/SKILL.md`, `skills/propose/SKILL.md` and `skills/contribution/SKILL.md` each contain `the session's own model`; and the three agents' frontmatter has `model: sonnet`
+- THEN `skills/build/SKILL.md` contains `--session-model`; `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/health/SKILL.md` and `skills/init/SKILL.md` each contain `model: "sonnet"`; `skills/build/SKILL.md`, `skills/triage/SKILL.md`, `skills/propose/SKILL.md` and `skills/contribution/SKILL.md` each contain `the session's own model`; and the three agents' frontmatter has `model: sonnet`
 
 #### Scenario: build launched without a model
-- GIVEN an `build` `SKILL.md` that doesn't mention `model: "sonnet"`
+- GIVEN a `build` `SKILL.md` that doesn't mention `--session-model`
 - WHEN the test's check runs on it
-- THEN it reports `model: "sonnet"`
+- THEN it reports `--session-model`
 
 #### Serves
 - capability/right-model-per-task
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - orchestrator.run/review-model
-- plugin.build/build-drafts-bugs
 
 ### Requirement: recommend-the-right-design
 `skills/triage/SKILL.md` and `skills/propose/SKILL.md` SHALL tell Claude how to choose what it recommends (`recommend-the-right-design`): before recommending an answer, a fix or a design to the human, or offering choices for one (triage's *Needs your input* answers and *Workaround* fixes, and propose's approaches while brainstorming), to read the specs and the code the item or intent concerns, with `clm context <component>` for its components and the files under their `paths` it names or touches; to treat the fix the item itself suggests, or the first one that comes to mind, as one option among the approaches, never as the answer by default; and to recommend the design that is correct and maintainable over the long term, saying why it beats the most convenient one, recommending a cheaper or smaller option only with the reason it is also the right one. It SHALL tell Claude that the order matters: the code is read before any recommendation is shown, not after the human pushes back.
@@ -654,7 +644,7 @@ No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a 
 #### Scenario: skills push through clm
 - GIVEN the plugin's `skills/*/SKILL.md`
 - WHEN a test reads each
-- THEN none contains `git push`, and `propose`, `contribution`, `triage` and `build` each contain `clm branch push`
+- THEN none contains `git push`, and `propose`, `contribution` and `triage` each contain `clm branch push`
 
 #### Scenario: skill with a raw push
 - GIVEN a `SKILL.md` that tells Claude to push with `git push --force-with-lease`
@@ -668,14 +658,15 @@ No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a 
 #### Needs
 - host/branch-push
 - host/branch-delete
+- plugin.build/build-runs-the-loop
 
 ### Requirement: unattended-permissions-check
-`skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, once, before the first build or draft it launches, to run `clm init --check-permissions` and, when it exits 1, to tell the human that in auto mode Claude Code may deny the unattended steps those rules allow, show the rules it printed, say that they belong in `permissions.allow` in `.claude/settings.json` (or `.claude/settings.local.json` for this clone alone), and go on launching, never refusing to; when it exits with any other code, as a `clm` without the option does, to tell the human the check couldn't run and go on launching; and never to write either file itself. `skills/build/SKILL.md` SHALL tell Claude to push a branch it rebased with `clm branch push` and to release a claim it took with `clm branch delete`, and SHALL NOT contain `git push --force-with-lease`.
+`skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, once, before the first build or draft it launches, to run `clm init --check-permissions` and, when it exits 1, to tell the human that in auto mode Claude Code may deny the unattended steps those rules allow, show the rules it printed, say that they belong in `permissions.allow` in `.claude/settings.json` (or `.claude/settings.local.json` for this clone alone), and go on launching, never refusing to; when it exits with any other code, as a `clm` without the option does, to tell the human the check couldn't run and go on launching; and never to write either file itself. `skills/build/SKILL.md` SHALL tell Claude to release the claim of a component the human gives up for good with `clm branch delete`, and SHALL NOT contain `git push`.
 
 #### Scenario: skills check the rules
 - GIVEN the plugin's `skills/build/SKILL.md` and `skills/triage/SKILL.md`
 - WHEN a test reads them
-- THEN each contains `clm init --check-permissions`, `auto mode` and `.claude/settings.json`, and the build skill contains `clm branch push` and `clm branch delete` and doesn't contain `git push --force-with-lease`
+- THEN each contains `clm init --check-permissions`, `auto mode` and `.claude/settings.json`, and the build skill contains `clm branch delete` and doesn't contain `git push`
 
 #### Scenario: skill without the check
 - GIVEN a `triage` `SKILL.md` that doesn't mention `clm init --check-permissions`
@@ -687,15 +678,16 @@ No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a 
 - capability/triage-unattended
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - init/init-check-permissions
-- host/branch-push
 - host/branch-delete
 
 ### Requirement: wrap-up-left-lines
-Each of `skills/build/SKILL.md`, `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/contribution/SKILL.md` and `skills/init/SKILL.md` that tells Claude to run `clm wrap-up` SHALL tell Claude to pass each `left <path>: ...` line `clm wrap-up` prints to the human as it stands, a build's worktree it couldn't remove, which doesn't make the wrap-up incomplete, and to leave the directory, and any command the line names, to them. No skill SHALL tell Claude to run `git worktree prune` or delete such a directory itself.
+Each of `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/contribution/SKILL.md` and `skills/init/SKILL.md` that tells Claude to run `clm wrap-up` SHALL tell Claude to pass each `left <path>: ...` line `clm wrap-up` prints to the human as it stands, a build's worktree it couldn't remove, which doesn't make the wrap-up incomplete, and to leave the directory, and any command the line names, to them. No skill SHALL tell Claude to run `git worktree prune` or delete such a directory itself. `skills/build/SKILL.md` runs no `clm wrap-up`: its loop passes those lines on in its `say` actions (`orchestrator.loop/step-housekeeping`).
 
 #### Needs
 - orchestrator.checkpoint/checkpoint
+- plugin.build/build-runs-the-loop
 
 #### Scenario: wrap-up's left lines passed on
 - GIVEN the plugin's skills
@@ -708,19 +700,20 @@ Each of `skills/build/SKILL.md`, `skills/triage/SKILL.md`, `skills/propose/SKILL
 - THEN it reports that skill
 
 ### Requirement: skills-run-verify
-`skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, at the end of the run, after its lands and before `clm wrap-up`, to run `clm verify --due --event work-done` and show the human its `verify` line; a `verify failed` line SHALL be shown as a slow test that broke on `main`, which the next triage takes in. `skills/triage/SKILL.md` SHALL also tell Claude to run `clm verify --import` just before `clm intake`, and SHALL say, among `clm intake`'s lines, that `verify <sha> new <culprit> <component>...` is a slow test that failed after the land, which no item has taken in: Claude shows them together with no verifier, offering `P1`, and writes each one taken in as a `kind: bug` item whose `verify_failures` holds the commit's full ID (`git rev-parse <sha>`), whose `components` are the line's, and whose body names the culprit land, its change and the verify log, on the same `intake/<YYYYMMDD-HHMM>` branch as the other items taken in, saying that, once the item is on `main`, `clm land` holds code lands on those components until the fix, whose commit carries `Resolves: backlog/<slug>`, lands, and that an item for a failure that proves a flake is deleted on the human's word (`verify-after-land`). It SHALL say that taking a `verify` line in is the human's decision that the failure is real: until then `clm land` only warns.
+`skills/triage/SKILL.md` SHALL tell Claude, at the end of the run, after its lands and before `clm wrap-up`, to run `clm verify --due --event work-done` and show the human its `verify` line; a `verify failed` line SHALL be shown as a slow test that broke on `main`, which the next triage takes in. It SHALL also tell Claude to run `clm verify --import` just before `clm intake`, and SHALL say, among `clm intake`'s lines, that `verify <sha> new <culprit> <component>...` is a slow test that failed after the land, which no item has taken in: Claude shows them together with no verifier, offering `P1`, and writes each one taken in as a `kind: bug` item whose `verify_failures` holds the commit's full ID (`git rev-parse <sha>`), whose `components` are the line's, and whose body names the culprit land, its change and the verify log, on the same `intake/<YYYYMMDD-HHMM>` branch as the other items taken in, saying that, once the item is on `main`, `clm land` holds code lands on those components until the fix, whose commit carries `Resolves: backlog/<slug>`, lands, and that an item for a failure that proves a flake is deleted on the human's word (`verify-after-land`). It SHALL say that taking a `verify` line in is the human's decision that the failure is real: until then `clm land` only warns.
 
 #### Scenario: the shipped skills
-- GIVEN the plugin's `skills/build/SKILL.md` and `skills/triage/SKILL.md`
-- WHEN a test reads them
-- THEN both contain `clm verify --due --event work-done`, and the triage skill contains `clm verify --import`, `verify <sha> new`, `verify_failures` and `verify-after-land`
+- GIVEN the plugin's `skills/triage/SKILL.md`
+- WHEN a test reads it
+- THEN it contains `clm verify --due --event work-done`, `clm verify --import`, `verify <sha> new`, `verify_failures` and `verify-after-land`
 
 #### Scenario: verify after the lands
-- GIVEN the plugin's `skills/build/SKILL.md`
+- GIVEN the plugin's `skills/triage/SKILL.md`
 - WHEN a test reads it
 - THEN `clm verify --due --event work-done` comes before the last `clm wrap-up` in it
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - verify/verify-due
 - verify/verify-import
 - orchestrator.triage/intake-verify-failures
@@ -820,7 +813,7 @@ The repository SHALL hold a Codex plugin marketplace, in the file and format Cod
 - architecture/guard-blocks-push-to-main
 
 ### Requirement: skills-follow-agent-harness
-Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for a build or asks for an approval SHALL tell the session to run `clm agent-harness` before its first such step and to follow what it prints: where `subagents` is `no`, to do each piece of work a subagent would take in the session itself, one at a time; where `isolated-worktrees` is `no`, to give a build its own worktree with `git worktree add .claude/worktrees/agent-<component>` before launching it, and to tell the build to work there; where `model-choice` is `no`, to launch with the session's own model, the model names the skill gives being Claude Code's; where `confirm` is `no`, to ask the human for their yes in the conversation and then to have them run `clm approve <branch>` in their own terminal, never running it from the session; and, where `named-agents` is `no`, to launch a general subagent told to follow the agent's file under the plugin's `agents/`. A skill SHALL name the Agent tool only beside the words `or the agent harness's own subagent tool`. This component's own skills (`help`, `health`, `configure`, `contribution`, `verify`) SHALL hold it; the children's skills hold it through their own requirements.
+Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for a build or asks for an approval, except `build`, whose loop reads the agent harness itself and says in each action how to launch (`orchestrator.loop/loop-follows-agent-harness`), SHALL tell the session to run `clm agent-harness` before its first such step and to follow what it prints: where `subagents` is `no`, to do each piece of work a subagent would take in the session itself, one at a time; where `isolated-worktrees` is `no`, to give a build its own worktree with `git worktree add .claude/worktrees/agent-<component>` before launching it, and to tell the build to work there; where `model-choice` is `no`, to launch with the session's own model, the model names the skill gives being Claude Code's; where `confirm` is `no`, to ask the human for their yes in the conversation and then to have them run `clm approve <branch>` in their own terminal, never running it from the session; and, where `named-agents` is `no`, to launch a general subagent told to follow the agent's file under the plugin's `agents/`. A skill SHALL name the Agent tool only beside the words `or the agent harness's own subagent tool`. This component's own skills (`help`, `health`, `configure`, `contribution`, `verify`) SHALL hold it; the children's skills hold it through their own requirements.
 
 #### Scenario: health under Codex
 - GIVEN `skills/health/SKILL.md`
@@ -834,7 +827,7 @@ Every skill under `plugin/skills/` that launches a subagent, cuts a worktree for
 
 #### Needs
 - plugin.propose/propose-follows-agent-harness
-- plugin.build/build-follows-agent-harness
+- orchestrator.loop/loop-follows-agent-harness
 - plugin.triage/triage-follows-agent-harness
 - plugin.init/init-follows-agent-harness
 - clm/agent-harness-command
