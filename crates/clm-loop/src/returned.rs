@@ -258,10 +258,9 @@ pub fn returned(
         }
         _ => None,
     };
-    let filed = match &escalation {
-        Some((slug, text)) => Some((slug.clone(), escalate::land(options, slug, text).is_ok())),
-        None => None,
-    };
+    let filed = escalation
+        .as_ref()
+        .map(|(slug, text)| (slug.clone(), escalate::land(options, slug, text).is_ok()));
     let say_fold = (run.kind == Some(Kind::Fold) && proposed.is_none() && !landed)
         .then(|| {
             let id = name.strip_prefix("fold:").unwrap_or(name);

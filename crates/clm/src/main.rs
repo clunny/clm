@@ -2080,7 +2080,7 @@ fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
         root,
         cwd,
         max_builds: settings.max_builds.value,
-        agent_harness: clm_agent_harness::detect(&clm_config::process_env),
+        agent_harness: clm_agent_harness::detect(clm_config::process_env),
     };
     let actions = match action {
         BuildAction::Start {
