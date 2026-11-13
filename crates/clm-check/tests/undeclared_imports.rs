@@ -242,6 +242,33 @@ fn a_test_among_its_components_paths_imports_the_entry_point() {
 }
 
 #[test]
+fn a_test_inside_another_components_paths_is_judged_as_its_owners() {
+    // req:check/undeclared-imports@1e2f49ba
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(root, "specs/SPEC.md", &node("[]", "[]"));
+    write(root, "specs/app/SPEC.md", &node("[\"app/main.py\"]", "[]"));
+    write(root, "specs/harness/SPEC.md", &node("[\"tests/**\"]", "[]"));
+    let feat = node("[\"feat/**\"]", "[]").replace(
+        "---\n## Contract",
+        "tests: [\"tests/feat/**\"]\ntest_depends_on: [app]\n---\n## Contract",
+    );
+    write(root, "specs/feat/SPEC.md", &feat);
+    let (graph, violations) = clm_model::load(root);
+    assert!(violations.is_empty(), "{violations:?}");
+    assert_eq!(
+        lines(&graph, &[("tests/feat/t.py", "app/main.py")]),
+        Vec::<String>::new()
+    );
+    assert_eq!(
+        lines(&graph, &[("tests/other.py", "app/main.py")]),
+        [
+            "tests/other.py: check/undeclared-imports: imports app/main.py of component `app`, and `harness` doesn't depend on `app`"
+        ]
+    );
+}
+
+#[test]
 fn production_code_still_judged() {
     // req:check/undeclared-imports@1e2f49ba
     let graph = app_and_feat();
