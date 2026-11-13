@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [config, gate, vcs]
 paths: ["crates/clm-ledger/**"]
 successor: ""
-serves: [capability/approve-intent, capability/land-safely, architecture/per-writer-ledgers]
+serves: [capability/approve-intent, capability/land-safely, architecture/git-is-truth]
 ---
 
 ## Contract
@@ -213,7 +213,6 @@ Every record also has `id` (random 128-bit hex, except an `effort` record's, whi
 
 #### Serves
 - capability/land-safely
-- architecture/per-writer-ledgers
 - architecture/git-is-truth
 
 ### Requirement: show
@@ -771,4 +770,4 @@ The fold, `fold` and `fold_records` alike, SHALL parse `answered` records and ho
 
 #### Serves
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth

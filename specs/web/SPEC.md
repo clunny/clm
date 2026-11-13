@@ -197,8 +197,8 @@ Approve SHALL post `{"fingerprint": <f>}`, where `<f>` is the fingerprint of the
 #### Serves
 - capability/follow-from-browser
 - capability/approve-intent
-- architecture/approve-pins-the-review
-- architecture/per-writer-ledgers
+- architecture/approval-policy
+- architecture/git-is-truth
 
 #### Needs
 - web.worker.review/approve
@@ -538,7 +538,7 @@ The app SHALL give Home and a backlog item's page the answer buttons' `Answering
 
 #### Serves
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - web.views/answer-buttons

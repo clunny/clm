@@ -4,7 +4,7 @@ status: active
 owners: ["@clunny"]
 depends_on: [vcs]
 paths: ["crates/clm-fingerprint/**"]
-serves: [capability/approve-intent, architecture/approve-pins-the-review, architecture/regenerate-dont-merge]
+serves: [capability/approve-intent, architecture/approval-policy, architecture/hash-based-staleness]
 ---
 
 ## Contract

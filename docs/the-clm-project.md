@@ -233,7 +233,7 @@ Drafted from the current specs and accepted as is on 2026-10-29, with its three 
 
 6. **Build from the spec automatically:** work out what's pending, claim it, and build it test-first in parallel isolated sessions (`orchestrator`, `orchestrator.run`, `context`).
 7. **Use the right model for each task:** superpowers' model policy, applied wherever CLM launches an agent. Each build, draft, audit and runner session names its model: a cheaper one for well-specified building, and the main session's own model for judgment and final review, stepping up when a cheaper model keeps failing (new, not built: today everything inherits the session's model).
-8. **Run builds unattended on your own machine:** a headless runner that drains the queue (`orchestrator.runner`).
+8. **Run builds unattended on your own machine:** a headless runner that drains the queue (`orchestrator.runner`). Folded into 6 on 2026-11-13: builds run unattended through `/clm:build` in a session.
 9. **Prove the code meets the spec:** versioned test citations, and lists of what's current, behind or pending (`check.coverage`).
 10. **Catch drift and staleness:** deterministic checks that the spec, the code and everything derived from them agree (`check`, `model`).
 11. **Land safely on `main`:** one door that merges, runs only the tests a change can affect, checks the result and records it (`land`, `ci` check script, `check.affected`, `ledger`).

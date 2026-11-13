@@ -305,7 +305,7 @@ Loading SHALL give `writer` the value of `CLM_WRITER` when set, otherwise of the
 
 #### Serves
 - capability/work-concurrently
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 ### Requirement: local-settings
 Loading SHALL read `clm.local.toml` from the CLM repository's directory in the clone's main worktree (the first worktree `git worktree list --porcelain` lists), whichever worktree of the clone the root is in, found without running git as the Design says. It SHALL accept every key there, `writer` and the repository-only keys included, except `upgraded` and `declined_migrations` (`upgrade-settings`). A missing `clm.local.toml` SHALL add no layer; one that can't be parsed, has an unknown key or sets a key to a value it doesn't accept SHALL fail naming `clm.local.toml` and the key, as for `clm.toml`.

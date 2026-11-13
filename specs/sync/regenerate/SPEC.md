@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [model, apply, check, vcs]
 paths: ["crates/clm-regenerate/**"]
 successor: ""
-serves: [capability/work-concurrently, architecture/regenerate-dont-merge]
+serves: [capability/work-concurrently, architecture/hash-based-staleness]
 ---
 
 ## Contract
@@ -70,7 +70,7 @@ It depends on `clm-model`, `clm-apply`, `clm-check` (for `format`, a violation a
 
 #### Serves
 - architecture/reuse-first
-- architecture/regenerate-dont-merge
+- architecture/hash-based-staleness
 
 ### Requirement: stale-delta-diff
 Only a base a delta records for a Contract, Design or requirement it MODIFIES or REMOVES counts here, never a frontmatter or asset base nor one `apply` accepts, such as that of a MODIFIED requirement without its own `#### Serves` block whose rule `onto` changed only in its `#### Serves` block. The stages of the tree are `onto`'s `specs/`, then the tree after each change applied before, in order. Such a base is found at the newest stage where the element hashes to it, an element absent from a stage never matching, or, when no stage has it, at the newest commit in `onto`'s history of the component's `SPEC.md` where the element hashes to it; it is unknown when neither has it.

@@ -100,7 +100,6 @@ A blank line follows the summary and each section. A section is its name on a li
 
 #### Serves
 - capability/see-project-state
-- architecture/views-name-their-commit
 - architecture/slim-components
 
 #### Needs
@@ -145,7 +144,6 @@ A blank line follows the summary and each section. A section is its name on a li
 
 #### Serves
 - capability/see-project-state
-- architecture/views-name-their-commit
 
 #### Needs
 - plugin.panel/views-panel

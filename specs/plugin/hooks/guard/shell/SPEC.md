@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: []
 paths: ["crates/clm-guard/src/shell/**", "crates/clm-guard/tests/shell.rs"]
 successor: ""
-serves: [capability/guard-sessions, architecture/guard-blocks-push-to-main]
+serves: [capability/guard-sessions, architecture/land-locally]
 ---
 
 ## Contract

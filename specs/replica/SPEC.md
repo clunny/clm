@@ -248,7 +248,7 @@ The replica's architecture view SHALL be `{"architecture", "signed", "indexing"}
 - THEN it is refused as `Taken`
 
 #### Serves
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 - architecture/humans-review-intent
 
 ### Requirement: open-proposals
@@ -272,7 +272,7 @@ The replica's implementation view SHALL carry `proposals`: the open `proposed` r
 #### Serves
 - capability/propose-intent
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - ledger/proposal-records
@@ -301,7 +301,7 @@ The replica's implementation view SHALL carry `answers`: the open answers of its
 
 #### Serves
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - ledger/answer-records
@@ -316,7 +316,7 @@ The replica's implementation view SHALL carry `answers`: the open answers of its
 
 #### Serves
 - capability/follow-from-browser
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 #### Needs
 - model/backlog-choices

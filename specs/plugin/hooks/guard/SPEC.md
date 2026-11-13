@@ -5,7 +5,7 @@ owners: ["@clunny"]
 depends_on: [plugin.hooks, plugin.hooks.guard.shell, config, vcs, agent-harness]
 paths: ["crates/clm-guard/Cargo.toml", "crates/clm-guard/src/*.rs", "crates/clm-guard/tests/guard.rs", "crates/clm-guard/tests/git_layer.rs", "crates/clm-guard/tests/budgets.rs"]
 successor: ""
-serves: [capability/guard-sessions, capability/work-from-any-agent-harness, architecture/approval-policy, architecture/guard-blocks-push-to-main, architecture/agent-harness-adapters]
+serves: [capability/guard-sessions, capability/work-from-any-agent-harness, architecture/approval-policy, architecture/land-locally, architecture/agent-harness-adapters]
 ---
 
 ## Contract
@@ -258,7 +258,7 @@ A segment runs `clm` when its command (`guard-command-position`) is `clm` or end
 - capability/review-capability-cost
 - architecture/approval-policy
 - architecture/humans-review-intent
-- architecture/guard-blocks-push-to-main
+- architecture/land-locally
 
 ### Requirement: git-through-layer
 `clm-guard` SHALL list `clm-git` among its dependencies and SHALL run no process itself: every `git` and `gh` call goes through `clm-git`'s `run_within` (`git-plumbing-layer`), and it SHALL bound a call's time only through `run_within`'s limit, never by waiting on a channel for a thread that runs the call (`bounded-runs`).
@@ -334,7 +334,7 @@ A segment runs `clm` when its command (`guard-command-position`) is `clm` or end
 - THEN the body of `guard` is one call of `guard_within` with `event` and `Budgets::HOOK`
 
 #### Serves
-- architecture/guard-blocks-push-to-main
+- architecture/land-locally
 
 ### Requirement: push-guard-scoped-to-clm
 `push-guard`'s cases SHALL hold only for a push under CLM: when a case would block a push that isn't under CLM, the guard SHALL allow it instead, whatever its refspecs and options (`guard-blocks-push-to-main`). A push isn't under CLM when all of these hold: the event has a `cwd`; the push's checkout (the segment's, moved by its `-C` directories), canonicalized (symlinks and `..` resolved), is an existing directory; `plugin.hooks`' `clm_root` finds no CLM repository from that directory, and that directory or one of its ancestors holds `.git`, which together mean the first directory holding `.git` going up is reached with none up to and including it holding `specs/SPEC.md` (`reuse-first`); the segment has no `--git-dir` or `--work-tree` option, no `-c` option whose name is `core.worktree` or `core.bare`, and no `GIT_DIR`, `GIT_WORK_TREE` or `GIT_COMMON_DIR` assignment; and no `cd` the guard couldn't follow is kept for the push, as `push-guard`'s reasons would name it: a kept `cd` counts unless the push's own absolute `-C`, or an absolute `env -C` or `sudo -D` (`guard-checkout`), set the checkout; and, last, `git ls-files -z -- ':(top,glob)**/specs/SPEC.md'`, run in the checkout as `push-guard`'s queries are, within the same budget, succeeds and prints nothing, so a CLM repository in a subdirectory of the git repository keeps its `main` guarded from anywhere in that git repository. The test SHALL be made only for a push a `push-guard` case would block, the `--all`, `--mirror` and explicit refspec cases included, so a push of another branch runs no query for it; a query that fails or runs out of the budget leaves the push under CLM. Every other push, such as one from an event with no `cwd`, from a directory in no git repository, from a checkout the guard fell back to, from a `-C` path that isn't a directory, or naming another git directory or work tree, counts as under CLM, since the guard can't tell which repository it reaches. A scratch repository made with `git init` inside a checkout under CLM is a repository of its own, so a push from it isn't under CLM.
@@ -467,4 +467,4 @@ When `clm hook guard` blocks a `Bash` command (exit 2), under any rule, the reas
 #### Serves
 - capability/work-from-any-agent-harness
 - architecture/agent-harness-adapters
-- architecture/guard-blocks-push-to-main
+- architecture/land-locally

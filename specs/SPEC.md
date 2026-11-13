@@ -142,7 +142,7 @@ Every `clm` command with a `--root` option SHALL, when it isn't given, use the f
 
 #### Serves
 - capability/guard-sessions
-- capability/unattended-runner
+- capability/build-from-spec
 
 ### Requirement: git-through-layer
 `clm` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `git`, `gh`, `run` or repo queries (`git-plumbing-layer`), and its own wrapper is gone (`no-dead-code`).
@@ -257,7 +257,7 @@ Run again on a clone already set up, it SHALL leave the settings file's content 
 - THEN the stub was run once, with `--rebuild`, during the push
 
 #### Serves
-- capability/pin-working-method
+- architecture/pin-working-method
 - capability/install-and-release
 
 ### Requirement: dev-install-remove
@@ -289,7 +289,7 @@ Run again on a clone already set up, it SHALL leave the settings file's content 
 - THEN both hooks are unchanged and it exits 0
 
 #### Serves
-- capability/pin-working-method
+- architecture/pin-working-method
 - capability/install-and-release
 
 ### Requirement: build-commit
@@ -355,7 +355,7 @@ The crates `clm-check`, `clm-gate` and `clm-land` SHALL NOT depend on `clm-healt
 - THEN it passes
 
 #### Serves
-- architecture/health-advises
+- capability/know-health
 
 ### Requirement: judges-read-only-git
 The crates that judge a branch, `clm-model`, `clm-coverage`, `clm-check`, `clm-apply`, `clm-gate`, `clm-ledger` and `clm-land`, SHALL NOT depend, directly or through any crate they depend on, counting normal and build dependencies and not dev-dependencies, on an HTTP client or a database crate: `reqwest`, `ureq`, `hyper`, `isahc`, `curl`, `rusqlite`, `sqlx`, `diesel`, `redis` or `postgres`. What they read they read from git, through `clm-git` (`git-is-truth`). A test reads the workspace's dependency graph (`cargo metadata`) and fails naming the judging crate and the crate it reaches.
@@ -582,7 +582,7 @@ Then it SHALL remove the lock, also when it stopped on a failure, and, unless it
 - THEN the stub `cargo` was run once with `--root $CARGO_HOME`
 
 #### Serves
-- capability/pin-working-method
+- architecture/pin-working-method
 - capability/install-and-release
 
 ### Requirement: architecture-term-retired

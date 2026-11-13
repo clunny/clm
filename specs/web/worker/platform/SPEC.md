@@ -53,7 +53,7 @@ It answers no route of its own, and decides nothing a route answers.
 
 #### Serves
 - architecture/reuse-first
-- architecture/per-writer-ledgers
+- architecture/git-is-truth
 
 ### Requirement: code-key-doc-only
 `keys::code_key` SHALL give, for a tree listing, the key `clm_ledger::code_key` gives for the same tree, leaving out exactly the entries whose path `clm_ledger::doc_only` (`ledger/doc-only`) answers true for, by calling it, so a change to `ledger`'s list reaches the Worker's code keys with no edit to this component.

@@ -274,8 +274,8 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - capability/git-host
 - capability/build-from-spec
 - capability/triage-unattended
-- architecture/lease-claims
-- architecture/guard-blocks-push-to-main
+- capability/work-concurrently
+- architecture/land-locally
 
 ### Requirement: list-alerts
 `clm-host` SHALL offer `alerts`, which on `github` returns the repository's open Dependabot alerts, each with its number, severity (`low`, `medium`, `high` or `critical`), ecosystem, package name and manifest path, through `gh api --paginate` on `repos/{owner}/{repo}/dependabot/alerts` with `state=open`, so every page is read, taking the number from `number`, the severity from `security_advisory.severity`, and the ecosystem, package and manifest path from `dependency.package.ecosystem`, `dependency.package.name` and `dependency.manifest_path`. A field holding whitespace or a control character SHALL come back with each such character replaced by `?`, a severity outside those four as `unknown`, and a missing or empty field as `unknown`, so a caller that prints a field prints one word. It SHALL return no advisory summary, description or other text of the advisory. When `gh` fails, as it does when alerts are off or the login may not read them, it SHALL return an error carrying `gh`'s message. On `git` and `none` it SHALL return an empty list and run no `gh`.
