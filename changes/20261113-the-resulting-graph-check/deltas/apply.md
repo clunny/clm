@@ -1,6 +1,12 @@
 ---
 component: apply
+base: { design: "f73dc5890f4e730d" }
 ---
+
+## MODIFIED Design
+Apply computes each new SPEC.md text in memory, starting from the current text, and writes files only after every delta has validated. Frontmatter keys are replaced line by line. Sections and requirement blocks are replaced by their heading spans (outside code fences), so the rest of the file is untouched.
+
+One function gives the backlog items `clm apply` deletes with a change (`answered-questions`, `promoted-item`). `plan` removes their files, and `resulting` leaves them out of the graph it returns (`resulting-graph-call`), so the graph a change is checked against can't hold an item its apply deletes.
 
 ## MODIFIED Requirements
 
@@ -32,6 +38,11 @@ Once every delta of the change is otherwise valid (`node_writes` reports nothing
 - WHEN `clm apply c` runs
 - THEN it exits 1 naming `apply/resulting-graph`, `model/parse-backlog` and `a/y`, and `backlog/b.md` still exists
 
+#### Scenario: answered question already blocks no requirement
+- GIVEN component `a` with requirement `x`, `backlog/q.md` with `kind: question` and `blocks: [a/gone]`, naming no requirement, and change `c` whose `resolves` is `[q]` with a valid delta that modifies `x`
+- WHEN `clm apply c` runs
+- THEN it exits 0, `backlog/q.md` no longer exists, and the graph then loads with no violation
+
 #### Scenario: violation already present
 - GIVEN component `b` with `depends_on: [gone]`, naming no component, and a proposed change `x` whose valid delta modifies `a`'s Design
 - WHEN `clm check` runs
@@ -50,7 +61,7 @@ Once every delta of the change is otherwise valid (`node_writes` reports nothing
 - model/graph-check
 
 ### Requirement: resulting-graph-call <!-- base: 06d5a9cc73e0d95f -->
-`resulting(graph, change)` SHALL return the spec graph `resulting-graph` builds for the change: each component the change writes parsed from its new `SPEC.md` text at the path it is written to, each component it removes gone, each backlog item `clm apply` deletes with the change gone, and every other component and backlog item, and the changes, decisions and human layers, as in `graph`; or none when a delta of the change can't be applied (`node_writes` reports a violation), whatever the change's status. The items `clm apply` deletes with the change are the `question` items its `resolves` names (`answered-questions`) and the item its `from` names unless that is a `human-task` (`promoted-item`). `clm apply` and `resulting` SHALL take them from one function both call (which may be private to the crate), so the graph a change is checked against never holds an item its apply deletes. A written component whose new text the parser yields no component for is left out of the graph, as `resulting-graph` leaves it, which reports the parse. It SHALL write nothing. In Rust it is `pub fn resulting(graph: &Graph, change: &Change) -> Option<Graph>`, and `plan` builds the graph it checks through it.
+`resulting(graph, change)` SHALL return the spec graph `resulting-graph` builds for the change: each component the change writes parsed from its new `SPEC.md` text at the path it is written to, each component it removes gone, each backlog item `clm apply` deletes with the change gone, and every other component and backlog item, and the changes, decisions and human layers, as in `graph`; or none when a delta of the change can't be applied (`node_writes` reports a violation), whatever the change's status. The items `clm apply` deletes with the change are the `question` items its `resolves` names (`answered-questions`) and the item its `from` names unless that is a `human-task` (`promoted-item`). The graph SHALL hold no item `clm apply` deletes with the change and every item it keeps. A written component whose new text the parser yields no component for is left out of the graph, as `resulting-graph` leaves it, which reports the parse. It SHALL write nothing. In Rust it is `pub fn resulting(graph: &Graph, change: &Change) -> Option<Graph>`, and `plan` builds the graph it checks through it.
 
 #### Scenario: graph a removal leaves
 - GIVEN component `a` with requirements `x` and `y`, and change `c` whose delta for `a` removes `y` with its base

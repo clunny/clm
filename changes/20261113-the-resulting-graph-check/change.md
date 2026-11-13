@@ -23,14 +23,14 @@ No requirement states the behaviour the fix restores: `resulting-graph` says the
 
 ## Outcome
 
-- `apply/resulting-graph-call`: `resulting(graph, change)` leaves out the `question` items the change's `resolves` names and the item its `from` names unless that is a `human-task`; `clm apply` and `resulting` take those items from one function.
+- `apply/resulting-graph-call`: `resulting(graph, change)` leaves out the `question` items the change's `resolves` names and the item its `from` names unless that is a `human-task`. The Design says `clm apply` and `resulting` take those items from one function.
 - `apply/resulting-graph`: the graph validation checks is that graph, so a violation only such an item causes is no longer reported, in `clm check` and in `clm apply`.
 - `check`'s two callers of `resulting` (`removed-names-before-apply`, `undeclared-imports-before-apply`) read no backlog item, so nothing in `check` changes.
 
 ## Constraints
 
 - A resolved item of another kind (`bug`, `idea`, `deferred`, `human-task`) stays in the backlog until its work is done, so its `blocks` on a removed requirement is still reported: the scenario `backlog blocks a removed requirement` stays, and `resolved bug blocks a removed requirement` states it.
-- `apply/loaded-graph` needs no edit: a violation of the loaded graph on an item the apply deletes is one the graph the change leaves no longer has, so by its text as written the change fixes it.
+- `apply/loaded-graph` needs no edit: a violation of the loaded graph on an item the apply deletes is one the graph the change leaves no longer has, so by its text as written the change fixes it. The scenario `answered question already blocks no requirement` of `resulting-graph` states it.
 
 ## Edge cases and workarounds
 
