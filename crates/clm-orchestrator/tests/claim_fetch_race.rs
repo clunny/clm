@@ -34,7 +34,7 @@ fn install_fake(bin: &std::path::Path, fails: &std::path::Path) {
 
 #[test]
 fn a_fetch_that_loses_a_ref_race_goes_on_and_one_that_keeps_failing_fails() {
-    // req:orchestrator/fetch-retries-race@ba70b96b
+    // req:orchestrator/fetch-retries-race@1d66d155
     let dir = tempfile::TempDir::new().unwrap();
     let bin = dir.path().join("bin");
     fs::create_dir_all(&bin).unwrap();
