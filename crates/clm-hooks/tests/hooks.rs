@@ -92,6 +92,7 @@ fn session_start_is_silent_elsewhere() {
     let rules: Vec<String> = [
         "apply",
         "branch",
+        "build",
         "check",
         "claim",
         "defect",

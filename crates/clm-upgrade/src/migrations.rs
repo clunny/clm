@@ -6,6 +6,8 @@ use crate::Migration;
 
 #[path = "migrations/20261112-agents-md/mod.rs"]
 mod agents_md;
+#[path = "migrations/20261112-build-loop-in-clm/mod.rs"]
+mod build_allow_rules;
 #[path = "migrations/20261109-a-build-s-tests/mod.rs"]
 mod build_setup;
 #[path = "migrations/20261106-corpus-entries-drift-from/mod.rs"]
@@ -40,6 +42,7 @@ pub(crate) static LIST: &[Migration] = &[
     build_setup::MIGRATION,
     agents_md::MIGRATION,
     setup_allow_rules::MIGRATION,
+    build_allow_rules::MIGRATION,
 ];
 
 /// `(migration, note it supersedes)`: a note whose edit is to a text the later migration has

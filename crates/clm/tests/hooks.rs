@@ -85,6 +85,7 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
     let rules: Vec<String> = [
         "apply",
         "branch",
+        "build",
         "check",
         "claim",
         "defect",
