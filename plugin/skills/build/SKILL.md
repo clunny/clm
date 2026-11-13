@@ -12,7 +12,7 @@ Once, before the first launch (`unattended-permissions-check`), run `clm init --
 
 Run `clm agent-harness` first (`skills-follow-agent-harness`): it says what this session's agent harness can do. Where it can't stop a subagent, a `stop` action waits for the run to return instead (below).
 
-Start the loop with `clm build start --session-model <alias>`, `<alias>` the alias of this session's own model, the one your system prompt names (such as `opus`). Then carry out each action every `clm build` command prints, in order. Load a deferred tool with `ToolSearch` first.
+Start the loop with `clm build start --session-model <alias>`, `<alias>` the alias of the session's own model, the one your system prompt names (such as `opus`). Then carry out each action every `clm build` command prints, in order. Load a deferred tool with `ToolSearch` first.
 
 - `launch`: start a background subagent with the Agent tool, as a `general-purpose` agent with `isolation: "worktree"` and the line's model, its prompt the named file's text unchanged. Then run `clm build launched <name> <task-id>`. When the line says to run it in the session, do its work here instead.
 - `resume`: send the file's text with `SendMessage`. When it can't be delivered, report it with `clm build returned <name> --result none --cause tool`.
