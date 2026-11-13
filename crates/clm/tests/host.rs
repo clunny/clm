@@ -919,7 +919,7 @@ fn az_calls(gh: &Gh) -> Vec<String> {
 
 #[test]
 fn scenario_azure_pull_request_through_the_setting() {
-    // req:host/azure-selected@ef11e15d
+    // req:host/azure-selected@288b93b3
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
@@ -935,7 +935,7 @@ fn scenario_azure_pull_request_through_the_setting() {
 
 #[test]
 fn scenario_azure_not_signed_in() {
-    // req:host/azure-selected@ef11e15d
+    // req:host/azure-selected@288b93b3
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     let env = [("FAKE_AZ_FAIL", "Please run 'az login'")];
@@ -946,7 +946,7 @@ fn scenario_azure_not_signed_in() {
 
 #[test]
 fn scenario_azure_issue_through_the_setting() {
-    // req:host/azure-selected@ef11e15d
+    // req:host/azure-selected@288b93b3
     let (r, gh) = (checkout("azure"), fake_gh());
     fake_az(&gh);
     write(&r.work, "r.md", "The report\n");
