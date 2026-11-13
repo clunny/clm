@@ -35,7 +35,9 @@ When Claude asks for your approval it shows you the change's intent, what it ask
 
 ## Build: `/clm:build`
 
-Run `/clm:build` and Claude builds every part of the system whose code is behind its design, each in its own background session, in parallel, writing the tests first. Each part lands on `main` once its checks pass, and the workflow keeps going until nothing is left to build. It also drafts fixes for the backlog's bugs, in the background beside the builds; a fix that needs your review is gathered with the others into one change, which it asks you to approve at the end. At the end it tells you what landed and anything waiting on you.
+Run `/clm:build` and Claude builds every part of the system whose code is behind its design, each in its own background session, in parallel, writing the tests first. Each part lands on `main` once its checks pass. It also drafts fixes for the backlog's bugs beside the builds, most urgent work first, whether build or fix; fixes that need your review are gathered into one change, which it asks you to approve as soon as no fix is still being drafted. It runs your project's slow tests when your `[verify]` settings say.
+
+The workflow keeps going: when nothing is left, it waits for new work, until you ask it to drain (finish what's running, then stop) or stop now, in the chat or with the panel's buttons. If the session ends or crashes, run `/clm:build` again in a new one and it carries on where it was. Anything waiting on you (an approval, a question a build raised, a build that keeps failing) stays in its queue, shown in the panel, until you deal with it.
 
 Builds run under your session's permission mode: in manual mode they pause for your answers, in auto mode they run alone. Auto mode lets them push and land only through the allow rules that setting up CLM puts in `.claude/settings.json`; if your repository was set up before those rules existed, Claude tells you which to add before the first build.
 
@@ -69,7 +71,7 @@ Claude summarises it and proposes cuts. Act on any of it with `/clm:propose`. [H
 ## See where things stand
 
 - Every Claude Code session starts with the project's status: what's built, what's in flight, what waits on you.
-- `/clm:view` opens a panel beside the chat with the same picture, kept up to date. With the `clm-panel` plugin installed, `/clm:build` opens it for you on the Flight tab, where the builds show.
+- `/clm:view` opens a panel beside the chat with the same picture, kept up to date. With the `clm-panel` plugin installed, `/clm:build` opens it for you on the Queue tab: what's running, what runs next, and what waits on you, with buttons to drain or stop.
 - The web app at [clm-app.dev/app/](https://clm-app.dev/app/), if you've been invited, shows the design, the work in flight and the backlog, and lets you approve changes and suggest new ones from any browser, a phone included.
 
 ## Decide what's worth keeping

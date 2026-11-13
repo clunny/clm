@@ -153,7 +153,7 @@ Nothing is filed and nothing is decided for you. Read it like this:
 
 - `change-done`: a change finished (it was archived). The usual choice: a change is the piece of work you approved, so a failure points at one change;
 - `queue-drained`: nothing is left to build;
-- `work-done`: a build or triage session ended (`/clm:build` and `/clm:triage` run `clm verify --due --event work-done` before they wrap up). Local mode only;
+- `work-done`: a piece of work ended: `/clm:build`'s loop ran out of work, or a `/clm:triage` session wrapped up (each runs `clm verify --due --event work-done` then). Local mode only;
 - `every = { lands = N, days = D }`: a backstop, so long-running changes still get checked.
 
 A failed last run makes any later land due, so a fix is checked at once. A run covers every test `clm affected` selects since the tests last passed.
