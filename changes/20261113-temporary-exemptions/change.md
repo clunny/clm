@@ -33,7 +33,7 @@ Adopting an existing app still meets code that is owned and specified but doesn'
 - `ARCHITECTURE.md`: a new carried constraint, `exemptions-end`; `path-ownership`'s shared-suite scenario no longer imports the entry point.
 - Decision `temporary-exemptions`; `components-own-their-tests` and `incremental-adoption` amended.
 - Guide: the glossary gains Exemption and loses `test_depends_on`; `ci-and-deployment` and `spec-format` follow.
-- Backlog: `clm-s-cli-tests-belong-to-the-root` reworded: each crate offers a library entry point its own tests call, and the binary keeps only tests of dispatch.
+- Backlog: `clm-s-cli-tests-belong-to-the-root` is replaced by `clm-s-cli-tests-prove-other-components-through-the-binary`: each crate offers a library entry point its own tests call, and the binary keeps only tests of dispatch.
 
 ## Constraints
 
