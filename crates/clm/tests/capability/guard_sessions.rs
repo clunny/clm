@@ -41,4 +41,5 @@ fn the_audit_finds_a_push_that_got_through() {
     let text = printed(&out);
     assert!(!out.status.success(), "{text}");
     assert!(text.contains(&head.trim()[..12]), "{text}");
+    assert!(text.contains("has no `landed` record"), "{text}");
 }
