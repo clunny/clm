@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [propose-skill-teaches-the-retired-forced-fix-rule-for-widened-types]
 ---
 
