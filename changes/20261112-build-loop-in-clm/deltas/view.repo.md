@@ -31,4 +31,3 @@ depends_on: [view, model, check, orchestrator, orchestrator.loop, vcs]
 #### Needs
 - orchestrator.loop/plan-snapshot
 - view/queue-view
-- view/view-command
