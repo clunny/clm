@@ -601,7 +601,7 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 - model/parse-backlog
 
 ### Requirement: next-wait
-`clm next` SHALL refuse `--wait` and `--interval` as usage errors, and SHALL hold no code that waits for work: `clm build wait` waits for everything the build loop launches (`orchestrator.loop/build-wait`), and the skill that ran `clm next --wait` runs the loop instead. This is the contract step of moving the wait into the loop (`expand-contract`), so it waits until the skill no longer names `clm next --wait`.
+`clm next` SHALL refuse `--wait` and `--interval` as usage errors, and SHALL hold no code that waits for work: `clm build wait` waits for everything the build loop launches (`orchestrator.loop/build-wait`), and the skill that ran `clm next --wait` runs the loop instead. This is the contract step of moving the wait into the loop (`expand-contract`), so it waits until the skill no longer names `clm next --wait`; while it waits, this pending requirement stands in for a `clm:remove-by 20261112-build-loop-in-clm` marker on the `--wait` code, which `clm pending` keeps in sight until it is built.
 
 #### Scenario: wait refused
 - WHEN `clm next --wait` runs, and then `clm next --interval 5`

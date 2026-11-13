@@ -31,7 +31,7 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 
 **The plan is recomputed** (`git-is-truth`). Each step computes the plan afresh from a snapshot: what the commands above printed after the step's fetch, the loop file and the time. `plan` is a pure function of it, so the scheduler is tested on snapshots built in the test with no git. The step stores the plan it acted on in the loop file with the `origin/main` commit and the time, and `clm view queue` shows that plan with the runs as they stand, so the view never shows an order the loop didn't compute. An explicit queue kept in the file was rejected: it goes stale whenever another clone lands, claims or files an item, so it would need recomputing anyway, plus reconciling.
 
-**The loop file** is `<git common dir>/clm/loop`, beside `clm/builds/` (`build-places`), so every worktree of the clone shares it. It is written whole through a temporary file and a rename while holding its own lock, `<git common dir>/clm/loop.lock`, which is never held while a subprocess runs, so a `clm run` or `clm draft` the step starts, which takes the places' lock, can't deadlock against it. Its format is the builder's, with a `version` the loader checks. A file that can't be read or parsed is set aside as `loop.damaged` and the loop starts afresh, which loses only the history, the drafted set, the conditions and the stored plan: claims, branches and places are in git and the places, and a step finds them again.
+**The loop file** is `<git common dir>/clm/loop`, beside `clm/builds/` (`build-places`), so every worktree of the clone shares it. It is written whole through a temporary file and a rename while holding its own lock, `<git common dir>/clm/loop.lock`, which is never held while a subprocess runs, so a `clm run` or `clm draft` the step starts, which takes the places' lock, can't deadlock against it. Its format is the builder's, with a `version` the loader checks. A file that can't be read or parsed is set aside as `loop.damaged` and the loop starts afresh, which loses the history, the drafted set, the conditions, the stored plan, the fold list and batches, the loop's red verify results and the escalations not yet landed. Claims, branches and places are in git and the places, and a step finds them again; review drafts a lost fold list held stay on their spec branches, which `clm proposals` lists and `/clm:triage` folds, a red verify result stays in the ledger for `clm intake`, and the next drain's stops escalate again. Losing it is a damaged file, not a step of the loop, so the cost is accepted rather than rebuilding those from git at every step.
 
 **Steps.** A step fetches, runs `clm wrap-up` for the housekeeping, reads the rest of the snapshot, computes the plan, prepares each run the plan launches (`clm run` or `clm draft`, which claim, take the place and write the prompt), records each action in the loop file, stores the plan, and prints the actions. A run's state is `planned` from the step that prints its `launch` until `launched` reports it, `running` until `returned`, then `returned`, or `stopped` when it returned with cause `stopped`; a planned run's `launch` is printed again, unchanged, by every step until it is reported, and it is never prepared twice. So a session that runs `step` twice, or loses an action line to compaction, launches each run once.
 
@@ -65,6 +65,9 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 - WHEN `clm build step` prepares a build with it
 - THEN the fake's attempt succeeds
 
+#### Needs
+- view/queue-view
+
 ### Requirement: loop-start
 `clm build start --session-model <alias>` SHALL take the loop's lease when there is no loop or its lease lapsed (no renewal for 15 minutes), record the session's model, clear a stop request, mark every run listed as `planned`, `running` or `stopped` an orphan, and print the first step's actions. When the lease is live it SHALL refuse with exit 1, printing when it was last renewed and that `clm view queue` shows the loop, unless `--take-over` is given. The next step SHALL relaunch an orphan by its kind: a build with `clm run <component>`, which resumes its branch; a draft with `clm draft --resume <change-id>`; a `land:` or `verify` run by running it again; and a fold or archive by dropping it for the plan to compute again. A relaunched orphan SHALL count no stop.
 
@@ -79,6 +82,7 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 - THEN it prints a `launch build:a build sonnet <prompt-file>` whose prompt resumes `impl/a`, and a `launch draft:d draft opus <prompt-file>` whose prompt continues `spec/d`, and the runs record no stop
 
 #### Needs
+- view/queue-view
 - orchestrator.triage/draft-resume
 
 ### Requirement: take-over-holds-moving-orphans
@@ -89,10 +93,13 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 - WHEN `clm build start --session-model opus --take-over` runs, and then `clm build step` runs 5 minutes later
 - THEN neither prints a `launch` for `build:a`, and `clm view queue` lists it under Running as held by a session taken over
 
+#### Needs
+- view/queue-view
+
 ### Requirement: step-actions
 `clm build step` SHALL fetch `origin`, do the housekeeping (`step-housekeeping`), read the snapshot, compute the plan, prepare each run the plan launches, record it as `planned`, store the plan, and print the actions, one per line, in the forms the Contract gives, the `launch` lines in the plan's order. The prompt file a `launch` names SHALL be the loop's own, under `.clm/prompts/loop/`, holding the line `loop run <name>` first and then, unchanged, the launcher `clm run`, `clm draft` or `clm draft --fold` printed for it, or the archive prompt (`plan-archive`), so the panel finds which entry a subagent belongs to (`plugin.panel/build-rows`). A run still `planned` SHALL be printed again unchanged by every step until `clm build launched` reports it, and SHALL NOT be prepared again. When the loop has nothing to launch, resume or stop and no `clm build wait` of the holder is running, it SHALL print `wait`. Every `clm build` command SHALL renew the lease.
 
-The build of this requirement updates the capability test `capability/build-from-spec` (`crates/clm/tests/capability/build_from_spec.rs`) to drain its queue through `clm build start`, `step`, `launched` and `returned` rather than `clm next` and `clm run`, and adds its scenario *resume in a new session* (`capability-tests-follow-rules`).
+The build of this requirement updates the capability test `capability/build-from-spec` (`crates/clm/tests/capability/build_from_spec.rs`) to drain its queue through `clm build start`, `step`, `launched` and `returned` rather than `clm next` and `clm run`, keeping its citation; the test of the new scenario *resume in a new session* is `capability`'s own build's (`capability-tests-follow-rules`).
 
 #### Scenario: an unreported launch
 - GIVEN a step that printed `launch build:a build sonnet <file>`, and no `launched` for it
@@ -109,8 +116,11 @@ The build of this requirement updates the capability test `capability/build-from
 - WHEN its prompt file is read
 - THEN its first line is `loop run build:a` and the rest is what `clm run a` printed
 
+#### Needs
+- view/queue-view
+
 ### Requirement: return-rules
-`clm build returned <name> --result <line>` SHALL, by `<line>`, the run's last line as it stands: for `waiting: <command>`, leave the run running and free nothing; for `landed <sha>` with `--cause running`, print `stop <name> <task-id>` and then finish it as landed; for any line with `--cause stopped`, mark the run `stopped`, keeping its claim, branch and place, and finish nothing; otherwise finish the run with `clm run --finish <component>` or `clm draft --finish <change-id>`, and, for a run whose line is neither `landed <sha>`, `proposed <id> review <url>` nor `stopped: <reason>`, count it as landed exactly when the finish prints `landed impl/<component>` (`unclosed-build-reads-finish`). It SHALL pass each `left <path>: ...` line a finish prints to a `say`, and record each `left <slug>: <reason>` line a draft's finish prints among the items drafts of the loop left. A `proposed <id> review <url>` from a draft SHALL add `<id>` to the fold list.
+`clm build returned <name> --result <line>` SHALL, by `<line>`, the run's last line as it stands: for `waiting: <command>`, leave the run running and free nothing; for `landed <sha>` with `--cause running`, print `stop <name> <task-id>` and then finish it as landed; for any line with `--cause stopped`, mark the run `stopped`, keeping its claim, branch and place, and finish nothing; otherwise finish the run with `clm run --finish <component>` or `clm draft --finish <change-id>`, and, for a run whose line is neither `landed <sha>`, `proposed <id> review` (with or without a URL) nor `stopped: <reason>`, count it as landed exactly when the finish prints `landed impl/<component>` (`unclosed-build-reads-finish`). It SHALL pass each `left <path>: ...` line a finish prints to a `say`, and record each `left <slug>: <reason>` line a draft's finish prints among the items drafts of the loop left. A draft's `proposed <id> review` line, with or without a URL after it, SHALL add `<id>` to the fold list.
 
 #### Scenario: waiting
 - GIVEN a running `build:a`
@@ -132,8 +142,11 @@ The build of this requirement updates the capability test `capability/build-from
 - WHEN `clm build returned build:a --result none --cause stopped` runs
 - THEN `build:a` is `stopped`, `clm run --finish a` didn't run, and its place still counts
 
+#### Needs
+- view/queue-view
+
 ### Requirement: stop-causes
-For a run that returned without landing, `clm build returned` SHALL decide by `--cause` and the run's stops so far: `limit` and `disk` SHALL resume the same subagent each time they recur, once the condition clears (`--until <time>` passes for `limit`; `clm build cleared disk` for `disk`), recording the condition meanwhile; `outage` and `tool` SHALL resume at once the first time they stop the run, and `work` the first time; a second stop of the run by `outage`, `tool` or `work`, and a first by `context`, SHALL finish the run and rebuild it, launching a new subagent on the session's model with its round one higher; `blocked`, `stopped` and `running` SHALL relaunch nothing. A resume SHALL be a `resume <name> <task-id> <message-file>` action whose message says why the run stopped, that the cause has cleared, to carry on in its own worktree, and to run again any review or check subagent of its own the stop killed. When the same `limit` or `disk` condition stops a second run while it holds, the loop SHALL resume the runs it stopped one at a time, each once the previous has returned, and launch no new run until they all have (`resume-sound-builds`).
+For a run that returned without landing, `clm build returned` SHALL decide by `--cause` and the run's stops so far: `limit` and `disk` SHALL resume the same subagent each time they recur, once the condition clears (`--until <time>` passes for `limit`; `clm build cleared disk` for `disk`), recording the condition meanwhile; `outage` and `tool` SHALL resume at once the first time they stop the run, and `work` the first time; a second stop of the run by `outage`, `tool` or `work`, and a first by `context`, SHALL finish the run and rebuild it, launching a new subagent on the session's model with its round one higher; `blocked`, `stopped` and `running` SHALL relaunch nothing. A resume the session reports it couldn't deliver, `clm build returned <name> --result none --cause tool` for a run whose resume is outstanding, SHALL finish the run and rebuild it, counting a `tool` stop. A resume SHALL be a `resume <name> <task-id> <message-file>` action whose message says why the run stopped, that the cause has cleared, to carry on in its own worktree, and to run again any review or check subagent of its own the stop killed. When the same `limit` or `disk` condition stops a second run while it holds, the loop SHALL resume the runs it stopped one at a time, each once the previous has returned, and launch no new run until they all have (`resume-sound-builds`).
 
 #### Scenario: a limit
 - GIVEN a running `build:a`
@@ -155,6 +168,9 @@ For a run that returned without landing, `clm build returned` SHALL decide by `-
 - WHEN `clm build step` runs at 14:01, and again after `build:a` returns
 - THEN the first prints one `resume`, for `build:a`, and no `launch`; the second prints the `resume` for `build:b`
 
+#### Needs
+- view/queue-view
+
 ### Requirement: repeated-stops-escalate
 The loop SHALL escalate a run, launching it no more, when a rebuilt run (round 2 or more) stops for the same cause as the stop that rebuilt it, or when a run stops with cause `context` for the second time; `limit`, `disk`, `blocked`, `stopped` and `running` stops SHALL never escalate. To escalate, it SHALL file a `kind: question` backlog item whose `components` name the component (or the draft's items' components), whose `blocks` name the component's pending requirements (none for a draft), and whose body names the stops with their results, by committing a tree that adds the item to `origin/main`'s with `git commit-tree`, pushing that commit as `loop/<slug>`, landing the branch with `clm land loop/<slug>` run from the main worktree, and deleting the branch. A land that fails SHALL keep the escalation in the loop file, listed in the human's queue, and the next step SHALL try again.
 
@@ -168,8 +184,11 @@ The loop SHALL escalate a run, launching it no more, when a rebuilt run (round 2
 - WHEN the next step runs
 - THEN no item is filed for `a`
 
+#### Needs
+- view/queue-view
+
 ### Requirement: plan-order
-The plan SHALL launch, up to the clone's free places, in one list sorted by priority (`P1` first): each component `clm next` prints, at the priority `clm view flight --at origin/main --format json` gives it, and each `group` line `clm triage` prints none of whose items a draft of the loop left, at the line's priority; at equal priority a draft SHALL come before a build, and otherwise each keeps its own command's order. A build SHALL launch on the build model `clm agent-harness` names, with `--review-model` the session's model, and a draft on the session's model (`model-per-launch`). It SHALL launch no new build or draft while a drain or a stop is requested.
+The plan SHALL launch, up to the clone's free places (`max_builds` less the places that count, as `orchestrator`'s `places` reads them), in one list sorted by priority (`P1` first): each component `clm next` prints, at the priority `clm view flight --at origin/main --format json` gives it, and each `group` line `clm triage` prints none of whose items a draft of the loop left, at the line's priority; at equal priority a draft SHALL come before a build, and otherwise each keeps its own command's order. A build SHALL launch on the build model `clm agent-harness` names, with `--review-model` the session's model, and a draft on the session's model (`model-per-launch`). It SHALL launch no new build or draft while a drain or a stop is requested. When `clm run` or `clm draft` exits 3 because another session took the place meanwhile, the step SHALL launch nothing more that step and print no action for that run.
 
 #### Scenario: a P1 build before P4 drafts
 - GIVEN `max_builds` 3, three `group` lines at `P4`, and component `a` ready at `P1`
@@ -186,6 +205,9 @@ The plan SHALL launch, up to the clone's free places, in one list sorted by prio
 - WHEN `clm build step` runs
 - THEN it launches no draft of that line
 
+#### Needs
+- view/queue-view
+
 ### Requirement: plan-fold
 Once the fold list isn't empty and no draft of the loop is running, the plan SHALL launch one fold, `fold:<first-id>`, with the prompt `clm draft --fold` writes for the fold list's IDs in the order their `group` lines came, on the build model, taking no place, also while a drain is requested. Its `proposed <batch> review <url>` SHALL put the batch in the human's queue. After `clm build approved <batch>`, the plan SHALL print `run land:<batch> clm land spec/<batch>`; a land that reports `gate/approval` SHALL put the batch back in the human's queue, and a land that lands SHALL be followed by `clm draft --finish` for each folded draft.
 
@@ -199,6 +221,9 @@ Once the fold list isn't empty and no draft of the loop is running, the plan SHA
 - WHEN `clm build approved b` runs
 - THEN it prints `run land:b clm land spec/b`
 
+#### Needs
+- view/queue-view
+
 ### Requirement: plan-archive
 When `clm wrap-up` names complete changes, no `impl/archive/*` branch is on `origin` that a run of the loop doesn't hold, and neither a drain nor a stop is requested, the plan SHALL launch `archive:<id>`, `<id>` the first change it names, on the build model, taking no place, with a prompt that, in the subagent's own checkout, cuts `impl/archive/<id>` from `origin/main` with `git switch -c` or continues it when `origin` has it, runs `clm rebase` until its last line is `rebase ok`, pushes with `clm branch push`, leaves the archive to another session when the push is refused because the branch moved on `origin` (`archive-branches`), opens its pull request with `clm pr open` and lands it with `clm land`.
 
@@ -207,8 +232,11 @@ When `clm wrap-up` names complete changes, no `impl/archive/*` branch is on `ori
 - WHEN `clm build step` runs
 - THEN it prints `launch archive:c archive sonnet <prompt-file>`, whose prompt names `git switch -c impl/archive/c origin/main`
 
+#### Needs
+- view/queue-view
+
 ### Requirement: plan-verify
-After a run of the loop landed, and when the loop becomes idle (no run running and nothing to launch), the plan SHALL run `clm verify --due --dry-run`, with `--event work-done` when idle, and, when it exits 0 saying a run is due, print `run verify clm verify --due` (with `--event work-done` when idle), also while a drain is requested. The run's last line SHALL be reported with `clm build returned verify --result <line>`. A `verify failed` line SHALL be recorded and put in the human's queue until a backlog item on `origin/main` names its commit in `verify_failures`, and SHALL NOT be drafted, since the human takes a slow test's break in (`slow-tests-after-land`).
+After a run of the loop landed, and when the loop becomes idle (no run running and nothing to launch), the plan SHALL run `clm verify --due --dry-run`, with `--event work-done` when idle, and, only when its stdout starts `verify due`, print `run verify clm verify --due` (with `--event work-done` when idle), also while a drain is requested. The run's last line SHALL be reported with `clm build returned verify --result <line>`. A `verify failed` line SHALL be recorded and put in the human's queue until a backlog item on `origin/main` names its commit in `verify_failures`, and SHALL NOT be drafted, since the human takes a slow test's break in (`slow-tests-after-land`).
 
 #### Scenario: idle and due
 - GIVEN nothing running or ready, and a fake `clm verify --due --dry-run --event work-done` that prints `verify due work-done` and exits 0
@@ -220,21 +248,30 @@ After a run of the loop landed, and when the loop becomes idle (no run running a
 - WHEN the plan is computed, and again after an item naming the commit in `verify_failures` lands
 - THEN the first human queue holds the red result with `take in with /clm:triage`, and the second doesn't
 
+#### Needs
+- view/queue-view
+
 ### Requirement: step-housekeeping
-Every step SHALL run `clm wrap-up`, which removes landed worktrees and branches and frees the places that don't count (`orchestrator.checkpoint/checkpoint`), pass each `left <path>: ...` line it prints to a `say` once, take the changes it names `complete` for `plan-archive`, and put each line it prints of work that isn't safe or a ledger finding in the human's queue.
+Every step SHALL run `clm wrap-up`, which removes landed worktrees and branches and frees the places that don't count (`orchestrator.checkpoint/checkpoint`), pass each `left <path>: ...` line it prints to a `say` once, take the changes it names `complete` for `plan-archive`, and put in the human's queue each line it prints of the caller's own work that isn't safe (`dirty`, `unpushed`) and each ledger finding, leaving out the lines about other checkouts' and the loop's runs' work (`elsewhere`, `open`). It SHALL run `clm wrap-up` in the directory `clm build` runs in.
 
 #### Scenario: unsafe work in sight
 - GIVEN a fake `clm wrap-up` that prints `unpushed spec/x` and `wrap-up incomplete`
 - WHEN `clm build step` runs
 - THEN the plan's human queue holds `unpushed spec/x`
 
+#### Needs
+- view/queue-view
+
 ### Requirement: loop-follows-agent-harness
-The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) and follow them (`skills-follow-agent-harness`): where `subagents` is `no`, it SHALL launch one run at a time, its `launch` lines saying to run the prompt in the session itself; where `isolated-worktrees` is `no`, it SHALL add the run's worktree at `.claude/worktrees/agent-<name>` from `origin/main`, `<name>` with `:` as `-`, before printing the `launch`, and its prompt SHALL say to work there; where `model-choice` is `no`, every run SHALL be on the session's model.
+The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) and follow them (`skills-follow-agent-harness`): where `subagents` is `no`, it SHALL launch one run at a time, its `launch` lines saying to run the prompt in the session itself; where `isolated-worktrees` is `no`, it SHALL add the run's worktree at `.claude/worktrees/agent-<name>` from `origin/main`, `<name>` with `:` as `-`, before printing the `launch`, and its prompt SHALL say to work there; where `model-choice` is `no`, every run SHALL be on the session's model. An agent harness that can't send a message to a subagent or stop one keeps every rule through the session's reports: an undelivered resume is rebuilt (`stop-causes`), and under `stop --now` a run the session can't stop is waited for and reported with cause `stopped`.
 
 #### Scenario: no subagents
 - GIVEN an agent harness whose `subagents` is `no`, and components `a` and `b` ready with `max_builds` 3
 - WHEN `clm build step` runs
 - THEN it prints one `launch`, for `build:a`, and none for `b` until `build:a` returns
+
+#### Needs
+- view/queue-view
 
 ### Requirement: build-wait
 `clm build wait [--interval <minutes>]` (a positive decimal number of at most 7, default 5) SHALL renew the lease every interval and exit 0, printing one line naming why, as soon as a step would print an action: a place frees while work is ready, new work is on `origin`, a fold is due, a condition clears or its time passes, a draft becomes possible, or a stop is requested. It SHALL read the loop file and the places every 5 seconds and fetch `origin` and read the snapshot once per interval. When a fetch fails it SHALL print `clm build wait: fetch failed: <reason>` on stderr and go on. An `--interval` that isn't a positive number of at most 7 SHALL exit 1 before waiting.
@@ -253,6 +290,9 @@ The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) an
 - WHEN `clm build wait --interval 10` runs
 - THEN it exits 1 before waiting
 
+#### Needs
+- view/queue-view
+
 ### Requirement: build-stop
 `clm build stop --drain` SHALL record a drain: no step launches a new build, draft or archive; running runs finish and are handled as usual; the fold list is folded, an approved batch is landed and a due verify is run; and once nothing runs, the step prints the summary's `say` and `end`. `clm build stop --now` SHALL record a stop: the next step prints `stop <name> <task-id>` for every running run, each then returned with cause `stopped`, and once none is running the summary's `say` and `end`. Neither SHALL fetch.
 
@@ -260,6 +300,9 @@ The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) an
 - GIVEN running `build:a` (task `t-1`) and `draft:c` (task `t-2`)
 - WHEN `clm build stop --now` runs and then `clm build step`
 - THEN the step prints `stop build:a t-1` and `stop draft:c t-2`, and after both are returned with `--cause stopped` the next step prints a `say` and `end`, and `origin/impl/a` still exists
+
+#### Needs
+- view/queue-view
 
 ### Requirement: end-summary
 The summary a drain or a stop ends with SHALL say what the loop's runs landed since `start`, what is still running, stopped or held and on what, the human's queue as it stands, and each `workaround` item and `reconsider-<component>-<slug>` question added on `origin/main` since the commit the loop started at, pointing at `/clm:health`; and, when the human's queue holds no unsafe work, that the session can end.
@@ -269,6 +312,9 @@ The summary a drain or a stop ends with SHALL say what the loop's runs landed si
 - WHEN the last run returns
 - THEN the summary names `a` as landed, names `workaround-a-x-1` and `/clm:health`, and says the session can end
 
+#### Needs
+- view/queue-view
+
 ### Requirement: humans-queue
 The plan SHALL hold the human's queue, each entry with what the human does about it and since when, oldest first: the fold batches waiting for approval (`say "approve <batch>"`); the `question` and `human-task` items on `origin/main` that block requirements, with what they block (`answer backlog/<slug>`), since the commit that added them; the escalations the loop couldn't land; the red results of the loop's verify runs no item has taken in (`take in with /clm:triage`); the work `clm wrap-up` reports isn't safe and its ledger findings; the migrations `clm upgrade` lists (`run /clm:upgrade`); and the conditions only the human can clear (`free disk, then say so`). It SHALL NOT call the host, so intake isn't in it.
 
@@ -276,6 +322,9 @@ The plan SHALL hold the human's queue, each entry with what the human does about
 - GIVEN an item `backlog/a-stops-on-work.md` the loop filed, blocking `a/x`
 - WHEN the plan is computed
 - THEN the human's queue lists `a-stops-on-work` with `answer backlog/a-stops-on-work` and `a/x`
+
+#### Needs
+- view/queue-view
 
 ### Requirement: plan-snapshot
 `clm-loop` SHALL offer `plan(snapshot)`, a pure function returning `view`'s queue model with the sections the view shows, in the order and with the reasons the steps act on, and `stored_plan(root)`, which reads the plan the last step stored and the runs as the loop file holds them now, without fetching, or none when the clone has no loop file. `clm build step` SHALL act on, and store, `plan` of the snapshot it read after its fetch.

@@ -170,6 +170,7 @@ The Queue tab SHALL show, under each entry of the chart's `running` section, the
 - THEN the Queue tab's text chart is followed by a line holding `build:git` and then the build's row
 
 #### Needs
+- view.repo/view-queue
 - orchestrator.loop/step-actions
 
 ### Requirement: blocker-chains
@@ -465,7 +466,7 @@ The Queue tab SHALL show `clm view queue --at origin/main`, with `--format ansi 
 - view.repo/view-queue
 
 ### Requirement: queue-stop-buttons
-Above the Queue tab's chart the pane SHALL draw two buttons, `Drain` (`key` `loop:drain`) and `Stop now` (`key` `loop:now`), which run `clm build stop --drain` and `clm build stop --now` in the session's `cwd` when pressed, and then redraw. When the command exits non-zero the pane SHALL show its stderr above the chart until the next press or redraw. While the plan's loop line says a stop is requested, the pane SHALL draw the pressed button's label dimmed with `requested`. Its build adds the capability test of `capability/watch-beside-chat`'s scenario *stop from the pane* to `capabilities/panel/watch-beside-chat.test.ts` (`capability-tests-follow-rules`).
+Above the Queue tab's chart the pane SHALL draw two buttons, `Drain` (`key` `loop:drain`) and `Stop now` (`key` `loop:now`), which run `clm build stop --drain` and `clm build stop --now` in the session's `cwd` when pressed, and then redraw. When the command exits non-zero the pane SHALL show its stderr above the chart until the next press or redraw. While the plan's loop line says a stop is requested, the pane SHALL draw the pressed button's label dimmed with `requested`.
 
 #### Scenario: drain pressed
 - GIVEN an open pane on the Queue tab with a fake `clm`
@@ -481,4 +482,5 @@ Above the Queue tab's chart the pane SHALL draw two buttons, `Drain` (`key` `loo
 - capability/watch-beside-chat
 
 #### Needs
+- view.repo/view-queue
 - orchestrator.loop/build-stop
