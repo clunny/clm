@@ -6,9 +6,18 @@ use crate::{Repo, printed};
 
 #[test]
 fn a_build_names_its_model() {
-    // req:capability/right-model-per-task@06c2f40a
+    // req:capability/right-model-per-task@e5783c37
     let repo = Repo::init();
     repo.land_on_origin("true");
+
+    // `clm agent-harness` names the model builds run on.
+    let harness = repo.clm_env(&["agent-harness"], "", &[("CLAUDECODE", "1")]);
+    assert!(harness.status.success(), "{}", printed(&harness));
+    let report = String::from_utf8_lossy(&harness.stdout);
+    assert!(
+        report.lines().any(|l| l.trim() == "build-model sonnet"),
+        "{report}"
+    );
 
     // `/clm:build`, running on `opus`, prepares node `a`'s build with the command it
     // runs, passing its own model. The skill's own `model` on the Agent tool, which launches

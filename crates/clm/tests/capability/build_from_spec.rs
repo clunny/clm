@@ -93,7 +93,7 @@ fn launch_prompt(actions: &[String], node: &str) -> Option<String> {
 
 #[test]
 fn drain_the_queue() {
-    // req:capability/build-from-spec@a85cfe36
+    // req:capability/build-from-spec@54a7f627
     let (repo, a, b) = queue();
 
     // `/clm:build`: both nodes are ready, with no `Needs` between them.
@@ -151,7 +151,7 @@ fn drain_the_queue() {
 
 #[test]
 fn resume_in_a_new_session() {
-    // req:capability/build-from-spec@a85cfe36
+    // req:capability/build-from-spec@54a7f627
     let (repo, a, b) = queue();
     let worktrees = repo.root.join(".claude/worktrees");
 

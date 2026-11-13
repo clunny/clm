@@ -20,7 +20,7 @@ fn capability_edit(repo: &Repo) {
 
 #[test]
 fn switch_tools_mid_change() {
-    // req:capability/work-from-any-agent-harness@2db7181d
+    // req:capability/work-from-any-agent-harness@f64fde43
     let repo = Repo::init();
     // The instructions both tools read: `AGENTS.md`, which `CLAUDE.md` imports.
     let init = repo.clm(&["init"]);
@@ -114,7 +114,7 @@ fn switch_tools_mid_change() {
 
 #[test]
 fn approve_under_a_harness_that_cannot_ask() {
-    // req:capability/work-from-any-agent-harness@2db7181d
+    // req:capability/work-from-any-agent-harness@f64fde43
     let repo = Repo::init();
     repo.land_on_origin("true");
     capability_edit(&repo);

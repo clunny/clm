@@ -6,7 +6,7 @@ use crate::{Repo, printed};
 
 #[test]
 fn file_a_defect() {
-    // req:capability/report-defects@b238d613
+    // req:capability/report-defects@6558be10
     let repo = Repo::init();
     repo.write("clm.toml", "host = \"none\"\ndefects = \"backlog\"\n");
     repo.commit("defects to the backlog");
