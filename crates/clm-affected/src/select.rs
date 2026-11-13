@@ -75,9 +75,7 @@ pub fn select(
     }
 }
 
-/// `nodes` and every node that depends on one of them, directly or indirectly, then each node
-/// whose tests import one of those (`test_depends_on`). The walk doesn't go on from the latter:
-/// only its tests use the changed component, not its code.
+/// `nodes` and every node that depends on one of them, directly or indirectly.
 fn with_dependants(graph: &Graph, mut nodes: BTreeSet<String>) -> BTreeSet<String> {
     loop {
         let more: Vec<String> = graph
@@ -92,19 +90,6 @@ fn with_dependants(graph: &Graph, mut nodes: BTreeSet<String>) -> BTreeSet<Strin
         }
         nodes.extend(more);
     }
-    let testers: Vec<String> = graph
-        .nodes
-        .values()
-        .filter(|n| !nodes.contains(&n.id))
-        .filter(|n| {
-            n.frontmatter
-                .test_depends_on
-                .iter()
-                .any(|d| nodes.contains(d))
-        })
-        .map(|n| n.id.clone())
-        .collect();
-    nodes.extend(testers);
     nodes
 }
 
