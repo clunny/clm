@@ -5,13 +5,13 @@ owners: ["@clunny"]
 depends_on: [web.worker, view, effort]
 paths: ["web/src/views/**"]
 successor: ""
-size_budget: { spec_tokens: 16000, code_tokens: 90000 }
+size_budget: { spec_tokens: 20000, code_tokens: 90000 }
 serves: [capability/follow-from-browser, capability/see-project-state, capability/review-capability-cost]
 ---
 
 ## Contract
 The views of `web`'s browser app, modules under `web/src/views/`, each with its Vitest tests beside it, which `web/src/main.ts` imports and wires to the page:
-- the render functions of the pages: the spec graph (`graph.ts`) and its inspector (`inspector.ts`), Spec PRs (`pr.ts`) with the full document (`full-document.ts`), Build (`implementation.ts`), Backlog (`backlog.ts`), Capabilities (`capabilities.ts`) and Architecture (`architecture.ts`). Each takes the Worker's responses it draws from and the callbacks for what the page does (post, load again, navigate), and returns the page's DOM;
+- the render functions of the pages: the spec graph (`graph.ts`) and its inspector (`inspector.ts`), Spec PRs (`pr.ts`) with the full document (`full-document.ts`), Build (`implementation.ts`), Backlog (`backlog.ts`), Capabilities (`capabilities.ts`), Architecture (`architecture.ts`), Home (`home.ts`, `home-waiting-on-you`) and a backlog item's page (`backlog-item-page`), with the answer buttons both draw (`answer-buttons`). Each takes the Worker's responses it draws from and the callbacks for what the page does (post, load again, navigate), and returns the page's DOM;
 - what they share with `web`'s shell: the Worker API's types (`types.ts`) and fetch helpers (`api.ts`), the hash routes (`route.ts`), DOM building (`dom.ts`), sanitised Markdown (`markdown.ts`), the one-field forms (`forms.ts`), times (`time.ts`) and word marks (`diff.ts`);
 - the fixtures the views' tests and `web`'s end-to-end tests draw from (`fixtures.ts`).
 
@@ -416,6 +416,7 @@ A capability's page SHALL show, in this order: its entry in full, the report's `
 
 #### Needs
 - web.worker/capabilities
+- effort/entry-text
 
 #### Scenario: sections
 - GIVEN capability `x` whose `text` holds `` `clm land` `` and a `#### Scenario: s` block, with an unsettled flag titled "Judge ignores pipes" whose text is "Builds pipe output."
@@ -482,6 +483,7 @@ An architectural constraint's page SHALL show, in this order: its entry in full,
 
 #### Needs
 - web.worker/architecture
+- effort/entry-text
 
 #### Scenario: sections
 - GIVEN entry `e`, whose `text` holds its `#### Enforced by` and `#### Untested` blocks, enforced by `a/x`, current, and `a/y`, pending, with the untested text "Partly judgement." and a flag titled "Gate misfires"
@@ -591,7 +593,7 @@ Zooming the graph SHALL keep the point under the pointer where it is on screen: 
 - architecture/ui-quality
 
 ### Requirement: home-waiting-on-you
-The Home view SHALL list, in this order, each section left out when empty: **Review**, each spec branch whose review has `review` true and no approval in `approvals`, by name, linking to its review; **Answer**, each `question` item with `choices` and each `human-task` item, by title, linking to its page, with its answer buttons (`answer-buttons`); **Flagged**, each capability and architectural constraint whose report entry has `flagged` true, linking to its page; and **Answer in a session**, each other `question` item, linking to its page and saying it is answered in a `/clm:triage` session. A Home with every section empty SHALL say nothing waits on the person. The number of entries in Review and Answer SHALL be the count the sidebar and tab bar badge Home with.
+The Home view SHALL list, in this order, each section left out when empty: **Review**, each spec branch whose review has `review` true and no approval in `approvals`, by name, linking to its review; **Answer**, each `question` item with `choices` and each `human-task` item, by title, linking to its page, with its answer buttons (`answer-buttons`); **Flagged**, each capability and architectural constraint whose report entry has `flagged` true, linking to its page; and **Answer in a session**, each other `question` item, linking to its page and saying it is answered in a `/clm:triage` session. Review counts only the reviews that have arrived. A Home with every section empty SHALL say nothing waits on the person. The number of entries in Review and Answer SHALL be the count the sidebar and tab bar badge Home with.
 
 #### Scenario: what waits
 - GIVEN repo `o/a` with spec branches `spec/x`, whose review needs review and has no approval, and `spec/y`, whose review needs review and has one; question `q` with choices `yes` and `no`; question `r` with none; `human-task` `h`; and a capabilities report flagging `c`

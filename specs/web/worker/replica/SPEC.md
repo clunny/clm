@@ -13,7 +13,7 @@ Crate `clm-web-replica`: the Durable Object class `Replica`, one per repo, named
 
 - `POST /event`: a verified webhook's event name, delivery and body, plus the installation's id. Answers 202 once the event is applied.
 - `GET /view/<name>?fresh=<0|1>`: the view `replica`'s `view` gives, as JSON, with `sha` and `computed_at`, or 503 `{"preparing": <share>}`. With `fresh=1` it first brings itself up to the tip and recomputes if anything was stale.
-- `POST /write`: a web write that needs the replica to validate (decide, propose, withdraw), the requester's login and token, in the body `web.worker/writes-to-object` gives. It brings itself up to the tip, validates, appends the record through `web.worker.platform`'s `ledger::append` with the requester's token, applies it, and answers with the status and body the Worker's route answers, or 503 `{"preparing": <share>}` while it has no views. A decide or a proposal recomputes before the answer.
+- `POST /write`: a web write that needs the replica to validate (decide, propose, withdraw, answer), the requester's login and token, in the body `web.worker/writes-to-object` gives. It brings itself up to the tip, validates, appends the record through `web.worker.platform`'s `ledger::append` with the requester's token, applies it, and answers with the status and body the Worker's route answers, or 503 `{"preparing": <share>}` while it has no views. A decide, a proposal or an answer recomputes before the answer.
 
 A read also tells the object the repo has open pages; the object keeps that for 5 minutes.
 
@@ -104,9 +104,16 @@ While a repo has open pages, the object SHALL list its refs and open pull reques
 - THEN the object made no request to GitHub
 
 ### Requirement: writes-through-object
-A write SHALL be validated against the replica after the object has brought itself up to the tip, by reading the default branch's ref and applying any push it hasn't seen, and SHALL be appended with the requester's token and applied to the replica before the answer. A decide or a proposal SHALL recompute before the answer, so a read right after it shows the record. While the replica has no views to answer (`Preparing`), a write SHALL answer 503 `{"preparing": <share>}` as a read does, before it reads the ref, start the build when none is under way, and append nothing. When the object can't read the ref, or its tip isn't that ref's commit after applying the push, a write SHALL answer 502 and append nothing, so nothing is judged against a tip it knows to be behind; a tip that moved with files still to fetch has moved.
+A write SHALL be validated against the replica after the object has brought itself up to the tip, by reading the default branch's ref and applying any push it hasn't seen, and SHALL be appended with the requester's token and applied to the replica before the answer. A decide, a proposal or an answer SHALL recompute before the answer, so a read right after it shows the record. An answer SHALL be validated by `replica/validate-answers`, `Unknown` answering 404 `{"error": "unknown"}` and `Invalid` 422 `{"error": "answer"}`, and appended as an `answered` record with `item` and `answer`, its `id` in the 200 answer. While the replica has no views to answer (`Preparing`), a write SHALL answer 503 `{"preparing": <share>}` as a read does, before it reads the ref, start the build when none is under way, and append nothing. When the object can't read the ref, or its tip isn't that ref's commit after applying the push, a write SHALL answer 502 and append nothing, so nothing is judged against a tip it knows to be behind; a tip that moved with files still to fetch has moved.
+
+#### Scenario: an answer read back
+- GIVEN a replica whose backlog holds question `q` with choices `yes` and `no`
+- WHEN an answer `yes` to `q` is written through the object, and the implementation view is read right after
+- THEN the view's `answers` holds it
 
 #### Needs
+- replica/validate-answers
+- replica/open-answers
 - replica/validate-writes
 - replica/apply-what-changed
 

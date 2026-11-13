@@ -22,9 +22,9 @@ Crate `clm-replica`: a repository's derived state, kept up to date from the chan
 - `pending_fetch()`: what the replica still needs before its views are complete: tree paths whose text it doesn't hold, in the order to fetch them. The runtime fetches them in slices it can afford and applies each slice as a `Tip` change.
 - `recompute(now) -> Recomputed`: computes every view from the state, at once, and returns the time they next go stale without a change (the next claim's expiry), or none.
 - `view(name)`: the last computed view, with the commit it describes and the time it was computed, or `Preparing { done }` before the first recompute that has the spec files.
-- `validate(write)`: checks a web write against the state, giving the refusal its route answers or the record's fields to append (`validate-writes`).
+- `validate(write)`: checks a web write against the state, giving the refusal its route answers or the record's fields to append (`validate-writes`, `validate-answers`).
 
-The views and their shapes are the ones `web.worker`'s routes answer: `snapshot`, `implementation` (all but the `mine` of each of its `proposals`, which is per requester), `capabilities` and `architecture`. A view's shape changes only with that contract.
+The views and their shapes are the ones `web.worker`'s routes answer: `snapshot`, `implementation` (all but the `mine` of each of its `proposals` and `answers`, which is per requester), `capabilities` and `architecture`. A view's shape changes only with that contract.
 
 ## Design
 The state is plain data: maps from path to text and blob SHA, the marker index, ledger sources by branch, refs, pull requests and at most 100 events. It is serialised with `serde_json` and split into chunks by `save`. The spec files are those `web.worker.platform`'s `files::is_spec_path` and `is_size_path` select. The change archive is kept as `changes/archive/<id>/change.md` only, since nothing but `resolved` reads it.
@@ -278,7 +278,7 @@ The replica's implementation view SHALL carry `proposals`: the open `proposed` r
 - ledger/proposal-records
 
 ### Requirement: snapshot-backlog-text
-Each item of the snapshot's `backlog` SHALL carry `body`, the item file's text after its frontmatter with leading and trailing blank lines removed; `priority`, `P1` to `P5`, `P5` when the item sets none; and `choices`, the item's choices (`model/backlog-choices`), empty when it has none.
+Each item of the snapshot's `backlog` SHALL carry `body`, the text of the item's file at the tip after its frontmatter with leading and trailing blank lines removed; `priority`, `P1` to `P5`, `P5` when the item sets none; and `choices`, the item's choices (`model/backlog-choices`), empty when it has none.
 
 #### Scenario: an item in full
 - GIVEN a tip with `backlog/q.md` holding `kind: question`, `priority: P2`, `choices: [yes, no]` and the body `Should we?`, and `backlog/i.md`, an `idea` with no priority
