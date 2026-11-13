@@ -527,7 +527,7 @@ fn invalid_graph_prints_violations() {
 #[test]
 fn status_and_view_never_fetch() {
     // req:view/status-report@538240fb
-    // req:view/view-command@8e470e55
+    // req:view/view-command@0fb30947
     let dir = base();
     let d = dir.path();
     write(d, "specs/z/SPEC.md", &node("specd", &["x"]));
