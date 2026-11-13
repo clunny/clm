@@ -1873,7 +1873,7 @@ fn agent_harness_gaps(skill: &str, body: &str) -> Vec<String> {
 
 #[test]
 fn skills_follow_the_agent_harness() {
-    // req:plugin/skills-follow-agent-harness@bd4508d6
+    // req:plugin/skills-follow-agent-harness@27ba8027
     for skill in ["health", "contribution", "configure", "verify"] {
         let body = skill_body(skill);
         assert_eq!(agent_harness_gaps(skill, &body), Vec::<String>::new());
