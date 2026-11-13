@@ -2,7 +2,16 @@ import { expect, test } from '@playwright/test';
 import { APPROVE, ARCHITECTURE, ARCH_DECIDE, CAPABILITIES, COMMENTS, DECIDE, PROPOSALS, REQUEST, REVIEW, mockApi, reviewOfB } from './mock';
 import { architecture, capabilities, cost, implementation, review, snapshot } from '../src/views/fixtures';
 
-// req:web/mobile-layout@b86f52c6
+/** The answer route of question `q`. */
+const ANSWER = 'POST /api/repos/o/a/backlog/q/answer';
+/** The fixture snapshot with a `question` that lists the choices `yes` and `no`. */
+const withQuestion = () => {
+  const snap = snapshot();
+  snap.backlog.push({ slug: 'q', kind: 'question', title: 'Ship it?', nodes: ['a'], origin: null, blocks: [], choices: ['yes', 'no'], body: 'Should we **ship**?', priority: 'P2' });
+  return snap;
+};
+
+// req:web/mobile-layout@cc420aa7
 test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
@@ -26,6 +35,20 @@ test.describe('phone', () => {
     await expect(page.locator('.tabbar')).toBeInViewport({ ratio: 1 });
     const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
     expect(fits).toBe(true);
+  });
+
+  test('Home on a phone: no sideways scroll, and a question\'s answer buttons can be tapped', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    await page.goto('/app/#/o/a');
+    const yes = page.locator('button.answer[data-answer=yes]');
+    await expect(yes).toBeVisible();
+    await yes.scrollIntoViewIfNeeded();
+    await expect(yes).toBeInViewport({ ratio: 1 });
+    const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+    expect(fits).toBe(true);
+    await yes.tap();
+    await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
   });
 
   test('every view fits the width', async ({ page, context }) => {
@@ -67,7 +90,9 @@ test.describe('phone', () => {
     await expect(page.locator('.ccard').first()).toBeVisible();
     await expect(page.locator('table.caps')).toBeHidden();
     expect(await fits()).toBe(true);
-    await expect(page.locator('.tabbar a[data-view=capabilities]')).toBeVisible();
+    await page.locator('.tabbar .tab-more').tap();
+    await expect(page.locator('.more-menu a[data-view=capabilities]')).toBeVisible();
+    await page.locator('.tabbar .tab-more').tap();
     await page.locator('.ccard[data-slug=a]').tap();
     await expect(page.locator('section[data-sec=workarounds]')).toBeVisible();
     expect(await fits()).toBe(true);
@@ -94,7 +119,7 @@ test.describe('phone', () => {
     await expect.poll(() => mock.posts).toEqual([{ key: DECIDE, body: '{"version":"61000000","value":"low","decision":"cut"}' }]);
   });
 
-  test('architecture on a phone: six tabs ending Capabilities and Arch., cards, nothing scrolls sideways, and the decision buttons can be reached and tapped', async ({ page, context }) => {
+  test('architecture on a phone: five tabs, More listing PRs, Capabilities and Arch., cards, nothing scrolls sideways, and the decision buttons can be reached and tapped', async ({ page, context }) => {
     const mock = await mockApi(context);
     const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
     await page.goto('/app/#/o/a/architecture');
@@ -102,9 +127,15 @@ test.describe('phone', () => {
     await expect(page.locator('.ccard').first()).toBeVisible();
     await expect(page.locator('table.caps')).toBeHidden();
     const tabs = page.locator('.tabbar a');
-    await expect(tabs).toHaveCount(6);
-    expect((await tabs.allInnerTexts()).slice(-2).map((t) => t.replace(/\s+/g, ' ').trim())).toEqual(['⚖ Capabilities', '▦ Arch.']);
-    for (const tab of await tabs.all()) await expect(tab).toBeInViewport({ ratio: 1 });
+    const text = (all: string[]) => all.map((t) => t.replace(/\s+/g, ' ').replace(/ \d+$/, '').trim());
+    await expect(tabs).toHaveCount(4);
+    await expect(page.locator('.tabbar > *')).toHaveCount(5);
+    expect(text(await page.locator('.tabbar > *').allInnerTexts())).toEqual(['⌂ Home', '☰ Backlog', '◇ Graph', '▶ Build', '⋯ More']);
+    for (const tab of await page.locator('.tabbar > *').all()) await expect(tab).toBeInViewport({ ratio: 1 });
+    await page.locator('.tabbar .tab-more').tap();
+    expect(text(await page.locator('.more-menu a').allInnerTexts())).toEqual(['PRs 1', 'Capabilities', 'Arch.']);
+    await page.locator('.tabbar .tab-more').tap();
+    await expect(page.locator('.more-menu')).toBeHidden();
     expect(await fits()).toBe(true);
     await page.locator('.ccard[data-slug=e]').tap();
     await expect(page.locator('section[data-sec=held]')).toBeVisible();
@@ -1014,5 +1045,82 @@ test.describe('a backlog item opens its page', () => {
     await page.locator('.n[data-node=b]').click();
     await page.locator('.insp .backlog a.mini').click();
     await expect(page).toHaveURL(/#\/o\/a\/backlog\/later$/);
+  });
+});
+
+// req:web/home-first@3681eee1
+test.describe('Home first', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('a repo opens on Home, the sidebar\'s first view, badged with what waits', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos'] = [
+      { owner: 'o', name: 'a', default_branch: 'main' },
+      { owner: 'o', name: 'b', default_branch: 'main' },
+    ];
+    mock.routes['GET /api/repos/o/b/snapshot'] = snapshot({ repo: 'o/b' });
+    mock.routes['GET /api/repos/o/b/branches'] = [];
+    mock.routes['GET /api/repos/o/b/implementation'] = implementation();
+    await page.goto('/app/#/o/b/graph');
+    await expect(page.locator('.n[data-node=b]')).toBeVisible();
+    await page.locator('.sidebar select.repo').selectOption('o/a');
+    await expect(page).toHaveURL(/#\/o\/a$/);
+    await expect(page.locator('.home h1')).toHaveText('Home');
+    await expect(page.locator('.sidebar .nv[data-view]').first()).toHaveAttribute('data-view', 'home');
+    await expect(page.locator('.sidebar .nv[data-view=home]')).toHaveClass(/\bon\b/);
+    // The human task `setup` waits on the person, and so does spec/c's review.
+    await expect(page.locator('.sidebar .nv[data-view=home] .c')).toHaveText('2');
+    await expect(page.locator('[data-section=review] a.hent')).toHaveAttribute('href', '#/o/a/prs/spec%2Fc');
+    await expect(page.locator('[data-section=answer] a.hent')).toHaveAttribute('href', '#/o/a/backlog/setup');
+  });
+
+  test('Home is drawn from the snapshot at once and adds each section as its response arrives', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.hold('GET /api/repos/o/a/implementation');
+    mock.hold(CAPABILITIES);
+    mock.hold(ARCHITECTURE);
+    await page.goto('/app/#/o/a');
+    await expect(page.locator('.home h1')).toBeVisible();
+    await expect(page.locator('[data-section=answer] button.answer')).toHaveCount(1);
+    await expect(page.locator('[data-section=flagged]')).toHaveCount(0);
+    mock.release(CAPABILITIES);
+    await expect(page.locator('[data-section=flagged]')).toBeVisible();
+    mock.release(ARCHITECTURE);
+    mock.release('GET /api/repos/o/a/implementation');
+  });
+
+  test('a backlog item\'s page opens at its route, with its answer buttons, and a tap posts one answer', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    await page.goto('/app/#/o/a/backlog/q');
+    await expect(page.locator('h1')).toContainText('Ship it?');
+    await expect(page.locator('strong')).toHaveText('ship');
+    await page.locator('button.answer[data-answer=yes]').dblclick();
+    await expect.poll(() => mock.posts).toEqual([{ key: ANSWER, body: '{"answer":"yes"}' }]);
+    // The implementation state is asked for again, so the answer shows from its `answers`.
+    await expect.poll(() => mock.requests.filter((k) => k === 'GET /api/repos/o/a/implementation').length).toBeGreaterThan(1);
+  });
+
+  test('an answer the Worker refuses says why and keeps the buttons enabled', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    mock.fail(ANSWER, 422, { error: 'answer' });
+    await page.goto('/app/#/o/a');
+    await page.locator('button.answer[data-answer=no]').click();
+    await expect(page.locator('.hent-row', { hasText: 'Ship it?' }).locator('.err')).toContainText('refused the answer');
+    await expect(page.locator('button.answer[data-answer=no]')).toBeEnabled();
+  });
+
+  test('an answer shows on Home, drawn chosen, from the next implementation state', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    mock.onPost = () => {
+      const impl = implementation();
+      impl.answers = [{ id: 'x1', writer: 'alice/web', at: '2026-11-13T00:00:00Z', item: 'q', answer: 'yes', mine: true }];
+      mock.routes['GET /api/repos/o/a/implementation'] = impl;
+    };
+    await page.goto('/app/#/o/a');
+    await page.locator('button.answer[data-answer=yes]').click();
+    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
   });
 });
