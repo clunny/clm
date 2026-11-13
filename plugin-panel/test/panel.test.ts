@@ -311,7 +311,7 @@ describe('views-panel', () => {
   })
 
   // req:plugin.panel/queue-tab@f6749284
-  test('the pane body: stderr on failure, else the ANSI lines on the terminal or the SVG', () => {
+  test('the pane body: stderr on failure, else ANSI on the terminal or for the Queue tab on any surface, else the SVG', () => {
     expect(paneBody('terminal', { exitCode: 1, stdout: 'x', stderr: 'violations: 2' }, 'spec')).toEqual({ error: 'violations: 2' })
     expect(paneBody('terminal', ok('\x1b[34mx\x1b[0m'), 'spec')).toEqual({ ansi: [[{ text: 'x', color: 'blue' }]] })
     expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })

@@ -21,7 +21,6 @@ import { type PaneLine, keyTarget, modelRuns, paneChart, pressNode, toggleRoot, 
 import { MACHINE_MS, machineLines, machineSampler } from '../src/machine.ts'
 import {
   FIRST_TAB,
-  ansiLines,
   ORIGIN_MAIN_ARGV,
   PANE_ID,
   PANE_TITLE,
@@ -398,7 +397,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
       </Box>
     )
   }
-  // An SVG, which carries no run rows.
+  // An SVG (Spec, Flight, Blockers off the terminal); only the Queue tab carries run rows, and it is always ANSI.
   if (!('ansi' in body)) {
     return (
       <Box flexDirection="column">
