@@ -1261,7 +1261,7 @@ fn frontmatter_delta(root: &Path, id: &str, yaml: &str) -> String {
 
 #[test]
 fn required_node_depends_on_a_node_made_optional() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1289,7 +1289,7 @@ fn required_node_depends_on_a_node_made_optional() {
 
 #[test]
 fn dependant_left_behind() {
-    // req:apply/resulting-graph@8282f3f1 req:apply/remove-node@668c4ecf
+    // req:apply/resulting-graph@b3caad6a req:apply/remove-node@668c4ecf
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1311,7 +1311,7 @@ fn dependant_left_behind() {
 
 #[test]
 fn dependant_edited_in_the_same_change() {
-    // req:apply/remove-node@668c4ecf req:apply/resulting-graph@8282f3f1
+    // req:apply/remove-node@668c4ecf req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1330,7 +1330,7 @@ fn dependant_edited_in_the_same_change() {
 
 #[test]
 fn backlog_blocks_a_removed_requirement() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1361,9 +1361,79 @@ fn backlog_blocks_a_removed_requirement() {
     assert_eq!(snapshot(d, ""), before);
 }
 
+/// `backlog/<slug>.md` of `kind` blocking `blocks`, and change `c` resolving `slug` that removes
+/// `a/y` with its base.
+fn resolving_and_removing_y(d: &Path, slug: &str, kind: &str, blocks: &str) {
+    write(
+        d,
+        &format!("backlog/{slug}.md"),
+        &format!("---\ntitle: T\nkind: {kind}\ncomponents: [a]\nblocks: [{blocks}]\n---\n\nbody\n"),
+    );
+    resolving(d, &[slug]);
+    write(d, "changes/c/deltas/a.md", &remove_y(d));
+}
+
+#[test]
+fn answered_question_blocks_a_removed_requirement() {
+    // req:apply/resulting-graph@b3caad6a
+    let dir = repo(&[]);
+    let d = dir.path();
+    resolving_and_removing_y(d, "q", "question", "a/y");
+    let (graph, violations) = load(d);
+    assert!(violations.is_empty(), "{violations:?}");
+    assert!(
+        validate(&graph, &graph.changes["c"]).is_empty(),
+        "check reports the change"
+    );
+    apply(d, "c").unwrap();
+    assert!(!d.join("backlog/q.md").exists());
+    assert!(!read(d, "specs/a/SPEC.md").contains("Requirement: y"));
+    assert_check_clean(d);
+}
+
+#[test]
+fn resolved_bug_blocks_a_removed_requirement() {
+    // req:apply/resulting-graph@b3caad6a
+    let dir = repo(&[]);
+    let d = dir.path();
+    resolving_and_removing_y(d, "b", "bug", "a/y");
+    let before = snapshot(d, "");
+    let violations = apply(d, "c").unwrap_err();
+    assert_eq!(rules(&violations), ["apply/resulting-graph"]);
+    let v = &violations[0];
+    assert_eq!(v.path, Path::new("backlog/b.md"));
+    assert!(
+        v.message
+            .starts_with("change `c` would leave: model/parse-backlog: "),
+        "{v:?}"
+    );
+    assert!(v.message.contains("a/y"), "{v:?}");
+    assert!(d.join("backlog/b.md").exists());
+    assert_eq!(snapshot(d, ""), before);
+}
+
+#[test]
+fn answered_question_that_blocks_nothing_is_no_violation() {
+    // req:apply/resulting-graph@b3caad6a
+    let dir = repo(&[]);
+    let d = dir.path();
+    write(
+        d,
+        "backlog/q.md",
+        "---\ntitle: T\nkind: question\ncomponents: [a]\nblocks: [a/gone]\n---\n\nbody\n",
+    );
+    resolving(d, &["q"]);
+    valid_delta(d);
+    let (_, before) = load(d);
+    assert_eq!(rules(&before), ["model/parse-backlog"]);
+    apply(d, "c").unwrap();
+    assert!(!d.join("backlog/q.md").exists());
+    assert_check_clean(d);
+}
+
 #[test]
 fn violation_already_present_is_not_reported_again() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1382,7 +1452,7 @@ fn violation_already_present_is_not_reported_again() {
 
 #[test]
 fn needs_and_backlog_nodes_naming_a_removed_node_are_new_violations() {
-    // req:apply/resulting-graph@8282f3f1 req:apply/remove-node@668c4ecf
+    // req:apply/resulting-graph@b3caad6a req:apply/remove-node@668c4ecf
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1417,7 +1487,7 @@ fn needs_and_backlog_nodes_naming_a_removed_node_are_new_violations() {
 
 #[test]
 fn not_checked_while_a_delta_is_invalid() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     // Removing `a` is valid, but `b`'s delta, which would drop its dependency on `a`, is
     // stale: only the stale base is reported, not the graph left without `b`'s edit.
     let dir = repo(&[]);
@@ -1436,7 +1506,7 @@ fn not_checked_while_a_delta_is_invalid() {
 
 #[test]
 fn a_second_copy_of_a_violation_already_present_is_new() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1453,7 +1523,7 @@ fn a_second_copy_of_a_violation_already_present_is_new() {
 
 #[test]
 fn a_parse_violation_the_written_node_already_has_is_not_reported_again() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     // `a/y` has no scenario, which the node parser reports on `a`'s current text and on
     // the text the change writes alike.
     let dir = repo(&[]);
@@ -1475,7 +1545,7 @@ fn a_parse_violation_the_written_node_already_has_is_not_reported_again() {
 
 #[test]
 fn a_violation_whose_message_the_change_alters_is_new() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     // `a` -> `b` -> `a` is a cycle already; making `b` depend on `k`, which depends on
     // `a`, turns it into a longer one, whose message names `k`.
     let dir = repo(&[]);
@@ -1506,7 +1576,7 @@ fn a_violation_whose_message_the_change_alters_is_new() {
 
 #[test]
 fn checked_whatever_the_status_but_not_by_reapply() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1523,7 +1593,7 @@ fn checked_whatever_the_status_but_not_by_reapply() {
 
 #[test]
 fn a_created_node_is_checked_at_its_path() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1661,7 +1731,7 @@ fn remove_y(root: &Path) -> String {
 
 #[test]
 fn resulting_graph_of_a_removal() {
-    // req:apply/resulting-graph-call@06d5a9cc
+    // req:apply/resulting-graph-call@3288507d
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/a.md", &remove_y(d));
@@ -1693,7 +1763,7 @@ fn resulting_graph_of_a_removal() {
 
 #[test]
 fn resulting_drops_a_removed_node() {
-    // req:apply/resulting-graph-call@06d5a9cc
+    // req:apply/resulting-graph-call@3288507d
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/a.md", &removal(d, "a", &[]));
@@ -1706,7 +1776,7 @@ fn resulting_drops_a_removed_node() {
 
 #[test]
 fn resulting_is_none_for_a_stale_delta() {
-    // req:apply/resulting-graph-call@06d5a9cc
+    // req:apply/resulting-graph-call@3288507d
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1719,8 +1789,41 @@ fn resulting_is_none_for_a_stale_delta() {
 }
 
 #[test]
+fn resulting_leaves_out_the_items_apply_deletes() {
+    // req:apply/resulting-graph-call@3288507d
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "q", "question");
+    item(d, "b", "bug");
+    item(d, "h", "human");
+    item(d, "i", "idea");
+    promoted(d, "backlog/i", &["q", "b", "h"]);
+    valid_delta(d);
+    let (graph, _) = load(d);
+    let before = snapshot(d, "");
+    let after = clm_apply::resulting(&graph, &graph.changes["c"]).unwrap();
+    let kept: Vec<_> = after.backlog.keys().map(String::as_str).collect();
+    assert_eq!(kept, ["b", "h"]);
+    assert_eq!(graph.backlog.len(), 4);
+    assert_eq!(snapshot(d, ""), before);
+}
+
+#[test]
+fn resulting_keeps_a_promoted_human_task() {
+    // req:apply/resulting-graph-call@3288507d
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "h", "human");
+    promoted(d, "backlog/h", &[]);
+    valid_delta(d);
+    let (graph, _) = load(d);
+    let after = clm_apply::resulting(&graph, &graph.changes["c"]).unwrap();
+    assert!(after.backlog.contains_key("h"));
+}
+
+#[test]
 fn resulting_ignores_the_change_status() {
-    // req:apply/resulting-graph-call@06d5a9cc
+    // req:apply/resulting-graph-call@3288507d
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/change.md", &change_md("applied", "[]"));
@@ -2029,7 +2132,7 @@ fn item_named_in_from_and_resolves_is_removed_once() {
 
 #[test]
 fn workaround_flag_on_a_rewritten_requirement() {
-    // req:apply/resulting-graph@8282f3f1
+    // req:apply/resulting-graph@b3caad6a
     let dir = repo(&[]);
     let d = dir.path();
     let version = {

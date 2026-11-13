@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use clm_model::outline::{requirement_spans, section_spans};
 use clm_model::{
-    BacklogKind, Change, Delta, DeltaRequirement, Graph, Layer, Node, ROOT_ID, Violation,
-    check_node_frontmatter, split_frontmatter,
+    BacklogItem, BacklogKind, Change, Delta, DeltaRequirement, Graph, Layer, Node, ROOT_ID,
+    Violation, check_node_frontmatter, split_frontmatter,
 };
 
 /// `(element, hash)` for every element of `node`, in `clm hashes` order.
@@ -217,29 +217,11 @@ fn plan(
         violations.extend(loaded);
     }
     if violations.is_empty() {
-        // `answered-questions`: the spec this applies answers the questions it resolves.
-        let answered = change
-            .frontmatter
-            .resolves
-            .iter()
-            .filter_map(|slug| graph.backlog.get(slug))
-            .filter(|item| item.frontmatter.kind == clm_model::BacklogKind::Question);
-        // `promoted-item`: the item the change was promoted from leaves the backlog with it,
-        // unless it is a human-task, which only the human deletes.
-        let promoted = change
-            .frontmatter
-            .from
-            .as_deref()
-            .and_then(|from| from.strip_prefix("backlog/"))
-            .and_then(|slug| graph.backlog.get(slug))
-            .filter(|item| item.frontmatter.kind != clm_model::BacklogKind::Human);
-        let mut removed: Vec<PathBuf> = Vec::new();
-        for item in answered.chain(promoted) {
-            if !removed.contains(&item.path) {
-                removed.push(item.path.clone());
-            }
-        }
-        ops.extend(removed.into_iter().map(FileOp::Remove));
+        ops.extend(
+            deleted_items(graph, change)
+                .into_iter()
+                .map(|item| FileOp::Remove(item.path.clone())),
+        );
         ops.push(FileOp::Write(
             change.path.clone(),
             mark_applied(&change.source).into_bytes(),
@@ -248,6 +230,32 @@ fn plan(
     } else {
         Err(violations)
     }
+}
+
+/// The backlog items `clm apply` deletes with the change, each once: the questions it
+/// resolves (`answered-questions`) and the item it was promoted from, unless that is a
+/// human-task, which only the human deletes (`promoted-item`).
+fn deleted_items<'a>(graph: &'a Graph, change: &Change) -> Vec<&'a BacklogItem> {
+    let answered = change
+        .frontmatter
+        .resolves
+        .iter()
+        .filter_map(|slug| graph.backlog.get(slug))
+        .filter(|item| item.frontmatter.kind == BacklogKind::Question);
+    let promoted = change
+        .frontmatter
+        .from
+        .as_deref()
+        .and_then(|from| from.strip_prefix("backlog/"))
+        .and_then(|slug| graph.backlog.get(slug))
+        .filter(|item| item.frontmatter.kind != BacklogKind::Human);
+    let mut items: Vec<&BacklogItem> = Vec::new();
+    for item in answered.chain(promoted) {
+        if !items.iter().any(|seen| seen.slug == item.slug) {
+            items.push(item);
+        }
+    }
+    items
 }
 
 /// What the change's deltas do to `specs/`.
@@ -372,6 +380,9 @@ pub fn resulting(graph: &Graph, change: &Change) -> Option<Graph> {
         layers: graph.layers.clone(),
         carried: graph.carried.clone(),
     };
+    for item in deleted_items(graph, change) {
+        after.backlog.remove(&item.slug);
+    }
     for (id, spec) in specs {
         after.nodes.remove(&id);
         if let Some((path, text)) = spec {
