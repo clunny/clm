@@ -284,7 +284,11 @@ fn a_sample_line_with_an_unknown_state_word_is_no_sample() {
     let path = common(dir.path()).join("clm/machine-samples");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     let t = clm_machine::format_time(now - 60);
-    fs::write(&path, format!("{t} 0.2000 fine 0.3000 ok 0.4000 ok\n")).unwrap();
+    fs::write(
+        &path,
+        format!("{t} 0.2000 fine 0.3000 ok 0.4000 ok\n{t} 0.2 ok 0.3 ok 0.4 ok extra\n"),
+    )
+    .unwrap();
     let snapshot = clm_machine::read(dir.path(), 3, 4, now);
     assert_eq!(snapshot.history.len(), 1);
 }
