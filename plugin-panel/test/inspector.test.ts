@@ -568,7 +568,7 @@ describe('component-heading', () => {
     ['the new heading', 'components'],
     ['an older clm', 'nodes'],
   ] as const) {
-    // req:plugin.panel/component-heading@900ca215
+    // req:plugin.panel/component-heading@50ce90a7
     test(name, () => {
       const { lines } = chartLines({ tab: 'flight', chart: chartWith(heading), own: two, selected: null, unfolded: [] })
       expect(keys(lines)).toEqual(['node:a', 'node:b'])
