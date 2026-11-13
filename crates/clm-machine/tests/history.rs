@@ -250,6 +250,33 @@ fn scenario_samples_written_before_states() {
 }
 
 #[test]
+fn a_sample_keeps_the_state_it_was_judged_at_through_the_file() {
+    // req:machine/machine-history@67a1a6a6
+    let dir = repo();
+    let now = clm_git::now();
+    let path = common(dir.path()).join("clm/machine-samples");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let t = clm_machine::format_time(now - 60);
+    fs::write(
+        &path,
+        format!("{t} 0.9000 critical 0.3000 warn - unknown\n"),
+    )
+    .unwrap();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, now);
+    let old = snapshot.history[0];
+    assert_eq!(
+        (old.cpu_state, old.memory_state, old.disk_state),
+        (State::Critical, State::Warn, State::Unknown)
+    );
+    assert_eq!(old.disk, None);
+    // The file written back keeps them, and the new sample holds the run's own states.
+    let again = clm_machine::read(dir.path(), 3, 4, now + 10);
+    assert_eq!(again.history[0], old);
+    assert_eq!(again.history[1].cpu_state, snapshot.report.cpu.state);
+    assert_eq!(again.history[1].disk_state, snapshot.report.disk.state);
+}
+
+#[test]
 fn a_sample_line_with_an_unknown_state_word_is_no_sample() {
     // req:machine/machine-history@67a1a6a6
     let dir = repo();
