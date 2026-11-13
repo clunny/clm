@@ -69,6 +69,7 @@ fn skipping_releases() {
     let rules: Vec<String> = [
         "apply",
         "branch",
+        "build",
         "check",
         "claim",
         "defect",

@@ -29,9 +29,10 @@ fn project(architecture: &str, claude: &str) -> TempDir {
     dir
 }
 
-const SUBCOMMANDS: [&str; 12] = [
+const SUBCOMMANDS: [&str; 13] = [
     "apply",
     "branch",
+    "build",
     "check",
     "claim",
     "defect",
@@ -291,7 +292,7 @@ fn a_declined_rules_migration_is_not_listed() {
     fs::write(
         dir.path().join("clm.toml"),
         stamped(&format!(
-            "declined_migrations = [\"{RULES_ID}\", \"20261112-a-draft-s-clm\"]\n"
+            "declined_migrations = [\"{RULES_ID}\", \"20261112-a-draft-s-clm\", \"20261112-build-loop-in-clm\"]\n"
         )),
     )
     .unwrap();
@@ -304,9 +305,12 @@ fn the_rules_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::remove_dir_all(dir.path().join(".claude")).unwrap();
     let note = crate::note(dir.path(), RULES_ID).unwrap();
-    // The note of the frozen migration lists the eleven rules it shipped with; `clm setup`'s are
-    // offered by their own migration.
-    for rule in all_rules().iter().filter(|r| !r.contains("setup")) {
+    // The note of the frozen migration lists the eleven rules it shipped with; `clm setup`'s and
+    // `clm build`'s are offered by their own migrations.
+    for rule in all_rules()
+        .iter()
+        .filter(|r| !r.contains("setup") && !r.contains("build"))
+    {
         assert!(note.contains(&format!("`{rule}`")), "{rule}: {note}");
     }
     assert!(note.contains("clm init --check-permissions"), "{note}");

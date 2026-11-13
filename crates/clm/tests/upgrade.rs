@@ -240,7 +240,11 @@ fn check_entry(entry: &Path, expected: &BTreeMap<String, Vec<u8>>) -> Result<(),
 }
 
 /// The note migrations that offer the allow rules `clm init` seeds on a first run.
-const ALLOW_RULES_IDS: [&str; 2] = ["20261107-projects-set-up-before", "20261112-a-draft-s-clm"];
+const ALLOW_RULES_IDS: [&str; 3] = [
+    "20261107-projects-set-up-before",
+    "20261112-a-draft-s-clm",
+    "20261112-build-loop-in-clm",
+];
 
 fn entries() -> Vec<PathBuf> {
     let corpus = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-upgrade/corpus");
