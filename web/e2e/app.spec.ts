@@ -677,9 +677,9 @@ test.describe('Notify me', () => {
 // req:web.client-live/push-shown@c8f12d9c
 test('the service worker imports the push handlers and shows a push', async ({ page, context, baseURL }) => {
   await mockApi(context);
-  // The view, not the `load` event: the graph's large chunk can hold `load` back.
-  await page.goto('/app/#/o/a/graph', { waitUntil: 'commit' });
-  await expect(page.locator('.n[data-node=b]')).toBeVisible();
+  // The worker, not a view: drawing one (the graph's layout above all) is the slowest step of a
+  // loaded run and proves nothing about the worker, whose `ready` this awaits directly.
+  await page.goto('/app/');
   const sw = await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.ready;
     return reg.active?.scriptURL ?? null;
