@@ -1051,7 +1051,7 @@ fn scenario_a_draft_that_pushed() {
     assert_eq!(drafted_id(&ran), id);
     assert!(ran.stdout.contains(".clm/prompts/draft/20261112-x.md"));
     let prompt = fs::read_to_string(r.work.join(".clm/prompts/draft/20261112-x.md")).unwrap();
-    assert!(prompt.contains("git switch -c spec/20261112-x origin/spec/20261112-x"));
+    assert!(prompt.contains("git switch -c spec/20261112-x --no-track origin/spec/20261112-x"));
     assert!(prompt.contains("clm gate --base origin/main"), "same steps");
     assert!(prompt.contains("`left <slug>: <reason>`"), "same rules");
     assert_eq!(place_names(&r), vec![id.to_string()]);
@@ -1072,7 +1072,7 @@ fn resume_takes_the_newer_of_the_two_spec_branches() {
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     let prompt = fs::read_to_string(r.work.join(format!(".clm/prompts/draft/{id}.md"))).unwrap();
     assert!(prompt.contains(&format!(
-        "git switch -c spec/{id} origin/autosync/spec/{id}"
+        "git switch -c spec/{id} --no-track origin/autosync/spec/{id}"
     )));
 }
 
