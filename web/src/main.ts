@@ -267,6 +267,7 @@ function shell(list: Repo[], route: AppRoute, snap: Snapshot | null, branches: S
     ...more.map((v) => el('a', { class: v === active ? 'on' : '', href: to(v), 'data-view': v }, tabLabel[v], v === 'prs' && specPrs ? el('span', { class: 'bdg' }, String(specPrs)) : '')),
   );
   const moreTab = el('button', { type: 'button', class: more.includes(active) ? 'tab-more on' : 'tab-more', 'aria-expanded': String(moreOpen) }, el('b', {}, '⋯'), 'More');
+  for (const a of moreMenu.querySelectorAll('a')) a.addEventListener('click', () => (moreOpen = false) || moreMenu.classList.remove('open'));
   moreTab.addEventListener('click', () => {
     moreOpen = !moreOpen;
     moreTab.setAttribute('aria-expanded', String(moreOpen));
@@ -665,7 +666,7 @@ function homePage(base: string, snap: Snapshot, branches: SpecBranch[], route: A
         answering: answering(base, held.impl),
       }),
     );
-    for (const badge of document.querySelectorAll<HTMLElement>('[data-home-badge]')) homeBadge(badge, homeCount(snap, reviews));
+    for (const badge of document.querySelectorAll<HTMLElement>('[data-home-badge]')) homeBadge(badge, homeCount(held.snap ?? snap, reviews));
   };
   draw();
   // Each response is asked for once from here; a failure leaves its section out until a refresh.
@@ -1083,6 +1084,7 @@ async function refresh(fresh?: string) {
     // Everything on screen is now live: an offline banner drawn from kept copies goes.
     const wasOffline = offline() || refreshFailing;
     held.from.clear();
+    held.tried.clear();
     refreshFailing = false;
     lastGood = Date.now();
     if (!changed && !wasOffline) return;

@@ -1148,4 +1148,30 @@ test.describe('Home first', () => {
     await page.locator('button.answer[data-answer=yes]').click();
     await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
   });
+
+  test('on an item page: the answer is drawn chosen, a 404 says the item is gone, and any other status is named', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.routes['GET /api/repos/o/a/snapshot'] = withQuestion();
+    mock.onPost = () => {
+      const impl = implementation();
+      impl.answers = [{ id: 'x1', writer: 'alice/web', at: '2026-11-13T00:00:00Z', item: 'q', answer: 'yes', mine: true }];
+      mock.routes['GET /api/repos/o/a/implementation'] = impl;
+    };
+    await page.goto('/app/#/o/a/backlog/q');
+    await page.locator('button.answer[data-answer=yes]').click();
+    await expect(page.locator('button.answer[data-answer=yes]')).toHaveClass(/chosen/);
+    mock.fail(ANSWER, 404);
+    await page.locator('button.answer[data-answer=no]').click();
+    await expect(page.locator('.answers .err')).toHaveText('That item is no longer in the backlog.');
+    mock.fail(ANSWER, 500);
+    await page.locator('button.answer[data-answer=no]').click();
+    await expect(page.locator('.answers .err')).toHaveText("The answer wasn't recorded (500).");
+  });
+
+  test('the phone tab bar badges Home with what waits', async ({ page, context }) => {
+    await mockApi(context);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/app/#/o/a');
+    await expect(page.locator('.tabbar a[data-view=home] .bdg')).toHaveText('2');
+  });
 });
