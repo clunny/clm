@@ -544,7 +544,10 @@ pub fn prompt(job: &Job) -> String {
          `[{node}]`, and `blocks` listing the requirements that can't be built without it, \
          saying exactly what is needed and why. Build the rest, and land what you have. When \
          only something outside the component depends on the answer, such as a deploy, add the \
-         item without `blocks` and carry on.\n\n\
+         item without `blocks` and carry on. When a short answer settles a `question` item, \
+         list the answers that settle it under `choices` (two to five, each a short line), so \
+         the human can answer it with a tap in the web app; list none for a question that \
+         needs explaining.\n\n\
          Your branch may add backlog items, add requirements to an existing item's `blocks`, \
          and delete items a live change lists in `resolves`. Any other backlog edit, such as \
          switching an item to kind `human-task`, makes the branch mixed: don't make it, and list \

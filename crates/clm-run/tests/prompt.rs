@@ -1162,3 +1162,24 @@ fn scenario_prompt_doc_readers() {
         }
     }
 }
+
+#[test]
+fn scenario_prompt_question_choices() {
+    // req:orchestrator.run/prompt-question-choices@dfacdb56
+    for resumed in [false, true] {
+        let mut j = job();
+        j.resumed = resumed;
+        let p = prompt(&j);
+        let para = p
+            .split("\n\n")
+            .find(|q| q.contains("`choices`"))
+            .expect("a paragraph names `choices`");
+        for needle in [
+            "`question`",
+            "two to five",
+            "none for a question that needs explaining",
+        ] {
+            assert!(para.contains(needle), "{needle} missing from {para}");
+        }
+    }
+}
