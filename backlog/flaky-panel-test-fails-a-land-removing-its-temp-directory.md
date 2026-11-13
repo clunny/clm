@@ -1,7 +1,7 @@
 ---
 title: "Flaky panel test fails a land removing its temp directory"
 kind: bug
-components: [plugin.panel]
+components: [capability]
 ---
 
 A build run's first `clm land` failed at the check script's `capabilities/panel` step: the panel suite's `watch-machine-load` test failed with ENOTEMPTY while removing its temporary directory. The test lies outside the component being built. A retry of `clm land` with no changes passed, so the failure is intermittent.
