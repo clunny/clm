@@ -107,7 +107,13 @@ pub(crate) fn land(options: &LoopOptions, slug: &str, text: &str) -> Result<(), 
         return Ok(());
     }
     let branch = format!("loop/{slug}");
-    let index = std::env::temp_dir().join(format!("clm-loop-index-{}-{slug}", std::process::id()));
+    // A temporary index of its own, so tree building never touches the clone's.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let index = std::env::temp_dir().join(format!(
+        "clm-loop-index-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
     let result = (|| {
         let index_env: [(&str, &OsStr); 1] = [("GIT_INDEX_FILE", index.as_os_str())];
         let in_index = Options {
