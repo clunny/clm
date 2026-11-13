@@ -53,9 +53,13 @@ fn loop_command(repo: &Repo, args: &[&str]) -> Vec<String> {
         .collect()
 }
 
-#[test]
-fn drain_the_queue() {
-    // req:capability/build-from-spec@4bf37ced
+/// A repository with nodes `a` (requirements `x`, `y`) and `b` (`z`) pending and nothing else,
+/// and the versions each build cites.
+fn queue() -> (
+    Repo,
+    Vec<(&'static str, String)>,
+    Vec<(&'static str, String)>,
+) {
     let repo = Repo::init();
     repo.write("specs/b/SPEC.md", NODE_B);
     // The fixture's capability is already proven, so only `a` and `b` are pending.
@@ -77,6 +81,21 @@ fn drain_the_queue() {
     };
     let a = versions("a", &["x", "y"]);
     let b = versions("b", &["z"]);
+    (repo, a, b)
+}
+
+/// The prompt file a `launch build:<node> ...` line names, read.
+fn launch_prompt(actions: &[String], node: &str) -> Option<String> {
+    let line = actions
+        .iter()
+        .find(|l| l.starts_with(&format!("launch build:{node} build ")))?;
+    Some(fs::read_to_string(line.rsplit(' ').next().unwrap()).unwrap())
+}
+
+#[test]
+fn drain_the_queue() {
+    // req:capability/build-from-spec@a85cfe36
+    let (repo, a, b) = queue();
 
     // `/clm:build`: both nodes are ready, with no `Needs` between them.
     let mut nodes = ready(&repo);
@@ -129,4 +148,67 @@ fn drain_the_queue() {
     assert!(out.status.success(), "{text}");
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "", "{text}");
     assert!(ready(&repo).is_empty());
+}
+
+#[test]
+fn resume_in_a_new_session() {
+    // req:capability/build-from-spec@a85cfe36
+    let (repo, a, b) = queue();
+    let worktrees = repo.root.join(".claude/worktrees");
+
+    // The first session launches both builds; `b` lands, and the session ends while `a` runs.
+    loop_command(&repo, &["build", "start", "--session-model", "opus"]);
+    for node in ["a", "b"] {
+        loop_command(
+            &repo,
+            &["build", "launched", &format!("build:{node}"), "t-1"],
+        );
+    }
+    build(&repo, &worktrees.join("build-b"), "b", "lib/tests", &b);
+    loop_command(
+        &repo,
+        &["build", "returned", "build:b", "--result", "landed 1a2b3c4"],
+    );
+    repo.git(&["fetch", "-q", "origin"]);
+    let landed_before = repo.git(&["rev-parse", "origin/main"]);
+
+    // A session whose lease is live is refused; once the lease lapses, a new one adopts the loop.
+    let live = repo.clm_env(
+        &["build", "start", "--session-model", "opus"],
+        "",
+        &[("CLAUDECODE", "1")],
+    );
+    assert!(!live.status.success(), "{}", printed(&live));
+    let common = repo.git(&["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+    let file = Path::new(common.trim()).join("clm/loop");
+    let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    state["lease"] = serde_json::json!(state["lease"].as_u64().unwrap() - 20 * 60);
+    fs::write(&file, serde_json::to_vec(&state).unwrap()).unwrap();
+
+    let started = loop_command(&repo, &["build", "start", "--session-model", "opus"]);
+    let prompt = launch_prompt(&started, "a")
+        .unwrap_or_else(|| panic!("`a` is not relaunched: {started:?}"));
+    assert!(prompt.contains("impl/a"), "{prompt}");
+    assert!(
+        launch_prompt(&started, "b").is_none(),
+        "`b` had landed: {started:?}"
+    );
+    loop_command(&repo, &["build", "launched", "build:a", "t-2"]);
+
+    // The relaunched build lands, with nothing redone: `main` gained only `a`'s land.
+    build(&repo, &worktrees.join("build-a"), "a", "tests", &a);
+    loop_command(
+        &repo,
+        &["build", "returned", "build:a", "--result", "landed 5d6e7f8"],
+    );
+    repo.git(&["pull", "-q", "--ff-only", "origin", "main"]);
+    let log = repo.git(&[
+        "log",
+        "--first-parent",
+        "--format=%s",
+        &format!("{}..HEAD", landed_before.trim()),
+    ]);
+    assert_eq!(log.lines().count(), 1, "{log}");
+    let out = repo.clm(&["pending"]);
+    assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "");
 }
