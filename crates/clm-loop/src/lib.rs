@@ -25,6 +25,8 @@ pub struct Options {
     pub clm: PathBuf,
     /// The CLM repository the loop builds; every subprocess runs in it.
     pub root: PathBuf,
+    /// The directory `clm build` runs in, where `clm wrap-up` looks at the caller's own work.
+    pub cwd: PathBuf,
     /// `config`'s `max_builds`: how many builds and drafts may hold a place at once.
     pub max_builds: u64,
     /// The agent harness the session runs under, whose abilities the loop follows.

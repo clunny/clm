@@ -58,6 +58,8 @@ pub struct Snapshot {
     pub complete: Vec<String>,
     /// The IDs of the `impl/archive/*` branches on `origin`.
     pub archive_branches: Vec<String>,
+    /// The `left <path>: ...` lines of `clm wrap-up`.
+    pub left: Vec<String>,
 }
 
 /// What the step does for one entry of the plan.

@@ -162,6 +162,9 @@ pub struct LoopFile {
     pub conditions: Conditions,
     pub stop: Option<StopMode>,
     pub plan: Option<StoredPlan>,
+    /// The `left` lines of `clm wrap-up` already said.
+    #[serde(default)]
+    pub said: Vec<String>,
 }
 
 impl Default for LoopFile {
@@ -180,6 +183,7 @@ impl Default for LoopFile {
             conditions: Conditions::default(),
             stop: None,
             plan: None,
+            said: Vec::new(),
         }
     }
 }

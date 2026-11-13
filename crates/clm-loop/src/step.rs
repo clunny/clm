@@ -9,7 +9,7 @@ use clm_git::{Failure, now};
 use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 
 use crate::Options;
-use crate::cmd::{clm, clm_ok, say};
+use crate::cmd::{clm, clm_in, clm_ok, say};
 use crate::plan::{BacklogRow, Group, Launch, Snapshot, plan_of};
 use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
 
@@ -148,6 +148,12 @@ fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Sna
             .filter_map(|l| Some(l.trim().strip_prefix("complete ")?.trim().to_string()))
             .collect(),
         archive_branches: archive_branches(options)?,
+        left: wrap_up
+            .lines()
+            .map(str::trim)
+            .filter(|l| l.starts_with("left "))
+            .map(str::to_string)
+            .collect(),
     })
 }
 
@@ -391,7 +397,7 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
 pub(crate) fn fresh_snapshot(options: &Options) -> Result<Snapshot, Failure> {
     // `clm wrap-up` removes landed worktrees and branches and frees the places that don't
     // count; its report is for the housekeeping requirements, which come later.
-    let wrap_up = clm(options, &["wrap-up"])?;
+    let wrap_up = clm_in(options, &options.cwd, &["wrap-up"])?;
     if wrap_up.code == 2 {
         return Err(Failure::Git(format!("clm wrap-up: {}", wrap_up.reason())));
     }
@@ -421,6 +427,17 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     })?;
     let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
+    // Each `left` line of the wrap-up is said once.
+    let mut said = Vec::new();
+    for left in &snapshot.left {
+        if !snapshot.file.said.contains(left) && !said.contains(left) {
+            said.push(left.clone());
+        }
+    }
+    let mut say_lines = Vec::new();
+    for left in &said {
+        say_lines.push(say(options, left)?);
+    }
     let mut changes = Vec::new();
     let mut stored_file = snapshot.file.clone();
     for launch in &plan.launches {
@@ -454,6 +471,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
                 Prepared::Nothing | Prepared::NoPlace => {}
             }
         }
+        f.said.extend(said);
         f.plan = Some(state::StoredPlan {
             main,
             at: now(),
@@ -492,10 +510,12 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         let text = crate::summary::summary(options, &file, &plan.view)?;
         return Ok(vec![say(options, &text)?, "end".to_string()]);
     }
-    if lines.is_empty() {
+    let mut out = say_lines;
+    out.extend(lines);
+    if out.is_empty() {
         Ok(vec!["wait".to_string()])
     } else {
-        Ok(lines)
+        Ok(out)
     }
 }
 

@@ -71,6 +71,7 @@ fn damaged_file_child() {
     };
     let options = clm_loop::Options {
         clm: clm.into(),
+        cwd: root.clone().into(),
         root: root.into(),
         max_builds: 3,
         agent_harness: clm_agent_harness::AgentHarness::ClaudeCode,

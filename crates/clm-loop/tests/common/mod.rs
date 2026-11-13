@@ -23,7 +23,7 @@ case "$1" in
 next) cat "$F/next" 2>/dev/null; exit 0 ;;
 triage) cat "$F/triage" 2>/dev/null; exit 0 ;;
 view) if [ -f "$F/flight.json" ]; then cat "$F/flight.json"; else echo '{"nodes":[]}'; fi ;;
-wrap-up) cat "$F/wrap-up" 2>/dev/null; echo "wrap-up ok"; exit 0 ;;
+wrap-up) pwd > "$F/wrap-up-cwd"; cat "$F/wrap-up" 2>/dev/null; echo "wrap-up ok"; exit 0 ;;
 run)
   if [ "$2" = "--finish" ]; then cat "$F/finish-$3" 2>/dev/null; exit 0; fi
   if [ -f "$F/run-exit-$2" ]; then exit "$(cat "$F/run-exit-$2")"; fi
@@ -67,6 +67,7 @@ impl Fixture {
         Options {
             clm: self.fake.join("clm"),
             root: self.work.clone(),
+            cwd: self.work.clone(),
             max_builds: 3,
             agent_harness: AgentHarness::ClaudeCode,
         }
