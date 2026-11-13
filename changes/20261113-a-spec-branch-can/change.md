@@ -27,6 +27,7 @@ The design was incomplete, not wrong: `removed-requirements-build-out` covers ev
 - `model/parse-changes`: `change.md` accepts `removes_capabilities`, a list of capability slugs, and the graph exposes it on the change.
 - `check.coverage/removed-capabilities` (new): a listed capability that `CAPABILITIES.md` doesn't hold is removed while its change is outside the archive. `removed` gives it, `clm coverage` and `clm pending` print it as `obsolete`, and it is pending where `pending-report` already places an obsolete requirement: on `capability`, or without that component on the owner of each marker's file.
 - `check.coverage/status-report` and `change-progress`: a change that lists a removed capability isn't complete while a marker cites it, so `clm rebase` doesn't archive the change before the build has deleted the tests.
+- `check`'s Contract: its definition of `obsolete` covers a removed capability.
 - `check/dangling-markers`: such a marker is no violation. The message for any other marker on a missing capability names the key, so the author of the next branch that removes a cited entry learns how.
 - `check/removed-requirement-names`: a component's `SPEC.md` that still names the removed capability is reported on the spec branch, where it can be fixed.
 - Decision `removed-capabilities-build-out`; `removed-requirements-build-out` amended. `docs/spec-format.md` and the glossary describe the key.
@@ -48,3 +49,8 @@ A capability test sees nothing different at the product's boundary because of th
 ## Decisions
 
 - `removed-capabilities-build-out`: a removed capability is built out like a removed requirement, declared in `change.md`.
+
+## Open questions
+
+- **No order between the capability's build and its rules' builds** (architecture audit, against `path-ownership`). A change that removes a capability often removes or changes the rules behind it. A rule's build that takes the behaviour away before the `capability` build has deleted the obsolete tests fails those tests at its land, and may not delete them. Left as a known limit in the decision: the obsolete line is never blocked and carries its change's priority, so the `capability` build is offered at once, and the rule's build goes through once it has landed. Closing it means a new kind of wait in `check.coverage/pending-report` and the queue (`orchestrator`), which is more than this bug needs before a removal has met it (`yagni`).
+- **The propose skill doesn't name the key** (architecture audit, not counted as a gap). `plugin/skills/propose/SKILL.md` tells a session to remove a capability's entry by hand and says nothing of `removes_capabilities`. Left: the `check/dangling-markers` message names the key at the moment a branch needs it, and `docs/spec-format.md` and the glossary describe it, so a requirement of `plugin` for one sentence isn't worth its build.
