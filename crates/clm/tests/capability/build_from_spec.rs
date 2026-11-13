@@ -214,5 +214,6 @@ fn resume_in_a_new_session() {
     ]);
     assert_eq!(log.lines().count(), 1, "{log}");
     let out = repo.clm(&["pending"]);
+    assert!(out.status.success(), "{}", printed(&out));
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "");
 }
