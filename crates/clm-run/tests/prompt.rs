@@ -354,7 +354,8 @@ fn scenario_own_files() {
         "those your component's `tests` match, wherever they sit",
         "those its `paths` match that no other component's `tests` match",
         "`components-own-their-tests`",
-        "`capability-tests-follow-rule` and `template-migration-fix`",
+        "`capability-tests-follow-rule` and `template-migration-fix` state below",
+        "and the re-citing above in a file no component's `tests` match",
         "Put each new test in a file your component's `tests` match, or its `paths` when it sets no `tests`",
         "never add a test to a file another component owns",
         "the CLI's dispatch, the workspace manifest and its lockfile, aren't another component's code",
@@ -386,7 +387,9 @@ fn removal_rule_for_an_obsolete_requirement_is_in_every_prompt() {
     j.pending.retain(|i| i.state != "obsolete");
     let p = prompt(&j);
     for needle in [
+        "remove its markers and tests as usual",
         "keep that code, with no `clm:remove-by` marker",
+        "whose `components` name both components and whose body names the kept code, the component that uses it, and that the code goes once that component no longer uses it",
         "add a `deferred` item without `blocks`",
         "`contract-removal-needs`",
         "`deferred-work-resolves-in-code`",
@@ -1091,6 +1094,16 @@ fn scenario_template_migration_fix() {
         ] {
             assert!(p.contains(needle), "{needle} missing from {p}");
         }
+        let own = p
+            .find("Your build changes only your own component's files")
+            .unwrap();
+        let cap = p
+            .find("a test in the `capability` component's `paths`")
+            .unwrap();
+        let mig = p
+            .find("changes the text of a file `clm init` writes")
+            .unwrap();
+        assert!(own < cap && cap < mig, "beside the other two rules: {p}");
     }
 }
 
