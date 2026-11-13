@@ -1,4 +1,4 @@
-//! The proposal, withdrawal and decide routes pass their writes to the repo's `Replica`
+//! The proposal, withdrawal, answer and decide routes pass their writes to the repo's `Replica`
 //! object in one post and answer what it answers (`writes-to-object`). The object is
 //! scripted here; the routes' own scenarios run against a real one.
 
@@ -73,7 +73,7 @@ fn one_post(fake: &Fake) -> Value {
 
 #[test]
 fn a_proposal_passed_on() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.set_write(409, json!({"error": "taken"}));
     let before = fake.gh.calls.borrow().len();
@@ -93,7 +93,7 @@ fn a_proposal_passed_on() {
 
 #[test]
 fn a_decision_passed_on() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.set_write(200, json!({"id": "d1"}));
     let body = json!({"version": "0123abcd", "value": "low", "decision": "cut"});
@@ -114,7 +114,7 @@ fn a_decision_passed_on() {
 
 #[test]
 fn a_capability_decision_names_its_layer() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.set_write(200, json!({}));
     let body = json!({"version": "0123abcd", "value": "high", "decision": "keep"});
@@ -124,7 +124,7 @@ fn a_capability_decision_names_its_layer() {
 
 #[test]
 fn a_withdrawal_passed_on() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     *fake.replicas.write.borrow_mut() = Some((404, String::new()));
     let before = fake.gh.calls.borrow().len();
@@ -137,8 +137,31 @@ fn a_withdrawal_passed_on() {
 }
 
 #[test]
+fn an_answer_passed_on() {
+    // req:web.worker/writes-to-object@a68570e6
+    let (fake, cookie) = setup();
+    fake.set_write(404, json!({"error": "unknown"}));
+    let before = fake.gh.calls.borrow().len();
+    let res = fake.handle(post(
+        "/api/repos/o/a/backlog/my%20q/answer",
+        &cookie,
+        json!({"answer": "yes"}).to_string().as_bytes(),
+    ));
+    only_the_access_check(&fake, before);
+    assert_eq!(res.status, 404);
+    assert_eq!(body_json(&res), json!({"error": "unknown"}));
+    let post = one_post(&fake);
+    assert_eq!(post["kind"], "answer");
+    assert_eq!(post["item"], "my q");
+    assert_eq!(post["answer"], "yes");
+    assert_eq!(post["login"], "alice");
+    assert_eq!(post["token"], "u");
+    assert!(fake.gh.writes().is_empty());
+}
+
+#[test]
 fn preparing() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.set_write(503, json!({"preparing": 0.4}));
     let res = propose(&fake, &cookie, "a", &proposal());
@@ -148,7 +171,7 @@ fn preparing() {
 
 #[test]
 fn object_down() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.replicas.bound.set(false);
     let valid = json!({"version": "0123abcd", "value": "low", "decision": "cut"});
@@ -156,6 +179,11 @@ fn object_down() {
         propose(&fake, &cookie, "a", &proposal()),
         decide(&fake, &cookie, "capabilities/x", &valid),
         withdraw(&fake, &cookie, "p1"),
+        fake.handle(post(
+            "/api/repos/o/a/backlog/q/answer",
+            &cookie,
+            br#"{"answer": "yes"}"#,
+        )),
     ] {
         assert_eq!(res.status, 503);
         assert_eq!(body_json(&res), json!({"error": "unavailable"}));
@@ -165,7 +193,7 @@ fn object_down() {
 
 #[test]
 fn no_access() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.set_write(200, json!({}));
     let res = propose(&fake, &cookie, "private", &proposal());
@@ -178,7 +206,7 @@ fn no_access() {
 
 #[test]
 fn a_failed_body_check_posts_nothing() {
-    // req:web.worker/writes-to-object@0e34d9ff
+    // req:web.worker/writes-to-object@a68570e6
     let (fake, cookie) = setup();
     fake.set_write(200, json!({}));
     let res = propose(

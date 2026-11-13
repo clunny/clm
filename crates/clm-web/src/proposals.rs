@@ -127,18 +127,19 @@ pub(crate) async fn withdraw<P: Replicas>(
     writes::through_object(p, access, login, json!({"kind": "withdraw", "id": id})).await
 }
 
-/// The implementation view with `mine` added to each of its `proposals`: whether the writer
-/// is `login`'s `<login>/web`. A view that carries none answers `[]`.
-pub(crate) fn with_mine(mut view: Value, login: &str) -> Value {
+/// The implementation view with `mine` added to each entry of its `list` (`proposals` or
+/// `answers`): whether the writer is `login`'s `<login>/web`. A view that carries none
+/// answers `[]`.
+pub(crate) fn with_mine(mut view: Value, list: &str, login: &str) -> Value {
     if !view.is_object() {
         return view;
     }
     let writer = ledger::web_writer(login);
-    let mut listed = view["proposals"].take();
-    for proposal in listed.as_array_mut().into_iter().flatten() {
-        proposal["mine"] = json!(proposal["writer"].as_str() == Some(writer.as_str()));
+    let mut listed = view[list].take();
+    for entry in listed.as_array_mut().into_iter().flatten() {
+        entry["mine"] = json!(entry["writer"].as_str() == Some(writer.as_str()));
     }
-    view["proposals"] = if listed.is_array() { listed } else { json!([]) };
+    view[list] = if listed.is_array() { listed } else { json!([]) };
     view
 }
 

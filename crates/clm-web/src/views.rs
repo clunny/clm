@@ -85,7 +85,8 @@ pub(crate) async fn get<P: Platform + Replicas>(
 }
 
 /// `GET .../implementation`: the object's view with `mine` added to each of its
-/// `proposals` for `login` (`proposals`), asking for no other view and reading no ledger.
+/// `proposals` and `answers` for `login` (`proposals`, `answers`), asking for no other view
+/// and reading no ledger.
 pub(crate) async fn implementation<P: Platform + Replicas>(
     p: &P,
     access: &Access,
@@ -93,7 +94,10 @@ pub(crate) async fn implementation<P: Platform + Replicas>(
     fresh: bool,
 ) -> Response {
     match fetch(p, access, "implementation", fresh).await {
-        Ok(view) => Response::json(&proposals::with_mine(view, login)),
+        Ok(view) => {
+            let view = proposals::with_mine(view, "proposals", login);
+            Response::json(&proposals::with_mine(view, "answers", login))
+        }
         Err(res) => res,
     }
 }
