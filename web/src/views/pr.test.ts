@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { drafts } from './forms';
 import { cannotAct, renderPrList, renderReview, specPath } from './pr';
-import { branches, review } from '../test/fixtures';
+import { branches, review } from './fixtures';
 import type { Target } from './route';
 import type { BranchReview } from './types';
 
 const opts = (over = {}) => ({ offline: false, accepted: false, onAct: vi.fn(), fullHref: (p: string) => `#full/${p}`, ...over });
 const link = (t: Target) => `#b/${t.branch}`;
 
-// req:web/pr-document@0e70b0ab
+// req:web.views/pr-document@0e70b0ab
 describe('Document tab', () => {
   it('modified requirement, asset and decision: n/r modified with quickly inserted, m.html added in an empty sandbox, d added with its text', () => {
     const view = renderReview(review(), opts());
@@ -62,7 +62,7 @@ describe('Document tab', () => {
   });
 });
 
-// req:web/review-intent-first@563a463a
+// req:web.views/review-intent-first@563a463a
 describe('Intent first', () => {
   it('intent first: the Intent section comes before the node changes, beside Approve', () => {
     const view = renderReview(review(), opts());
@@ -90,7 +90,7 @@ describe('Intent first', () => {
   });
 });
 
-// req:web/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@a7d7ac89
 describe('Needs review', () => {
   it("needs review without a change: the review's top-level review decides, not the change", () => {
     const meta = (r: BranchReview) => renderReview(r, opts()).querySelector('.meta')!.textContent;
@@ -106,7 +106,7 @@ describe('Needs review', () => {
   });
 });
 
-// req:web/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@a7d7ac89
 describe('spec branches', () => {
   it('branch without a page: both listed, spec/c with #7 and its title, spec/d with no page', () => {
     const list = renderPrList(branches, link);
@@ -143,7 +143,7 @@ describe('spec branches', () => {
   });
 });
 
-// req:web/approve-button@ff59f9d1
+// req:web.views/approve-button@ff59f9d1
 describe('Approve intent', () => {
   it('one request, then approved: a second tap while the first is in flight sends nothing', () => {
     const o = opts();
@@ -182,7 +182,7 @@ describe('what Approve may send', () => {
   });
 });
 
-// req:web/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@a7d7ac89
 describe('no review list', () => {
   it('the PR list shows the spec branches only: no To review list and no Mark reviewed', () => {
     const list = renderPrList(branches, link);
@@ -193,7 +193,7 @@ describe('no review list', () => {
   });
 });
 
-// req:web/signed-approvals@9bdf6473
+// req:web.views/signed-approvals@9bdf6473
 describe('signed repositories', () => {
   const approvalMarks = (view: HTMLElement) => [...view.querySelectorAll('.head .sig')].map((c) => c.textContent);
 
@@ -264,7 +264,7 @@ const typeIn = (form: HTMLElement, text: string) => {
   t.dispatchEvent(new Event('input'));
 };
 
-// req:web/request-changes@8ce19ec8
+// req:web.views/request-changes@8ce19ec8
 describe('Request changes', () => {
   const held = (over = {}) => ({ id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true, ...over });
   const button = (view: HTMLElement) => view.querySelector<HTMLButtonElement>('.approve-bar button.request')!;
@@ -312,7 +312,7 @@ describe('Request changes', () => {
   });
 });
 
-// req:web/comment-on-review@1279617c
+// req:web.views/comment-on-review@1279617c
 describe('comments', () => {
   const comment = (over = {}) => ({ id: 'c1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', fingerprint: 'f1', target: null, text: 'Looks right', current: true, ...over });
   const open = (root: HTMLElement, at: string) => {

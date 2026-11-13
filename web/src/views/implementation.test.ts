@@ -4,13 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderActivity, renderImplementation } from './implementation';
 import { ago, lapsesIn } from './time';
-import { HOUR, NOW, blockers, flight, implementation, snapshot } from '../test/fixtures';
+import { HOUR, NOW, blockers, flight, implementation, snapshot } from './fixtures';
 
 const build = (impl = implementation(), snap = snapshot(), which: 'flight' | 'blockers' = 'flight') =>
   renderImplementation(impl, snap, { now: NOW, show: which, onShow: () => {} });
 const entry = (e: HTMLElement, node: string) => e.querySelector<HTMLElement>(`.fn[data-node="${node}"]`)!;
 
-// req:web/implementation-view@915d41a2
+// req:web.views/implementation-view@915d41a2
 describe('implementation view', () => {
   it('claimed node: shows it claimed, its last push, and lapsing in 3 hours', () => {
     const b = entry(build(), 'b');
@@ -95,7 +95,7 @@ describe('implementation view', () => {
     // Built in parts, so this file doesn't name the field it looks for.
     const old = new RegExp(`needs_${'pending'}`);
     const here = dirname(fileURLToPath(import.meta.url));
-    for (const dir of [here, join(here, '..', 'test')]) {
+    for (const dir of [join(here, '..'), join(here, '..', '..', 'test')]) {
       for (const name of readdirSync(dir, { recursive: true, encoding: 'utf8' })) {
         if (!/\.(ts|css|html)$/.test(name)) continue;
         expect(readFileSync(join(dir, name), 'utf8'), name).not.toMatch(old);
@@ -179,7 +179,7 @@ describe('implementation view', () => {
   });
 });
 
-// req:web/blockers-view@fb7c0561
+// req:web.views/blockers-view@fb7c0561
 describe('blockers switch', () => {
   it('blocker weight: what waits on you first, then roots by weight, each with the nodes it holds up', () => {
     const b = blockers({
@@ -238,7 +238,7 @@ describe('times', () => {
   });
 });
 
-// req:web/activity-feed@a884943f
+// req:web.views/activity-feed@a884943f
 describe('activity feed', () => {
   it('approval shows: lists the push, then the approval of spec/x', () => {
     const feed = renderActivity(

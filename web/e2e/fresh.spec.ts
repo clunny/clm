@@ -35,7 +35,6 @@ test.describe('fresh after write', () => {
       const form = page.locator('.fbform.proposal');
       await form.locator('input[name=title]').fill(title);
       await form.locator('textarea').fill('body');
-      await form.locator('.picker input[value="a"]').check();
       await form.locator('button.send').click();
       await expect.poll(() => mock.posts.filter((p) => p.key === PROPOSALS).length).toBe(title === 'One' ? 1 : 2);
       await expect(page.locator('.fbform.proposal')).toHaveCount(0);

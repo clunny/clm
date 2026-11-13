@@ -1,12 +1,12 @@
-// req:web/queue-states@340afeed
+// req:web.views/queue-states@340afeed
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderImplementation } from './implementation';
-import { NOW, flight, implementation, snapshot } from '../test/fixtures';
+import { NOW, flight, implementation, snapshot } from './fixtures';
 
-const SRC = dirname(fileURLToPath(import.meta.url));
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
 // Built in parts, so this file doesn't name what it looks for: the state as a string, a
 // key or a class, and the line that explained it.
 const STATE = `${'inter'}active`;

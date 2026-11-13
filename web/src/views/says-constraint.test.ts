@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { renderArchitecture, renderConstraint } from './architecture';
-import { architecture } from '../test/fixtures';
+import { architecture } from './fixtures';
 
 const SRC = `${process.cwd()}/src/`;
 const files = (dir: string): string[] =>
@@ -10,7 +10,7 @@ const files = (dir: string): string[] =>
 const list = (flaggedOnly = false) => ({ flaggedOnly, onFilter: vi.fn(), link: (s: string) => `#/o/a/architecture/${s}` });
 const page = { offline: false, busy: false, value: 'medium' as const, onValue: vi.fn(), onDecide: vi.fn(), back: '#/o/a/architecture', note: null };
 
-// req:web/says-architectural-constraint@c93b2f7f
+// req:web.views/says-architectural-constraint@c93b2f7f
 describe('says architectural constraint', () => {
   it('an empty report says so', () => {
     const view = renderArchitecture(architecture({ architecture: [] }), list());

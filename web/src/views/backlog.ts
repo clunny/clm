@@ -1,15 +1,12 @@
 // The backlog: "Waiting on you" first (question and human-task items, with the requirements
 // each blocks, `requirement-blocks`), then the other items in columns by kind, filterable
-// by node (web/backlog-view), each item marked with what holds it (web/backlog-taken), and
+// by component (web.views/backlog-view), each item marked with what holds it (web/backlog-taken), and
 // New proposal with the open proposals under Proposed (web/propose-from-backlog).
 
 import { chip, div, el } from './dom';
 import { Draft, drafts, person, sendOnce, submitDraft } from './forms';
 import { when } from './time';
 import type { BacklogView, Proposal, Snapshot, Taken } from './types';
-
-/** The most components a proposal names, the Worker's limit. */
-const MAX_NODES = 10;
 
 const WAITING = ['question', 'human-task'];
 const COLUMNS: [string, string, string][] = [
@@ -43,12 +40,15 @@ export function takenMark(taken: Taken, slug: string): string | null {
   return taken.claims.some((c) => bare(c.item) === slug) ? 'claimed' : null;
 }
 
-function card(b: BacklogView, taken: Taken | null, blocks?: string[]): HTMLElement {
+/** The in-app link to a backlog item's page. */
+type ItemLink = (slug: string) => string;
+
+function card(b: BacklogView, taken: Taken | null, link?: ItemLink, blocks?: string[]): HTMLElement {
   const mark = taken ? takenMark(taken, b.slug) : null;
   return el(
     'div',
     { class: 'bi', 'data-slug': b.slug },
-    div('ttl', b.title),
+    link ? el('a', { class: 'ttl', href: link(b.slug) }, b.title) : div('ttl', b.title),
     ...b.nodes.map((n) => el('span', { class: 'pill' }, n)),
     mark ? chip('acc taken', mark) : '',
     blocks?.length ? div('blocks', `Blocks ${blocks.join(', ')}`) : '',
@@ -61,20 +61,21 @@ export interface Proposing {
   proposals: Proposal[] | null;
   offline: boolean;
   /** Sends a proposal: null once the Worker took it, else why not, for the form to show. */
-  onPropose: (title: string, body: string, nodes: string[]) => Promise<string | null>;
+  onPropose: (title: string, body: string) => Promise<string | null>;
   /** Withdraws the proposal `id`: null once the Worker took it, else why not. */
   onWithdraw: (id: string) => Promise<string | null>;
 }
 
-/** New proposal: a button that opens a form with a title, an intent and a picker of the
- * graph's components, open at once while `drafts` holds what was typed into it. */
-function proposalForm(key: string, graph: string[], p: Proposing): HTMLElement {
+/** New proposal: a button that opens a form with a title and an intent, open at once while
+ * `drafts` holds what was typed into it. It has no picker of components: the draft that
+ * takes the item up decides them. */
+function proposalForm(key: string, p: Proposing): HTMLElement {
   const wrap = div('fbw newprop');
   const disabled = p.offline ? 'Offline' : null;
   const toggle = el('button', { type: 'button', class: 'btn pri propose', disabled: disabled !== null, title: disabled ?? 'Propose an item for the backlog' }, 'New proposal');
   toggle.addEventListener('click', () => {
     if (toggle.disabled) return;
-    drafts.set(key, { title: '', text: '', nodes: [] });
+    drafts.set(key, { title: '', text: '' });
     draw();
   });
   const draw = () => {
@@ -86,18 +87,6 @@ function proposalForm(key: string, graph: string[], p: Proposing): HTMLElement {
     const body = el('textarea', { rows: 4, 'aria-label': 'Intent', placeholder: 'The intent: what and why (plain text or Markdown)', 'data-draft': `${key}|text` });
     body.value = draft.text;
     body.addEventListener('input', () => (draft.text = body.value));
-    const picked = new Set(draft.nodes ?? []);
-    const boxes = graph.map((n) => el('input', { type: 'checkbox', value: n, checked: picked.has(n) }));
-    // At most MAX_NODES: once that many are picked, the rest can't be.
-    const limit = () => boxes.forEach((b) => (b.disabled = !b.checked && picked.size >= MAX_NODES));
-    for (const b of boxes)
-      b.addEventListener('change', () => {
-        if (b.checked) picked.add(b.value);
-        else picked.delete(b.value);
-        draft.nodes = graph.filter((n) => picked.has(n));
-        limit();
-      });
-    limit();
     const send = el('button', { type: 'button', class: 'btn pri send', disabled: disabled !== null, title: disabled ?? 'Propose' }, 'Propose');
     const cancel = el('button', { type: 'button', class: 'btn cancel' }, 'Cancel');
     cancel.addEventListener('click', () => {
@@ -111,7 +100,7 @@ function proposalForm(key: string, graph: string[], p: Proposing): HTMLElement {
       () => {
         const t = title.value.trim();
         if (!t) return Promise.resolve('Give it a title first.');
-        return submitDraft(key, draft, () => p.onPropose(t, body.value.trim(), graph.filter((n) => picked.has(n))));
+        return submitDraft(key, draft, () => p.onPropose(t, body.value.trim()));
       },
       draw,
     );
@@ -120,7 +109,6 @@ function proposalForm(key: string, graph: string[], p: Proposing): HTMLElement {
         'fbform proposal',
         title,
         body,
-        div('picker', el('span', { class: 'note' }, `Components (at most ${MAX_NODES})`), ...boxes.map((b) => el('label', { class: 'pill' }, b, ` ${b.value}`))),
         div('fbact', send, cancel),
         err,
       ),
@@ -158,7 +146,6 @@ function proposedRow(list: Proposal[], p: Proposing): HTMLElement | '' {
         'div',
         { class: 'bi prop', 'data-id': x.id },
         div('ttl', x.title),
-        ...x.nodes.map((n) => el('span', { class: 'pill' }, n)),
         div('slug', `${person(x.writer)} · ${when(x.at)}`),
         div('note', 'The next build files it as a backlog item.'),
         withdraw,
@@ -169,7 +156,14 @@ function proposedRow(list: Proposal[], p: Proposing): HTMLElement | '' {
 
 /** The backlog, with each item's `taken` mark once the implementation state has arrived
  * (`taken` null until then), and New proposal and Proposed when `p` is given. */
-export function renderBacklog(snap: Snapshot, taken: Taken | null, node: string | null, onFilter: (node: string | null) => void, p?: Proposing): HTMLElement {
+export function renderBacklog(
+  snap: Snapshot,
+  taken: Taken | null,
+  node: string | null,
+  onFilter: (node: string | null) => void,
+  p?: Proposing,
+  link?: ItemLink,
+): HTMLElement {
   const on = (b: BacklogView) => node === null || b.nodes.includes(node);
   const nodes = [...new Set(snap.backlog.flatMap((b) => b.nodes))].sort();
   const filter = div(
@@ -186,7 +180,7 @@ export function renderBacklog(snap: Snapshot, taken: Taken | null, node: string 
     ? div(
         'card sec waiting',
         el('h3', { class: 'h' }, 'Waiting on you ', chip('wait', String(wait.length))),
-        div('kan', ...wait.map((w) => div('', chip(w.item.kind === 'human-task' ? 'wait' : 'sky', w.item.kind), card(w.item, taken, w.blocks)))),
+        div('kan', ...wait.map((w) => div('', chip(w.item.kind === 'human-task' ? 'wait' : 'sky', w.item.kind), card(w.item, taken, link, w.blocks)))),
       )
     : '';
 
@@ -199,7 +193,7 @@ export function renderBacklog(snap: Snapshot, taken: Taken | null, node: string 
       'div',
       { class: 'col', 'data-kind': kind },
       div('colh', el('span', { class: 'dot', style: `background:${colour};margin:0` }), label, el('span', { class: 'c' }, String(items.length))),
-      ...items.map((b) => card(b, taken)),
+      ...items.map((b) => card(b, taken, link)),
     );
   });
 
@@ -211,9 +205,28 @@ export function renderBacklog(snap: Snapshot, taken: Taken | null, node: string 
       div('', el('h1', {}, 'Backlog'), div('meta', `${snap.backlog.length} items across ${nodes.length} components`)),
       filter,
     ),
-    p ? proposalForm(`${snap.repo}|proposal`, snap.spec.nodes.map((n) => n.node), p) : '',
+    p ? proposalForm(`${snap.repo}|proposal`, p) : '',
     waitRow,
     p ? proposedRow(p.proposals ?? [], p) : '',
     div('kan', ...cols),
+  );
+}
+
+/** A backlog item's page at `#/<owner>/<repo>/backlog/<slug>`: what the snapshot holds of
+ * it, and what holds it once `taken` has arrived; a slug the backlog doesn't hold says so,
+ * with a link to the Backlog (`back`). */
+export function renderBacklogItem(snap: Snapshot, slug: string, taken: Taken | null, back: string): HTMLElement {
+  const b = snap.backlog.find((x) => x.slug === slug);
+  const crumb = el('a', { class: 'back', href: back }, '‹ Backlog');
+  if (!b) return div('bipage', crumb, div('empty', `The item ${slug} isn't in the backlog. `, el('a', { href: back }, 'Back to the Backlog')));
+  const mark = taken ? takenMark(taken, b.slug) : null;
+  return div(
+    'bipage',
+    crumb,
+    el('h1', {}, b.title),
+    div('meta', chip('mute', b.kind), ...b.nodes.map((n) => chip('node', n)), mark ? chip('acc taken', mark) : ''),
+    div('slug', b.slug),
+    b.origin ? div('note', `Origin: ${b.origin}`) : '',
+    b.blocks.length ? div('blocks', `Blocks ${b.blocks.join(', ')}`) : '',
   );
 }

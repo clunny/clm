@@ -11,7 +11,7 @@ describe('routes', () => {
     expect(parseRoute('')).toEqual({ owner: undefined, repo: undefined, view: 'graph' });
   });
 
-  // req:web/spec-branch-review@a7d7ac89
+  // req:web.views/spec-branch-review@a7d7ac89
   it('routes a branch by its name as one segment, and asks the Worker with its slashes', () => {
     const at = reviewHref('o', 'a', { branch: 'spec/x/y' }, 'full', 'specs/n/SPEC.md');
     expect(at).toBe('#/o/a/prs/spec%2Fx%2Fy/full/specs/n/SPEC.md');
@@ -27,14 +27,14 @@ describe('routes', () => {
     });
   });
 
-  // req:web/capabilities-list@fde4e68b
+  // req:web.views/capabilities-list@fde4e68b
   it('reads the capabilities list and a capability page, and round-trips them', () => {
     expect(parseRoute('#/o/a/capabilities')).toEqual({ owner: 'o', repo: 'a', view: 'capabilities' });
     expect(parseRoute('#/o/a/capabilities/review-capability-cost')).toEqual({ owner: 'o', repo: 'a', view: 'capabilities', capability: 'review-capability-cost' });
     expect(parseRoute(href('o', 'a', 'capabilities', 'x'))).toMatchObject({ view: 'capabilities', capability: 'x' });
   });
 
-  // req:web/architecture-list@d644a9d4
+  // req:web.views/architecture-list@d644a9d4
   it('reads the architecture list and an entry page, a view of its own, and round-trips them', () => {
     expect(parseRoute('#/o/a/architecture')).toEqual({ owner: 'o', repo: 'a', view: 'architecture' });
     expect(parseRoute('#/o/a/architecture/git-is-truth')).toEqual({ owner: 'o', repo: 'a', view: 'architecture', entry: 'git-is-truth' });

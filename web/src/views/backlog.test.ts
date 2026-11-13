@@ -1,8 +1,9 @@
-// req:web/backlog-view@3bb10ff3
+// req:web.views/backlog-view@c6475681
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Proposing, renderBacklog, waiting } from './backlog';
+import { Proposing, renderBacklog, renderBacklogItem, waiting } from './backlog';
 import { drafts } from './forms';
-import { snapshot } from '../test/fixtures';
+import { snapshot } from './fixtures';
+import { parseRoute } from './route';
 import type { Proposal, Taken } from './types';
 
 const slugs = (e: HTMLElement) => [...e.querySelectorAll<HTMLElement>('.bi')].map((b) => b.dataset.slug);
@@ -45,6 +46,25 @@ describe('backlog view', () => {
     expect(view.querySelector('.col[data-kind=idea] .bi[data-slug=later]')).not.toBeNull();
   });
 
+  it("an item opens its page: 'later' links to #/o/a/backlog/later, and that route shows the item", () => {
+    const link = (slug: string) => `#/o/a/backlog/${slug}`;
+    const view = renderBacklog(snapshot(), null, null, () => {}, undefined, link);
+    const a = view.querySelector<HTMLAnchorElement>('.bi[data-slug=later] a.ttl')!;
+    expect(a.getAttribute('href')).toBe('#/o/a/backlog/later');
+    expect(view.querySelector('.waiting .bi[data-slug=setup] a.ttl')!.getAttribute('href')).toBe('#/o/a/backlog/setup');
+    expect(parseRoute('#/o/a/backlog/later')).toMatchObject({ owner: 'o', repo: 'a', view: 'backlog', item: 'later' });
+    const page = renderBacklogItem(snapshot(), 'setup', null, '#/o/a/backlog');
+    expect(page.querySelector('h1')!.textContent).toBe('Create the account');
+    expect(page.textContent).toContain('human-task');
+    expect(page.textContent).toContain('c/a');
+  });
+
+  it('a slug the backlog does not hold says so and links to the Backlog', () => {
+    const page = renderBacklogItem(snapshot(), 'gone', null, '#/o/a/backlog');
+    expect(page.textContent).toContain("isn't in the backlog");
+    expect(page.querySelector('a')!.getAttribute('href')).toBe('#/o/a/backlog');
+  });
+
   it('picking a node pill filters', () => {
     let picked: string | null = 'x';
     const view = renderBacklog(snapshot(), null, null, (n) => (picked = n));
@@ -53,7 +73,7 @@ describe('backlog view', () => {
   });
 });
 
-// req:web/backlog-taken@7225a6a8
+// req:web.views/backlog-taken@7225a6a8
 describe('taken marks', () => {
   const snap = () => {
     const s = snapshot();
@@ -93,7 +113,7 @@ describe('taken marks', () => {
   });
 });
 
-// req:web/propose-from-backlog@9b8191c8
+// req:web.views/propose-from-backlog@9531d23b
 describe('proposals', () => {
   const settle = async () => {
     for (let i = 0; i < 4; i++) await Promise.resolve();
@@ -106,40 +126,38 @@ describe('proposals', () => {
     view.querySelector<HTMLButtonElement>('button.propose')!.click();
     return view.querySelector<HTMLElement>('.fbform.proposal')!;
   };
-  const fill = (form: HTMLElement, title: string, body: string, nodes: string[]) => {
+  const fill = (form: HTMLElement, title: string, body: string) => {
     const t = form.querySelector<HTMLInputElement>('input[name=title]')!;
     t.value = title;
     t.dispatchEvent(new Event('input'));
     const b = form.querySelector('textarea')!;
     b.value = body;
     b.dispatchEvent(new Event('input'));
-    for (const n of nodes) form.querySelector<HTMLInputElement>(`.picker input[value="${n}"]`)!.click();
   };
   beforeEach(() => drafts.clear());
 
-  it("proposed: one post of the title, intent and picked components for two quick submits, then the form closes", async () => {
+  it("proposed: one post of the title and intent for two quick submits, then the form closes", async () => {
     let done: (v: string | null) => void = () => undefined;
     const onPropose = vi.fn(() => new Promise<string | null>((go) => (done = go)));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose }));
     const form = openForm(view);
-    // The picker offers the graph's components.
-    expect([...form.querySelectorAll<HTMLInputElement>('.picker input')].map((i) => i.value)).toEqual(['root', 'a', 'b']);
-    fill(form, 'Export CSV', 'Let me export.', ['a']);
+    // The draft that takes the item up decides its components: the form has no picker.
+    expect(form.querySelector('.picker, input[type=checkbox]')).toBeNull();
+    fill(form, 'Export CSV', 'Let me export.');
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     expect(onPropose).toHaveBeenCalledTimes(1);
-    expect(onPropose).toHaveBeenCalledWith('Export CSV', 'Let me export.', ['a']);
+    expect(onPropose).toHaveBeenCalledWith('Export CSV', 'Let me export.');
     done(null);
     await settle();
     expect(view.querySelector('.fbform.proposal')).toBeNull();
   });
 
-  it('Proposed lists each proposal with its title, components, proposer and the note, between Waiting on you and the columns', () => {
+  it('Proposed lists each proposal with its title, proposer, time and the note, between Waiting on you and the columns', () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ proposals: [proposal()] }));
     const row = view.querySelector<HTMLElement>('.proposed')!;
     const p = row.querySelector<HTMLElement>('.prop[data-id=p1]')!;
     expect(p.textContent).toContain('Export CSV');
-    expect([...p.querySelectorAll('.pill')].map((x) => x.textContent)).toEqual(['a']);
     expect(p.textContent).toContain('alice');
     expect(p.textContent).not.toContain('alice/web');
     expect(p.textContent).toContain('2026-10-27 10:00 UTC');
@@ -151,7 +169,7 @@ describe('proposals', () => {
   it('title taken: a refusal keeps the form open with its reason', async () => {
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose: () => Promise.resolve('That title is taken: choose another.') }));
     const form = openForm(view);
-    fill(form, 'Export CSV', '', []);
+    fill(form, 'Export CSV', '');
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     await settle();
     expect(view.querySelector('.fbform.proposal .err')?.textContent).toBe('That title is taken: choose another.');
@@ -162,30 +180,18 @@ describe('proposals', () => {
     const onPropose = vi.fn(() => Promise.resolve(null));
     const view = renderBacklog(snapshot(), null, null, () => {}, proposing({ onPropose }));
     const form = openForm(view);
-    fill(form, '  ', 'Body', []);
+    fill(form, '  ', 'Body');
     form.querySelector<HTMLButtonElement>('button.send')!.click();
     await settle();
     expect(onPropose).not.toHaveBeenCalled();
     expect(form.querySelector('.err')?.textContent).toContain('title');
   });
 
-  it('the picker takes at most 10 components', () => {
-    const s = snapshot();
-    const many = Array.from({ length: 12 }, (_, i) => `n${i}`);
-    s.spec = { view: 'spec', nodes: many.map((n) => ({ ...s.spec.nodes[0], node: n })) };
-    const form = openForm(renderBacklog(s, null, null, () => {}, proposing()));
-    for (const n of many.slice(0, 10)) form.querySelector<HTMLInputElement>(`.picker input[value="${n}"]`)!.click();
-    const boxes = [...form.querySelectorAll<HTMLInputElement>('.picker input')];
-    expect(boxes.filter((b) => b.checked)).toHaveLength(10);
-    expect(boxes.filter((b) => !b.checked).every((b) => b.disabled)).toBe(true);
-  });
-
   it('what was typed survives a redraw', () => {
-    fill(openForm(renderBacklog(snapshot(), null, null, () => {}, proposing())), 'Half', 'a thought', ['b']);
+    fill(openForm(renderBacklog(snapshot(), null, null, () => {}, proposing())), 'Half', 'a thought');
     const form = renderBacklog(snapshot(), null, null, () => {}, proposing()).querySelector<HTMLElement>('.fbform.proposal')!;
     expect(form.querySelector<HTMLInputElement>('input[name=title]')?.value).toBe('Half');
     expect(form.querySelector('textarea')?.value).toBe('a thought');
-    expect(form.querySelector<HTMLInputElement>('.picker input[value="b"]')?.checked).toBe(true);
   });
 
   it('withdraw: only mine carries Withdraw, and a tap sends one withdrawal', () => {

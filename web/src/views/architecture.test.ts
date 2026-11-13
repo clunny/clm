@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderArchitecture, renderConstraint } from './architecture';
 import { decide } from './capabilities';
 import type { ListOptions, PageOptions } from './capabilities';
-import { architecture, constraint } from '../test/fixtures';
+import { architecture, constraint } from './fixtures';
 
 const list = (o: Partial<ListOptions> = {}): ListOptions => ({ flaggedOnly: false, onFilter: vi.fn(), link: (s) => `#/o/a/architecture/${s}`, ...o });
 const page = (o: Partial<PageOptions> = {}): PageOptions => ({ offline: false, busy: false, value: 'medium', onValue: vi.fn(), onDecide: vi.fn(), back: '#/o/a/architecture', note: null, ...o });
@@ -10,7 +10,7 @@ const slugs = (e: HTMLElement, sel: string) => [...e.querySelectorAll<HTMLElemen
 const decideButtons = (e: HTMLElement) => [...e.querySelectorAll<HTMLButtonElement>('button.decide')];
 const proof = (e: HTMLElement, slug: string) => e.querySelector<HTMLElement>(`tr.cap[data-slug=${slug}] .proof`)!;
 
-// req:web/architecture-list@d644a9d4
+// req:web.views/architecture-list@d644a9d4
 describe('architecture list', () => {
   it('ranked, held and flagged: the report order, as a table and as cards, held 1/2 in amber, untested alone', () => {
     const view = renderArchitecture(architecture(), list());
@@ -69,13 +69,15 @@ describe('architecture list', () => {
 
 });
 
-// req:web/architecture-page@d01678bd
+// req:web.views/architecture-page@b9446399
 describe('architecture page', () => {
-  it('sections in order: statement, held with each rule and its untested text, cost, workarounds, without, decisions, then the buttons', () => {
+  it('sections in order: the entry in full, held with each rule, cost, workarounds, without, decisions, then the buttons', () => {
     const view = renderConstraint(architecture(), 'e', page());
     const secs = [...view.querySelectorAll<HTMLElement>('section[data-sec]')].map((s) => s.dataset.sec);
-    expect(secs).toEqual(['held', 'cost', 'workarounds', 'without', 'decisions']);
-    expect(view.querySelector('.statement')!.textContent).toBe('CLM SHALL e.');
+    expect(secs).toEqual(['entry', 'held', 'cost', 'workarounds', 'without', 'decisions']);
+    expect(view.querySelector('section[data-sec=entry]')!.textContent).toContain('Partly judgement.');
+    expect(view.querySelector('.statement')).toBeNull();
+    expect(view.querySelector('.untested')).toBeNull();
     const held = view.querySelector('section[data-sec=held]')!;
     const rules = [...held.querySelectorAll<HTMLElement>('li.rule')].map((r) => [r.dataset.rule, r.dataset.state]);
     expect(rules).toEqual([
@@ -84,9 +86,6 @@ describe('architecture page', () => {
     ]);
     expect(held.querySelector('li.rule[data-rule="a/x"] .chip')!.classList.contains('ok')).toBe(true);
     expect(held.querySelector('li.rule[data-rule="a/y"] .chip')!.classList.contains('wait')).toBe(true);
-    const untested = held.querySelector('.untested')!;
-    expect(untested.textContent).toContain('Partly judgement.');
-    expect(held.querySelector('ul')!.compareDocumentPosition(untested) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(view.querySelector('section[data-sec=cost]')!.textContent).toContain('counted apart from the capabilities');
     const d = view.querySelector<HTMLDetailsElement>('section[data-sec=workarounds] details')!;
     expect(d.querySelector('summary')!.textContent).toBe('Gate misfires');
@@ -109,15 +108,15 @@ describe('architecture page', () => {
     expect([...known.querySelectorAll<HTMLElement>('li.rule')].map((r) => r.dataset.state)).toEqual(['unknown', 'unknown']);
   });
 
-  it('an entry without rules or untested text, and an unknown slug', () => {
+  it('an entry without rules, and an unknown slug', () => {
     const held = renderConstraint(architecture(), 'g', page()).querySelector('section[data-sec=held]')!;
     expect(held.querySelectorAll('li.rule')).toHaveLength(0);
-    expect(held.textContent).toContain('A judgement.');
+    expect(held.textContent).toContain('No rule enforces it.');
     expect(renderConstraint(architecture(), 'zzz', page()).textContent).toContain('zzz');
   });
 });
 
-// req:web/architecture-decide-buttons@41e20cf5
+// req:web.views/architecture-decide-buttons@41e20cf5
 describe('architecture decide', () => {
   it('one request per tap: a second tap while the first is in flight sends nothing', () => {
     const o = page();
@@ -168,5 +167,19 @@ describe('architecture decide', () => {
     // Without the Worker's command, the note still gives one.
     const bare = await decide('/b', 'architecture', 'e', 'v', 'low', 'cut', { post: async () => answer(422, { error: 'signed' }), reload: vi.fn(async () => false) });
     expect(bare.command).toBe('clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept');
+  });
+});
+
+// req:web.views/repo-markdown@53adc355
+describe('repo markdown in the architecture views', () => {
+  it('a statement in the list and the entry on the page show code, no backtick and no onerror', () => {
+    const a = architecture();
+    a.architecture[0].statement = 'Run `clm land` <img src=x onerror=alert(1)>';
+    a.architecture[0].text = '### Constraint: e\nRun `clm land` <img src=x onerror=alert(1)>';
+    for (const view of [renderArchitecture(a, list()), renderConstraint(a, 'e', page())]) {
+      expect(view.querySelector('code')?.textContent).toBe('clm land');
+      expect(view.textContent).not.toContain('`');
+      expect(view.innerHTML).not.toContain('onerror');
+    }
   });
 });

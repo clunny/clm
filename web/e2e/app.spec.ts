@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { APPROVE, ARCHITECTURE, ARCH_DECIDE, CAPABILITIES, COMMENTS, DECIDE, PROPOSALS, REQUEST, REVIEW, mockApi, reviewOfB } from './mock';
-import { architecture, capabilities, cost, implementation, review, snapshot } from '../test/fixtures';
+import { architecture, capabilities, cost, implementation, review, snapshot } from '../src/views/fixtures';
 
 // req:web/mobile-layout@b86f52c6
 test.describe('phone', () => {
@@ -131,7 +131,7 @@ test.describe('phone', () => {
   });
 });
 
-// req:web/capabilities-list@fde4e68b
+// req:web.views/capabilities-list@fde4e68b
 test('capabilities from 900 px: a table in the report order, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
   await mockApi(context);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -143,11 +143,11 @@ test('capabilities from 900 px: a table in the report order, ⚑ only filters, a
   await expect(page.locator('table.caps tr.cap')).toHaveCount(1);
   await page.locator('tr.cap[data-slug=a] a').click();
   await expect(page).toHaveURL(/#\/o\/a\/capabilities\/a$/);
-  await expect(page.locator('section[data-sec=why]')).toContainText('Without a, nothing works.');
+  await expect(page.locator('section[data-sec=entry]')).toContainText('Without a, nothing works.');
   await expect(page.locator('.sidebar .nv[data-view=capabilities]')).toHaveClass(/on/);
 });
 
-// req:web/architecture-list@d644a9d4
+// req:web.views/architecture-list@d644a9d4
 test.describe('architecture list', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -188,7 +188,7 @@ test.describe('architecture list', () => {
     await expect(page.locator('table.caps tr.cap')).toHaveCount(1);
     await page.locator('tr.cap[data-slug=e] a').click();
     await expect(page).toHaveURL(/#\/o\/a\/architecture\/e$/);
-    await expect(page.locator('section[data-sec=held]')).toContainText('Partly judgement.');
+    await expect(page.locator('section[data-sec=entry]')).toContainText('Partly judgement.');
   });
 
   test('indexing: the proof reads ? / 2 and the note says coverage is still indexing', async ({ page, context }) => {
@@ -200,7 +200,7 @@ test.describe('architecture list', () => {
   });
 });
 
-// req:web/architecture-decide-buttons@41e20cf5
+// req:web.views/architecture-decide-buttons@41e20cf5
 test.describe('deciding an architectural constraint', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -230,7 +230,7 @@ test.describe('deciding an architectural constraint', () => {
     mock.fail(ARCH_DECIDE, 409);
     mock.onPost = () => {
       const a = architecture();
-      a.architecture[0] = { ...a.architecture[0], version: 'feedbeef', statement: 'CLM SHALL e, reworded.' };
+      a.architecture[0] = { ...a.architecture[0], version: 'feedbeef', text: '### Constraint: e\nCLM SHALL e, reworded.' };
       mock.routes[ARCHITECTURE] = a;
     };
     await page.goto('/app/#/o/a/architecture/e');
@@ -250,7 +250,7 @@ test.describe('deciding an architectural constraint', () => {
   });
 });
 
-// req:web/decide-buttons@c1039d9e
+// req:web.views/decide-buttons@c1039d9e
 test.describe('deciding a capability', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -318,7 +318,7 @@ test.describe('deciding a capability', () => {
     mock.fail(DECIDE, 409);
     mock.onPost = () => {
       const c = capabilities();
-      c.report.capabilities[1] = cost('a', 2, { version: 'feedbeef', statement: 'A person can a, reworded.' });
+      c.report.capabilities[1] = cost('a', 2, { version: 'feedbeef', text: '### Capability: a\nA person can a, reworded.' });
       mock.routes[CAPABILITIES] = c;
     };
     await page.goto('/app/#/o/a/capabilities/a');
@@ -356,7 +356,7 @@ test('wide screens get the sidebar and no tab bar', async ({ page, context }) =>
   await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
 });
 
-// req:web/full-document@fcfa5b34
+// req:web.views/full-document@fcfa5b34
 test('opening a file in full scrolls to its first change, and j steps to the next', async ({ page, context }) => {
   const requirements = Array.from({ length: 40 }, (_, i) => `### Requirement: r${i}\nIt SHALL do ${i}.`).join('\n\n');
   const before = `# N\n\n### Design\n\nThe design.\n\n### Requirements\n\n${requirements}\n`;
@@ -374,7 +374,7 @@ test('opening a file in full scrolls to its first change, and j steps to the nex
   await expect(page.locator('.chg.focus')).toBeInViewport();
 });
 
-// req:web/graph-view@7bdf4eb6
+// req:web.views/graph-view@7bdf4eb6
 test.describe('graph', () => {
   test('queue states: once the implementation state arrives, b is ringed amber and named claimed, a rose and blocked', async ({ page, context }) => {
     await mockApi(context);
@@ -446,12 +446,13 @@ test.describe('graph', () => {
     await page.goto('/app/#/o/a/graph');
     await page.locator('.n[data-node=b]').click();
     await expect(page.locator('.insp .inpr')).toContainText('spec/c');
-    await page.locator('.n[data-node=a]').click();
+    // The drawer may cover the card, so tap it without a pointer.
+    await page.locator('.n[data-node=a]').dispatchEvent('click');
     await expect(page.locator('.insp .inpr')).toContainText('No open PR changes it.');
   });
 });
 
-// req:web/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@a7d7ac89
 test.describe('spec branches', () => {
   test("branch without a page: both listed, and spec/d's review loads from its branch route with no page link", async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -531,7 +532,7 @@ test.describe('Approve by branch', () => {
   });
 });
 
-// req:web/signed-approvals@9bdf6473
+// req:web.views/signed-approvals@9bdf6473
 test.describe('signed repositories', () => {
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -561,7 +562,7 @@ test.describe('signed repositories', () => {
   });
 });
 
-// req:web/approve-button@ff59f9d1
+// req:web.views/approve-button@ff59f9d1
 test('one request, then approved: two quick taps send one approve, and the button reads Approved, disabled', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.hold(APPROVE);
@@ -575,7 +576,7 @@ test('one request, then approved: two quick taps send one approve, and the butto
   expect(mock.posts).toHaveLength(1);
 });
 
-// req:web/backlog-taken@7225a6a8
+// req:web.views/backlog-taken@7225a6a8
 test('the backlog is drawn before the implementation state, and takes its marks when it arrives', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.routes['GET /api/repos/o/a/implementation'] = implementation({ taken: { changes: [{ id: 'x', state: 'main', items: ['crash'], nodes: ['a'] }], claims: [{ item: 'later', nodes: [] }] } });
@@ -589,7 +590,7 @@ test('the backlog is drawn before the implementation state, and takes its marks 
   await expect(page.locator('.bi[data-slug=setup] .taken')).toHaveCount(0);
 });
 
-// req:web/oversized-component@550a1fc1
+// req:web.views/oversized-component@550a1fc1
 test("an oversized node's card is outlined amber, unless a queue ring colours it", async ({ page, context }) => {
   const snap = snapshot();
   snap.spec.nodes = snap.spec.nodes.map((n) => (n.parent ? { ...n, oversized: true } : n));
@@ -760,7 +761,7 @@ test.describe('PWA', () => {
   });
 });
 
-// req:web/comment-on-review@1279617c
+// req:web.views/comment-on-review@1279617c
 test.describe('comments', () => {
   test('comment on a requirement: one post of the fingerprint, target and text, the review asked again, and the card shows the comment by alice', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -790,7 +791,7 @@ test.describe('comments', () => {
   });
 });
 
-// req:web/request-changes@8ce19ec8
+// req:web.views/request-changes@8ce19ec8
 test.describe('Request changes', () => {
   const requested = { id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true };
 
@@ -858,7 +859,7 @@ test.describe('Request changes', () => {
   });
 });
 
-// req:web/propose-from-backlog@9b8191c8
+// req:web.views/propose-from-backlog@9531d23b
 test.describe('proposals', () => {
   const IMPL = 'GET /api/repos/o/a/implementation';
   const proposal = (over = {}) => ({ id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true, ...over });
@@ -871,7 +872,6 @@ test.describe('proposals', () => {
     const form = page.locator('.fbform.proposal');
     await form.locator('input[name=title]').fill('Export CSV');
     await form.locator('textarea').fill('Let me export.');
-    await form.locator('.picker input[value="a"]').check();
     // The answer is held, so the second tap lands while the first is in flight.
     mock.hold(PROPOSALS);
     await form.locator('button.send').click();
@@ -883,8 +883,7 @@ test.describe('proposals', () => {
     await expect(row).toContainText('Export CSV');
     await expect(row).toContainText('alice');
     await expect(row).toContainText('next build files it');
-    await expect(row.locator('.pill')).toHaveText(['a']);
-    expect(mock.posts).toEqual([{ key: PROPOSALS, body: '{"title":"Export CSV","body":"Let me export.","nodes":["a"]}' }]);
+    expect(mock.posts).toEqual([{ key: PROPOSALS, body: '{"title":"Export CSV","body":"Let me export.","nodes":[]}' }]);
     expect(mock.requests.filter((r) => r === IMPL).length).toBeGreaterThanOrEqual(2);
   });
 
@@ -996,4 +995,24 @@ test('the sign-in page says CLM works without the web app and links to early acc
   await expect(card.locator('a', { hasText: 'Request early access' })).toHaveAttribute('href', 'https://github.com/clunny/clm/issues/new?template=early-access.yml');
   await expect(card.locator('a', { hasText: 'Sign in with GitHub' })).toHaveAttribute('href', '/auth/login');
   await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
+});
+
+// req:web.views/backlog-view@c6475681
+test.describe('a backlog item opens its page', () => {
+  test('tapping an item in the Backlog and in the inspector shows its page', async ({ page, context }) => {
+    await mockApi(context);
+    await page.goto('/app/#/o/a/backlog');
+    await page.locator('.bi[data-slug=later] a.ttl').click();
+    await expect(page).toHaveURL(/#\/o\/a\/backlog\/later$/);
+    await expect(page.locator('.bipage h1')).toHaveText('Do it later');
+    await page.goto('/app/#/o/a/backlog/gone');
+    await expect(page.locator('.bipage')).toContainText("isn't in the backlog");
+    await page.locator('.bipage .empty a').click();
+    await expect(page).toHaveURL(/#\/o\/a\/backlog$/);
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto('/app/#/o/a/graph');
+    await page.locator('.n[data-node=b]').click();
+    await page.locator('.insp .backlog a.mini').click();
+    await expect(page).toHaveURL(/#\/o\/a\/backlog\/later$/);
+  });
 });

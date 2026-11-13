@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { decide, renderCapabilities, renderCapability } from './capabilities';
 import type { ListOptions, PageOptions } from './capabilities';
-import { capabilities } from '../test/fixtures';
+import { capabilities } from './fixtures';
 import { SignedOut } from './api';
 
 const list = (o: Partial<ListOptions> = {}): ListOptions => ({ flaggedOnly: false, onFilter: vi.fn(), link: (s) => `#/o/a/capabilities/${s}`, ...o });
@@ -9,7 +9,7 @@ const page = (o: Partial<PageOptions> = {}): PageOptions => ({ offline: false, b
 const slugs = (e: HTMLElement, sel: string) => [...e.querySelectorAll<HTMLElement>(sel)].map((r) => r.dataset.slug);
 const decideButtons = (e: HTMLElement) => [...e.querySelectorAll<HTMLButtonElement>('button.decide')];
 
-// req:web/capabilities-list@fde4e68b
+// req:web.views/capabilities-list@fde4e68b
 describe('capabilities list', () => {
   it('list ranked and flagged: the report order, as a table and as cards, only a marked ⚑', () => {
     const view = renderCapabilities(capabilities(), list());
@@ -51,17 +51,27 @@ describe('capabilities list', () => {
   });
 });
 
-// req:web/capability-page@853bfb39
+// req:web.views/capability-page@ebf73282
 describe('capability page', () => {
-  it('page sections in order, and clm capabilities named for what the Worker lacks', () => {
-    const view = renderCapability(capabilities(), 'a', page());
+  const withText = () => {
+    const c = capabilities();
+    const a = c.report.capabilities.find((x) => x.slug === 'a')!;
+    a.text = '### Capability: a\nRun `clm land` safely.\n\n#### Scenario: s\n- GIVEN a\n- WHEN b\n- THEN c';
+    return c;
+  };
+
+  it('page sections in order: the entry in full as Markdown, and clm capabilities named for what the Worker lacks', () => {
+    const view = renderCapability(withText(), 'a', page());
     const secs = [...view.querySelectorAll<HTMLElement>('section[data-sec]')].map((s) => s.dataset.sec);
-    expect(secs).toEqual(['why', 'cost', 'workarounds', 'without', 'rules', 'decisions']);
+    expect(secs).toEqual(['entry', 'cost', 'workarounds', 'without', 'rules', 'decisions']);
     expect(view.querySelector('h1')!.textContent).toContain('a ⚑');
-    const statement = view.querySelector('.statement')!;
-    expect(statement.textContent).toBe('A person can a.');
-    expect(statement.compareDocumentPosition(view.querySelector('section[data-sec=why]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(view.querySelector('section[data-sec=why]')!.textContent).toContain('Without a, nothing works.');
+    const entry = view.querySelector('section[data-sec=entry]')!;
+    expect(entry.querySelector('code')!.textContent).toBe('clm land');
+    expect(entry.textContent).toContain('Scenario: s');
+    expect(entry.textContent).not.toContain('`');
+    // The statement and the why are the entry's text, not drawn again.
+    expect(view.querySelector('.statement')).toBeNull();
+    expect(view.querySelector('section[data-sec=why]')).toBeNull();
     expect(view.querySelector('section[data-sec=cost]')!.textContent).toContain('clm capabilities a');
     expect(view.querySelector('section[data-sec=without]')!.textContent).toContain('1 of its 2 rules serve only it; the rest also serve other (1)');
     const rules = view.querySelector<HTMLDetailsElement>('section[data-sec=rules] details')!;
@@ -84,7 +94,7 @@ describe('capability page', () => {
   });
 });
 
-// req:web/decide-buttons@c1039d9e
+// req:web.views/decide-buttons@c1039d9e
 describe('decide', () => {
   it('decide one request per tap: a second tap while the first is in flight sends nothing', () => {
     const o = page();
@@ -190,5 +200,24 @@ describe('decide', () => {
     expect(out.text).toContain('Signed out');
     const lost = await decide('/b', 'capabilities', 'a', 'v', 'low', 'cut', { post: async () => answer(409), reload: async () => false });
     expect(lost.text).toContain('Reload');
+  });
+});
+
+// req:web.views/repo-markdown@53adc355
+describe('repo markdown in the capabilities views', () => {
+  const hostile = () => {
+    const c = capabilities();
+    c.report.capabilities[0].statement = 'Run `clm land` <img src=x onerror=alert(1)>';
+    c.report.capabilities[0].text = '### Capability: b\nRun `clm land` <img src=x onerror=alert(1)>';
+    return c;
+  };
+
+  it('a statement in the list and the page shows code, no backtick and no onerror', () => {
+    for (const view of [renderCapabilities(hostile(), list()), renderCapability(hostile(), 'b', page())]) {
+      const code = view.querySelector('code');
+      expect(code?.textContent).toBe('clm land');
+      expect(view.textContent).not.toContain('`');
+      expect(view.innerHTML).not.toContain('onerror');
+    }
   });
 });

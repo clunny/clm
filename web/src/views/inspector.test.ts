@@ -1,7 +1,7 @@
-// req:web/graph-view@7bdf4eb6 (the inspector a selected node opens)
-import { describe, expect, it } from 'vitest';
+// req:web.views/graph-view@7bdf4eb6 (the inspector a selected node opens)
+import { describe, expect, it, vi } from 'vitest';
 import { renderInspector } from './inspector';
-import { flight, implementation, review, snapshot } from '../test/fixtures';
+import { flight, implementation, review, snapshot } from './fixtures';
 
 describe('node inspector', () => {
   it('shows the contract, dependencies, changes, work in flight and backlog of a node', () => {
@@ -43,7 +43,7 @@ describe('node inspector', () => {
   });
 });
 
-// req:web/inspector-pending@bfc459c7
+// req:web.views/inspector-pending@bfc459c7
 describe('work in flight', () => {
   const reqs = (insp: HTMLElement) => [...insp.querySelectorAll<HTMLElement>('.work .rq')].map((r) => r.textContent);
 
@@ -85,5 +85,40 @@ describe('work in flight', () => {
     const insp = renderInspector(snapshot(), impl, [], 'b');
     expect(insp.querySelector('.work')?.textContent).toContain('Coverage is indexing');
     expect(reqs(insp)).toEqual([]);
+  });
+});
+
+// req:web.views/inspector-overlay@ca741eb0
+describe('inspector overlay', () => {
+  it('has a × button that closes it', () => {
+    const onClose = vi.fn();
+    const insp = renderInspector(snapshot(), null, [], 'b', onClose);
+    const x = insp.querySelector<HTMLButtonElement>('button.close')!;
+    expect(x.textContent).toBe('×');
+    expect(x.getAttribute('aria-label')).toBe('Close');
+    x.click();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on Escape while it is on the page, and not after it has left', () => {
+    const onClose = vi.fn();
+    const insp = renderInspector(snapshot(), null, [], 'b', onClose);
+    document.body.append(insp);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    expect(onClose).not.toHaveBeenCalled();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    insp.remove();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("its backlog items link to their pages: 'dark-mode' opens #/o/a/backlog/dark-mode", () => {
+    const snap = snapshot();
+    snap.backlog = [{ slug: 'dark-mode', kind: 'idea', title: 'Dark mode', nodes: ['a'], origin: null, blocks: [] }];
+    const insp = renderInspector(snap, null, [], 'a', undefined, (slug) => `#/o/a/backlog/${slug}`);
+    const link = insp.querySelector<HTMLAnchorElement>('.backlog a')!;
+    expect(link.textContent).toContain('dark-mode');
+    expect(link.getAttribute('href')).toBe('#/o/a/backlog/dark-mode');
   });
 });

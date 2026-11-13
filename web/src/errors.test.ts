@@ -1,7 +1,7 @@
 // req:web/honest-errors@444ce2bc: the retry schedule, the words for each failure, and what the
 // API client does with a 5xx.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HttpError, Offline, get } from './api';
+import { HttpError, Offline, get } from './views/api';
 import { classify, failureText, retryDelay } from './errors';
 
 describe('retryDelay', () => {

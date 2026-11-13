@@ -1,7 +1,7 @@
 // Fixture responses for the unit and browser tests. Illustrative data, built here rather
 // than read from the repository's specs (tests don't read doc-only paths).
 
-import type { Architecture, BlockersView, BranchReview, Capabilities, Constraint, Cost, FlightView, Implementation, NodeView, Snapshot, SpecBranch, SpecNode, SpecView } from '../src/types';
+import type { Architecture, BlockersView, BranchReview, Capabilities, Constraint, Cost, FlightView, Implementation, NodeView, Snapshot, SpecBranch, SpecNode, SpecView } from './types';
 
 export function node(id: string, over: Partial<NodeView> = {}): NodeView {
   return {
@@ -277,6 +277,7 @@ export function cost(slug: string, dollars: number, over: Partial<Cost> = {}): C
     overlap: { only: 1, shared: [[`capability/other`, 1]] },
     decisions: [],
     flagged: false,
+    text: `### Capability: ${slug}\nA person can ${slug}.\n\n#### Why\nWithout ${slug}, nothing works.`,
     ...over,
   };
 }
@@ -320,6 +321,7 @@ export function constraint(slug: string, dollars: number, over: Partial<Constrai
     overlap: { only: 0, shared: [] },
     decisions: [],
     flagged: false,
+    text: `### Constraint: ${slug}\nCLM SHALL ${slug}.`,
     ...over,
   };
 }
@@ -335,6 +337,7 @@ export function architecture(over: Partial<Architecture> = {}): Architecture {
           { rule: 'a/y', current: false },
         ],
         untested: 'Partly judgement.',
+        text: '### Constraint: e\nCLM SHALL e.\n\n#### Enforced by\n- a/x\n- a/y\n\n#### Untested\nPartly judgement.',
         rules: ['a/x', 'a/y'],
         nodes: ['a'],
         overlap: { only: 1, shared: [['architecture/other', 1]] },
