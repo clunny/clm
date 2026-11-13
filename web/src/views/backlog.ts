@@ -3,8 +3,10 @@
 // by component (web.views/backlog-view), each item marked with what holds it (web/backlog-taken), and
 // New proposal with the open proposals under Proposed (web/propose-from-backlog).
 
+import { answerButtons, type Answering } from './answers';
 import { chip, div, el } from './dom';
 import { Draft, drafts, person, sendOnce, submitDraft } from './forms';
+import { md } from './markdown';
 import { when } from './time';
 import type { BacklogView, Proposal, Snapshot, Taken } from './types';
 
@@ -215,18 +217,24 @@ export function renderBacklog(
 /** A backlog item's page at `#/<owner>/<repo>/backlog/<slug>`: what the snapshot holds of
  * it, and what holds it once `taken` has arrived; a slug the backlog doesn't hold says so,
  * with a link to the Backlog (`back`). */
-export function renderBacklogItem(snap: Snapshot, slug: string, taken: Taken | null, back: string): HTMLElement {
+export function renderBacklogItem(snap: Snapshot, slug: string, taken: Taken | null, back: string, answering?: Answering): HTMLElement {
   const b = snap.backlog.find((x) => x.slug === slug);
   const crumb = el('a', { class: 'back', href: back }, '‹ Backlog');
   if (!b) return div('bipage', crumb, div('empty', `The item ${slug} isn't in the backlog. `, el('a', { href: back }, 'Back to the Backlog')));
   const mark = taken ? takenMark(taken, b.slug) : null;
+  const given = (answering?.answers ?? []).filter((x) => x.item === b.slug);
   return div(
     'bipage',
     crumb,
     el('h1', {}, b.title),
-    div('meta', chip('mute', b.kind), ...b.nodes.map((n) => chip('node', n)), mark ? chip('acc taken', mark) : ''),
+    div('meta', chip('mute', b.kind), b.priority ? chip('mute prio', b.priority) : '', ...b.nodes.map((n) => chip('node', n)), mark ? chip('acc taken', mark) : ''),
     div('slug', b.slug),
     b.origin ? div('note', `Origin: ${b.origin}`) : '',
     b.blocks.length ? div('blocks', `Blocks ${b.blocks.join(', ')}`) : '',
+    given.length
+      ? div('given', el('h3', { class: 'h' }, 'Answers'), ...given.map((x) => div('note given-answer', el('strong', {}, x.answer), ` by ${person(x.writer)} · ${when(x.at)}`)))
+      : '',
+    answering ? answerButtons(b, answering) : '',
+    b.body ? md(b.body) : '',
   );
 }

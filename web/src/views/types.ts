@@ -53,6 +53,21 @@ export interface BacklogView {
   blocks: string[];
   /** The answers a `question` item offers; absent in a snapshot kept from before the Worker sent it, read as none. */
   choices?: string[];
+  /** The item's Markdown body and its priority; absent in a snapshot kept from before the Worker sent them. */
+  body?: string;
+  priority?: string | null;
+}
+
+/** An open `answered` record of the implementation state (`answers`): the person's answer to
+ * a backlog item, `mine` when its writer is the requester's `<login>/web`. */
+export interface Answer {
+  id: string;
+  /** `<person>/<clone>`. */
+  writer: string;
+  at: string;
+  item: string;
+  answer: string;
+  mine: boolean;
 }
 
 /** The `view` node's `spec` model: every node once, parents before children. */
@@ -353,6 +368,9 @@ export interface Implementation {
   /** The open proposals, by `at` then `id` (web/propose-from-backlog). Absent in a state
    * kept from before the Worker sent it, read as none. */
   proposals?: Proposal[];
+  /** The open answers to backlog items, by `at` then `id`. Absent in a state kept from before
+   * the Worker sent it, read as none. */
+  answers?: Answer[];
 }
 
 /** A `proposed` record no `withdrawn` record names and no backlog item has filed yet. */
