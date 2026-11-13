@@ -8,6 +8,8 @@ components: [clm]
 
 Bring CLM into line with its own philosophy: AI writes and maintains all code and tests, the human owns only intent and constraints, and a green check means the code does what the spec says. This item is the plan for that work. It is elaborated here across sessions; each phase is proposed from it as ordinary changes and built by the build loop.
 
+A session working on any phase first reads `docs/the-clm-project.md`, the philosophy and goals every decision here is judged against: humans own intent only, two human roles, three layers, and the intended size of the human layers. It dates from 2026-10-29; where it differs from `ARCHITECTURE.md` or from this item, those are current, until phase 1 brings it up to date.
+
 ## Problem
 
 An audit of `main` at `09b74b03` (2026-11-13) found the philosophy coherent and the mechanical core (land, gate, ledger, model, guard parsing) well tested, but four things wrong.
@@ -50,6 +52,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 - `CAPABILITIES.md`: fold the runner, move the pin, add the eval capability, reword scenarios the product's boundary can't observe.
 - Reword `proven-by-tests` and `deterministic-enforcement` for the three kinds.
 - Remove the contradictions listed under Problem.
+- Last, once the human layer is settled: bring `docs/the-clm-project.md` up to date with it (the supported agents, the ways the AI layer reaches a person, the three kinds of rule, evals, what this plan changed and why), and open `AGENTS.md` with a few sentences stating CLM's philosophy and goals, so every session has them in front of it. Those sentences are short, since every session and every build loads the file, and they point at the article for the reasoning, never restating it.
 
 **2. Delete.**
 - `clm runner` and `orchestrator.runner`.
