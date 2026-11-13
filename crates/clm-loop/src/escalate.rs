@@ -74,7 +74,7 @@ pub(crate) fn item(
         run.name,
         last.split_once(": ")
             .map_or(last, |(_, r)| r)
-            .replace('"', "'"),
+            .replace(['"', '\\'], "'"),
         components.join(", ")
     );
     if !blocks.is_empty() {

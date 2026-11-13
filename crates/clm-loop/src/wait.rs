@@ -51,6 +51,14 @@ fn reason(
     {
         return Ok(Some("the limit has lifted".to_string()));
     }
+    // A held orphan whose branch has stayed still long enough is for the next step to release.
+    if file.runs.iter().any(|r| {
+        r.hold
+            .as_ref()
+            .is_some_and(|h| snapshot.now.saturating_sub(h.since) >= 15 * 60)
+    }) {
+        return Ok(Some("a held orphan's branch has stayed still".to_string()));
+    }
     let plan = plan_of(snapshot);
     if plan.launches.is_empty() {
         return Ok(None);

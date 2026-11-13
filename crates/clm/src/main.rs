@@ -707,7 +707,7 @@ enum BuildAction {
     /// Record a request to drain or to stop the loop.
     #[command(group(clap::ArgGroup::new("mode").required(true).args(["drain", "now"])))]
     Stop {
-        #[arg(long)]
+        #[arg(long, conflicts_with = "now")]
         drain: bool,
         #[arg(long)]
         now: bool,

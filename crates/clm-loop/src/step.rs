@@ -729,7 +729,10 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     })?;
     if ended {
         let text = crate::summary::summary(options, &file, &plan.view)?;
-        return Ok(vec![say(options, &text)?, "end".to_string()]);
+        let mut out = say_lines;
+        out.push(say(options, &text)?);
+        out.push("end".to_string());
+        return Ok(out);
     }
     let mut out = say_lines;
     out.extend(lines);
