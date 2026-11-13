@@ -8,8 +8,8 @@ status: accepted
 
 That cost has changed. `#### Needs` orders builds across components (`needs-alone-order`) and the build loop runs them unattended (`build-loop-in-clm`), so the extra builds are machine time, not the human's. So every change another component's code or tests must follow is written as steps, each a requirement of the component whose files it changes:
 
-- **Removal or rename:** the provider expands (the new beside the old), each user moves in a requirement of its own that needs the expansion, and the provider contracts, needing every move (`rename-adds-then-removes`, `contract-removal-needs`, unchanged).
-- **Added variant a user matches exhaustively:** the user first adds a default arm in a requirement of its own, the widening needs it, and the user's requirement that handles the new value needs the widening.
+- **Removal or rename:** the provider expands (the new beside the old), each user moves in a requirement of its own that needs the expansion, and the provider contracts, needing every move (`rename-adds-then-removes`, `contract-removal-needs`, whose forced-fix exception is withdrawn).
+- **Added variant a user matches exhaustively:** the user first adds a default arm, marked `clm:remove-by` the change, in a requirement of its own; the widening needs it; and the user's requirement that handles the new value needs the widening and removes the arm (`no-dead-code`).
 - **Added field a user builds by struct literal:** the provider first offers a constructor or defaults, the user moves to them, and the field comes last.
 - **Split:** the child's requirements build its code in its own files, and the parent gets a requirement, needing them, that deletes its copy and reaches the code through the child.
 - **Optional user of a required provider:** a required component can't `Need` an optional one (`optional-nodes`), so the contraction waits as a contract step (`contract-step-deferred`), as it already did for removals.
@@ -22,4 +22,4 @@ Rejected:
 - **A `#### Touches` block per requirement, naming the other components its build edits and claiming them with it.** It makes the reaching-out declared and safe from parallel builds, but builds still edit files they don't own.
 - **Keeping the forced-fix exceptions and stating them more generally.** Generality makes the rule shorter but no stricter, and the next kind of tie still arrives as a judgement in a build.
 
-Supersedes `forced-fixes-cover-additions`. The root's dispatch files (`crates/clm/src/main.rs`, `Cargo.toml`, `Cargo.lock`), which every build that adds a command edits as the root's Design allows, are unchanged by this decision.
+Supersedes `forced-fixes-cover-additions`. The shared wiring a root's Design names stays a permanent, named exception of `path-ownership`: here the root's dispatch files (`crates/clm/src/main.rs`, `Cargo.toml`, `Cargo.lock`) and `clm.toml`'s detector allowances, which a build edits only to add or change its own component's entry.

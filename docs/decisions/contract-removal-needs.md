@@ -28,3 +28,5 @@ Rejected:
 (Amended 2026-11-04, `20261104-rename-adds-then-removes`: a rename is an adding requirement, which needs nothing, and a removing one, which needs each user's move, in one change, so the needs form no cycle (`rename-adds-then-removes`).)
 
 (Amended 2026-11-04, `20261104-clm-run-allows-compile`: the compile-only and test-fixture fixes a build may make in other components cover what an addition to its Contract forces too, such as a struct literal that must name an added field, set to the value under which the provider behaves as before (`forced-fixes-cover-additions`).)
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: the exception for the compile-only and test-fixture fixes a removal or an addition forces is withdrawn; each user moves in a requirement of its own (`coupled-changes-sequence`).)

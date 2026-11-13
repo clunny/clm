@@ -12,7 +12,7 @@ A removal marker's change is classified from the graph (`model`), in this order:
 
 **Shared paths** (`paths-disjoint`). `run` lists the files `git ls-files --cached` lists, Markdown included, itself through `git` (outside a git work tree, none); `run_listed` reads the listing its caller passes instead (`run-listed`). A file belongs to one component, the one whose builds own it and whose size it counts toward, so `nested-splits` keeps `paths` disjoint, parents and children included. A component's `tests` carve its test files out of whatever `paths` match them (`components-own-their-tests`): the file is the `tests` component's, so a suite's directory can belong to a harness component while each feature owns its own tests in it. `paths-disjoint`, `unowned-files` and `undeclared-imports` all read a file's component as its owner, the one place that rule is written.
 
-**Undeclared imports** (`undeclared-imports`, `undeclared-imports-check`, `tree-sitter-analysis`). The import edges come from `init`'s `import_edges(root)`, the same tree-sitter extraction `clm survey` uses: Rust workspace path dependencies and `mod`/`use crate::` paths, TypeScript relative imports and workspace packages, and Python imports that resolve to files in the repository. Tree-sitter is C, which doesn't build for `wasm32-unknown-unknown`, so `run` never reports this rule; the `clm check` command (crate `clm`) does, after `run` and before the detectors, from the graph it loaded, and `--no-detectors` doesn't skip it, since it needs no tool. A file's components are the components whose `paths` match it, each judged (two of them is `paths-disjoint`'s report). Only a direct `depends_on` counts, and a parent or child gets no exemption, since `depends_on` is separate from ownership (`nested-splits`). `import_edges` returns a `Result`: outside a git work tree it returns no edges, as `scan` finds no markers there, so a fixture that isn't a repository passes; when `git` fails inside one, the command reports `<root>: check/undeclared-imports: <error>` and goes on. `clm rebase` calls `run`, so its `rebase ok` doesn't cover this rule; `clm land` runs `clm check` and does.
+**Undeclared imports** (`undeclared-imports`, `undeclared-imports-check`, `tree-sitter-analysis`). The import edges come from `init`'s `import_edges(root)`, the same tree-sitter extraction `clm survey` uses: Rust workspace path dependencies and `mod`/`use crate::` paths, TypeScript relative imports and workspace packages, and Python imports that resolve to files in the repository. Tree-sitter is C, which doesn't build for `wasm32-unknown-unknown`, so `run` never reports this rule; the `clm check` command (crate `clm`) does, after `run` and before the detectors, from the graph it loaded, and `--no-detectors` doesn't skip it, since it needs no tool. A file's component is its owner (`paths-disjoint`), and a file a component's `tests` match is judged against that component's `depends_on` and `test_depends_on` together, production files against `depends_on` alone. Only a direct `depends_on` counts, and a parent or child gets no exemption, since `depends_on` is separate from ownership (`nested-splits`). `import_edges` returns a `Result`: outside a git work tree it returns no edges, as `scan` finds no markers there, so a fixture that isn't a repository passes; when `git` fails inside one, the command reports `<root>: check/undeclared-imports: <error>` and goes on. `clm rebase` calls `run`, so its `rebase ok` doesn't cover this rule; `clm land` runs `clm check` and does.
 
 **Imports before apply** (`undeclared-imports-before-apply`). A change's deltas can rewrite a component's `depends_on` and `paths`, so `undeclared_imports` also judges the same edges against the graph each `proposed` or `approved` change would leave, which `apply`'s `resulting(graph, change)` gives (`apply/resulting-graph-call`), as `removed-names-before-apply` does for names. A pair both graphs leave undeclared is reported once, by the current graph's line. Each change is judged alone against the current graph, so two pending changes that drop the same dependency each report it, naming themselves. A change whose deltas don't apply has no resulting graph: `stale-deltas` reports it. The edges are the code's as it is, read once. So a draft whose delta drops a `depends_on` entry its component's code uses meets the report in its own `clm check`, before `clm apply`, not first at `clm land`. A pair is its importing file, imported file and the IDs of `a` and `b`. A pair a change makes newly judged, by adding component `a` or `b` or by changing `paths` so a file falls in one, is reported the same way. The pending changes are those `is_pending` gives, as for `run`'s scan. The lines come after the current graph's, change by change in ID order, each in the order of the edges. The judging of resulting graphs sits behind `clm-check`'s `checkout` feature, which brings in `clm-apply` for `run`'s own before-apply scan: `undeclared_imports` is public and ungated, and without the feature it judges the current graph alone. `clm rebase` and `clm gate` don't run the rule: once the change is applied the current graph's line reports it, and `clm land` runs `clm check`.
 
@@ -178,6 +178,83 @@ When the root sets `outside` (`model/outside-globs`), even to `[]`, `run` SHALL 
 #### Needs
 - model/outside-globs
 - model/test-ownership-keys
+
+### Requirement: node-size <!-- base: 7fb9fb0c85660eed -->
+`clm size` SHALL print one line per component, sorted by ID, and `clm size <component>` only that component's line: `<component>`, `spec <tokens>/<budget>` and `code <tokens>/<budget>`, tab-separated, followed by a tab and `oversized` when the component is oversized, and SHALL exit 0. A component is *oversized* when either count exceeds a budget its frontmatter doesn't set for that count, or exceeds a `size_budget` it does set (`oversized-is-a-state`). A count's tokens SHALL be the total bytes of the parts it counts divided by 4, rounded up once. Spec tokens SHALL count the component's `SPEC.md`. Code tokens SHALL count, among the files `git ls-files --cached` lists, except a file with a NUL byte in its first 8000 bytes or whose `linguist-generated` or `linguist-vendored` attribute is set or `true` (any other value, `false` and unset don't exclude it): every part holding a `req:` marker that cites one of the component's requirements, wherever it sits, and every part holding no `req:` marker of a file the component owns (`check.coverage/owner`, so a file its `tests` match among them) (`tests-count-where-cited`). A file SHALL be one part, except a `.rs` file holding a line whose text, trimmed, is exactly `#[cfg(test)]`, which SHALL be two: the bytes from the first such line to the end of the file, and the bytes before it (`inline-tests-count-where-cited`). A part with markers SHALL NOT count toward a component its markers don't cite, even when that component's `paths` hold its file. A marker's component is the part of its ID before the `/`, as `check.coverage/pending-report` reads it, so a marker citing a requirement the component no longer holds still counts toward that component, and a part whose markers name only components that don't exist counts toward none. Each budget SHALL be the component's `size_budget` value for it when set, else the default passed in. `size(root, graph, markers, defaults)` SHALL return each component's counts, budgets and whether it is oversized, for `clm status`, `clm view` and `clm rebase`. `clm size` SHALL exit 1 naming a component that doesn't exist, and SHALL exit 1 printing the error when the settings can't be loaded.
+
+#### Scenario: over its spec budget
+- GIVEN defaults of 1000 spec and 1000 code tokens, and component `a` with paths `["src/a/**"]`, a `SPEC.md` of 4001 bytes and one tracked file `src/a/x.rs` of 400 bytes with no markers
+- WHEN `clm size a` runs
+- THEN it prints `a`, `spec 1001/1000`, `code 100/1000` and `oversized`, tab-separated, and exits 0
+
+#### Scenario: files that don't count
+- GIVEN the same component, plus an untracked `src/a/y.rs`, a tracked `src/a/gen.rs` that `.gitattributes` marks `linguist-generated`, a tracked `src/a/vendor/z.js` marked `linguist-vendored`, and a tracked `src/a/logo.png` holding a NUL byte
+- WHEN `clm size a` runs
+- THEN its code count is still `code 100/1000`
+
+#### Scenario: rounded once
+- GIVEN component `a` whose only tracked files are `src/a/p.rs` of 1 byte and `src/a/q.rs` of 3 bytes, neither with markers
+- WHEN `clm size a` runs
+- THEN its code count is `code 1/1000`
+
+#### Scenario: attribute set to false
+- GIVEN component `a` with a tracked `src/a/x.rs` of 400 bytes that `.gitattributes` marks `linguist-generated=false`
+- WHEN `clm size a` runs
+- THEN its code count is `code 100/1000`
+
+#### Scenario: a test counts where it is cited
+- GIVEN components `a` (paths `["src/a/**"]`) and `b` (paths `["src/b/**"]`), a tracked `src/a/tests/b.rs` of 800 bytes whose only marker cites `b/x`, and a tracked `src/a/lib.rs` of 400 bytes with no marker
+- WHEN `clm size` runs
+- THEN `a`'s code count is `code 100/1000` and `b`'s is `code 200/1000`
+
+#### Scenario: inline tests count where they are cited
+- GIVEN components `a` (paths `["src/a/**"]`) and `b` (paths `["src/b/**"]`), and a tracked `src/a/w.rs` of 1200 bytes whose first 400 bytes hold no marker and whose last 800 bytes start with a line `#[cfg(test)]` and hold a marker citing `b/x`
+- WHEN `clm size` runs
+- THEN `a`'s code count is `code 100/1000` and `b`'s is `code 200/1000`
+
+#### Scenario: inline tests without markers
+- GIVEN component `a` with a tracked `src/a/v.rs` of 400 bytes holding a `#[cfg(test)]` line and no marker
+- WHEN `clm size a` runs
+- THEN its code count is `code 100/1000`
+
+#### Scenario: a test citing two nodes counts for both
+- GIVEN the same components and a tracked `tests/both.rs` of 400 bytes, under neither component's `paths`, with markers citing `a/y` and `b/x`
+- WHEN `clm size` runs
+- THEN both `a`'s and `b`'s code counts include its 100 tokens
+
+#### Scenario: budget raised in the spec
+- GIVEN component `a` with a `SPEC.md` of 4001 bytes and 400 bytes of code, whose frontmatter sets `size_budget: { spec_tokens: 2000 }`
+- WHEN `clm size a` runs
+- THEN it prints `a`, `spec 1001/2000` and `code 100/1000`, with no `oversized`
+
+#### Scenario: budget outgrown
+- GIVEN the same component with a `SPEC.md` of 8001 bytes
+- WHEN `clm size a` runs
+- THEN it prints `spec 2001/2000` and `oversized`
+
+#### Scenario: every node
+- GIVEN components `b` and `a`
+- WHEN `clm size` runs
+- THEN it prints the line for `a`, then the line for `b`
+
+#### Scenario: unknown node
+- GIVEN no component `zz`
+- WHEN `clm size zz` runs
+- THEN it exits 1 naming `zz`
+
+#### Scenario: settings can't be loaded
+- GIVEN a repository `clm.toml` with `[component_size]` and `spec_tokens = 0`
+- WHEN `clm size` runs
+- THEN it exits 1 naming `clm.toml` and `component_size`
+
+#### Serves
+- capability/know-health
+- architecture/slim-components
+
+#### Needs
+- check.coverage/owner
+- model/size-budget
+- config/component-size-setting
 
 ## ADDED Requirements
 
