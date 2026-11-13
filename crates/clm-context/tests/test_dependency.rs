@@ -36,6 +36,25 @@ fn test_dependency_contract_only() {
 }
 
 #[test]
+fn bundle_nodes_include_test_dependency() {
+    // req:context/bundle-contents@ec3b6384
+    let mut files = Files::new();
+    files.insert(PathBuf::from("specs/SPEC.md"), node("Root", "", "R", "R"));
+    files.insert(
+        PathBuf::from("specs/app/SPEC.md"),
+        node("App", "", "A", "A"),
+    );
+    files.insert(
+        PathBuf::from("specs/feat/SPEC.md"),
+        node("Feat", "test_depends_on: [app]\n", "F", "F"),
+    );
+    let (graph, violations) = load_files(&files);
+    assert!(violations.is_empty(), "{violations:?}");
+    let nodes = clm_context::bundle_nodes(&graph, "feat");
+    assert_eq!(nodes.last().map(String::as_str), Some("app"), "{nodes:?}");
+}
+
+#[test]
 fn test_dependency_listed_once_and_spine_skipped() {
     // req:context/bundle-contents@ec3b6384
     let mut files = Files::new();
