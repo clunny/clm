@@ -1656,6 +1656,8 @@ fn view_command_falls_back_without_claiming_absence() {
         "claude plugin validate",
         "claude --debug",
         "queue",
+        "argument-hint: \"[status|queue|spec|flight|blockers]\"",
+        "`status`, `queue`, `spec`, `flight` or `blockers`",
         "clm status",
         "clm view $ARGUMENTS",
     ] {
