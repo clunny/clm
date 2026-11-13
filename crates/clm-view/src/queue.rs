@@ -92,12 +92,19 @@ fn cell(text: impl Into<String>) -> Cell {
     vec![plain(text)]
 }
 
-fn section(title: &str, rows: Vec<Vec<Cell>>) -> Vec<Line> {
+/// A section's heading and its rows; `style` colours each entry line from its name to its
+/// end, padding included, while the heading and `  none` stay as they are.
+fn section(title: &str, rows: Vec<Vec<Cell>>, style: Option<chart::Style>) -> Vec<Line> {
     let mut lines = vec![heading(title)];
     if rows.is_empty() {
         lines.push(vec![plain("  none")]);
     } else {
         for mut line in chart::align(rows) {
+            if let Some(style) = style {
+                for s in &mut line {
+                    s.style = style;
+                }
+            }
             line.insert(0, plain("  "));
             lines.push(line);
         }
@@ -141,6 +148,7 @@ pub(crate) fn chart(v: &QueueView) -> Vec<Line> {
                 row
             })
             .collect(),
+        None,
     ));
     lines.extend(section(
         "next up",
@@ -148,6 +156,7 @@ pub(crate) fn chart(v: &QueueView) -> Vec<Line> {
             .iter()
             .map(|n| vec![cell(&n.name), cell(&n.priority), cell(&n.reason)])
             .collect(),
+        None,
     ));
     lines.extend(section(
         "waiting on you",
@@ -162,6 +171,7 @@ pub(crate) fn chart(v: &QueueView) -> Vec<Line> {
                 ]
             })
             .collect(),
+        Some(chart::Style::Amber),
     ));
     lines.extend(section(
         "waiting on work",
@@ -169,6 +179,7 @@ pub(crate) fn chart(v: &QueueView) -> Vec<Line> {
             .iter()
             .map(|w| vec![cell(&w.name), cell(&w.waits_on)])
             .collect(),
+        None,
     ));
     lines
 }
