@@ -7,6 +7,7 @@
 
 import './styles.css';
 import { Fetched, HttpError, SignedOut, apiBase, get, post, send } from './views/api';
+import { Answering } from './views/answers';
 import { Proposing, renderBacklog, renderBacklogItem, waiting } from './views/backlog';
 import { renderArchitecture, renderConstraint } from './views/architecture';
 import { Layer, ListOptions, Note, PageOptions, decide, renderCapabilities, renderCapability } from './views/capabilities';
@@ -16,6 +17,7 @@ import { fitGraphs } from './fit';
 import { FullDocument, FullState, renderFullDocument } from './views/full-document';
 import { Viewport, layoutGraph, queueStates, renderGraph, ringGraph, traceEdges } from './views/graph';
 import { Switch, renderImplementation } from './views/implementation';
+import { homeCount, renderHome } from './views/home';
 import { renderInspector } from './views/inspector';
 import { LiveSocket } from './live/live';
 import { Notify } from './live/notify';
@@ -31,6 +33,16 @@ const EARLY_ACCESS = 'https://github.com/clunny/clm/issues/new?template=early-ac
 const REFRESH_MS = 60_000;
 
 const app = document.getElementById('app')!;
+
+/** The route on screen: Home is a repo's address with no view after it (web/home-first). */
+type AppRoute = Route & { home: boolean };
+function appRoute(hash: string): AppRoute {
+  const route = parseRoute(hash);
+  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+  return { ...route, home: parts.length === 2 };
+}
+/** The More menu of the tab bar is open. */
+let moreOpen = false;
 
 /** What the app holds for the repo on screen, so a navigation within it draws at once
  * while it asks again, and a refresh has something to compare with. */
@@ -48,9 +60,11 @@ interface Held {
   reviews: Map<string, Review>;
   /** Of each path held, when it was fetched if it came from the offline copy. */
   from: Map<string, number | null>;
+  /** The paths Home asked for, so a redraw never asks again for one that failed. */
+  tried: Set<string>;
 }
 
-const empty = (base: string): Held => ({ base, snap: null, branches: null, impl: null, caps: null, arch: null, reviews: new Map(), from: new Map() });
+const empty = (base: string): Held => ({ base, snap: null, branches: null, impl: null, caps: null, arch: null, reviews: new Map(), from: new Map(), tried: new Set() });
 let repos: Repo[] | null = null;
 let held: Held = empty('');
 
@@ -185,19 +199,22 @@ function repoPicker(list: Repo[], route: Route): HTMLSelectElement {
   }
   select.addEventListener('change', () => {
     const [o, r] = select.value.split('/');
-    location.hash = href(o, r, route.view);
+    location.hash = href(o, r);
   });
   return select;
 }
 
-function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: SpecBranch[] | null, main: HTMLElement): HTMLElement {
+function shell(list: Repo[], route: AppRoute, snap: Snapshot | null, branches: SpecBranch[] | null, main: HTMLElement): HTMLElement {
   const { owner = '', repo = '' } = route;
   const waits = snap ? waiting(snap).length : 0;
   const specPrs = (branches ?? []).length;
   const spec = snap?.spec.nodes ?? [];
   const current = spec.reduce((n, s) => n + s.current, 0);
   const total = spec.reduce((n, s) => n + s.total, 0);
-  const nav: [View, string, string, number, string][] = [
+  const active: Screen = route.home ? 'home' : route.view;
+  const homeWaits = snap ? homeCount(snap, reviewsOf(branches)) : 0;
+  const nav: [Screen, string, string, number, string][] = [
+    ['home', 'Home', '⌂', homeWaits, 'wait'],
     ['graph', 'Spec graph', '◇', 0, ''],
     ['prs', 'Spec PRs', '⇄', specPrs, ''],
     ['build', 'Implementation', '▶', 0, ''],
@@ -205,9 +222,9 @@ function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: Spec
     ['capabilities', 'Capabilities', '⚖', 0, ''],
     ['architecture', 'Architecture', '▦', 0, ''],
   ];
-  const tabLabel: Record<View, string> = { graph: 'Graph', prs: 'PRs', build: 'Build', backlog: 'Backlog', capabilities: 'Capabilities', architecture: 'Arch.' };
+  const tabLabel: Record<Screen, string> = { home: 'Home', graph: 'Graph', prs: 'PRs', build: 'Build', backlog: 'Backlog', capabilities: 'Capabilities', architecture: 'Arch.' };
   // Without a repo, the repo views lead to the first repo.
-  const to = (v: View) => (owner && repo ? href(owner, repo, v) : '#/');
+  const to = (v: Screen) => (owner && repo ? (v === 'home' ? href(owner, repo) : href(owner, repo, v)) : '#/');
   // Notify me is for the repo on screen.
   const notifySwitch = () => (owner && repo ? notify.switchFor(owner, repo) : '');
 
@@ -229,26 +246,47 @@ function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: Spec
       ...nav.map(([v, label, , count, cls]) =>
         el(
           'a',
-          { class: v === route.view ? 'nv on' : 'nv', href: to(v), 'data-view': v },
+          { class: v === active ? 'nv on' : 'nv', href: to(v), 'data-view': v },
           label,
-          count ? el('span', { class: `c ${cls}`, title: v === 'backlog' ? 'Waiting on you' : '' }, String(count)) : '',
+          v === 'home'
+            ? homeBadge(el('span', { class: `c ${cls}`, 'data-home-badge': '', title: 'Waiting on you' }), count)
+            : count
+              ? el('span', { class: `c ${cls}`, title: v === 'backlog' ? 'Waiting on you' : '' }, String(count))
+              : '',
         ),
       ),
     ),
     div('', el('a', { class: 'nv', href: '/guide/' }, 'Guide'), el('a', { class: 'nv', href: INSTALL }, 'Add repos')),
   );
+  // Five tabs; More lists the views that don't fit (web/mobile-layout).
+  const tabs: Screen[] = ['home', 'backlog', 'graph', 'build'];
+  const more: Screen[] = ['prs', 'capabilities', 'architecture'];
+  const moreMenu = el(
+    'nav',
+    { class: moreOpen ? 'more-menu open' : 'more-menu', 'aria-label': 'More views' },
+    ...more.map((v) => el('a', { class: v === active ? 'on' : '', href: to(v), 'data-view': v }, tabLabel[v], v === 'prs' && specPrs ? el('span', { class: 'bdg' }, String(specPrs)) : '')),
+  );
+  const moreTab = el('button', { type: 'button', class: more.includes(active) ? 'tab-more on' : 'tab-more', 'aria-expanded': String(moreOpen) }, el('b', {}, '⋯'), 'More');
+  for (const a of moreMenu.querySelectorAll('a')) a.addEventListener('click', () => (moreOpen = false) || moreMenu.classList.remove('open'));
+  moreTab.addEventListener('click', () => {
+    moreOpen = !moreOpen;
+    moreTab.setAttribute('aria-expanded', String(moreOpen));
+    moreMenu.classList.toggle('open', moreOpen);
+  });
   const tabbar = el(
     'nav',
     { class: 'tabbar', 'aria-label': 'Views' },
-    ...nav.map(([v, , icon, count]) =>
-      el(
+    ...tabs.map((v) => {
+      const count = nav.find((n) => n[0] === v)![3];
+      return el(
         'a',
-        { class: v === route.view ? 'on' : '', href: to(v), 'data-view': v },
-        el('b', {}, icon),
+        { class: v === active ? 'on' : '', href: to(v), 'data-view': v },
+        el('b', {}, nav.find((n) => n[0] === v)![2]),
         tabLabel[v],
-        count && (v === 'backlog' || v === 'prs') ? el('span', { class: 'bdg' }, String(count)) : '',
-      ),
-    ),
+        v === 'home' ? homeBadge(el('span', { class: 'bdg', 'data-home-badge': '' }), count) : count && v === 'backlog' ? el('span', { class: 'bdg' }, String(count)) : '',
+      );
+    }),
+    moreTab,
   );
   const mtop = div('mtop', el('a', { class: 'home', href: '/', 'aria-label': 'CLM homepage' }, '◆'), repoPicker(list, route), notifySwitch());
   const now = Math.floor(Date.now() / 1000);
@@ -262,7 +300,22 @@ function shell(list: Repo[], route: Route, snap: Snapshot | null, branches: Spec
         : stale
           ? div('offline stale', `Couldn't refresh · showing data from ${ago(Math.floor(lastGood / 1000), now)}`)
           : '';
-  return div('app', sidebar, el('main', { class: 'main' }, mtop, banner, main), tabbar);
+  return div('app', sidebar, el('main', { class: 'main' }, mtop, banner, main), moreMenu, tabbar);
+}
+
+/** The views the sidebar and tab bar lead to: Home and the repo's views. */
+type Screen = View | 'home';
+
+/** The reviews of `branches` that have arrived. */
+function reviewsOf(branches: SpecBranch[] | null): Review[] {
+  return (branches ?? []).map((b) => held.reviews.get(reviewUrl(held.base, { branch: b.branch }))).filter((r): r is Review => r !== undefined);
+}
+
+/** Shows `badge` with `count`, or hides it when nothing waits. */
+function homeBadge(badge: HTMLElement, count: number): HTMLElement {
+  badge.textContent = count ? String(count) : '';
+  badge.hidden = count === 0;
+  return badge;
 }
 
 /** The reviews of the spec branches, kept in `held`, so only the missing ones are loaded;
@@ -525,7 +578,7 @@ async function reloadImpl(base: string) {
   } catch {
     // The next refresh asks again.
   }
-  if (held.base === base) await draw(parseRoute(location.hash), showing);
+  if (held.base === base) await draw(appRoute(location.hash), showing);
 }
 
 /** Proposes an item for the backlog (web/propose-from-backlog): null once the Worker took it
@@ -564,6 +617,83 @@ function withdraw(base: string, id: string): Promise<string | null> {
   });
 }
 
+/** Answers item `slug` with `answer` (web.views/answer-buttons): null once the Worker took it
+ * and the implementation state was asked for again, else why not, shown under the buttons. */
+function answerItem(base: string, slug: string, answer: string): Promise<string | null> {
+  return whileWriting(async () => {
+    try {
+      const res = await post(`${base}/backlog/${encodeURIComponent(slug)}/answer`, { answer });
+      if (res.ok) {
+        await reloadImpl(base);
+        return null;
+      }
+      if (res.status === 404) return 'That item is no longer in the backlog.';
+      if (res.status === 422) return 'The answer was refused.';
+      return `The answer wasn't recorded (${res.status}).`;
+    } catch (e) {
+      if (e instanceof SignedOut) showSignIn();
+      return notSent(e);
+    }
+  });
+}
+
+/** What the answer buttons need, from the implementation state held, or without it. */
+const answering = (base: string, impl: Implementation | null): Answering => ({
+  answers: impl?.answers ?? [],
+  offline: offline(),
+  onAnswer: (slug, answer) => answerItem(base, slug, answer),
+});
+
+/** Home (web.views/home-waiting-on-you), drawn from the snapshot at once, and drawn again as
+ * each response it needs arrives: the spec branches' reviews, the implementation state and the
+ * capabilities and architecture reports. */
+function homePage(base: string, snap: Snapshot, branches: SpecBranch[], route: AppRoute): HTMLElement {
+  const { owner = '', repo = '' } = route;
+  const wrap = div('');
+  const b = held;
+  const draw = () => {
+    const reviews = reviewsOf(branches);
+    wrap.replaceChildren(
+      renderHome({
+        snap,
+        reviews,
+        caps: held.caps,
+        arch: held.arch,
+        reviewLink: (branch) => reviewHref(owner, repo, { branch }),
+        itemLink: (slug) => href(owner, repo, 'backlog', slug),
+        capLink: (slug) => href(owner, repo, 'capabilities', slug),
+        archLink: (slug) => href(owner, repo, 'architecture', slug),
+        answering: answering(base, held.impl),
+      }),
+    );
+    for (const badge of document.querySelectorAll<HTMLElement>('[data-home-badge]')) homeBadge(badge, homeCount(held.snap ?? snap, reviews));
+  };
+  draw();
+  // Each response is asked for once from here; a failure leaves its section out until a refresh.
+  const ask = (path: string, have: boolean, keep: (data: never) => void) => {
+    if (have || b.tried.has(path)) return;
+    b.tried.add(path);
+    load<never>(path)
+      .then((data) => {
+        if (held !== b) return;
+        keep(data);
+        draw();
+      })
+      .catch(() => undefined);
+  };
+  ask(`${base}/implementation`, held.impl !== null, (d: Implementation) => (held.impl = d));
+  ask(`${base}/capabilities`, held.caps !== null, (d: Capabilities) => (held.caps = d));
+  ask(`${base}/architecture`, held.arch !== null, (d: Architecture) => (held.arch = d));
+  const missing = branches.map((br) => reviewUrl(base, { branch: br.branch })).filter((u) => !held.reviews.has(u) && !b.tried.has(u));
+  for (const u of missing) b.tried.add(u);
+  if (missing.length) {
+    void Promise.all(missing.map((u) => load<Review>(u).then((r) => held.reviews.set(u, r), () => undefined))).then(() => {
+      if (held === b) draw();
+    });
+  }
+  return wrap;
+}
+
 /** The backlog, drawn from the snapshot first and marked with what holds each item once
  * the implementation state arrives (web/backlog-taken), with New proposal and Proposed
  * (web/propose-from-backlog). */
@@ -572,7 +702,7 @@ function backlogPage(base: string, snap: Snapshot, route: Route): HTMLElement {
   const back = href(owner, repo, 'backlog');
   if (route.item !== undefined) {
     const slug = route.item;
-    return withImpl(base, (impl) => renderBacklogItem(snap, slug, impl?.taken ?? null, back));
+    return withImpl(base, (impl) => renderBacklogItem(snap, slug, impl?.taken ?? null, back, answering(base, impl)));
   }
   if (backlogFilter.repo !== snap.repo) backlogFilter = { repo: snap.repo, node: null };
   return withImpl(base, (impl) => {
@@ -703,8 +833,9 @@ function buildPage(impl: Implementation, snap: Snapshot): HTMLElement {
 /** The repo's page for `route`, from what `held` has: the snapshot and spec branches, and
  * for Build the implementation state and for a review page its review, which `show` loads
  * first. */
-async function page(route: Route, snap: Snapshot, branches: SpecBranch[], ctx: PageContext): Promise<HTMLElement> {
+async function page(route: AppRoute, snap: Snapshot, branches: SpecBranch[], ctx: PageContext): Promise<HTMLElement> {
   const base = held.base;
+  if (route.home) return homePage(base, snap, branches, route);
   switch (route.view) {
     case 'graph': {
       const g = await graphPage(base, snap, new Set(), `${base}|graph`, () => specReviews(base, branches));
@@ -737,18 +868,18 @@ async function page(route: Route, snap: Snapshot, branches: SpecBranch[], ctx: P
 /** The paths the view on screen is drawn from, beyond the snapshot and spec branches: the
  * implementation state for the graph, Build, Backlog and a review's Graph tab, and a review
  * page's review. */
-function needs(route: Route, base: string): { impl: boolean; review: string | null; caps: boolean; arch: boolean } {
-  const review = route.view === 'prs' && route.review ? reviewUrl(base, route.review) : null;
+function needs(route: AppRoute, base: string): { impl: boolean; review: string | null; caps: boolean; arch: boolean } {
+  const review = !route.home && route.view === 'prs' && route.review ? reviewUrl(base, route.review) : null;
   return {
-    impl: route.view === 'build' || route.view === 'graph' || route.view === 'backlog' || (review !== null && route.prTab === 'graph'),
+    impl: route.home || route.view === 'build' || route.view === 'graph' || route.view === 'backlog' || (review !== null && route.prTab === 'graph'),
     review,
-    caps: route.view === 'capabilities',
-    arch: route.view === 'architecture',
+    caps: route.home || route.view === 'capabilities',
+    arch: route.home || route.view === 'architecture',
   };
 }
 
 /** Fetches what `route` needs that `held` doesn't have yet. */
-async function fill(route: Route) {
+async function fill(route: AppRoute) {
   // Filled into what is held for this repo, even when another repo was opened meanwhile.
   const h = held;
   const base = h.base;
@@ -757,8 +888,8 @@ async function fill(route: Route) {
     h.snap ?? load<Snapshot>(`${base}/snapshot`),
     h.branches ?? load<SpecBranch[]>(`${base}/branches`).catch(() => [] as SpecBranch[]),
     need.review !== null && !h.reviews.has(need.review) ? load<Review>(need.review) : null,
-    need.caps && !h.caps ? load<Capabilities>(`${base}/capabilities`) : null,
-    need.arch && !h.arch ? load<Architecture>(`${base}/architecture`) : null,
+    need.caps && !h.caps && !route.home ? load<Capabilities>(`${base}/capabilities`) : null,
+    need.arch && !h.arch && !route.home ? load<Architecture>(`${base}/architecture`) : null,
   ]);
   if (caps) h.caps = caps;
   if (arch) h.arch = arch;
@@ -766,7 +897,7 @@ async function fill(route: Route) {
   h.branches = branches;
   if (review && need.review !== null) h.reviews.set(need.review, review);
   // Build can't draw without the implementation state; the graph draws before it arrives.
-  if (route.view === 'build' && !h.impl) h.impl = await load<Implementation>(`${base}/implementation`);
+  if (!route.home && route.view === 'build' && !h.impl) h.impl = await load<Implementation>(`${base}/implementation`);
 }
 
 let showing = 0;
@@ -789,7 +920,7 @@ function retryKept(ticket: number) {
 const fitGraph = fitGraphs(app);
 
 /** Draws `route` from `held`, in place of whatever is on screen, keeping the scroll. */
-async function draw(route: Route, ticket: number) {
+async function draw(route: AppRoute, ticket: number) {
   const ctx: PageContext = { full: null };
   leaveFull();
   const main = await page(route, held.snap!, held.branches ?? [], ctx).catch((e) => errorView(e));
@@ -825,8 +956,11 @@ const loading = (on: boolean) => loadbar?.toggleAttribute('hidden', !on);
  * offline, without it: draws the view from what is held, asking for the rest. */
 async function show(nav = true) {
   const ticket = ++showing;
-  const route = parseRoute(location.hash);
-  if (nav) loading(true);
+  const route = appRoute(location.hash);
+  if (nav) {
+    loading(true);
+    moreOpen = false;
+  }
   if (retryTimer !== null) clearTimeout(retryTimer);
   retryTimer = null;
   if (nav) {
@@ -900,7 +1034,7 @@ async function show(nav = true) {
 }
 
 /** Asks for the repo list again and redraws the shell when it differs; a failure leaves it. */
-async function refreshRepos(route: Route, ticket: number) {
+async function refreshRepos(route: AppRoute, ticket: number) {
   try {
     const list = (await get<Repo[]>('/api/repos', { live: true })).data;
     if (ticket !== showing || JSON.stringify(list) === JSON.stringify(repos)) return;
@@ -921,7 +1055,7 @@ function sans(v: unknown, key: string): unknown {
  * being signed out shows the sign-in page. */
 async function refresh(fresh?: string) {
   if (writes > 0 || document.visibilityState !== 'visible' || !held.snap) return;
-  const route = parseRoute(location.hash);
+  const route = appRoute(location.hash);
   if (!route.owner || !route.repo || apiBase(route.owner, route.repo) !== held.base) return;
   const base = held.base;
   const ticket = showing;
@@ -931,7 +1065,7 @@ async function refresh(fresh?: string) {
   void notify.refresh(fresh);
   try {
     // The review page's review, and on the graph the spec branches' reviews the inspector loaded.
-    const branchReviews = route.view === 'graph' ? (held.branches ?? []).map((b) => reviewUrl(base, { branch: b.branch })) : [];
+    const branchReviews = route.home || route.view === 'graph' ? (held.branches ?? []).map((b) => reviewUrl(base, { branch: b.branch })) : [];
     const reviewUrls = [...held.reviews.keys()].filter((u) => u === need.review || branchReviews.includes(u));
     const [snap, branches, impl, caps, arch, ...reviews] = await Promise.all([
       live<Snapshot>(`${base}/snapshot`),
@@ -950,6 +1084,7 @@ async function refresh(fresh?: string) {
     // Everything on screen is now live: an offline banner drawn from kept copies goes.
     const wasOffline = offline() || refreshFailing;
     held.from.clear();
+    held.tried.clear();
     refreshFailing = false;
     lastGood = Date.now();
     if (!changed && !wasOffline) return;
@@ -1021,7 +1156,7 @@ function showSignIn() {
 
 /** Holds the socket for the repo on screen while the page is visible and online. */
 function syncLive() {
-  const route = parseRoute(location.hash);
+  const route = appRoute(location.hash);
   const onScreen = !signedOutShown && document.visibilityState === 'visible' && navigator.onLine && held.snap !== null && !!route.owner && !!route.repo && apiBase(route.owner, route.repo) === held.base;
   live.want(onScreen ? `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}${held.base}/live` : null);
 }

@@ -56,7 +56,8 @@ button{font:inherit}
 .c.wait{color:var(--amber);border-color:var(--amber)}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:8px}
 .main{padding:22px 28px;min-width:0}
-.tabbar{display:none}
+.tabbar,.more-menu{display:none}
+[data-home-badge][hidden]{display:none}
 .offline{margin:0 0 12px;padding:6px 10px;border-radius:9px;background:var(--amber-bg);color:var(--amber);font-size:12.5px;font-weight:550}
 .crumb{color:var(--muted);font-size:13px;margin-bottom:6px}
 .crumb a{color:inherit}
@@ -322,8 +323,13 @@ table.caps td a{color:var(--text);text-decoration:none}
   .main{padding:14px 16px 90px}
   .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;height:calc(62px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);border-top:1px solid var(--border);background:var(--surface);justify-content:space-around;align-items:center;z-index:20}
   .tabbar a{display:flex;flex-direction:column;align-items:center;font-size:10.5px;color:var(--muted);gap:2px;position:relative;text-decoration:none;min-width:56px}
-  .tabbar a b{font-size:17px;font-weight:400;line-height:1}
-  .tabbar a.on{color:var(--accent)}
+  .tabbar a b,.tabbar .tab-more b{font-size:17px;font-weight:400;line-height:1}
+  .tabbar a.on,.tabbar .tab-more.on{color:var(--accent)}
+  .tabbar .tab-more{display:flex;flex-direction:column;align-items:center;font:inherit;font-size:10.5px;color:var(--muted);gap:2px;background:none;border:0;padding:0;min-width:56px;cursor:pointer}
+  .more-menu.open{display:flex;flex-direction:column;position:fixed;right:8px;bottom:calc(70px + env(safe-area-inset-bottom));min-width:170px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;z-index:21;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+  .more-menu a{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;color:var(--body);text-decoration:none;font-size:14px;border-radius:8px}
+  .more-menu a.on{color:var(--accent)}
+  .more-menu .bdg{background:var(--amber);color:#1a1300;font-size:10px;font-weight:700;border-radius:9px;padding:0 6px}
   .tabbar .bdg{position:absolute;top:-4px;right:6px;background:var(--amber);color:#1a1300;font-size:9px;font-weight:700;border-radius:9px;padding:0 5px}
   .mtop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
   .mtop select{max-width:60vw}
