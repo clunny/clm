@@ -112,6 +112,8 @@ pub struct BacklogFrontmatter {
     /// The red `verified` results on `main` the item was taken in from, as commit IDs of
     /// 40 lower-case hex digits (`verify-after-land`).
     pub verify_failures: Vec<String>,
+    /// The answers a `question` item offers, each trimmed (`backlog-choices`).
+    pub choices: Vec<String>,
 }
 
 /// A backlog item's frontmatter as written, before `components` and its old key
@@ -139,6 +141,8 @@ struct RawBacklogFrontmatter {
     alerts: Vec<u64>,
     #[serde(default)]
     verify_failures: Vec<String>,
+    #[serde(default)]
+    choices: Vec<String>,
 }
 
 /// A key's value when the key is written at all, a null included.
@@ -187,6 +191,7 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
             issues: raw.issues,
             alerts: raw.alerts,
             verify_failures: raw.verify_failures,
+            choices: raw.choices.iter().map(|c| c.trim().to_string()).collect(),
         })
     }
 }
@@ -304,12 +309,40 @@ fn parse_item(slug: &str, text: &str) -> (Option<BacklogItem>, Vec<Violation>) {
         };
         violations.push(v(&path, BACKLOG, problem.into()));
     }
+    if let Some(problem) = choices_problem(&frontmatter) {
+        violations.push(v(&path, CHOICES, problem));
+    }
     let item = BacklogItem {
         slug: slug.into(),
         path,
         frontmatter,
     };
     (Some(item), violations)
+}
+
+/// What breaks `backlog-choices` in an item's `choices`, if anything.
+fn choices_problem(fm: &BacklogFrontmatter) -> Option<String> {
+    let choices = &fm.choices;
+    if choices.is_empty() {
+        return None;
+    }
+    if fm.kind != BacklogKind::Question {
+        return Some("only a `question` item sets `choices`".into());
+    }
+    if !(2..=5).contains(&choices.len()) {
+        return Some("`choices` needs 2 to 5 entries".into());
+    }
+    for (i, c) in choices.iter().enumerate() {
+        if c.is_empty() || c.chars().count() > 40 || c.contains(['\n', '\r']) {
+            return Some(format!(
+                "a `choices` entry must be 1 to 40 characters on one line, not `{c}`"
+            ));
+        }
+        if choices[..i].contains(c) {
+            return Some(format!("`choices` holds `{c}` twice"));
+        }
+    }
+    None
 }
 
 /// Loads `backlog/`, parsing each item; `check_backlog` checks its references.
@@ -345,6 +378,7 @@ pub(crate) fn load_backlog(
 }
 
 const BACKLOG: &str = "model/parse-backlog";
+const CHOICES: &str = "model/backlog-choices";
 
 /// Whether a `blocks` entry, or an `#### Enforced by` ID (`human-layers`), may name
 /// requirement `id`: it exists, or a loaded delta for its node, of a change outside the
