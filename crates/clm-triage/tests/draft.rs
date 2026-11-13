@@ -522,7 +522,7 @@ fn scenario_draft_backlog_only_change() {
 
 #[test]
 fn scenario_draft_corrects_bug_components() {
-    // req:orchestrator.triage/draft-corrects-bug-components@9b7f374a
+    // req:orchestrator.triage/draft-corrects-bug-components@84cd7020
     let r = with_items(&[("a", "kind: bug\ncomponents: [check]\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     let fixes = paragraph(&p, "clm claim <component> --fix backlog/<slug>");
@@ -530,6 +530,24 @@ fn scenario_draft_corrects_bug_components() {
         fixes.contains("components corrected to <components>"),
         "missing from {fixes}"
     );
+}
+
+#[test]
+fn scenario_draft_corrects_test_plumbing_components() {
+    // req:orchestrator.triage/draft-corrects-bug-components@84cd7020
+    let r = with_items(&[("a", "kind: bug\ncomponents: [check]\n", "Body.")]);
+    let (_, p) = drafted_prompt(&r, &["a"]);
+    let plumbing = paragraph(&p, "components corrected to <components>");
+    for needle in [
+        "belongs to no component the item names",
+        "gate/backlog-additions",
+        "mixed",
+    ] {
+        assert!(
+            plumbing.contains(needle),
+            "{needle} missing from {plumbing}"
+        );
+    }
 }
 
 #[test]
