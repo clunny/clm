@@ -1646,7 +1646,7 @@ fn shim_prefers_clm_bin() {
 
 #[test]
 fn view_command_falls_back_without_claiming_absence() {
-    // req:plugin/view-fallback-wording@ac3807bc
+    // req:plugin/view-fallback-wording@fc0defe8
     let text = fs::read_to_string(plugin().join("commands/view.md")).unwrap();
     // installed but refused: the text can't tell which, so it names both cases.
     assert!(!text.contains("isn't installed here"), "{text}");
@@ -1660,9 +1660,12 @@ fn view_command_falls_back_without_claiming_absence() {
         "`status`, `queue`, `spec`, `flight` or `blockers`",
         "clm status",
         "clm view $ARGUMENTS",
+        "clm view queue",
     ] {
         assert!(text.contains(needle), "{needle}: {text}");
     }
+    // no name shows the queue, the view the panel opens on, never the flight.
+    assert!(!text.contains("clm view flight"), "{text}");
 }
 
 /// What `skills-write-serves` asks of the propose and init skills.
