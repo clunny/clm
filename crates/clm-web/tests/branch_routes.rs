@@ -59,7 +59,7 @@ fn approve_needs_same_origin() {
 
 #[test]
 fn old_pr_routes() {
-    // req:web.worker/pr-routes-removed@62c5fe09
+    // req:web.worker/pr-routes-removed@678e848e
     let (fake, cookie) = setup();
     let refs = || fake.gh.repos.borrow()["o/a"].branches.clone();
     let before = refs();
