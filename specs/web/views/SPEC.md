@@ -1,6 +1,6 @@
 ---
 title: Web views
-status: unbuilt
+status: active
 owners: ["@clunny"]
 depends_on: [web.worker, view, effort]
 paths: ["web/src/views/**"]
