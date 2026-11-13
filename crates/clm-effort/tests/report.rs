@@ -625,6 +625,18 @@ fn a_capabilitys_text_is_its_whole_entry() {
 }
 
 #[test]
+fn a_text_stops_at_the_next_section() {
+    // req:effort/entry-text@c8d13ca6
+    let capabilities = "## Capabilities\n\n### Capability: x\nA person can x.\n\n#### Why\nx why\n\n#### Scenario: s\n- ok\n\n## Notes\n\nOther prose.\n";
+    let graph = graph(&[("CAPABILITIES.md", capabilities)]);
+    let fold = fold(&[]);
+    let report = run(&graph, &fold);
+    let x = report.capabilities.iter().find(|c| c.slug == "x").unwrap();
+    assert!(x.text.ends_with("- ok"), "{}", x.text);
+    assert!(!x.text.contains("Other prose"));
+}
+
+#[test]
 fn a_constraints_text_is_its_whole_entry() {
     // req:effort/entry-text@c8d13ca6
     let list = architecture_of(&fold_of_nothing(), None);
