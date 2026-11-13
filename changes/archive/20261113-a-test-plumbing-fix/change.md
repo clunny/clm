@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
 - a-test-plumbing-fix-can-t-delete-a-bug-item-that-names-another
 ---
