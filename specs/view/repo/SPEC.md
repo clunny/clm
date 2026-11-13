@@ -109,4 +109,3 @@ Crate `clm-view-repo`: the `clm status`, `clm view` and `clm pending` commands' 
 #### Needs
 - orchestrator.loop/plan-snapshot
 - view/queue-view
-- view/view-command
