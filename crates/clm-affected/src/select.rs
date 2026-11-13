@@ -75,14 +75,21 @@ pub fn select(
     }
 }
 
-/// `nodes` and every node that depends on one of them, directly or indirectly.
+/// `nodes` and every node that depends on one of them, directly or indirectly, or whose
+/// tests import one (`test_depends_on`).
 fn with_dependants(graph: &Graph, mut nodes: BTreeSet<String>) -> BTreeSet<String> {
     loop {
         let more: Vec<String> = graph
             .nodes
             .values()
             .filter(|n| !nodes.contains(&n.id))
-            .filter(|n| n.frontmatter.depends_on.iter().any(|d| nodes.contains(d)))
+            .filter(|n| {
+                let f = &n.frontmatter;
+                f.depends_on
+                    .iter()
+                    .chain(&f.test_depends_on)
+                    .any(|d| nodes.contains(d))
+            })
             .map(|n| n.id.clone())
             .collect();
         if more.is_empty() {

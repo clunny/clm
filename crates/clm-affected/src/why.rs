@@ -97,10 +97,11 @@ fn route<'a>(graph: &'a Graph, start: &'a str, changed: &[(&str, &str)]) -> Vec<
             hops.reverse();
             return hops;
         }
-        let mut deps: Vec<&str> = graph.nodes[id]
-            .frontmatter
+        let f = &graph.nodes[id].frontmatter;
+        let mut deps: Vec<&str> = f
             .depends_on
             .iter()
+            .chain(&f.test_depends_on)
             .map(String::as_str)
             .collect();
         deps.sort();
