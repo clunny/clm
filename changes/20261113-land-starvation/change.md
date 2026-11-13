@@ -1,7 +1,6 @@
 ---
 status: proposed
-resolves:
-  - backlog/a-land-with-a-full-check-to-run-can-lose-every-attempt-to-lands
+resolves: [a-land-with-a-full-check-to-run-can-lose-every-attempt-to-lands]
 ---
 
 ## Intent
