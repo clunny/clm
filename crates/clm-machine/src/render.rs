@@ -113,17 +113,29 @@ fn block(share: Option<f64>) -> char {
     }
 }
 
-fn paint(state: State, line: &str) -> String {
-    let sgr = match state {
-        State::Ok => "\x1b[32m",
-        State::Warn => "\x1b[33m",
-        State::Critical => "\x1b[31m",
-        State::Unknown => "\x1b[2m",
-    };
-    format!("{sgr}{line}\x1b[0m")
+/// The runs painted and reset one by one, cut to `width` cells, escapes not counted.
+fn paint_runs(runs: &[(State, String)], width: usize) -> String {
+    let mut left = width;
+    let mut out = String::new();
+    for (state, text) in runs {
+        let shown: String = text.chars().take(left).collect();
+        left -= shown.chars().count();
+        if shown.is_empty() {
+            continue;
+        }
+        let sgr = match state {
+            State::Ok => "\x1b[32m",
+            State::Warn => "\x1b[33m",
+            State::Critical => "\x1b[31m",
+            State::Unknown => "\x1b[2m",
+        };
+        out.push_str(&format!("{sgr}{shown}\x1b[0m"));
+    }
+    out
 }
 
-/// The `cpu`, `mem` and `disk` chart rows, no line wider than `width` cells, coloured by state.
+/// The `cpu`, `mem` and `disk` chart rows, no line wider than `width` cells. Each cell is
+/// coloured by the state its sample recorded, the rest of the line by the latest reading's.
 pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
     let cpu = &report.cpu;
     let figures = [
@@ -131,7 +143,10 @@ pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
             "cpu",
             cpu.state,
             ratio(cpu.load1, cpu.cores).unwrap_or_else(|| "-".into()),
-            history.iter().map(|s| s.cpu).collect::<Vec<_>>(),
+            history
+                .iter()
+                .map(|s| (s.cpu, s.cpu_state))
+                .collect::<Vec<_>>(),
         ),
         (
             "mem",
@@ -140,7 +155,7 @@ pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
                 .memory
                 .space
                 .map_or("-".into(), |s| format!("{} avail", size(s.available))),
-            history.iter().map(|s| s.memory).collect(),
+            history.iter().map(|s| (s.memory, s.memory_state)).collect(),
         ),
         (
             "disk",
@@ -149,25 +164,32 @@ pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
                 .disk
                 .space
                 .map_or("-".into(), |s| format!("{} free", size(s.available))),
-            history.iter().map(|s| s.disk).collect(),
+            history.iter().map(|s| (s.disk, s.disk_state)).collect(),
         ),
     ];
     let mut out = String::new();
-    for (label, state, figure, shares) in figures {
+    for (label, state, figure, samples) in figures {
         let tail = match state {
             State::Ok => String::new(),
             other => format!(" {}", other.word()),
         };
         // Label padded to four cells, a space, the chart, a space, the figure, the state.
         let room = width.saturating_sub(4 + 1 + 1 + figure.chars().count() + tail.chars().count());
-        let shown = &shares[shares.len().saturating_sub(room)..];
-        let chart: String = shown.iter().map(|s| block(*s)).collect();
+        let shown = &samples[samples.len().saturating_sub(room)..];
+        // Runs of one state, each painted and reset on its own: the label, the cells of one
+        // state together, then the figure and the state's word.
+        let mut chart: Vec<(State, String)> = Vec::new();
+        for (share, cell_state) in shown {
+            match chart.last_mut() {
+                Some((run, text)) if run == cell_state => text.push(block(*share)),
+                _ => chart.push((*cell_state, block(*share).to_string())),
+            }
+        }
+        let mut runs = vec![(state, format!("{label:<4} "))];
+        runs.extend(chart);
+        runs.push((state, format!(" {figure}{tail}")));
         // No line is wider than the width, even when the row's fixed part is.
-        let line: String = format!("{label:<4} {chart} {figure}{tail}")
-            .chars()
-            .take(width)
-            .collect();
-        out.push_str(&paint(state, &line));
+        out.push_str(&paint_runs(&runs, width));
         out.push('\n');
     }
     out
