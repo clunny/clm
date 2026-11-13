@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-view-command-file-names-no-queue]
 ---
 
