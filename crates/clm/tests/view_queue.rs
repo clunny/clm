@@ -224,7 +224,7 @@ fn the_queue_has_no_svg_form_and_a_missing_commit_is_named() {
     let dir = ready_a();
     let d = dir.path();
     let svg = clm(d, &["view", "queue", "--format", "svg"]);
-    assert_eq!(svg.status.code(), Some(1));
+    assert_eq!(svg.status.code(), Some(2));
     assert!(stdout(&svg).is_empty());
     assert!(String::from_utf8_lossy(&svg.stderr).contains("svg"));
     let none = clm(d, &["view", "queue", "--at", "nowhere"]);

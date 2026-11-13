@@ -1067,7 +1067,7 @@ fn dispatch() -> ExitCode {
                 // The queue is the loop's plan, which has no layout for a diagram.
                 None if matches!(format, ViewFormat::Svg) => {
                     eprintln!("clm view: the queue has no svg form");
-                    return ExitCode::FAILURE;
+                    return ExitCode::from(2);
                 }
                 None => clm_view_repo::queue(&root, format.into(), usize::from(width), source),
             };
