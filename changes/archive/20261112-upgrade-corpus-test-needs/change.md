@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [upgrade-corpus-test-needs-both-allow-rule-migrations-declined]
 ---
 
