@@ -57,9 +57,69 @@ struct Node {
     /// (`model/test-ownership-keys`).
     #[serde(default)]
     tests: Vec<String>,
-    /// Components its tests may import beyond `depends_on`.
-    #[serde(default)]
-    test_depends_on: Vec<String>,
+    /// Rules its files are temporarily exempt from (`model/exemptions`), read as YAML and
+    /// judged by `exemption_globs`; a null value is present, so it is refused.
+    #[serde(default, deserialize_with = "present")]
+    exemptions: Option<serde_yaml::Value>,
+}
+
+/// The `files` globs of `node`'s exemptions from `undeclared-imports`; an error naming
+/// `exemptions` and the entry's position for one the model would refuse
+/// (`model/exemptions`): not a map, no `rule`, `files` or `until`, another key, another
+/// rule, or a `files` or `until` of the wrong shape.
+fn exemption_globs(node: &Node) -> Result<Vec<String>, String> {
+    let Some(value) = &node.exemptions else {
+        return Ok(Vec::new());
+    };
+    let entries = value
+        .as_sequence()
+        .ok_or("`exemptions` must be a list".to_owned())?;
+    let mut globs = Vec::new();
+    for (i, entry) in entries.iter().enumerate() {
+        let bad = |why: &str| format!("`exemptions` entry {}: {why}", i + 1);
+        let map = entry.as_mapping().ok_or_else(|| bad("not a map"))?;
+        for key in map.keys() {
+            if !matches!(key.as_str(), Some("rule" | "files" | "until" | "why")) {
+                return Err(bad(
+                    "holds a key other than `rule`, `files`, `until` and `why`",
+                ));
+            }
+        }
+        let get = |key: &str| map.get(key);
+        let rule = get("rule")
+            .ok_or_else(|| bad("lacks `rule`"))?
+            .as_str()
+            .unwrap_or_default();
+        if !matches!(
+            rule,
+            "undeclared-imports" | "tests-cite-their-owner" | "skipped-tests"
+        ) {
+            return Err(bad(&format!(
+                "names the rule `{rule}`, which can't be exempted"
+            )));
+        }
+        let files = get("files")
+            .ok_or_else(|| bad("lacks `files`"))?
+            .as_sequence()
+            .filter(|l| !l.is_empty())
+            .and_then(|l| {
+                l.iter()
+                    .map(|g| g.as_str().filter(|g| !g.is_empty()).map(str::to_owned))
+                    .collect::<Option<Vec<_>>>()
+            })
+            .ok_or_else(|| bad("`files` must be a non-empty list of non-empty globs"))?;
+        let until = get("until")
+            .ok_or_else(|| bad("lacks `until`"))?
+            .as_str()
+            .unwrap_or_default();
+        if until.strip_prefix("backlog/").is_none_or(str::is_empty) {
+            return Err(bad("`until` must be `backlog/<slug>`"));
+        }
+        if rule == "undeclared-imports" {
+            globs.extend(files);
+        }
+    }
+    Ok(globs)
 }
 
 /// What's wrong with the node map `yaml` (read from `file`) for the repository at `root`,
@@ -89,8 +149,7 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         }
     }
     for node in list {
-        let mut all_deps = node.depends_on.iter().chain(&node.test_depends_on);
-        if let Some(dep) = all_deps.find(|d| !ids.contains(d.as_str())) {
+        if let Some(dep) = node.depends_on.iter().find(|d| !ids.contains(d.as_str())) {
             return Err(format!(
                 "{}: component `{}` depends on unknown component `{dep}`",
                 file.display(),
@@ -182,10 +241,13 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         .iter()
         .map(|n| (n.id.as_str(), n.depends_on.as_slice()))
         .collect();
-    let test_deps: BTreeMap<&str, &[String]> = list
-        .iter()
-        .map(|n| (n.id.as_str(), n.test_depends_on.as_slice()))
-        .collect();
+    // Each component's files an exemption names for `undeclared-imports`.
+    let mut exempt_files: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+    for node in list {
+        let globs =
+            exemption_globs(node).map_err(|e| format!("{}: {}: {e}", file.display(), node.id))?;
+        exempt_files.insert(&node.id, matching(root, &globs)?);
+    }
     for (from, to) in surveyed.edges.keys() {
         let (Some([a]), Some([b])) = (
             owners.get(from.as_str()).map(Vec::as_slice),
@@ -193,12 +255,7 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         ) else {
             continue;
         };
-        // An edge from a file of the component's tests may also use `test_depends_on`.
-        let from_tests = test_owners
-            .get(from.as_str())
-            .is_some_and(|ids| ids.contains(a));
-        let allowed =
-            deps[a].iter().any(|d| d == b) || (from_tests && test_deps[a].iter().any(|d| d == b));
+        let allowed = deps[a].iter().any(|d| d == b) || exempt_files[a].contains(from);
         if a != b && !allowed {
             lines.insert((
                 "survey/undeclared-edge",
