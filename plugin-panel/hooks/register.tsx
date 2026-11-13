@@ -7,7 +7,6 @@ import type { EngineInterface, Register, RenderNode } from 'claude-code'
 
 import {
   dismiss,
-  queueRows,
   onComplete,
   onSessionEnd,
   onSpawn,
@@ -366,8 +365,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   )
   const body = paneBody(e.surface, run, shown)
   // Above the Queue chart: Drain and Stop now, whatever the loop's state, and a failure's stderr.
-  const requested =
-    'ansi' in body ? stopRequested(body.ansi) : 'text' in body ? stopRequested(ansiLines(body.text)) : undefined
+  const requested = 'ansi' in body ? stopRequested(body.ansi) : undefined
   const failed = await read($, stopError)
   const stopRow =
     shown === 'queue' ? (
@@ -400,12 +398,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
       </Box>
     )
   }
-  // An ANSI chart carries the run rows under its running entries; a text chart is followed by them.
-  const drawn =
-    'ansi' in body ? undefined
-    : 'text' in body ? body.text.replace(/\n$/, '').split('\n').map(line => <Text wrap="truncate-end">{line === '' ? ' ' : line}</Text>)
-    : 'svg' in body && Svg ? <Svg source={body.svg} alt={`clm view ${shown}`} />
-    : undefined
+  // An SVG, which carries no run rows.
   if (!('ansi' in body)) {
     return (
       <Box flexDirection="column">
@@ -413,8 +406,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
         {machine}
         {fetchLine}
         {stopRow}
-        {drawn}
-        {shown === 'queue' && lines(queueRows(undefined, list, at).map(spans => ({ spans })))}
+        {Svg && <Svg source={body.svg} alt={`clm view ${shown}`} />}
       </Box>
     )
   }

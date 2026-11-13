@@ -493,24 +493,3 @@ export function queueLines(chart: readonly Span[][], list: readonly AgentRun[], 
   const rest = newestFirst(trees.tops.map(t => t.run).filter(a => !placed.has(a.id)))
   return [...out, ...tailLines(list, trees, rest, at)]
 }
-
-/**
- * The Queue tab's text lines: an ANSI `chart` with the run rows under its running entries, or,
- * when the text chart is drawn instead (`undefined`), which the pane can't read entries from,
- * the rows that follow it.
- */
-export const queueRows = (chart: readonly Span[][] | undefined, list: readonly AgentRun[], at: number): Span[][] =>
-  chart === undefined ? followingLines(list, at) : queueLines(chart, list, at)
-
-/**
- * The rows that follow a text chart: every run under a line holding its entry's name, entries in
- * the order of their first run, then the runs that belong to none and the totals.
- */
-export function followingLines(list: readonly AgentRun[], at: number): Span[][] {
-  const trees = forest(list)
-  const { tops } = trees
-  const order = [...tops].sort((x, y) => x.run.startedAt - y.run.startedAt).flatMap(t => (t.entry === undefined ? [] : [t.entry]))
-  const of = (entry: string | undefined) => newestFirst(tops.filter(t => t.entry === entry).map(t => t.run))
-  const out = [...new Set(order)].flatMap(entry => [[{ text: entry, bold: true }], ...treeLines(trees.children, of(entry), at, 2)])
-  return [...out, ...tailLines(list, trees, of(undefined), at)]
-}

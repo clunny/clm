@@ -1,4 +1,4 @@
-// req:plugin.panel/build-rows@64fc6eb9
+// req:plugin.panel/build-rows@84e4b711
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 
@@ -11,7 +11,6 @@ import {
   bar,
   dismiss,
   costOf,
-  followingLines,
   fmtCost,
   fmtTime,
   fmtTokens,
@@ -31,12 +30,11 @@ import {
   resetsOn,
   startRun,
   queueLines,
-  queueRows,
   runEntry,
   windowOf,
 } from '../src/agents.ts'
 import { keyTarget } from '../src/inspector.ts'
-import { type Host, type Run, type Span, ansiLines, cachedRun, command, viewKey } from '../src/panel.ts'
+import { type Host, type Run, type Span, ansiLines, cachedRun, command, viewArgs, viewKey } from '../src/panel.ts'
 
 const PROMPT = (node: string) => `loop run build:${node}\nMore.`
 
@@ -392,7 +390,6 @@ describe('drawing', () => {
   test('clearing the session draws no build row and no totals', () => {
     const list = applyComplete(gitBuild(), 'b1', false, 90_000)
     expect(queueLines(CHART, onSessionEnd(list, 'clear'), 0)).toEqual(CHART)
-    expect(followingLines(onSessionEnd(list, 'clear'), 0)).toEqual([])
   })
 
   test('a subagent that is not a build follows the chart under agents while it runs, and the totals count it', () => {
@@ -494,29 +491,24 @@ describe('drawing', () => {
     expect(all[all.indexOf('agents') + 1]).toMatch(/^ +● orphan$/)
   })
 
-  test('on a surface that draws the SVG, the rows follow it grouped under entry lines', () => {
+  test('the rows go under their entries, then the unplaced runs under agents, then the totals', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'i1', type: 'general-purpose', description: 'build init', model: 'claude-opus-5-5', prompt: PROMPT('init'), at: 20_000 })
-    const all = text(followingLines(list, 61_000))
-    expect(all[0]).toBe('build:git')
-    expect(all[1]).toMatch(/● build git/)
-    expect(all[4]).toBe('build:init')
-    expect(all[5]).toMatch(/● build init/)
-    expect(all[8]).toBe('agents')
-    expect(all[9]).toMatch(/● look around/)
+    const all = text(queueLines(CHART, list, 61_000))
+    expect(between(all, '  build:git ', '  build:init ')[0]).toMatch(/● build git/)
+    expect(between(all, '  build:init ', 'next up')[0]).toMatch(/● build init/)
+    expect(all[all.indexOf('agents') + 1]).toMatch(/● look around/)
     expect(all.at(-1)).toMatch(/^≈\$/)
-    expect(followingLines([], 0)).toEqual([])
+    expect(queueLines(CHART, [], 0)).toEqual(CHART)
   })
 
-  test('after the SVG, only drawn runs follow, a failed child of a finished build under its node', () => {
+  test('only drawn runs appear, a failed child of a finished build under its node', () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'm', prompt: 'x', at: 30_000 })
     list = startRun(list, { id: 'x1', type: 'Explore', description: 'look around', model: 'm', prompt: 'x', at: 31_000 })
     list = applyComplete(applyComplete(applyComplete(list, 'c1', false, 40_000), 'b1', true, 50_000), 'x1', true, 50_000)
-    const all = text(followingLines(list, 61_000))
-    expect(all[0]).toBe('build:git')
-    expect(all[1]).toMatch(/^ {2}✗ code review/)
+    const all = text(queueLines(CHART, list, 61_000))
+    expect(between(all, '  build:git ', '  build:init ')[0]).toMatch(/^ {4}✗ code review/)
     expect(all).not.toContain('agents')
-    expect(all).toHaveLength(5)
     expect(all.at(-1)).toMatch(/^≈\$.* · m ×2 · Opus 5\.5 ×1$/)
   })
 
@@ -582,11 +574,12 @@ describe('hooks events', () => {
 })
 
 describe('build-rows', () => {
-  test('after the SVG, the build rows follow it grouped under lines holding the entry names', () => {
-    const all = text(queueRows(undefined, gitBuild(), 61_000))
-    expect(all[0]).toBe('build:git')
-    expect(all[1]).toMatch(/● build git/)
-    expect(text(queueRows(CHART, gitBuild(), 61_000))).toEqual(text(queueLines(CHART, gitBuild(), 61_000)))
+  test('on every surface alike the build rows go under their running entry, as the terminal draws them', () => {
+    const all = text(queueLines(CHART, gitBuild(), 61_000))
+    const rows = between(all, '  build:git ', '  build:init ')
+    expect(rows[0]).toMatch(/● build git/)
+    // The pane runs the same ANSI chart on the desktop surface, so nothing follows a text chart.
+    expect(viewArgs('queue', 'desktop', 80, true)).toEqual(viewArgs('queue', 'terminal', 80, true))
   })
 })
 
