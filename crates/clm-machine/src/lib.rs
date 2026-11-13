@@ -37,7 +37,7 @@ impl State {
     }
 
     /// The state a word names, `None` for any other word.
-    pub fn from_word(word: &str) -> Option<State> {
+    pub(crate) fn from_word(word: &str) -> Option<State> {
         [State::Ok, State::Warn, State::Critical, State::Unknown]
             .into_iter()
             .find(|s| s.word() == word)
