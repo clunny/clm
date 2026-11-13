@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-resulting-graph-check-keeps-answered-questions-that-clm]
 ---
 
