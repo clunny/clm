@@ -170,6 +170,7 @@ describe('views-panel', () => {
   })
 
   // req:plugin.panel/views-panel@29b65e2f
+  // req:plugin.panel/queue-tab@f6749284
   test('the Queue tab has no SVG form: every surface runs its ANSI chart at the pane width', () => {
     expect(viewArgs('queue', 'terminal', 80, true)).toEqual([
       'view', 'queue', '--at', 'origin/main', '--format', 'ansi', '--width', '80',
