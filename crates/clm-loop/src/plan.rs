@@ -171,6 +171,15 @@ fn active(file: &LoopFile, name: &str) -> bool {
 /// (`plan-archive`).
 fn archive_due(s: &Snapshot) -> Option<String> {
     let id = s.complete.first()?;
+    // Where the agent harness has no subagents, the loop runs one run at a time.
+    if s.one_at_a_time
+        && s.file
+            .runs
+            .iter()
+            .any(|r| matches!(r.state, RunState::Planned | RunState::Running))
+    {
+        return None;
+    }
     let held = |id: &str| active(&s.file, &format!("archive:{id}"));
     (s.archive_branches.iter().all(|b| held(b)) && !held(id)).then(|| id.clone())
 }
@@ -242,18 +251,6 @@ pub fn plan_of(s: &Snapshot) -> Plan {
                 },
             ));
         }
-        if let Some(id) = archive_due(s) {
-            next.push(StoredNext {
-                name: format!("archive:{id}"),
-                kind: Kind::Archive,
-                priority: "-".to_string(),
-                reason: LAUNCHES_NOW.to_string(),
-            });
-            launches.push(Launch::Archive {
-                id,
-                model: s.build_model.clone(),
-            });
-        }
         candidates.sort_by_key(|(rank, build, ..)| (*rank, *build));
         let busy = file
             .runs
@@ -273,6 +270,24 @@ pub fn plan_of(s: &Snapshot) -> Plan {
                 entry.reason = WAITS_FOR_A_PLACE.to_string();
             }
             next.push(entry);
+        }
+        // Where the agent harness has no subagents, an archive waits for a step that launches
+        // no other run.
+        let launching = launches.iter().any(|l| !matches!(l, Launch::Relaunch(_)));
+        if let Some(id) = archive_due(s).filter(|_| !(s.one_at_a_time && launching)) {
+            next.insert(
+                0,
+                StoredNext {
+                    name: format!("archive:{id}"),
+                    kind: Kind::Archive,
+                    priority: "-".to_string(),
+                    reason: LAUNCHES_NOW.to_string(),
+                },
+            );
+            launches.push(Launch::Archive {
+                id,
+                model: s.build_model.clone(),
+            });
         }
     }
     let humans = crate::humans::queue(s);

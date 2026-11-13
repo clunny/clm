@@ -62,6 +62,7 @@ pub(crate) fn summary(
     for run in open {
         let state = match run.state {
             RunState::Stopped => "stopped, its claim, branch and place kept",
+            RunState::Planned => "planned, never launched",
             _ => "running",
         };
         out.push_str(&format!("  {}: {state}\n", run.name));

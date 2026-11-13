@@ -208,7 +208,9 @@ fn unsafe_work(wrap_up: &str) -> Vec<String> {
         .lines()
         .map(str::trim)
         .filter(|l| {
-            l.starts_with("dirty ") || l.starts_with("unpushed ") || l.starts_with("ledger/")
+            l.starts_with("dirty ")
+                || l.starts_with("unpushed ")
+                || l.split(": ").any(|part| part.starts_with("ledger/"))
         })
         .map(str::to_string)
         .collect()

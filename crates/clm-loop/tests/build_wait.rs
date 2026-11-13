@@ -103,3 +103,12 @@ fn a_failed_fetch_is_reported_and_waiting_goes_on() {
     stop(&fx.options(), StopMode::Now).unwrap();
     rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
 }
+
+#[test]
+fn a_stop_asked_for_earlier_wakes_once_nothing_runs() {
+    // req:orchestrator.loop/build-wait@838b1759
+    let fx = Fixture::new();
+    stop(&fx.options(), StopMode::Drain).unwrap();
+    let why = wait(&fx.options(), 5.0).unwrap();
+    assert!(why.contains("drain"), "{why}");
+}

@@ -77,3 +77,19 @@ fn claude_code_needs_neither() {
     let a = line(&actions, "launch build:a ");
     assert!(a.starts_with("launch build:a build sonnet "), "{a}");
 }
+
+#[test]
+fn an_archive_waits_for_a_run_without_subagents() {
+    // req:orchestrator.loop/loop-follows-agent-harness@3f186db6
+    let fx = Fixture::new();
+    let mut options = fx.options();
+    options.agent_harness = AgentHarness::None;
+    fx.set("next", "a\n");
+    fx.set("wrap-up", "complete c\n");
+    start(&options, "opus", false).unwrap();
+    let actions = step(&options).unwrap();
+    assert!(
+        !actions.iter().any(|a| a.starts_with("launch archive:c")),
+        "{actions:?}"
+    );
+}

@@ -132,7 +132,7 @@ fn unsafe_work_from_wrap_up() {
     let fx = Fixture::new();
     fx.set(
         "wrap-up",
-        "unpushed spec/x\ndirty work/a\nelsewhere dirty /other\nopen spec/z\nledger/unrecorded-land abc\n",
+        "unpushed spec/x\ndirty work/a\nelsewhere dirty /other\nopen spec/z\norigin/main: ledger/unrecorded-land: abc\n",
     );
     fx.set("upgrade", "");
     step(&fx.options()).unwrap();
@@ -147,7 +147,7 @@ fn unsafe_work_from_wrap_up() {
         [
             "unpushed spec/x",
             "dirty work/a",
-            "ledger/unrecorded-land abc"
+            "origin/main: ledger/unrecorded-land: abc"
         ]
     );
 }
