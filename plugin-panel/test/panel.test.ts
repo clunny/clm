@@ -135,7 +135,7 @@ describe('view-command-in-chat', () => {
 })
 
 describe('views-panel', () => {
-  // req:plugin.panel/views-panel@4f33137b
+  // req:plugin.panel/views-panel@29b65e2f
   test('the pane is CLM with Queue, Spec, Flight and Blockers, Queue first', () => {
     expect(PANE_TITLE).toBe('CLM')
     expect(TABS).toEqual(['queue', 'spec', 'flight', 'blockers'])
@@ -148,7 +148,7 @@ describe('views-panel', () => {
     for (const t of TABS) expect(tabOf(t)).toBe(t)
   })
 
-  // req:plugin.panel/queue-tab@0cb57d23
+  // req:plugin.panel/queue-tab@f6749284
   test('the Queue tab runs no JSON model, and its lines are not pressable and draw no inspector', () => {
     for (const surface of ['terminal', 'desktop'] as const) {
       expect(modelRuns('queue', surface, null, true)).toEqual({})
@@ -169,14 +169,17 @@ describe('views-panel', () => {
     expect(lines.map(l => l.spans)).toEqual(chart)
   })
 
-  // req:plugin.panel/views-panel@4f33137b
-  test('the Queue tab has no SVG form: other surfaces run its text chart', () => {
+  // req:plugin.panel/views-panel@29b65e2f
+  // req:plugin.panel/queue-tab@f6749284
+  test('the Queue tab has no SVG form: every surface runs its ANSI chart at the pane width', () => {
     expect(viewArgs('queue', 'terminal', 80, true)).toEqual([
       'view', 'queue', '--at', 'origin/main', '--format', 'ansi', '--width', '80',
     ])
     for (const surface of ['desktop', 'vscode', 'mobile'] as const) {
-      expect(viewArgs('queue', surface, 80, true)).toEqual(['view', 'queue', '--at', 'origin/main', '--format', 'text'])
-      expect(viewArgs('queue', surface, 80)).toEqual(['view', 'queue', '--format', 'text'])
+      expect(viewArgs('queue', surface, 80, true)).toEqual([
+        'view', 'queue', '--at', 'origin/main', '--format', 'ansi', '--width', '80',
+      ])
+      expect(viewArgs('queue', surface, 80)).toEqual(['view', 'queue', '--format', 'ansi', '--width', '80'])
       expect(viewArgs('spec', surface, 80)).toEqual(['view', 'spec', '--format', 'svg'])
     }
   })
@@ -248,7 +251,7 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
-  // req:plugin.panel/views-panel@4f33137b
+  // req:plugin.panel/views-panel@29b65e2f
   test('a press changes no run the pane holds for this generation, so no clm command runs again', async () => {
     const cache = new Map<string, Promise<Run>>()
     let started = 0
@@ -308,12 +311,14 @@ describe('views-panel', () => {
     expect($.calls).toHaveLength(1)
   })
 
-  test('the pane body: stderr on failure, else the ANSI lines on the terminal or the SVG', () => {
+  // req:plugin.panel/queue-tab@f6749284
+  test('the pane body: stderr on failure, else ANSI on the terminal or for the Queue tab on any surface, else the SVG', () => {
     expect(paneBody('terminal', { exitCode: 1, stdout: 'x', stderr: 'violations: 2' }, 'spec')).toEqual({ error: 'violations: 2' })
     expect(paneBody('terminal', ok('\x1b[34mx\x1b[0m'), 'spec')).toEqual({ ansi: [[{ text: 'x', color: 'blue' }]] })
     expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })
-    // The Queue tab's text chart is shown as text where the other tabs draw an SVG.
-    expect(paneBody('desktop', ok('queue\n'), 'queue')).toEqual({ text: 'queue\n' })
+    // The Queue tab's chart is drawn in colour as its escapes say, where the other tabs draw an SVG.
+    const amber = '  fold:x  say "approve x"'
+    expect(paneBody('desktop', ok(`\x1b[33m${amber}\x1b[0m`), 'queue')).toEqual({ ansi: [[{ text: amber, color: 'yellow' }]] })
     expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })
   })
 

@@ -172,21 +172,21 @@ export const widthOf = (columns: number): number =>
 
 /**
  * The `clm view` arguments for a tab on a surface `columns` wide: an SVG, or ANSI on the
- * terminal; the Queue tab has no SVG form, so other surfaces run its text chart.
+ * terminal; the Queue tab has no SVG form, so it runs ANSI on every surface (`queue-tab`).
  */
 export function viewArgs(tab: ViewTab, surface: Surface, columns: number, at = false): string[] {
   const view = viewOf(tab, at)
-  if (surface !== 'terminal') return [...view, '--format', tab === 'queue' ? 'text' : 'svg']
+  if (surface !== 'terminal' && tab !== 'queue') return [...view, '--format', 'svg']
   return [...view, '--format', 'ansi', '--width', String(widthOf(columns))]
 }
 
 /** What the pane draws under its tabs, from its `clm` run: `clm`'s stderr first. */
-export type PaneBody = { error: string } | { ansi: Span[][] } | { svg: string } | { text: string }
+export type PaneBody = { error: string } | { ansi: Span[][] } | { svg: string }
 
 export function paneBody(surface: Surface, run: Run, tab: ViewTab): PaneBody {
   if (run.exitCode !== 0) return { error: run.stderr }
-  if (surface === 'terminal') return { ansi: ansiLines(run.stdout) }
-  return tab === 'queue' ? { text: run.stdout } : { svg: run.stdout }
+  if (surface === 'terminal' || tab === 'queue') return { ansi: ansiLines(run.stdout) }
+  return { svg: run.stdout }
 }
 
 /** The pane's cache key for one `clm` run: its redraw generation and arguments. */
