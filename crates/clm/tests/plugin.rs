@@ -260,14 +260,14 @@ fn skill_gaps(skill: &str, body: &str) -> Vec<String> {
         ],
         // `clm rebase`'s outcome is its last line, never its exit code.
         "init" => &[REBASE_RULE],
-        // The build loop decides every step and archives the complete changes itself.
+        // The build loop decides every step (`orchestrator.loop`).
         "build" => &[
             "clm build start",
             "clm build step",
             "clm build launched",
             "clm build returned",
             "clm build stop",
-            "isolation",
+            "isolation: \"worktree\"",
         ],
         _ => &[],
     };
@@ -1705,7 +1705,7 @@ const OWN_MODEL: &str = "the session's own model";
 /// text it lacks. Empty when it says it all.
 fn launch_model_gaps(skill: &str, body: &str) -> Vec<String> {
     let must: &[&str] = match skill {
-        // The launches of `build` are `clm build`'s action lines, which name their models.
+        // `build` starts the loop with the session's model; the loop's `launch` lines name the rest.
         "build" => &["--session-model"],
         "triage" | "propose" => &[SONNET, OWN_MODEL],
         "contribution" => &[OWN_MODEL],
