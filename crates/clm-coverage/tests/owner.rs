@@ -69,6 +69,23 @@ fn pending_puts_an_unowned_file_on_the_root() {
 }
 
 #[test]
+fn two_components_tests_match_the_first_by_id() {
+    // req:check.coverage/owner@50c03c13
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    for id in ["b", "a"] {
+        write(
+            d,
+            &format!("specs/{id}/SPEC.md"),
+            &spec("[]", &[]).replace("paths: []", "tests: [\"t/**\"]"),
+        );
+    }
+    let g = graph(d);
+    assert_eq!(owner(&g, Path::new("t/x.rs")), Some("a"));
+}
+
+#[test]
 fn scenario_tests_inside_another_components_paths() {
     // req:check.coverage/owner@50c03c13
     let dir = TempDir::new().unwrap();
