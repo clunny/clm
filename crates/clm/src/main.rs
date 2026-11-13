@@ -227,12 +227,6 @@ enum Command {
         /// Hours without a commit after which a claim lapses.
         #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
         expiry: u64,
-        /// Look again until a look prints a component, then print it.
-        #[arg(long)]
-        wait: bool,
-        /// Minutes between looks with `--wait`.
-        #[arg(long, requires = "wait", default_value = "5")]
-        interval: String,
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -1220,31 +1214,19 @@ fn dispatch() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        Command::Next {
-            expiry,
-            wait,
-            interval,
-            root,
-        } => {
+        Command::Next { expiry, root } => {
             let root = repo_root(root);
             orchestrated(
                 "next",
                 clm_config::load(Some(&root), &clm_config::process_env)
                     .map_err(|e| clm_orchestrator::Error::Refused(format!("settings: {e}")))
                     .and_then(|s| {
-                        let max = s.max_builds.value;
-                        if wait {
-                            clm_orchestrator::next_wait(&root, expiry, max, &interval, &mut |n| {
-                                eprintln!("{n}")
-                            })
-                        } else {
-                            clm_orchestrator::next_look(&root, expiry, max).map(|look| {
-                                if let Some(line) = &look.no_place {
-                                    eprintln!("{line}");
-                                }
-                                look.components
-                            })
-                        }
+                        clm_orchestrator::next_look(&root, expiry, s.max_builds.value).map(|look| {
+                            if let Some(line) = &look.no_place {
+                                eprintln!("{line}");
+                            }
+                            look.components
+                        })
                     })
                     .map(|n| n.join("\n")),
             )

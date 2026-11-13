@@ -4,7 +4,7 @@
 use clm_git::{git, now};
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clm_check::Marker;
 use clm_model::{BacklogKind, Graph};
@@ -55,45 +55,6 @@ pub fn next_look(root: &Path, expiry_hours: u64, max_builds: u64) -> Result<Next
         components: ready,
         no_place,
     })
-}
-
-/// `clm next --wait` (`next-wait`): looks as [`next`] does and, while a look prints nothing,
-/// waits `interval_minutes` (a positive decimal number) and looks again, until a look
-/// returns nodes. The first look's failure is returned; a later look's failure is passed to
-/// `note` as `clm next failed: <reason>` and waited out. An interval that isn't a positive
-/// number is refused before any look.
-pub fn next_wait(
-    root: &Path,
-    expiry_hours: u64,
-    max_builds: u64,
-    interval_minutes: &str,
-    note: &mut dyn FnMut(&str),
-) -> Result<Vec<String>, Error> {
-    let interval = interval_minutes
-        .trim()
-        .parse::<f64>()
-        .ok()
-        .filter(|m| *m > 0.0)
-        .and_then(|m| Duration::try_from_secs_f64(m * 60.0).ok())
-        .filter(|d| !d.is_zero())
-        .ok_or_else(|| {
-            Error::Refused(format!(
-                "the interval must be a positive number of minutes, not `{interval_minutes}`"
-            ))
-        })?;
-    let mut ready = next(root, expiry_hours, max_builds)?;
-    while ready.is_empty() {
-        std::thread::sleep(interval);
-        match next(root, expiry_hours, max_builds) {
-            Ok(nodes) => ready = nodes,
-            Err(Error::Spec(violations)) => note(&format!(
-                "clm next failed: the specs don't load ({} violations)",
-                violations.len()
-            )),
-            Err(Error::Refused(why) | Error::Git(why)) => note(&format!("clm next failed: {why}")),
-        }
-    }
-    Ok(ready)
 }
 
 /// Fetches, then builds the queue from `origin/main`'s tree and the claims on `origin`,
