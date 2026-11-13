@@ -55,8 +55,7 @@ A SHALL x.
 const made: string[] = []
 afterAll(() => made.forEach(d => rmSync(d, { recursive: true, force: true })))
 
-test('the pane shows the new state when a build lands, without being asked', async () => {
-  // req:capability/watch-beside-chat@9ddcb34b
+const project = () => {
   const top = realpathSync(mkdtempSync(join(tmpdir(), 'clm-panel-')))
   made.push(top)
   const origin = join(top, 'origin.git')
@@ -73,19 +72,26 @@ test('the pane shows the new state when a build lands, without being asked', asy
   git(person, 'add', '-A')
   git(person, 'commit', '-q', '-m', 'specs')
   git(person, 'push', '-q', '-u', 'origin', 'main')
+  return { top, origin, person }
+}
 
-  // The pane, open beside the chat. The plugin is installed alone: its root holds no `clm`
-  // shim, so the pane runs the `clm` on `PATH`.
+// The plugin is installed alone: its root holds no `clm` shim, so the pane runs the `clm` on `PATH`.
+const openPane = (top: string, cwd: string) => {
   const pluginRoot = join(top, 'plugins', 'clm-panel')
   cpSync(join(repository, 'plugin-panel'), pluginRoot, {
     recursive: true,
     filter: from => !from.includes('node_modules'),
   })
-  const engine = await createEngine({
-    pluginRoot,
-    cwd: person,
-    path: process.env.CLM_CAPABILITY_BIN_DIR!,
-  })
+  return createEngine({ pluginRoot, cwd, path: process.env.CLM_CAPABILITY_BIN_DIR! })
+}
+
+test('the pane shows the new state when a build lands, without being asked', async () => {
+  // req:capability/watch-beside-chat@109098d4
+  const { top, origin, person } = project()
+
+  // The pane, open beside the chat. The plugin is installed alone: its root holds no `clm`
+  // shim, so the pane runs the `clm` on `PATH`.
+  const engine = await openPane(top, person)
   const opened = await engine.command('clm:view')
   expect(opened.text).toContain('Opened')
   await expect.poll(() => engine.pane()).toContain('Flight')
@@ -114,4 +120,32 @@ test('the pane shows the new state when a build lands, without being asked', asy
   await engine.advance(150_000)
   await expect.poll(() => engine.pane(), { timeout: 20_000 }).toContain('0 components pending')
   expect(engine.pane()).not.toMatch(/\ba +P5 +ready/)
+})
+
+test('Drain on the Queue tab stops the loop launching anything new, and the tab says so', async () => {
+  // req:capability/watch-beside-chat@109098d4
+  const { top, person } = project()
+  const engine = await openPane(top, person)
+
+  // The build loop runs: it holds the clone's lease and has a build of `a` running.
+  expect(clm(person, 'build', 'start', '--session-model', 'opus')).toMatch(/^launch build:a /m)
+  clm(person, 'build', 'launched', 'build:a', 'task-1')
+  // A second component becomes ready on `main` meanwhile: a build the loop would launch next.
+  write(person, 'specs/b/SPEC.md', NODE_A.replace('title: A', 'title: B'))
+  git(person, 'add', '-A')
+  git(person, 'commit', '-q', '-m', 'b')
+  git(person, 'push', '-q', 'origin', 'main')
+  await engine.command('clm:view')
+  await engine.press('Queue')
+  const slow = { timeout: 20_000 }
+  await expect.poll(() => engine.pane(), slow).toContain('[Drain]')
+  expect(engine.pane()).not.toContain('stop requested')
+
+  await engine.press('Drain')
+  await expect.poll(() => engine.pane(), slow).toContain('stop requested: drain')
+  await expect.poll(() => engine.pane(), slow).toContain('Drain · requested')
+
+  // The loop obeys it: its next step launches nothing, though `b` is ready.
+  expect(clm(person, 'view', 'flight')).toMatch(/\bb +P5 +ready/)
+  expect(clm(person, 'build', 'step')).not.toMatch(/^launch /m)
 })
