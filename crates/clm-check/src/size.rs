@@ -116,7 +116,7 @@ impl Length {
 /// and linguist-excluded files already left out, with its length. A node's spec tokens are
 /// its `SPEC.md`'s length in `files` (0 when missing). A part of a file holding `markers`
 /// counts toward each node they name (the part of a marker's ID before `/`); one holding
-/// none counts toward each node whose `paths` match its file (`tests-count-where-cited`).
+/// none counts toward the node that owns its file (`check.coverage/owner`, `tests-count-where-cited`).
 pub fn size_of(
     graph: &Graph,
     files: &BTreeMap<PathBuf, Length>,
@@ -136,17 +136,15 @@ pub fn size_of(
             .or_default()
             .insert(node);
     }
+    let owners: BTreeMap<&Path, Option<&str>> = files
+        .keys()
+        .map(|f| (f.as_path(), crate::owner(graph, f)))
+        .collect();
     graph
         .nodes
         .values()
         .map(|node| {
-            let owns = |file: &Path| {
-                let file = file.to_string_lossy();
-                node.frontmatter
-                    .paths
-                    .iter()
-                    .any(|glob| crate::matches(glob, &file))
-            };
+            let owns = |file: &Path| owners.get(file) == Some(&Some(node.id.as_str()));
             let counts = |file: &Path, in_tests: bool| match cited.get(&(file, in_tests)) {
                 Some(nodes) => nodes.contains(node.id.as_str()),
                 None => owns(file),
@@ -226,10 +224,9 @@ mod tree {
             .collect();
         let mut owned = BTreeSet::new();
         for node in graph.nodes.values() {
-            owned.extend(
-                clm_git::tracked_matching(root, &node.frontmatter.paths)
-                    .map_err(io::Error::other)?,
-            );
+            for globs in [&node.frontmatter.paths, &node.frontmatter.tests] {
+                owned.extend(clm_git::tracked_matching(root, globs).map_err(io::Error::other)?);
+            }
         }
         // Only the files some node may count are probed, not the whole repository.
         let mut files = countable(root, |f| cited.contains(f) || owned.contains(f))?;

@@ -64,7 +64,7 @@ const BUDGETS: &str = "[component_size]\nspec_tokens = 1000\ncode_tokens = 1000\
 
 #[test]
 fn prints_the_node_with_the_repository_budgets() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(BUDGETS);
     let out = clm_size(dir.path(), Some("a"));
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -76,7 +76,7 @@ fn prints_the_node_with_the_repository_budgets() {
 
 #[test]
 fn every_node_sorted_by_id() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(BUDGETS);
     let out = clm_size(dir.path(), None);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -90,7 +90,7 @@ fn every_node_sorted_by_id() {
 
 #[test]
 fn defaults_from_config_when_unset() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("");
     let out = clm_size(dir.path(), Some("a"));
     assert_eq!(
@@ -101,7 +101,7 @@ fn defaults_from_config_when_unset() {
 
 #[test]
 fn spec_violations_dont_stop_the_report() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(BUDGETS);
     write(
         dir.path(),
@@ -118,7 +118,7 @@ fn spec_violations_dont_stop_the_report() {
 
 #[test]
 fn unknown_node_exits_1() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(BUDGETS);
     let out = clm_size(dir.path(), Some("zz"));
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -132,7 +132,7 @@ fn unknown_node_exits_1() {
 
 #[test]
 fn settings_that_cant_be_loaded_exit_1() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo("[component_size]\nspec_tokens = 0\n");
     let out = clm_size(dir.path(), None);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -149,7 +149,7 @@ fn settings_that_cant_be_loaded_exit_1() {
 
 #[test]
 fn a_test_counts_toward_the_node_it_cites() {
-    // req:check/node-size@7fb9fb0c
+    // req:check/node-size@a70a5200
     let dir = repo(BUDGETS);
     let mut test = concat!("// req", ":b/x\n").as_bytes().to_vec();
     test.resize(800, b't');
