@@ -31,6 +31,14 @@ run)
     if flock -n "$(cat "$F/lock")" true; then echo free > "$F/lock-result"; else echo held > "$F/lock-result"; fi
   fi
   echo "launcher for $2" ;;
+pending) cat "$F/pending-$2" 2>/dev/null; exit 0 ;;
+land)
+  if [ -f "$F/land-exit" ]; then echo "land refused" >&2; exit "$(cat "$F/land-exit")"; fi
+  git fetch -q origin && git push -q origin "origin/$2:refs/heads/main" && git push -q origin --delete "$2"
+  echo "landed fake $2"; exit 0 ;;
+verify)
+  if [ -f "$F/verify-due" ]; then cat "$F/verify-due"; exit 0; fi
+  exit 3 ;;
 draft)
   if [ "$2" = "--finish" ]; then cat "$F/finish-$3" 2>/dev/null; exit 0; fi
   if [ "$2" = "--resume" ]; then echo "resume launcher for $3"; echo "draft $3" >&2; exit 0; fi
@@ -135,6 +143,13 @@ pub fn run(name: &str, kind: Kind, model: &str, state: RunState, task: Option<&s
         prompt: None,
         command: None,
         landed: false,
+        resume: None,
+        resumed: false,
+        serial: false,
+        rebuilt_for: None,
+        log: Vec::new(),
+        escalated: None,
+        hold: None,
     }
 }
 
@@ -144,4 +159,59 @@ pub fn line<'a>(lines: &'a [String], prefix: &str) -> &'a str {
         .iter()
         .find(|l| l.starts_with(prefix))
         .unwrap_or_else(|| panic!("no `{prefix}` line in {lines:?}"))
+}
+
+/// `secs` (Unix) as an RFC 3339 time, for an `--until`.
+pub fn rfc3339(secs: u64) -> String {
+    let out = std::process::Command::new("date")
+        .args(["-u", "-d", &format!("@{secs}"), "+%Y-%m-%dT%H:%M:%SZ"])
+        .output()
+        .unwrap();
+    String::from_utf8(out.stdout).unwrap().trim().to_string()
+}
+
+impl Fixture {
+    /// Records the model the session runs on, as `start` would.
+    pub fn session(&self, model: &str) {
+        clm_loop::update(&self.work, |f| {
+            f.session_model = model.to_string();
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Changes one run in the loop file.
+    pub fn change_run(&self, name: &str, change: impl FnOnce(&mut Run)) {
+        clm_loop::update(&self.work, |f| {
+            change(f.runs.iter_mut().find(|r| r.name == name).unwrap());
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Adds `path` with `text` to `origin/main` from the work clone.
+    pub fn land_file(&self, path: &str, text: &str) {
+        let file = self.work.join(path);
+        fs::create_dir_all(file.parent().unwrap()).unwrap();
+        fs::write(&file, text).unwrap();
+        let git = |args: &[&str]| clm_git::git(&self.work, args).unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", path]);
+        git(&["push", "-q", "origin", "HEAD:main"]);
+    }
+
+    /// The branches of `origin` under `loop/`.
+    pub fn loop_branches(&self) -> Vec<String> {
+        clm_git::git(&self.work, &["ls-remote", "--heads", "origin", "loop/*"])
+            .unwrap()
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// The text of `path` on `origin/main`, if it is there.
+    pub fn on_main(&self, path: &str) -> Option<String> {
+        clm_git::git(&self.work, &["fetch", "-q", "origin"]).unwrap();
+        clm_git::git(&self.work, &["show", &format!("origin/main:{path}")]).ok()
+    }
 }

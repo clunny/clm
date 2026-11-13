@@ -32,7 +32,11 @@ pub(crate) fn clm(options: &Options, args: &[&str]) -> Result<Ran, Failure> {
 }
 
 /// Runs `clm <args>` in `dir` with nothing on standard input.
-pub(crate) fn clm_in(options: &Options, dir: &std::path::Path, args: &[&str]) -> Result<Ran, Failure> {
+pub(crate) fn clm_in(
+    options: &Options,
+    dir: &std::path::Path,
+    args: &[&str],
+) -> Result<Ran, Failure> {
     let out = Command::new(&options.clm)
         .args(args)
         .current_dir(dir)

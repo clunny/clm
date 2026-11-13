@@ -4,19 +4,22 @@
 use std::path::PathBuf;
 
 mod cmd;
+mod escalate;
 mod humans;
 mod plan;
 mod returned;
 mod state;
 mod step;
+mod stops;
 mod summary;
+mod time;
 mod wait;
 
 pub use plan::{BacklogRow, Group, Launch, Plan, Snapshot, plan, plan_of, stored_plan};
 pub use state::{Batch, Escalation, Kind, LoopFile, Run, RunState, StopMode, read, update};
 
 pub use returned::returned;
-pub use step::{launched, start, step, stop};
+pub use step::{approved, cleared, launched, start, step, stop};
 pub use wait::wait;
 
 /// What `clm build` was given.
