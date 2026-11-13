@@ -4,7 +4,7 @@ component: orchestrator.loop
 
 ## MODIFIED Requirements
 ### Requirement: plan-snapshot <!-- base: 675c1a3ae9038a80 -->
-`clm-loop` SHALL offer `plan(snapshot)`, a pure function returning `view`'s queue model with the sections the view shows, in the order and with the reasons the steps act on, and `stored_plan(root)`, which reads the plan the last step stored and the runs as the loop file holds them now, without fetching and without creating or writing any file or directory, or none when the clone has no loop file. Only a command that writes the loop file SHALL create `<git common dir>/clm/`. `clm build step` SHALL act on, and store, `plan` of the snapshot it read after its fetch.
+`clm-loop` SHALL offer `plan(snapshot)`, a pure function returning `view`'s queue model with the sections the view shows, in the order and with the reasons the steps act on, and `stored_plan(root)`, which reads the plan the last step stored and the runs as the loop file holds them now, without fetching and without creating or writing any file or directory, or none when the clone has no loop file. Of `clm-loop`'s code, only what writes the loop file SHALL create `<git common dir>/clm/`. `clm build step` SHALL act on, and store, `plan` of the snapshot it read after its fetch.
 
 #### Scenario: view and step agree
 - GIVEN a snapshot with `a` ready at `P2` and a `group` line at `P4`, `max_builds` 1

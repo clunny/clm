@@ -5,7 +5,7 @@ resolves: [reading-the-loop-file-creates-its-directory]
 
 ## Intent
 
-`stored_plan` reads the loop file without creating anything: on a clone that has never run the loop, `clm view queue` leaves no empty `<git common dir>/clm/` behind. Only the commands that write the loop file make its directory.
+`stored_plan` reads the loop file without creating anything: on a clone that has never run the loop, `clm view queue` leaves no empty `<git common dir>/clm/` behind. Only `clm-loop`'s writes of the loop file make its directory; places, machine samples and the remote mirror keep making it as their own requirements say.
 
 ## Problem
 
@@ -19,6 +19,6 @@ resolves: [reading-the-loop-file-creates-its-directory]
 
 ## Outcome
 
-`orchestrator.loop/plan-snapshot` says `stored_plan` creates and writes no file or directory and that only a command writing the loop file creates `<git common dir>/clm/`, with a scenario for a clone with no such directory. The requirement becomes pending, and `orchestrator.loop`'s build fixes `state.rs` (the read paths stop calling `create_dir_all`). Nothing else changes: `view.repo/view-queue` already says the view writes nothing, and its tests see no difference beyond the directory's absence.
+`orchestrator.loop/plan-snapshot` says `stored_plan` creates and writes no file or directory and that, of `clm-loop`'s code, only what writes the loop file creates `<git common dir>/clm/` (other components' files there, such as `build-places`' places, keep creating it), with a scenario for a clone with no such directory. The requirement becomes pending, and `orchestrator.loop`'s build fixes `state.rs` (the read paths stop calling `create_dir_all`). Nothing else changes: `view.repo/view-queue` already says the view writes nothing, and its tests see no difference beyond the directory's absence (`crates/clm/tests/view_queue.rs`'s `no_loop_yet` counts the directory's entries, which passes either way; its comment that a read may make the directory goes stale, for `view.repo`'s next build to tidy).
 
 Edge cases and workarounds: none.
