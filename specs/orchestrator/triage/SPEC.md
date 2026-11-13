@@ -530,12 +530,17 @@ The prompts `clm draft` and `clm draft --fold` write, and the lines `clm triage`
 - architecture/plain-terms
 
 ### Requirement: draft-corrects-bug-components
-The prompt `clm draft` writes SHALL tell the session that a code-only bug whose fix lies in no component the item names has its `components` set on `spec/<id>` to the components whose `paths` hold the fix, is left out of `resolves` with `left <slug>: components corrected to <components>`, and is not fixed by that draft, since `clm claim --fix` takes only a component the item on `origin/main` names. It says so in the paragraph that describes code-only bugs.
+The prompt `clm draft` writes SHALL tell the session that a code-only bug whose fix lies in no component the item names has its `components` set on `spec/<id>` to the components whose `paths` hold the fix, is left out of `resolves` with `left <slug>: components corrected to <components>`, and is not fixed by that draft, since `clm claim --fix` takes only a component the item on `origin/main` names. It SHALL tell the session that a `bug` or `deferred` item whose work is test plumbing is treated the same way when every file its fix changes belongs to no component the item names, a file belonging to a component whose `paths` hold it or whose requirement its text cites: the session sets the item's `components` on `spec/<id>` to the components those files belong to, leaves it with the same `left` line and opens no branch of its own for it, since the gate passes the deletion of an item by a `Resolves: backlog/<slug>` trailer only when the branch's code belongs to a component the item at the merge base names (`gate/backlog-additions`), and otherwise prints `mixed`. It says so in the paragraph that describes code-only bugs.
 
 #### Scenario: prompt
 - GIVEN untaken `bug` item `a` with `components: [check]`
 - WHEN `clm draft a` runs
 - THEN the paragraph of the prompt file that contains `clm claim <component> --fix backlog/<slug>` also contains `components corrected to <components>`
+
+#### Scenario: test plumbing under another component
+- GIVEN untaken `bug` item `a` with `components: [check]`
+- WHEN `clm draft a` runs
+- THEN the paragraph of the prompt file that contains `components corrected to <components>` also contains `belongs to no component the item names`, `gate/backlog-additions` and `mixed`
 
 ### Requirement: draft-hand-edit-check
 The prompt `clm draft` writes SHALL tell the session that when its spec branch changes a file outside `specs/`, `changes/` and `backlog/` (a hand edit, such as one to `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md`, `README.md` or `docs/`), which a code test may read and which neither `clm check` nor the gate tests, it runs `clm land --check-only` after its last `clm gate` run, before it opens the pull request or stops for review (`draft-checks-hand-edits`). It SHALL tell the session that a failing test that reads a file the branch changes is the change's: the session names each such test, its component and the hand edit that breaks it under `## Open questions` in `change.md`, commits, rebases and pushes as after any commit, and doesn't land; that when the gate's first line is `spec review` it then stops as for any change that needs review, and when it is `spec` it opens no pull request and ends with `stopped: land check fails: <tests>`; and that a failing test that reads no file the branch changes isn't the change's and doesn't stop it. It says so in the paragraph that tells the session to go by the first line of its last `clm gate` run, and keeps to the wording `draft` allows.
