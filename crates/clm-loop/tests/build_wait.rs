@@ -79,10 +79,10 @@ fn an_interval_that_isnt_allowed() {
     let fx = Fixture::new();
     let started = Instant::now();
     for bad in [10.0, 0.0, -1.0, f64::NAN, 7.1] {
-        assert!(
-            matches!(wait(&fx.options(), bad), Err(Failure::Refused(_))),
-            "{bad}"
-        );
+        // On a thread, so a wait that wrongly starts fails the test instead of hanging it.
+        let rx = waiting(&fx, bad);
+        let got = rx.recv_timeout(Duration::from_secs(2));
+        assert!(matches!(got, Ok(Err(Failure::Refused(_)))), "{bad}");
     }
     assert!(
         started.elapsed() < Duration::from_secs(2),
