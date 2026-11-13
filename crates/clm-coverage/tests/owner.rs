@@ -8,7 +8,7 @@ use tempfile::TempDir;
 
 #[test]
 fn scenario_owned_and_unowned() {
-    // req:check.coverage/owner@2e5588c3
+    // req:check.coverage/owner@50c03c13
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -22,7 +22,7 @@ fn scenario_owned_and_unowned() {
 
 #[test]
 fn the_deepest_node_then_the_first_by_id() {
-    // req:check.coverage/owner@2e5588c3
+    // req:check.coverage/owner@50c03c13
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -36,7 +36,7 @@ fn the_deepest_node_then_the_first_by_id() {
 
 #[test]
 fn pending_puts_an_unowned_file_on_the_root() {
-    // req:check.coverage/owner@2e5588c3
+    // req:check.coverage/owner@50c03c13
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -66,4 +66,41 @@ fn pending_puts_an_unowned_file_on_the_root() {
             ("clm".to_string(), "g/x obsolete old/t.rs:2".to_string()),
         ]
     );
+}
+
+#[test]
+fn two_components_tests_match_the_first_by_id() {
+    // req:check.coverage/owner@50c03c13
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    for id in ["b", "a"] {
+        write(
+            d,
+            &format!("specs/{id}/SPEC.md"),
+            &spec("[]", &[]).replace("paths: []", "tests: [\"t/**\"]"),
+        );
+    }
+    let g = graph(d);
+    assert_eq!(owner(&g, Path::new("t/x.rs")), Some("a"));
+}
+
+#[test]
+fn scenario_tests_inside_another_components_paths() {
+    // req:check.coverage/owner@50c03c13
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/harness/SPEC.md", &spec(r#"["tests/**"]"#, &[]));
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &spec(r#"["crates/a/**"]"#, &[]).replace(
+            "paths: [\"crates/a/**\"]",
+            "paths: [\"crates/a/**\"]\ntests: [\"tests/a/**\"]",
+        ),
+    );
+    let g = graph(d);
+    assert_eq!(owner(&g, Path::new("tests/a/conftest.py")), Some("a"));
+    assert_eq!(owner(&g, Path::new("tests/helpers.py")), Some("harness"));
 }
