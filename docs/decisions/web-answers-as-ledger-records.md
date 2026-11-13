@@ -10,6 +10,7 @@ The answer is written as approvals and proposals are (`per-writer-ledgers`, `web
 
 - `choices` is written by whoever files the question (a build's or a draft's session), when a short answer settles it. A question without them stays a session's.
 - `done` on a `human-task` says the person did the step; the draft that takes it up deletes the item and releases what it blocks.
+- An answer gates nothing: it is a person's word to the next triage, which still drafts a change that lands as any other. So it is accepted in a signed repository as it is, where Approve is off, since only an approval decides a land (`signed-approvals`).
 
 Rejected:
 - **Free-text answers from the app.** A typed answer usually needs a follow-up question, which only a session can ask; it would turn the app into a slower chat.

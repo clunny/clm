@@ -1,7 +1,18 @@
 ---
 component: web.views
-base: { design: "a24bddcece8b48c9" }
+base: { frontmatter: "6b0456af868290e3", contract: "668e4cd550ff7579", design: "a24bddcece8b48c9" }
 ---
+
+## MODIFIED Frontmatter
+```yaml
+size_budget: { spec_tokens: 20000, code_tokens: 90000 }
+```
+
+## MODIFIED Contract
+The views of `web`'s browser app, modules under `web/src/views/`, each with its Vitest tests beside it, which `web/src/main.ts` imports and wires to the page:
+- the render functions of the pages: the spec graph (`graph.ts`) and its inspector (`inspector.ts`), Spec PRs (`pr.ts`) with the full document (`full-document.ts`), Build (`implementation.ts`), Backlog (`backlog.ts`), Capabilities (`capabilities.ts`), Architecture (`architecture.ts`), Home (`home.ts`, `home-waiting-on-you`) and a backlog item's page (`backlog-item-page`), with the answer buttons both draw (`answer-buttons`). Each takes the Worker's responses it draws from and the callbacks for what the page does (post, load again, navigate), and returns the page's DOM;
+- what they share with `web`'s shell: the Worker API's types (`types.ts`) and fetch helpers (`api.ts`), the hash routes (`route.ts`), DOM building (`dom.ts`), sanitised Markdown (`markdown.ts`), the one-field forms (`forms.ts`), times (`time.ts`) and word marks (`diff.ts`);
+- the fixtures the views' tests and `web`'s end-to-end tests draw from (`fixtures.ts`).
 
 ## MODIFIED Design
 The modules import nothing of `web`'s outside `web/src/views/`, since an import of `web`'s code from here would need `depends_on: [web]`, a cycle with `web`'s dependency on this component (`check/undeclared-imports`). What a page needs of the app (the responses on screen, what the user set, posting and loading again) comes in through its parameters. `web/src/styles.css`, which styles every page, stays `web`'s: a stylesheet is no import. The build that makes this component moves the modules from `web/src/` and `web/test/fixtures.ts` here, keeping their tests, and re-points the tests' markers at this component's requirement IDs, `web`'s end-to-end tests among them. Graph layout uses ELK (`elkjs`, layered, edges from dependent to dependency) and word-level diffs use `diff` (jsdiff). The mockups in `web`'s `assets/mockups/` are the reference for layout, colour, type and interaction, as `web`'s Design says.
@@ -76,6 +87,7 @@ A capability's page SHALL show, in this order: its entry in full, the report's `
 
 #### Needs
 - web.worker/capabilities
+- effort/entry-text
 
 #### Scenario: sections
 - GIVEN capability `x` whose `text` holds `` `clm land` `` and a `#### Scenario: s` block, with an unsettled flag titled "Judge ignores pipes" whose text is "Builds pipe output."
@@ -91,6 +103,7 @@ An architectural constraint's page SHALL show, in this order: its entry in full,
 
 #### Needs
 - web.worker/architecture
+- effort/entry-text
 
 #### Scenario: sections
 - GIVEN entry `e`, whose `text` holds its `#### Enforced by` and `#### Untested` blocks, enforced by `a/x`, current, and `a/y`, pending, with the untested text "Partly judgement." and a flag titled "Gate misfires"
@@ -99,7 +112,7 @@ An architectural constraint's page SHALL show, in this order: its entry in full,
 
 ## ADDED Requirements
 ### Requirement: home-waiting-on-you
-The Home view SHALL list, in this order, each section left out when empty: **Review**, each spec branch whose review has `review` true and no approval in `approvals`, by name, linking to its review; **Answer**, each `question` item with `choices` and each `human-task` item, by title, linking to its page, with its answer buttons (`answer-buttons`); **Flagged**, each capability and architectural constraint whose report entry has `flagged` true, linking to its page; and **Answer in a session**, each other `question` item, linking to its page and saying it is answered in a `/clm:triage` session. A Home with every section empty SHALL say nothing waits on the person. The number of entries in Review and Answer SHALL be the count the sidebar and tab bar badge Home with.
+The Home view SHALL list, in this order, each section left out when empty: **Review**, each spec branch whose review has `review` true and no approval in `approvals`, by name, linking to its review; **Answer**, each `question` item with `choices` and each `human-task` item, by title, linking to its page, with its answer buttons (`answer-buttons`); **Flagged**, each capability and architectural constraint whose report entry has `flagged` true, linking to its page; and **Answer in a session**, each other `question` item, linking to its page and saying it is answered in a `/clm:triage` session. Review counts only the reviews that have arrived. A Home with every section empty SHALL say nothing waits on the person. The number of entries in Review and Answer SHALL be the count the sidebar and tab bar badge Home with.
 
 #### Scenario: what waits
 - GIVEN repo `o/a` with spec branches `spec/x`, whose review needs review and has no approval, and `spec/y`, whose review needs review and has one; question `q` with choices `yes` and `no`; question `r` with none; `human-task` `h`; and a capabilities report flagging `c`

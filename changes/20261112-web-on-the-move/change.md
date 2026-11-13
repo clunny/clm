@@ -39,3 +39,7 @@ How a person answers: a `question` lists the answers it accepts in `choices`, an
 - No agent reasoning in the app: it records a person's yes, choice or done, and a session acts on it.
 - `web-optional` holds: every answer can still be given in a `/clm:triage` session.
 - An `answered` record is open while its item is in the backlog; answering again replaces that person's answer. An older `clm` skips the kind with a warning, as it does any kind it doesn't know.
+
+## Open questions
+
+- The split's build (`web.views`) moves files out of `web`'s `paths`, rewires `web/src/main.ts` and re-points markers in `web/e2e/`. `path-ownership`'s text lists no such exception, while `nested-splits` sanctions it and every earlier split built this way. Left as established practice; the architecture audit flagged the gap in the constraint's wording.
