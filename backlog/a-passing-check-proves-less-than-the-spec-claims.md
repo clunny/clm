@@ -23,6 +23,8 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 ## Settled (2026-11-13, with the human)
 
+- **The freeze is on.** Until this plan is done, the build loop and triage work only on it. Defects are filed, and their default answer is "accept".
+- **CLM has adopters.** Projects run published releases, so `upgrade` and its migrations stay, and every change in this plan that alters a file, key or format those projects hold ships its migration (`upgrades-carry-migrations`).
 - **`clm land` stays fast.** It gains only checks that take milliseconds. Anything slow runs after the land.
 - **Scope kept.** The web app, Azure DevOps, Codex, the site, blog and analytics, `right-model-per-task` and `watch-machine-load` are in use and stay.
 - **Scope cut.** The `clm runner` command and its component `orchestrator.runner` go: the human runs unattended builds through `/clm:build` in a session. The capability `unattended-runner` folds into `build-from-spec`.
@@ -37,7 +39,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 ## Plan
 
-**0. Freeze and baseline.** The build loop and triage work only on this plan. Defects are filed, and their default answer is "accept". Record the counts of the day.
+**0. Baseline.** Record the counts of the day the freeze began, to measure the plan against.
 
 **1. Rewrite the human layer by hand.** One spec branch, one approval.
 - `ARCHITECTURE.md`: each constraint one or two sentences, labelled checked, measured or principle; mechanics move down into decisions.
@@ -88,8 +90,6 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 ## Open questions
 
-- **The freeze.** The human hasn't yet agreed phase 0.
-- **Adopters.** Whether anyone runs a published release decides whether `upgrade` and its migrations stay as they are or are frozen.
 - **Mutation tool.** Whether `cargo-mutants`' diff-scoped mode fits the verify job hasn't been checked.
 - **Eval results.** Whether `claude plugin eval` returns a case's tags in its JSON isn't documented; the wrapper may have to map case names to requirement IDs.
 - **A hard approval boundary.** A separate touch key for approvals alone, with an answer for the web app, is left for when others join the project.
