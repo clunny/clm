@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [reconsider-plugin.panel-build-opens-panel]
 ---
 

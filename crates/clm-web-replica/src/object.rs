@@ -602,9 +602,9 @@ impl<S: Store, A: Alarm> Object<S, A> {
 
     // ---- POST /write
 
-    /// `POST /write`: `{"login", "token", "kind": "decide" | "propose" | "withdraw", ...}`.
+    /// `POST /write`: `{"login", "token", "kind": "decide" | "propose" | "withdraw" | "answer", ...}`.
     /// Brings itself up to the tip, validates, appends with the requester's token, applies the
-    /// record and, for a decision or a proposal, recomputes before it answers.
+    /// record and, for a decision, a proposal or an answer, recomputes before it answers.
     pub async fn write<P: Host>(&mut self, p: &P, req: &Value) -> Answer {
         let now = p.now();
         let done = match self.replica.view("snapshot") {
@@ -635,6 +635,7 @@ impl<S: Store, A: Alarm> Object<S, A> {
             Some("decide") => self.decide(p, &access, login, req).await,
             Some("propose") => self.propose(p, &access, login, req).await,
             Some("withdraw") => self.withdraw(p, &access, login, req).await,
+            Some("answer") => self.answer(p, &access, login, req).await,
             _ => Answer::empty(422),
         };
         self.batch(now);
@@ -734,6 +735,41 @@ impl<S: Store, A: Alarm> Object<S, A> {
             "kind": "proposed", "slug": slug, "title": title, "body": text, "nodes": nodes,
         });
         let Ok(body) = serde_json::from_value(body) else {
+            return Answer::empty(422);
+        };
+        let record = ledger::record(p, login, body);
+        let appended = ledger::append(p, access, &record).await.is_some();
+        if !self.applied(p, access, &record.writer, appended).await {
+            return Answer::empty(502);
+        }
+        self.recompute(p.now());
+        Answer::json(200, &json!({ "id": record.id }))
+    }
+
+    /// An answer to a backlog item, as the replica validates it (`replica/validate-answers`).
+    async fn answer<P: Host>(
+        &mut self,
+        p: &P,
+        access: &Access,
+        login: &str,
+        req: &Value,
+    ) -> Answer {
+        let (Some(item), Some(text)) = (req["item"].as_str(), req["answer"].as_str()) else {
+            return Answer::empty(422);
+        };
+        let write = Write::Answer {
+            item: item.into(),
+            answer: text.into(),
+        };
+        match self.replica.validate(&write) {
+            Ok(Validated::Answer) => {}
+            Err(Refusal::Unknown) => return Answer::json(404, &json!({ "error": "unknown" })),
+            Err(Refusal::Invalid) => return Answer::json(422, &json!({ "error": "answer" })),
+            _ => return Answer::empty(422),
+        }
+        let Ok(body) = serde_json::from_value(json!({
+            "kind": "answered", "item": item, "answer": text,
+        })) else {
             return Answer::empty(422);
         };
         let record = ledger::record(p, login, body);
