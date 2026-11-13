@@ -133,7 +133,7 @@ test.describe('phone', () => {
     expect(text(await page.locator('.tabbar > *').allInnerTexts())).toEqual(['⌂ Home', '☰ Backlog', '◇ Graph', '▶ Build', '⋯ More']);
     for (const tab of await page.locator('.tabbar > *').all()) await expect(tab).toBeInViewport({ ratio: 1 });
     await page.locator('.tabbar .tab-more').tap();
-    expect(text(await page.locator('.more-menu a').allInnerTexts())).toEqual(['PRs 1', 'Capabilities', 'Arch.']);
+    expect(text(await page.locator('.more-menu a').allInnerTexts())).toEqual(['PRs', 'Capabilities', 'Arch.']);
     await page.locator('.tabbar .tab-more').tap();
     await expect(page.locator('.more-menu')).toBeHidden();
     expect(await fits()).toBe(true);
