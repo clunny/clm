@@ -149,12 +149,43 @@ pub fn triage(root: &Path, expiry_hours: u64) -> Result<Triage, Error> {
             &b.rest,
         ))
     });
+    let mut warnings = taken.warnings;
+    let answers = if lines.iter().any(|l| l.form == "human") {
+        match clm_ledger::fold(root) {
+            Ok(fold) => {
+                warnings.extend(fold.warnings.iter().map(|w| format!("ledger: {w}")));
+                fold.answers
+            }
+            Err(e) => {
+                warnings.push(format!("no answered lines, the ledger can't be read: {e}"));
+                BTreeMap::new()
+            }
+        }
+    } else {
+        BTreeMap::new()
+    };
+    let mut out = Vec::new();
+    for l in lines {
+        out.push(format!("{} {}", l.form, l.rest));
+        if l.form != "human" {
+            continue;
+        }
+        let slug = l.rest.split(' ').next().unwrap_or_default();
+        let open: Vec<&clm_ledger::Record> = answers
+            .get(slug)
+            .map(|v| v.iter().collect())
+            .unwrap_or_default();
+        for r in open {
+            if let clm_ledger::Body::Answered { answer, .. } = &r.body {
+                // One line each: an answer comes from the web, so it may hold line breaks.
+                let answer = answer.replace(char::is_control, " ");
+                out.push(format!("answered {slug} {} {} {answer}", r.writer, r.at));
+            }
+        }
+    }
     Ok(Triage {
-        lines: lines
-            .into_iter()
-            .map(|l| format!("{} {}", l.form, l.rest))
-            .collect(),
-        warnings: taken.warnings,
+        lines: out,
+        warnings,
     })
 }
 
