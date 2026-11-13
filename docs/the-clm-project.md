@@ -1,12 +1,12 @@
 # The CLM project
 
-*An article about CLM as a whole: what it is for, what it believes, where it went wrong and where it is going. It is not part of the spec and no check reads it. It describes the direction agreed on 2026-10-29. Much of it has since been built: `CAPABILITIES.md`, yes-or-no review, traced rules and effort accounting. Where it differs from `ARCHITECTURE.md` or `specs/`, those describe CLM as it is today.*
+*An article about CLM as a whole: what it is for, what it believes, where it went wrong and where it is going. It is not part of the spec and no check reads it. It describes the direction agreed on 2026-10-29, brought up to date on 2026-11-13 with the human layer as rewritten that day. Much of the direction has been built: `CAPABILITIES.md`, yes-or-no review, traced rules and effort accounting. Where it differs from `ARCHITECTURE.md` or `specs/`, those describe CLM as it is today.*
 
 ## What CLM is
 
-CLM is a way of building software in which AI writes and maintains all of the code, and people decide what the software is for and what it must never do. It ships as a `clm` command-line tool and a Claude Code plugin, and it runs on git alone.
+CLM is a way of building software in which AI writes and maintains all of the code, and people decide what the software is for and what it must never do. It ships as a `clm` command-line tool with a plugin for Claude Code and one for Codex, any other agent that reads `AGENTS.md` and runs shell commands can use the tool alone, and it runs on git alone.
 
-The idea underneath it is simple. AI can now write most of a system's code. What it can't do is decide what the system is for, which trade-offs are acceptable, or whether a feature is worth what it costs. CLM draws the line there: humans own intent, AI owns everything below it, and a written spec between them is the contract both sides keep, enforced by programs rather than good intentions.
+The idea underneath it is simple. AI can now write most of a system's code. What it can't do is decide what the system is for, which trade-offs are acceptable, or whether a feature is worth what it costs. CLM draws the line there: humans own intent, AI owns everything below it, and a written spec between them is the contract both sides keep, checked by programs rather than kept by good intentions.
 
 ## Where it comes from
 
@@ -41,8 +41,8 @@ These are two kinds of content, not two kinds of person. Anyone trusted on the p
 
 | Layer | Owner | What it holds | Rough size | Review |
 |---|---|---|---|---|
-| **Capabilities** | Product manager | What the product lets you do, why, and how you would know it works | 15–30 | A trusted human |
-| **Architecture requirements** | Architect | Constraints, invariants, quality bars: "git is the only channel", "no API key is stored", "every land runs on the lander's machine" | 30–60 | A trusted human |
+| **Capabilities** | Product manager | What the product lets you do, why, and how you would know it works | 15–30 (32 today) | A trusted human |
+| **Architecture requirements** | Architect | Constraints, invariants, quality bars: "git is the only channel", "no API key is stored", "every land runs on the lander's machine" | 30–60 (43 today), each one or two sentences | A trusted human |
 | **Implementation spec** | AI | Components, contracts, designs, detailed rules, edge cases, tests | Whatever it takes | Deterministic checks only |
 
 The implementation spec is fluid. AI changes it freely, and it lands on checks alone. It is held to the human layers in three ways:
@@ -69,14 +69,15 @@ These are CLM's invariants, grouped by what they protect. The first two groups w
 
 ### Who owns what
 
-- **AI writes all the code.** Humans don't author or review code. Code changes only through the build flow.
+- **AI writes all the code.** AI writes and maintains all code and tests. Humans don't author or review them, and code reaches `main` only from an AI session's branch.
 - **Humans own intent.** Humans own capabilities and architecture requirements and approve changes to them. They don't approve implementation detail.
+- **Removing behaviour needs a yes.** A scenario, a rule, a capability or an architecture requirement that states behaviour is never dropped without the human's yes. The human reads no pass over what is kept or added; their only pass is over cuts.
 - **Review is yes or no.** A change either needs human review or it doesn't. A change to a capability or an architecture requirement, or one that adds a burden a human must agree to (see *How the AI layer reaches you*), waits for a trusted person's approval. Everything else lands on checks alone, with no review after the fact. Earlier CLM had three tiers, `HARD`, `SOFT` and `AUTO`, with an after-the-fact review queue for `SOFT`. The queue grew faster than anyone could read it, and the word "hard" made review sound difficult rather than necessary. The tiers are gone. A change *needs review*, or it doesn't.
 
 ### Proof and enforcement
 
-- **Programs enforce every rule.** Anything that must hold is checked by a program (the CLI, a hook, the land script), never by prose or by a model's judgment alone. Judgment can advise, but it never stops a land.
-- **Tests prove the spec.** A rule or requirement counts as built only when a passing test cites it at its current version (`req:<id>@<version>`). A citation of an older version means the code is behind.
+- **Three kinds of rule, labelled as such.** A rule is *checked* when a program decides it (the CLI, a hook, the land script): this is preferred wherever a program can decide, model behaviour included, since refusing the bad outcome beats measuring compliance. It is *measured* when an eval scores it against a threshold the human agreed, for behaviour that comes from a model or is statistical by nature. It is a *principle* when it is design judgement, which a review may advise on. "Enforced" only ever means checked, and only a program stops a land. A sentence in a prompt enforces nothing.
+- **Tests, and evals, prove the spec.** A rule or requirement counts as built only when a passing test cites it at its current version (`req:<id>@<version>`). A citation of an older version means the code is behind. For behaviour only a model produces, an eval is the proof instead, where the human has agreed to pay for it: the project names its eval command as it names its land check, an eval runs when something it reads has changed, within a spend limit, and a result below its threshold files a bug. An eval never holds a land.
 - **No silent drift.** A divergence between spec and code is a blocking error on `main`.
 - **The spec describes only the present.** Removed requirements are deleted, not marked deprecated. History lives in git and the change archive, and future intent lives in the backlog.
 
@@ -102,12 +103,12 @@ These are CLM's invariants, grouped by what they protect. The first two groups w
   - **Accept it** as the way things are: write it down and do nothing. That is a complete answer, not a deferral.
   - **Make a small workaround** for a genuine edge case.
 
-  Workarounds are counted against the capability they serve. Several on one capability, or one with many edge cases, is a red flag: stop and decide whether to redesign, drop or keep it. Where possible this should be foreseen. A proposal lists the edge cases and workarounds it already knows it will need, and a long list at that stage raises the flag before anything is built. An AI session that hits its third workaround on the same thing stops and asks instead of pushing on.
+  Workarounds are counted against the capability they serve. Several on one capability, or one with many edge cases, is a red flag: stop and decide whether to redesign, drop or keep it. Where possible this should be foreseen. A proposal lists the edge cases and workarounds it already knows it will need, and a long list at that stage raises the flag before anything is built. An AI session whose workaround brings a capability to its limit of unsettled workarounds, three by default, stops work on that rule and asks instead of pushing on.
 - **The right model for the task.** Each kind of work runs on a model suited to it, and every agent CLM launches names its model explicitly, because an agent launched without one silently inherits the session's model. CLM reuses superpowers' model policy (the Model Selection rules of `subagent-driven-development`) rather than inventing its own.
   - **"The most capable model" means the human's main session model**, whatever that is (Opus, say), never a fixed top-tier name. It is for work where judgment is the product: brainstorming intent, design, hard debugging, and the final review of a build.
   - **A faster, cheaper model** (Sonnet, or Haiku for mechanical steps) is for work that is well specified and checked by programs anyway: building a pending rule test-first, running checks, rebasing, writing up a pull request.
 
-  Builds keep superpowers' **inline ("Native") execution**: one session builds every step of its plan, then one fresh reviewer on the main session's model reviews the whole branch. They don't use `subagent-driven-development` itself. A fresh implementer and reviewer per task, with up to five fix rounds, multiplies the agents on builds that are deliberately small, and the skill's worktree setup and finishing steps would have to be blocked, which is a skill used with workarounds. So the policy applies where CLM does the launching: the build subagents, the drafts, the spec auditor and the headless runner. A build that keeps failing on the cheaper model steps up rather than grinding on. Model choice is part of effort accounting, so the policy is judged by its results, which is also what replaces the eval that used to gate changes to a build's skill list.
+  Builds keep superpowers' **inline ("Native") execution**: one session builds every step of its plan, then one fresh reviewer on the main session's model reviews the whole branch. They don't use `subagent-driven-development` itself. A fresh implementer and reviewer per task, with up to five fix rounds, multiplies the agents on builds that are deliberately small, and the skill's worktree setup and finishing steps would have to be blocked, which is a skill used with workarounds. So the policy applies where CLM does the launching: the build subagents, the drafts and the spec auditor. A build that keeps failing on the cheaper model steps up rather than grinding on. Model choice is part of effort accounting, so the policy is judged by its results, which is also what replaces the eval that used to gate changes to a build's skill list.
 - **Ask the architect rather than guess.** When there is no clear standard answer, or reuse and minimalism pull in different directions, the AI asks the architect instead of guessing.
 - **No dead code.** Code exists only to serve a current rule. Removing behaviour removes its code, tests and dependencies. A breaking contract change goes expand, then contract.
 - **Small nodes.** A component stays small enough for one build session to hold its spec and its code. Splitting components is the AI's business and needs no human.
@@ -128,11 +129,12 @@ These are CLM's invariants, grouped by what they protect. The first two groups w
 
 ### How the AI layer reaches you
 
-Implementation work is free, but some of it creates work or cost for people. There are exactly three ways it reaches a human, and no others:
+Implementation work is free, but some of it creates work or cost for people. There are exactly four ways it reaches a human, and no others:
 
 - **It waits** when a change spends your money or your time, or can't be undone. Examples: recurring model runs or paid services, a step only you can do (installing something, creating an account, a DNS record, a secret), or anything outward-facing (publishing, a release, sending data to an outside service). These need a yes before they land, like a capability change. A step only you can do should be asked about at design time, not discovered during the build.
 - **It flags** a burden that can be undone: workarounds piling up, new edge cases, slower or flakier lands. The change lands, and the flag appears on the capability's review page, next to the change that caused it, and as a line in `clm status`. It stays there until someone decides: keep, cut, redesign, or accept as is.
 - **It asks** when an architectural choice isn't clear. A question is filed as a backlog item that blocks only the rules waiting on the answer, and the rest gets built.
+- **It proposes a cut** when it sees something that should probably go: a duplicate, a scenario nothing uses, a rule that keeps being rewritten or worked around, a capability whose cost outruns its use. It says what it is, the evidence, what would be lost and what it would save. A proposed cut holds nothing up, and nothing is cut without a yes.
 
 Programs can detect some burdens: a new human-only backlog item, a new budget or cost setting, a release step. Others, like "this now calls a paid model on every land", can't be detected reliably. So the AI declares the burdens a change adds, and the checks verify what they can. Effort accounting is the safety net for what neither catches: a cost nobody declared still shows up in the numbers.
 
@@ -181,7 +183,7 @@ CLM is opinionated. If its opinions don't suit a team, it will get in the team's
 - Every capability earns its place against its cost, and gets reviewed periodically.
 - Standard solutions over home-made ones. Minimal over clever. Redesign over patching.
 - One branch per piece of work, based on `main`, landed through `clm land`.
-- Git and Claude Code. A git host (GitHub, Azure DevOps, a bare server, or none) only holds the remote and a pull request per branch. It runs no checks and decides nothing.
+- Git and an agent harness: Claude Code or Codex with a plugin, or any agent that reads `AGENTS.md` and runs shell commands. A git host (GitHub, Azure DevOps, a bare server, or none) holds the remote and a pull request per branch. It may run a project's slow tests after a land, and decides no land.
 
 CLM is a poor fit when you want to write code by hand, when the work is a script that will never change, or when no one wants to own the product's intent.
 
@@ -200,6 +202,14 @@ Starting over would bring the same habits and the same rules, and would throw aw
 7. **Review and prune.** The first review, run against real numbers, decides what else goes.
 
 The re-founding probably has to be done by hand on a branch, as the earlier redesign of the build queue was: CLM can't easily carry a change to its own information model through itself.
+
+### The second correction (2026-11-13)
+
+Two weeks after the re-founding, an audit found the philosophy sound and the mechanical core well tested, and four things wrong again. Proof had become a marker: a rule read as built when a `req:` string with the right hash existed in any file, whether or not it sat in a test that ran. About 130 rules were satisfied by a sentence existing in a prompt. The growth had recurred, to 932 rules in 57 components, most of the new changes patching CLM's own process. And mechanics had moved back into the human layer: `ARCHITECTURE.md` had grown by three quarters in ten days.
+
+The answer is a plan, kept as one backlog item (`backlog/a-passing-check-proves-less-than-the-spec-claims.md`), with a freeze on everything else until it is done. Its first phase rewrote the human layer by hand: each architecture requirement in one or two sentences with its label, its mechanics moved down into decisions and the guide, and the capabilities reworded to what a test at the product's boundary can observe. The later phases delete the prompt-text rules, make proof real (a marker counts only in a test that passed, a build's diff outside its component is refused, and changed code is mutated to see that its tests notice), prune the implementation spec to observable behaviour, add evals, and turn the advisory brakes into ones that gate.
+
+Three things were learned. A rule a model is merely told about is not enforced, so each rule now says whether a program checks it, an eval measures it or it is a principle. Deleting on purpose loses behaviour by accident, so removing behaviour needs the human's yes and every phase lists what it deletes. And a human layer that every build reads has to stay small enough to read, which only holds while its mechanics live somewhere else.
 
 ### Risks
 
