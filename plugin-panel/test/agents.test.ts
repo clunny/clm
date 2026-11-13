@@ -101,6 +101,7 @@ describe('runs', () => {
     expect(list[0]?.id).toBe('a1')
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('clear and resume empty the list; quitting does not', () => {
     expect(resetsOn('clear')).toBe(true)
     expect(resetsOn('resume')).toBe(true)
@@ -368,6 +369,7 @@ describe('drawing', () => {
     expect(glyphs(flightLines(CHART, resumed, 95_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test("a failed child of a finished build takes its parent's place, at the top level under its node", () => {
     let list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-opus-5-5', prompt: 'Review.', at: 30_000 })
     list = applyComplete(list, 'c1', false, 80_000)
@@ -565,6 +567,7 @@ describe('hooks events', () => {
     expect(onToolCall(list, { tool: 'TodoWrite', todos: [] }, {})).toEqual(list)
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('session.end empties the list on clear and resume only; the rows tick while one runs', () => {
     const list = onSpawn([], spawn, { agentId: 'b1', model: 'm' }, 0)
     expect(onSessionEnd(list, 'clear')).toEqual([])
@@ -653,6 +656,7 @@ describe('waiting', () => {
     expect(stepped?.endedAt).toBeUndefined()
   })
 
+  // req:plugin.panel/build-row-lifecycle@f82ccf35
   test('the 30-second reconciliation ends a waiting run the engine lists otherwise, and revives a lagging done one', () => {
     const waiting = onComplete(build(), { agentId: 'b1', reason: 'answer' }, 9_000, 'waiting')
     const ended = reconcileWaiting(waiting, [{ id: 'b1', status: 'completed' }], 40_000)
