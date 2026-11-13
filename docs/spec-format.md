@@ -20,7 +20,8 @@ successor: ""            # placeholder components: the slice that will flesh thi
 optional: false          # optional; true makes this component and its descendants optional: no required component may depend on them (`optional-nodes`)
 size_budget: { spec_tokens: 20000 }   # optional; this component's size budget in tokens, in place of clm.toml's `component_size` (`node-size-budgets`)
 tests: ["tests/check/**"]   # optional; this component's test files, owned wherever they sit, inside another component's paths included (`components-own-their-tests`)
-test_depends_on: [clm]   # optional; components its test files may import beyond depends_on, such as the one holding the entry point or a shared test harness
+exemptions:             # optional; files temporarily exempt from one code rule, each until a backlog item's work is done (`temporary-exemptions`)
+  - { rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/give-features-their-own-tests, why: "the suite still builds the whole app" }
 outside: ["src/web/**"]   # root only, optional; code no component owns yet, while a codebase is adopted a part at a time (`incremental-adoption`)
 ---
 

@@ -529,9 +529,9 @@ Every implementation rule SHALL name what it serves: a capability or an architec
 A component's build SHALL change only its own component's files: those its `tests` match, wherever they sit, and those its `paths` match that no other component's `tests` match (`components-own-their-tests`). A change that another component's code or tests must follow is built in steps, each by the build of the component whose files it changes: the provider expands, each user moves in a requirement of its own that needs the expansion, and the provider contracts once every move is built (`coupled-changes-sequence`, `expand-contract`); a build whose requirement needs an edit outside its files leaves it unbuilt with a `question` item. Two exceptions are permanent. A build edits the shared wiring its root's Design names, the files that wire every component into one product (here the root's dispatch files, `crates/clm/src/main.rs`, `Cargo.toml` and `Cargo.lock`, and `clm.toml`'s detector allowances, `unreferenced-allow-then-narrow`), only to add or change the entry its own component needs. And a build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations, and the steps that reach them, to what the requirement states, keeping its citation and every check its capability's scenarios, as `CAPABILITIES.md` now states them, state, and names each one in its pull request; a requirement under which the entry as written no longer holds is left unbuilt, with a `question` item, until a change edits the entry, since its own land runs that test and the `capability` component holds no requirement to carry the move (`capability-tests-follow-rules`): a capability test observes the whole product, so a behaviour and the test that observes it can't land apart. Two are transitional, each until a backlog item is done: a build whose requirement changes the text of a file `clm init` writes writes the `upgrade` migration that carries the change, as the `upgrade` requirement that needs it states it, brings `upgrade`'s tests that the new migration makes fail to what `upgrade`'s requirements as applied state, and names both in its pull request, since the upgrade corpus test fails a land of either half alone (`template-change-ships-its-migration`), until a template and its migration share a component (`backlog/a-template-and-its-migration-live-in-different-components`); and a build may re-cite, and bring up to the current text, a test in a file no component's `tests` match that cites one of its own requirements at another version, since that test is part of the cited component's build (`tests-count-where-cited`, `stale-markers-keep-behind`), until the project gives its tests to their components (`backlog/clm-s-cli-tests-belong-to-the-root`).
 
 #### Scenario: test in its own directory of a shared suite
-- GIVEN a suite directory `tests/` that a harness component's `paths` own, and component `a` with `tests: ["tests/a/**"]` and `test_depends_on` naming the component that holds the app's entry point
+- GIVEN a suite directory `tests/` that a harness component's `paths` own, and component `a` with `tests: ["tests/a/**"]`
 - WHEN `a`'s build adds a test
-- THEN it writes it under `tests/a/`, importing the entry point, and changes no file of the harness
+- THEN it writes it under `tests/a/`, reaching `a`'s code through `a`'s own surface and what `a` depends on, and changes no file of the harness
 
 #### Scenario: removal another component still uses
 - GIVEN a build of `a` whose requirement removes a Contract function that component `b`'s code still calls, and no requirement of `b` that moves it off
@@ -571,6 +571,32 @@ A component's build SHALL change only its own component's files: those its `test
 
 #### Untested
 Accepted: no gate or land check refuses a build's file outside its component's files. The build prompt keeps it there, and the build's review and spec audit read the diff (`path-ownership-by-prompt`). Which files a component owns is checked: `paths` and `tests` stay disjoint, and a test a component's `tests` own cites only that component.
+
+### Constraint: exemptions-end
+A rule `clm check` judges code by SHALL hold for every file a component owns, except a file that one of that component's exemptions names for that rule; each exemption SHALL name its rule, its files and the backlog item whose work ends it, SHALL be added only by a change a human reviews, and SHALL stay in sight until a change removes it (`temporary-exemptions`). Code CLM makes no claims about at all, such as code not adopted yet or vendored code, is the root's `outside` instead (`incremental-adoption`).
+
+#### Scenario: adopting a suite that imports the app
+- GIVEN an existing test suite, adopted into feature components, whose tests import the app's entry point above them
+- WHEN the first spec graph is written
+- THEN each feature that owns such tests holds an exemption from `undeclared-imports` for them, naming the item that has its builds prove its requirements through its own surface, and `clm check` passes
+
+#### Scenario: an exemption a build would add
+- GIVEN a build whose requirement needs an import its component's `depends_on` doesn't allow
+- WHEN it builds
+- THEN it adds no exemption, leaves the requirement unbuilt, and adds a `question` item whose `blocks` names it
+
+#### Carries
+- method
+
+#### Enforced by
+- model/exemptions
+- gate/needs-review
+- gate/exemption-names-its-item
+- check.health/exemptions-signal
+- orchestrator.run/stays-in-its-component
+
+#### Untested
+When an exemption's work is done is the human's call, made by ordering its item in the backlog; `clm health` shows each exemption, how much it still covers and whether its item is gone.
 
 ### Constraint: approval-policy
 Only a human SHALL approve a change that needs review, through the command the agent harness's guard asks them to confirm, or from the human's own terminal outside any agent; the conversation alone never counts. Under a recognised agent harness that can't make the human confirm a command, `clm approve` refuses (`agent-harness-adapters`). Who may approve is the project's `approval` setting.

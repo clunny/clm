@@ -26,6 +26,7 @@ serves: [capability/know-health, architecture/health-advises]
 | `outlier-size` | component whose code or spec tokens per requirement exceed twice the median |
 | `unexercised` | run of lines no test runs, from the `lcov` file the settings name (`lcov-coverage-signal`) |
 | `workaround` | `workaround` backlog item, with the requirement it names (`workaround-flags`) |
+| `exemption` | exemption a component holds, with its rule, how many of the component's files it names and the item that ends it (`exemptions-signal`) |
 | `rewritten` | requirement that two or more archived changes modified |
 | `churn` | requirement the committed history cites at three or more versions, counted from the markers each commit added (`churn-from-marker-history`) |
 | `land-time` | step, among the up to five with the most total seconds over the last 50 timed lands (`ledger/landed-times`), as `<path>: health/land-time: <step>: <runs> runs, median <n>s, total <n>s, selected by <paths>`, `<path>` the path that most often selected it or `clm.toml` when none did; the summary line is `<m> of <n> timed lands over <t>s`, `<t>` being `clm_health::Settings`' `land_check_target_seconds`, which the caller sets from `[land] check_target_seconds` (`land-time-signal`) |
@@ -356,3 +357,23 @@ The field of `Settings` that holds the size budgets SHALL be `component_size`, n
 
 #### Needs
 - ledger/landed-times
+
+### Requirement: exemptions-signal
+`clm health` SHALL report, under `exemption`, each exemption a component holds (`model/exemptions`), in component ID then written order, as `specs/<component path>/SPEC.md: health/exemption: <component>: <rule> until backlog/<slug>: <n> files`, `<n>` the number of tracked files the component owns (`check.coverage/owner`) that its `files` match, followed by `; item gone` when `backlog/<slug>.md` doesn't exist and `; matches nothing` when `<n>` is 0, so an exemption whose work is done, or whose files are gone, shows as one to remove (`temporary-exemptions`). The summary line SHALL count the exemptions, as `health/exemption: <n> exemptions`.
+
+#### Scenario: exemption being paid down
+- GIVEN component `a` owning `tests/a/x.py` and `tests/a/y.py`, with an exemption from `undeclared-imports` for `tests/a/**` until `backlog/r`, and `backlog/r.md`
+- WHEN `clm health` runs
+- THEN it prints `specs/a/SPEC.md: health/exemption: a: undeclared-imports until backlog/r: 2 files`
+
+#### Scenario: work done
+- GIVEN the same exemption, with no `backlog/r.md` and no file under `tests/a/`
+- WHEN `clm health` runs
+- THEN it prints `specs/a/SPEC.md: health/exemption: a: undeclared-imports until backlog/r: 0 files; item gone; matches nothing`
+
+#### Serves
+- architecture/exemptions-end
+- architecture/health-advises
+
+#### Needs
+- model/exemptions

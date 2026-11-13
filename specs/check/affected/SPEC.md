@@ -13,7 +13,7 @@ serves: [capability/land-safely]
 
 - The *changed files* are the paths that differ between the merge base of `<ref>` (default `origin/main`) and `HEAD`, and the working tree, with the untracked files git doesn't ignore, leaving out every path `ledger`'s `doc_only` names. A deleted file is a changed file.
 - When a changed file matches a glob of `config`'s `[affected] all`, or no component's `paths` hold it (`check`'s `owner` gives none), the output is one line, `all <file>`, naming the first such file in path order.
-- Otherwise the *affected* components are the owners of the changed files, every component that depends on one of them, directly or indirectly (`depends_on`), and every component whose `test_depends_on` names one of those, since its tests import it. The output is a *component line* for each affected component, the word `component-words` keeps for these lines followed by a space and the component's ID, which `ci`'s check script and `clm land` read, then `file <path>` for each selected file, each group sorted, and nothing when no file changed.
+- Otherwise the *affected* components are the owners of the changed files, every component that depends on one of them, directly or indirectly (`depends_on`). The output is a *component line* for each affected component, the word `component-words` keeps for these lines followed by a space and the component's ID, which `ci`'s check script and `clm land` read, then `file <path>` for each selected file, each group sorted, and nothing when no file changed.
 - The *selected* files are the changed files that still exist, whatever their content, the files `check`'s coverage scan reads (tracked, or untracked and not ignored; UTF-8; Markdown left out) that hold a `req:` marker whose requirement ID names an affected component (the part before `/`, whether or not the requirement still exists), or that hold no `req:` marker and whose `owner` is affected, and the *readers*.
 - A *reader* is a file the coverage scan reads that holds a `clm:reads <glob>` marker (`doc-readers-marked`) whose glob matches a path that differs as the changed files do, doc-only paths included: a test that reads the repository's own files, such as its specs or `ARCHITECTURE.md`, names them so, since `code_key` leaves the doc-only ones out and nothing else connects the test to them. `--readers` prints the readers' `file` lines alone, with no component or `all` line, which `clm land` runs on a tree whose code was already checked.
 - `--why <path>` prints why the change selects `<path>`, as the chain from the file to a changed file, one link per line (`why-chain`), which the library offers as `why(root, base, path)`. `clm land` runs it to explain a step's cost (`land/check-time-report`).
@@ -120,22 +120,12 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - architecture/reuse-first
 
 ### Requirement: affected-components
-`clm affected` SHALL print a component line (the Contract's) for each component that owns a changed file (`check.coverage/owner`) and for each component that depends on one of those, directly or indirectly, sorted by ID, and for each component whose `test_depends_on` names one of those (`model/test-ownership-keys`), since its tests import it, and for no other component.
+`clm affected` SHALL print a component line (the Contract's) for each component that owns a changed file (`check.coverage/owner`) and for each component that depends on one of those, directly or indirectly, sorted by ID, and for no other component.
 
 #### Scenario: dependants
 - GIVEN a root with no dependencies, components `a`, `b` depending on `a`, `c` depending on `b`, and `d` depending on nothing, and a branch that changes only `crates/a/src/lib.rs`, which `a`'s `paths` hold
 - WHEN `clm affected --base main` runs on the branch
 - THEN it prints the component lines of `a`, `b` and `c`, and no other component line
-
-#### Scenario: tests import a changed component
-- GIVEN components `app` depending on `feat`, and `feat` with `test_depends_on: [app]`, and a branch that changes only a file `app`'s `paths` hold
-- WHEN `clm affected --base main` runs on the branch
-- THEN it prints the component lines of `app` and `feat`
-
-#### Scenario: not through a test dependency's dependants
-- GIVEN components `app` depending on `feat`, `feat` with `test_depends_on: [app]`, and `other` depending on `feat`, and a branch that changes only a file `app`'s `paths` hold
-- WHEN `clm affected --base main` runs on the branch
-- THEN it prints the component lines of `app` and `feat`, and not `other`
 
 #### Scenario: nothing changed
 - GIVEN a branch with no commits beyond `main` and a clean working tree
@@ -145,7 +135,6 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 #### Needs
 - check/path-ownership
 - check.coverage/owner
-- model/test-ownership-keys
 
 ### Requirement: affected-readers
 `clm affected` SHALL treat as a *reader* each file `check`'s coverage scan reads that holds the text `clm:reads ` followed by a glob, up to the next whitespace, matching, as component `paths` match, a path that differs between the merge base and the working tree, doc-only paths and untracked files included. It SHALL print `file <path>` for each reader that still exists among its other `file` lines, sorted with them, whether or not the reader's owner is affected, and given `--readers` SHALL print those lines alone, with no component or `all` line, and nothing when no reader matches.

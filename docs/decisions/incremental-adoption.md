@@ -25,3 +25,5 @@ Rejected:
 - Checking untracked files as well. A human's scratch notes in their checkout would fail `clm check`.
 
 Whether people may keep editing code outside every node by hand during adoption, which `ai-writes-code` doesn't allow, is left open: changing a Layer 1 invariant is the human's call.
+
+(Amended 2026-11-13, `20261113-temporary-exemptions`: `outside` stays the code CLM makes no claims about, adopted later or never, such as vendored code. Adopted code that doesn't meet a rule yet is not `outside`: its component holds an exemption naming the rule and the item that ends it (`temporary-exemptions`).)

@@ -21,3 +21,5 @@ Rejected:
 - **Clean Architecture as a principle of every CLM project.** It would let most tests run against fakes with no entry point, but CLM already enforces the dependency rule that matters (`depends_on` and `undeclared-imports`), end-to-end tests still need the composition root, and its layering is indirection that a small CLI or front end doesn't need. A project may still adopt it in its own `ARCHITECTURE.md`.
 
 This repository's own `crates/clm/tests/` keeps relying on the transitional re-citing exception until its files get `tests` globs (`backlog/clm-s-cli-tests-belong-to-the-root`).
+
+(Amended 2026-11-13, `20261113-temporary-exemptions`: `test_depends_on` is withdrawn. A component's tests import only what its code may; a test of the whole product belongs to the component that holds the entry point, and what doesn't meet a rule at adoption gets an exemption naming the item that ends it (`temporary-exemptions`).)
