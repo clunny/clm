@@ -421,7 +421,6 @@ struct At<'a> {
     head: &'a str,
 }
 
-/// `(status, path)` for each file `git diff --name-status --no-renames <range>` lists.
 /// Whether `head` is a build branch, `impl/<component>`, as `HEAD` names the checked-out one.
 fn is_build_branch(repo: &Path, head: &str) -> bool {
     let name = if head == "HEAD" {
@@ -435,6 +434,7 @@ fn is_build_branch(repo: &Path, head: &str) -> bool {
     })
 }
 
+/// `(status, path)` for each file `git diff --name-status --no-renames <range>` lists.
 fn changed_files(repo: &Path, range: &str) -> Result<Vec<(char, String)>, String> {
     // `-z` gives `<status>\0<path>\0` per file, with paths unquoted.
     let changed = clm_git::git(
