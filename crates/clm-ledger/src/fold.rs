@@ -37,6 +37,9 @@ pub struct Fold {
     /// The open web proposals by `id`: each `proposed` record no `withdrawn` record's
     /// `proposal` names, whoever wrote it.
     pub proposals: BTreeMap<String, Record>,
+    /// The open answers by item: for each item and writer, that writer's `answered` record
+    /// with the latest `at`, ties broken by the greater `id`, in `at` order.
+    pub answers: BTreeMap<String, Vec<Record>>,
     /// `commented` by branch.
     pub comments: BTreeMap<String, Vec<Record>>,
     /// `changes_requested` by branch.
@@ -195,6 +198,13 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             _ => false,
         };
     }
+    // `records` is in `at` then `id` order, so a later entry is the newer answer.
+    let mut newest: BTreeMap<(&str, &str), &str> = BTreeMap::new();
+    for record in &fold.records {
+        if let Body::Answered { item, .. } = &record.body {
+            newest.insert((item, &record.writer), &record.id);
+        }
+    }
     for record in &fold.records {
         let (index, key) = match &record.body {
             Body::Approved { fingerprint, .. } => (&mut fold.approvals, fingerprint),
@@ -218,6 +228,16 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             Body::Proposed { .. } => {
                 if !withdrawn.contains(&record.id) {
                     fold.proposals.insert(record.id.clone(), record.clone());
+                }
+                continue;
+            }
+            Body::Answered { item, .. } => {
+                if newest.get(&(item.as_str(), record.writer.as_str())) == Some(&record.id.as_str())
+                {
+                    fold.answers
+                        .entry(item.clone())
+                        .or_default()
+                        .push(record.clone());
                 }
                 continue;
             }
@@ -284,6 +304,7 @@ pub fn show(fold: &Fold) -> Vec<String> {
                 Body::Unsubscribed { subscription } => subscription.clone(),
                 Body::Proposed { slug, .. } => format!("{} {slug}", r.id),
                 Body::Withdrawn { proposal } => proposal.clone(),
+                Body::Answered { item, .. } => format!("{} {item}", r.id),
                 Body::Commented {
                     branch,
                     fingerprint,

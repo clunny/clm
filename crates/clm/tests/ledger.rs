@@ -1419,6 +1419,45 @@ fn compact_keeps_proposal_records() {
     assert!(!text.contains(r#""kind":"approved""#), "{text}");
 }
 
+fn answered(item: &str, answer: &str) -> Body {
+    Body::Answered {
+        item: item.into(),
+        answer: answer.into(),
+    }
+}
+
+#[test]
+fn show_prints_answers() {
+    // req:ledger/answer-records@96b5bcca
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let env = env(root, alices(root));
+    let a = clm_ledger::append(root, answered("q", "yes"), &env).unwrap();
+    let (code, out, err) = clm(root, root, &["ledger", "show"]);
+    assert_eq!(code, Some(0), "{err}");
+    let (id, who) = (&a.record.id, &a.record.writer);
+    assert!(who.starts_with("alice/"), "{who}");
+    assert_eq!(out, format!("answered {id} q {who} {}\n", a.record.at));
+}
+
+#[test]
+fn compact_keeps_answers() {
+    // req:ledger/answer-records@96b5bcca
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let a = clone_with_origin(home, "a", "A");
+    let env = env(home, &[]);
+    let r = clm_ledger::append(&a, answered("q", "yes"), &env).unwrap();
+    clm_ledger::append(&a, approved("f"), &env).unwrap();
+    tick();
+    clm_ledger::append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
+    assert_eq!(code, Some(0), "{out}{err}");
+    assert_eq!(out.trim(), "removed 1");
+    let text = records(&a, &format!("clm/ledger/{}", r.record.writer));
+    assert!(text.contains(r#""kind":"answered""#), "{text}");
+}
+
 fn commented(fingerprint: &str, target: Option<&str>, text: &str) -> Body {
     Body::Commented {
         branch: "spec/x".into(),

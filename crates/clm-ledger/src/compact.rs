@@ -152,6 +152,7 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
         | Body::Unsubscribed { .. }
         | Body::Proposed { .. }
         | Body::Withdrawn { .. }
+        | Body::Answered { .. }
         | Body::Decided { .. } => false,
     };
     let name = branch::ref_of(&writer);

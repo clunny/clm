@@ -139,6 +139,9 @@ pub enum Body {
     },
     /// The withdrawal of the proposal whose `proposed` record's `id` is `proposal`.
     Withdrawn { proposal: String },
+    /// A person's answer from the web app to a backlog item, `done` for a `human-task`
+    /// (`web-answers-as-ledger-records`).
+    Answered { item: String, answer: String },
     /// A reviewer's comment on a spec branch's diff (`web-review-feedback-as-ledger-records`).
     Commented {
         branch: String,
@@ -337,6 +340,7 @@ impl Body {
             Body::Unsubscribed { .. } => "unsubscribed",
             Body::Proposed { .. } => "proposed",
             Body::Withdrawn { .. } => "withdrawn",
+            Body::Answered { .. } => "answered",
             Body::Commented { .. } => "commented",
             Body::ChangesRequested { .. } => "changes_requested",
             Body::Effort { .. } => "effort",
