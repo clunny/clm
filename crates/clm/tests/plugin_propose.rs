@@ -344,7 +344,7 @@ fn propose_elaborates_ideas() {
 
 #[test]
 fn propose_nests_splits() {
-    // req:plugin.propose/propose-nests-splits@7b381998
+    // req:plugin.propose/propose-nests-splits@fba65430
     let (_, body) = frontmatter(&plugin().join("skills/propose/SKILL.md"));
     for needle in [
         "specs/<component>/<part>/SPEC.md",
@@ -380,10 +380,21 @@ fn propose_nests_splits() {
     let added = sentence.find("ADDED").expect(sentence);
     let child = sentence.find("to the child").expect(sentence);
     assert!(removed < added && added < child, "{sentence}");
+    // The parent gets a requirement that removes its copy, sequenced after the child's build.
+    let sentence = sentence_with(&body, "`coupled-changes-sequence`");
+    for needle in [
+        "requirement of the parent's",
+        "whose `#### Needs` names the moved ones",
+        "removes the parent's copy of their code and tests",
+        "through the child",
+    ] {
+        assert!(sentence.contains(needle), "propose: {needle}: {sentence}");
+    }
     // An undeclared edge may stand only when all three hold; a cycle never does.
     let sentence = sentence_with(&body, "`survey/undeclared-edge`");
     for needle in [
         "importing file moves into a crate or package of the child's own",
+        "whose build writes the importing file in its own crate or package",
         "states the edge's removal",
         "whose `#### Needs` names the child's",
         "`## Edges the change removes`",
