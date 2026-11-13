@@ -38,6 +38,18 @@ Chosen: A, since git is already the queue's source (`git-is-truth`) and the loop
 
 ## Design
 
+### Components
+
+- **`orchestrator.loop`**, new, a child of `orchestrator`, crate `crates/clm-loop`: `clm build` and its subcommands, the loop file, the lease, the return rules and the plan. The plan is a pure function over a snapshot (the queue, the triage groups, the complete changes, the places, the loop file, whether a verify run is due, the agent harness's abilities and the human's items), so the scheduler is tested without git; a thin layer gathers the snapshot from git and the clone. It sits above `orchestrator`, `orchestrator.run`, `orchestrator.triage`, `orchestrator.checkpoint`, `verify`, `agent-harness` and `view`, calling their libraries.
+- **`view`**: the `queue` view's model and renderers, the model a plain type with no dependency it lacks today.
+- **`view.repo`**: `clm view queue`, reading the snapshot through `orchestrator.loop`.
+- **`orchestrator`**: `next-wait` removed.
+- **`orchestrator.run`, `orchestrator.triage`, `orchestrator.checkpoint`**: what the stepper calls as libraries, where today only their commands offer it.
+- **`plugin.build`**: the skill rewritten as above; the requirements whose rules move into `orchestrator.loop` removed.
+- **`plugin.panel`**: the Queue tab, its buttons and the build rows' new place.
+- **`init`, `upgrade`**: the allow rule and its migration.
+- **`clm`**: dispatching `clm build`, and the glossary entry for it.
+
 ### The loop and its lease
 
 One loop per clone. Its state is the loop file, `<git common dir>/clm/loop`, beside `clm/builds/` (`build-places`), shared by every worktree of the clone and written under the places' lock. It holds:
@@ -47,6 +59,10 @@ One loop per clone. Its state is the loop file, `<git common dir>/clm/loop`, bes
 - the **drafted items**, so an item a draft of the loop took is never drafted again by the loop, even after a draft that left it released its claim;
 - the **review drafts** waiting to be folded, and the fold batches waiting for approval;
 - the **conditions** that clear themselves (a full disk, a usage limit until a time), and the **stop request**.
+
+**A run's states.** A run is *planned* from the step that prints its `launch` until the session reports it with `clm build launched`, then *running* until `clm build returned` records its return, and then *returned*. A step prints a planned run's `launch` again, unchanged, until it is reported, and never prepares that component or draft a second time, so a session that runs `step` twice, or loses an action to compaction, launches each run once. On a `start` that adopts a stale loop, planned and running runs alike are orphans: the session that held them is gone, and its subagents with it.
+
+**Taking over a live lease.** `--take-over` is the human's word that the other session is gone, but its subagents may still be running when it isn't. So an orphan that a take-over found, whose branch on `origin` the last fetch saw advance within the lease's 15 minutes, is relaunched only once its branch has stayed still for 15 minutes; until then the queue view shows it under Running as `held by a session taken over`. A build that two subagents work at once would push over each other's branch.
 
 Deleting the loop file loses only the history and the drafted set: the claims, branches, places and backlog are in git or the places, and the next step rebuilds the rest.
 
@@ -70,7 +86,7 @@ Deleting the loop file loses only the history and the drafted set: the claims, b
 - `landed <sha>` while the agent harness still lists the run as running background work: `stop` it, then finish it as landed.
 - Every other return is finished as `clm run --finish` or `clm draft --finish` finishes it today (the place freed, a landed run's worktree removed), and a run with no closing line is landed exactly when the finish says so (`unclosed-build-reads-finish`).
 - A stop is **resumed** in the same subagent when its cause is outside the work: `limit` and `disk` each time they recur, once the condition clears (the reset time passes, or the human says the disk is freed); `outage` and `tool` once, at once; `work` once. A stop is **rebuilt** with a new subagent on the session's model when its cause is `context`, a second `work` stop, or a second `outage` or `tool` stop. A resume whose subagent no longer exists is a stop of cause `tool`.
-- When a component or draft stops twice in a row for the same cause, the loop launches it no more and **escalates**: it files a `question` backlog item on the component, whose `blocks` names the component's pending requirements and whose body names the stops, so the queue holds the component back until the human answers or deletes the item (`requirement-blocks`). It files the item on a branch `loop/<slug>` cut from `origin/main` and lands it with `clm land`, as a code land that adds one backlog item (`gate/backlog-additions`); a `/` after `loop` keeps it out of every claim and proposal namespace.
+- When a component or draft stops twice in a row for the same cause, the loop launches it no more and **escalates**: it files a `question` backlog item on the component, whose `blocks` names the component's pending requirements and whose body names the stops, so the queue holds the component back until the human answers or deletes the item (`requirement-blocks`). The stepper files it itself, with no subagent and no place: it writes the item in a commit on `origin/main` made with `git commit-tree` (as a claim is made), pushes it as the branch `loop/<slug>` and lands that branch with `clm land`, run from the clone's main worktree as a subprocess, then deletes the branch. The branch adds one backlog item and nothing else, so its gate prints `code` and its land runs `clm check` alone, as any small change outside `impl/`, `spec/`, `propose/` and `autosync/` does (`small-change-no-claim`, `gate/backlog-additions`); `gate` needs no rule for `loop/*`. A land that fails leaves the escalation in the loop file, shown in the human's queue, and the next step tries again.
 - `blocked`: nothing is relaunched; the queue already holds the component back by the item the build filed.
 
 **The plan**, in order of what the next step launches. Up to the free places, the step launches the entries below in one list sorted by priority: each ready component `clm next` gives, at its effective priority, and each `clm triage` `group` line whose items the loop hasn't drafted, at its priority; at equal priority a draft goes first, since a bug's spec fix can make its component pending. A fold, an archive, a verify run and an escalation take no place, and are launched when due:
@@ -85,7 +101,7 @@ Builds launch on the build model, `sonnet` as `clm agent-harness` names it, and 
 
 ### Waiting and stopping
 
-`clm build wait` runs in the background whenever the loop has nothing to do this moment: it renews the lease every interval and exits, printing why, when a step would launch something (a place frees and work is ready, new work lands, a draft becomes possible, a condition clears or its time passes, a fold is due) or a stop is requested. The session then runs `clm build step`. It replaces `clm next --wait`, which only the build skill ran, and differs from it in waking on everything the plan launches, drafts included, while builds still run, which closes the idle-place gap.
+`clm build wait` runs in the background whenever the loop has nothing to do this moment: it renews the lease every interval and exits, printing why, when a step would launch something (a place frees and work is ready, new work lands, a draft becomes possible, a condition clears or its time passes, a fold is due) or a stop is requested. The session then runs `clm build step`. It reads the loop file and the places every few seconds, which needs no network, so a stop request or a place another session on this clone frees wakes it at once, and fetches `origin` once per interval (5 minutes, `next-wait`'s default) for work that lands elsewhere. It replaces `clm next --wait`, which only the build skill ran, so this change removes `--wait` and `--interval` from `clm next` and the `next-wait` requirement (`no-dead-code`). It differs from it in waking on everything the plan launches, drafts included, while builds still run, which closes the idle-place gap.
 
 `clm build stop --drain` records a drain: the plan launches nothing new; what runs finishes; the review drafts are folded; then the step says the summary and `end`. `clm build stop --now` records a stop: the next step prints `stop` for every running run and, once they are returned with cause `stopped`, the summary and `end`. Their claims, branches and places stay, so the next `/clm:build` resumes them as orphans. Either is run by the session when the human asks in the chat, or by the panel's buttons; `clm build wait` exits on it, so the session acts at once. A new `clm build start` clears a stop request.
 
