@@ -169,7 +169,7 @@ The Worker SHALL answer 404 to `GET /api/repos/{o}/{r}/pulls`, `GET /api/repos/{
 - architecture/spec-is-current
 
 #### Needs
-- web/spec-branch-review
+- web.views/spec-branch-review
 - web/approve-by-branch
 
 #### Scenario: old routes
