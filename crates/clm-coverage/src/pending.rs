@@ -227,10 +227,18 @@ pub(crate) fn entries_node(graph: &Graph) -> &str {
     graph.capability_tests_node()
 }
 
-/// The node whose `paths` hold the repository-relative `path`: the deepest such node, then
-/// the first by ID; `None` when no node's `paths` do (`owner`).
+/// The node whose `tests` match the repository-relative `path` (the first by ID), else the
+/// node whose `paths` hold it (the deepest, then the first by ID); `None` when no node's
+/// `tests` or `paths` do (`owner`).
 pub fn owner<'g>(graph: &'g Graph, path: &Path) -> Option<&'g str> {
-    let path = path.to_string_lossy();
+    let path = &*path.to_string_lossy();
+    let holding = |globs: fn(&clm_model::Node) -> &[String]| {
+        graph
+            .nodes
+            .values()
+            .filter(move |n| globs(n).iter().any(|p| glob::matches(p, path)))
+            .map(|n| n.id.as_str())
+    };
     let depth = |id: &str| {
         if id == ROOT_ID {
             0
@@ -238,10 +246,7 @@ pub fn owner<'g>(graph: &'g Graph, path: &Path) -> Option<&'g str> {
             id.split('.').count()
         }
     };
-    graph
-        .nodes
-        .values()
-        .filter(|n| n.frontmatter.paths.iter().any(|p| glob::matches(p, &path)))
-        .map(|n| n.id.as_str())
-        .min_by_key(|id| (std::cmp::Reverse(depth(id)), *id))
+    holding(|n| &n.frontmatter.tests).min().or_else(|| {
+        holding(|n| &n.frontmatter.paths).min_by_key(|id| (std::cmp::Reverse(depth(id)), *id))
+    })
 }
