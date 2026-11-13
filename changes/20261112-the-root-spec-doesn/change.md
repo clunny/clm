@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [the-root-spec-doesn-t-declare-orchestrator-loop-as-a-dependency]
 ---
 

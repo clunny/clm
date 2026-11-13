@@ -2,7 +2,7 @@
 title: CLM
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, agent-harness, machine]
+depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, orchestrator.loop, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, agent-harness, machine]
 paths: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/build.rs", "crates/clm/src/**", "crates/clm/tests/*.rs", "rust-toolchain.toml", ".claude/settings.json", ".gitattributes", "scripts/dev-install.sh", "scripts/retired-terms.sh", "scripts/retired-terms.txt", "README.md", "CONTRIBUTING.md", "LICENSE"]
 outside: []
 serves: [capability/install-and-release, architecture/platform]
