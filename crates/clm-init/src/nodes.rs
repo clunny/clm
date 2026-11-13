@@ -89,8 +89,8 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         }
     }
     for node in list {
-        let all_deps = node.depends_on.iter().chain(&node.test_depends_on);
-        if let Some(dep) = all_deps.into_iter().find(|d| !ids.contains(d.as_str())) {
+        let mut all_deps = node.depends_on.iter().chain(&node.test_depends_on);
+        if let Some(dep) = all_deps.find(|d| !ids.contains(d.as_str())) {
             return Err(format!(
                 "{}: component `{}` depends on unknown component `{dep}`",
                 file.display(),

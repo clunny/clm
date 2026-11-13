@@ -602,6 +602,20 @@ fn an_edge_from_tests_needs_depends_on_or_test_depends_on() {
 }
 
 #[test]
+fn test_depends_on_excuses_no_edge_from_a_non_test_file() {
+    // req:init/survey-components@cf5e7ef5
+    let map = carved_map("tests: [\"tests/feat/**\"], test_depends_on: [app]");
+    let mut files = CARVED.to_vec();
+    files[1] = ("feat/lib.py", b"import app.mod\n");
+    let out = components(&files, &map);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(
+        stdout(&out).contains("feat/lib.py (component `feat`)"),
+        "{out:?}"
+    );
+}
+
+#[test]
 fn two_components_tests_overlap() {
     // req:init/survey-components@cf5e7ef5
     let map = format!(
