@@ -217,7 +217,7 @@ test.describe('Markdown from the repository', () => {
     const mock = await mockApi(context);
     const row = (cells: string[]) => `| ${cells.join(' | ')} |`;
     const wide = ['alphabetical', 'bravo-column', 'charlie-column', 'delta-column', 'echo-column'];
-    const text = ['### Capability: a', '', 'A person can a, with `inline` code.', '', '```', 'x'.repeat(300), '```', '', row(wide), row(wide.map(() => '---')), row(wide.map((w) => w.repeat(2))), '', '> quoted', '', '- one', '- two'].join('\n');
+    const text = ['### Capability: a', '', 'A person can a, with `inline` code.', '', '```', 'x'.repeat(300), '```', '', row(wide), row(wide.map(() => '---')), row(wide.map((w) => w.repeat(2))), '', '> quoted', '', '- one', '- two', '', '[a link](https://example.com/x)'].join('\n');
     const c = capabilities();
     c.report.capabilities[1] = cost('a', 2, { text });
     mock.routes[CAPABILITIES] = c;
@@ -233,8 +233,15 @@ test.describe('Markdown from the repository', () => {
     const table = await page.locator('.md table').first().evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth, overflowX: getComputedStyle(e).overflowX }));
     expect(table.scroll).toBeGreaterThan(table.client);
     expect(['auto', 'scroll']).toContain(table.overflowX);
+    // Headings, lists, quotes and links carry their own styles.
+    const style = (sel: string, prop: string) => page.locator(sel).first().evaluate((e, p) => getComputedStyle(e).getPropertyValue(p), prop);
+    expect(await style('.md h3', 'font-weight')).toBe('600');
+    expect(parseFloat(await style('.md ul', 'padding-left'))).toBeGreaterThan(0);
+    expect(parseFloat(await style('.md blockquote', 'border-left-width'))).toBeGreaterThan(0);
+    expect(await style('.md a', 'text-decoration-line')).toBe('underline');
     // Code is set in JetBrains Mono.
     expect(await page.locator('.md code').first().evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
     expect(await pre.evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
+    expect(await pre.locator('code').evaluate((e) => getComputedStyle(e).fontFamily)).toContain('JetBrains Mono');
   });
 });
