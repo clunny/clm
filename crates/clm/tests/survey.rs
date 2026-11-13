@@ -285,7 +285,7 @@ const TOP: &str = "  - { id: top, paths: [\"Cargo.toml\", \"README.md\", \"docs/
 
 #[test]
 fn components_key() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "components:\n  - {{ id: a, paths: [\"crates/a/**\"], depends_on: [b] }}\n  - {{ id: b, paths: [\"crates/b/**\"] }}\n{TOP}"
     );
@@ -315,7 +315,7 @@ fn a_and_b(deps: &str) -> String {
 
 #[test]
 fn uncovered_file() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = "components:\n  - { id: a, paths: [\"crates/a/**\"] }\n";
     let out = components(TWO_CRATES, map);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -329,7 +329,7 @@ fn uncovered_file() {
 
 #[test]
 fn undeclared_edge() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!("components:\n{}{TOP}", a_and_b(""));
     let out = components(TWO_CRATES, &map);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -342,7 +342,7 @@ fn undeclared_edge() {
 
 #[test]
 fn good_map() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!("components:\n{}{TOP}", a_and_b("b"));
     let out = components(TWO_CRATES, &map);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -351,7 +351,7 @@ fn good_map() {
 
 #[test]
 fn part_left_for_later() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "components:\n  - {{ id: a, paths: [\"crates/a/**\"], depends_on: [] }}\n{TOP}outside: [\"crates/b/**\"]\n"
     );
@@ -362,7 +362,7 @@ fn part_left_for_later() {
 
 #[test]
 fn outside_glob_that_exempts_nothing() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "components:\n{}{TOP}outside: [\"crates/c/**\"]\n",
         a_and_b("b")
@@ -378,7 +378,7 @@ fn outside_glob_that_exempts_nothing() {
 
 #[test]
 fn an_outside_glob_over_a_covered_file_exempts_nothing() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "components:\n{}{TOP}outside: [\"crates/b/**\"]\n",
         a_and_b("b")
@@ -402,7 +402,7 @@ fn survey_reads_the_index_alone() {
 
 #[test]
 fn the_code_files_check_reads() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let mut files = TWO_CRATES.to_vec();
     files.push(("docs/notes.md", b"notes\n"));
     files.push((".github/workflows/ci.yml", b"name: ci\n"));
@@ -420,7 +420,7 @@ fn the_code_files_check_reads() {
 
 #[test]
 fn outside_that_is_not_a_list_of_globs_is_refused() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     for outside in ["outside: x\n", "outside: [\"\"]\n", "outside: [1]\n"] {
         let map = format!("components:\n{}{TOP}{outside}", a_and_b("b"));
         let out = components(TWO_CRATES, &map);
@@ -437,7 +437,7 @@ fn outside_that_is_not_a_list_of_globs_is_refused() {
 
 #[test]
 fn a_file_two_components_cover_overlaps() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "components:\n{}  - {{ id: c, paths: [\"crates/a/src/lib.rs\"] }}\n{TOP}",
         a_and_b("b")
@@ -449,7 +449,7 @@ fn a_file_two_components_cover_overlaps() {
 
 #[test]
 fn a_depends_on_cycle_is_reported() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "components:\n  - {{ id: a, paths: [\"crates/a/**\"], depends_on: [b] }}\n  - {{ id: b, paths: [\"crates/b/**\"], depends_on: [a] }}\n{TOP}"
     );
@@ -463,7 +463,7 @@ fn a_depends_on_cycle_is_reported() {
 
 #[test]
 fn the_report_lines_name_what_they_found() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let overlap = format!(
         "components:\n{}  - {{ id: c, paths: [\"crates/a/src/lib.rs\"] }}\n{TOP}",
         a_and_b("b")
@@ -486,7 +486,7 @@ fn the_report_lines_name_what_they_found() {
 
 #[test]
 fn binary_files_count_and_spec_files_do_not() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let mut files = TWO_CRATES.to_vec();
     files.push(("assets/logo.bin", b"\0\x01\x02"));
     for f in [
@@ -521,7 +521,7 @@ fn binary_files_count_and_spec_files_do_not() {
 
 #[test]
 fn a_star_does_not_cross_a_slash() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = "components:\n  - { id: a, paths: [\"crates/*\"] }\n  - { id: t, paths: [\"Cargo.toml\", \"README.md\"] }\n";
     let text = stdout(&components(TWO_CRATES, map));
     assert!(
@@ -544,7 +544,7 @@ fn a_duplicate_component_exits_1() {
 
 #[test]
 fn the_old_key() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let repo = repo(TWO_CRATES);
     let map = format!("nodes:\n{}{TOP}", a_and_b("b"));
     fs::write(repo.path().join("map.yaml"), map).unwrap();
@@ -578,49 +578,100 @@ fn carved_map(feat: &str) -> String {
 
 #[test]
 fn tests_carved_out_of_a_suite() {
-    // req:init/survey-components@cf5e7ef5
-    let map = carved_map("tests: [\"tests/feat/**\"], test_depends_on: [app]");
-    let out = components(CARVED, &map);
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert_eq!(stdout(&out), "", "{out:?}");
-}
-
-#[test]
-fn an_edge_from_tests_needs_depends_on_or_test_depends_on() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = carved_map("tests: [\"tests/feat/**\"]");
     let out = components(CARVED, &map);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let text = stdout(&out);
     assert!(
         text.contains("survey/undeclared-edge")
-            && text.contains("`feat`")
+            && text.contains("tests/feat/test_x.py (component `feat`)")
             && text.contains("`app`"),
         "{out:?}"
     );
+    assert!(!text.contains("survey/overlap"), "{out:?}");
     assert!(!text.contains("survey/cycle"), "{out:?}");
 }
 
 #[test]
-fn test_depends_on_excuses_no_edge_from_a_non_test_file() {
-    // req:init/survey-components@cf5e7ef5
-    let map = carved_map("tests: [\"tests/feat/**\"], test_depends_on: [app]");
-    let mut files = CARVED.to_vec();
-    files[1] = ("feat/lib.py", b"import app.mod\n");
-    let out = components(&files, &map);
-    assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(
-        stdout(&out).contains("feat/lib.py (component `feat`)"),
-        "{out:?}"
+fn an_exempt_edge_is_not_reported() {
+    // req:init/survey-components@368a5dcd
+    let map = carved_map(
+        "tests: [\"tests/feat/**\"], exemptions: [{ rule: undeclared-imports, files: [\"tests/feat/**\"], until: backlog/x }]",
     );
+    let out = components(CARVED, &map);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "", "{out:?}");
+}
+
+#[test]
+fn an_exemption_covers_only_its_rule_and_files() {
+    // req:init/survey-components@368a5dcd
+    for exemption in [
+        "{ rule: skipped-tests, files: [\"tests/feat/**\"], until: backlog/x }",
+        "{ rule: undeclared-imports, files: [\"tests/other/**\"], until: backlog/x }",
+    ] {
+        let map = carved_map(&format!(
+            "tests: [\"tests/feat/**\"], exemptions: [{exemption}]"
+        ));
+        let out = components(CARVED, &map);
+        assert_eq!(out.status.code(), Some(1), "{exemption}: {out:?}");
+        assert!(
+            stdout(&out).contains("survey/undeclared-edge"),
+            "{exemption}: {out:?}"
+        );
+    }
+}
+
+#[test]
+fn an_exemption_the_model_would_refuse_is_refused() {
+    // req:init/survey-components@368a5dcd
+    let unparsed = components(CARVED, "components: 3\n");
+    for exemption in [
+        "3",
+        "{ files: [\"a\"], until: backlog/x }",
+        "{ rule: undeclared-imports, until: backlog/x }",
+        "{ rule: undeclared-imports, files: [\"a\"] }",
+        "{ rule: paths-disjoint, files: [\"a\"], until: backlog/x }",
+        "{ rule: undeclared-imports, files: [], until: backlog/x }",
+        "{ rule: undeclared-imports, files: [\"\"], until: backlog/x }",
+        "{ rule: undeclared-imports, files: \"a\", until: backlog/x }",
+        "{ rule: undeclared-imports, files: [\"a\"], until: x }",
+        "{ rule: undeclared-imports, files: [\"a\"], until: backlog/x, extra: 1 }",
+    ] {
+        let map = carved_map(&format!("exemptions: [{exemption}]"));
+        let out = components(CARVED, &map);
+        assert_eq!(
+            out.status.code(),
+            unparsed.status.code(),
+            "{exemption}: {out:?}"
+        );
+        assert!(out.stdout.is_empty(), "{exemption}: {out:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("exemptions"), "{exemption}: {err}");
+    }
+    let ok = carved_map(
+        "exemptions: [{ rule: skipped-tests, files: [\"a\"], until: backlog/x, why: \"y\" }]",
+    );
+    assert_ne!(components(CARVED, &ok).status.code(), Some(2));
+}
+
+#[test]
+fn a_map_that_sets_test_depends_on_is_refused() {
+    // req:init/survey-components@368a5dcd
+    let map = carved_map("tests: [\"tests/feat/**\"], test_depends_on: [app]");
+    let out = components(CARVED, &map);
+    let unparsed = components(CARVED, "components: 3\n");
+    assert_eq!(out.status.code(), unparsed.status.code(), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
 }
 
 #[test]
 fn two_components_tests_overlap() {
-    // req:init/survey-components@cf5e7ef5
+    // req:init/survey-components@368a5dcd
     let map = format!(
         "{}  - {{ id: other, paths: [\"other/**\"], tests: [\"tests/feat/**\"] }}\n",
-        carved_map("tests: [\"tests/feat/**\"], test_depends_on: [app]")
+        carved_map("tests: [\"tests/feat/**\"]")
     );
     let mut files = CARVED.to_vec();
     files.push(("other/x.py", b""));
