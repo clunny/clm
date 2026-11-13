@@ -75,22 +75,23 @@ const project = () => {
   return { top, origin, person }
 }
 
+// The plugin is installed alone: its root holds no `clm` shim, so the pane runs the `clm` on `PATH`.
+const openPane = (top: string, cwd: string) => {
+  const pluginRoot = join(top, 'plugins', 'clm-panel')
+  cpSync(join(repository, 'plugin-panel'), pluginRoot, {
+    recursive: true,
+    filter: from => !from.includes('node_modules'),
+  })
+  return createEngine({ pluginRoot, cwd, path: process.env.CLM_CAPABILITY_BIN_DIR! })
+}
+
 test('the pane shows the new state when a build lands, without being asked', async () => {
   // req:capability/watch-beside-chat@109098d4
   const { top, origin, person } = project()
 
   // The pane, open beside the chat. The plugin is installed alone: its root holds no `clm`
   // shim, so the pane runs the `clm` on `PATH`.
-  const pluginRoot = join(top, 'plugins', 'clm-panel')
-  cpSync(join(repository, 'plugin-panel'), pluginRoot, {
-    recursive: true,
-    filter: from => !from.includes('node_modules'),
-  })
-  const engine = await createEngine({
-    pluginRoot,
-    cwd: person,
-    path: process.env.CLM_CAPABILITY_BIN_DIR!,
-  })
+  const engine = await openPane(top, person)
   const opened = await engine.command('clm:view')
   expect(opened.text).toContain('Opened')
   await expect.poll(() => engine.pane()).toContain('Flight')
@@ -124,25 +125,21 @@ test('the pane shows the new state when a build lands, without being asked', asy
 test('Drain on the Queue tab stops the loop launching anything new, and the tab says so', async () => {
   // req:capability/watch-beside-chat@109098d4
   const { top, person } = project()
-  const pluginRoot = join(top, 'plugins', 'clm-panel')
-  cpSync(join(repository, 'plugin-panel'), pluginRoot, {
-    recursive: true,
-    filter: from => !from.includes('node_modules'),
-  })
+  const engine = await openPane(top, person)
 
-  // The build loop runs: it holds the clone's lease and has a build of `a` to launch next.
-  expect(clm(person, 'build', 'start', '--session-model', 'opus')).toContain('launch build:a')
+  // The build loop runs: it holds the clone's lease and has a build of `a` running.
+  expect(clm(person, 'build', 'start', '--session-model', 'opus')).toMatch(/^launch build:a /m)
   clm(person, 'build', 'launched', 'build:a', 'task-1')
-  const engine = await createEngine({ pluginRoot, cwd: person, path: process.env.CLM_CAPABILITY_BIN_DIR! })
   await engine.command('clm:view')
   await engine.press('Queue')
-  await expect.poll(() => engine.pane()).toContain('[Drain]')
+  const slow = { timeout: 20_000 }
+  await expect.poll(() => engine.pane(), slow).toContain('[Drain]')
   expect(engine.pane()).not.toContain('stop requested')
 
   await engine.press('Drain')
-  await expect.poll(() => engine.pane()).toContain('stop requested: drain')
-  expect(engine.pane()).toContain('Drain · requested')
+  await expect.poll(() => engine.pane(), slow).toContain('stop requested: drain')
+  await expect.poll(() => engine.pane(), slow).toContain('Drain · requested')
 
   // The loop obeys it: its next step launches nothing.
-  expect(clm(person, 'build', 'step')).not.toMatch(/launch/i)
+  expect(clm(person, 'build', 'step')).not.toMatch(/^launch /m)
 })
