@@ -134,7 +134,7 @@ fn wrong_profiles_reported() {
 
 /// The toolchain's Bash commands unattended sessions may run beyond `clm run`'s own; the `clm`
 /// rules `clm init` seeds come with them.
-const TOOLCHAIN: [&str; 10] = [
+const TOOLCHAIN: [&str; 12] = [
     "Bash(cargo *)",
     "Bash(npm ci *)",
     "Bash(npm install --ignore-scripts *)",
@@ -145,6 +145,8 @@ const TOOLCHAIN: [&str; 10] = [
     "Bash(.github/scripts/ci-check.sh *)",
     "Bash(clm setup)",
     "Bash(clm setup *)",
+    "Bash(clm build)",
+    "Bash(clm build *)",
 ];
 
 fn allowed() -> Vec<&'static str> {
@@ -164,7 +166,7 @@ fn disallowed(allow: &[&str]) -> Vec<String> {
         .collect()
 }
 
-// req:clm/session-commands@562aaa70
+// req:clm/session-commands@def407a1
 #[test]
 fn allowed_commands() {
     let text = fs::read_to_string(repo().join(".claude/settings.json")).unwrap();
@@ -186,7 +188,7 @@ fn allowed_commands() {
     }
 }
 
-// req:clm/session-commands@562aaa70
+// req:clm/session-commands@def407a1
 #[test]
 fn bare_npx_refused() {
     assert_eq!(
