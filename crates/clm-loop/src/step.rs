@@ -117,11 +117,7 @@ fn read_groups(options: &Options) -> Result<Vec<Group>, Failure> {
 /// Reads what the plan is computed from, after the step's fetch.
 fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Snapshot, Failure> {
     let main = clm_git::git(&options.root, &["rev-parse", "origin/main"])?;
-    let held = clm_orchestrator::places(&options.root, DEFAULT_EXPIRY_HOURS)
-        .map_err(|e| Failure::Git(format!("places: {e:?}")))?
-        .iter()
-        .filter(|p| p.counts)
-        .count() as u64;
+    let held = held_places(options)?.len() as u64;
     let ready = read_ready(options)?;
     let priorities = if ready.is_empty() {
         BTreeMap::new()
@@ -389,6 +385,30 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
     }
 }
 
+/// Runs the housekeeping and reads the snapshot, after a fetch the caller made.
+pub(crate) fn fresh_snapshot(options: &Options) -> Result<Snapshot, Failure> {
+    // `clm wrap-up` removes landed worktrees and branches and frees the places that don't
+    // count; its report is for the housekeeping requirements, which come later.
+    let wrap_up = clm(options, &["wrap-up"])?;
+    if wrap_up.code == 2 {
+        return Err(Failure::Git(format!("clm wrap-up: {}", wrap_up.reason())));
+    }
+    let file = state::read(&options.root).unwrap_or_default();
+    read_snapshot(options, file, &wrap_up.stdout)
+}
+
+/// The names of the clone's places that count.
+pub(crate) fn held_places(options: &Options) -> Result<Vec<String>, Failure> {
+    Ok(
+        clm_orchestrator::places(&options.root, DEFAULT_EXPIRY_HOURS)
+            .map_err(|e| Failure::Git(format!("places: {e:?}")))?
+            .into_iter()
+            .filter(|p| p.counts)
+            .map(|p| p.name)
+            .collect(),
+    )
+}
+
 /// The actions to take now: fetch, do the housekeeping, read the snapshot, compute the plan,
 /// prepare each run it launches, record them and print one line per action.
 fn actions(options: &Options) -> Result<Vec<String>, Failure> {
@@ -397,14 +417,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         f.lease = Some(now());
         Ok(())
     })?;
-    // `clm wrap-up` removes landed worktrees and branches and frees the places that don't
-    // count; its report is for the housekeeping requirements, which come later.
-    let wrap_up = clm(options, &["wrap-up"])?;
-    if wrap_up.code == 2 {
-        return Err(Failure::Git(format!("clm wrap-up: {}", wrap_up.reason())));
-    }
-    let file = state::read(&options.root).unwrap_or_default();
-    let snapshot = read_snapshot(options, file, &wrap_up.stdout)?;
+    let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
     let mut changes = Vec::new();
     let mut stored_file = snapshot.file.clone();
