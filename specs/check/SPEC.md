@@ -68,7 +68,7 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - THEN it exits 1 naming the delta and the stale element
 
 ### Requirement: dangling-markers
-`clm check` SHALL report every `req:<id>` marker in a scanned file whose `<id>` names no existing requirement or human-layer entry (`model/human-layers`), giving the file and line; and every marker that cites an architecture entry, or an entry holding `#### Untested`, with the message `architecture entries are proven by the rules their #### Enforced by names, not by tests` or `<id> is untested`, since a test never proves either (`human-layer-proof`); unless a change outside the archive lists `<id>` under `REMOVED Requirements` in one of its deltas: that code is obsolete and is removed when the component is next built (`removed-requirements-build-out`). Once the change is archived, the marker SHALL be reported as before. An `abandoned` change is archived (`archive-done`), so it grants no exemption; a requirement another change adds back under the same ID is a new requirement once that change applies, and the marker then cites it as usual.
+`clm check` SHALL report every `req:<id>` marker in a scanned file whose `<id>` names no existing requirement or human-layer entry (`model/human-layers`), giving the file and line; and every marker that cites an architecture entry, or an entry holding `#### Untested`, with the message `architecture entries are proven by the rules their #### Enforced by names, not by tests` or `<id> is untested`, since a test never proves either (`human-layer-proof`); unless a change outside the archive lists `<id>` under `REMOVED Requirements` in one of its deltas, or `<id>` is a capability that a change outside the archive lists under `removes_capabilities` and `CAPABILITIES.md` doesn't hold (`check.coverage/removed-capabilities`): that code is obsolete and is removed when the component is next built (`removed-requirements-build-out`, `removed-capabilities-build-out`). The message for a marker whose `<id>` is `capability/<slug>` and names no entry, with no such change, SHALL end `; a change that removes the capability lists it under removes_capabilities`, so the author of a branch that removes a cited capability learns how to land it. Once the change is archived, the marker SHALL be reported as before. An `abandoned` change is archived (`archive-done`), so it grants no exemption; a requirement another change adds back under the same ID is a new requirement once that change applies, and the marker then cites it as usual.
 
 #### Scenario: marker on an entry
 - GIVEN a test citing `capability/approve`, an entry of `CAPABILITIES.md`, and another citing `capability/nope`, which isn't one
@@ -90,6 +90,11 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - WHEN `clm check` runs
 - THEN it reports no `check/dangling-markers` violation
 
+#### Scenario: capability removed by a live change
+- GIVEN `tests/t.rs` line 3 contains the marker for `capability/gone`, `CAPABILITIES.md` has no entry `gone`, and a `proposed` change `x` with `removes_capabilities: [gone]`
+- WHEN `clm check` runs
+- THEN it reports no `check/dangling-markers` violation; with `x` under `changes/archive/`, or with no `removes_capabilities`, it exits 1 reporting `tests/t.rs:3` and `capability/gone`, the line ending `; a change that removes the capability lists it under removes_capabilities`
+
 #### Scenario: removing change archived
 - GIVEN the same files, with change `x` under `changes/archive/`
 - WHEN `clm check` runs
@@ -97,6 +102,7 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 
 #### Needs
 - model/human-layers
+- check.coverage/removed-capabilities
 
 ### Requirement: archive-done
 `clm check` SHALL report a `done` or `abandoned` change that is not under `changes/archive/`, and an archived change in any other status.
@@ -522,7 +528,7 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 - model/exemptions
 
 ### Requirement: removed-requirement-names
-`clm check` SHALL report each inline code span outside fenced code blocks in a component's `SPEC.md`, below its frontmatter, whose whole text is a removed requirement ID `<component>/<slug>`, in any component's `SPEC.md`, or the bare `<slug>` of one, in the `SPEC.md` of `<component>` itself unless a requirement of any component has that slug, `docs/decisions/<slug>.md` exists or a human-layer entry has that slug; as `<spec file>:<line>: check/removed-requirement-names: names `<id>`, which <change> removes`. An ID is *removed* when `check.coverage`'s `removed` gives it: a change outside the archive lists the slug under `REMOVED Requirements` in its delta for the component and no component holds the ID; with several such changes, the message SHALL name the first by ID. It SHALL also report the same spans in the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), for the IDs that change's deltas list under `REMOVED Requirements` and the current graph holds, with shared slugs judged on that graph, as `<spec file>:<line>: check/removed-requirement-names: names `<id>`, which <change> would remove`, the line being that of the text the change leaves; a change whose deltas don't apply is skipped.
+`clm check` SHALL report each inline code span outside fenced code blocks in a component's `SPEC.md`, below its frontmatter, whose whole text is a removed requirement ID `<component>/<slug>`, in any component's `SPEC.md`, or the bare `<slug>` of one, in the `SPEC.md` of `<component>` itself unless a requirement of any component has that slug, `docs/decisions/<slug>.md` exists or a human-layer entry has that slug; as `<spec file>:<line>: check/removed-requirement-names: names `<id>`, which <change> removes`. An ID is *removed* when `check.coverage`'s `removed` gives it: a change outside the archive lists the slug under `REMOVED Requirements` in its delta for the component and no component holds the ID, or lists a capability's slug under `removes_capabilities` and `CAPABILITIES.md` doesn't hold it, the ID being `capability/<slug>` and its component, for the bare slug, the graph's component `capability` (`check.coverage/removed-capabilities`); with several such changes, the message SHALL name the first by ID. It SHALL also report the same spans in the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), for the IDs that change's deltas list under `REMOVED Requirements` and the current graph holds, with shared slugs judged on that graph, as `<spec file>:<line>: check/removed-requirement-names: names `<id>`, which <change> would remove`, the line being that of the text the change leaves; a change whose deltas don't apply is skipped.
 
 #### Scenario: requirement names a removed sibling
 - GIVEN component `a` holding requirement `keep`, whose text names `` `gone` `` on line 30 of `specs/a/SPEC.md`, and an `applied` change `20260101-x` whose delta for `a` lists `gone` under `REMOVED Requirements`
@@ -543,6 +549,11 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 - GIVEN the same change, component `a`'s text naming `` `gone` ``, and an `ARCHITECTURE.md` whose `## Constraints` holds `### Constraint: gone`
 - WHEN `clm check` runs
 - THEN it reports no `check/removed-requirement-names` violation for the bare `` `gone` ``
+
+#### Scenario: removed capability named
+- GIVEN a `CAPABILITIES.md` with no entry `gone`, a `proposed` change `20260101-x` with `removes_capabilities: [gone]`, and component `b` whose Design names `` `capability/gone` `` on line 12 of `specs/b/SPEC.md`
+- WHEN `clm check` runs
+- THEN it exits 1 with the line ``specs/b/SPEC.md:12: check/removed-requirement-names: names `capability/gone`, which 20260101-x removes``
 
 #### Scenario: not applied yet
 - GIVEN component `a` holding requirement `keep`, a `proposed` change `20260101-y` whose delta for `a` lists `keep` under `REMOVED Requirements` with its base and which has no delta for `b`, and component `b` whose Design names `` `a/keep` `` on line 12 of `specs/b/SPEC.md`
@@ -576,6 +587,7 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 #### Needs
 - apply/resulting-graph-call
 - model/human-layers
+- check.coverage/removed-capabilities
 
 ### Requirement: size-of-listing
 `clm_check::size_of(graph, files, markers, defaults)` SHALL return each component's counts, budgets and oversized state by the rules `node-size` states, from `files`, a map from each tracked file that may count to its `Length`, rather than from a working tree: its bytes and, for a `.rs` file `node-size` counts as two parts, its test part's first line and bytes (`Length::of(path, text)` splits a file's text; `Length::from(bytes)` is a file of one part, which is all a listing without contents can give), and SHALL build for `wasm32-unknown-unknown` with the crate's default features off. `size` SHALL compute its result by calling `size_of` with the files it lists and probes.
