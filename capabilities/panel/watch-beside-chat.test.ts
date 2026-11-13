@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, expect, test } from 'vitest'
 
-import { createEngine } from './fake-engine.ts'
+import { createEngine, type Engine } from './fake-engine.ts'
 
 const repository = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
 
@@ -53,7 +53,12 @@ A SHALL x.
 `
 
 const made: string[] = []
-afterAll(() => made.forEach(d => rmSync(d, { recursive: true, force: true })))
+const engines: Engine[] = []
+// The pane's `clm` writes under the project, so each engine ends its processes first.
+afterAll(async () => {
+  await Promise.all(engines.map(e => e.close()))
+  made.forEach(d => rmSync(d, { recursive: true, force: true }))
+})
 
 const project = () => {
   const top = realpathSync(mkdtempSync(join(tmpdir(), 'clm-panel-')))
@@ -76,13 +81,15 @@ const project = () => {
 }
 
 // The plugin is installed alone: its root holds no `clm` shim, so the pane runs the `clm` on `PATH`.
-const openPane = (top: string, cwd: string) => {
+const openPane = async (top: string, cwd: string) => {
   const pluginRoot = join(top, 'plugins', 'clm-panel')
   cpSync(join(repository, 'plugin-panel'), pluginRoot, {
     recursive: true,
     filter: from => !from.includes('node_modules'),
   })
-  return createEngine({ pluginRoot, cwd, path: process.env.CLM_CAPABILITY_BIN_DIR! })
+  const engine = await createEngine({ pluginRoot, cwd, path: process.env.CLM_CAPABILITY_BIN_DIR! })
+  engines.push(engine)
+  return engine
 }
 
 test('the pane shows the new state when a build lands, without being asked', async () => {

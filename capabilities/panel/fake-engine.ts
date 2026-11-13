@@ -60,6 +60,12 @@ export type Engine = {
   pane(): string
   /** Presses the pane's button with this label. */
   press(label: string): Promise<void>
+  /**
+   * Stops the module's timers and waits for the processes the pane started to end. A test
+   * calls it before it removes the directory they run in, since a `clm` still writing there
+   * fails the removal.
+   */
+  close(): Promise<void>
 }
 
 /**
@@ -86,6 +92,19 @@ export async function createEngine(opts: {
   let tree: unknown = undefined
   let drawing = Promise.resolve()
   const env = { ...process.env, PATH: `${opts.path}:${process.env.PATH}` }
+  let closed = false
+  const running = new Set<Promise<unknown>>()
+  const start = (argv: readonly string[], cwd: string | undefined) => {
+    // A closed engine starts nothing: the caller sees a command that failed.
+    if (closed) return Promise.resolve({ exitCode: 1, stdout: '', stderr: 'the engine is closed' })
+    const ran = run(argv, cwd, env)
+    const done = ran.then(
+      () => running.delete(done),
+      () => running.delete(done),
+    )
+    running.add(done)
+    return ran
+  }
 
   const elements = { Box: 'Box', Text: 'Text', Button: 'Button', Code: 'Code' }
   const $: any = {
@@ -105,7 +124,7 @@ export async function createEngine(opts: {
     },
     session: { cwd: async () => opts.cwd },
     agent: { list: async () => [] },
-    process: { run: async (argv: readonly string[], init?: { cwd?: string }) => run(argv, init?.cwd, env) },
+    process: { run: async (argv: readonly string[], init?: { cwd?: string }) => start(argv, init?.cwd) },
     fs: {
       stat: async (path: string) => ({ kind: (await stat(path)).isDirectory() ? 'dir' : 'file' }),
       list: async (path: string) =>
@@ -193,6 +212,12 @@ export async function createEngine(opts: {
       const b = buttons(tree).find(b => b.props.label === label)
       if (!b) throw new Error(`no button ${label} in:\n${text(tree).join('\n')}`)
       await b.props.onPress()
+      await settle()
+    },
+    async close() {
+      closed = true
+      for (const t of timers) t.live = false
+      while (running.size > 0) await Promise.all(running)
       await settle()
     },
   }
