@@ -92,6 +92,7 @@ function parse<T>(tab: ViewTab, run: Run | undefined, list: 'nodes' | 'roots'): 
 function lineIndexes(tab: ViewTab, chart: readonly Span[][], checkout: boolean): number[] {
   const texts = chart.map(lineText)
   const all = texts.map((_, i) => i)
+  if (tab === 'queue') return []
   if (tab === 'spec') return all.slice(checkout ? 1 : 0)
   if (tab === 'flight') {
     const [nodes, changes] = componentRange(texts)

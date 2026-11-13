@@ -366,8 +366,8 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   // An ANSI chart carries the build rows under its node lines; the SVG is followed by them.
   const drawn =
     'ansi' in body ? undefined
+    : 'text' in body ? body.text.replace(/\n$/, '').split('\n').map(line => <Text wrap="truncate-end">{line === '' ? ' ' : line}</Text>)
     : 'svg' in body && Svg ? <Svg source={body.svg} alt={`clm view ${shown}`} />
-    : 'text' in body ? body.text.replace(/\n$/, '').split('\n').map(line => <Text>{line === '' ? ' ' : line}</Text>)
     : undefined
   if (!('ansi' in body)) {
     return (

@@ -297,9 +297,9 @@ describe('views-panel', () => {
   })
 
   test('the pane body: stderr on failure, else the ANSI lines on the terminal or the SVG', () => {
-    expect(paneBody('terminal', { exitCode: 1, stdout: 'x', stderr: 'violations: 2' })).toEqual({ error: 'violations: 2' })
-    expect(paneBody('terminal', ok('\x1b[34mx\x1b[0m'))).toEqual({ ansi: [[{ text: 'x', color: 'blue' }]] })
-    expect(paneBody('desktop', ok('<svg/>'))).toEqual({ svg: '<svg/>' })
+    expect(paneBody('terminal', { exitCode: 1, stdout: 'x', stderr: 'violations: 2' }, 'spec')).toEqual({ error: 'violations: 2' })
+    expect(paneBody('terminal', ok('\x1b[34mx\x1b[0m'), 'spec')).toEqual({ ansi: [[{ text: 'x', color: 'blue' }]] })
+    expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })
     // The Queue tab's text chart is shown as text where the other tabs draw an SVG.
     expect(paneBody('desktop', ok('queue\n'), 'queue')).toEqual({ text: 'queue\n' })
     expect(paneBody('desktop', ok('<svg/>'), 'spec')).toEqual({ svg: '<svg/>' })

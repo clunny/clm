@@ -183,7 +183,7 @@ export function viewArgs(tab: ViewTab, surface: Surface, columns: number, at = f
 /** What the pane draws under its tabs, from its `clm` run: `clm`'s stderr first. */
 export type PaneBody = { error: string } | { ansi: Span[][] } | { svg: string } | { text: string }
 
-export function paneBody(surface: Surface, run: Run, tab?: ViewTab): PaneBody {
+export function paneBody(surface: Surface, run: Run, tab: ViewTab): PaneBody {
   if (run.exitCode !== 0) return { error: run.stderr }
   if (surface === 'terminal') return { ansi: ansiLines(run.stdout) }
   return tab === 'queue' ? { text: run.stdout } : { svg: run.stdout }
