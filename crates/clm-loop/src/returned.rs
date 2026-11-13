@@ -24,6 +24,10 @@ pub fn returned(
             .ok_or_else(|| Failure::Refused(format!("the loop has no run {name}")))
     })?;
     let mut lines = Vec::new();
+    // A report repeated, such as after a timeout, finishes nothing twice.
+    if run.state == RunState::Returned {
+        return crate::step::next_actions(options);
+    }
     let line = result.trim();
     // A run still waiting on a command stays running and frees nothing.
     if line.starts_with("waiting:") {
