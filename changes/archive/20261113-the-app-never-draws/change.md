@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
 - the-app-never-draws-answer-buttons-or-posts-an-answer
 ---
