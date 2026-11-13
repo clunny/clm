@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [context-bundle-contents-text-is-garbled]
 ---
 
