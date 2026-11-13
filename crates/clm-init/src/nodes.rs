@@ -53,6 +53,13 @@ struct Node {
     paths: Vec<String>,
     #[serde(default)]
     depends_on: Vec<String>,
+    /// Globs the component owns as its tests, whatever `paths` match
+    /// (`model/test-ownership-keys`).
+    #[serde(default)]
+    tests: Vec<String>,
+    /// Components its tests may import beyond `depends_on`.
+    #[serde(default)]
+    test_depends_on: Vec<String>,
 }
 
 /// What's wrong with the node map `yaml` (read from `file`) for the repository at `root`,
@@ -82,7 +89,8 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         }
     }
     for node in list {
-        if let Some(dep) = node.depends_on.iter().find(|d| !ids.contains(d.as_str())) {
+        let all_deps = node.depends_on.iter().chain(&node.test_depends_on);
+        if let Some(dep) = all_deps.into_iter().find(|d| !ids.contains(d.as_str())) {
             return Err(format!(
                 "{}: component `{}` depends on unknown component `{dep}`",
                 file.display(),
@@ -103,11 +111,27 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
     let code = survey::code_files(root)?;
     let mut owners: BTreeMap<&str, Vec<&str>> =
         code.iter().map(|f| (f.as_str(), Vec::new())).collect();
+    // A file a component's `tests` match is that component's whatever `paths` match it; two
+    // components' `tests` matching it overlap (`components-own-their-tests`).
+    let mut test_owners: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+    for node in list.iter().filter(|n| !n.tests.is_empty()) {
+        for path in matching(root, &node.tests)? {
+            test_owners.entry(path).or_default().push(&node.id);
+        }
+    }
     for node in list {
         for path in matching(root, &node.paths)? {
+            if test_owners.contains_key(&path) {
+                continue;
+            }
             if let Some(list) = owners.get_mut(path.as_str()) {
                 list.push(&node.id);
             }
+        }
+    }
+    for (path, ids) in &test_owners {
+        if let Some(list) = owners.get_mut(path.as_str()) {
+            list.extend(ids);
         }
     }
     // The code files no node covers.
@@ -158,6 +182,10 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         .iter()
         .map(|n| (n.id.as_str(), n.depends_on.as_slice()))
         .collect();
+    let test_deps: BTreeMap<&str, &[String]> = list
+        .iter()
+        .map(|n| (n.id.as_str(), n.test_depends_on.as_slice()))
+        .collect();
     for (from, to) in surveyed.edges.keys() {
         let (Some([a]), Some([b])) = (
             owners.get(from.as_str()).map(Vec::as_slice),
@@ -165,7 +193,13 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
         ) else {
             continue;
         };
-        if a != b && !deps[a].iter().any(|d| d == b) {
+        // An edge from a file of the component's tests may also use `test_depends_on`.
+        let from_tests = test_owners
+            .get(from.as_str())
+            .is_some_and(|ids| ids.contains(a));
+        let allowed =
+            deps[a].iter().any(|d| d == b) || (from_tests && test_deps[a].iter().any(|d| d == b));
+        if a != b && !allowed {
             lines.insert((
                 "survey/undeclared-edge",
                 format!(
