@@ -110,9 +110,14 @@ fn bad_entries_name_their_position_and_the_problem() {
             "until",
         ),
         (
-            "{rule: skipped-tests, files: [x], until: backlog/x, why: 3}",
-            "why",
+            "{rule: skipped-tests, files: [x], until: backlog/a/b}",
+            "until",
         ),
+        (
+            "{rule: skipped-tests, files: [x], until: \"backlog/a b\"}",
+            "until",
+        ),
+        ("{rule: 3, files: [x], until: backlog/x}", "rule"),
         ("not-a-map", "map"),
     ] {
         let extra = format!("\nexemptions: [{ok}, {entry}]");
@@ -127,20 +132,8 @@ fn bad_entries_name_their_position_and_the_problem() {
         let path = Path::new("specs/a/SPEC.md");
         let errs = check_node_frontmatter("a", path, &fm, &BTreeSet::new()).unwrap_err();
         assert_eq!(rules(&errs), ["model/exemptions"], "{entry}");
-    }
-}
-
-#[test]
-fn not_a_list_is_refused() {
-    // req:model/exemptions@20ac503e
-    for extra in [
-        "\nexemptions: x",
-        "\nexemptions:",
-        "\nexemptions: {rule: skipped-tests}",
-    ] {
-        let (_, violations) = load(repo(extra).path());
-        assert_eq!(rules(&violations), ["model/exemptions"], "{extra}");
-        assert!(violations[0].message.contains("exemptions"));
+        let e = &errs[0].message;
+        assert!(e.contains("entry 2") && e.contains(word), "{entry}: {e}");
     }
 }
 

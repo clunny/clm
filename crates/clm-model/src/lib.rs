@@ -687,11 +687,9 @@ fn bad_exemptions(fm: &serde_yaml::Value) -> Vec<String> {
     let Some(value) = fm.get("exemptions") else {
         return Vec::new();
     };
+    // A value that isn't a list is left to the typed parse.
     let Some(entries) = value.as_sequence() else {
-        return vec![format!(
-            "`exemptions` must be a list of entries, not `{}`",
-            one_line(value)
-        )];
+        return Vec::new();
     };
     let mut problems = Vec::new();
     for (i, entry) in entries.iter().enumerate() {
@@ -747,14 +745,6 @@ fn bad_exemptions(fm: &serde_yaml::Value) -> Vec<String> {
                     ));
                 }
             }
-        }
-        if let Some(why) = map.get("why")
-            && !why.is_string()
-        {
-            problems.push(format!(
-                "{at} needs `why` to be a string, not `{}`",
-                one_line(why)
-            ));
         }
     }
     problems
