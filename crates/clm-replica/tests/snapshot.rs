@@ -393,7 +393,7 @@ fn a_backlog_item_in_full() {
             "backlog/q.md",
             "---\ntitle: Q\nkind: question\npriority: P2\nchoices: [yes, no]\n---\n\n\nShould we?\n\n",
         ),
-        ("backlog/i.md", "---\ntitle: I\nkind: idea\n---\nAn idea.\n"),
+        ("backlog/i.md", "---\ntitle: I\nkind: idea\n---\n\n    indented\nAn idea.\n  \n"),
     ]));
     let r = ready(&f, "111", 100);
     let snap = view(&r, "snapshot");
@@ -411,7 +411,7 @@ fn a_backlog_item_in_full() {
     assert_eq!(q["priority"], "P2");
     assert_eq!(q["choices"], json!(["yes", "no"]));
     let i = item("i");
-    assert_eq!(i["body"], "An idea.");
+    assert_eq!(i["body"], "    indented\nAn idea.");
     assert_eq!(i["priority"], "P5");
     assert_eq!(i["choices"], json!([]));
 }

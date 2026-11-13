@@ -453,6 +453,10 @@ fn open_answers_leave_out_items_the_tip_lost() {
         "backlog/q.md".into(),
         b"---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nShould we?\n".to_vec(),
     );
+    f.insert(
+        "backlog/r.md".into(),
+        b"---\ntitle: R\nkind: human-task\n---\nDo it.\n".to_vec(),
+    );
     let mut r = scratch(&f, "111");
     ledger(
         &mut r,
@@ -461,6 +465,7 @@ fn open_answers_leave_out_items_the_tip_lost() {
             answered("a2", "alice/web", 9, 0, "gone", "yes"),
             answered("a3", "alice/web", 9, 0, "q", "no"),
             answered("a1", "bob/web", 8, 0, "q", "yes"),
+            answered("a4", "bob/web", 8, 30, "r", "done"),
         ],
     );
     r.recompute(at(11, 0));
@@ -469,6 +474,7 @@ fn open_answers_leave_out_items_the_tip_lost() {
         imp["answers"],
         json!([
             {"id": "a1", "writer": "bob/web", "at": stamp(8, 0), "item": "q", "answer": "yes"},
+            {"id": "a4", "writer": "bob/web", "at": stamp(8, 30), "item": "r", "answer": "done"},
             {"id": "a3", "writer": "alice/web", "at": stamp(9, 0), "item": "q", "answer": "no"},
         ])
     );
