@@ -9,7 +9,7 @@ blocks: [capability/measure-by-evals]
 
 Bring CLM into line with its own philosophy: AI writes and maintains all code and tests, the human owns only intent and constraints, and a green check means the code does what the spec says. This item is the plan for that work. It is elaborated here across sessions; each phase is proposed from it as ordinary changes and built by the build loop.
 
-A session working on any phase first reads `docs/the-clm-project.md`, the philosophy and goals every decision here is judged against: humans own intent only, two human roles, three layers, and the intended size of the human layers. It dates from 2026-10-29; where it differs from `ARCHITECTURE.md` or from this item, those are current, until phase 1 brings it up to date.
+A session working on any phase first reads `docs/the-clm-project.md`, the philosophy and goals every decision here is judged against: humans own intent only, two human roles, three layers, and the intended size of the human layers. Phase 1 brought it up to date on 2026-11-13; where it differs from `ARCHITECTURE.md` or from this item, those are current.
 
 ## Problem
 
@@ -48,12 +48,15 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 **0. Baseline.** Record the counts of the day the freeze began, to measure the plan against.
 
-**1. Rewrite the human layer by hand.** One spec branch, one approval.
-- `ARCHITECTURE.md`: each constraint one or two sentences, labelled checked, measured or principle; mechanics move down into decisions.
-- `CAPABILITIES.md`: fold the runner, move the pin, add the eval capability, reword scenarios the product's boundary can't observe.
-- Reword `proven-by-tests` and `deterministic-enforcement` for the three kinds.
-- Remove the contradictions listed under Problem.
-- Last, once the human layer is settled: bring `docs/the-clm-project.md` up to date with it (the supported agents, the ways the AI layer reaches a person, the three kinds of rule, evals, what this plan changed and why), and revise the opening of `AGENTS.md`, "What CLM is for", added on 2026-11-13 so every session has the philosophy and goals in front of it, where the settled layer changed them (the three kinds of rule and evals among them). That opening stays short, since every session and every build loads the file, and it points at the article for the reasoning, never restating it. The plan's last phase removes its sentence naming this item.
+**1. Rewrite the human layer by hand.** Done on 2026-11-13 (`20261113-human-layer-rewrite`, decision `human-layer-entries-stay-short`). To carry forward:
+- `ARCHITECTURE.md` holds 43 entries (from 56), each one or two sentences starting with its label, and `CAPABILITIES.md` 32 (from 33). No requirement was deleted: 66 requirements and 10 components name a different entry under `serves`.
+- No entry is measured yet. A principle holds no `#### Enforced by` block, so it never reads as held; it names the programs that check a part of it in its `#### Untested` prose (`three-kinds-of-rule`). A later phase that makes a principle checked, as phase 3 does for `path-ownership`, relabels it and gives it the block.
+- Mechanics an adopter's project is held to are in the guide, since `clm guide constraints` prints only an entry's statement; CLM-internal mechanics are in decisions.
+- `removal-needs-a-yes` is a carried `method` constraint, a principle until the gate can tell a removal from a rewording (`approval-gap-accepted` records the other accepted gap, the guard).
+- `measure-by-evals` is a capability this item blocks (`blocks` in its frontmatter) until phase 6 builds the eval method; phase 6 removes the block.
+- Seven reworded capabilities left their tests `behind`, which the build loop brings up. The capability tests of `unattended-runner` and `pin-working-method` were deleted on a code branch that landed first, since a spec branch can't remove an entry a test cites.
+- Still citing a name that resolves to nothing: `specs/init/SPEC.md` names `trunk-named-main`, whose decision is `trunk-is-main`. Phase 2 fixes it with the other stale citations.
+- `land-locally` lists `orchestrator.runner/runner-needs-guard` under `#### Enforced by`; phase 2's removal of the runner takes that line out.
 
 **2. Delete.**
 - `clm runner` and `orchestrator.runner`.
@@ -82,7 +85,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 ## How it is executed
 
 - **This item is the plan of record.** It lives in git, so no session's memory or conversation holds anything the next one needs. A session that settles something rewrites the sections here.
-- **Each phase is one or a few ordinary changes that names this item in its `## Intent`**, and their code is built by `/clm:build`. No change but the last phase's names it in `from` or `resolves`: `clm apply` deletes the item a change's `from` names (`apply-deletes-promoted-items`), which would delete the plan with its first phase. Progress is CLM's own state: `clm status` shows which changes are applied, pending or archived. No checklist is kept by hand; when a phase's changes have all landed, its paragraph under Plan is deleted.
+- **Each phase is one or a few ordinary changes that names this item in its `## Intent`**, and their code is built by `/clm:build`. No change but the last phase's names it in `from` or `resolves`: `clm apply` deletes the item a change's `from` names (`apply-deletes-promoted-items`), which would delete the plan with its first phase. Progress is CLM's own state: `clm status` shows which changes are applied, pending or archived. When a phase's changes have all landed, its paragraph under Plan is marked done with the date and its changes, and rewritten to hold what the later phases need to carry forward: what it settled, what it left for them, and what it found.
 - **A fresh session per phase.** It starts from this item and `clm status`, proposes that phase, and ends when the phase's spec branch has landed. Builds then run in the loop, unattended.
 - **Phase 1 is the exception in kind, not in route.** It is written by hand with the human in the conversation, since only they can settle the human layer, on one spec branch through the same `clm land`.
 - **Order between phases is by `#### Needs` and priority, as for any work.** A change that relaxes a check lands before one that relies on it (`checks-relax-before-use`).
@@ -108,6 +111,13 @@ This plan deletes requirements on purpose, and code that serves no written requi
 - Every workaround flag is settled, and the documents hold none of the contradictions listed under Problem.
 
 ## Open questions
+
+- **The size target for `ARCHITECTURE.md`.** Phase 1 reached 5,700 words, 66% of 8,636, not the third under Done means. The statements are about 1,800 words; the scenario and proof blocks the format requires of every entry are the rest. A third needs about 25 entries, or a context bundle that carries only each entry's statement. Which, or a new target, is open.
+- **`proven-by-tests` names eval proof before phase 6 builds it.** Its `#### Untested` says so. Whether the clause should wait for phase 6 is open.
+- **Proposed cuts from phase 1.** The capabilities `catch-drift` and `no-dead-weight` restate the carried constraints `no-silent-drift` and `no-dead-code`, which are what reaches an adopter's project.
+- **The release workflow's push to `main`.** `land-locally` names it as the one exception. Landing the version bump through `clm land` would remove it, and is a change to `ci` and `ledger`.
+- **Adopters' entries carry no label** (`backlog/adopters-architecture-entries-carry-no-label`), which belongs with phase 6's block for measured entries.
+- **A spec branch can't remove a capability a test cites** (`backlog/a-spec-branch-can-t-remove-a-capability-entry-a-test-cites`). Phases 2 and 5 remove entries, so whether to fix it before them is open.
 
 - **Mutation tool.** Whether `cargo-mutants`' diff-scoped mode fits the verify job hasn't been checked.
 - **Eval results.** Whether `claude plugin eval` returns a case's tags in its JSON isn't documented; the wrapper may have to map case names to requirement IDs.
