@@ -98,7 +98,7 @@ A `spec` branch that needs review (`needs-review`) SHALL be blocked with rule `g
 - THEN it prints `spec` and exits 0
 
 ### Requirement: needs-review
-A `spec` branch SHALL need review exactly when its diff adds, modifies or deletes `ARCHITECTURE.md`, `CAPABILITIES.md` or `docs/allowed_signers` (the keys a signed repository trusts, `signed-ledger-records`); or `approval-setting` counts `clm.toml` as changed; or a change one of whose files it adds or modifies, a live change or a new archived one, has a `change.md` at `HEAD` that can't be read as UTF-8, whose frontmatter doesn't parse, or that declares a non-empty `human_burdens` (`yes-no-review`), so editing a change's deltas or assets alone doesn't leave its burdens unreviewed. A `spec` branch that `rename/replay` accepts SHALL instead need review exactly when its added change records a `term` rename, declares a non-empty `human_burdens`, or has a `change.md` that can't be read or parsed: its replayed edits to `ARCHITECTURE.md` and `CAPABILITIES.md` SHALL NOT count. Nothing else SHALL make a branch need review, and a `code` or `mixed` branch never does. `clm gate` SHALL print `spec review` for a `spec` branch that needs review and `spec` for one that doesn't.
+A `spec` branch SHALL need review exactly when its diff adds, modifies or deletes `ARCHITECTURE.md`, `CAPABILITIES.md` or `docs/allowed_signers` (the keys a signed repository trusts, `signed-ledger-records`); or `approval-setting` counts `clm.toml` as changed; or a change one of whose files it adds or modifies, a live change or a new archived one, has a `change.md` at `HEAD` that can't be read as UTF-8, whose frontmatter doesn't parse, or that declares a non-empty `human_burdens` (`yes-no-review`), so editing a change's deltas or assets alone doesn't leave its burdens unreviewed; or a component's `SPEC.md` at `HEAD` holds an exemption (`model/exemptions`) whose `files` aren't all among the `files` of an exemption with the same `rule` and `until` that the component with the same ID holds at the merge base (every exemption of a component new on the branch counting), so relaxing a rule, or widening a relaxation, is always seen by a human, while removing or narrowing one, or changing only its `why`, never needs review (`temporary-exemptions`). A `spec` branch that `rename/replay` accepts SHALL instead need review exactly when its added change records a `term` rename, declares a non-empty `human_burdens`, or has a `change.md` that can't be read or parsed: its replayed edits to `ARCHITECTURE.md` and `CAPABILITIES.md` SHALL NOT count. Nothing else SHALL make a branch need review, and a `code` or `mixed` branch never does. `clm gate` SHALL print `spec review` for a `spec` branch that needs review and `spec` for one that doesn't.
 
 #### Scenario: architecture
 - GIVEN a branch that only edits `ARCHITECTURE.md`
@@ -145,7 +145,23 @@ A `spec` branch SHALL need review exactly when its diff adds, modifies or delete
 - WHEN `clm gate --base main` runs
 - THEN it prints `spec review` and exits 1
 
+#### Scenario: an added exemption
+- GIVEN a `spec` branch whose only change adds an exemption to `specs/a/SPEC.md`'s frontmatter
+- WHEN the gate runs
+- THEN it prints `spec review`
+
+#### Scenario: a narrowed exemption
+- GIVEN a `spec` branch whose only change removes one of the globs an exemption in `specs/a/SPEC.md` lists
+- WHEN the gate runs
+- THEN it prints `spec`
+
+#### Scenario: a removed exemption
+- GIVEN a `spec` branch whose only change removes an exemption from `specs/a/SPEC.md`'s frontmatter
+- WHEN the gate runs
+- THEN it prints `spec`
+
 #### Needs
+- model/exemptions
 - rename/replay
 - model/parse-changes
 
@@ -647,3 +663,22 @@ The gate SHALL count `AGENTS.md` at the top of the repository as a spec path, as
 
 #### Serves
 - capability/work-from-any-agent-harness
+
+### Requirement: exemption-names-its-item
+The gate SHALL block a `spec` branch holding an exemption that `needs-review` counts as added or widened (`model/exemptions`) whose `until` names no backlog item that `backlog/<slug>.md` holds at `HEAD`, reporting `<file>: gate/exemption-names-its-item: exemption from <rule> until backlog/<slug> names no backlog item; add it` for each, so every exemption starts with the work that ends it in the queue (`temporary-exemptions`). An exemption whose item is deleted later SHALL NOT block a branch: `check.health` reports it.
+
+#### Scenario: no item
+- GIVEN a `spec` branch that adds to `specs/a/SPEC.md` an exemption from `skipped-tests` until `backlog/x`, with no `backlog/x.md`
+- WHEN the gate runs
+- THEN it exits 1 with the line `specs/a/SPEC.md: gate/exemption-names-its-item: exemption from skipped-tests until backlog/x names no backlog item; add it`
+
+#### Scenario: item added with it
+- GIVEN the same branch, also adding `backlog/x.md`
+- WHEN the gate runs
+- THEN it reports no `gate/exemption-names-its-item` violation
+
+#### Serves
+- architecture/exemptions-end
+
+#### Needs
+- model/exemptions

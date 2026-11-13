@@ -167,12 +167,12 @@ It SHALL NOT contain the text `clm.yml`, `clm-build.sh`, `spec-approved`, `spec-
 - capability/work-from-any-agent-harness
 
 ### Requirement: init-skill-gives-tests-their-component
-`skills/init/SKILL.md` SHALL tell Claude, when it recovers an existing codebase's graph, to give each component the tests that prove it with `tests` globs, by directory or by a file-name pattern, never as a list of files, so that a test file added later is owned (`components-own-their-tests`); to give a component whose tests import the product's entry point or a shared test harness a `test_depends_on` naming the component that holds it, rather than giving the whole suite to one component; to keep the shared harness (fixtures, helpers, a test app factory) in a component of its own; to prefer directory globs in `paths` too, so a file added later beside a component's files is owned; and, where one existing test file tests several components, to give it to one of them and record a `kind: deferred` backlog item for splitting it, naming the file and the components.
+`skills/init/SKILL.md` SHALL tell Claude, when it recovers an existing codebase's graph, to give each component the tests that prove it with `tests` globs, by directory or by a file-name pattern, never as a list of files, so that a test file added later is owned (`components-own-their-tests`); to prefer directory globs in `paths` too, so a file added later beside a component's files is owned; that a component's tests import only what its code may (`depends_on`), so a test that runs the whole product through its entry point belongs to the component that holds the entry point, as a test of the product, and a feature's requirements are proven through the feature's own surface by tests its builds write; to keep shared test helpers that features' tests use in a component of their own below those features, never importing the entry point; and, for owned code or tests that break a rule `clm check` judges and can't be put right at adoption (an upward import, a test file that tests several components, a skipped test), to give the owning component an exemption naming the rule, the files and a backlog item that ends it, with a line saying why (`model/exemptions`, `temporary-exemptions`), adding that item, and never to put adopted code in the root's `outside`, which is for code CLM makes no claims about (`incremental-adoption`). It SHALL NOT name `test_depends_on`.
 
 #### Scenario: skill text
 - GIVEN `plugin/skills/init/SKILL.md`
 - WHEN a test reads it
-- THEN it names `tests`, `test_depends_on` and `components-own-their-tests`, and says never to list test files one by one
+- THEN it names `tests`, `exemptions`, `until`, `components-own-their-tests` and `temporary-exemptions`, says never to list test files one by one and that a test running the whole product belongs to the component holding the entry point, and doesn't contain `test_depends_on`
 
 #### Serves
 - architecture/path-ownership
@@ -180,3 +180,4 @@ It SHALL NOT contain the text `clm.yml`, `clm-build.sh`, `spec-approved`, `spec-
 
 #### Needs
 - init/survey-components
+- model/exemptions

@@ -24,9 +24,9 @@ A removal marker's change is classified from the graph (`model`), in this order:
 
 **Re-exports** (`check-coverage-split`, `nested-splits`). `check` keeps the rules `clm check` runs, the detectors and `clm size`; `check.coverage` keeps what says how far the code has caught up with the spec, which the queue, the views, `clm rebase` and the Worker read. `clm-check` depends on `clm-coverage` and re-exports its public items (`Coverage`, `Marker`, `State`, `markers_in`, `report`, `Pending`, `pending`, `Row`, `StatusReport`, `status_report`, `complete_changes`, `ChangeProgress`, `change_progress`, `removed`, `matches` (also as `path_matches`), `owner`, and with the `checkout` feature `Scan` and `scan`), and its `checkout` feature turns on `clm-coverage`'s. `pending_in`, `status`, `coverage` and `backlog`, the checkout wrappers the `clm` commands call, live in `clm-check`; `pending_in`'s unknown-node violation carries the rule `check.coverage/pending-report`, the requirement it enforces. `run` matches `paths` with `clm-coverage`'s `matches`, as `pending` does. The `dangling-markers` rule (`violations` in `coverage.rs`) lives in `clm-check` and takes the removed IDs from `clm-coverage`'s `removed`, as `removed-requirement-names` does. Tests that call `clm_check::` live in `crates/clm-check/tests`, citing the child's requirements where they prove them, since `clm-coverage` can't depend on `clm-check` (`undeclared-imports`, and a cycle); the child's own tests call `clm-coverage` directly.
 
-**Shared paths** (`paths-disjoint`). `run` lists the files `git ls-files --cached` lists, Markdown included, itself through `git` (outside a git work tree, none); `run_listed` reads the listing its caller passes instead (`run-listed`). A file belongs to one component, the one whose builds own it and whose size it counts toward, so `nested-splits` keeps `paths` disjoint, parents and children included. A component's `tests` carve its test files out of whatever `paths` match them (`components-own-their-tests`): the file is the `tests` component's, so a suite's directory can belong to a harness component while each feature owns its own tests in it. `paths-disjoint`, `unowned-files` and `undeclared-imports` all read a file's component as its owner, the one place that rule is written.
+**Shared paths** (`paths-disjoint`). `run` lists the files `git ls-files --cached` lists, Markdown included, itself through `git` (outside a git work tree, none); `run_listed` reads the listing its caller passes instead (`run-listed`). A file belongs to one component, the one whose builds own it and whose size it counts toward, so `nested-splits` keeps `paths` disjoint, parents and children included. A component's `tests` carve its test files out of whatever `paths` match them (`components-own-their-tests`): the file is the `tests` component's, so a suite's directory can belong to a harness component while each feature owns its own tests in it. `paths-disjoint`, `unowned-files` and `undeclared-imports` all read a file's component as its owner, the one place that rule is written. **Exemptions** (`temporary-exemptions`): `undeclared-imports`, `tests-cite-their-owner` and `skipped-tests` drop a violation in a file whose owner's `exemptions` name that rule for it, and nothing else; whether an exemption is still needed is `check.health`'s report, never a violation, so the build that fixes the code still lands.
 
-**Undeclared imports** (`undeclared-imports`, `undeclared-imports-check`, `tree-sitter-analysis`). The import edges come from `init`'s `import_edges(root)`, the same tree-sitter extraction `clm survey` uses: Rust workspace path dependencies and `mod`/`use crate::` paths, TypeScript relative imports and workspace packages, and Python imports that resolve to files in the repository. Tree-sitter is C, which doesn't build for `wasm32-unknown-unknown`, so `run` never reports this rule; the `clm check` command (crate `clm`) does, after `run` and before the detectors, from the graph it loaded, and `--no-detectors` doesn't skip it, since it needs no tool. A file's component is its owner (`paths-disjoint`), and a file a component's `tests` match is judged against that component's `depends_on` and `test_depends_on` together, production files against `depends_on` alone. Only a direct `depends_on` counts, and a parent or child gets no exemption, since `depends_on` is separate from ownership (`nested-splits`). `import_edges` returns a `Result`: outside a git work tree it returns no edges, as `scan` finds no markers there, so a fixture that isn't a repository passes; when `git` fails inside one, the command reports `<root>: check/undeclared-imports: <error>` and goes on. `clm rebase` calls `run`, so its `rebase ok` doesn't cover this rule; `clm land` runs `clm check` and does.
+**Undeclared imports** (`undeclared-imports`, `undeclared-imports-check`, `tree-sitter-analysis`). The import edges come from `init`'s `import_edges(root)`, the same tree-sitter extraction `clm survey` uses: Rust workspace path dependencies and `mod`/`use crate::` paths, TypeScript relative imports and workspace packages, and Python imports that resolve to files in the repository. Tree-sitter is C, which doesn't build for `wasm32-unknown-unknown`, so `run` never reports this rule; the `clm check` command (crate `clm`) does, after `run` and before the detectors, from the graph it loaded, and `--no-detectors` doesn't skip it, since it needs no tool. A file's component is its owner (`paths-disjoint`), test files and production files alike judged against its `depends_on`. Only a direct `depends_on` counts, and a parent or child gets no exemption, since `depends_on` is separate from ownership (`nested-splits`). `import_edges` returns a `Result`: outside a git work tree it returns no edges, as `scan` finds no markers there, so a fixture that isn't a repository passes; when `git` fails inside one, the command reports `<root>: check/undeclared-imports: <error>` and goes on. `clm rebase` calls `run`, so its `rebase ok` doesn't cover this rule; `clm land` runs `clm check` and does.
 
 **Imports before apply** (`undeclared-imports-before-apply`). A change's deltas can rewrite a component's `depends_on` and `paths`, so `undeclared_imports` also judges the same edges against the graph each `proposed` or `approved` change would leave, which `apply`'s `resulting(graph, change)` gives (`apply/resulting-graph-call`), as `removed-names-before-apply` does for names. A pair both graphs leave undeclared is reported once, by the current graph's line. Each change is judged alone against the current graph, so two pending changes that drop the same dependency each report it, naming themselves. A change whose deltas don't apply has no resulting graph: `stale-deltas` reports it. The edges are the code's as it is, read once. So a draft whose delta drops a `depends_on` entry its component's code uses meets the report in its own `clm check`, before `clm apply`, not first at `clm land`. A pair is its importing file, imported file and the IDs of `a` and `b`. A pair a change makes newly judged, by adding component `a` or `b` or by changing `paths` so a file falls in one, is reported the same way. The pending changes are those `is_pending` gives, as for `run`'s scan. The lines come after the current graph's, change by change in ID order, each in the order of the edges. The judging of resulting graphs sits behind `clm-check`'s `checkout` feature, which brings in `clm-apply` for `run`'s own before-apply scan: `undeclared_imports` is public and ungated, and without the feature it judges the current graph alone. `clm rebase` and `clm gate` don't run the rule: once the change is applied the current graph's line reports it, and `clm land` runs `clm check`.
 
@@ -426,7 +426,7 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 - model/test-ownership-keys
 
 ### Requirement: undeclared-imports
-`clm check` SHALL report each import edge `init`'s `import_edges` returns from a file of component `a` to a file of component `b`, where `b` is not `a` and `a`'s `depends_on` doesn't list `b`, as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` doesn't depend on `b``, where a file's component is its owner (`paths-disjoint`); an edge with an end no component owns SHALL NOT be reported. An edge from a file that `a`'s `tests` match SHALL be judged against `a`'s `depends_on` and `test_depends_on` together (`model/test-ownership-keys`), and reported only when neither lists `b`, with the same line. `clm check --no-detectors` SHALL report it as well, and `run` SHALL NOT. It SHALL also judge the same edges against the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), reporting each edge and component pair that graph leaves undeclared and the current graph doesn't as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` wouldn't depend on `b` after <change>`; a change whose deltas don't apply SHALL be skipped.
+`clm check` SHALL report each import edge `init`'s `import_edges` returns from a file of component `a` to a file of component `b`, where `b` is not `a` and `a`'s `depends_on` doesn't list `b`, as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` doesn't depend on `b``, where a file's component is its owner (`paths-disjoint`); an edge with an end no component owns SHALL NOT be reported. A file `a`'s `tests` match SHALL be judged against `a`'s `depends_on` as any of its files is. An edge from a file that an exemption of `a` names for `undeclared-imports` (`model/exemptions`) SHALL NOT be reported, judged by the exemptions of the graph being judged, the current one or the one a change would leave. `clm check --no-detectors` SHALL report it as well, and `run` SHALL NOT. It SHALL also judge the same edges against the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), reporting each edge and component pair that graph leaves undeclared and the current graph doesn't as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` wouldn't depend on `b` after <change>`; a change whose deltas don't apply SHALL be skipped.
 
 #### Scenario: undeclared path dependency
 - GIVEN components `a` (paths `["crates/a/**"]`, `depends_on: []`) and `b` (paths `["crates/b/**"]`), and a Cargo workspace where `crates/a/Cargo.toml` has a path dependency on `b`
@@ -444,9 +444,14 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 - THEN it reports no `check/undeclared-imports` violation
 
 #### Scenario: a test imports the entry point
-- GIVEN components `app` (paths `["app/main.py"]`, `depends_on: [feat]`) and `feat` (paths `["app/feat.py"]`, tests `["tests/feat/**"]`, `test_depends_on: [app]`), where `tests/feat/test_x.py` imports `app/main.py`
+- GIVEN components `app` (paths `["app/main.py"]`, `depends_on: [feat]`) and `feat` (paths `["app/feat.py"]`, tests `["tests/feat/**"]`), where `tests/feat/test_x.py` imports `app/main.py`
 - WHEN `clm check` runs
-- THEN it reports no `check/undeclared-imports` violation
+- THEN it exits 1 with the line ``tests/feat/test_x.py: check/undeclared-imports: imports app/main.py of component `app`, and `feat` doesn't depend on `app` ``
+
+#### Scenario: exempt until refactored
+- GIVEN the same components, and `feat` with `exemptions: [{rule: undeclared-imports, files: ["tests/feat/**"], until: backlog/x}]`
+- WHEN `clm check` runs
+- THEN it reports no `check/undeclared-imports` violation for `tests/feat/test_x.py`
 
 #### Scenario: production code still judged
 - GIVEN the same components, where `app/feat.py` also imports `app/main.py`
@@ -479,10 +484,10 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 
 #### Needs
 - init/import-edges
-- model/test-ownership-keys
+- model/exemptions
 
 ### Requirement: skipped-tests
-`clm check` SHALL report, in each scanned file that holds a `req:` marker, each line that skips a test: in a `.rs` file a line starting `#[ignore` after leading whitespace; in a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` or `.cjs` file a call of `it`, `test` or `describe` with `.skip`, `.skipIf` or `.todo`, or of `xit`, `xtest` or `xdescribe`; and in a `.py` file a line starting `@pytest.mark.skip` or `@unittest.skip` after leading whitespace, or holding `pytest.skip(`; as `<file>:<line>: check/skipped-tests: a skipped test in a file that cites requirements; run it, or move it to a file that cites none`. A file without markers, and a Markdown file, SHALL NOT be reported.
+`clm check` SHALL report, in each scanned file that holds a `req:` marker, each line that skips a test: in a `.rs` file a line starting `#[ignore` after leading whitespace; in a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` or `.cjs` file a call of `it`, `test` or `describe` with `.skip`, `.skipIf` or `.todo`, or of `xit`, `xtest` or `xdescribe`; and in a `.py` file a line starting `@pytest.mark.skip` or `@unittest.skip` after leading whitespace, or holding `pytest.skip(`; as `<file>:<line>: check/skipped-tests: a skipped test in a file that cites requirements; run it, or move it to a file that cites none`. A file without markers, a Markdown file, and a file that an exemption of its owner names for `skipped-tests` (`model/exemptions`) SHALL NOT be reported.
 
 #### Scenario: ignored Rust test
 - GIVEN `tests/t.rs` holding a marker citing `a/x` on line 2 and `#[ignore]` on line 5
@@ -504,9 +509,17 @@ A file's *owner* SHALL be the component whose `tests` match it or, when no compo
 - WHEN `clm check` runs
 - THEN it reports no `check/skipped-tests` violation
 
+#### Scenario: exempt skip
+- GIVEN `tests/t.rs` holding a marker citing `a/x` and `#[ignore]` on line 5, owned by `a`, which has an exemption from `skipped-tests` for `tests/t.rs` until `backlog/x`
+- WHEN `clm check` runs
+- THEN it reports no `check/skipped-tests` violation
+
 #### Serves
 - capability/prove-by-tests
 - architecture/proven-by-tests
+
+#### Needs
+- model/exemptions
 
 ### Requirement: removed-requirement-names
 `clm check` SHALL report each inline code span outside fenced code blocks in a component's `SPEC.md`, below its frontmatter, whose whole text is a removed requirement ID `<component>/<slug>`, in any component's `SPEC.md`, or the bare `<slug>` of one, in the `SPEC.md` of `<component>` itself unless a requirement of any component has that slug, `docs/decisions/<slug>.md` exists or a human-layer entry has that slug; as `<spec file>:<line>: check/removed-requirement-names: names `<id>`, which <change> removes`. An ID is *removed* when `check.coverage`'s `removed` gives it: a change outside the archive lists the slug under `REMOVED Requirements` in its delta for the component and no component holds the ID; with several such changes, the message SHALL name the first by ID. It SHALL also report the same spans in the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), for the IDs that change's deltas list under `REMOVED Requirements` and the current graph holds, with shared slugs judged on that graph, as `<spec file>:<line>: check/removed-requirement-names: names `<id>`, which <change> would remove`, the line being that of the text the change leaves; a change whose deltas don't apply is skipped.
@@ -781,7 +794,7 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 - architecture/incremental-adoption
 
 ### Requirement: tests-cite-their-owner
-`clm check` SHALL report each `req:` marker, in a file of its scan that a component's `tests` match, that cites a requirement of a component other than that file's owner (`paths-disjoint`), as `<file>:<line>: check/tests-cite-their-owner: cites <requirement> of `b`, but the file is `a`'s test; move the test to `b`'s tests`, and `run` SHALL report it too. A marker citing a capability (`capability/<slug>`) SHALL be read as citing the `capability` component's requirement, which proves it (`human-layer-proof`). A file that only `paths` match SHALL NOT be judged, so a project gives its tests to their components one `tests` glob at a time (`components-own-their-tests`), and a marker that names no existing requirement is left to `dangling-markers`.
+`clm check` SHALL report each `req:` marker, in a file of its scan that a component's `tests` match, that cites a requirement of a component other than that file's owner (`paths-disjoint`), as `<file>:<line>: check/tests-cite-their-owner: cites <requirement> of `b`, but the file is `a`'s test; move the test to `b`'s tests`, and `run` SHALL report it too. A marker citing a capability (`capability/<slug>`) SHALL be read as citing the `capability` component's requirement, which proves it (`human-layer-proof`). A file that only `paths` match SHALL NOT be judged, so a project gives its tests to their components one `tests` glob at a time (`components-own-their-tests`), and a marker that names no existing requirement is left to `dangling-markers`. A marker in a file that an exemption of its owner names for `tests-cite-their-owner` (`model/exemptions`) SHALL NOT be reported.
 
 #### Scenario: another component's requirement
 - GIVEN components `a` with tests `["tests/a/**"]` and `b` with requirement `y`, and `tests/a/t.rs` whose line 4 cites `b/y`
@@ -798,9 +811,15 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 - WHEN `clm check` runs
 - THEN it reports no `check/tests-cite-their-owner` violation
 
+#### Scenario: exempt until split
+- GIVEN the file of `another component's requirement`, and `a` with an exemption from `tests-cite-their-owner` for `tests/a/t.rs` until `backlog/x`
+- WHEN `clm check` runs
+- THEN it reports no `check/tests-cite-their-owner` violation
+
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
 
 #### Needs
 - model/test-ownership-keys
+- model/exemptions

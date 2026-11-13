@@ -43,7 +43,7 @@ fi
 **What the file holds.** One item per line, in one of three forms:
 
 - `all <path>`: the only line in the file. The branch changes a file that no component's `paths` hold, or one that matches `[affected] all`, so every test must run;
-- `node <id>`: a component the branch affects, directly, through `depends_on`, or because its `test_depends_on` names an affected component, since its tests import that component. The word is `node` rather than component, since programs read these lines. Useful when your suites map to components rather than files;
+- `node <id>`: a component the branch affects, directly or through `depends_on`. The word is `node` rather than component, since programs read these lines. Useful when your suites map to components rather than files;
 - `file <path>`: a file whose tests should run: a changed file that still exists, a test that cites a requirement of an affected component, a file of an affected component that cites none, or a test whose `clm:reads` marker matches what changed (next section). Paths are relative to the repository root.
 
 The `node` lines come first, then the `file` lines, each group sorted. An empty file means the branch changes nothing a test depends on, so no test needs to run. Run `clm affected` on a branch to see what a land would hand over.
