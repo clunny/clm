@@ -1234,7 +1234,9 @@ fn triage_takes_web_answers() {
     for needle in [
         "`.clm/answers.md`",
         "`<slug>: <answer> (answered",
-        "draft the item",
+        "draft the item as you draft a `human` line answered in the session",
+        "`done` as its answer",
+        "not asked for again",
     ] {
         assert!(record.contains(needle), "{needle}: {record}");
     }
