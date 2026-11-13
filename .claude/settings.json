@@ -11,6 +11,8 @@
       "Bash(.github/scripts/ci-check.sh *)",
       "Bash(clm setup)",
       "Bash(clm setup *)",
+      "Bash(clm build)",
+      "Bash(clm build *)",
       "Bash(clm apply)",
       "Bash(clm apply *)",
       "Bash(clm branch)",
