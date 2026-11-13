@@ -341,7 +341,7 @@ fn scenario_no_shared_install() {
 
 #[test]
 fn scenario_own_files() {
-    // req:orchestrator.run/stays-in-its-component@a0d6cc53
+    // req:orchestrator.run/stays-in-its-component@f555fb6d
     let p = prompt(&job());
     let obsolete = p
         .find("For an `obsolete` requirement, remove the code and tests its markers mark")
@@ -366,15 +366,18 @@ fn scenario_own_files() {
 
 #[test]
 fn scenario_no_legal_home() {
-    // req:orchestrator.run/stays-in-its-component@a0d6cc53
+    // req:orchestrator.run/stays-in-its-component@f555fb6d
     let p = prompt(&job());
     for needle in [
-        "it needs a file no glob of your component matches, an import its `depends_on` and `test_depends_on` don't allow, or an edit to another component's code or tests",
+        "it needs a file no glob of your component matches, an import its `depends_on` doesn't allow, or an edit to another component's code or tests",
         "keep every component building as it stands, leave the requirement unbuilt",
         "add a `question` backlog item whose `components` name the components concerned, with `blocks` naming the requirement",
         "what spec change it waits on: a glob, a dependency, or another component's requirement",
+        "as when what it removes from or adds to its Contract breaks a component that still uses it",
+        "that moves that component first",
         "`coupled-changes-sequence`",
-        "never move an import, hide a file, edit a spec path or ask for a history rewrite to get past a check",
+        "never move an import, hide a file, edit a spec path or ask for a history rewrite to get past a check, and never add or widen an exemption, which only a change a human reviews does (`temporary-exemptions`)",
+        "A file of your component that an exemption names still holds every other rule, and you add nothing to such a file that the exemption would excuse",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
@@ -382,7 +385,7 @@ fn scenario_no_legal_home() {
 
 #[test]
 fn removal_rule_for_an_obsolete_requirement_is_in_every_prompt() {
-    // req:orchestrator.run/stays-in-its-component@a0d6cc53
+    // req:orchestrator.run/stays-in-its-component@f555fb6d
     let mut j = job();
     j.pending.retain(|i| i.state != "obsolete");
     let p = prompt(&j);

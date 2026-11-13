@@ -453,14 +453,17 @@ pub fn prompt(job: &Job) -> String {
          component's `tests` match, or its `paths` when it sets no `tests`, and never add a test \
          to a file another component owns. When a requirement you build can't be built within \
          those files (it needs a file no glob of your component matches, an import its \
-         `depends_on` and `test_depends_on` don't allow, or an edit to another component's code \
+         `depends_on` doesn't allow, or an edit to another component's code \
          or tests, as when what it removes from or adds to its Contract breaks a component that \
          still uses it), keep every component building as it stands, leave the requirement \
          unbuilt, and add a `question` backlog item whose `components` name the components \
          concerned, with `blocks` naming the requirement and saying what spec change it waits \
          on: a glob, a dependency, or another component's requirement that moves that component \
          first (`coupled-changes-sequence`); never move an import, hide a file, edit a spec path \
-         or ask for a history rewrite to get past a check. For an `obsolete` requirement whose \
+         or ask for a history rewrite to get past a check, and never add or widen an exemption, \
+         which only a change a human reviews does (`temporary-exemptions`). A file of your \
+         component that an exemption names still holds every other rule, and you add nothing to \
+         such a file that the exemption would excuse. For an `obsolete` requirement whose \
          code another component still uses, remove its markers and tests as usual, but keep that \
          code, with no `clm:remove-by` marker, and add a `deferred` item without `blocks`, whose \
          `components` name both components and whose body names the kept code, the component \
