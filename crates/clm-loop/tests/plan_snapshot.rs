@@ -36,6 +36,7 @@ fn view_and_step_agree() {
             lease: Some(clm_git::now()),
             ..LoopFile::default()
         },
+        ..Snapshot::default()
     };
     let computed = plan(&snapshot);
     assert_eq!(computed.next[0].name, "build:a");

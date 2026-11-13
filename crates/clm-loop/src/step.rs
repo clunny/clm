@@ -10,7 +10,7 @@ use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 
 use crate::Options;
 use crate::cmd::{clm, clm_ok, say};
-use crate::plan::{Group, Launch, Snapshot, plan_of};
+use crate::plan::{BacklogRow, Group, Launch, Snapshot, plan_of};
 use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
 
 /// The prompt file of a run: `.clm/prompts/loop/<name>.md`, with `:` written `-`.
@@ -81,7 +81,7 @@ fn read_groups(options: &Options) -> Result<Vec<Group>, Failure> {
 }
 
 /// Reads what the plan is computed from, after the step's fetch.
-fn read_snapshot(options: &Options, file: LoopFile) -> Result<Snapshot, Failure> {
+fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Snapshot, Failure> {
     let main = clm_git::git(&options.root, &["rev-parse", "origin/main"])?;
     let held = clm_orchestrator::places(&options.root, DEFAULT_EXPIRY_HOURS)
         .map_err(|e| Failure::Git(format!("places: {e:?}")))?
@@ -106,7 +106,90 @@ fn read_snapshot(options: &Options, file: LoopFile) -> Result<Snapshot, Failure>
         groups: read_groups(options)?,
         build_model,
         file,
+        backlog: read_backlog(options)?,
+        unsafe_work: unsafe_work(wrap_up),
+        upgrades: read_upgrades(options)?,
     })
+}
+
+/// The items of `origin/main`'s backlog the plan reads: those that block requirements or took
+/// in a red verify, with, for a question or human task, when it was added.
+fn read_backlog(options: &Options) -> Result<Vec<BacklogRow>, Failure> {
+    let blobs = clm_git::tree_blobs(&options.root, "origin/main", &|path| {
+        path.starts_with("backlog/") && path.ends_with(".md")
+    })?;
+    let mut rows = Vec::new();
+    for (path, bytes) in blobs {
+        let slug = path
+            .trim_start_matches("backlog/")
+            .trim_end_matches(".md")
+            .to_string();
+        let Ok(item) = clm_model::parse_backlog_item(&slug, &String::from_utf8_lossy(&bytes))
+        else {
+            continue;
+        };
+        let fm = item.frontmatter;
+        let human = matches!(
+            fm.kind,
+            clm_model::BacklogKind::Question | clm_model::BacklogKind::Human
+        );
+        if !(human && !fm.blocks.is_empty() || !fm.verify_failures.is_empty()) {
+            continue;
+        }
+        let since = clm_git::git(
+            &options.root,
+            &[
+                "log",
+                "--diff-filter=A",
+                "--format=%ct",
+                "origin/main",
+                "--",
+                &path,
+            ],
+        )?
+        .lines()
+        .last()
+        .and_then(|t| t.parse().ok())
+        .unwrap_or_else(now);
+        rows.push(BacklogRow {
+            slug,
+            kind: fm.kind.to_string(),
+            blocks: fm.blocks,
+            verify_failures: fm.verify_failures,
+            since,
+        });
+    }
+    Ok(rows)
+}
+
+/// The lines of `clm wrap-up` about the caller's own work that isn't safe and the ledger's
+/// findings; the lines about other checkouts' work (`elsewhere`) and runs' (`open`) are left out.
+fn unsafe_work(wrap_up: &str) -> Vec<String> {
+    wrap_up
+        .lines()
+        .map(str::trim)
+        .filter(|l| {
+            l.starts_with("dirty ") || l.starts_with("unpushed ") || l.starts_with("ledger/")
+        })
+        .map(str::to_string)
+        .collect()
+}
+
+/// The migrations `clm upgrade` lists, by ID.
+fn read_upgrades(options: &Options) -> Result<Vec<String>, Failure> {
+    let ran = clm(options, &["upgrade"])?;
+    if ran.code != 0 {
+        return Ok(Vec::new());
+    }
+    Ok(ran
+        .stdout
+        .lines()
+        .filter_map(|l| {
+            let mut words = l.split_whitespace();
+            let id = words.next()?;
+            matches!(words.next()?, "required" | "advised").then(|| id.to_string())
+        })
+        .collect())
 }
 
 /// What preparing one launch came to.
@@ -237,7 +320,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         return Err(Failure::Git(format!("clm wrap-up: {}", wrap_up.reason())));
     }
     let file = state::read(&options.root).unwrap_or_default();
-    let snapshot = read_snapshot(options, file)?;
+    let snapshot = read_snapshot(options, file, &wrap_up.stdout)?;
     let plan = plan_of(&snapshot);
     let mut changes = Vec::new();
     let mut stored_file = snapshot.file.clone();
@@ -259,6 +342,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     }
     let main = snapshot.main.clone();
     let next = plan.next.clone();
+    let humans = plan.humans.clone();
     let no_launches = plan.launches.is_empty();
     let (lines, ended, file) = state::update(&options.root, |f| {
         for change in changes {
@@ -275,6 +359,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
             main,
             at: now(),
             next,
+            humans,
         });
         let lines = if f.stop == Some(StopMode::Now) {
             // A run never launched is stopped with its claim, branch and place kept.

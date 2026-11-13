@@ -34,6 +34,7 @@ fn snapshot(
             session_model: "opus".to_string(),
             ..LoopFile::default()
         },
+        ..Snapshot::default()
     }
 }
 
