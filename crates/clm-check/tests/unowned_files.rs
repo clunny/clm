@@ -64,7 +64,7 @@ const A: (&str, &str) = ("specs/a/SPEC.md", "[\"crates/a/**\"]");
 
 #[test]
 fn file_in_no_node() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(Some("[]"), &[A], &["crates/a/lib.rs", "crates/b/lib.rs"]);
     assert_eq!(
         found(dir.path()),
@@ -74,14 +74,14 @@ fn file_in_no_node() {
 
 #[test]
 fn not_opted_in() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(None, &[A], &["crates/a/lib.rs", "crates/b/lib.rs"]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn declared_not_yet_adopted() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(
         Some("[\"crates/b/**\"]"),
         &[A],
@@ -92,7 +92,7 @@ fn declared_not_yet_adopted() {
 
 #[test]
 fn part_of_an_outside_directory_adopted() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(
         Some("[\"src/**\"]"),
         &[("specs/api/SPEC.md", "[\"src/api/**\"]")],
@@ -103,7 +103,7 @@ fn part_of_an_outside_directory_adopted() {
 
 #[test]
 fn outside_glob_left_behind() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(
         Some("[\"crates/b/**\"]"),
         &[A, ("specs/b/SPEC.md", "[\"crates/b/**\"]")],
@@ -119,7 +119,7 @@ fn outside_glob_left_behind() {
 
 #[test]
 fn spec_paths_and_untracked_files() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(
         Some("[]"),
         &[A],
@@ -140,7 +140,7 @@ fn spec_paths_and_untracked_files() {
 
 #[test]
 fn whatever_the_node_status() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(Some("[]"), &[], &["crates/a/lib.rs"]);
     write(
         dir.path(),
@@ -153,7 +153,7 @@ fn whatever_the_node_status() {
 #[cfg(unix)]
 #[test]
 fn symlinks_and_markdown_count() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = tree(Some("[]"), &[A], &["README.md"]);
     std::os::unix::fs::symlink("README.md", dir.path().join("link")).unwrap();
     for args in [&["init", "-q"][..], &["add", "."]] {
@@ -175,7 +175,7 @@ fn symlinks_and_markdown_count() {
 
 #[test]
 fn extracted_tree() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = tree(
         Some("[\".ci/**\"]"),
         &[A],
@@ -195,7 +195,7 @@ fn extracted_tree() {
 
 #[test]
 fn no_work_tree_no_listing() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = tree(
         Some("[\".ci/**\"]"),
         &[A],
@@ -206,7 +206,7 @@ fn no_work_tree_no_listing() {
 
 #[test]
 fn submodules_count() {
-    // req:check/unowned-files@d0c0eb0d
+    // req:check/unowned-files@788ce525
     let dir = repo(Some("[]"), &[A], &["crates/a/lib.rs"]);
     let status = Command::new("git")
         .args([
@@ -223,4 +223,16 @@ fn submodules_count() {
         found(dir.path()),
         [format!("vendor/sub: check/unowned-files: {MESSAGE}")]
     );
+}
+
+#[test]
+fn owned_by_tests() {
+    // req:check/unowned-files@788ce525
+    let dir = repo(Some("[]"), &[], &["crates/a/lib.rs", "tests/a/t.rs"]);
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"crates/a/**\"]\ntests: [\"tests/a/**\"]\n---\n## Contract\n",
+    );
+    assert_eq!(found(dir.path()), Vec::<String>::new());
 }

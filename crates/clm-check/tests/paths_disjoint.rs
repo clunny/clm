@@ -52,7 +52,7 @@ fn found(root: &Path) -> Vec<String> {
 
 #[test]
 fn two_owners() {
-    // req:check/paths-disjoint@fad0d1e8
+    // req:check/paths-disjoint@b3d269ba
     let dir = repo(
         &[
             ("specs/a/SPEC.md", "[\"src/**\"]"),
@@ -68,7 +68,7 @@ fn two_owners() {
 
 #[test]
 fn parent_and_child() {
-    // req:check/paths-disjoint@fad0d1e8
+    // req:check/paths-disjoint@b3d269ba
     let dir = repo(
         &[
             ("specs/a/SPEC.md", "[\"src/**\"]"),
@@ -84,7 +84,7 @@ fn parent_and_child() {
 
 #[test]
 fn disjoint() {
-    // req:check/paths-disjoint@fad0d1e8
+    // req:check/paths-disjoint@b3d269ba
     let dir = repo(
         &[
             ("specs/a/SPEC.md", "[\"src/a/**\"]"),
@@ -97,7 +97,7 @@ fn disjoint() {
 
 #[test]
 fn markdown_and_untracked_files() {
-    // req:check/paths-disjoint@fad0d1e8
+    // req:check/paths-disjoint@b3d269ba
     let dir = repo(
         &[
             ("specs/a/SPEC.md", "[\"src/**\"]"),
@@ -114,11 +114,53 @@ fn markdown_and_untracked_files() {
 
 #[test]
 fn outside_a_work_tree_none() {
-    // req:check/paths-disjoint@fad0d1e8
+    // req:check/paths-disjoint@b3d269ba
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", &node("[]"));
     write(dir.path(), "specs/a/SPEC.md", &node("[\"src/**\"]"));
     write(dir.path(), "specs/b/SPEC.md", &node("[\"src/**\"]"));
     write(dir.path(), "src/x.rs", "x\n");
     assert_eq!(found(dir.path()), Vec::<String>::new());
+}
+
+/// A component's frontmatter with `paths` and `tests`.
+fn with_tests(paths: &str, tests: &str) -> String {
+    format!(
+        "---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ntests: {tests}\n---\n## Contract\n"
+    )
+}
+
+#[test]
+fn tests_inside_another_components_paths() {
+    // req:check/paths-disjoint@b3d269ba
+    let dir = repo(
+        &[("specs/harness/SPEC.md", "[\"tests/**\"]")],
+        &["tests/a/t.py"],
+    );
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &with_tests("[\"src/a/**\"]", "[\"tests/a/**\"]"),
+    );
+    assert_eq!(found(dir.path()), Vec::<String>::new());
+}
+
+#[test]
+fn two_components_tests() {
+    // req:check/paths-disjoint@b3d269ba
+    let dir = repo(&[], &["tests/b/t.py"]);
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &with_tests("[\"src/a/**\"]", "[\"tests/**\"]"),
+    );
+    write(
+        dir.path(),
+        "specs/b/SPEC.md",
+        &with_tests("[\"src/b/**\"]", "[\"tests/b/**\"]"),
+    );
+    assert_eq!(
+        found(dir.path()),
+        ["tests/b/t.py: check/paths-disjoint: owned by `a`, `b`"]
+    );
 }
