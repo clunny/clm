@@ -590,6 +590,8 @@ fn scenario_draft_contract_step_deferred_prompt() {
         "exhaustive",
         "widens",
         "coupled-changes-sequence",
+        "default arm",
+        "struct literal",
         "clm:remove-by",
         "contract-step-deferred",
         "optional",
