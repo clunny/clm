@@ -52,7 +52,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 - `CAPABILITIES.md`: fold the runner, move the pin, add the eval capability, reword scenarios the product's boundary can't observe.
 - Reword `proven-by-tests` and `deterministic-enforcement` for the three kinds.
 - Remove the contradictions listed under Problem.
-- Last, once the human layer is settled: bring `docs/the-clm-project.md` up to date with it (the supported agents, the ways the AI layer reaches a person, the three kinds of rule, evals, what this plan changed and why), and open `AGENTS.md` with a few sentences stating CLM's philosophy and goals, so every session has them in front of it. Those sentences are short, since every session and every build loads the file, and they point at the article for the reasoning, never restating it.
+- Last, once the human layer is settled: bring `docs/the-clm-project.md` up to date with it (the supported agents, the ways the AI layer reaches a person, the three kinds of rule, evals, what this plan changed and why), and revise the opening of `AGENTS.md`, "What CLM is for", added on 2026-11-13 so every session has the philosophy and goals in front of it, where the settled layer changed them (the three kinds of rule and evals among them). That opening stays short, since every session and every build loads the file, and it points at the article for the reasoning, never restating it. The plan's last phase removes its sentence naming this item.
 
 **2. Delete.**
 - `clm runner` and `orchestrator.runner`.

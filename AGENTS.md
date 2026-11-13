@@ -1,5 +1,17 @@
 # CLM: working in this repo
 
+## What CLM is for
+
+CLM exists so that AI writes and maintains all code and tests, and people decide only what the software is for and what must always hold. Judge every design, recommendation and piece of work in this repo against that:
+
+- **Humans own intent, and only intent.** The capabilities and the architectural constraints are theirs. Everything below is the AI's, and nothing should make a person read code, tests or implementation detail to steer the product.
+- **A passing check must mean the code does what the spec says.** A rule that gates is decided by a program, never by prose or a model's judgement, and a test must prove the behaviour it cites, not only name it.
+- **Keep it small.** Build what a capability needs now, reuse before writing, and redesign before working around. Propose a cut rather than carry a burden in silence, and never drop behaviour without the human's yes.
+
+`docs/the-clm-project.md` gives the reasoning, and `backlog/a-passing-check-proves-less-than-the-spec-claims.md` the plan now in force: until it is done, work here serves that plan.
+
+## Working here
+
 CLM is built with CLM. Read `ARCHITECTURE.md` first; its architectural constraints apply to work in this repo. Then run `clm status` (`cargo run -q -p clm -- status`) for the current state, and `clm backlog` for what's next. Open `spec/*` and `impl/*` branches, and their pull requests, show work in flight.
 
 - Spec/design edits go in `changes/<YYYYMMDD-slug>/deltas/` and reach `specs/` only through `clm apply`. `/clm:help` answers questions about working with CLM.
