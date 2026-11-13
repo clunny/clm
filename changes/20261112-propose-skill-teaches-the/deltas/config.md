@@ -39,7 +39,3 @@ Loading SHALL take `host` only from the repository's `clm.toml` or the clone's `
 #### Serves
 - capability/git-host
 - architecture/host-adapters
-
-#### Needs
-- host/azure-pull-requests
-- host/azure-other-operations

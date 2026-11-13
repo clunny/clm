@@ -30,7 +30,7 @@ The skill half of the item is already fixed in the spec by `20261112-components-
 
 ## Constraints
 
-- Scenarios, `#### Needs` and `#### Serves` are unchanged.
+- Scenarios and `#### Serves` are unchanged. `config/host-setting` drops its `#### Needs` on `host/azure-pull-requests` and `host/azure-other-operations`: they ordered the forced-fix arm after the adapter, and the arm is built, so `config` re-cites without waiting on `host`. `host/azure-selected` keeps its need on `config/host-setting`.
 
 ## Edge cases and workarounds
 
