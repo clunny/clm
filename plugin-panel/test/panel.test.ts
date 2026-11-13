@@ -150,7 +150,15 @@ describe('views-panel', () => {
       expect(modelRuns('queue', surface, null, true)).toEqual({})
       expect(modelRuns('queue', surface, 'a', true)).toEqual({})
     }
+    expect(viewArgs('queue', 'terminal', 90, true)).toEqual([
+      'view', 'queue', '--at', 'origin/main', '--format', 'ansi', '--width', '90',
+    ])
     const chart = ansiLines('\x1b[34mqueue\x1b[0m\n  build:git\n')
+    // Even given a model, the Queue chart has no pressable line and no inspector.
+    const model = ok(JSON.stringify({ nodes: [{ node: 'build:git' }] }))
+    const given = chartLines({ tab: 'queue', chart, own: model, selected: 'build:git', unfolded: [] })
+    expect(given.inspector).toBeUndefined()
+    expect(given.lines.map(l => l.key)).toEqual([undefined, undefined])
     const { lines, inspector } = paneChart({ tab: 'queue', chart, selected: 'a', unfolded: [] })
     expect(inspector).toBeUndefined()
     expect(lines.map(l => l.key)).toEqual([undefined, undefined])
