@@ -265,6 +265,7 @@ fn scenario_unknown_view() {
     }
     let out = clm(dir.path(), &["view", "queue", "--format", "svg"]);
     assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8(out.stderr).unwrap().contains("svg"));
     let out = clm(dir.path(), &["view", "spec", "--width", "0"]);
     assert_eq!(out.status.code(), Some(2));
 }
