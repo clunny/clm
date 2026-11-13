@@ -1054,8 +1054,39 @@ fn scenario_a_draft_that_pushed() {
     assert!(prompt.contains("git switch -c spec/20261112-x --no-track origin/spec/20261112-x"));
     assert!(prompt.contains("clm gate --base origin/main"), "same steps");
     assert!(prompt.contains("`left <slug>: <reason>`"), "same rules");
+    assert!(
+        prompt.contains("`changes/20261112-x/change.md`"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("each backlog item its `resolves` names"));
     assert_eq!(place_names(&r), vec![id.to_string()]);
     assert!(local_branches(&r).lines().all(|b| !b.contains("spec/")));
+}
+
+#[test]
+fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
+    // req:orchestrator.triage/draft-resume@62d8d617
+    let r = with_items();
+    let id = "20261112-v";
+    push_files(
+        &r.work,
+        &format!("spec/{id}"),
+        &[(&format!("changes/{id}/change.md"), &change("proposed"))],
+    );
+    place_taken(&r, id, 1, &[&format!("spec/{id}"), "propose/a"]);
+    let ran = clm_draft_env(&r, &fake(), &["--resume", id], &[("CLM_MAX_BUILDS", "1")]);
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let places = clm_orchestrator::places(&r.work, 4).unwrap();
+    assert_eq!(places.len(), 1);
+    assert!(places[0].counts);
+    assert!(
+        places[0]
+            .file
+            .as_ref()
+            .unwrap()
+            .branches
+            .contains(&"propose/a".to_string())
+    );
 }
 
 #[test]
