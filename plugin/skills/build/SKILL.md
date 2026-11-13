@@ -8,6 +8,8 @@ Run the clone's build loop. `clm build` decides every launch, order, retry, resu
 
 Before starting, tell the human once that runs launch under this session's permission mode: in manual mode they pause for the human's answers, while auto or bypass mode lets them run alone. Never refuse a mode.
 
+Once, before the first launch (`unattended-permissions-check`), run `clm init --check-permissions`. When it exits 1, tell the human that in auto mode Claude Code may deny the unattended steps those rules allow, show the rules it printed, say that they belong in `permissions.allow` in `.claude/settings.json` (or `.claude/settings.local.json` for this clone alone), and go on launching, never refusing to. When it exits 0, go on. When it exits with any other code, as a `clm` without the option does, tell the human the check couldn't run and go on launching. Never write either file yourself.
+
 Run `clm agent-harness` first (`skills-follow-agent-harness`): it says what this session's agent harness can do. Where it can't stop a subagent, a `stop` action waits for the run to return instead (below).
 
 Start the loop with `clm build start --session-model <alias>`, `<alias>` the alias of this session's own model, the one your system prompt names (such as `opus`). Then carry out each action every `clm build` command prints, in order. Load a deferred tool with `ToolSearch` first.

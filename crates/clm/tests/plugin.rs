@@ -2677,10 +2677,21 @@ fn permission_check_gaps(skill: &str, body: &str) -> Vec<String> {
 #[test]
 fn skills_check_the_permission_rules() {
     // req:plugin/unattended-permissions-check@e8390775
-    assert_eq!(
-        permission_check_gaps("triage", &skill_body("triage")),
-        Vec::<String>::new()
+    for name in ["build", "triage"] {
+        assert_eq!(
+            permission_check_gaps(name, &skill_body(name)),
+            Vec::<String>::new()
+        );
+    }
+    // `build` releases a given-up component's claim with `clm branch delete` and never pushes
+    // raw.
+    let gaps = text_gaps(
+        "build",
+        &skill_body("build"),
+        &["clm branch delete"],
+        &[concat!("git", " push")],
     );
+    assert_eq!(gaps, Vec::<String>::new());
     // the check comes before the first launch
     let triage = skill_body("triage");
     assert!(

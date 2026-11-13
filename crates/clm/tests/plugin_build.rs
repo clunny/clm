@@ -148,6 +148,28 @@ fn build_skill_runs_the_loop() {
     ] {
         assert!(body.contains(needle), "{needle} missing from the skill");
     }
+    // Each action line maps to its own tool call, in the line that names it.
+    for (action, needles) in [
+        (
+            "- `launch`:",
+            &[
+                "isolation: \"worktree\"",
+                "line's model",
+                "clm build launched <name> <task-id>",
+            ][..],
+        ),
+        (
+            "- `resume`:",
+            &["SendMessage", "--result none --cause tool"],
+        ),
+        ("- `stop`:", &["TaskStop", "--cause stopped"]),
+        ("- `wait`:", &["clm build wait", "background"]),
+    ] {
+        let line = body.lines().find(|l| l.starts_with(action)).unwrap();
+        for needle in needles {
+            assert!(line.contains(needle), "{action} lacks {needle}: {line}");
+        }
+    }
     assert_eq!(scheduling_gaps(&body), Vec::<String>::new());
     assert!(!body.contains("fix reported defects"));
     // A skill that tells Claude to schedule is reported.
