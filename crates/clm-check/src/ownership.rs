@@ -8,7 +8,7 @@ use crate::matches;
 /// The components that own `file`, sorted by ID: those whose `tests` match it or, when no
 /// component's `tests` do, those whose `paths` match it (`components-own-their-tests`). More
 /// than one is what `paths-disjoint` reports.
-pub fn owners<'g>(graph: &'g Graph, file: &str) -> Vec<&'g Node> {
+pub(crate) fn owners<'g>(graph: &'g Graph, file: &str) -> Vec<&'g Node> {
     let by = |globs: fn(&Node) -> &Vec<String>| -> Vec<&Node> {
         graph
             .nodes
@@ -26,7 +26,7 @@ pub fn owners<'g>(graph: &'g Graph, file: &str) -> Vec<&'g Node> {
 
 /// The one component that owns `file`: the first of the components whose `tests` match it, or
 /// else the deepest whose `paths` match it, then the first by ID.
-pub fn owner<'g>(graph: &'g Graph, file: &str) -> Option<&'g Node> {
+pub(crate) fn owner<'g>(graph: &'g Graph, file: &str) -> Option<&'g Node> {
     let owners = owners(graph, file);
     if owners.iter().any(|n| is_test_of(n, file)) {
         return owners.into_iter().next();
@@ -44,6 +44,6 @@ pub fn owner<'g>(graph: &'g Graph, file: &str) -> Option<&'g Node> {
 }
 
 /// Whether one of `node`'s `tests` globs matches `file`.
-pub fn is_test_of(node: &Node, file: &str) -> bool {
+pub(crate) fn is_test_of(node: &Node, file: &str) -> bool {
     node.frontmatter.tests.iter().any(|g| matches(g, file))
 }
