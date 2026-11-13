@@ -794,7 +794,7 @@ The prompts `clm draft` writes SHALL tell the session that when it adds a `quest
 - model/backlog-choices
 
 ### Requirement: finish-delete-loses-race
-When `origin` refuses a delete `clm draft --finish` makes of `spec/<change>` or `autosync/spec/<change>` (`draft-finish`) because the branch is no longer at the tip the fetch read, `clm draft --finish` SHALL read that branch on `origin` again and go on, as it does for a claim: a branch `origin` no longer has SHALL be skipped as one that doesn't exist, since another session or command deleted it after the fetch, and a branch whose tip moved SHALL be kept. It SHALL print no `removed` line for either, SHALL still do the rest of the finish, and the refusal SHALL NOT make it exit 2. When a delete fails and `origin` still has the branch at the tip the fetch read, the failure is git's and it SHALL exit 2.
+When `origin` refuses a delete `clm draft --finish` makes of `spec/<change>` or `autosync/spec/<change>` (`draft-finish`) because the branch is no longer at the tip the fetch read, `clm draft --finish` SHALL read that branch on `origin` again and go on, as it does for a claim: a branch `origin` no longer has SHALL be skipped as one that doesn't exist, since another session or command deleted it after the fetch, and a branch whose tip moved SHALL be kept. It SHALL print no `removed origin/<branch>` line for either, SHALL still do the rest of the finish, the local branch's delete and its `removed spec/<change>` line among it, and the refusal SHALL NOT make it exit 2. When a delete fails and `origin` still has the branch at the tip the fetch read, the failure is git's and it SHALL exit 2.
 
 #### Serves
 - capability/work-concurrently
