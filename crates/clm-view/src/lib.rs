@@ -1,7 +1,7 @@
 //! View: `clm status` and `clm view` (see specs/view/SPEC.md), the `spec`, `flight` and
-//! `blockers` views of a CLM repository, as models (`views-rendered-by-clm`) and as charts.
+//! `blockers` views, and the `queue` model of a CLM repository, as models (`views-rendered-by-clm`) and as charts.
 //!
-//! The models ([`spec_view`], [`flight_view`], [`blockers_view`]) and the renderers
+//! The models ([`spec_view`], [`flight_view`], [`blockers_view`], [`QueueView`]) and the renderers
 //! ([`render`]) need neither git nor a checkout, so the crate builds for
 //! `wasm32-unknown-unknown` (`view-library`). The commands that read a repository
 //! are `clm-view-repo`'s.
@@ -9,6 +9,7 @@
 mod blockers;
 mod chart;
 mod flight;
+mod queue;
 mod spec;
 mod status;
 mod svg;
@@ -16,6 +17,7 @@ mod svg;
 pub use blockers::{BlockersView, Held, Root, blockers_view};
 pub use clm_orchestrator::ClaimRef;
 pub use flight::{Claim, FlightChange, FlightGroup, FlightNode, FlightView, Totals, flight_view};
+pub use queue::{Loop, Next, QueueView, Running, Stop, WaitingOnWork, WaitingOnYou};
 use spec::States;
 pub use spec::{SpecNode, SpecView, queue_states, spec_view};
 pub use status::status_text;
@@ -28,6 +30,9 @@ pub enum View {
     Spec(SpecView, States),
     Flight(FlightView),
     Blockers(BlockersView),
+    /// The build loop's plan; it has no `svg` form, which `clm view` refuses before it
+    /// renders, and its JSON carries the checkout like the others.
+    Queue(QueueView),
 }
 
 /// A view's name, as `clm view <name>` takes it.
@@ -169,6 +174,7 @@ pub fn render(view: &View, format: Format, width: usize, head: Option<&Head>) ->
             View::Spec(v, states) => spec::chart(v, states),
             View::Flight(v) => flight::chart(v),
             View::Blockers(v) => blockers::chart(v),
+            View::Queue(v) => queue::chart(v),
         });
         lines
     };
@@ -184,6 +190,7 @@ pub fn render(view: &View, format: Format, width: usize, head: Option<&Head>) ->
                 View::Spec(v, _) => json(v, head),
                 View::Flight(v) => json(v, head),
                 View::Blockers(v) => json(v, head),
+                View::Queue(v) => json(v, head),
             };
             // The models are plain data: a failure here is a bug, and a silent empty line
             // would break the web app and the panel that parse it.
