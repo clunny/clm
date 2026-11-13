@@ -31,3 +31,5 @@ Updated 2026-10-25: `interactive` left the table with the queue state it named (
 Updated 2026-10-25: the panel's build rows (`20261025-panel-build-rows`) colour a running subagent amber, like a claim, a finished one green and a failed one rose, each with its glyph (`● ✓ ✗`).
 
 Updated 2026-11-12: `clm machine`'s rows (`machine-load-measured-by-clm`) colour a reading `ok` green, `warn` amber and `critical` rose, and dim `unknown`; each state but `ok` is also written as its word after the figure, so the row reads without colour.
+
+Updated 2026-11-12: `clm machine`'s chart cells (`machine-cells-keep-their-state`) each take the colour of the state their sample was judged at, the one place colour is the only cue: the current reading's state is still written as its word, and a past cell's state is history that before this had no cue at all.

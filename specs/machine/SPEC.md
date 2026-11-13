@@ -14,7 +14,7 @@ serves: [capability/watch-machine-load]
 ## Design
 Crate `clm-machine`, at `crates/clm-machine/`. It reads the machine through a maintained crate rather than per-platform code of its own (`reuse-first`): `sysinfo` with its default features off and only the features the readings need, provided it builds for every target the release builds with zig (`cross-built-macos-binaries`); otherwise it reads `/proc` on Linux and `sysctl` and `host_statistics64` on macOS through `libc`, and this Design says why. Free disk is `statvfs`'s `f_bavail × f_frsize`, the space an unprivileged process can still write, and total `f_blocks × f_frsize`.
 
-**CPU** is the 1- and 5-minute load averages over the logical cores. The load average is the operating system's own smoothing, so a sustained load shows and a spike doesn't, with no sampling of its own. The state follows the 5-minute ratio: `critical` from 2, `warn` from 1.25, else `ok`; a compile keeps it near 1, so only queueing beyond the cores flags. Where the system gives no load average the state is `unknown`.
+**CPU** is the 1- and 5-minute load averages over the logical cores (`machine-cpu-flags-the-minute`). The load average is the operating system's own smoothing, with no sampling of its own. A parallel build fills every core, so a ratio near 1 is a machine at work, and beyond it work queues for the cores. The state is `critical` when the 5-minute ratio is at least 1.25, the queueing having held for minutes; else `warn` when the 1-minute ratio is at least 1.25, queueing that has just begun and may pass; else `ok`. Where the system gives either load average not, the state is `unknown`.
 
 **Memory** is the memory the system can still hand out, not the free memory: Linux's `MemAvailable`, which counts reclaimable cache, and on macOS the free, inactive and purgeable pages. Free memory alone reads near zero whenever the page cache is full, while allocations fail only when available memory runs out. `critical` below 10% of total, `warn` below 20%.
 
@@ -22,16 +22,16 @@ Crate `clm-machine`, at `crates/clm-machine/`. It reads the machine through a ma
 
 **Disk** judges free space against that need. With a `peak`, the *growth* still owed is the sum over the counting builds of `peak` minus its last measured size, when positive (a build not yet measured owes `peak`), and the *starts* are `peak` times the free places, `max_builds` minus the places that count, at least 0. `critical` when free space is below the growth, since a running build may then fail; `warn` when it is below the growth plus the starts, since builds `clm next` may still start won't all fit; else `ok`. With no `peak` yet, `critical` below 5% of total and `warn` below 10%. Under WSL the filesystem is a virtual disk whose free space can exceed the Windows host's, so the reading can be `ok` while the host is full; nothing inside the system can see the host's disk.
 
-**History** (`machine-history`). Each run appends a sample to `<git common dir>/clm/machine-samples`, beside the record, unless the newest sample there is under 5 seconds old, so two panes sampling the one clone don't double it, and drops the samples older than 30 minutes, keeping at most 180. A sample is one line: its RFC 3339 time, then the CPU, memory and disk *shares*, each a decimal or `-` when its reading is unknown: CPU `load1 / cores` over 2, so a share of 1 is twice the cores; memory `1 − available / total`; disk `1 − available / total`, so for all three a larger share is a heavier load. The file is written through a temporary file and a rename; two runs at once may lose one of their samples, never tear the file, and a file that can't be read counts as empty. Sampling rides on the pane's runs: nothing samples while nothing runs `clm machine`, and the chart shows that gap only as fewer cells.
+**History** (`machine-history`, `machine-cells-keep-their-state`). Each run appends a sample to `<git common dir>/clm/machine-samples`, beside the record, unless the newest sample there is under 5 seconds old, so two panes sampling the one clone don't double it, and drops the samples older than 30 minutes, keeping at most 180. A sample is one line of seven fields: its RFC 3339 time, then for CPU, memory and disk in turn the reading's *share*, a decimal or `-` when the reading is unknown, and the word of the state that run judged it at (`ok`, `warn`, `critical` or `unknown`), as in `2026-11-12T10:00:00Z 0.6250 warn 0.7500 ok - unknown`. The shares are CPU `load1 / cores` over 2, so a share of 1 is twice the cores; memory `1 − available / total`; disk `1 − available / total`, so for all three a larger share is a heavier load. A sample keeps its state because the state can't be judged again from the share: the disk's depends on the `peak` and the free places of that moment, and the CPU's on the 5-minute load. A line of any other shape is no sample, one with another state word or one written before samples held states (time and three shares) included: it is left out and dropped when the file is next written. Such a line is at most 30 minutes old, so dropping it costs the chart at most one half-hour, once, where reading it would paint a cell in a state nobody judged. The file is written through a temporary file and a rename; two runs at once may lose one of their samples, never tear the file, and a file that can't be read counts as empty. Sampling rides on the pane's runs: nothing samples while nothing runs `clm machine`, and the chart shows that gap only as fewer cells.
 
-**Rows.** `--format ansi` prints three lines, `cpu`, `mem` and `disk`: the label padded to four cells, a space, the chart, a space, the figure, and, for a state other than `ok`, a space and the state's word, so the row reads without colour (`colour-meanings`). The chart is one cell per sample, newest on the right, as many of the newest as fit `--width` (default 80) beside the rest of the row; a cell is the `k`th of `▁▂▃▄▅▆▇█`, `k` its share times 8 rounded up, at least 1 and at most 8, and a blank for `-`. The figure is the latest reading's: `<load1 / cores>×` to one decimal, or `-` when unknown; `<available> avail`; `<available> free`. Each line is coloured by its state, as `colour-meanings` gives them: `ok` green, `warn` amber, `critical` rose, `unknown` dimmed. Sizes, here and in the text, are powers of 1024 written `850M`, `12G` or `1.3T`, one decimal under 10.
+**Rows.** `--format ansi` prints three lines, `cpu`, `mem` and `disk`: the label padded to four cells, a space, the chart, a space, the figure, and, for a state other than `ok`, a space and the state's word, so the current reading reads without colour (`colour-meanings`); a past cell's state is shown by its colour alone, an exception `machine-cells-keep-their-state` records. The chart is one cell per sample, newest on the right, as many of the newest as fit `--width` (default 80) beside the rest of the row; a cell is the `k`th of `▁▂▃▄▅▆▇█`, `k` its share times 8 rounded up, at least 1 and at most 8, and a blank for `-`. The figure is the latest reading's: `<load1 / cores>×` to one decimal, or `-` when unknown; `<available> avail`; `<available> free`. Each cell is coloured by the state its sample recorded, a blank one included, and the rest of the line (the label, the spaces, the figure and the state's word) by the latest reading's state, as `colour-meanings` gives them: `ok` green, `warn` amber, `critical` rose, `unknown` dimmed. Each coloured run, adjacent cells of one state making one run, ends with a reset, so no style carries into the next run: the pane reads the escapes run by run (`plugin.panel/machine-charts`). A line's width counts the cells it shows, never its escapes. Sizes, here and in the text, are powers of 1024 written `850M`, `12G` or `1.3T`, one decimal under 10.
 
 **Output.** `--format json` prints `{"view": "machine", "cpu": {...}, "memory": {...}, "disk": {...}}`: `cpu` with `cores`, `load1`, `load5` (both `null` when unknown) and `state`; `memory` with `total`, `available` and `state`; `disk` with `path`, `total`, `available`, `peak` (`null` before any measurement), `measured` (an RFC 3339 time or `null`), `builds` (each counting build's `name` and last measured `bytes`, or `null`), `free_places`, `need` (the growth plus the starts, `null` with no `peak`) and `state`, all sizes in bytes. Fields may be added, never renamed or removed without a spec change. `--format text`, the default, prints three lines: `cpu  <load1 ratio>× of <cores> cores, <load5 ratio>× over 5 min  <state>`, `mem  <available> available of <total>  <state>` and `disk <available> free of <total>, <need> needed by <n> builds  <state>` (`needed` left out with no `peak`), sizes as the rows write them. Outside a git repository the disk is the current directory's filesystem, with no builds. It exits 0 whatever the states; a reading the system refuses is `unknown`, and only a failure to write its output exits 1.
 
 ## Requirements
 
 ### Requirement: machine-report
-`clm machine` SHALL print the CPU, memory and disk readings and their states as the Design's **Output** gives them, as text by default, as JSON with `--format json` and as chart rows with `--format ansi`, and exit 0 whatever the states. CPU SHALL be judged on the 5-minute load average over the logical cores (`critical` from 2, `warn` from 1.25), memory on the available memory, never the free memory (`critical` below 10% of total, `warn` below 20%), and disk as the Design's **Disk** says, against the builds' measured `peak` when the record holds one and against 5% and 10% of total otherwise. A reading the system doesn't give SHALL be `unknown`. The judgement SHALL be a pure function of the readings, the record, the places that count and `max_builds`.
+`clm machine` SHALL print the CPU, memory and disk readings and their states as the Design's **Output** gives them, as text by default, as JSON with `--format json` and as chart rows with `--format ansi`, and exit 0 whatever the states. CPU SHALL be judged on the load averages over the logical cores: `critical` when the 5-minute one is at least 1.25, else `warn` when the 1-minute one is at least 1.25, else `ok`. Memory SHALL be judged on the available memory, never the free memory (`critical` below 10% of total, `warn` below 20%), and disk as the Design's **Disk** says, against the builds' measured `peak` when the record holds one and against 5% and 10% of total otherwise. A reading the system doesn't give SHALL be `unknown`. The judgement SHALL be a pure function of the readings, the record, the places that count and `max_builds`.
 
 #### Scenario: the JSON
 - GIVEN a CLM repository with no build places
@@ -39,9 +39,9 @@ Crate `clm-machine`, at `crates/clm-machine/`. It reads the machine through a ma
 - THEN it exits 0 and prints JSON with `view` `machine`, `cpu.cores` at least 1, `memory.total` and `disk.total` above 0, `disk.peak` `null` and `disk.free_places` equal to `max_builds`
 
 #### Scenario: sustained CPU
-- GIVEN 8 cores, `load1` 20 and `load5` 11
+- GIVEN 8 cores, `load1` 10 and `load5` 6
 - WHEN the readings are judged
-- THEN `cpu` is `warn`, and with `load5` 16 it is `critical`, and with `load1` 20 and `load5` 6 it is `ok`
+- THEN `cpu` is `warn`; with `load5` 10 it is `critical`; with `load1` 4 and `load5` 10 it is still `critical`; and with `load1` 9.9 and `load5` 9.9 it is `ok`
 
 #### Scenario: available, not free
 - GIVEN 16 GiB of memory with 0.5 GiB free and 6 GiB available
@@ -64,9 +64,9 @@ Crate `clm-machine`, at `crates/clm-machine/`. It reads the machine through a ma
 - THEN `cpu` is `unknown` with `load1` and `load5` `null`, and memory and disk are judged as ever
 
 #### Scenario: text
-- GIVEN 8 cores with `load1` 8 and `load5` 11, 4 GiB available of 16 GiB, and 20 GiB free of 100 GiB with no record
+- GIVEN 8 cores with `load1` 12 and `load5` 8, 4 GiB available of 16 GiB, and 20 GiB free of 100 GiB with no record
 - WHEN `clm machine`'s text is rendered
-- THEN its three lines start `cpu  1.0× of 8 cores, 1.4× over 5 min`, `mem  4.0G available of 16G` and `disk 20G free of 100G`, and end `warn`, `ok` and `ok`
+- THEN its three lines start `cpu  1.5× of 8 cores, 1.0× over 5 min`, `mem  4.0G available of 16G` and `disk 20G free of 100G`, and end `warn`, `ok` and `ok`
 
 ### Requirement: build-measure
 `clm machine` SHALL measure the disk each counting build's worktree takes when the record is older than 10 minutes or there is none, and otherwise reuse the record's sizes. A worktree's size SHALL be the space its files take on disk, counting a hard-linked file once and following no symbolic link. The record SHALL keep in `peak` the largest size any one build has been measured at in this clone, never lowering it, and be written through a temporary file and a rename; a record that can't be read or parsed SHALL count as none.
@@ -92,12 +92,22 @@ Crate `clm-machine`, at `crates/clm-machine/`. It reads the machine through a ma
 - THEN it exits 0 and measures the builds, and the record parses afterwards
 
 ### Requirement: machine-history
-Each `clm machine` run SHALL append a sample of its readings' shares to the clone's history, unless the newest sample is under 5 seconds old, and SHALL drop the samples older than 30 minutes, keeping at most 180. `--format ansi --width <columns>` SHALL print the rows the Design's **Rows** gives: `cpu`, `mem` and `disk`, each its label, a chart of one block per sample, newest on the right, as many of the newest as fit the width, the latest figure and, for a state other than `ok`, the state's word, each line coloured by its state. No line SHALL be wider than the width.
+Each `clm machine` run SHALL append a sample of its readings' shares and states to the clone's history, unless the newest sample is under 5 seconds old, and SHALL drop the samples older than 30 minutes, keeping at most 180. A line of the history that isn't a sample as the Design's **History** gives it, one written before samples held states included, SHALL count as none and be dropped when the file is next written. `--format ansi --width <columns>` SHALL print the rows the Design's **Rows** gives: `cpu`, `mem` and `disk`, each its label, a chart of one block per sample, newest on the right, as many of the newest as fit the width, the latest figure and, for a state other than `ok`, the state's word. Each block SHALL be coloured by the state its sample recorded, and the label, figure and state word by the latest reading's state. No line SHALL be wider than the width, its escapes not counted.
 
 #### Scenario: rows from the history
-- GIVEN a history of three samples, the last with CPU `load1` 8 of 8 cores and state `warn`, memory 4 GiB available of 16 GiB `ok`, and disk 20 GiB free of 100 GiB `critical`
+- GIVEN a history of three samples, the last with CPU `load1` 12 of 8 cores and state `warn`, memory 4 GiB available of 16 GiB `ok`, and disk 20 GiB free of 100 GiB `critical`, the latest readings being those
 - WHEN the rows are rendered 40 columns wide
-- THEN they are `cpu`, `mem` and `disk`, each with a chart of three blocks, the last of `cpu` `▄`, the figures `1.0×`, `4.0G avail` and `20G free`, `cpu`'s line ending ` warn` in amber, `mem`'s in green with no state word, and `disk`'s ending ` critical` in rose
+- THEN they are `cpu`, `mem` and `disk`, each with a chart of three blocks, the last of `cpu` `▆`, the figures `1.5×`, `4.0G avail` and `20G free`, `cpu`'s line ending ` warn` in amber, `mem`'s figure in green with no state word, and `disk`'s line ending ` critical` in rose
+
+#### Scenario: cells keep their state
+- GIVEN a history of three samples whose CPU states are `critical`, `warn` and `ok`, oldest first, the latest reading's CPU state `ok`
+- WHEN the rows are rendered 40 columns wide
+- THEN the `cpu` chart's cells are rose, amber and green in that order, and its label and figure green with no state word
+
+#### Scenario: samples written before states
+- GIVEN a history file holding two lines of the earlier form, a time and three shares, taken within the last 30 minutes, then one sample with states
+- WHEN `clm machine --format ansi` runs 10 seconds after the newest
+- THEN it exits 0, each chart row holds two blocks, and the history file holds two samples and no line of the earlier form
 
 #### Scenario: the newest fit
 - GIVEN a history of 180 samples
@@ -115,9 +125,9 @@ Each `clm machine` run SHALL append a sample of its readings' shares to the clon
 - THEN the history holds no more samples than before
 
 #### Scenario: unknown CPU
-- GIVEN a history whose newest sample's CPU share is `-`
+- GIVEN a history whose newest sample's CPU share is `-` and state `unknown`, the latest reading's CPU unknown
 - WHEN the rows are rendered
-- THEN the `cpu` chart's last cell is blank, its figure `-` and its line dimmed, ending ` unknown`
+- THEN the `cpu` chart's last cell is blank, its figure `-`, and its label, figure and the ` unknown` that ends the line dimmed
 
 #### Scenario: damaged history
 - GIVEN a history file holding `not a sample`
