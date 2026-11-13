@@ -444,36 +444,30 @@ pub fn prompt(job: &Job) -> String {
          `#### Enforced by` names and is never cited by a test (`human-layer-proof`); one \
          that says only `#### Untested` needs no proof. \
          For an `obsolete` requirement, remove the \
-         code and tests its markers mark (`no-dead-code`). Re-citing a marker of your own requirement, wherever its file sits, is allowed (`architecture/path-ownership`). Never edit another component's code or \
-         tests to absorb what your component removes from or adds to its Contract, except for the \
-         compile-only and test-fixture fixes the removal or the addition forces \
-         (`architecture/path-ownership`, `forced-fixes-cover-additions`): where another component's code or \
-         tests only name what you remove, such as a `match` arm on a removed variant, a fixture \
-         that sets a removed field or an assertion on a removed field or state, and nothing \
-         that component's code does depends on it, or only build a value that gains a field (a struct \
-         literal, in code or in a fixture, that must now name the added field) and the fix sets that \
-         field to the value under which the provider behaves as before, so the other component's \
-         behaviour doesn't change, make the fix and name each one under \
-         `## Fixes in other components` in your pull request body. An arm for an added variant that \
-         another component matches exhaustively is such a fix only when a requirement of that \
-         component, in the specs as applied, names what the variant selects there and the code it \
-         selects is built (the requirements that build it current), the arm selecting that code and \
-         nothing else. A rename is not such a fix \
-         (`rename-adds-then-removes`), and neither is any other arm for an added variant, nor an \
-         added field with no value under which the provider \
-         behaves as before, since those decide what the other component does. When building a \
-         requirement would break another component's code or tests because that component still uses \
-         what the requirement removes, or because what it adds needs more there than such a fix (a \
-         rename, an arm for an added variant whose selected code isn't built or named, or a field with no such value), keep the old path \
-         working and that component building as it stands, leave the requirement unbuilt, and add a \
-         `question` backlog item whose `components` name both components, with `blocks` naming the \
-         requirement, saying which component uses what, so a spec branch gives the requirement the \
-         `#### Needs` it lacks. For an `obsolete` requirement, remove its markers and tests as \
-         usual, but keep the code the other component still uses, with no `clm:remove-by` marker, \
-         and add a `deferred` item without `blocks`, whose `components` name both components and whose \
-         body names the kept code, the component that uses it, and that the code goes once that \
-         component no longer uses it. Files the root's Design gives every build to \
-         edit, such as the CLI's dispatch, the workspace manifest and its lockfile, aren't another component's code for this rule. \
+         code and tests its markers mark (`no-dead-code`). Re-citing a marker of your own requirement, wherever its file sits, is allowed (`architecture/path-ownership`). \
+         Your build changes only your own component's files: those your component's `tests` match, \
+         wherever they sit, and those its `paths` match that no other component's `tests` match \
+         (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \
+         `capability-tests-follow-rule` and `template-migration-fix` state below and the \
+         re-citing above in a file no component's `tests` match. Put each new test in a file your \
+         component's `tests` match, or its `paths` when it sets no `tests`, and never add a test \
+         to a file another component owns. When a requirement you build can't be built within \
+         those files (it needs a file no glob of your component matches, an import its \
+         `depends_on` and `test_depends_on` don't allow, or an edit to another component's code \
+         or tests, as when what it removes from or adds to its Contract breaks a component that \
+         still uses it), keep every component building as it stands, leave the requirement \
+         unbuilt, and add a `question` backlog item whose `components` name the components \
+         concerned, with `blocks` naming the requirement and saying what spec change it waits \
+         on: a glob, a dependency, or another component's requirement that moves that component \
+         first (`coupled-changes-sequence`); never move an import, hide a file, edit a spec path \
+         or ask for a history rewrite to get past a check. For an `obsolete` requirement whose \
+         code another component still uses, remove its markers and tests as usual, but keep that \
+         code, with no `clm:remove-by` marker, and add a `deferred` item without `blocks`, whose \
+         `components` name both components and whose body names the kept code, the component \
+         that uses it, and that the code goes once that component no longer uses it \
+         (`contract-removal-needs`, `deferred-work-resolves-in-code`). Files the root's Design \
+         gives every build to edit, such as the CLI's dispatch, the workspace manifest and its \
+         lockfile, aren't another component's code for this rule. \
          When a requirement you build changes what a test in the `capability` component's `paths` \
          observes at the product's boundary (a screen, a path, a message or an output the test \
          expects), update that test in your own branch, since your land runs the test and the \
