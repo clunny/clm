@@ -525,6 +525,7 @@ version = "0.26.0"
 dependencies = [
  "clm-agent-harness",
  "clm-git",
+ "clm-model",
  "clm-orchestrator",
  "clm-view",
  "serde",
