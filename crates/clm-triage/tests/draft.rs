@@ -56,6 +56,19 @@ fn place_file(r: &Repo, name: &str) -> String {
 }
 
 #[test]
+fn prompt_names_choices_beside_question_items() {
+    // req:orchestrator.triage/draft-question-choices@07360a93
+    let p = prompt_for(&["a"], &[]);
+    let para = paragraph(&p, "`web-answers-as-ledger-records`");
+    assert!(para.contains("under `choices` of a `question`"), "{para}");
+    assert!(para.contains("two to five"), "{para}");
+    assert!(
+        para.contains("none for a question that needs explaining"),
+        "{para}"
+    );
+}
+
+#[test]
 fn the_date_is_the_given_clock_in_the_given_time_zone() {
     // req:orchestrator.triage/draft@d6d9db87
     let r = with(&["a"]);
