@@ -49,6 +49,7 @@ fn bad_choices_are_refused_by_load_and_by_parse_backlog_item() {
         ("e", item("question", &long)),
         ("f", item("question", "[yes, \"a\\nb\"]")),
         ("g", item("question", "[yes, ' yes']")),
+        ("h", item("question", "[yes, \"a\\rb\"]")),
     ];
     let paths: Vec<String> = bad.iter().map(|(s, _)| format!("backlog/{s}.md")).collect();
     let files: Vec<(&str, &str)> = paths
@@ -74,4 +75,7 @@ fn bad_choices_are_refused_by_load_and_by_parse_backlog_item() {
     // five entries, one of 40 characters, are within the limits.
     let ok = item("question", &format!("[{}, b, c, d, e]", "x".repeat(40)));
     assert!(clm_model::parse_backlog_item("ok", &ok).is_ok());
+    // the limit counts characters, not bytes.
+    let wide = item("question", &format!("[{}, b]", "é".repeat(40)));
+    assert!(clm_model::parse_backlog_item("wide", &wide).is_ok());
 }

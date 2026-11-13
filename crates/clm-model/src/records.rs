@@ -333,7 +333,7 @@ fn choices_problem(fm: &BacklogFrontmatter) -> Option<String> {
         return Some("`choices` needs 2 to 5 entries".into());
     }
     for (i, c) in choices.iter().enumerate() {
-        if c.is_empty() || c.chars().count() > 40 || c.contains(['\n', '\r']) {
+        if c.is_empty() || c.chars().count() > 40 || c.chars().any(char::is_control) {
             return Some(format!(
                 "a `choices` entry must be 1 to 40 characters on one line, not `{c}`"
             ));
