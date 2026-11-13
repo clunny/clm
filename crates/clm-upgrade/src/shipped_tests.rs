@@ -462,6 +462,20 @@ fn each_build_rule_is_needed_and_the_two_files_are_read_together() {
 
 // req:upgrade/migration-build-allow-rules@1c2d0022
 #[test]
+fn a_settings_file_that_is_not_the_expected_json_allows_no_build_rule() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join(".claude/settings.json"), "not json").unwrap();
+    assert!(list(dir.path()).unwrap().contains(BUILD_ID));
+    fs::write(
+        dir.path().join(".claude/settings.json"),
+        r#"{"permissions":{"allow":"Bash(clm build)"}}"#,
+    )
+    .unwrap();
+    assert!(list(dir.path()).unwrap().contains(BUILD_ID));
+}
+
+// req:upgrade/migration-build-allow-rules@1c2d0022
+#[test]
 fn a_declined_build_rules_migration_is_not_listed() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     write_settings(dir.path(), "settings.json", &rules_without_build());
