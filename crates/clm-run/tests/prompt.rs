@@ -340,58 +340,40 @@ fn scenario_no_shared_install() {
 }
 
 #[test]
-fn scenario_removal_breaks_dependant() {
-    // req:orchestrator.run/removal-breaks-dependant@fee35b44
+fn scenario_own_files() {
+    // req:orchestrator.run/stays-in-its-component@a0d6cc53
     let p = prompt(&job());
     let obsolete = p
         .find("For an `obsolete` requirement, remove the code and tests its markers mark")
         .expect("the general obsolete instruction stays");
     let rule = p
-        .find("Never edit another component's code or tests to absorb what your component removes from or adds to its Contract, except")
-        .expect("the removal rule");
+        .find("Your build changes only your own component's files")
+        .expect("the ownership rule");
     assert!(obsolete < rule, "beside the obsolete instruction: {p}");
     for needle in [
-        "leave the requirement unbuilt",
-        "add a `question` backlog item whose `components` name both components",
-        "with `blocks` naming the requirement",
-        "saying which component uses what",
+        "those your component's `tests` match, wherever they sit",
+        "those its `paths` match that no other component's `tests` match",
+        "`components-own-their-tests`",
+        "`capability-tests-follow-rule` and `template-migration-fix`",
+        "Put each new test in a file your component's `tests` match, or its `paths` when it sets no `tests`",
+        "never add a test to a file another component owns",
         "the CLI's dispatch, the workspace manifest and its lockfile, aren't another component's code",
-        "the compile-only and test-fixture fixes the removal or the addition forces (`architecture/path-ownership`, `forced-fixes-cover-additions`)",
-        "only name what you remove",
-        "an assertion on a removed field or state",
-        "and nothing that component's code does depends on it",
-        "name each one under `## Fixes in other components` in your pull request body",
-        "still uses what the requirement removes, or because what it adds needs more there than such a fix",
-        "keep the old path working and that component building as it stands",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
 }
 
 #[test]
-fn scenario_addition_forces_a_fix() {
-    // req:orchestrator.run/removal-breaks-dependant@fee35b44
+fn scenario_no_legal_home() {
+    // req:orchestrator.run/stays-in-its-component@a0d6cc53
     let p = prompt(&job());
     for needle in [
-        "or only build a value that gains a field (a struct literal, in code or in a fixture, that must now name the added field)",
-        "sets that field to the value under which the provider behaves as before",
-        "so the other component's behaviour doesn't change",
-        "A rename is not such a fix (`rename-adds-then-removes`)",
-        "and neither is any other arm for an added variant",
-        "an added field with no value under which the provider behaves as before",
-        "since those decide what the other component does",
-    ] {
-        assert!(p.contains(needle), "{needle} missing from {p}");
-    }
-}
-
-#[test]
-fn scenario_arm_selecting_built_code() {
-    // req:orchestrator.run/removal-breaks-dependant@fee35b44
-    let p = prompt(&job());
-    for needle in [
-        "arm for an added variant that another component matches exhaustively is such a fix only when a requirement of that component, in the specs as applied, names what the variant selects there and the code it selects is built (the requirements that build it current), the arm selecting that code and nothing else",
-        "a rename, an arm for an added variant whose selected code isn't built or named, or a field with no such value",
+        "it needs a file no glob of your component matches, an import its `depends_on` and `test_depends_on` don't allow, or an edit to another component's code or tests",
+        "keep every component building as it stands, leave the requirement unbuilt",
+        "add a `question` backlog item whose `components` name the components concerned, with `blocks` naming the requirement",
+        "what spec change it waits on: a glob, a dependency, or another component's requirement",
+        "`coupled-changes-sequence`",
+        "never move an import, hide a file, edit a spec path or ask for a history rewrite to get past a check",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
@@ -399,14 +381,15 @@ fn scenario_arm_selecting_built_code() {
 
 #[test]
 fn removal_rule_for_an_obsolete_requirement_is_in_every_prompt() {
-    // req:orchestrator.run/removal-breaks-dependant@fee35b44
+    // req:orchestrator.run/stays-in-its-component@a0d6cc53
     let mut j = job();
     j.pending.retain(|i| i.state != "obsolete");
     let p = prompt(&j);
     for needle in [
-        "keep the code the other component still uses",
-        "no `clm:remove-by` marker",
+        "keep that code, with no `clm:remove-by` marker",
         "add a `deferred` item without `blocks`",
+        "`contract-removal-needs`",
+        "`deferred-work-resolves-in-code`",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
@@ -823,7 +806,7 @@ fn scenario_review_every_diff() {
 
 #[test]
 fn scenario_capability_tests_follow_rule() {
-    // req:orchestrator.run/capability-tests-follow-rule@5d7ee5f9
+    // req:orchestrator.run/capability-tests-follow-rule@37f21ffa
     let p = prompt(&job());
     for needle in [
         "a test in the `capability` component's `paths` observes at the product's boundary",
@@ -841,7 +824,7 @@ fn scenario_capability_tests_follow_rule() {
 
 #[test]
 fn scenario_entry_no_longer_holds() {
-    // req:orchestrator.run/capability-tests-follow-rule@5d7ee5f9
+    // req:orchestrator.run/capability-tests-follow-rule@37f21ffa
     let p = prompt(&job());
     for needle in [
         "no longer holds is not such a fix",
@@ -851,7 +834,9 @@ fn scenario_entry_no_longer_holds() {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
     // Beside the removal rule, in every prompt, whatever the repository holds.
-    let removal = p.find("Never edit another component's code").unwrap();
+    let removal = p
+        .find("Your build changes only your own component's files")
+        .unwrap();
     let rule = p
         .find("a test in the `capability` component's `paths`")
         .unwrap();
@@ -1089,7 +1074,7 @@ fn scenario_setup_nothing_declared() {
 
 #[test]
 fn scenario_template_migration_fix() {
-    // req:orchestrator.run/template-migration-fix@5a686ffe
+    // req:orchestrator.run/template-migration-fix@0e61edbc
     for resumed in [false, true] {
         let mut j = job();
         j.resumed = resumed;
