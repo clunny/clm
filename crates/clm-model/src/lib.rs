@@ -92,6 +92,14 @@ pub struct Frontmatter {
     /// (`outside-globs`).
     #[serde(default)]
     pub outside: Option<Vec<String>>,
+    /// Globs of the node's test files, which it owns wherever they sit
+    /// (`test-ownership-keys`).
+    #[serde(default)]
+    pub tests: Vec<String>,
+    /// The nodes its test files may import beyond `depends_on`; not part of the
+    /// dependency DAG (`test-ownership-keys`).
+    #[serde(default)]
+    pub test_depends_on: Vec<String>,
 }
 
 /// The node's own size budgets, each in place of `config`'s `node_size` when set
@@ -497,7 +505,7 @@ fn parent_id(id: &str) -> Option<String> {
 }
 
 /// The node frontmatter keys the model knows: `Frontmatter`'s fields.
-const KNOWN_KEYS: [&str; 12] = [
+const KNOWN_KEYS: [&str; 14] = [
     "title",
     "status",
     "owners",
@@ -510,6 +518,8 @@ const KNOWN_KEYS: [&str; 12] = [
     "optional",
     "size_budget",
     "outside",
+    "tests",
+    "test_depends_on",
 ];
 
 /// The rules `fm_text`, the YAML between a node's `---` lines, alone decides, for the file
@@ -538,6 +548,18 @@ fn check_frontmatter(
             path,
             OUTSIDE,
             format!("`outside` must be a list of non-empty globs, not `{bad}`"),
+        ));
+    }
+    for (key, bad) in bad_test_keys(&fm) {
+        let items = if key == "tests" {
+            "non-empty strings"
+        } else {
+            "strings"
+        };
+        errors.push(v(
+            path,
+            TEST_KEYS,
+            format!("`{key}` must be a list of {items}, not `{bad}`"),
         ));
     }
     if let Some(bad) = bad_size_budget(&fm) {
@@ -609,6 +631,24 @@ pub fn check_node_frontmatter(
 }
 
 const OUTSIDE: &str = "model/outside-globs";
+const TEST_KEYS: &str = "model/test-ownership-keys";
+
+/// Each of `tests` and `test_depends_on` whose value is present and not a list of
+/// strings (`tests`: non-empty ones), with the value as one line of YAML. A null counts.
+fn bad_test_keys(fm: &serde_yaml::Value) -> Vec<(&'static str, String)> {
+    [("tests", true), ("test_depends_on", false)]
+        .into_iter()
+        .filter_map(|(key, non_empty)| {
+            let value = fm.get(key)?;
+            let ok = value.as_sequence().is_some_and(|items| {
+                items
+                    .iter()
+                    .all(|g| g.as_str().is_some_and(|g| !non_empty || !g.is_empty()))
+            });
+            (!ok).then(|| (key, one_line(value)))
+        })
+        .collect()
+}
 
 /// The frontmatter's `outside` value, as one line of YAML, when it is present and not a
 /// list of non-empty strings.
@@ -903,6 +943,7 @@ pub fn split_frontmatter(text: &str) -> Option<(&str, &str)> {
 pub fn check_graph(graph: &Graph) -> Vec<Violation> {
     let mut violations = Vec::new();
     check_dependencies(graph, &mut violations);
+    check_test_dependencies(graph, &mut violations);
     check_needs(graph, &mut violations);
     check_serves(graph, &mut violations);
     layers::check_enforced_by(graph, &mut violations);
@@ -948,6 +989,27 @@ fn check_dependencies(graph: &Graph, violations: &mut Vec<Violation>) {
             "model/dependency-dag",
             format!("dependency cycle: {}", names.join(" -> ")),
         ));
+    }
+}
+
+/// Reports a `test_depends_on` entry naming no node or the node itself. These edges are
+/// no part of the dependency DAG (`test-ownership-keys`).
+fn check_test_dependencies(graph: &Graph, violations: &mut Vec<Violation>) {
+    for node in graph.nodes.values() {
+        for dep in &node.frontmatter.test_depends_on {
+            let problem = if *dep == node.id {
+                "the component itself"
+            } else if !graph.nodes.contains_key(dep) {
+                "no component"
+            } else {
+                continue;
+            };
+            violations.push(v(
+                &node.path,
+                TEST_KEYS,
+                format!("`test_depends_on` names `{dep}`, {problem}"),
+            ));
+        }
     }
 }
 
