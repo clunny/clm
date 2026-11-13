@@ -1,7 +1,8 @@
 ---
 title: "A build may make the compile-only fixes an addition to its Contract forces in other components, as it may for a removal"
 date: 2026-11-04
-status: accepted
+status: superseded
+superseded_by: coupled-changes-sequence
 ---
 
 `path-ownership` let a build edit another component's code only for the compile-only and test-fixture fixes a removal forces. An addition can force the same kind of fix: a field added to a public struct breaks every struct literal of it in another crate until the literal names the field. No `#### Needs` can order that: the other component's fix needs the field to exist, and the provider's build can't land the field while the workspace doesn't build. A draft that met it had to design around it (`20261104-detectors-skip-in-the-root`).

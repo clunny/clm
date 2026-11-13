@@ -24,7 +24,7 @@ A removal marker's change is classified from the graph (`model`), in this order:
 
 **Re-exports** (`check-coverage-split`, `nested-splits`). `check` keeps the rules `clm check` runs, the detectors and `clm size`; `check.coverage` keeps what says how far the code has caught up with the spec, which the queue, the views, `clm rebase` and the Worker read. `clm-check` depends on `clm-coverage` and re-exports its public items (`Coverage`, `Marker`, `State`, `markers_in`, `report`, `Pending`, `pending`, `Row`, `StatusReport`, `status_report`, `complete_changes`, `ChangeProgress`, `change_progress`, `removed`, `matches` (also as `path_matches`), `owner`, and with the `checkout` feature `Scan` and `scan`), and its `checkout` feature turns on `clm-coverage`'s. `pending_in`, `status`, `coverage` and `backlog`, the checkout wrappers the `clm` commands call, live in `clm-check`; `pending_in`'s unknown-node violation carries the rule `check.coverage/pending-report`, the requirement it enforces. `run` matches `paths` with `clm-coverage`'s `matches`, as `pending` does. The `dangling-markers` rule (`violations` in `coverage.rs`) lives in `clm-check` and takes the removed IDs from `clm-coverage`'s `removed`, as `removed-requirement-names` does. Tests that call `clm_check::` live in `crates/clm-check/tests`, citing the child's requirements where they prove them, since `clm-coverage` can't depend on `clm-check` (`undeclared-imports`, and a cycle); the child's own tests call `clm-coverage` directly.
 
-**Shared paths** (`paths-disjoint`). `run` lists the files `git ls-files --cached` lists, Markdown included, itself through `git` (outside a git work tree, none); `run_listed` reads the listing its caller passes instead (`run-listed`). A file belongs to one component, the one whose builds own it and whose size it counts toward, so `nested-splits` keeps `paths` disjoint, parents and children included.
+**Shared paths** (`paths-disjoint`). `run` lists the files `git ls-files --cached` lists, Markdown included, itself through `git` (outside a git work tree, none); `run_listed` reads the listing its caller passes instead (`run-listed`). A file belongs to one component, the one whose builds own it and whose size it counts toward, so `nested-splits` keeps `paths` disjoint, parents and children included. A component's `tests` carve its test files out of whatever `paths` match them (`components-own-their-tests`): the file is the `tests` component's, so a suite's directory can belong to a harness component while each feature owns its own tests in it. `paths-disjoint`, `unowned-files` and `undeclared-imports` all read a file's component as its owner, the one place that rule is written.
 
 **Undeclared imports** (`undeclared-imports`, `undeclared-imports-check`, `tree-sitter-analysis`). The import edges come from `init`'s `import_edges(root)`, the same tree-sitter extraction `clm survey` uses: Rust workspace path dependencies and `mod`/`use crate::` paths, TypeScript relative imports and workspace packages, and Python imports that resolve to files in the repository. Tree-sitter is C, which doesn't build for `wasm32-unknown-unknown`, so `run` never reports this rule; the `clm check` command (crate `clm`) does, after `run` and before the detectors, from the graph it loaded, and `--no-detectors` doesn't skip it, since it needs no tool. A file's components are the components whose `paths` match it, each judged (two of them is `paths-disjoint`'s report). Only a direct `depends_on` counts, and a parent or child gets no exemption, since `depends_on` is separate from ownership (`nested-splits`). `import_edges` returns a `Result`: outside a git work tree it returns no edges, as `scan` finds no markers there, so a fixture that isn't a repository passes; when `git` fails inside one, the command reports `<root>: check/undeclared-imports: <error>` and goes on. `clm rebase` calls `run`, so its `rebase ok` doesn't cover this rule; `clm land` runs `clm check` and does.
 
@@ -390,7 +390,7 @@ The suggested slug is the entry with one leading `backlog/` removed, then one tr
 - architecture/no-silent-drift
 
 ### Requirement: paths-disjoint
-`clm check` SHALL report each file of its scan that the `paths` of two or more components match, as `<file>: check/paths-disjoint: owned by <components>`, the components in backticks, sorted by ID and comma-separated, once per file, and `run` SHALL report it too.
+A file's *owner* SHALL be the component whose `tests` match it or, when no component's `tests` do, the component whose `paths` match it (`components-own-their-tests`). `clm check` SHALL report each file of its scan that the `tests` of two or more components match, or that no component's `tests` match and the `paths` of two or more components match, as `<file>: check/paths-disjoint: owned by <components>`, the components in backticks, sorted by ID and comma-separated, once per file, and `run` SHALL report it too. A file that one component's `tests` match and another's `paths` match is the first component's, and SHALL NOT be reported.
 
 #### Scenario: two owners
 - GIVEN component `a` with paths `["src/**"]`, component `b` with paths `["src/b/**"]`, and a tracked `src/b/x.rs`
@@ -407,12 +407,25 @@ The suggested slug is the entry with one leading `backlog/` removed, then one tr
 - WHEN `clm check` runs
 - THEN it reports no `check/paths-disjoint` violation
 
+#### Scenario: tests inside another component's paths
+- GIVEN component `harness` with paths `["tests/**"]`, component `a` with tests `["tests/a/**"]`, and a tracked `tests/a/t.py`
+- WHEN `clm check` runs
+- THEN it reports no `check/paths-disjoint` violation, and `tests/a/t.py`'s owner is `a`
+
+#### Scenario: two components' tests
+- GIVEN components `a` and `b` with tests `["tests/**"]` and `["tests/b/**"]`, and a tracked `tests/b/t.py`
+- WHEN `clm check` runs
+- THEN it exits 1 with the line ``tests/b/t.py: check/paths-disjoint: owned by `a`, `b` ``
+
 #### Serves
 - architecture/path-ownership
 - capability/work-concurrently
 
+#### Needs
+- model/test-ownership-keys
+
 ### Requirement: undeclared-imports
-`clm check` SHALL report each import edge `init`'s `import_edges` returns from a file of component `a` to a file of component `b`, where `b` is not `a` and `a`'s `depends_on` doesn't list `b`, as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` doesn't depend on `b``, where a file's component is the component whose `paths` match it; an edge with an end no component's `paths` match SHALL NOT be reported. `clm check --no-detectors` SHALL report it as well, and `run` SHALL NOT. It SHALL also judge the same edges against the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), reporting each edge and component pair that graph leaves undeclared and the current graph doesn't as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` wouldn't depend on `b` after <change>`; a change whose deltas don't apply SHALL be skipped.
+`clm check` SHALL report each import edge `init`'s `import_edges` returns from a file of component `a` to a file of component `b`, where `b` is not `a` and `a`'s `depends_on` doesn't list `b`, as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` doesn't depend on `b``, where a file's component is its owner (`paths-disjoint`); an edge with an end no component owns SHALL NOT be reported. An edge from a file that `a`'s `tests` match SHALL be judged against `a`'s `depends_on` and `test_depends_on` together (`model/test-ownership-keys`), and reported only when neither lists `b`, with the same line. `clm check --no-detectors` SHALL report it as well, and `run` SHALL NOT. It SHALL also judge the same edges against the graph each `proposed` or `approved` change would leave (`apply/resulting-graph-call`), reporting each edge and component pair that graph leaves undeclared and the current graph doesn't as `<importing file>: check/undeclared-imports: imports <imported file> of component `b`, and `a` wouldn't depend on `b` after <change>`; a change whose deltas don't apply SHALL be skipped.
 
 #### Scenario: undeclared path dependency
 - GIVEN components `a` (paths `["crates/a/**"]`, `depends_on: []`) and `b` (paths `["crates/b/**"]`), and a Cargo workspace where `crates/a/Cargo.toml` has a path dependency on `b`
@@ -428,6 +441,16 @@ The suggested slug is the entry with one leading `backlog/` removed, then one tr
 - GIVEN the same workspace with no component whose `paths` match `crates/b/Cargo.toml`
 - WHEN `clm check` runs
 - THEN it reports no `check/undeclared-imports` violation
+
+#### Scenario: a test imports the entry point
+- GIVEN components `app` (paths `["app/main.py"]`, `depends_on: [feat]`) and `feat` (paths `["app/feat.py"]`, tests `["tests/feat/**"]`, `test_depends_on: [app]`), where `tests/feat/test_x.py` imports `app/main.py`
+- WHEN `clm check` runs
+- THEN it reports no `check/undeclared-imports` violation
+
+#### Scenario: production code still judged
+- GIVEN the same components, where `app/feat.py` also imports `app/main.py`
+- WHEN `clm check` runs
+- THEN it exits 1 with the line ``app/feat.py: check/undeclared-imports: imports app/main.py of component `app`, and `feat` doesn't depend on `app` ``
 
 #### Scenario: not in run
 - GIVEN the undeclared workspace
@@ -455,6 +478,7 @@ The suggested slug is the entry with one leading `backlog/` removed, then one tr
 
 #### Needs
 - init/import-edges
+- model/test-ownership-keys
 
 ### Requirement: skipped-tests
 `clm check` SHALL report, in each scanned file that holds a `req:` marker, each line that skips a test: in a `.rs` file a line starting `#[ignore` after leading whitespace; in a `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` or `.cjs` file a call of `it`, `test` or `describe` with `.skip`, `.skipIf` or `.todo`, or of `xit`, `xtest` or `xdescribe`; and in a `.py` file a line starting `@pytest.mark.skip` or `@unittest.skip` after leading whitespace, or holding `pytest.skip(`; as `<file>:<line>: check/skipped-tests: a skipped test in a file that cites requirements; run it, or move it to a file that cites none`. A file without markers, and a Markdown file, SHALL NOT be reported.
@@ -585,12 +609,17 @@ The suggested slug is the entry with one leading `backlog/` removed, then one tr
 - check.coverage/owner
 
 ### Requirement: unowned-files
-When the root sets `outside` (`model/outside-globs`), even to `[]`, `run` SHALL check path ownership; when the root has no `outside` key it SHALL NOT, and reports no `check/unowned-files` violation. It SHALL read the files the index holds under the CLM repository (`git ls-files --cached`, through the `git` layer), every entry the index lists, symlinks and submodules included; in a directory that isn't a git work tree it SHALL read no file and report no `check/unowned-files` violation; `run_listed` (`run-listed`) SHALL read the files of the listing it is given instead, wherever the directory is. It SHALL leave out the spec paths: every file under `specs/`, `changes/`, `backlog/` or `docs/`, and `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and `AGENTS.md`, the same spec paths `gate` names. Of the rest, the *code files*, it SHALL report each that no component's `paths` match, whatever the component's status, and no glob of the root's `outside` matches, as `<file>: check/unowned-files: in no component's paths; add it to a component's paths, or to outside in specs/SPEC.md until a change adopts it`. It SHALL report each `outside` glob that matches no code file that no component's `paths` match, as `specs/SPEC.md: check/unowned-files: outside glob <glob> matches no file outside every component`. A glob matches a file as the git pathspec `:(glob)<glob>` does; matching in memory by the same rules is enough. A code file that a component's `paths` and an `outside` glob both match is the component's, and SHALL NOT be reported. A file the index doesn't hold, untracked or ignored, SHALL NOT be read or reported.
+When the root sets `outside` (`model/outside-globs`), even to `[]`, `run` SHALL check path ownership; when the root has no `outside` key it SHALL NOT, and reports no `check/unowned-files` violation. It SHALL read the files the index holds under the CLM repository (`git ls-files --cached`, through the `git` layer), every entry the index lists, symlinks and submodules included; in a directory that isn't a git work tree it SHALL read no file and report no `check/unowned-files` violation; `run_listed` (`run-listed`) SHALL read the files of the listing it is given instead, wherever the directory is. It SHALL leave out the spec paths: every file under `specs/`, `changes/`, `backlog/` or `docs/`, and `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and `AGENTS.md`, the same spec paths `gate` names. Of the rest, the *code files*, it SHALL report each that no component owns (`paths-disjoint`), by its `paths` or its `tests`, whatever the component's status, and no glob of the root's `outside` matches, as `<file>: check/unowned-files: in no component's paths; add it to a component's paths, or to outside in specs/SPEC.md until a change adopts it`. It SHALL report each `outside` glob that matches no code file that no component owns, as `specs/SPEC.md: check/unowned-files: outside glob <glob> matches no file outside every component`. A glob matches a file as the git pathspec `:(glob)<glob>` does; matching in memory by the same rules is enough. A code file that a component owns and an `outside` glob matches is the component's, and SHALL NOT be reported. A file the index doesn't hold, untracked or ignored, SHALL NOT be read or reported.
 
 #### Scenario: file in no node
 - GIVEN component `a` with `paths: ["crates/a/**"]`, a root with `outside: []`, and tracked files `crates/a/lib.rs` and `crates/b/lib.rs`
 - WHEN `clm check` runs
 - THEN it exits 1 with the line `crates/b/lib.rs: check/unowned-files: in no component's paths; add it to a component's paths, or to outside in specs/SPEC.md until a change adopts it`, and none for `crates/a/lib.rs`
+
+#### Scenario: owned by tests
+- GIVEN component `a` with `paths: ["crates/a/**"]` and `tests: ["tests/a/**"]`, a root with `outside: []`, and tracked files `crates/a/lib.rs` and `tests/a/t.rs`
+- WHEN `clm check` runs
+- THEN it reports no `check/unowned-files` violation
 
 #### Scenario: not opted in
 - GIVEN the same files, and a root with no `outside` key
@@ -633,6 +662,7 @@ When the root sets `outside` (`model/outside-globs`), even to `[]`, `run` SHALL 
 
 #### Needs
 - model/outside-globs
+- model/test-ownership-keys
 
 ### Requirement: size-tracked-through-git
 `size` SHALL list the tracked files it counts through `clm-git`'s `tracked_files`, and the files a component's `paths` match through `clm-git`'s `tracked_matching` (`tracked-files-in-git-layer`). `crates/clm-check/src/size.rs` SHALL NOT run `git ls-files` itself (`no-dead-code`).
@@ -748,3 +778,28 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 #### Serves
 - capability/wrap-up-session
 - architecture/incremental-adoption
+
+### Requirement: tests-cite-their-owner
+`clm check` SHALL report each `req:` marker, in a file of its scan that a component's `tests` match, that cites a requirement of a component other than that file's owner (`paths-disjoint`), as `<file>:<line>: check/tests-cite-their-owner: cites <requirement> of `b`, but the file is `a`'s test; move the test to `b`'s tests`, and `run` SHALL report it too. A marker citing a capability (`capability/<slug>`) SHALL be read as citing the `capability` component's requirement, which proves it (`human-layer-proof`). A file that only `paths` match SHALL NOT be judged, so a project gives its tests to their components one `tests` glob at a time (`components-own-their-tests`), and a marker that names no existing requirement is left to `dangling-markers`.
+
+#### Scenario: another component's requirement
+- GIVEN components `a` with tests `["tests/a/**"]` and `b` with requirement `y`, and `tests/a/t.rs` whose line 4 cites `b/y`
+- WHEN `clm check` runs
+- THEN it exits 1 with the line ``tests/a/t.rs:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests``
+
+#### Scenario: its own requirement
+- GIVEN the same components, and `tests/a/t.rs` citing only `a`'s requirements
+- WHEN `clm check` runs
+- THEN it reports no `check/tests-cite-their-owner` violation
+
+#### Scenario: a file only paths own
+- GIVEN component `a` with paths `["tests/**"]` and no `tests`, and `tests/t.rs` citing `b/y`
+- WHEN `clm check` runs
+- THEN it reports no `check/tests-cite-their-owner` violation
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests
+
+#### Needs
+- model/test-ownership-keys

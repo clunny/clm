@@ -22,3 +22,5 @@ What nesting doesn't change: `paths` stay disjoint across all nodes, parent incl
 Rejected:
 - **Flat siblings** (`watch`, `run`, `hooks`, `panel`, `web-app` at the top level). Every moved requirement and most of the unmoved ones would have changed ID, the node map would have doubled, and the components would have lost the parent's context they need.
 - **Splitting by moving code between crates without new nodes.** It leaves the spec, which is what every build loads, exactly as long.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: the child's build no longer moves files out of the parent. It writes the moved code in its own files, and a requirement of the parent's, needing the child's, deletes the parent's copy and rewires it (`coupled-changes-sequence`).)

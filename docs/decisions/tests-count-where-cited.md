@@ -12,3 +12,5 @@ Rejected:
 - **Moving the test files into the crates they prove.** The binary isn't available to another package's tests; `assert_cmd`'s workspace lookup finds it only when the whole workspace was built first, so `cargo test -p <crate>` would break. And `paths` are disjoint for a reason: two builds never edit the same files.
 - **Carving the test files out of the root's `paths` into the other nodes'.** The root's globs can't express an exclusion, each node would list files inside another crate, and the files are still read by their cited nodes either way.
 - **Counting a mixed file toward its `paths` owner only.** A file that cites two nodes is read by both builds; counting it once in the wrong place is what the old measure did.
+
+(Amended 2026-11-12, `20261112-components-own-their-tests`: a component can now own test files inside another's `paths` through `tests` globs, which is the carve-out this decision rejected for want of exclusions; a file a `tests` glob owns cites only its owner, so for those files ownership and attribution agree.)
