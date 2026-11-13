@@ -294,10 +294,10 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
     models.own && clm(models.own),
     models.other && clm(models.other),
   ])
-  // The build rows go on the Flight tab only, drawn at the latest tick.
-  // Only the Flight tab reads `now`, so a tick redraws no other tab.
-  const list = shown === 'flight' ? await read($, agents) : []
-  const at = shown === 'flight' ? Math.max(await read($, now), ...list.map(a => a.startedAt)) : 0
+  // The build rows go on the Queue tab only, drawn at the latest tick.
+  // Only the Queue tab reads `now`, so a tick redraws no other tab.
+  const list = shown === 'queue' ? await read($, agents) : []
+  const at = shown === 'queue' ? Math.max(await read($, now), ...list.map(a => a.startedAt)) : 0
 
   // A span with `button` is drawn as a button after the line's text, not as text.
   const runsOf = (line: Span[]) =>
@@ -400,7 +400,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
       </Box>
     )
   }
-  // An ANSI chart carries the build rows under its node lines; the SVG is followed by them.
+  // An ANSI chart carries the run rows under its running entries; a text chart is followed by them.
   const drawn =
     'ansi' in body ? undefined
     : 'text' in body ? body.text.replace(/\n$/, '').split('\n').map(line => <Text wrap="truncate-end">{line === '' ? ' ' : line}</Text>)
