@@ -1,11 +1,9 @@
 //! `clm build returned`: a run's return, recorded and finished (`return-rules`).
 
-use std::fs;
-
 use clm_git::{Failure, now};
 
 use crate::Options;
-use crate::cmd::clm;
+use crate::cmd::{clm, say};
 use crate::state::{self, Kind, RunState};
 
 /// `clm build returned <name> --result <line> [--cause <cause>]`: records a run's return by
@@ -123,33 +121,4 @@ pub fn returned(
     })?;
     lines.extend(crate::step::next_actions(options)?);
     Ok(lines)
-}
-
-/// A `say` action naming a file that holds `text`.
-fn say(options: &Options, text: &str) -> Result<String, Failure> {
-    let root = std::path::absolute(&options.root)
-        .map_err(|e| Failure::Git(format!("{}: {e}", options.root.display())))?;
-    let dir = root.join(".clm/prompts/loop");
-    fs::create_dir_all(&dir).map_err(|e| Failure::Git(format!("{}: {e}", dir.display())))?;
-    let path = dir.join(format!("say-{}-{}.md", now(), std::process::id()));
-    let path = unique(path);
-    fs::write(&path, format!("{text}\n"))
-        .map_err(|e| Failure::Git(format!("{}: {e}", path.display())))?;
-    Ok(format!("say {}", path.display()))
-}
-
-/// `path`, or the first of `path` with `-2`, `-3`, ... before its extension that doesn't exist.
-fn unique(path: std::path::PathBuf) -> std::path::PathBuf {
-    if !path.exists() {
-        return path;
-    }
-    let stem = path
-        .file_stem()
-        .unwrap_or_default()
-        .to_string_lossy()
-        .into_owned();
-    (2..)
-        .map(|n| path.with_file_name(format!("{stem}-{n}.md")))
-        .find(|p| !p.exists())
-        .unwrap_or(path)
 }

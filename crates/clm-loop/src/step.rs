@@ -9,9 +9,9 @@ use clm_git::{Failure, now};
 use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 
 use crate::Options;
-use crate::cmd::{clm, clm_ok};
+use crate::cmd::{clm, clm_ok, say};
 use crate::plan::{Group, Launch, Snapshot, plan_of};
-use crate::state::{self, Kind, LoopFile, Run, RunState};
+use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
 
 /// The prompt file of a run: `.clm/prompts/loop/<name>.md`, with `:` written `-`.
 fn prompt_path(options: &Options, name: &str) -> Result<PathBuf, Failure> {
@@ -259,7 +259,8 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     }
     let main = snapshot.main.clone();
     let next = plan.next.clone();
-    let lines = state::update(&options.root, |f| {
+    let no_launches = plan.launches.is_empty();
+    let (lines, ended, file) = state::update(&options.root, |f| {
         for change in changes {
             match change {
                 Prepared::Run(run) => match f.run_mut(&run.name) {
@@ -275,12 +276,38 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
             at: now(),
             next,
         });
-        Ok(f.runs
+        let lines = if f.stop == Some(StopMode::Now) {
+            // A run never launched is stopped with its claim, branch and place kept.
+            for run in f.runs.iter_mut().filter(|r| r.state == RunState::Planned) {
+                run.state = RunState::Stopped;
+            }
+            f.runs
+                .iter()
+                .filter(|r| r.state == RunState::Running)
+                .filter_map(|r| Some(format!("stop {} {}", r.name, r.task_id.as_ref()?)))
+                .collect()
+        } else {
+            f.runs
+                .iter()
+                .filter(|r| r.state == RunState::Planned)
+                .filter_map(action_line)
+                .collect::<Vec<_>>()
+        };
+        let busy = f
+            .runs
             .iter()
-            .filter(|r| r.state == RunState::Planned)
-            .filter_map(action_line)
-            .collect::<Vec<_>>())
+            .any(|r| matches!(r.state, RunState::Planned | RunState::Running));
+        let ended = f.stop.is_some() && !busy && no_launches;
+        if ended {
+            // The loop is over: the next `start` takes the lease at once.
+            f.lease = None;
+        }
+        Ok((lines, ended, f.clone()))
     })?;
+    if ended {
+        let text = crate::summary::summary(options, &file, &plan.view)?;
+        return Ok(vec![say(options, &text)?, "end".to_string()]);
+    }
     if lines.is_empty() {
         Ok(vec!["wait".to_string()])
     } else {
@@ -333,6 +360,8 @@ pub fn start(
         f.started_main = Some(main);
         f.session_model = session_model.to_string();
         f.stop = None;
+        // The summary tells what the runs landed since this start.
+        f.runs.retain(|r| r.state != RunState::Returned);
         for run in &mut f.runs {
             if matches!(
                 run.state,
@@ -355,6 +384,15 @@ pub fn launched(options: &Options, name: &str, task_id: &str) -> Result<(), Fail
             .ok_or_else(|| Failure::Refused(format!("the loop has no run {name}")))?;
         run.state = RunState::Running;
         run.task_id = Some(task_id.to_string());
+        Ok(())
+    })
+}
+
+/// `clm build stop --drain|--now`: records the request. It fetches nothing.
+pub fn stop(options: &Options, mode: StopMode) -> Result<(), Failure> {
+    state::update(&options.root, |f| {
+        f.lease = Some(now());
+        f.stop = Some(mode);
         Ok(())
     })
 }

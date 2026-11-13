@@ -128,7 +128,7 @@ pub fn plan_of(s: &Snapshot) -> Plan {
     let mut launches: Vec<Launch> = file
         .runs
         .iter()
-        .filter(|r| r.orphan)
+        .filter(|r| r.orphan && file.stop != Some(StopMode::Now))
         .map(|r| Launch::Relaunch(r.name.clone()))
         .collect();
     let mut next: Vec<StoredNext> = Vec::new();
