@@ -437,7 +437,7 @@ All code serves a current requirement, and a program the project names in `clm.t
 - ci/detector-tools
 
 ### Constraint: slim-components
-**Checked.** A component SHALL stay small enough for one build session to hold its spec and its code, measured against its size budget (`node-size-budgets`). One over budget is shown as oversized and blocks nothing, and components split along architectural seams, never to satisfy a number.
+**Checked.** A component SHALL stay small enough for one build session to hold its spec and its code, measured against its size budget (`node-size-budgets`). One over budget is shown as oversized and blocks nothing. Splitting is the AI's business and needs no human, along architectural seams and never to satisfy a number.
 
 #### Scenario: component over budget
 - GIVEN a component over its size budget
@@ -645,7 +645,7 @@ A judgement made in design and review.
 Whether a standard answer is clear is a judgement.
 
 ### Constraint: right-over-convenient
-**Principle.** A session that recommends or chooses a design SHALL first read the code and specs involved, and recommend the design that is correct and maintainable over the long term, saying why it beats the convenient one.
+**Principle.** A session that recommends or chooses a design SHALL first read the code and specs involved, and recommend the design that is correct and maintainable over the long term, saying why it beats the convenient one; a cheaper option only with the reason it is also the right one.
 
 #### Scenario: item proposes its own fix
 - GIVEN a backlog item whose text proposes a fix
