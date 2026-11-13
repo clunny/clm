@@ -498,7 +498,12 @@ fn delete_on_origin<'a>(
         let now = git(root, &["ls-remote", REMOTE, &format!("refs/heads/{b}")])?;
         // Still at the tip judged: the refusal is git's. Gone, or moved on: nothing of ours
         // to delete, and nothing to say.
-        if now.split_whitespace().next() == Some(tip.as_str()) {
+        let ref_name = format!("refs/heads/{b}");
+        let at_tip = now.lines().any(|l| {
+            let mut f = l.split_whitespace();
+            f.next() == Some(tip.as_str()) && f.next() == Some(ref_name.as_str())
+        });
+        if at_tip {
             return Err(Error::Git(stderr.trim().to_string()));
         }
     }

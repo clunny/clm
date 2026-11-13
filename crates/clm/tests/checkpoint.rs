@@ -907,11 +907,11 @@ fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
 
 /// A directory holding a `git` that, before it runs the first `push` naming `origin`, runs
 /// `before` (shell, with `$real` the real git and `$origin` the bare repository), and for
-/// `fail` instead fails every such `push` with `fatal: unable to access`, exit 128.
-fn pushing_git(origin: &Path, before: &str, fail: bool) -> TempDir {
+/// `fail` instead fails every such `push` with that stderr and exit status.
+fn pushing_git(origin: &Path, before: &str, fail: Option<(&str, i32)>) -> TempDir {
     let bin = TempDir::new().unwrap();
-    let on_push = if fail {
-        "echo 'fatal: unable to access' >&2\nexit 128\n".to_string()
+    let on_push = if let Some((stderr, status)) = fail {
+        format!("echo '{stderr}' >&2\nexit {status}\n")
     } else {
         format!("[ -e \"$flag\" ] || {{ : > \"$flag\"\n{before}\n}}\n")
     };
@@ -955,7 +955,7 @@ fn scenario_a_claim_deleted_since_the_fetch() {
     // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
     let r = repo();
     claim_and_landed_branch(&r);
-    let bin = pushing_git(&r.origin, DELETE_Q, false);
+    let bin = pushing_git(&r.origin, DELETE_Q, None);
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
     assert!(bin.path().join("pushed").exists(), "the fake never ran");
     assert!(out.lines().any(|l| l == "removed origin/spec/y"), "{out}");
@@ -973,7 +973,7 @@ fn scenario_a_claim_retaken_since_the_fetch() {
     let r = repo();
     claim_and_landed_branch(&r);
     let before = git(&r.origin, &["rev-parse", "refs/heads/propose/q"]);
-    let bin = pushing_git(&r.origin, MOVE_Q, false);
+    let bin = pushing_git(&r.origin, MOVE_Q, None);
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
     assert!(bin.path().join("pushed").exists(), "the fake never ran");
     assert!(out.lines().any(|l| l == "removed origin/spec/y"), "{out}");
@@ -990,13 +990,26 @@ fn scenario_a_delete_git_fails() {
     // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
     let r = repo();
     claim_and_landed_branch(&r);
-    let bin = pushing_git(&r.origin, "", true);
+    let bin = pushing_git(&r.origin, "", Some(("fatal: unable to access", 128)));
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
     assert!(!out.contains("wrap-up ok"), "{out}");
     assert_eq!(code, Some(2), "{out}");
     for rf in ["propose/q", "spec/y"] {
         assert!(exists(&r.origin, &format!("refs/heads/{rf}")), "{rf}");
     }
+}
+
+#[test]
+fn a_stale_refusal_while_origin_holds_the_tip_is_gits_failure() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let refused = (" ! [rejected]        (delete) -> propose/q (stale info)", 1);
+    let bin = pushing_git(&r.origin, "", Some(refused));
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(!out.contains("wrap-up ok"), "{out}");
+    assert_eq!(code, Some(2), "{out}");
+    assert!(exists(&r.origin, "refs/heads/propose/q"));
 }
 
 #[test]
