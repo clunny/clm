@@ -43,7 +43,7 @@ fi
 **What the file holds.** One item per line, in one of three forms:
 
 - `all <path>`: the only line in the file. The branch changes a file that no component's `paths` hold, or one that matches `[affected] all`, so every test must run;
-- `node <id>`: a component the branch affects, directly or through `depends_on`. The word is `node` rather than component, since programs read these lines. Useful when your suites map to components rather than files;
+- `node <id>`: a component the branch affects, directly, through `depends_on`, or because its `test_depends_on` names an affected component, since its tests import that component. The word is `node` rather than component, since programs read these lines. Useful when your suites map to components rather than files;
 - `file <path>`: a file whose tests should run: a changed file that still exists, a test that cites a requirement of an affected component, a file of an affected component that cites none, or a test whose `clm:reads` marker matches what changed (next section). Paths are relative to the repository root.
 
 The `node` lines come first, then the `file` lines, each group sorted. An empty file means the branch changes nothing a test depends on, so no test needs to run. Run `clm affected` on a branch to see what a land would hand over.
@@ -138,7 +138,7 @@ Tests too slow for every land have three places to go:
 
 ### When a land runs over its target
 
-`[land] check_target_seconds` (default 120) is how long a land's check should take. To see where the time goes, the check marks its steps with `::group::<name>` and `::endgroup::` lines, and inside a step it prints `::clm-selected::<path>` for each selected file that made it run that step. `clm land` times each step and records the times in the ledger. A land over the target prints its three costliest steps, each with the chain that selected it (the same chain `clm affected --why <path>` prints: the file, the component that owns or cites it, the `depends_on` path, the changed file), and how many of the last 20 timed lands also went over. `clm health`'s `land-time` signal shows the trend over the last 50.
+`[land] check_target_seconds` (default 120) is how long a land's check should take. To see where the time goes, the check marks its steps with `::group::<name>` and `::endgroup::` lines, and inside a step it prints `::clm-selected::<path>` for each selected file that made it run that step. `clm land` times each step and records the times in the ledger. A land over the target prints its three costliest steps, each with the chain that selected it (the same chain `clm affected --why <path>` prints: the file, the component that owns or cites it, the `depends_on` path, led by a `tests against` link when the component is selected through its `test_depends_on`, the changed file), and how many of the last 20 timed lands also went over. `clm health`'s `land-time` signal shows the trend over the last 50.
 
 Nothing is filed and nothing is decided for you. Read it like this:
 

@@ -22,10 +22,12 @@ Finish what `20261112-components-own-their-tests` started for `clm affected`. Th
 ## Outcome
 
 - `check.affected`'s Contract and Design: the affected components include each component whose `test_depends_on` names an owner of a changed file or one of its dependants, not transitively.
-- `check.affected/why-chain`: the `tests against` link and a scenario for it. Its build and `affected-components`' build are the same component's, so one build catches both up.
+- `check.affected/why-chain`: the `tests against` link, which may be followed by `depends_on` links when the component it names is a dependant of a changed file's owner, and a scenario for it. Its build and `affected-components`' build are the same component's, so one build catches both up.
+- `check.affected/affected-components`: a scenario that a component brought in by its `test_depends_on` brings in none of its own dependants.
+- Guide: `docs/guide/ci-and-deployment.md` says a component's `test_depends_on` brings its tests into the selection, and that the chain can hold a `tests against` link (`method-in-the-plugin`).
 
 No edge cases or workarounds are known. `land`'s check-time report prints `why`'s lines as they come, so the new link needs nothing of `land`.
 
 ## Open questions
 
-None.
+- `land-checks-stay-fast` in `ARCHITECTURE.md` still connects a test only to its own component, those it `depends_on` and the files its markers name, not to its `test_depends_on` components. The lag dates from `20261112-components-own-their-tests`; this change moves the selection toward that constraint's guarantee. Closing it is an `ARCHITECTURE.md` edit that needs review, so it is left to the human (architecture audit).
