@@ -357,3 +357,37 @@ export function fetchWarning(latest: Fetched | undefined, now: number): Span[] |
   const why = latest.stderr.trim().split('\n', 1)[0] || `git exited ${latest.exitCode}`
   return [{ text: `⚠ fetch failed ${fetchAge(now - latest.startedAt)} ago: ${why}`, color: AMBER }]
 }
+
+/** The Queue tab's two buttons: each records the human's request for the build loop. */
+export const STOP_BUTTONS = [
+  { key: 'loop:drain', label: 'Drain', flag: '--drain', mode: 'drain' },
+  { key: 'loop:now', label: 'Stop now', flag: '--now', mode: 'now' },
+] as const
+
+/** The mode of a stop the Queue chart's loop line says is requested (`stop requested: <mode>`). */
+export function stopRequested(chart: readonly (readonly Span[])[]): 'drain' | 'now' | undefined {
+  for (const line of chart) {
+    const m = /^stop requested: (drain|now)$/.exec(line.map(s => s.text).join('').trim())
+    if (m) return m[1] as 'drain' | 'now'
+  }
+  return undefined
+}
+
+/** What each button shows: the label, and `requested` dimmed on the one whose stop is requested. */
+export const stopButtonLabels = (requested: 'drain' | 'now' | undefined) =>
+  STOP_BUTTONS.map(b => ({
+    key: b.key,
+    label: b.mode === requested ? `${b.label} · requested` : b.label,
+    dim: b.mode === requested,
+  }))
+
+/**
+ * A pressed stop button: runs `clm build stop --drain|--now` at `cwd`. Answers `clm`'s stderr
+ * when it exits non-zero, for the pane to show above the chart; none otherwise.
+ */
+export async function pressStop($: Host, key: string, cwd: string): Promise<string | undefined> {
+  const button = STOP_BUTTONS.find(b => b.key === key)
+  if (!button) return undefined
+  const run = await runClm($, ['build', 'stop', button.flag], cwd)
+  return run.exitCode === 0 ? undefined : run.stderr
+}

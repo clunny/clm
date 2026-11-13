@@ -47,6 +47,8 @@ declare module 'claude-code' {
       sampled: number
       agents: AgentRun[]
       now: number
+      /** A failed `clm build stop`'s stderr, shown above the Queue chart until the next press or redraw. */
+      stopError: string
     }
   }
 }

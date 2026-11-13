@@ -23,6 +23,10 @@ import {
   tabOf,
   paneBody,
   cachedRun,
+  STOP_BUTTONS,
+  pressStop,
+  stopButtonLabels,
+  stopRequested,
   runClm,
   sessionDirGone,
   unlessSuperseded,
@@ -476,5 +480,40 @@ describe('superseded-draw', () => {
     const $ = fake({ files: [SHIM], dirs: ['/work/repo'], startError: 'spawn EACCES' })
     const run = await unlessSuperseded(() => runClm($, ['view', 'flight'], '/work/repo'), null)
     expect(run?.stderr).toBe(`clm couldn't start: ${SHIM} in /work/repo: spawn EACCES`)
+  })
+})
+
+describe('queue-stop-buttons', () => {
+  // req:plugin.panel/queue-stop-buttons@14eb1ea3
+  test('Drain and Stop now run clm build stop at the cwd, and a failure answers its stderr', async () => {
+    expect(STOP_BUTTONS.map(b => [b.key, b.label])).toEqual([['loop:drain', 'Drain'], ['loop:now', 'Stop now']])
+    const $ = fake({ ...REPO, answer: () => ok('') })
+    expect(await pressStop($, 'loop:drain', '/work/repo/crates')).toBeUndefined()
+    expect(await pressStop($, 'loop:now', '/work/repo')).toBeUndefined()
+    expect($.calls).toEqual([
+      { argv: [SHIM, 'build', 'stop', '--drain'], cwd: '/work/repo/crates' },
+      { argv: [SHIM, 'build', 'stop', '--now'], cwd: '/work/repo' },
+    ])
+    const failing = fake({ ...REPO, answer: () => ({ exitCode: 2, stdout: '', stderr: 'no state dir\n' }) })
+    expect(await pressStop(failing, 'loop:now', '/work/repo')).toBe('no state dir\n')
+    expect(await pressStop(failing, 'dismiss:x', '/work/repo')).toBeUndefined()
+    expect(failing.calls).toHaveLength(1)
+  })
+
+  // req:plugin.panel/queue-stop-buttons@14eb1ea3
+  test('a requested stop dims the pressed button with requested', () => {
+    const now = ansiLines('queue\n\x1b[33mstop requested: now\x1b[0m\n')
+    expect(stopRequested(now)).toBe('now')
+    expect(stopButtonLabels('now')).toEqual([
+      { key: 'loop:drain', label: 'Drain', dim: false },
+      { key: 'loop:now', label: 'Stop now · requested', dim: true },
+    ])
+    expect(stopButtonLabels(stopRequested(ansiLines('stop requested: drain\n')))[0]).toEqual({
+      key: 'loop:drain',
+      label: 'Drain · requested',
+      dim: true,
+    })
+    expect(stopRequested(ansiLines('loop held, renewed 1m ago\n'))).toBeUndefined()
+    expect(stopButtonLabels(undefined).every(b => !b.dim && !b.label.includes('requested'))).toBe(true)
   })
 })

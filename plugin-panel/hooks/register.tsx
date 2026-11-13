@@ -22,6 +22,7 @@ import { type PaneLine, keyTarget, modelRuns, paneChart, pressNode, toggleRoot, 
 import { MACHINE_MS, machineLines, machineSampler } from '../src/machine.ts'
 import {
   FIRST_TAB,
+  ansiLines,
   ORIGIN_MAIN_ARGV,
   PANE_ID,
   PANE_TITLE,
@@ -39,7 +40,10 @@ import {
   fetchWarning,
   hasOriginMain,
   paneBody,
+  pressStop,
   runClm,
+  stopButtonLabels,
+  stopRequested,
   tabOf,
   unfenced,
   unlessSuperseded,
@@ -58,6 +62,7 @@ const contract = atom({ plugin: 'clm-panel', key: 'contract' } as const, false, 
 const generation = atom({ plugin: 'clm-panel', key: 'generation' } as const, 0)
 // The subagents this session launched, and the time their rows are drawn at.
 const agents = atom({ plugin: 'clm-panel', key: 'agents' } as const, [])
+const stopError = atom({ plugin: 'clm-panel', key: 'stopError' } as const, '')
 const now = atom({ plugin: 'clm-panel', key: 'now' } as const, 0)
 // Bumped when a `clm machine` sample finishes: the pane redraws from the views' cache.
 const sampled = atom({ plugin: 'clm-panel', key: 'sampled' } as const, 0)
@@ -97,6 +102,7 @@ async function reconcileRuns($: EngineInterface) {
 }
 
 async function redraw($: EngineInterface) {
+  await update($, stopError, () => '')
   await update($, generation, n => n + 1)
   const cwd = await $.session.cwd()
   const fetch = fetchIfDue($, cwd, await $.clock.now(), lastFetch)
@@ -311,6 +317,15 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
     if (target && 'node' in target) void update($, selected, s => pressNode(s, target.node))
     else if (target && 'root' in target) void update($, unfolded, u => toggleRoot(u, target.root))
     else if (target && 'dismiss' in target) void update($, agents, list => dismiss(list, target.dismiss))
+    else if (key.startsWith('loop:')) {
+      // Only records the request; the error shows until the next press or redraw.
+      void (async () => {
+        await update($, stopError, () => '')
+        const failed = await pressStop($, key, await $.session.cwd())
+        if (failed !== undefined) await update($, stopError, () => failed)
+        await update($, generation, n => n + 1)
+      })().catch(() => undefined)
+    }
   }
   const lines = (drawn: PaneLine[], wrap: 'wrap' | 'truncate-end' = 'truncate-end') =>
     drawn.map(line => {
@@ -350,6 +365,27 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
     </Box>
   )
   const body = paneBody(e.surface, run, shown)
+  // Above the Queue chart: Drain and Stop now, whatever the loop's state, and a failure's stderr.
+  const requested =
+    'ansi' in body ? stopRequested(body.ansi) : 'text' in body ? stopRequested(ansiLines(body.text)) : undefined
+  const failed = await read($, stopError)
+  const stopRow =
+    shown === 'queue' ? (
+      <Box flexDirection="column">
+        <Box flexDirection="row" gap={1}>
+          {stopButtonLabels(requested).map(b =>
+            b.dim ? (
+              <Button key={b.key} plain onPress={() => press(b.key)}>
+                <Text dimColor>{b.label}</Text>
+              </Button>
+            ) : (
+              <Button key={b.key} label={b.label} variant="secondary" onPress={() => press(b.key)} />
+            ),
+          )}
+        </Box>
+        {failed !== '' && <Text color="error">{failed}</Text>}
+      </Box>
+    ) : undefined
   // Above the chart while the latest fetch failed, until one succeeds.
   const warning = fetchWarning(latestFetch, await $.clock.now())
   const fetchLine = warning && <Text wrap="truncate-end">{runsOf(warning)}</Text>
@@ -359,6 +395,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
         {tabs}
         {machine}
         {fetchLine}
+        {stopRow}
         <Text color="error">{body.error}</Text>
       </Box>
     )
@@ -375,6 +412,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
         {tabs}
         {machine}
         {fetchLine}
+        {stopRow}
         {drawn}
         {lines(flightRows(undefined, list, at).map(spans => ({ spans })))}
       </Box>
@@ -398,6 +436,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
       {tabs}
       {machine}
       {fetchLine}
+      {stopRow}
       {head && (
         <Box flexDirection="row" gap={2}>
           <Text wrap="truncate-end">{runsOf(head)}</Text>
