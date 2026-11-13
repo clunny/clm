@@ -172,10 +172,10 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN each time a test fails naming the skill and `rebase ok`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
 - model/parse-changes
 - model/parse-backlog
-- orchestrator.loop/step-actions
 
 #### Serves
 - capability/propose-intent
@@ -242,6 +242,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - architecture/ask-the-architect
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - model/parse-backlog
 
 ### Requirement: shim-targets
@@ -297,8 +298,8 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 - THEN a test fails naming the skill and `fix reported defects`
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
-- orchestrator.loop/plan-order
 
 #### Serves
 - capability/report-defects
@@ -335,6 +336,7 @@ The plugin SHALL ship `skills/propose/SKILL.md` and `skills/build/SKILL.md`, eac
 
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - clm/renamed-commands
 
 #### Serves
@@ -457,8 +459,8 @@ Every subagent the plugin's skills tell Claude to launch SHALL have its model na
 - capability/right-model-per-task
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - orchestrator.run/review-model
-- orchestrator.loop/plan-order
 
 ### Requirement: recommend-the-right-design
 `skills/triage/SKILL.md` and `skills/propose/SKILL.md` SHALL tell Claude how to choose what it recommends (`recommend-the-right-design`): before recommending an answer, a fix or a design to the human, or offering choices for one (triage's *Needs your input* answers and *Workaround* fixes, and propose's approaches while brainstorming), to read the specs and the code the item or intent concerns, with `clm context <component>` for its components and the files under their `paths` it names or touches; to treat the fix the item itself suggests, or the first one that comes to mind, as one option among the approaches, never as the answer by default; and to recommend the design that is correct and maintainable over the long term, saying why it beats the most convenient one, recommending a cheaper or smaller option only with the reason it is also the right one. It SHALL tell Claude that the order matters: the code is read before any recommendation is shown, not after the human pushes back.
@@ -639,7 +641,7 @@ No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a 
 #### Scenario: skills push through clm
 - GIVEN the plugin's `skills/*/SKILL.md`
 - WHEN a test reads each
-- THEN none contains `git push`, and `propose`, `contribution`, `triage` and `build` each contain `clm branch push`
+- THEN none contains `git push`, and `propose`, `contribution` and `triage` each contain `clm branch push`
 
 #### Scenario: skill with a raw push
 - GIVEN a `SKILL.md` that tells Claude to push with `git push --force-with-lease`
@@ -653,6 +655,7 @@ No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a 
 #### Needs
 - host/branch-push
 - host/branch-delete
+- plugin.build/build-runs-the-loop
 
 ### Requirement: unattended-permissions-check
 `skills/build/SKILL.md` and `skills/triage/SKILL.md` SHALL each tell Claude, once, before the first build or draft it launches, to run `clm init --check-permissions` and, when it exits 1, to tell the human that in auto mode Claude Code may deny the unattended steps those rules allow, show the rules it printed, say that they belong in `permissions.allow` in `.claude/settings.json` (or `.claude/settings.local.json` for this clone alone), and go on launching, never refusing to; when it exits with any other code, as a `clm` without the option does, to tell the human the check couldn't run and go on launching; and never to write either file itself. `skills/build/SKILL.md` SHALL tell Claude to release the claim of a component the human gives up for good with `clm branch delete`, and SHALL NOT contain `git push`.
@@ -672,14 +675,16 @@ No `SKILL.md` under the plugin's `skills/` SHALL contain `git push`. Wherever a 
 - capability/triage-unattended
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - init/init-check-permissions
 - host/branch-delete
 
 ### Requirement: wrap-up-left-lines
-Each of `skills/build/SKILL.md`, `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/contribution/SKILL.md` and `skills/init/SKILL.md` that tells Claude to run `clm wrap-up` SHALL tell Claude to pass each `left <path>: ...` line `clm wrap-up` prints to the human as it stands, a build's worktree it couldn't remove, which doesn't make the wrap-up incomplete, and to leave the directory, and any command the line names, to them. No skill SHALL tell Claude to run `git worktree prune` or delete such a directory itself.
+Each of `skills/triage/SKILL.md`, `skills/propose/SKILL.md`, `skills/contribution/SKILL.md` and `skills/init/SKILL.md` that tells Claude to run `clm wrap-up` SHALL tell Claude to pass each `left <path>: ...` line `clm wrap-up` prints to the human as it stands, a build's worktree it couldn't remove, which doesn't make the wrap-up incomplete, and to leave the directory, and any command the line names, to them. No skill SHALL tell Claude to run `git worktree prune` or delete such a directory itself. `skills/build/SKILL.md` runs no `clm wrap-up`: its loop passes those lines on in its `say` actions (`orchestrator.loop/step-housekeeping`).
 
 #### Needs
 - orchestrator.checkpoint/checkpoint
+- plugin.build/build-runs-the-loop
 
 #### Scenario: wrap-up's left lines passed on
 - GIVEN the plugin's skills
@@ -705,6 +710,7 @@ Each of `skills/build/SKILL.md`, `skills/triage/SKILL.md`, `skills/propose/SKILL
 - THEN `clm verify --due --event work-done` comes before the last `clm wrap-up` in it
 
 #### Needs
+- plugin.build/build-runs-the-loop
 - verify/verify-due
 - verify/verify-import
 - orchestrator.triage/intake-verify-failures

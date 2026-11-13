@@ -17,7 +17,7 @@ The unit of building is the component, not the change (`node-reconciliation`). `
 
 A proposing session claims a backlog item before designing its fix (`propose-claims`). `clm claim backlog/<slug>` pushes branch `propose/<slug>` to `origin` the way a component claim pushes `impl/*`, with the same expiry and takeover, and prints the branch name. It refuses an item that isn't in `origin/main`'s `backlog/`, or that is already taken: claimed, or named in the `from` or `resolves` of spec work in flight on `origin`. `clm proposals` lists that spec work and the bare claims, each with its components and items, so a session can see what another is already changing. Backlog claims never enter `clm next`.
 
-An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change on any `impl/*` branch (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the `build` skill to archive.
+An `applied` or `implementing` change is *complete* when every requirement its deltas add or modify is current, each counted as the requirement a rename or move took it to and left out when no move reaches one the spec holds, and no marker cites one it removed that the spec doesn't hold (`check.coverage/status-report`). A later change can remove what it added or add back what it removed, and neither keeps it from completing. A change that hasn't applied is never complete, since its modified requirements are still the old text. `clm rebase` archives a complete change on any `impl/*` branch (`archive-on-sync`), and `clm wrap-up` names those still unarchived on `origin/main`, for the build loop to archive (`orchestrator.loop`).
 
 `queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. `land_priority(root, branch, base, head)` gives `land` the priority a land of `branch` carries, which orders the clone's land queue (`land-priority`, `land/lock-queue`). With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
 
@@ -599,6 +599,20 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 
 #### Needs
 - model/parse-backlog
+
+### Requirement: next-wait
+`clm next` SHALL refuse `--wait` and `--interval` as usage errors, and SHALL hold no code that waits for work: `clm build wait` waits for everything the build loop launches (`orchestrator.loop/build-wait`), and the skill that ran `clm next --wait` runs the loop instead. This is the contract step of moving the wait into the loop (`expand-contract`), so it waits until the skill no longer names `clm next --wait`.
+
+#### Scenario: wait refused
+- WHEN `clm next --wait` runs, and then `clm next --interval 5`
+- THEN each exits 2 with usage
+
+#### Serves
+- capability/build-from-spec
+
+#### Needs
+- plugin.build/build-runs-the-loop
+- orchestrator.loop/build-wait
 
 ### Requirement: archived-spec-work
 `clm claim backlog/<slug>`, `clm proposals` and `taken_items` SHALL read a `spec/<id>` or `autosync/spec/<id>` ref whose tip holds no `changes/<id>/change.md` through its `changes/archive/<id>/change.md`, when the tip holds one and change `<id>` is under neither `changes/` nor `changes/archive/` in `origin/main`: its `from` and `resolves` SHALL hold items as a live `change.md`'s do, and the names under `changes/archive/<id>/deltas/` SHALL give its components. When the checkout is on `spec/<id>` and has no working-tree `changes/<id>/change.md`, the items its working-tree `changes/archive/<id>/change.md` names SHALL be left out of *claimed*. A tip holding both files SHALL be read through the live one alone.
