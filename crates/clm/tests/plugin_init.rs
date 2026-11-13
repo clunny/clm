@@ -499,6 +499,26 @@ const INIT_HARNESS: &[&str] = &[
     "one at a time",
 ];
 
+/// What `init-skill-gives-tests-their-component` asks of the `init` skill.
+const INIT_TEST_OWNERS: &[&str] = &[
+    "`tests` globs",
+    "`test_depends_on`",
+    "components-own-their-tests",
+    "never list test files one by one",
+    "`kind: deferred`",
+];
+
+#[test]
+fn init_skill_gives_tests_their_component() {
+    // req:plugin.init/init-skill-gives-tests-their-component@342b4d5f
+    let body = skill_body("init");
+    assert_eq!(lacks("init", &body, INIT_TEST_OWNERS), Vec::<String>::new());
+    for needle in INIT_TEST_OWNERS {
+        let gaps = lacks("init", &body.replace(needle, "elided"), INIT_TEST_OWNERS);
+        assert!(!gaps.is_empty(), "{needle}");
+    }
+}
+
 #[test]
 fn init_follows_agent_harness() {
     // req:plugin.init/init-follows-agent-harness@8df57b35
