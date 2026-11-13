@@ -37,7 +37,7 @@ fn decide(version: &str) -> Value {
 
 #[test]
 fn a_decision_shows_at_once() {
-    // req:web.worker.replica/writes-through-object@b4776943
+    // req:web.worker.replica/writes-through-object@43885d86
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -63,7 +63,7 @@ fn a_decision_shows_at_once() {
 
 #[test]
 fn reworded_since_the_page_was_drawn() {
-    // req:web.worker.replica/writes-through-object@b4776943
+    // req:web.worker.replica/writes-through-object@43885d86
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -85,7 +85,7 @@ fn reworded_since_the_page_was_drawn() {
 
 #[test]
 fn a_proposal_shows_at_once() {
-    // req:web.worker.replica/writes-through-object@b4776943
+    // req:web.worker.replica/writes-through-object@43885d86
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -110,7 +110,7 @@ fn a_proposal_shows_at_once() {
 
 #[test]
 fn the_tip_cant_be_read() {
-    // req:web.worker.replica/writes-through-object@b4776943
+    // req:web.worker.replica/writes-through-object@43885d86
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, _slot) = built(&fake);
@@ -137,7 +137,7 @@ fn the_tip_cant_be_read() {
 
 #[test]
 fn still_preparing() {
-    // req:web.worker.replica/writes-through-object@b4776943
+    // req:web.worker.replica/writes-through-object@43885d86
     let fake = fake_with("111", repo(CAPABILITIES));
     fake.gh.grant("tok", "o/a");
     let (mut object, _mem, slot) = object();
@@ -153,4 +153,39 @@ fn still_preparing() {
     assert!(slot.0.get().is_some(), "the alarm is set");
     assert_eq!(fake.gh.calls.borrow().len(), before, "no ref was read");
     assert!(fake.gh.writes().is_empty(), "nothing was appended");
+}
+
+#[test]
+fn an_answer_read_back() {
+    // req:web.worker.replica/writes-through-object@43885d86
+    let item = "---\ntitle: Q\nkind: question\nchoices: [yes, no]\n---\nQ?\n";
+    let fake = fake_with("111", repo_files(&[("backlog/q.md", item)]));
+    fake.gh.grant("tok", "o/a");
+    let (mut object, _mem, _slot) = built(&fake);
+    let answer = |item: &str, answer: &str| json!({"login": "carol", "token": "tok", "kind": "answer", "item": item, "answer": answer});
+    let unknown = block_on(object.write(&fake, &answer("nope", "yes")));
+    assert_eq!(unknown.status, 404);
+    assert_eq!(
+        serde_json::from_str::<Value>(&unknown.body).unwrap(),
+        json!({"error": "unknown"})
+    );
+    let invalid = block_on(object.write(&fake, &answer("q", "maybe")));
+    assert_eq!(invalid.status, 422);
+    assert_eq!(
+        serde_json::from_str::<Value>(&invalid.body).unwrap(),
+        json!({"error": "answer"})
+    );
+    assert!(fake.gh.writes().is_empty(), "nothing was appended");
+    let ok = block_on(object.write(&fake, &answer("q", "yes")));
+    assert_eq!(ok.status, 200, "{}", ok.body);
+    let id = serde_json::from_str::<Value>(&ok.body).unwrap()["id"].clone();
+    assert!(id.is_string(), "{}", ok.body);
+    let seen = view(&fake, &mut object, "implementation");
+    let answers = seen["view"]["answers"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{seen}"));
+    assert_eq!(answers.len(), 1, "{seen}");
+    assert_eq!(answers[0]["item"], "q");
+    assert_eq!(answers[0]["answer"], "yes");
+    assert_eq!(answers[0]["id"], id);
 }
