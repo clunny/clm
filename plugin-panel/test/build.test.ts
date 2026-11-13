@@ -3,7 +3,7 @@ import { describe, expect, test } from 'vitest'
 import { PANE_ID, opensForSkill } from '../src/panel.ts'
 
 describe('build-opens-panel', () => {
-  // req:plugin.panel/build-opens-panel@dcdf45be
+  // req:plugin.panel/build-opens-panel@10e6e6a2
   const pane = (id: string) => ({ id, isPlaced: false })
 
   test('the clm plugin build skill opens a pane that is not listed, in a CLM repository', () => {

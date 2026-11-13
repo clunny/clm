@@ -64,7 +64,7 @@ const sampled = atom({ plugin: 'clm-panel', key: 'sampled' } as const, 0)
 
 type PaneEvent = { surface: Surface; props: { bodyColumns: number } }
 
-const LABELS = { spec: 'Spec', flight: 'Flight', blockers: 'Blockers' } as const
+const LABELS = { queue: 'Queue', spec: 'Spec', flight: 'Flight', blockers: 'Blockers' } as const
 
 let timer: { cancel(): void } | undefined
 let tick: { cancel(): void } | undefined
@@ -145,7 +145,7 @@ const setNow = async ($: EngineInterface) => {
   return at
 }
 
-// Opens the pane on Flight, as `/clm:view` with no argument does.
+// Opens the pane on Queue, as `/clm:view` with no argument does.
 async function openPane($: EngineInterface) {
   await update($, tab, () => FIRST_TAB)
   await $.ui.open({ id: PANE_ID, title: PANE_TITLE })
@@ -207,7 +207,7 @@ export const register: Register = on => {
     return { text: 'Opened the CLM panel.' }
   })
 
-  // The build skill opens the pane on Flight when it isn't open; the prompt is left as it came.
+  // The build skill opens the pane on Queue when it isn't open; the prompt is left as it came.
   on('skill.prompt', async ($, e, next) => {
     const prompt = await next(e)
     // Other skills cost no lookup.
@@ -261,7 +261,7 @@ export const register: Register = on => {
 }
 
 async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
-  // A tab kept by an earlier version of the panel that is none of the three reads as Flight.
+  // A tab kept by an earlier version of the panel that is none of the four reads as Queue.
   const shown = tabOf(await read($, tab))
   // The machine rows follow the latest sample; a pane measured at a new width samples again.
   await read($, sampled)
@@ -349,7 +349,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
       ))}
     </Box>
   )
-  const body = paneBody(e.surface, run)
+  const body = paneBody(e.surface, run, shown)
   // Above the chart while the latest fetch failed, until one succeeds.
   const warning = fetchWarning(latestFetch, await $.clock.now())
   const fetchLine = warning && <Text wrap="truncate-end">{runsOf(warning)}</Text>
@@ -366,6 +366,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
   // An ANSI chart carries the build rows under its node lines; the SVG is followed by them.
   const drawn =
     'ansi' in body ? undefined
+    : 'text' in body ? body.text.replace(/\n$/, '').split('\n').map(line => <Text wrap="truncate-end">{line === '' ? ' ' : line}</Text>)
     : 'svg' in body && Svg ? <Svg source={body.svg} alt={`clm view ${shown}`} />
     : undefined
   if (!('ansi' in body)) {

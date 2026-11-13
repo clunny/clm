@@ -3,13 +3,13 @@
 // tests run them against a fake; `hooks/register.tsx` wires them to the real `$`.
 
 /** What `/clm:view <name>` accepts: `status` runs `clm status`, the rest `clm view <name>`. */
-export const NAMES = ['status', 'spec', 'flight', 'blockers'] as const
+export const NAMES = ['status', 'queue', 'spec', 'flight', 'blockers'] as const
 
-/** The pane's tabs, in order; it opens on `flight`. Each shows `clm view <tab>`. */
-export const TABS = ['spec', 'flight', 'blockers'] as const
+/** The pane's tabs, in order; it opens on `queue`. Each shows `clm view <tab>`. */
+export const TABS = ['queue', 'spec', 'flight', 'blockers'] as const
 export type ViewTab = (typeof TABS)[number]
-export const FIRST_TAB: ViewTab = 'flight'
-/** A tab kept across a reload, read as one of the three; any other reads as Flight (`views-panel`). */
+export const FIRST_TAB: ViewTab = 'queue'
+/** A tab kept across a reload, read as one of the four; any other reads as Queue (`views-panel`). */
 export const tabOf = (kept: unknown): ViewTab => TABS.find(t => t === kept) ?? FIRST_TAB
 
 export const PANE_ID = 'clm'
@@ -170,19 +170,23 @@ export const viewOf = (tab: ViewTab, at: boolean): string[] => ['view', tab, ...
 export const widthOf = (columns: number): number =>
   Number.isFinite(columns) ? Math.min(65535, Math.max(1, Math.floor(columns))) : 100
 
-/** The `clm view` arguments for a tab on a surface `columns` wide: an SVG, or ANSI on the terminal. */
+/**
+ * The `clm view` arguments for a tab on a surface `columns` wide: an SVG, or ANSI on the
+ * terminal; the Queue tab has no SVG form, so other surfaces run its text chart.
+ */
 export function viewArgs(tab: ViewTab, surface: Surface, columns: number, at = false): string[] {
   const view = viewOf(tab, at)
-  if (surface !== 'terminal') return [...view, '--format', 'svg']
+  if (surface !== 'terminal') return [...view, '--format', tab === 'queue' ? 'text' : 'svg']
   return [...view, '--format', 'ansi', '--width', String(widthOf(columns))]
 }
 
 /** What the pane draws under its tabs, from its `clm` run: `clm`'s stderr first. */
-export type PaneBody = { error: string } | { ansi: Span[][] } | { svg: string }
+export type PaneBody = { error: string } | { ansi: Span[][] } | { svg: string } | { text: string }
 
-export function paneBody(surface: Surface, run: Run): PaneBody {
+export function paneBody(surface: Surface, run: Run, tab: ViewTab): PaneBody {
   if (run.exitCode !== 0) return { error: run.stderr }
-  return surface === 'terminal' ? { ansi: ansiLines(run.stdout) } : { svg: run.stdout }
+  if (surface === 'terminal') return { ansi: ansiLines(run.stdout) }
+  return tab === 'queue' ? { text: run.stdout } : { svg: run.stdout }
 }
 
 /** The pane's cache key for one `clm` run: its redraw generation and arguments. */

@@ -55,7 +55,8 @@ export const otherTab = (tab: ViewTab): ViewTab | undefined =>
 
 /**
  * The `clm view --format json` runs beside the chart: only on the terminal surface,
- * where lines can be pressed; the other tab's only while a node is selected.
+ * where lines can be pressed; the other tab's only while a node is selected. The Queue tab's
+ * lines aren't pressable, so none runs for it (`queue-tab`).
  */
 export function modelRuns(
   tab: ViewTab,
@@ -63,7 +64,7 @@ export function modelRuns(
   selected: string | null,
   at = false,
 ): { own?: string[]; other?: string[] } {
-  if (surface !== 'terminal') return {}
+  if (surface !== 'terminal' || tab === 'queue') return {}
   const json = (t: ViewTab) => [...viewOf(t, at), '--format', 'json']
   const other = selected === null ? undefined : otherTab(tab)
   return { own: json(tab), ...(other && { other: json(other) }) }
@@ -91,6 +92,7 @@ function parse<T>(tab: ViewTab, run: Run | undefined, list: 'nodes' | 'roots'): 
 function lineIndexes(tab: ViewTab, chart: readonly Span[][], checkout: boolean): number[] {
   const texts = chart.map(lineText)
   const all = texts.map((_, i) => i)
+  if (tab === 'queue') return []
   if (tab === 'spec') return all.slice(checkout ? 1 : 0)
   if (tab === 'flight') {
     const [nodes, changes] = componentRange(texts)
