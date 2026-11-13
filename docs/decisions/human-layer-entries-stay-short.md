@@ -14,10 +14,10 @@ status: accepted
 - Moved down to the decision of the same name: `per-writer-ledgers` (its rules serve `git-is-truth`), `lease-claims` and `autosync-policy` (the capability `work-concurrently`), `health-advises` (`know-health`), `say-guard-is-off` (`guard-sessions`) and `views-name-their-commit` (`see-project-state`).
 - Added: `pin-working-method`, from `CAPABILITIES.md`, and `removal-needs-a-yes`.
 
-For CLM itself, `reuse-first` means git, the agent harness's own primitives and superpowers, with CLM's code kept to glue and checks.
+`plain-terms` governs CLM's own vocabulary, not an adopter's. CLM may use a supported agent harness's own features directly where its adapter declares them (`platform`). For CLM itself, `reuse-first` means git, the agent harness's own primitives and superpowers, with CLM's code kept to glue and checks.
 
 **Corrected.** `redesign-before-workaround` counts unsettled workaround flags per capability, as `clm workaround` and the guide always did, where the entry said "the same thing". `platform` lets a host run a project's slow tests after a land (`[verify] mode = "pipeline"`) and still decide no land. `land-locally` names the one push to `main` that isn't a land, the release workflow's merge of its version bump. `ai-writes-code` says code reaches `main` from an AI session's branch, since a small fix takes no build.
 
 **Capabilities.** `unattended-runner` folded into `build-from-spec`, `measure-by-evals` was added, blocked by the plan until the eval method is built, and scenarios the product's boundary can't observe were reworded: `adopt-clm`, `propose-intent`, `right-model-per-task`, `guard-sessions`, `report-defects` and `work-from-any-agent-harness`. `catch-drift` and `no-dead-weight` restate the constraints `no-silent-drift` and `no-dead-code`; they stay, as proposed cuts for the human to decide later.
 
-**Size.** The file is 5,600 words, about two thirds of what it was. The statements are about 1,800 words; the scenarios and proof blocks the format requires of every entry are the rest. Reaching the plan's third needs fewer entries or a bundle that carries only the statements, which is left to the plan.
+**Size.** The file is 5,700 words, about two thirds of what it was. The statements are about 1,800 words; the scenarios and proof blocks the format requires of every entry are the rest. Reaching the plan's third needs fewer entries or a bundle that carries only the statements, which is left to the plan.

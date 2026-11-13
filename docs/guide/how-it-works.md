@@ -22,9 +22,9 @@ Two short files at the repository's root are written for people rather than for 
 
 Each entry has an ID, `capability/<slug>` or `architecture/<slug>`, and a version, as a requirement does: `clm hashes capability` and `clm hashes architecture` print them. A capability is proven by a black-box test at the product's public boundary that cites it, `req:capability/<slug>@<version>`, unless an `#### Untested` block says why no program can check it. An architectural constraint is never cited by a test: it names under `#### Enforced by` the component rules that enforce it, and is current when every rule it names is current; it says what no program can check under `#### Untested`. `clm check` fails a constraint with neither block. A component says which entries its rules serve with `serves` in its frontmatter, and a requirement can override that with a `#### Serves` block.
 
-Each architectural constraint starts with the kind of rule it is. **Checked**: a program decides it, and only such a rule is enforced. **Measured**: an eval scores it against a threshold you agreed, for behaviour that comes from a model. **Principle**: design judgement, which a review may advise on. Only a program holds a land; an eval or a review never does.
+Each architectural constraint starts with the kind of rule it is. **Checked**: a program decides it, and only such a rule is enforced. **Measured**: an eval scores it against a threshold you agreed, for behaviour that comes from a model. **Principle**: design judgement, which a review may advise on. Only a program holds a land; an eval or an AI's review never does.
 
-Any edit to either file needs your review before it lands. Everything below them is the AI's to change. Removing behaviour is the exception to that: a scenario, a requirement, a capability or a constraint that states behaviour is never dropped without your yes, so a session that proposes a cut shows you what would be lost first.
+Any edit to either file needs your review before it lands. Everything below them is the AI's to change. Removing behaviour is the exception to that: a scenario, a requirement, a capability or a constraint that states behaviour is never dropped without your yes, so a session that proposes a cut shows you what would be lost and asks first.
 
 ## The spec
 
@@ -59,7 +59,7 @@ A spec branch needs your review when:
 - it edits `ARCHITECTURE.md` or `CAPABILITIES.md`, or `docs/allowed_signers`, the keys a signed repository trusts;
 - it changes the `approval` setting in `clm.toml`;
 - it adds or widens a component's exemption from a code rule;
-- a change it adds or edits declares `human_burdens`.
+- a change it adds or edits declares `human_burdens`, or has a `change.md` that can't be read.
 
 Everything else lands on checks, and nothing is reviewed after it lands. When you say yes, Claude runs `clm approve <branch>` and Claude Code asks you to confirm that command, so the approval is yours. It's a record in your ledger, pinned to the files the branch changes: a rebase or merge of `main` that touched only other files keeps it, and any change to the branch's own files drops it, so you review again.
 

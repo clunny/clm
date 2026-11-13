@@ -40,7 +40,7 @@ Pass 2, the capabilities: 33 become 32.
 
 ## Outcome
 
-- `ARCHITECTURE.md`: 43 entries, each one or two sentences starting with its label, in about 5,600 words (65% of 8,636). `#### Enforced by` lists programs only.
+- `ARCHITECTURE.md`: 43 entries, each one or two sentences starting with its label, in about 5,700 words (66% of 8,636). `#### Enforced by` lists programs only, and only a checked entry holds one: a principle names the programs that check a part of it in its `#### Untested` prose, so it never reads as held.
 - `CAPABILITIES.md`: 32 entries.
 - 66 requirements and 10 components name a different entry under `serves`; no requirement's text or version changes, so no test falls behind for it. Seven capability entries are reworded, so their capability tests are `behind` and the `capability` build brings them up.
 - The contradictions listed under Problem are gone from `ARCHITECTURE.md`, the guide and the two decisions. `land-locally` now names the release workflow's merge of its version bump as the one push to `main` that isn't a land, which is what the workflow and `clm ledger verify` already do.
@@ -76,3 +76,7 @@ Two capability tests go with their entries, `crates/clm/tests/capability/unatten
 - **The plan's size target.** "Under a third" of 8,636 words is 2,880. The statements alone are about 1,800 words; the scenario and proof blocks the format requires of every entry are 3,600 more. Reaching a third needs about 25 entries, or a context bundle that carries only each entry's statement, as `clm guide constraints` already does.
 - **The release workflow's push to `main`.** The contradiction is removed by naming the exception. Having the version bump land through `clm land` would remove the exception itself, and is a change to `ci` and `ledger`.
 - **`catch-drift` and `no-dead-weight`** as proposed cuts.
+- **`proven-by-tests` names eval proof before it exists.** The plan asks for the rewording now; the entry's `#### Untested` says CLM knows no eval proof yet. The architecture audit reads this against `spec-is-current`. The alternative is to leave the clause to the plan's phase 6.
+- **Adopters' entries carry no label.** `deterministic-enforcement` is carried, and asks every rule to say its kind, but the `ARCHITECTURE.md` that `clm init` writes and the entries projects already hold have none, and nothing checks it (`backlog/adopters-architecture-entries-carry-no-label`).
+- **What is carried widened by the merges.** `land-locally` and `approval-policy`, both `method`, now state what `no-local-land-with-remote`, `guard-blocks-push-to-main`, `approve-pins-the-review` and `land-policy-from-base` stated as CLM's own. Each describes what `clm` itself does in any project, so no project is held to more than before.
+- **Template text under `#### Enforced by`.** The audit questioned `init/claude-md-points-at-guide` and `init/architecture-template-proof`, which test sentences in files `clm init` writes. Both were taken off the lists; the requirements stay.

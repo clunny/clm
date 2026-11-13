@@ -129,7 +129,7 @@ An agent launched without a model inherits the session's, so cheap mechanical wo
 - THEN the first names the model builds run on, and the prompt names the session's model for the final review
 
 ### Capability: measure-by-evals
-A person can have behaviour that comes from a model, which no program can decide, proven by an eval against a threshold they agreed: the project names its eval command, the evals that are due run on their own schedule within a spend limit, each run says why it ran and what it cost, and one that falls below its threshold becomes a bug on the component that owns it. An eval never holds a land.
+A person can have behaviour that comes from a model, which no program can decide, proven by an eval against a threshold they agreed: the project names its eval command, the evals that are due run apart from any land, within a spend limit, each run says why it ran and what it cost, and one that falls below its threshold becomes a bug on the component that owns it. An eval never holds a land.
 
 #### Why
 Some of what a product does comes from a model and is statistical by nature, so a test can't prove it and a sentence in a prompt proves nothing. Measuring it costs money on a recurring basis, so what is measured, and how well it must do, is the person's decision.
@@ -303,7 +303,7 @@ Nothing showed what a feature cost, so nothing was ever cut; keeping a capabilit
 - THEN it shows each one's cost and that the second isn't held yet, and records their decision to keep or cut it
 
 ### Capability: guard-sessions
-A person can rely on an AI session's unsafe actions, such as approving its own change or pushing to `main`, being stopped and put to them, and on an audit finding afterwards any that got through. The guard prevents accidents; it is not a boundary against a session set on getting round it.
+A person can rely on an AI session's unsafe actions, such as approving its own change or pushing to `main`, being stopped and put to them, and on an audit finding afterwards a push to `main` that got through. The guard prevents accidents; it is not a boundary against a session set on getting round it.
 
 #### Why
 A session that can approve or push for itself makes every other rule optional.

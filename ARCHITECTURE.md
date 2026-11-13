@@ -3,7 +3,7 @@
 The architectural constraints: what must always hold of CLM, whatever is built. The architect owns this file.
 An edit to it needs a human's review before it lands (`humans-review-intent`).
 It is prepended to every context bundle, so each entry is one or two sentences; its mechanics are in the decision of its name under `docs/decisions/`, or the one it names.
-Each entry says which kind of rule it is (`deterministic-enforcement`): **checked**, which a program decides, the rules that do so named under `#### Enforced by`; **measured**, by an eval; or **principle**, design judgement, with `#### Untested` saying why no program decides it. A checked entry is current when every rule it names is current (`human-layer-proof`). The format is in `clm guide spec-format`.
+Each entry says which kind of rule it is (`deterministic-enforcement`): **checked**, which a program decides, the rules that do so named under `#### Enforced by`, which no other kind of entry holds; **measured**, by an eval; or **principle**, design judgement, with `#### Untested` saying why no program decides it. A checked entry is current when every rule it names is current (`human-layer-proof`). The format is in `clm guide spec-format`.
 An entry holding a `#### Carries` block reaches every project built with CLM, at its tier, from the `clm` that project runs (`carried-constraints`); the others are CLM's own.
 
 ## Constraints
@@ -23,7 +23,7 @@ An entry holding a `#### Carries` block reaches every project built with CLM, at
 Who wrote a diff isn't visible to a program.
 
 ### Constraint: humans-review-intent
-**Checked.** Humans SHALL review intent, not code: a branch that changes what the product is for, what must always hold, who may approve or what the work costs the human waits for a human's approval, and every other branch lands on checks, with nothing reviewed after it lands. The exact triggers are in `yes-no-review`.
+**Checked.** Humans SHALL review intent, not code: a branch that changes what the product is for, what must always hold, who may approve or what the work costs the human waits for a human's approval, and every other branch lands on checks, with nothing reviewed after it lands. The exact triggers are in the guide (`clm guide how-it-works`).
 
 #### Scenario: capability edit
 - GIVEN a spec branch that edits only `CAPABILITIES.md`
@@ -57,16 +57,16 @@ Who wrote a diff isn't visible to a program.
 #### Scenario: a change that drops a scenario
 - GIVEN a change that would remove a scenario stating behaviour
 - WHEN a session proposes it
-- THEN it shows the human what would be lost, and the change lands only after their yes
+- THEN it lists what would be lost and asks the human, and goes on only on their yes
 
 #### Carries
 - method
 
 #### Untested
-No program yet tells a removal of behaviour from a rewording, so the session lists what a change removes and the human reads that list before the land.
+No program yet tells a removal of behaviour from a rewording, and such a change may still land on checks, so this yes is the human's answer in the session, not a `clm approve`: the session lists what a change removes and asks before going on.
 
 ### Constraint: deterministic-enforcement
-**Principle.** Every rule SHALL be one of three kinds and say which: *checked*, decided by a program (the CLI, a hook or the land checks), preferred wherever a program can decide, model behaviour included; *measured*, by an eval against a threshold the human agreed, for behaviour that comes from a model or is statistical by nature; or *principle*, design judgement, which may be audited for advice. Only a checked rule is enforced, and only a program holds a land: an eval, a review or an audit never does (`three-kinds-of-rule`).
+**Principle.** Every rule SHALL be one of three kinds and say which: *checked*, decided by a program (the CLI, a hook or the land checks), preferred wherever a program can decide, model behaviour included; *measured*, by an eval against a threshold the human agreed, for behaviour that comes from a model or is statistical by nature; or *principle*, design judgement, which may be audited for advice. Only a checked rule is enforced, and only a program holds a land: an eval, an AI review or an audit never does (`three-kinds-of-rule`).
 
 #### Scenario: advisory review
 - GIVEN a branch whose checks pass and whose AI review found something
@@ -119,7 +119,7 @@ Today the check reads a marker wherever it sits, whether or not its test ran, an
 - sync/judged-by-check
 
 ### Constraint: git-is-truth
-**Checked.** Git SHALL be the source of truth and the only channel: all shared state (specs, changes, claims, approvals, checks and lands) is committed files, branches or ledger records (`per-writer-ledgers`), and no check, gate or approval reads anything else. A service may keep only a cache it can rebuild from git with nothing lost.
+**Checked.** Git SHALL be the source of truth and the only channel: all shared state (specs, changes, claims, approvals, checks and lands) is committed files, branches or ledger records (`per-writer-ledgers`), and no check, gate or approval reads anything else. A service may keep only a cache derived from git, and from a host's own data such as a pull request's URL, that it can rebuild with nothing lost.
 
 #### Scenario: cache emptied
 - GIVEN the web app's cache is deleted
@@ -172,7 +172,7 @@ That no server or database owns shared state is a judgement on the design.
 - gate/up-to-date
 
 ### Constraint: ancestor-scoped-context
-**Checked.** An agent building a component SHALL receive `ARCHITECTURE.md`, the carried constraints in force, the component's ancestors, the contracts of what it depends on and the capabilities its rules serve, and nothing else.
+**Checked.** An agent building a component SHALL receive `ARCHITECTURE.md`, the carried constraints in force, the component's ancestors, the one-hop contracts of what it needs and the capabilities its rules serve, and nothing else.
 
 #### Scenario: unrelated component
 - GIVEN components `a` and `b`, neither needing the other
@@ -216,7 +216,7 @@ That no server or database owns shared state is a judgement on the design.
 A writing discipline; `clm apply` deletes what a change removes.
 
 ### Constraint: component-reconciliation
-**Checked.** The unit of building SHALL be the component: a build brings its code up to its whole current spec, highest priority first, and the queue is derived from committed state, never stored. A component is ready when it has an unblocked pending requirement, whatever the state of what it depends on: only a requirement's `Needs` and the backlog items that block it order work (`needs-alone-order`).
+**Checked.** The unit of building SHALL be the component: a build brings its code up to its whole current spec, highest priority first, and the queue is derived from committed state, never stored. A component is ready when it has an unblocked pending requirement, whatever the state of what it depends on: only a requirement's `Needs` and the backlog items that block it order work, and a capability's test waits for the rules that serve it (`needs-alone-order`, `serving-rules-order-capabilities`).
 
 #### Scenario: two changes on one component
 - GIVEN two applied changes that both edit component `a`
@@ -235,8 +235,11 @@ A writing discipline; `clm apply` deletes what a change removes.
 - orchestrator/priority-orders-components
 - model/requirement-needs
 
+#### Untested
+That a build works through its component highest priority first is a session's conduct.
+
 ### Constraint: path-ownership
-**Principle.** Every code file SHALL have one owning component, and a build SHALL change only its own component's files; a change that another component must follow is built in steps, each by its owner's build (`expand-contract`). The exceptions, for shared wiring and for a capability test that follows its rule, are in `path-ownership-by-prompt` and the guide.
+**Principle.** Every code file SHALL have one owning component, and a build SHALL change only its own component's files; a change that another component must follow is built in steps, each by its owner's build (`expand-contract`). The exceptions, for shared wiring and for a capability test that follows its rule, are in the guide (`clm guide how-it-works`).
 
 #### Scenario: removal another component still uses
 - GIVEN a build of `a` whose requirement removes a Contract function that component `b`'s code still calls, and no requirement of `b` that moves it off
@@ -246,12 +249,8 @@ A writing discipline; `clm apply` deletes what a change removes.
 #### Carries
 - method
 
-#### Enforced by
-- check/paths-disjoint
-- check/tests-cite-their-owner
-
 #### Untested
-Which files a component owns is checked. That a build stays in them is not yet: no gate or land check refuses a file outside them, so the build's instructions keep it there and its review reads the diff.
+Which files a component owns is checked (`check/paths-disjoint`, `check/tests-cite-their-owner`). That a build stays in them is not yet: no gate or land check refuses a file outside them, so the build's instructions keep it there and its review reads the diff.
 
 ### Constraint: incremental-adoption
 **Checked.** Once the root spec sets `outside`, every tracked code file SHALL be owned by a component or declared `outside`, so an existing codebase is adopted a part at a time and nothing is unowned by accident.
@@ -287,7 +286,7 @@ Which files a component owns is checked. That a build stays in them is not yet: 
 - check.health/exemptions-signal
 
 ### Constraint: approval-policy
-**Checked.** Only a human SHALL approve a change that needs review, through the command the agent harness's guard makes them confirm, or from their own terminal; the conversation alone never counts. An approval counts only for the diff it was given for (`approve-pins-the-review`), under the `approval` setting committed on `main`, never the branch's (`land-policy-from-base`).
+**Checked.** Only a human SHALL approve a change that needs review, through the command the agent harness's guard makes them confirm, or from their own terminal; the conversation alone never counts. An approval counts only for the diff it was given for (`approve-pins-the-review`), under the `approval` setting committed on `main` or set in the clone's own `clm.local.toml`, never the branch's (`land-policy-from-base`).
 
 #### Scenario: session tries to approve
 - GIVEN a session that runs `clm approve` on a branch
@@ -409,11 +408,8 @@ An agent with no adapter runs no guard: nothing stops its push to `main` but the
 #### Guarantee
 Every land leaves `main` green while the components that use a contract haven't moved off it yet: CLM builds one component at a time and never stacks branches, so no change lands everywhere at once.
 
-#### Enforced by
-- check/remove-by-markers
-
 #### Untested
-Whether a contract change breaks a user, and so needs steps, is a judgement; the markers it leaves are checked.
+Whether a contract change breaks a user, and so needs steps, is a judgement; only the markers it leaves are checked (`check/remove-by-markers`).
 
 ### Constraint: no-dead-code
 **Checked.** Code SHALL exist only to serve a current requirement: a change that removes behaviour removes its code, tests and dependencies, at once or in a later change a `clm:remove-by <change-id>` marker names, and the detectors the project names in `clm.toml` find what is left.
@@ -437,7 +433,7 @@ All code serves a current requirement, and a program the project names in `clm.t
 - ci/detector-tools
 
 ### Constraint: slim-components
-**Checked.** A component SHALL stay small enough for one build session to hold its spec and its code, measured against its size budget (`node-size-budgets`). One over budget is shown as oversized and blocks nothing. Splitting is the AI's business and needs no human, along architectural seams and never to satisfy a number.
+**Principle.** A component SHALL stay small enough for one build session to hold its spec and its code, measured against its size budget (`node-size-budgets`). Splitting is the AI's business and needs no human, along architectural seams and never to satisfy a number.
 
 #### Scenario: component over budget
 - GIVEN a component over its size budget
@@ -450,13 +446,8 @@ All code serves a current requirement, and a program the project names in `clm.t
 #### Guarantee
 One build session can hold a component's spec and its code: a build sees only its component's bundle and the code it owns.
 
-#### Enforced by
-- check/node-size
-- model/size-budget
-- view/status-report
-
 #### Untested
-Where a component's seams lie is a judgement.
+Each component's size is measured against its budget and one over it is shown as oversized (`check/node-size`), but nothing refuses it; where its seams lie is a judgement.
 
 ### Constraint: tests-run-concurrently
 **Principle.** A project's tests, and the check command that runs them, SHALL pass while other runs of them overlap on the same host: none binds a fixed port, writes a fixed path outside its checkout and the system's temporary directory, or relies on a server or database another run shares. What a run must know in advance is keyed on `CLM_SLOT`, the number CLM gives each build (`build-slots`).
@@ -464,7 +455,7 @@ Where a component's seams lie is a judgement.
 #### Scenario: a preview server
 - GIVEN a project whose check starts a preview server for its browser tests, and two builds of it on one clone
 - WHEN both run their tests at once
-- THEN each server listens on a port derived from its own `CLM_SLOT`, and both runs pass
+- THEN each server listens on a port derived from its own `CLM_SLOT`, or one the system chose, and both runs pass
 
 #### Carries
 - replaceable
@@ -472,12 +463,8 @@ Where a component's seams lie is a judgement.
 #### Guarantee
 Two runs of the project's tests on one host, from different build places of a clone, never fail each other through a resource the host holds, so CLM can build in parallel without serialising the tests its builds run.
 
-#### Enforced by
-- orchestrator/place-slots
-- land/check-slot
-
 #### Untested
-CLM gives each build its slot, but can't see whether a project's tests share a host resource: a collision shows as a test that fails beside another build and passes alone.
+CLM gives each build its slot (`orchestrator/place-slots`, `land/check-slot`), but can't see whether a project's tests share a host resource: a collision shows as a test that fails beside another build and passes alone.
 
 ### Constraint: tests-run-in-their-own-tree
 **Principle.** A build's tests SHALL run against the code and the dependencies of the tree it builds in, never another checkout's. The project declares in `[build] setup` the command that makes a fresh worktree ready, and every session runs it with `clm setup` before its first test there (`build-setup-step`).
@@ -493,13 +480,8 @@ CLM gives each build its slot, but can't see whether a project's tests share a h
 #### Guarantee
 A build's red and green test runs exercise the branch's own code with the dependencies its own tree declares, so a test-first build's result means what it says, and what a build saw pass is what its land checks.
 
-#### Enforced by
-- config/build-setup-setting
-- orchestrator.run/setup-command
-- init/init-build-setup
-
 #### Untested
-No program sees a session's test runs, so that it runs `clm setup` first rests on its instructions; whether the project's command installs everything its tests need is the project's to get right.
+`clm setup` runs the project's command (`orchestrator.run/setup-command`), but no program sees a session's test runs, so that it runs `clm setup` first rests on its instructions; whether the project's command installs everything its tests need is the project's to get right.
 
 ### Constraint: land-checks-stay-fast
 **Principle.** A project's `[land] check` SHALL run the tests `CLM_SELECTION` names, and those tests SHALL be fast, deterministic and able to overlap; every file a test reads SHALL be one the spec graph connects it to, or one a `clm:reads` marker in it names (`graph-test-selection`). A test that is slow, flaky or exclusive belongs in `[verify]`, after the land (`verify-after-land`).
@@ -515,13 +497,8 @@ No program sees a session's test runs, so that it runs `clm setup` first rests o
 #### Guarantee
 A test that the spec graph doesn't connect to a change gives the same result with and without it, so CLM can land a branch on a `main` that moved without re-running the tests the two can't both affect, and slow or exclusive tests never hold a land.
 
-#### Enforced by
-- land/overlap-recheck
-- land/check-time-report
-- verify/culprit-recheck
-
 #### Untested
-CLM can't see before the fact whether a test is deterministic or reads only what the graph connects it to; a breach shows after the land, where `[verify]` finds it and names the land.
+CLM can't see before the fact whether a test is deterministic or reads only what the graph connects it to; a breach shows after the land, where `[verify]` finds it and names the land (`verify/culprit-recheck`).
 
 ### Constraint: upgrades-carry-migrations
 **Checked.** A change that alters a file, key or format that projects set up by a published release already hold SHALL ship the migration that brings those projects up to date, and a migration a release has shipped SHALL never change.
@@ -546,15 +523,11 @@ A change in what an existing file means, with no change in what `clm init` write
 - WHEN it is landed
 - THEN the running `clm` fails it, and the relaxation must land first
 
-#### Enforced by
-- config/invalid-settings
-- sync/judged-by-check
-
 #### Untested
-An order in which changes land, which no program sees; a key the running `clm` doesn't know is refused.
+An order in which changes land, which no program sees; a key the running `clm` doesn't know is refused (`config/invalid-settings`).
 
 ### Constraint: pin-working-method
-**Checked.** Every build SHALL follow the same pinned version of the AI's working method, superpowers, whatever the session has installed.
+**Checked.** CLM SHALL give every build the same pinned version of the AI's working method, superpowers, whatever the session has installed.
 
 #### Scenario: pinned method
 - GIVEN the pinned superpowers version
@@ -617,7 +590,7 @@ Small and significant are judgements made during a change.
 A judgement made in design and review.
 
 ### Constraint: yagni
-**Principle.** The project SHALL build what a capability needs now, not what it might need later: no option, adapter, setting or extension point without a capability asking for it.
+**Principle.** The project SHALL build what a capability needs now, not what it might need later: no option, adapter, setting or extension point without a capability asking for it. Adding complexity needs a reason.
 
 #### Scenario: speculative setting
 - GIVEN a proposal adding a setting no capability uses
@@ -645,7 +618,7 @@ A judgement made in design and review.
 Whether a standard answer is clear is a judgement.
 
 ### Constraint: right-over-convenient
-**Principle.** A session that recommends or chooses a design SHALL first read the code and specs involved, and recommend the design that is correct and maintainable over the long term, saying why it beats the convenient one; a cheaper option only with the reason it is also the right one.
+**Principle.** A session that recommends or chooses a design SHALL first read the code and specs involved, and recommend the design that is correct and maintainable over the long term, weighing the obvious fix as one option and saying why its choice beats the convenient one. A cheaper option is recommended only with the reason it is also the right one, which being minimal or standard is not alone.
 
 #### Scenario: item proposes its own fix
 - GIVEN a backlog item whose text proposes a fix
@@ -689,7 +662,6 @@ Keeping a capability against its cost is a decision people make.
 - model/carried-constraints
 - context/bundle-carries-constraints
 - init/guide-constraints-page
-- init/architecture-template-proof
 
 #### Untested
 Whether a replacement keeps the guarantee it replaces is a judgement, which the auditor advises on and the human's approval decides.
@@ -702,15 +674,8 @@ Whether a replacement keeps the guarantee it replaces is a judgement, which the 
 - WHEN they run `clm guide spec-format`
 - THEN the page prints, matching the installed version
 
-#### Enforced by
-- init/guide-command
-- init/guide-table-from-files
-- init/guide-links-inside
-- init/claude-md-points-at-guide
-- init/guide-constraints-page
-
 #### Untested
-That no working rule is written only in this repository is a judgement about prose; that the guide ships in the binary is checked.
+That no working rule is written only in this repository is a judgement about prose; that the guide ships in the binary is checked (`init/guide-command`).
 
 ### Constraint: plain-terms
 **Checked.** CLM's names SHALL read right to a seasoned software engineer and to a newcomer alike: a term keeps its usual meaning, a term CLM coins says plainly what it names, every term is defined in the guide's glossary, and a term CLM has renamed doesn't come back (`plain-terms-renames`).
@@ -728,7 +693,7 @@ That no working rule is written only in this repository is a judgement about pro
 Whether a name reads right is a judgement, made when the name is proposed and reviewed.
 
 ### Constraint: platform
-**Principle.** CLM SHALL be built on git and the supported agent harnesses: Claude Code and Codex through an adapter each, and any other agent that reads `AGENTS.md` and runs shell commands with none. A git host is optional: it holds the remote and a pull request per branch, and may run a project's tests after a land (`verify-after-land`), but never decides one. Adding or dropping a supported agent harness needs review.
+**Principle.** CLM SHALL be built on git and the supported agent harnesses, which only a reviewed change adds or drops: Claude Code and Codex through an adapter each, and any other agent that reads `AGENTS.md` and runs shell commands with none. A git host is optional: it holds the remote and a pull request per branch, and may run a project's tests after a land (`verify-after-land`), but never decides one.
 
 #### Scenario: two agent harnesses, one change
 - GIVEN a spec branch proposed from a Claude Code session
