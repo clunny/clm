@@ -580,7 +580,7 @@ fn scenario_builder_check_order_draft_prompt() {
 
 #[test]
 fn scenario_draft_contract_step_deferred_prompt() {
-    // req:orchestrator.triage/draft-contract-step-deferred@4b4f6ae2
+    // req:orchestrator.triage/draft-contract-step-deferred@ab89b550
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     let check = paragraph(&p, "Then the builder check");
@@ -589,7 +589,9 @@ fn scenario_draft_contract_step_deferred_prompt() {
         "rename-adds-then-removes",
         "exhaustive",
         "widens",
-        "forced-fixes-cover-additions",
+        "coupled-changes-sequence",
+        "default arm",
+        "struct literal",
         "clm:remove-by",
         "contract-step-deferred",
         "optional",

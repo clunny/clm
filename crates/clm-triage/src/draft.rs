@@ -663,12 +663,14 @@ fn prompt_for(
          name `clm:remove-by` the change, which stays live until the removal is built \
          (`expand-contract`). The builder check searches each user's code for exhaustive uses \
          (a `match`, a `switch` with no default, a map keyed by the type) the adding one must \
-         not break. A requirement that widens a type another component matches exhaustively \
-         (an added enum variant) needs that component's requirements that build and name the \
-         code the new value selects there, which need nothing of the widening and are tested \
-         by calling that code directly, so the widening's build adds the arm as a forced fix; \
-         that component's requirements that reach the code through the new value need the \
-         widening (`forced-fixes-cover-additions`). The builder check searches each user's code \
+         not break. No build edits another component's code or tests to follow a change \
+         (`path-ownership`), so a requirement that widens a type another component matches \
+         exhaustively (an added enum variant) needs that component's requirement that first \
+         handles a value it doesn't know with a default arm marked `clm:remove-by` the change; \
+         that component's requirement that handles the new value, removing the arm, needs the \
+         widening, and a requirement that adds a field another component builds by struct \
+         literal needs that component's requirement that builds it so the field leaves it \
+         compiling (`coupled-changes-sequence`). The builder check searches each user's code \
          for exhaustive uses of a type the change widens too. When the removal can't carry that `#### Needs` (the \
          removing component is required and the component that must move is optional, or the removed \
          text is a whole requirement under `REMOVED Requirements`), put the contract step in \
