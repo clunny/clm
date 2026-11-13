@@ -30,7 +30,7 @@ Every request the app makes to load data again after the Worker answered one of 
 
 ## ADDED Requirements
 ### Requirement: answer-from-app
-The app SHALL give Home and a backlog item's page the answer buttons' `Answering` (`web.views/answer-buttons`): the implementation state's `answers`, none until it arrives, whether the app is offline, and an `onAnswer` that runs as a write (**Loading and refresh**), so no refresh runs during it. `onAnswer` SHALL post `{"answer": <answer>}` to `POST /api/repos/<o>/<r>/backlog/<slug>/answer`; on 200 it SHALL ask for the implementation state again (`fresh-after-write`) and redraw the view on screen from it, keeping its scroll; on 422 it SHALL say the answer was refused, on 404 that the item is no longer in the backlog, on any other status that the answer wasn't recorded, with the status, and when the request isn't sent that it is offline, each as text under the buttons, asking for nothing again; a 401 shows the sign-in page, as for the app's other writes. Its build adds the test of `capability/follow-from-browser`'s scenario **answer on a phone** to `capabilities/web/` (`capability-tests-follow-rules`).
+The app SHALL give Home and a backlog item's page the answer buttons' `Answering` (`web.views/answer-buttons`): the implementation state's `answers`, none until it arrives, whether the app is offline, and an `onAnswer` that runs as a write (**Loading and refresh**), so no refresh runs during it. `onAnswer` SHALL post `{"answer": <answer>}` to `POST /api/repos/<o>/<r>/backlog/<slug>/answer`; on 200 it SHALL ask for the implementation state again (`fresh-after-write`) and redraw the view on screen from it, keeping its scroll; on 422 it SHALL say the answer was refused, on 404 that the item is no longer in the backlog, on any other status that the answer wasn't recorded, with the status, and when the request isn't sent that it is offline, each as text under the buttons, asking for nothing again; a 401 shows the sign-in page, as for the app's other writes.
 
 #### Scenario: answered on the item's page
 - GIVEN repo `o/a` whose backlog holds question `q` with choices `yes` and `no`, and a Worker that answers the answer with 200 and then the implementation state with the answer `yes` by `alice/web`, `mine` true
@@ -58,4 +58,6 @@ The app SHALL give Home and a backlog item's page the answer buttons' `Answering
 
 #### Needs
 - web.views/answer-buttons
+- web.views/home-waiting-on-you
+- web.views/backlog-item-page
 - web.worker/answers

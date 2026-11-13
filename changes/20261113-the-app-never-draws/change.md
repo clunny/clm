@@ -19,10 +19,11 @@ Wire the answer buttons into the running app: `web` builds the callback that pos
 
 ## Outcome
 
-- `web/answer-from-app`: Home and a backlog item's page get `{answers: impl.answers ?? [], offline: offline(), onAnswer}`. `onAnswer` posts `{"answer": ...}` through `whileWriting`; on 200 it reloads the implementation state with `fresh` and redraws; 422, 404, other statuses and a failed send each give a message under the buttons. Its build adds the capability test of **answer on a phone**.
+- `web/answer-from-app`: Home and a backlog item's page get `{answers: impl.answers ?? [], offline: offline(), onAnswer}`. `onAnswer` posts `{"answer": ...}` through `whileWriting`; on 200 it reloads the implementation state with `fresh` and redraws; 422, 404, other statuses and a failed send each give a message under the buttons. `capability`'s own build, which the queue orders after `answer-from-app` and `home-first` (`serving-rules-order-capabilities`), then adds the test of **answer on a phone**; the architecture audit found that a `web` build writing it would break `path-ownership`.
 - `web/fresh-after-write`: lists an answer among the writes (a wording change; the scenarios are unchanged, so its build re-cites its tests).
 
 ## Constraints
 
 - Home is drawn only once `web/home-first` is built (pending, unbuilt); `answer-from-app` relies on it for its Home scenario, in the same component, and is best built with it or after it.
+- Build order (builder check): `answer-from-app` relies on `web/home-first`, pending in its own component, so it carries `home-first`'s needs (`web.views/home-waiting-on-you`, `web.views/backlog-item-page`); `fresh-after-write` relies on none. `clm triage` already prints answers (`orchestrator.triage/triage-web-answers` is current), so `capability`'s test of **answer on a phone** needs only the harness's fake GitHub to take the answer's Git Data writes, as it does an approval's.
 - Edge cases and workarounds known: none.
