@@ -439,6 +439,17 @@ fn an_unmarked_file_counts_for_its_owner() {
 }
 
 #[test]
+fn a_file_only_tests_match_counts_for_its_owner() {
+    // req:check/node-size@a70a5200
+    let dir = repo("tests: [\"t/**\"]\n", &[("t/x.rs", &[b'x'; 400])]);
+    assert!(
+        line(dir.path(), "a").contains("\tcode 100/1000"),
+        "{}",
+        line(dir.path(), "a")
+    );
+}
+
+#[test]
 fn markdown_counts_by_paths() {
     // req:check/node-size@a70a5200
     let doc = sized(CITES_B, 400);
