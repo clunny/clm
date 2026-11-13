@@ -1,7 +1,7 @@
-// req:web/graph-view@7bdf4eb6 (the inspector a selected node opens)
+// req:web.views/graph-view@7bdf4eb6 (the inspector a selected node opens)
 import { describe, expect, it } from 'vitest';
 import { renderInspector } from './inspector';
-import { flight, implementation, review, snapshot } from '../test/fixtures';
+import { flight, implementation, review, snapshot } from './fixtures';
 
 describe('node inspector', () => {
   it('shows the contract, dependencies, changes, work in flight and backlog of a node', () => {
@@ -43,7 +43,7 @@ describe('node inspector', () => {
   });
 });
 
-// req:web/inspector-pending@bfc459c7
+// req:web.views/inspector-pending@bfc459c7
 describe('work in flight', () => {
   const reqs = (insp: HTMLElement) => [...insp.querySelectorAll<HTMLElement>('.work .rq')].map((r) => r.textContent);
 

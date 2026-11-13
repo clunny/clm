@@ -1,13 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { renderInspector } from './inspector';
-import { snapshot } from '../test/fixtures';
+import { snapshot } from './fixtures';
 
 const SRC = `${process.cwd()}/src/`;
 const files = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(`${dir}${e.name}/`) : [`${dir}${e.name}`]));
 
-// req:web/says-new-state-words@1dbae2a0
+// req:web.views/says-new-state-words@1dbae2a0
 describe('says the new state words', () => {
   it('an unbuilt component: the inspector names the status the model gives', () => {
     const insp = renderInspector(snapshot(), null, [], 'b');
@@ -35,7 +35,7 @@ describe('says the new state words', () => {
   });
 
   it('the Flag type is documented as a workaround flag open on a capability', () => {
-    expect(readFileSync(`${SRC}types.ts`, 'utf8')).toContain('/** A workaround flag open on a capability. */');
+    expect(readFileSync(`${SRC}views/types.ts`, 'utf8')).toContain('/** A workaround flag open on a capability. */');
   });
 
   it('the app maps no word to unbuilt: a status shows as given', () => {

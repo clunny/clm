@@ -1,7 +1,7 @@
 // What the app says when a request for a repo's view fails (web/honest-errors): never more
 // than it knows.
 
-import { HttpError } from './api';
+import { HttpError } from './views/api';
 
 /** The seconds between asks after a failure: 5, 10, 20, then every 60. */
 const BACKOFF_S = [5, 10, 20, 60];

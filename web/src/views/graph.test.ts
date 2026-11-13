@@ -1,7 +1,7 @@
-// req:web/graph-view@7bdf4eb6
+// req:web.views/graph-view@7bdf4eb6
 import { describe, expect, it } from 'vitest';
 import { layoutGraph, queueStates, renderGraph, ringGraph } from './graph';
-import { flight, implementation, nestedSnapshot, node, snapshot, spec } from '../test/fixtures';
+import { flight, implementation, nestedSnapshot, node, snapshot, spec } from './fixtures';
 import type { FlightNode, RequirementView } from './types';
 
 const req = (id: string, state: string): RequirementView => ({ id, text: `${id}.`, version: '00000000', state, markers: state === 'unbuilt' ? [] : ['t.rs:1'] });
@@ -204,7 +204,7 @@ describe('graph view', () => {
   });
 
   it('no waiting state: the graph rings `waiting` as any state it does not know', async () => {
-    // req:web/queue-states@340afeed
+    // req:web.views/queue-states@340afeed
     const nodes = [node('root', { parent: null }), node('w'), node('x')];
     const snap = snapshot({ nodes, spec: spec(nodes), changes: [], backlog: [] });
     const states = queueStates(queued([pending('w', 'waiting'), pending('x', 'parked')]));
@@ -258,7 +258,7 @@ describe('graph view', () => {
   });
 });
 
-// req:web/oversized-component@550a1fc1
+// req:web.views/oversized-component@550a1fc1
 describe('oversized nodes', () => {
   /** `a` oversized, `b` not, `c` with no size report. */
   const sized = () => {
@@ -294,7 +294,7 @@ describe('oversized nodes', () => {
   });
 });
 
-// req:web/zoom-at-pointer@7f4f9eca
+// req:web.views/zoom-at-pointer@7f4f9eca
 describe('zoom at the pointer', () => {
   /** A graph with a known view, whose canvas sits at (100, 50) and is 800 x 600. */
   async function zoomable() {

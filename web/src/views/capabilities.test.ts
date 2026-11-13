@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { decide, renderCapabilities, renderCapability } from './capabilities';
 import type { ListOptions, PageOptions } from './capabilities';
-import { capabilities } from '../test/fixtures';
+import { capabilities } from './fixtures';
 import { SignedOut } from './api';
 
 const list = (o: Partial<ListOptions> = {}): ListOptions => ({ flaggedOnly: false, onFilter: vi.fn(), link: (s) => `#/o/a/capabilities/${s}`, ...o });
@@ -9,7 +9,7 @@ const page = (o: Partial<PageOptions> = {}): PageOptions => ({ offline: false, b
 const slugs = (e: HTMLElement, sel: string) => [...e.querySelectorAll<HTMLElement>(sel)].map((r) => r.dataset.slug);
 const decideButtons = (e: HTMLElement) => [...e.querySelectorAll<HTMLButtonElement>('button.decide')];
 
-// req:web/capabilities-list@fde4e68b
+// req:web.views/capabilities-list@fde4e68b
 describe('capabilities list', () => {
   it('list ranked and flagged: the report order, as a table and as cards, only a marked ⚑', () => {
     const view = renderCapabilities(capabilities(), list());
@@ -84,7 +84,7 @@ describe('capability page', () => {
   });
 });
 
-// req:web/decide-buttons@c1039d9e
+// req:web.views/decide-buttons@c1039d9e
 describe('decide', () => {
   it('decide one request per tap: a second tap while the first is in flight sends nothing', () => {
     const o = page();

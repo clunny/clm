@@ -1,7 +1,7 @@
 // Fixture responses for the unit and browser tests. Illustrative data, built here rather
 // than read from the repository's specs (tests don't read doc-only paths).
 
-import type { Architecture, BlockersView, BranchReview, Capabilities, Constraint, Cost, FlightView, Implementation, NodeView, Snapshot, SpecBranch, SpecNode, SpecView } from '../src/types';
+import type { Architecture, BlockersView, BranchReview, Capabilities, Constraint, Cost, FlightView, Implementation, NodeView, Snapshot, SpecBranch, SpecNode, SpecView } from './types';
 
 export function node(id: string, over: Partial<NodeView> = {}): NodeView {
   return {

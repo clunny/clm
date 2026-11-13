@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderArchitecture, renderConstraint } from './architecture';
 import { decide } from './capabilities';
 import type { ListOptions, PageOptions } from './capabilities';
-import { architecture, constraint } from '../test/fixtures';
+import { architecture, constraint } from './fixtures';
 
 const list = (o: Partial<ListOptions> = {}): ListOptions => ({ flaggedOnly: false, onFilter: vi.fn(), link: (s) => `#/o/a/architecture/${s}`, ...o });
 const page = (o: Partial<PageOptions> = {}): PageOptions => ({ offline: false, busy: false, value: 'medium', onValue: vi.fn(), onDecide: vi.fn(), back: '#/o/a/architecture', note: null, ...o });
@@ -10,7 +10,7 @@ const slugs = (e: HTMLElement, sel: string) => [...e.querySelectorAll<HTMLElemen
 const decideButtons = (e: HTMLElement) => [...e.querySelectorAll<HTMLButtonElement>('button.decide')];
 const proof = (e: HTMLElement, slug: string) => e.querySelector<HTMLElement>(`tr.cap[data-slug=${slug}] .proof`)!;
 
-// req:web/architecture-list@d644a9d4
+// req:web.views/architecture-list@d644a9d4
 describe('architecture list', () => {
   it('ranked, held and flagged: the report order, as a table and as cards, held 1/2 in amber, untested alone', () => {
     const view = renderArchitecture(architecture(), list());
@@ -117,7 +117,7 @@ describe('architecture page', () => {
   });
 });
 
-// req:web/architecture-decide-buttons@41e20cf5
+// req:web.views/architecture-decide-buttons@41e20cf5
 describe('architecture decide', () => {
   it('one request per tap: a second tap while the first is in flight sends nothing', () => {
     const o = page();

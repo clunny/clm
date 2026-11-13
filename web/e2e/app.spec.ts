@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { APPROVE, ARCHITECTURE, ARCH_DECIDE, CAPABILITIES, COMMENTS, DECIDE, PROPOSALS, REQUEST, REVIEW, mockApi, reviewOfB } from './mock';
-import { architecture, capabilities, cost, implementation, review, snapshot } from '../test/fixtures';
+import { architecture, capabilities, cost, implementation, review, snapshot } from '../src/views/fixtures';
 
 // req:web/mobile-layout@b86f52c6
 test.describe('phone', () => {
@@ -131,7 +131,7 @@ test.describe('phone', () => {
   });
 });
 
-// req:web/capabilities-list@fde4e68b
+// req:web.views/capabilities-list@fde4e68b
 test('capabilities from 900 px: a table in the report order, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
   await mockApi(context);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -147,7 +147,7 @@ test('capabilities from 900 px: a table in the report order, ⚑ only filters, a
   await expect(page.locator('.sidebar .nv[data-view=capabilities]')).toHaveClass(/on/);
 });
 
-// req:web/architecture-list@d644a9d4
+// req:web.views/architecture-list@d644a9d4
 test.describe('architecture list', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -200,7 +200,7 @@ test.describe('architecture list', () => {
   });
 });
 
-// req:web/architecture-decide-buttons@41e20cf5
+// req:web.views/architecture-decide-buttons@41e20cf5
 test.describe('deciding an architectural constraint', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -250,7 +250,7 @@ test.describe('deciding an architectural constraint', () => {
   });
 });
 
-// req:web/decide-buttons@c1039d9e
+// req:web.views/decide-buttons@c1039d9e
 test.describe('deciding a capability', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -356,7 +356,7 @@ test('wide screens get the sidebar and no tab bar', async ({ page, context }) =>
   await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
 });
 
-// req:web/full-document@fcfa5b34
+// req:web.views/full-document@fcfa5b34
 test('opening a file in full scrolls to its first change, and j steps to the next', async ({ page, context }) => {
   const requirements = Array.from({ length: 40 }, (_, i) => `### Requirement: r${i}\nIt SHALL do ${i}.`).join('\n\n');
   const before = `# N\n\n### Design\n\nThe design.\n\n### Requirements\n\n${requirements}\n`;
@@ -374,7 +374,7 @@ test('opening a file in full scrolls to its first change, and j steps to the nex
   await expect(page.locator('.chg.focus')).toBeInViewport();
 });
 
-// req:web/graph-view@7bdf4eb6
+// req:web.views/graph-view@7bdf4eb6
 test.describe('graph', () => {
   test('queue states: once the implementation state arrives, b is ringed amber and named claimed, a rose and blocked', async ({ page, context }) => {
     await mockApi(context);
@@ -451,7 +451,7 @@ test.describe('graph', () => {
   });
 });
 
-// req:web/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@a7d7ac89
 test.describe('spec branches', () => {
   test("branch without a page: both listed, and spec/d's review loads from its branch route with no page link", async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -531,7 +531,7 @@ test.describe('Approve by branch', () => {
   });
 });
 
-// req:web/signed-approvals@9bdf6473
+// req:web.views/signed-approvals@9bdf6473
 test.describe('signed repositories', () => {
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -561,7 +561,7 @@ test.describe('signed repositories', () => {
   });
 });
 
-// req:web/approve-button@ff59f9d1
+// req:web.views/approve-button@ff59f9d1
 test('one request, then approved: two quick taps send one approve, and the button reads Approved, disabled', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.hold(APPROVE);
@@ -575,7 +575,7 @@ test('one request, then approved: two quick taps send one approve, and the butto
   expect(mock.posts).toHaveLength(1);
 });
 
-// req:web/backlog-taken@7225a6a8
+// req:web.views/backlog-taken@7225a6a8
 test('the backlog is drawn before the implementation state, and takes its marks when it arrives', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.routes['GET /api/repos/o/a/implementation'] = implementation({ taken: { changes: [{ id: 'x', state: 'main', items: ['crash'], nodes: ['a'] }], claims: [{ item: 'later', nodes: [] }] } });
@@ -589,7 +589,7 @@ test('the backlog is drawn before the implementation state, and takes its marks 
   await expect(page.locator('.bi[data-slug=setup] .taken')).toHaveCount(0);
 });
 
-// req:web/oversized-component@550a1fc1
+// req:web.views/oversized-component@550a1fc1
 test("an oversized node's card is outlined amber, unless a queue ring colours it", async ({ page, context }) => {
   const snap = snapshot();
   snap.spec.nodes = snap.spec.nodes.map((n) => (n.parent ? { ...n, oversized: true } : n));
@@ -760,7 +760,7 @@ test.describe('PWA', () => {
   });
 });
 
-// req:web/comment-on-review@1279617c
+// req:web.views/comment-on-review@1279617c
 test.describe('comments', () => {
   test('comment on a requirement: one post of the fingerprint, target and text, the review asked again, and the card shows the comment by alice', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -790,7 +790,7 @@ test.describe('comments', () => {
   });
 });
 
-// req:web/request-changes@8ce19ec8
+// req:web.views/request-changes@8ce19ec8
 test.describe('Request changes', () => {
   const requested = { id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true };
 

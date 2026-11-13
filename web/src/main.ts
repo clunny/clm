@@ -6,23 +6,23 @@
 // the page is visible (web/live-refresh).
 
 import './styles.css';
-import { Fetched, HttpError, SignedOut, apiBase, get, post, send } from './api';
-import { Proposing, renderBacklog, waiting } from './backlog';
-import { renderArchitecture, renderConstraint } from './architecture';
-import { Layer, ListOptions, Note, PageOptions, decide, renderCapabilities, renderCapability } from './capabilities';
-import { chip, div, el } from './dom';
+import { Fetched, HttpError, SignedOut, apiBase, get, post, send } from './views/api';
+import { Proposing, renderBacklog, waiting } from './views/backlog';
+import { renderArchitecture, renderConstraint } from './views/architecture';
+import { Layer, ListOptions, Note, PageOptions, decide, renderCapabilities, renderCapability } from './views/capabilities';
+import { chip, div, el } from './views/dom';
 import { PREPARING_MS, STALE_MS, classify, failureText, retryDelay } from './errors';
 import { fitGraphs } from './fit';
-import { FullDocument, FullState, renderFullDocument } from './full-document';
-import { Viewport, layoutGraph, queueStates, renderGraph, ringGraph } from './graph';
-import { Switch, renderImplementation } from './implementation';
-import { renderInspector } from './inspector';
+import { FullDocument, FullState, renderFullDocument } from './views/full-document';
+import { Viewport, layoutGraph, queueStates, renderGraph, ringGraph } from './views/graph';
+import { Switch, renderImplementation } from './views/implementation';
+import { renderInspector } from './views/inspector';
 import { LiveSocket } from './live/live';
 import { Notify } from './live/notify';
-import { renderPrList, renderReview } from './pr';
-import { Route, Target, View, href, parseRoute, reviewHref, reviewPath } from './route';
-import { ago } from './time';
-import type { Architecture, Capabilities, DecisionKind, Implementation, Rating, Repo, Review, Snapshot, SpecBranch } from './types';
+import { renderPrList, renderReview } from './views/pr';
+import { Route, Target, View, href, parseRoute, reviewHref, reviewPath } from './views/route';
+import { ago } from './views/time';
+import type { Architecture, Capabilities, DecisionKind, Implementation, Rating, Repo, Review, Snapshot, SpecBranch } from './views/types';
 
 const INSTALL = 'https://github.com/apps/clm-spec-review/installations/new';
 /** Where the sign-in page sends a person who wants the web app (the one place the app names it). */

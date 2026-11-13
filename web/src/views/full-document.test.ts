@@ -1,7 +1,7 @@
-// req:web/full-document@fcfa5b34
+// req:web.views/full-document@fcfa5b34
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { blocks, renderFullDocument } from './full-document';
-import { SPEC_AFTER, SPEC_BEFORE } from '../test/fixtures';
+import { SPEC_AFTER, SPEC_BEFORE } from './fixtures';
 
 const doc = { path: 'specs/n/SPEC.md', before: SPEC_BEFORE, after: SPEC_AFTER };
 

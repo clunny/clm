@@ -3,9 +3,9 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { renderImplementation } from './implementation';
-import { NOW, implementation, snapshot } from '../test/fixtures';
+import { NOW, implementation, snapshot } from './fixtures';
 
-const SRC = `${dirname(fileURLToPath(import.meta.url))}/`;
+const SRC = `${dirname(fileURLToPath(import.meta.url))}/../`;
 const files = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(`${dir}${e.name}/`) : [`${dir}${e.name}`]));
 
@@ -71,7 +71,7 @@ function literals(src: string): [number, string][] {
   return out;
 }
 
-// req:web/says-component@88d3bff9
+// req:web.views/says-component@88d3bff9
 describe('says component', () => {
   it('the Implementation view shows Components and Pending components, and no old word', () => {
     const view = renderImplementation(implementation(), snapshot(), { now: NOW, show: 'flight', onShow: () => {} });

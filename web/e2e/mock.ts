@@ -1,8 +1,8 @@
 // The Worker's API, mocked for browser tests.
 
 import type { BrowserContext } from '@playwright/test';
-import { architecture, branches, capabilities, implementation, review, snapshot } from '../test/fixtures';
-import type { Review } from '../src/types';
+import { architecture, branches, capabilities, implementation, review, snapshot } from '../src/views/fixtures';
+import type { Review } from '../src/views/types';
 
 /** `spec/c`'s review and approve routes. */
 export const REVIEW = 'GET /api/repos/o/a/branches/spec/c/review';

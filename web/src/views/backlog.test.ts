@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Proposing, renderBacklog, waiting } from './backlog';
 import { drafts } from './forms';
-import { snapshot } from '../test/fixtures';
+import { snapshot } from './fixtures';
 import type { Proposal, Taken } from './types';
 
 const slugs = (e: HTMLElement) => [...e.querySelectorAll<HTMLElement>('.bi')].map((b) => b.dataset.slug);
@@ -53,7 +53,7 @@ describe('backlog view', () => {
   });
 });
 
-// req:web/backlog-taken@7225a6a8
+// req:web.views/backlog-taken@7225a6a8
 describe('taken marks', () => {
   const snap = () => {
     const s = snapshot();

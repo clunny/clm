@@ -3,7 +3,7 @@
 
 import { Page, WebSocketRoute, expect, test } from '@playwright/test';
 import { APPROVE, REVIEW, mockApi } from './mock';
-import { NOW, flight, implementation, review, snapshot } from '../test/fixtures';
+import { NOW, flight, implementation, review, snapshot } from '../src/views/fixtures';
 
 const SNAPSHOT = 'GET /api/repos/o/a/snapshot';
 const BRANCHES = 'GET /api/repos/o/a/branches';
