@@ -1,5 +1,6 @@
 ---
-status: proposed
+status: applied
+resolves: [reconsider-plugin.panel-build-opens-panel]
 ---
 
 ## Intent
@@ -150,6 +151,11 @@ The pane gains a **Queue** tab, first, drawing `clm view queue --format ansi --a
 - The loop file's format (one `key value` per line as the place files, or JSON), so long as it is written atomically under the places' lock.
 - The wait's interval (the `next-wait` default of 5 minutes is the starting point) and how `clm build wait` sees a stop request at once (a file watch or a short poll).
 - The exact text of each `say` and each line of the queue view, within the sections above.
+
+## Backlog
+
+- The workaround flag on `plugin.panel/build-opens-panel` (sampling timer not started on open) no longer applies: `machine-charts` is built and `openPane` starts the sampling timer, so this change, which rewrites that requirement, deletes the flag and the `reconsider-plugin.panel-build-opens-panel` question that rested on it.
+- `backlog/runner-loop-on-the-stepper` (`kind: deferred`) records moving `clm runner` onto the stepper.
 
 ## Related
 
