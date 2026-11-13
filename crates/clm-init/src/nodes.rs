@@ -115,9 +115,6 @@ fn exemption_globs(node: &Node) -> Result<Vec<String>, String> {
         if until.strip_prefix("backlog/").is_none_or(str::is_empty) {
             return Err(bad("`until` must be `backlog/<slug>`"));
         }
-        if get("why").is_some_and(|w| !w.is_string()) {
-            return Err(bad("`why` must be a string"));
-        }
         if rule == "undeclared-imports" {
             globs.extend(files);
         }

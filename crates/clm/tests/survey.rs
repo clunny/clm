@@ -624,6 +624,32 @@ fn an_exemption_covers_only_its_rule_and_files() {
 }
 
 #[test]
+fn another_components_exemption_exempts_nothing() {
+    // req:init/survey-components@368a5dcd
+    let map = format!(
+        "{}    # harness exempts a file feat owns\n",
+        carved_map("tests: [\"tests/feat/**\"]")
+    )
+    .replace(
+        "{ id: harness, paths: [\"tests/**\"] }",
+        "{ id: harness, paths: [\"tests/**\"], exemptions: [{ rule: undeclared-imports, files: [\"tests/feat/**\"], until: backlog/x }] }",
+    );
+    let out = components(CARVED, &map);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(stdout(&out).contains("survey/undeclared-edge"), "{out:?}");
+}
+
+#[test]
+fn exemptions_that_are_not_a_list_are_refused() {
+    // req:init/survey-components@368a5dcd
+    for value in ["3", "null", "{}"] {
+        let out = components(CARVED, &carved_map(&format!("exemptions: {value}")));
+        assert_eq!(out.status.code(), Some(2), "{value}: {out:?}");
+        assert!(out.stdout.is_empty(), "{value}: {out:?}");
+    }
+}
+
+#[test]
 fn an_exemption_the_model_would_refuse_is_refused() {
     // req:init/survey-components@368a5dcd
     let unparsed = components(CARVED, "components: 3\n");
@@ -638,6 +664,8 @@ fn an_exemption_the_model_would_refuse_is_refused() {
         "{ rule: undeclared-imports, files: \"a\", until: backlog/x }",
         "{ rule: undeclared-imports, files: [\"a\"], until: x }",
         "{ rule: undeclared-imports, files: [\"a\"], until: backlog/x, extra: 1 }",
+        "{ rule: 3, files: [\"a\"], until: backlog/x }",
+        "{ rule: undeclared-imports, files: [\"a\"], until: 5 }",
     ] {
         let map = carved_map(&format!("exemptions: [{exemption}]"));
         let out = components(CARVED, &map);
