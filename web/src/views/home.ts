@@ -1,6 +1,7 @@
 // Home: what waits on the person (web.views/home-waiting-on-you). Sections in order, each
 // left out when empty: Review, Answer, Flagged, Answer in a session.
 
+import { answerButtons, type Answering } from './answers';
 import { div, el } from './dom';
 import type { Architecture, BacklogView, Capabilities, Review, Snapshot } from './types';
 
@@ -15,6 +16,8 @@ export interface HomeInput {
   itemLink: (slug: string) => string;
   capLink: (slug: string) => string;
   archLink: (slug: string) => string;
+  /** What the answer buttons need; without it Answer's entries draw none. */
+  answering?: Answering;
 }
 
 /** Whether the person can answer the item from the app: a `question` with choices, or a `human-task`. */
@@ -35,12 +38,12 @@ function section(name: string, title: string, entries: HTMLElement[], note?: str
   return s;
 }
 
-const entry = (href: string, text: string) => div('hent-row', el('a', { class: 'hent', href }, text));
+const entry = (href: string, text: string, extra?: HTMLElement | '') => div('hent-row', el('a', { class: 'hent', href }, text), extra);
 
 export function renderHome(i: HomeInput): HTMLElement {
   const { snap } = i;
   const review = toReview(i.reviews).map((r) => entry(i.reviewLink(r.branch), r.branch));
-  const answer = snap.backlog.filter(answerable).map((b) => entry(i.itemLink(b.slug), b.title));
+  const answer = snap.backlog.filter(answerable).map((b) => entry(i.itemLink(b.slug), b.title, i.answering ? answerButtons(b, i.answering) : ''));
   const flagged = [
     ...(i.caps?.report.capabilities ?? []).filter((c) => c.flagged).map((c) => entry(i.capLink(c.slug), c.slug)),
     ...(i.arch?.architecture ?? []).filter((c) => c.flagged).map((c) => entry(i.archLink(c.slug), c.slug)),
