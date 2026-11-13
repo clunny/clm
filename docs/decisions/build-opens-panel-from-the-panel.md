@@ -12,5 +12,5 @@ Builds run for a long time in background subagents, and the panel's Flight tab i
 - **The person's layout wins.** An open pane keeps its tab; the hook opens nothing then, and opens again on a later `/clm:build` only once the person has closed it.
 
 Rejected:
-- **The build skill asks the model to run `/clm:view`.** A model can't type a slash command; through the Skill tool the panel's `command.run` hook may not see it, and without the panel the command file would run `clm view queue` in the chat instead.
+- **The build skill asks the model to run `/clm:view`.** A model can't type a slash command; through the Skill tool the panel's `command.run` hook may not see it, and without the panel the command file would run `clm view flight` in the chat instead.
 - **Opening on the first build subagent's spawn.** It would reopen a pane the person closed mid-build, and it isn't tied to the person's ask.
