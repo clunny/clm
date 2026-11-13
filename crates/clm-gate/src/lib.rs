@@ -65,6 +65,7 @@ pub fn is_spec_path(path: &str) -> bool {
 pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Result<Outcome, String> {
     let here = PathBuf::from(format!("{base}..{head}"));
     let mut violations = Vec::new();
+    let build_branch = is_build_branch(repo, head);
 
     // Every read sees the one commit `head` names now, however the name moves meanwhile.
     let head = &clm_git::git(
@@ -238,9 +239,14 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
                 path: here,
                 rule: "gate/classify",
                 message: format!(
-                    "PR mixes spec changes ({}) with code changes ({}); split it into a spec PR and a code PR",
+                    "PR mixes spec changes ({}) with code changes ({}); split it into a spec PR and a code PR{}",
                     spec.join(", "),
-                    code.join(", ")
+                    code.join(", "),
+                    if build_branch {
+                        "; a build edits no spec path: it leaves a requirement that needs a spec edit unbuilt and adds a `question` backlog item whose `blocks` names it"
+                    } else {
+                        ""
+                    }
                 ),
             })
         }
@@ -413,6 +419,19 @@ struct At<'a> {
     repo: &'a Path,
     merge_base: &'a str,
     head: &'a str,
+}
+
+/// Whether `head` is a build branch, `impl/<component>`, as `HEAD` names the checked-out one.
+fn is_build_branch(repo: &Path, head: &str) -> bool {
+    let name = if head == "HEAD" {
+        clm_git::current_branch(repo).ok().flatten()
+    } else {
+        Some(head.to_string())
+    };
+    name.is_some_and(|n| {
+        let n = n.strip_prefix("refs/heads/").unwrap_or(&n);
+        n.strip_prefix("origin/").unwrap_or(n).starts_with("impl/")
+    })
 }
 
 /// `(status, path)` for each file `git diff --name-status --no-renames <range>` lists.

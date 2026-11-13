@@ -53,7 +53,7 @@ fn rules(outcome: &clm_gate::Outcome) -> Vec<&str> {
 
 #[test]
 fn mixed_pr_is_blocked() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     let dir = repo();
     write(
         dir.path(),
@@ -69,8 +69,36 @@ fn mixed_pr_is_blocked() {
 }
 
 #[test]
+fn mixed_build_branch_says_to_leave_it_unbuilt() {
+    // req:gate/classify@17132c50
+    let dir = repo();
+    git(dir.path(), &["checkout", "-q", "-b", "impl/a"]);
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &SPEC.replace("c\n", "changed\n"),
+    );
+    write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
+    commit_all(dir.path(), "both");
+
+    let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
+    assert_eq!(out.kind, Kind::Mixed);
+    let msg = &out.violations[0].message;
+    assert!(
+        msg.contains("leaves a requirement that needs a spec edit unbuilt")
+            && msg.contains("`question`"),
+        "{msg}"
+    );
+
+    // a branch that isn't a build's gets no such advice
+    git(dir.path(), &["checkout", "-q", "-b", "spec/z"]);
+    let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
+    assert!(!out.violations[0].message.contains("question"));
+}
+
+#[test]
 fn code_only_pr_is_code() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     let dir = repo();
     write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
     commit_all(dir.path(), "code");
@@ -82,7 +110,7 @@ fn code_only_pr_is_code() {
 
 #[test]
 fn every_spec_path_counts_as_spec() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     let dir = repo();
     for rel in [
         "specs/b/SPEC.md",
@@ -101,7 +129,7 @@ fn every_spec_path_counts_as_spec() {
 
 #[test]
 fn paths_git_would_quote_are_classified() {
-    // req:gate/classify@2825a73f
+    // req:gate/classify@17132c50
     // `git diff --name-status` quotes non-ASCII paths unless `-z` is used.
     for file in ["docs/naïve.md", "specs/é/SPEC.md"] {
         let dir = repo();
