@@ -401,7 +401,7 @@ describe('drawing', () => {
     const lines = queueLines(CHART, list, 61_000)
     const all = text(lines)
     const heading = all.indexOf('agents')
-    expect(heading).toBeGreaterThan(all.findIndex(l => l.startsWith('    20261025-x')))
+    expect(heading).toBeGreaterThan(all.indexOf('waiting on you'))
     expect(lines[heading]).toEqual([{ text: 'agents', color: 'blue' }])
     expect(all[heading + 1]).toMatch(/● look around/)
     expect(between(all, '  build:git ', '  build:init ').join('\n')).not.toContain('look around')
