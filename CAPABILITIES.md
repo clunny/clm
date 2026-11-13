@@ -260,15 +260,20 @@ Parallel builds can exhaust memory or disk partway through a land check, after t
 - THEN the pane shows `cpu`, `mem` and `disk` rows, each charting the readings taken so far
 
 ### Capability: follow-from-browser
-A person can follow a change's progress and approve it from a browser or a phone.
+A person can follow the project from a browser or a phone: see what waits on them, read any backlog item, capability or architectural constraint in full, and take the steps that need only their yes, choice or done (approve a change, answer a question that lists its answers, mark a human task done), while anything that needs a dialogue with an agent stays in a session.
 
 #### Why
-Approvals shouldn't wait for someone to reach a terminal.
+The human's steps shouldn't wait for someone to reach a terminal, and the ones a tap settles shouldn't need a session.
 
 #### Scenario: approve on a phone
 - GIVEN a change that needs review, in an unsigned repository
 - WHEN an invited reviewer opens its page on their phone and approves it
 - THEN the approval is recorded and `clm land` counts it
+
+#### Scenario: answer on a phone
+- GIVEN a `question` item that lists the choices `yes` and `no`
+- WHEN an invited person opens the app on their phone and taps `yes` on its home page
+- THEN `clm triage` prints the answer under the item's line
 
 ### Capability: know-health
 A person can read one advisory report of the project's health: what's oversized, what was hard to build, and what to reconsider.

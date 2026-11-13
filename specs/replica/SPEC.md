@@ -22,9 +22,9 @@ Crate `clm-replica`: a repository's derived state, kept up to date from the chan
 - `pending_fetch()`: what the replica still needs before its views are complete: tree paths whose text it doesn't hold, in the order to fetch them. The runtime fetches them in slices it can afford and applies each slice as a `Tip` change.
 - `recompute(now) -> Recomputed`: computes every view from the state, at once, and returns the time they next go stale without a change (the next claim's expiry), or none.
 - `view(name)`: the last computed view, with the commit it describes and the time it was computed, or `Preparing { done }` before the first recompute that has the spec files.
-- `validate(write)`: checks a web write against the state, giving the refusal its route answers or the record's fields to append (`validate-writes`).
+- `validate(write)`: checks a web write against the state, giving the refusal its route answers or the record's fields to append (`validate-writes`, `validate-answers`).
 
-The views and their shapes are the ones `web.worker`'s routes answer: `snapshot`, `implementation` (all but the `mine` of each of its `proposals`, which is per requester), `capabilities` and `architecture`. A view's shape changes only with that contract.
+The views and their shapes are the ones `web.worker`'s routes answer: `snapshot`, `implementation` (all but the `mine` of each of its `proposals` and `answers`, which is per requester), `capabilities` and `architecture`. A view's shape changes only with that contract.
 
 ## Design
 The state is plain data: maps from path to text and blob SHA, the marker index, ledger sources by branch, refs, pull requests and at most 100 events. It is serialised with `serde_json` and split into chunks by `save`. The spec files are those `web.worker.platform`'s `files::is_spec_path` and `is_size_path` select. The change archive is kept as `changes/archive/<id>/change.md` only, since nothing but `resolved` reads it.
@@ -276,3 +276,47 @@ The replica's implementation view SHALL carry `proposals`: the open `proposed` r
 
 #### Needs
 - ledger/proposal-records
+
+### Requirement: snapshot-backlog-text
+Each item of the snapshot's `backlog` SHALL carry `body`, the text of the item's file at the tip after its frontmatter with leading and trailing blank lines removed; `priority`, `P1` to `P5`, `P5` when the item sets none; and `choices`, the item's choices (`model/backlog-choices`), empty when it has none.
+
+#### Scenario: an item in full
+- GIVEN a tip with `backlog/q.md` holding `kind: question`, `priority: P2`, `choices: [yes, no]` and the body `Should we?`, and `backlog/i.md`, an `idea` with no priority
+- WHEN the views are recomputed
+- THEN the snapshot's `q` carries `body` `Should we?`, `priority` `P2` and `choices` `yes` and `no`, and `i` carries `priority` `P5` and no choices
+
+#### Serves
+- capability/follow-from-browser
+
+#### Needs
+- model/backlog-choices
+
+### Requirement: open-answers
+The replica's implementation view SHALL carry `answers`: the open answers of its ledger fold (`ledger/answer-records`) whose item its tip's backlog holds, each with `id`, `writer`, `at`, `item` and `answer` and no `mine`, sorted by `at` then `id`.
+
+#### Scenario: answered, then resolved
+- GIVEN a fold holding open answers `a1` naming `q` and `a2` naming `gone`, and a tip whose backlog holds `q` and not `gone`
+- WHEN the views are recomputed
+- THEN `answers` lists `a1` only, with its fields and no `mine`
+
+#### Serves
+- capability/follow-from-browser
+- architecture/per-writer-ledgers
+
+#### Needs
+- ledger/answer-records
+
+### Requirement: validate-answers
+`validate` SHALL refuse an answer naming an item its tip's backlog doesn't hold as `Unknown`, and as `Invalid` an answer to a `question` item that isn't one of its `choices` (so any answer to a question without choices), an answer to a `human-task` item other than `done`, and any answer to an item of another kind.
+
+#### Scenario: what an item offers
+- GIVEN a tip whose backlog holds question `q` with choices `yes` and `no`, question `r` with none, `human-task` `h` and `idea` `i`
+- WHEN answers `yes` to `q`, `maybe` to `q`, `yes` to `r`, `done` to `h`, `yes` to `h`, `done` to `i` and `yes` to `nope` are validated
+- THEN the first and fourth pass, `nope` is refused as `Unknown`, and the rest as `Invalid`
+
+#### Serves
+- capability/follow-from-browser
+- architecture/per-writer-ledgers
+
+#### Needs
+- model/backlog-choices

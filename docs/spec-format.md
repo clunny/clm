@@ -182,12 +182,14 @@ components: [check]            # components it concerns (must exist)
 origin: 20261021-coverage # optional: the change during which it came up
 priority: P3              # optional: P1..P5, default P5 (capped slots, see below)
 blocks: [check/skipped-tests]   # optional: requirements that can't be built until this is resolved
+choices: [yes, no]        # optional, `question` items only: the 2 to 5 answers that settle it, each a short line
 ---
 Enough context to act on later.
 ```
 
 - Any PR, including an AI-only code PR, may **add** backlog items (`fold-small-defer-large`), and may add requirements to an existing item's `blocks`. A code PR may also delete the items listed in `resolves` by a change it archives, or by a change outside the archive, as the build that fixes an item does (`task-deletes-fixed-items`), and a `kind: bug` or `kind: deferred` item naming a component whose `paths` its code changes, named by a commit trailer `Resolves: backlog/<slug>` (`code-fix-resolves-bug`, `deferred-work-resolves-in-code`). Any other edit or deletion is a spec change.
 - An item that says when to delete it names a step its closer can take. A build may delete it only when a change's `resolves` lists it, or when it is `kind: deferred` and the build does its work (`deferred-work-resolves-in-code`); otherwise an item a build should close goes into the `resolves` of the change whose work it waits on, in the spec PR that adds the item or that change. An item no change lists, such as one about a change already archived, is deleted by a spec PR, and its body says so instead of asking a code PR to.
+- **Choices** (`web-answers-as-ledger-records`). A `question` a short answer settles lists the answers it accepts under `choices`, two to five distinct strings of at most 40 characters with no line break, so the web app can offer them as buttons. A tap there is an `answered` record in the person's web ledger, which `clm triage` prints under the item and the `triage` skill takes as the human's answer. A question that needs explaining lists none and is answered in a session; a `human-task` lists none, since the app offers it **Done**.
 - **Blocks** (`requirement-blocks`). `blocks` names the requirements that can't be built until the item is resolved, usually a `question` or `human-task` item a build raised. A blocked requirement stays pending but is left out of its component's work, and a component whose pending requirements are all blocked holds up nothing above it. Deleting the item releases them.
 - An item is promoted by creating a change with `from: backlog/<slug>` in its `change.md`; `clm apply` deletes the item, so it leaves the backlog in the same spec PR (`apply/promoted-item`).
 - `clm backlog` lists the items, highest priority first.

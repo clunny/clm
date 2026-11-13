@@ -739,7 +739,7 @@ In a signed repository the web app SHALL NOT approve: its approve route refuses 
 
 #### Enforced by
 - web.worker.review/signed-repository
-- web/signed-approvals
+- web.views/signed-approvals
 
 ### Constraint: component-reconciliation
 The unit of building SHALL be the component: a build brings a component's code up to its whole current spec, highest priority first, and the queue is derived from committed state, never stored.

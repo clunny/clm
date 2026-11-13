@@ -19,13 +19,14 @@ Record kinds:
 - `unsubscribed`: `subscription` (the `id` of a `subscribed` record). That subscription's end.
 - `proposed`: `slug`, `title`, `body`, and the components at `/nodes`. A backlog item proposed from the web app, which `clm rebase` files as `backlog/<slug>.md` on the next `impl/*` branch (`web-proposals-as-ledger-records`).
 - `withdrawn`: `proposal` (the `id` of a `proposed` record). That proposal's withdrawal by its proposer.
+- `answered`: `item` (a backlog item's slug) and `answer`. A person's answer from the web app to a `question` item that lists it in `choices`, or `done` for a `human-task` item, which `clm triage` prints under the item (`web-answers-as-ledger-records`).
 - `commented`: `branch`, `fingerprint`, `target` (always present: a requirement ID `<component>/<slug>`, or null for the change as a whole), `text`. A reviewer's comment on a spec branch's diff, made in the web app (`web-review-feedback-as-ledger-records`).
 - `changes_requested`: `branch`, `fingerprint`, `text`. A reviewer's request, made in the web app, that the branch change before it lands; `clm land` holds the branch while its fingerprint is the one named (`land`).
 - `effort`: `branch`, `session`, `models` (a map from a model's name to its `input`, `output`, `cache_read` and `cache_write` token counts), `active_seconds`. The work one Claude Code session spent on one branch, as `clm effort record` read it from this machine's transcripts (`effort`). Its `id` is `effort_id(session, branch)`, not random, so a later record of the same session and branch supersedes the earlier one (`effort-accounted`).
 - `decided`: `capability` (the ID of the entry decided on, `capability/<slug>` or `architecture/<slug>`; the key keeps its name for both, so earlier records and earlier `clm`s read alike), `value` (`high`, `medium` or `low`), `decision` (`keep`, `cut`, `redesign` or `accept`), `settles` (the slugs of the workaround items it settles). A human's review decision on a capability or an architectural constraint (`review-capability-cost`, `docs/decisions/architecture-review.md`).
 - `verified`: `commit` (a commit of `main`), `passed` (true or false), `since` (the last commit a `verified` record named before it, or null), `lands` (the first-parent commits of `main` it covers, oldest first), `culprit` (the land that broke it, or null), `components` (the components a red result holds, empty when it passed), `mode` (`local`, `pipeline` or `import`), `run` (the host pipeline run's URL, or null). The result of running a project's slow tests after the land on that commit (`verify-after-land`).
 
-Every record also has `id` (random 128-bit hex, except an `effort` record's, which is `effort_id(session, branch)`), `kind` (one of the twelve above), `writer` (`<person>/<clone>`) and `at` (the time it was written, in UTC, always as `YYYY-MM-DDTHH:MM:SS.mmmZ`, as `clm` and `web.worker` write it, so two records' times order as strings: the fold sorts by `at` so, and `cleared` compares a request's and an approval's so for `land` and `web.worker` alike). A signed record also has `sig`: an `approved` record signed under the namespace `clm-approve`, or a `landed` record under `clm-land`; the other kinds never have it, and a record without it is unsigned. A record is one flat JSON object, so no record field shares a name with these five: the land's kind is `land_kind`, not `kind`.
+Every record also has `id` (random 128-bit hex, except an `effort` record's, which is `effort_id(session, branch)`), `kind` (one of the thirteen above), `writer` (`<person>/<clone>`) and `at` (the time it was written, in UTC, always as `YYYY-MM-DDTHH:MM:SS.mmmZ`, as `clm` and `web.worker` write it, so two records' times order as strings: the fold sorts by `at` so, and `cleared` compares a request's and an approval's so for `land` and `web.worker` alike). A signed record also has `sig`: an `approved` record signed under the namespace `clm-approve`, or a `landed` record under `clm-land`; the other kinds never have it, and a record without it is unsigned. A record is one flat JSON object, so no record field shares a name with these five: the land's kind is `land_kind`, not `kind`.
 
 ## Design
 **Writers.** The person part falls back to `git config user.name` slugged (`person-slug`) when no layer sets `writer`; an empty result is an error telling the human to set `writer`. The clone part is written to `.git/clm/writer` in the common git directory, so a clone's worktrees share it. Many sessions in one clone commit to one local branch, and git's ref lock orders them; two clones of one person never share a branch, so nothing ever rebases a ledger.
@@ -754,3 +755,20 @@ The fold, `fold` and `fold_records` alike, SHALL parse `verified` records and ho
 - GIVEN a `landed` record with neither field
 - WHEN the ledger is folded
 - THEN the land holds neither, and nothing fails
+
+### Requirement: answer-records
+The fold, `fold` and `fold_records` alike, SHALL parse `answered` records and hold as its open answers, for each item and writer, the one record of that writer naming that item with the latest `at`, ties broken by the greater `id`, whatever order the records are read in, each with its `id`, `writer`, `at`, `item` and `answer`. Whether its item is still in the backlog is the reader's to judge from the tree. `clm ledger show` SHALL print an `answered` record as `answered <id> <item> <writer> <at>`. `clm ledger compact` SHALL keep `answered` records when they are in the caller's own ledger.
+
+#### Scenario: a later answer replaces an earlier one
+- GIVEN `clm/ledger/alice/web` holding `answered` `a2` naming `q` with answer `no` at 10:00, then `answered` `a1` naming `q` with answer `yes` at 09:00, and `clm/ledger/bob/web` holding `answered` `b1` naming `q` with answer `yes` at 08:00
+- WHEN `fold_records` runs over them
+- THEN its open answers are `a2` (`alice/web`, `no`) and `b1` (`bob/web`, `yes`), and not `a1`
+
+#### Scenario: shown
+- GIVEN a ledger holding `answered` `a2` naming `q` by `alice/web`
+- WHEN `clm ledger show` runs
+- THEN it prints a line starting `answered a2 q alice/web`
+
+#### Serves
+- capability/follow-from-browser
+- architecture/per-writer-ledgers
