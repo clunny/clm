@@ -47,7 +47,7 @@ fn text(m: QueueView, format: Format) -> String {
 
 #[test]
 fn scenario_chart_sections() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let out = text(model(), Format::Text);
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines[0], "commit abc1234");
@@ -67,8 +67,47 @@ fn scenario_chart_sections() {
 }
 
 #[test]
+fn scenario_waiting_on_you_highlighted() {
+    // req:view/queue-view@ba511898
+    const AMBER: &str = "\x1b[33m";
+    let ansi = text(model(), Format::Ansi);
+    let fold = ansi.lines().find(|l| l.contains("fold:x")).unwrap();
+    let start = fold.find("fold:x").unwrap();
+    assert!(fold[..start].ends_with(AMBER), "{fold:?}");
+    // From the name to the end, every character lies between amber and a reset.
+    let mut amber = false;
+    let mut chars = fold[start - AMBER.len()..].chars();
+    let mut shown = String::new();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            let mut esc = String::from("\x1b");
+            for e in chars.by_ref() {
+                esc.push(e);
+                if e == 'm' {
+                    break;
+                }
+            }
+            amber = esc == AMBER;
+        } else {
+            assert!(amber, "{c:?} outside amber in {fold:?}");
+            shown.push(c);
+        }
+    }
+    assert!(
+        shown.starts_with("fold:x") && shown.contains("say"),
+        "{shown}"
+    );
+    for name in ["build:a", "build:b"] {
+        let l = ansi.lines().find(|l| l.contains(name)).unwrap();
+        assert!(!l[..l.find(name).unwrap()].contains(AMBER), "{l:?}");
+    }
+    let heading = ansi.lines().find(|l| l.contains("waiting on you")).unwrap();
+    assert!(!heading.contains(AMBER), "{heading:?}");
+}
+
+#[test]
 fn scenario_ansi_is_the_text_with_colour() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let ansi = text(model(), Format::Ansi);
     let mut plain = String::new();
     let mut chars = ansi.chars();
@@ -89,7 +128,7 @@ fn scenario_ansi_is_the_text_with_colour() {
 
 #[test]
 fn scenario_loop_line_and_empty_sections() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let empty = |loop_state| QueueView {
         view: "queue",
         loop_state,
@@ -126,7 +165,7 @@ fn scenario_loop_line_and_empty_sections() {
 
 #[test]
 fn scenario_running_entry_held_by_a_taken_over_session() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let mut m = model();
     m.running[0].taken_over = true;
     m.waiting_on_work.push(WaitingOnWork {
@@ -143,7 +182,7 @@ fn scenario_running_entry_held_by_a_taken_over_session() {
 
 #[test]
 fn scenario_json_is_the_model() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let out = text(model(), Format::Json);
     let v: serde_json::Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["view"], "queue");
@@ -157,7 +196,7 @@ fn scenario_json_is_the_model() {
 
 #[test]
 fn scenario_entries_keep_the_models_order_and_show_their_fields() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let mut m = model();
     m.running.insert(
         0,
@@ -188,7 +227,7 @@ fn scenario_entries_keep_the_models_order_and_show_their_fields() {
 
 #[test]
 fn scenario_lines_fit_the_width() {
-    // req:view/queue-view@b97e55e3
+    // req:view/queue-view@ba511898
     let out = render(&View::Queue(model()), Format::Text, 20, None);
     assert!(out.lines().all(|l| l.chars().count() <= 20), "{out}");
 }
