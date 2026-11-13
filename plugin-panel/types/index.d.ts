@@ -15,8 +15,8 @@ export type AgentRun = {
   description: string
   model: string
   effort?: string
-  /** The node it builds, from the first five lines of its prompt. */
-  node?: string
+  /** The queue entry it runs, from the first five lines of its prompt. */
+  entry?: string
   status: RunStatus
   /** A failed run whose `Dismiss` was pressed: no longer drawn, still counted. */
   dismissed?: boolean

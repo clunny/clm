@@ -7,7 +7,7 @@ import type { EngineInterface, Register, RenderNode } from 'claude-code'
 
 import {
   dismiss,
-  flightRows,
+  queueRows,
   onComplete,
   onSessionEnd,
   onSpawn,
@@ -414,7 +414,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
         {fetchLine}
         {stopRow}
         {drawn}
-        {lines(flightRows(undefined, list, at).map(spans => ({ spans })))}
+        {shown === 'queue' && lines(queueRows(undefined, list, at).map(spans => ({ spans })))}
       </Box>
     )
   }
@@ -458,7 +458,7 @@ async function drawPane($: EngineInterface, e: PaneEvent): Promise<RenderNode> {
         />
       )}
       {detail?.contract?.map(line => <Text>{line === '' ? ' ' : line}</Text>)}
-      {lines(shown === 'flight' ? withBuildRows(chart.lines, list, at) : chart.lines)}
+      {lines(shown === 'queue' ? withBuildRows(chart.lines, list, at) : chart.lines)}
     </Box>
   )
 }

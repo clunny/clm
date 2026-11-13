@@ -4,7 +4,7 @@
 // ansi`; these rules only match the two by position. `hooks/register.tsx` turns what they
 // return into elements and presses into atom updates.
 
-import { type AgentRun, componentRange, flightLines, lineText } from './agents.ts'
+import { type AgentRun, componentRange, lineText, queueLines } from './agents.ts'
 import { AMBER, GREEN, INDIGO, ROSE, type Run, type Span, type Surface, type ViewTab, viewOf } from './panel.ts'
 
 /** A chart line as drawn; `key` (`node:<id>` or `root:<name>`) makes it a pressable `Button`. */
@@ -278,10 +278,10 @@ function inFlight(f: FlightNode | undefined): Span[][] {
   ]
 }
 
-/** The Flight tab's lines with the build rows (`build-rows`) under its node lines, keys kept. */
+/** The Queue tab's lines with the run rows (`build-rows`) under its running entries, keys kept. */
 export function withBuildRows(lines: readonly PaneLine[], runs: readonly AgentRun[], at: number): PaneLine[] {
   const keyOf = new Map(lines.map(l => [l.spans, l.key]))
-  return flightLines(
+  return queueLines(
     lines.map(l => l.spans),
     runs,
     at,

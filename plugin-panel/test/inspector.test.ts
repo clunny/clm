@@ -336,14 +336,15 @@ describe('node-inspector', () => {
     expect(started).toHaveLength(3)
   })
 
-  test('the Flight tab keeps its build rows under the pressable lines', () => {
-    const { lines } = chartLines({ tab: 'flight', chart: FLIGHT_CHART, own: FLIGHT, selected: null, unfolded: [] })
+  test('the Queue tab draws its run rows under the running entries and the Flight tab draws none', () => {
+    const queue = ansiLines('loop not held\nrunning\n  build:a  P5\nnext up\n  none\n')
+    const { lines } = chartLines({ tab: 'queue', chart: queue, own: { stdout: '', stderr: '', exitCode: 0 }, selected: null, unfolded: [] })
     const build: AgentRun = {
       id: 'x',
       type: 'general-purpose',
       description: 'build a',
       model: 'claude-opus-5-5',
-      node: 'a',
+      entry: 'build:a',
       status: 'running',
       startedAt: 0,
       round: 1,
@@ -354,10 +355,11 @@ describe('node-inspector', () => {
       tasks: [],
     }
     const drawn = withBuildRows(lines, [build], 1000)
-    const at = drawn.findIndex(l => l.key === 'node:a')
+    const at = drawn.findIndex(l => text(l.spans) === '  build:a  P5')
     expect(text(drawn[at + 1]!.spans)).toContain('build a')
-    expect(drawn[at + 1]!.key).toBeUndefined()
-    expect(keys(drawn)).toEqual(['node:a'])
+    expect(keys(drawn)).toEqual([])
+    const flight = chartLines({ tab: 'flight', chart: FLIGHT_CHART, own: FLIGHT, selected: null, unfolded: [] })
+    expect(flight.lines.some(l => text(l.spans).includes('build a'))).toBe(false)
   })
 })
 
