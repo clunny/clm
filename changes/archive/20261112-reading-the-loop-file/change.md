@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [reading-the-loop-file-creates-its-directory]
 ---
 

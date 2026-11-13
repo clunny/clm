@@ -90,6 +90,9 @@ pub enum StopMode {
 pub struct Batch {
     pub id: String,
     pub approved: bool,
+    /// When the batch went to the human, Unix seconds.
+    #[serde(default)]
+    pub since: u64,
 }
 
 /// A `question` item the loop couldn't land yet.
@@ -116,6 +119,17 @@ pub struct StoredNext {
     pub reason: String,
 }
 
+/// An entry of the human's queue as the loop file stores it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredHuman {
+    pub name: String,
+    pub kind: String,
+    pub what: String,
+    /// Unix seconds.
+    pub since: u64,
+    pub action: String,
+}
+
 /// The plan the last step acted on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredPlan {
@@ -123,6 +137,9 @@ pub struct StoredPlan {
     pub main: String,
     pub at: u64,
     pub next: Vec<StoredNext>,
+    /// The human's queue, oldest first.
+    #[serde(default)]
+    pub humans: Vec<StoredHuman>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,9 +200,14 @@ impl LoopFile {
     }
 }
 
-/// Where the loop file and its lock live: `<git common dir>/clm/`.
+/// Where the loop file and its lock live: `<git common dir>/clm/`, not created.
+fn dir_path(root: &Path) -> Result<PathBuf, Failure> {
+    Ok(clm_git::common_dir(root)?.join("clm"))
+}
+
+/// `dir_path`, created: only what writes the loop file creates it.
 fn dir(root: &Path) -> Result<PathBuf, Failure> {
-    let dir = clm_git::common_dir(root)?.join("clm");
+    let dir = dir_path(root)?;
     fs::create_dir_all(&dir).map_err(|e| Failure::Git(format!("{}: {e}", dir.display())))?;
     Ok(dir)
 }
@@ -202,7 +224,7 @@ fn parse(bytes: &[u8]) -> Result<LoopFile, String> {
 /// The loop file as it stands, read without a lock or a write: none when the clone has none
 /// or it can't be read.
 pub fn read(root: &Path) -> Option<LoopFile> {
-    let path = dir(root).ok()?.join("loop");
+    let path = dir_path(root).ok()?.join("loop");
     parse(&fs::read(path).ok()?).ok()
 }
 

@@ -9,7 +9,7 @@ use common::{Fixture, line};
 
 #[test]
 fn view_and_step_agree() {
-    // req:orchestrator.loop/plan-snapshot@675c1a3a
+    // req:orchestrator.loop/plan-snapshot@b518eee9
     let fx = Fixture::new();
     let mut options = fx.options();
     options.max_builds = 1;
@@ -36,6 +36,7 @@ fn view_and_step_agree() {
             lease: Some(clm_git::now()),
             ..LoopFile::default()
         },
+        ..Snapshot::default()
     };
     let computed = plan(&snapshot);
     assert_eq!(computed.next[0].name, "build:a");
@@ -55,4 +56,14 @@ fn view_and_step_agree() {
     // The runs are the loop file's as they stand now: the build the step prepared.
     assert_eq!(stored.running.len(), 1);
     assert_eq!(stored.running[0].name, "build:a");
+}
+
+#[test]
+fn no_loop_has_run() {
+    // req:orchestrator.loop/plan-snapshot@b518eee9
+    let fx = Fixture::new();
+    assert!(!fx.loop_dir().exists());
+    assert!(stored_plan(&fx.work).is_none());
+    assert!(clm_loop::read(&fx.work).is_none());
+    assert!(!fx.loop_dir().exists(), "reading creates nothing");
 }
