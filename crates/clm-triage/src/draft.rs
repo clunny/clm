@@ -573,7 +573,16 @@ fn prompt_for(
          a component the item on `origin/main` names: set the item's `components` on `spec/<id>` to \
          the components whose `paths` hold the fix, leave it out of `resolves` with \
          `left <slug>: components corrected to <components>`, and fix nothing; the next `clm triage` \
-         groups it by its corrected components, and that draft fixes it. A claimed `workaround` \
+         groups it by its corrected components, and that draft fixes it. A `bug` or `deferred` \
+         item whose work is test plumbing is treated the same way, as the exception to the \
+         branch of your own above, when every file its fix changes belongs to no component \
+         the item names, a file belonging to a component whose `paths` hold it or whose \
+         requirement its text cites: set the item's `components` on `spec/<id>` to the \
+         components those files belong to, leave it with the same `left` line, and open no \
+         branch of your own for it, since the gate passes the deletion of an item by a \
+         `Resolves: backlog/<slug>` trailer only when the branch's code belongs to a component \
+         the item at the merge base names (`gate/backlog-additions`), and otherwise prints \
+         `mixed`. A claimed `workaround` \
          item is a build's flag against a requirement (`workaround-flags`): the change \
          resolves it by rewording or re-scoping that requirement, or adding the \
          `#### Needs` or Design it lacks, deleting the flag, or by re-recording its \

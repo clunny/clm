@@ -152,19 +152,38 @@ fn release_claims(
         if committed >= place.taken + expiry_hours * 3600 || moved.iter().any(|m| m == slug) {
             continue;
         }
-        let lease = format!("--force-with-lease=refs/heads/{name}:{sha}");
-        let target = format!(":refs/heads/{name}");
-        if let Err(e) = git(root, &["push", "--quiet", &lease, REMOTE, &target]) {
-            // The ref gone or moved is the lease doing its work; anything else is git's.
-            let now = git(root, &["ls-remote", "--heads", REMOTE, &name])?;
-            if now.split_whitespace().next() == Some(sha) {
-                return Err(e.into());
-            }
-            continue;
+        if delete_on_origin(root, &name, sha)? {
+            done.push(format!("released {name}"));
         }
-        done.push(format!("released {name}"));
     }
     Ok(())
+}
+
+/// Deletes branch `name` on `origin`, leased on `tip`, the tip the fetch read
+/// (`finish-delete-loses-race`). Whether it did: a refusal is read again on `origin`, and a
+/// branch that is gone or has moved since the fetch is the lease doing its work, so another
+/// session's, never this one's to delete; only a failure with the branch still at `tip` is
+/// git's.
+fn delete_on_origin(root: &Path, name: &str, tip: &str) -> Result<bool, Error> {
+    let lease = format!("--force-with-lease=refs/heads/{name}:{tip}");
+    let target = format!(":refs/heads/{name}");
+    let Err(e) = git(root, &["push", "--quiet", &lease, REMOTE, &target]) else {
+        return Ok(true);
+    };
+    // The full ref: a bare name also matches `autosync/<name>` as a path suffix.
+    let now = git(
+        root,
+        &[
+            "ls-remote",
+            "--heads",
+            REMOTE,
+            &format!("refs/heads/{name}"),
+        ],
+    )?;
+    if now.split_whitespace().next() == Some(tip) {
+        return Err(e.into());
+    }
+    Ok(false)
 }
 
 /// The items whose `backlog/<slug>.md` `origin/spec/<change>` changes since its merge base
@@ -247,18 +266,9 @@ fn delete_branches(
         if !doomed(&name, &tip)? {
             continue;
         }
-        let lease = format!("--force-with-lease=refs/heads/{name}:{tip}");
-        git(
-            root,
-            &[
-                "push",
-                "--quiet",
-                &lease,
-                REMOTE,
-                &format!(":refs/heads/{name}"),
-            ],
-        )?;
-        done.push(format!("removed {REMOTE}/{name}"));
+        if delete_on_origin(root, &name, &tip)? {
+            done.push(format!("removed {REMOTE}/{name}"));
+        }
     }
     Ok(())
 }
