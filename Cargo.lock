@@ -519,6 +519,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "clm-loop"
+version = "0.26.0"
+dependencies = [
+ "clm-agent-harness",
+ "clm-git",
+ "clm-orchestrator",
+ "clm-view",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "clm-machine"
 version = "0.26.0"
 dependencies = [

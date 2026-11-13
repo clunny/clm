@@ -1,0 +1,17 @@
+[package]
+name = "clm-loop"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+clm-git.workspace = true
+clm-orchestrator.workspace = true
+clm-agent-harness.workspace = true
+clm-view.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
