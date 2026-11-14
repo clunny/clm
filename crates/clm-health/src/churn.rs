@@ -69,7 +69,10 @@ pub fn churn(root: &Path) -> Result<Option<Vec<Churn>>, Failure> {
         let (Some(text), Some(file)) = (line.strip_prefix('+'), path) else {
             continue;
         };
-        for m in clm_check::markers_in(file, text) {
+        if file.extension().is_some_and(|e| e == "md") {
+            continue;
+        }
+        for m in clm_coverage::marker_spans(text) {
             if let Some(version) = m.version {
                 let version = version.trim_start_matches('@').to_string();
                 cited.entry(m.id).or_default().insert(version);

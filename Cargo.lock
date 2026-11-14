@@ -425,6 +425,7 @@ name = "clm-health"
 version = "0.26.0"
 dependencies = [
  "clm-check",
+ "clm-coverage",
  "clm-effort",
  "clm-git",
  "clm-ledger",
