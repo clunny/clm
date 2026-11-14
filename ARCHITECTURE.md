@@ -347,7 +347,7 @@ The guard prevents accidents and is not a hard boundary: it rests on each harnes
 - web.views/signed-approvals
 
 ### Constraint: land-locally
-**Checked.** A branch SHALL land only through `clm land`, on the trunk, which is always named `main`: it runs the checks on the merged tree on the machine that runs it and pushes `main`, and refuses when the remote can't be reached. Nothing else pushes `main` or decides a land, but the release workflow's merge of its version bump; each agent harness's guard blocks a session's push to `main` (`guard-blocks-push-to-main`).
+**Checked.** A branch SHALL land only through `clm land`, on the trunk, which is always named `main`: it runs the checks on the merged tree on the machine that runs it and pushes `main`, and refuses when the remote can't be reached. Lands waiting on one clone may share one run of the checks, on the tree that holds them all, so every commit a push leaves `main` at is a checked tree, though not every commit behind it (`batched-lands`). Nothing else pushes `main` or decides a land, but the release workflow's merge of its version bump; each agent harness's guard blocks a session's push to `main` (`guard-blocks-push-to-main`).
 
 #### Scenario: push to main
 - GIVEN a session on `main` in a repository under CLM

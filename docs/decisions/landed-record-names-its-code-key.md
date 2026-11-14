@@ -16,3 +16,5 @@ Alternatives considered:
 The cost is one `checked` line kept per land, the same growth as the `landed` lines that are `main`'s audit trail. The record's key is the writer's word, as every record is; in a signed repository the `landed` record is signed, which makes it attributable but not checked (`signed-ledger-records`).
 
 The same change names the land's kind `land_kind`: a record is one flat JSON object whose `kind` says which of the four record kinds it is, so no field can share that name (`backlog/landed-record-kind-field-collides-with-the-record-kind`).
+
+**Amended 2026-11-13 (`batched-lands`).** A land taken with others on one check names in `code_key` the key that check ran on, the code key of the last merge commit of their push, not its own merge commit's. It is still the key the land's `checked` record names, which is all `clm ledger verify` and `clm ledger compact` ask of it.
