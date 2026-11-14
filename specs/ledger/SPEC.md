@@ -25,7 +25,7 @@ Record kinds:
 - `effort`: `branch`, `session`, `models` (a map from a model's name to its `input`, `output`, `cache_read` and `cache_write` token counts), `active_seconds`. The work one Claude Code session spent on one branch, as `clm effort record` read it from this machine's transcripts (`effort`). Its `id` is `effort_id(session, branch)`, not random, so a later record of the same session and branch supersedes the earlier one (`effort-accounted`).
 - `decided`: `capability` (the ID of the entry decided on, `capability/<slug>` or `architecture/<slug>`; the key keeps its name for both, so earlier records and earlier `clm`s read alike), `value` (`high`, `medium` or `low`), `decision` (`keep`, `cut`, `redesign` or `accept`), `settles` (the slugs of the workaround items it settles). A human's review decision on a capability or an architectural constraint (`review-capability-cost`, `docs/decisions/architecture-review.md`).
 - `verified`: `commit` (a commit of `main`), `passed` (true or false), `since` (the last commit a `verified` record named before it, or null), `lands` (the first-parent commits of `main` it covers, oldest first), `culprit` (the land that broke it, or null), `components` (the components a red result holds, empty when it passed), `mode` (`local`, `pipeline` or `import`), `run` (the host pipeline run's URL, or null). The result of running a project's slow tests after the land on that commit (`verify-after-land`).
-- `mutated`: `commit` (a commit of `main`), `since` (the commit the `mutated` record before it named, or null), `killed` and `not_judged` (requirement IDs), `unproven` (entries `<component>/<slug>@<version>`). What a mutation pass found on that commit (`mutation-after-land`).
+- `mutated`: `commit` (a commit of `main`), `since` (the commit the pass started from, or null), `killed` and `not_judged` (requirement IDs), `unproven` (entries `<component>/<slug>@<version>`). What a mutation pass found on that commit (`mutation-after-land`).
 
 Every record also has `id` (random 128-bit hex, except an `effort` record's, which is `effort_id(session, branch)`), `kind` (one of the fourteen above), `writer` (`<person>/<clone>`) and `at` (the time it was written, in UTC, always as `YYYY-MM-DDTHH:MM:SS.mmmZ`, as `clm` and `web.worker` write it, so two records' times order as strings: the fold sorts by `at` so, and `cleared` compares a request's and an approval's so for `land` and `web.worker` alike). A signed record also has `sig`: an `approved` record signed under the namespace `clm-approve`, or a `landed` record under `clm-land`; the other kinds never have it, and a record without it is unsigned. A record is one flat JSON object, so no record field shares a name with these five: the land's kind is `land_kind`, not `kind`.
 
@@ -774,7 +774,7 @@ The fold, `fold` and `fold_records` alike, SHALL parse `answered` records and ho
 - architecture/git-is-truth
 
 ### Requirement: mutated-record
-The fold, `fold` and `fold_records` alike, SHALL parse `mutated` records and hold them by `commit`, the newest by `at` first, skipping with a warning a line whose `commit` or `since` holds anything but a full 40-hex lowercase commit ID (or null for `since`), whose `killed` or `not_judged` isn't a list of requirement IDs, or whose `unproven` isn't a list of `<component>/<slug>@<version>` entries with 8 lower-case hex digits. `append` SHALL write it like any record, unsigned in every repository, since it holds no land. `clm ledger show` SHALL print it as `mutated <commit> <k> killed <u> unproven <n> not judged <writer> <at>`. `clm ledger compact` SHALL keep the caller's newest `mutated` record for each commit and every one that holds an `unproven` entry, and drop the others. `Fold::unfiled_unproven(chain)`, given a first-parent chain of commits oldest first, SHALL return each `unproven` entry of a record on the chain that no later record on the chain names under `killed`, by its requirement ID, each once, in chain order.
+The fold, `fold` and `fold_records` alike, SHALL parse `mutated` records and hold them by `commit`, the newest by `at` first, skipping with a warning a line whose `commit` or `since` holds anything but a full 40-hex lowercase commit ID (or null for `since`), whose `killed` or `not_judged` isn't a list of requirement IDs, or whose `unproven` isn't a list of `<component>/<slug>@<version>` entries with 8 lower-case hex digits. `append` SHALL write it like any record, unsigned in every repository, since it holds no land. `clm ledger show` SHALL print it as `mutated <commit> <k> killed <u> unproven <n> not judged <writer> <at>`. `clm ledger compact` SHALL keep the caller's newest `mutated` record for each commit and every one that holds an `unproven` entry, and drop the others.
 
 #### Scenario: folded and shown
 - GIVEN a `mutated` record for commit `c` with one `killed`, one `unproven` and no `not_judged`
@@ -785,11 +785,6 @@ The fold, `fold` and `fold_records` alike, SHALL parse `mutated` records and hol
 - GIVEN a `mutated` line whose `unproven` holds `a/x` with no version
 - WHEN the fold reads it
 - THEN it skips the line with a warning naming it
-
-#### Scenario: killed later
-- GIVEN a chain `a`, `b`, a record for `a` with `unproven` `n/x@11111111` and `n/y@22222222`, and one for `b` with `killed` `n/x`
-- WHEN `unfiled_unproven` reads the chain
-- THEN it returns `n/y@22222222` alone
 
 #### Serves
 - architecture/proven-by-tests

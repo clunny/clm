@@ -131,7 +131,7 @@ For a `term` rename `clm rename` SHALL replace, case-sensitively, each occurrenc
 - THEN `a` still holds requirement `sprocket`
 
 ### Requirement: marker-rewrite
-`clm rename` SHALL rewrite each marker, in the files and as `check.coverage/markers-from-files` reads them, that cites a renamed requirement or one whose text the change rewords: a marker citing the requirement's current version SHALL cite the new ID at the requirement's version after the change, and any other marker SHALL cite the new ID with its version unchanged, so a requirement current before the rename is current after it, and one behind stays behind; except that a marker citing the current version of a requirement whose text `references` rewrote SHALL keep that version, under the new ID, when a mention `finish` reports of an old ID or slug rewritten in that text lies in a file the requirement's component owns or a file holding one of its markers, so that requirement is `behind` after the rename. A mention of a term never holds a marker back. Nothing else in the file SHALL change.
+`clm rename` SHALL rewrite each marker, in every file `scan` reads, the markers outside a test included (`scan`'s `outside`, `check.coverage/test-spans`), found with `marker_spans`, that cites a renamed requirement or one whose text the change rewords: a marker citing the requirement's current version SHALL cite the new ID at the requirement's version after the change, and any other marker SHALL cite the new ID with its version unchanged, so a requirement current before the rename is current after it, and one behind stays behind; except that a marker citing the current version of a requirement whose text `references` rewrote SHALL keep that version, under the new ID, when a mention `finish` reports of an old ID or slug rewritten in that text lies in a file the requirement's component owns or a file holding one of its markers, so that requirement is `behind` after the rename. A mention of a term never holds a marker back. Nothing else in the file SHALL change.
 
 #### Scenario: current and behind markers
 - GIVEN requirement `a/x` at version `11111111`, a test citing `a/x@11111111` and another citing `a/x@00000000`, and a change renaming `a/x` to `a/y`, whose version becomes `22222222`
@@ -158,8 +158,14 @@ For a `term` rename `clm rename` SHALL replace, case-sensitively, each occurrenc
 - WHEN `clm rename` runs
 - THEN the test cites `a/x` at its new version, and it prints `still names sprocket plugin/skills/s/SKILL.md:<line>`
 
+#### Scenario: a marker outside a test
+- GIVEN `src/lib.rs` holding a marker citing `a/x` in a function with no test attribute, and a rename of `a/x` to `a/y`
+- WHEN `clm rename` runs
+- THEN the marker cites `a/y`
+
 #### Needs
 - check.coverage/marker-spans
+- check.coverage/test-spans
 
 ### Requirement: finish
 `clm rename` SHALL, after generating the deltas, apply the change, set its status to `done` by its `status:` line alone, archive it, delete each `backlog/<slug>.md` its `resolves` names, and print one `renamed <old> -> <new>` line per rename in record order. It SHALL then print one `still names <old> <file>:<line>` line for each mention of an old ID or term it left, and of the old slug of a renamed requirement or entry written as a code span's whole text when no other requirement, entry or decision has that slug, in the tracked text files outside `specs/`, `changes/`, `ARCHITECTURE.md`, `CAPABILITIES.md` and `docs/decisions/`, sorted by file and line, and exit 0.

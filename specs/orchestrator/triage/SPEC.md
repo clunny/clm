@@ -75,7 +75,7 @@ The fold prompt never names a superpowers skill, `gh pr create`, `--body `, `gh 
 ## Requirements
 
 ### Requirement: triage
-`clm triage` SHALL fetch `origin` and print, sorted as the Design says (`group` lines first, `deferred` lines next to last and `workaround` lines last), one `group` line per group of untaken `bug` items with the same sorted `components`, cut into groups of at most the draft budget; for each proposed or on-main change that names backlog items one `designed` line when it is proposed and its `change.md` has `status: applied`, one `open` line when it is proposed otherwise, and one `main` line when it is on main; one `human` line per untaken `question` or `human-task` item; one `idea` line per untaken `idea` item; one `deferred` line per untaken `deferred` item; and one `workaround` line per untaken `workaround` item (`workaround-flags`); each as `<form> <name> [<components>] <P> <n> <slug>...`, with `<P>` the highest priority of its items and `<n>` the number of distinct requirements in their `blocks`. An item held only by a claim, and an untaken item of a kind no form takes, SHALL appear on no line. It SHALL exit 0, and 2 when git fails.
+`clm triage` SHALL fetch `origin` and print, sorted as the Design says (`group` lines first, `deferred` lines next to last and `workaround` lines last), one `group` line per group of untaken `bug` items with the same sorted `components`, cut into groups of at most the draft budget; for each proposed or on-main change that names backlog items one `designed` line when it is proposed and its `change.md` has `status: applied`, one `open` line when it is proposed otherwise, and one `main` line when it is on main; one `human` line per untaken `question` or `human-task` item; one `idea` line per untaken `idea` item; one `deferred` line per untaken `deferred` item; and one `workaround` line per untaken `workaround` item (`workaround-flags`); each as `<form> <name> [<components>] <P> <n> <slug>...`, with `<P>` the highest priority of its items and `<n>` the number of distinct requirements in their `blocks`. An item held only by a claim, an untaken item of a kind no form takes, and a `bug` item that holds `unproven` entries, which its component's build resolves by mending the test (`verify/files-unproven`), SHALL appear on no line. It SHALL exit 0, and 2 when git fails.
 
 #### Scenario: groups by kind and nodes
 - GIVEN untaken items `a` and `b` of kind `bug` with `components: [check]`, `c` of kind `idea` with `components: [check]`, `d` of kind `deferred` with `components: [check]`, and `e` of kind `bug` with no `components`
@@ -106,6 +106,11 @@ The fold prompt never names a superpowers skill, `gh pr create`, `--body `, `gh 
 - GIVEN `origin/main` whose component `check` has a requirement `w`, an untaken item `f` of kind `workaround` with `components: [check]` and `requirement: check/w@<version>`, where `<version>` is `w`'s current version, an untaken `deferred` item `k` with `components: [gate]`, an untaken `idea` item `i` with no `components`, and an untaken `bug` item `u`
 - WHEN `clm triage` runs
 - THEN it prints, in this order, a `group` line for `u`, `idea i [] P5 0`, `deferred k [gate] P5 0` and `workaround f [check] P5 0`
+
+#### Scenario: an unproven item is no draft
+- GIVEN an untaken `bug` item on `a` with `unproven: [a/x@0123abcd]`
+- WHEN `clm triage` runs
+- THEN no line names it
 
 #### Needs
 - model/parse-backlog

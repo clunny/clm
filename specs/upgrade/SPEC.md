@@ -511,5 +511,6 @@ An `advised` note migration, ID `20261114-proof-is-real`, SHALL tell a project s
 
 #### Needs
 - check.coverage/markers-in-tests
+- check/coverage-lists
 - gate/own-files
 - config/verify-setting

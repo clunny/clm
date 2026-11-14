@@ -37,7 +37,7 @@ As a library call it offers `kept_log(root, commit)`: the path of the log a fail
 
 **The mutation pass** (`mutation-pass`, `mutation-after-land`). A marker says which test claims a requirement, and the land's check says the test passed; neither says the test would fail if the code were wrong. Mutation says that, and it is slow, so it runs here, after the land. CLM names no tool: the project's `[verify] mutate` command gets a plan and writes verdicts, as `[land] check` gets a selection, and it is unset unless the project sets it. A requirement is *due* when one of its citing tests was added, or changed in more than its markers, since the last pass, so a requirement that was only re-cited isn't judged: its tests are the ones an earlier pass saw, or none did, and a sample of mutants drawn from a whole component can't judge it either, since on 2026-11-14 seventeen mutants of `clm-coverage` were noticed by the tests of seven of its ten requirements often and by those of three almost never, all ten sound. The plan therefore hands the command the code the lands changed first, and a limit of 20 further mutants from the rest of the component, a constant (`yagni`). Tests that predate the pass are never judged (`backlog/tests-written-before-the-mutation-pass-were-never-judged`). The pass runs after the `verified` record is appended and the outcome line printed, and outside the check lock, so it can lose no verdict and hold no land; it keeps the verify tree's lock, so two passes never share the tree, and it gets a slot of its own, one past the build places, since its tests overlap lands' checks and builds' (`check-runs-one-at-a-time` covers the runs that share slot 0, which this one doesn't). A requirement an item named is not judged again when the item goes: the build that mended its test changed the test, which makes it due, and the build that found the test sound and deleted the item has settled it. A command that fails, or a pass killed, appends nothing, and the next pass starts from the same commit.
 
-**Filing** (`files-unproven`). Verify pushes nothing to `main`, so a verdict reaches the tree as a backlog item, landed through `clm land` like any branch: adding a new item lands on checks. It is found from the ledger each time, not remembered, so a filing that failed is made by the next `clm verify --due` on a clone in `local` mode. A pipeline has the right to push only the ledger, so `pipeline` mode records and leaves the filing to such a clone.
+**Filing** (`files-unproven`). Verify pushes nothing to `main`, so a verdict reaches the tree as a backlog item, landed through `clm land` like any branch: adding a new item lands on checks. What is still to file is found each time from the ledger and from `main`'s history, not remembered: an item is named after the commit of the record that found it, so a filing that failed is made by the next `clm verify --due` on a clone in `local` mode, and an item a build has resolved is not filed twice. A pipeline has the right to push only the ledger, so `pipeline` mode records and leaves the filing to such a clone.
 
 ## Requirements
 
@@ -387,12 +387,12 @@ When the settings it follows (`settings-from-main`) set `[verify] mutate`, a `cl
 - model/parse-backlog
 
 ### Requirement: files-unproven
-At the end of every `clm verify --due` in `local` mode whose settings set `[verify] mutate`, whether or not a run was due, and after the mutation pass when one ran, it SHALL take `Fold::unfiled_unproven` over `origin/main`'s first-parent chain (`ledger/mutated-record`) and keep the entries that name a requirement at its current version in `origin/main` and that no backlog item on `origin/main` names under `unproven`. When any is left it SHALL, in a temporary worktree on a branch `unproven/<short sha>` cut from `origin/main`, `<short sha>` being `origin/main`'s, write one item per component, `backlog/unproven-<component>-<short sha>.md`, with `title` `Tests of <component> notice no change to its code`, `kind: bug`, `components` that component and `unproven` its entries, and a body naming, for each entry, its citing tests and the commit of the record that found it; commit them; push the branch and land it with `clm land`, as any branch lands; and delete the branch, here and on `origin`, whether or not it landed. It SHALL print `unproven: filed <n> items for <m> requirements` on stderr when it landed, and `unproven: not filed: <reason>` when the push or the land failed, leaving the entries for the next call. Neither SHALL change the outcome line, stdout or the exit status.
+At the end of every `clm verify --due` in `local` mode whose settings set `[verify] mutate`, whether or not a run was due, and after the mutation pass when one ran, it SHALL, for each `mutated` record that names a commit `R` on `origin/main`'s first-parent chain and holds `unproven` entries, and for each component those entries name, file the item `backlog/unproven-<component>-<short sha of R>.md` unless a commit after `R` on that chain added a file of that path, so an item a build has since deleted is never filed again, or none of the component's entries names a requirement at its current version in `origin/main`. It SHALL write the items to file in a temporary worktree on a branch `unproven/<short sha of origin/main>` cut from `origin/main`, each with `title` `Tests of <component> notice no change to its code`, `kind: bug`, `components` that component, `unproven` the entries still at their current version, and a body naming each entry's citing tests and `R`; commit them; push the branch and land it with `clm land`, as any branch lands; and delete the branch, here and on `origin`, whether or not it landed. It SHALL print `unproven: filed <n> items for <m> requirements` on stderr when it landed, and `unproven: not filed: <reason>` when the push or the land failed, leaving the items for the next call. It SHALL NOT change the outcome line, stdout or the exit status. `clm verify --commit`, and `pipeline` and `import` mode, file nothing.
 
 #### Scenario: filed and read as not built
-- GIVEN a `mutated` record for `origin/main`'s head with `unproven` `a/x@<current version>`, and `a/x` current
+- GIVEN a `mutated` record for `origin/main`'s head `R` with `unproven` `a/x@<current version>`, and `a/x` current
 - WHEN `clm verify --due` runs with nothing due, and then `clm coverage` runs on the new `origin/main`
-- THEN `origin/main` holds `backlog/unproven-a-<short sha>.md`, a `bug` item on `a` with `unproven: [a/x@<version>]`, no branch `unproven/<short sha>` is left on `origin`, and coverage prints `a/x unbuilt`
+- THEN `origin/main` holds `backlog/unproven-a-<short sha of R>.md`, a `bug` item on `a` with `unproven: [a/x@<version>]`, no branch `unproven/<short sha>` is left on `origin`, and coverage prints `a/x unbuilt`
 
 #### Scenario: already filed
 - GIVEN the same once the item is on `origin/main`
@@ -404,9 +404,9 @@ At the end of every `clm verify --due` in `local` mode whose settings set `[veri
 - WHEN `clm verify --due` runs
 - THEN it lands nothing
 
-#### Scenario: killed by a later pass
-- GIVEN that record, and a later one naming `a/x` under `killed`
-- WHEN `clm verify --due` runs
+#### Scenario: resolved by a build
+- GIVEN that item filed, and then deleted by a land
+- WHEN `clm verify --due` runs again
 - THEN it lands nothing
 
 #### Scenario: the land fails
@@ -427,3 +427,4 @@ At the end of every `clm verify --due` in `local` mode whose settings set `[veri
 - ledger/mutated-record
 - model/parse-backlog
 - check.coverage/coverage-report
+- orchestrator.triage/triage
