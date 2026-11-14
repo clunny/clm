@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [health-churn-cannot-reach-marker-spans]
 ---
 

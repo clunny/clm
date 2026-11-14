@@ -2,7 +2,7 @@
 title: Health
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, orchestrator, vcs, ledger, effort]
+depends_on: [model, check, check.coverage, orchestrator, vcs, ledger, effort]
 paths: ["crates/clm-health/**"]
 successor: ""
 serves: [capability/know-health]
