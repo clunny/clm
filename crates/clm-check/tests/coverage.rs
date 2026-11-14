@@ -87,7 +87,7 @@ fn lines(root: &Path) -> Vec<String> {
 
 #[test]
 fn dangling_marker_reports_file_and_line() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
     write(d, "tests/t.rs", &format!("\n\n// {GONE}\n"));
@@ -100,7 +100,7 @@ fn dangling_marker_reports_file_and_line() {
 
 #[test]
 fn bare_and_versioned_markers_both_count_for_dangling() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
     write(d, "tests/t.rs", &format!("// {GONE}@01234567\n// {X}\n"));
@@ -111,7 +111,7 @@ fn bare_and_versioned_markers_both_count_for_dangling() {
 
 #[test]
 fn only_files_git_would_track_are_scanned() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
     let git = |args: &[&str]| {
@@ -215,7 +215,7 @@ fn removing_change(root: &Path, archived: bool) {
 
 #[test]
 fn marker_of_requirement_a_live_change_removed_is_obsolete_not_dangling() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     removing_change(dir.path(), false);
     write(dir.path(), "tests/t.rs", &format!("\n\n// {GONE}\n"));
@@ -224,7 +224,7 @@ fn marker_of_requirement_a_live_change_removed_is_obsolete_not_dangling() {
 
 #[test]
 fn marker_dangles_again_once_the_removing_change_is_archived() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     removing_change(dir.path(), true);
     write(dir.path(), "tests/t.rs", &format!("\n\n// {GONE}\n"));
@@ -396,7 +396,7 @@ fn backlog_sorted_by_priority_then_kind_then_slug() {
 
 #[test]
 fn marker_on_entry_not_dangling() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
     write(
@@ -418,7 +418,7 @@ fn marker_on_entry_not_dangling() {
 
 #[test]
 fn marker_on_missing_entry_dangling() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
     write(
@@ -435,7 +435,7 @@ fn marker_on_missing_entry_dangling() {
 
 #[test]
 fn marker_on_architecture_or_untested_entry_reported() {
-    // req:check/dangling-markers@de7f46e1
+    // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
     write(
@@ -478,4 +478,49 @@ fn marker_on_architecture_or_untested_entry_reported() {
             at("4", arch)
         ]
     );
+}
+
+#[test]
+fn capability_removed_by_a_live_change_is_not_dangling() {
+    // req:check/dangling-markers@2e31c5b8
+    let suffix = "; a change that removes the capability lists it under removes_capabilities";
+    let gone = format!("{REQ}capability/gone");
+    for (dir, status, removes, dangling) in [
+        ("changes/x", "proposed", "[gone]", false),
+        ("changes/archive/x", "done", "[gone]", true),
+        ("changes/x", "proposed", "[]", true),
+    ] {
+        let tmp = repo("applied");
+        let d = tmp.path();
+        write(d, "CAPABILITIES.md", "## Capabilities\n");
+        write(d, "tests/t.rs", &format!("\n\n// {gone}\n"));
+        write(
+            d,
+            &format!("{dir}/change.md"),
+            &format!("---\nstatus: {status}\nremoves_capabilities: {removes}\n---\n"),
+        );
+        let found: Vec<_> = rules(d)
+            .into_iter()
+            .filter(|v| v.1 == "check/dangling-markers")
+            .collect();
+        if dangling {
+            assert_eq!(found.len(), 1, "{dir} {removes}: {found:?}");
+            assert_eq!(found[0].0, "tests/t.rs:3");
+            assert!(found[0].2.contains("capability/gone"), "{found:?}");
+            assert!(found[0].2.ends_with(suffix), "{found:?}");
+        } else {
+            assert!(found.is_empty(), "{found:?}");
+        }
+    }
+}
+
+#[test]
+fn only_a_capability_marker_gets_the_removal_hint() {
+    // req:check/dangling-markers@2e31c5b8
+    let dir = repo("applied");
+    let d = dir.path();
+    write(d, "tests/t.rs", &format!("// {GONE}\n"));
+    let found = rules(d);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(!found[0].2.contains("removes_capabilities"), "{found:?}");
 }

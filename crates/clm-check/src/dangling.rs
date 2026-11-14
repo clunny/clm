@@ -23,6 +23,10 @@ pub fn violations(
             // A test never proves an architecture entry or an untested entry
             // (`human-layer-proof`).
             let message = match graph.requirement(&m.id) {
+                None if m.id.starts_with("capability/") => format!(
+                    "marker cites `{}`, which is not a requirement; a change that removes the capability lists it under removes_capabilities",
+                    m.id
+                ),
                 None => format!("marker cites `{}`, which is not a requirement", m.id),
                 Some(_) if Layer::of(&m.id) == Some(Layer::Architecture) => {
                     "architecture entries are proven by the rules their #### Enforced by names, not by tests".to_string()
