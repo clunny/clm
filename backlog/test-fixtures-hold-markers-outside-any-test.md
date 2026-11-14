@@ -8,7 +8,7 @@ blocks: [check.coverage/markers-in-tests]
 
 `check.coverage/markers-in-tests` makes a marker count only inside a test. 118 tests in ten components build a fixture repository whose marker sits in a bare comment of a file with no test in it (`// req:a/x` in `t.rs`), and assert that it counts. They would fail the day the rule is built, in components its build may not edit, so this item blocks the rule until they are mended.
 
-The work: in each fixture, write the marker inside a test (for a Rust fixture, a `#[test]` function around the comment; for a TypeScript one, an `it(...)` call). That is valid today, changes nothing a test asserts and no requirement, so it is done on one code branch that resolves this item with the trailer `Resolves: backlog/test-fixtures-hold-markers-outside-any-test` (`deferred-work-resolves-in-code`). A fixture whose point is a marker that must not count, or a dangling one, keeps its marker where it is.
+The work: in each fixture, write the marker inside a test (for a Rust fixture, a `#[test]` function around the comment; for a TypeScript one, an `it(...)` call). That is valid today, changes nothing a test asserts and no requirement, so it is done on one code branch, before this repository sets `wiring`, that resolves this item with the trailer `Resolves: backlog/test-fixtures-hold-markers-outside-any-test` (`deferred-work-resolves-in-code`). A fixture whose point is a marker that must not count, or a dangling one, keeps its marker where it is.
 
 Found on 2026-11-14 by running the whole Rust suite against a prototype of the rule on `9f2746dd`; 4,013 of 4,131 tests passed. The vitest and Playwright suites were not run against it. The tests that failed, by test binary:
 

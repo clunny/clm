@@ -16,7 +16,7 @@ The markers and the states are computed by the child component `check.coverage` 
 ## MODIFIED Requirements
 
 ### Requirement: dangling-markers <!-- base: 2e31c5b8395a0bb1 -->
-`clm check` SHALL report every `req:<id>` marker in a scanned file whose `<id>` names no existing requirement or human-layer entry (`model/human-layers`), giving the file and line; and every marker that cites an architecture entry, or an entry holding `#### Untested`, with the message `architecture entries are proven by the rules their #### Enforced by names, not by tests` or `<id> is untested`, since a test never proves either (`human-layer-proof`); unless a change outside the archive lists `<id>` under `REMOVED Requirements` in one of its deltas, or `<id>` is a capability that a change outside the archive lists under `removes_capabilities` and `CAPABILITIES.md` doesn't hold (`check.coverage/removed-capabilities`): that code is obsolete and is removed when the component is next built (`removed-requirements-build-out`, `removed-capabilities-build-out`). The message for a marker whose `<id>` is `capability/<slug>` and names no entry, with no such change, SHALL end `; a change that removes the capability lists it under removes_capabilities`, so the author of a branch that removes a cited capability learns how to land it. Once the change is archived, the marker SHALL be reported as before. An `abandoned` change is archived (`archive-done`), so it grants no exemption; a requirement another change adds back under the same ID is a new requirement once that change applies, and the marker then cites it as usual. It SHALL judge the markers outside a test (`check.coverage/test-spans`, `markers_outside_tests`) as it judges those `scan` returns, each marker once, so a marker that proves nothing still can't name what doesn't exist.
+`clm check` SHALL report every `req:<id>` marker in a scanned file whose `<id>` names no existing requirement or human-layer entry (`model/human-layers`), giving the file and line; and every marker that cites an architecture entry, or an entry holding `#### Untested`, with the message `architecture entries are proven by the rules their #### Enforced by names, not by tests` or `<id> is untested`, since a test never proves either (`human-layer-proof`); unless a change outside the archive lists `<id>` under `REMOVED Requirements` in one of its deltas, or `<id>` is a capability that a change outside the archive lists under `removes_capabilities` and `CAPABILITIES.md` doesn't hold (`check.coverage/removed-capabilities`): that code is obsolete and is removed when the component is next built (`removed-requirements-build-out`, `removed-capabilities-build-out`). The message for a marker whose `<id>` is `capability/<slug>` and names no entry, with no such change, SHALL end `; a change that removes the capability lists it under removes_capabilities`, so the author of a branch that removes a cited capability learns how to land it. Once the change is archived, the marker SHALL be reported as before. An `abandoned` change is archived (`archive-done`), so it grants no exemption; a requirement another change adds back under the same ID is a new requirement once that change applies, and the marker then cites it as usual. It SHALL judge the markers outside a test, `scan`'s `outside` (`check.coverage/test-spans`), as it judges `scan`'s `req`, each marker once by its file, line and ID, so a marker that proves nothing still can't name what doesn't exist.
 
 #### Scenario: marker on an entry
 - GIVEN a test citing `capability/approve`, an entry of `CAPABILITIES.md`, and another citing `capability/nope`, which isn't one
@@ -57,3 +57,36 @@ The markers and the states are computed by the child component `check.coverage` 
 - check.coverage/test-spans
 - model/human-layers
 - check.coverage/removed-capabilities
+
+## ADDED Requirements
+
+### Requirement: coverage-lists
+`clm-check` SHALL re-export `clm-coverage`'s `tests_in`, `markers_outside_tests`, `uncounted`, `obsolete_tests` and `deleted_tests` (`check-coverage-split`). After the obsolete lines `clm coverage` SHALL print one line `<id> uncounted <file>:<line>[ <file>:<line>...]` for each entry `uncounted` returns for the checkout, so a build finds the markers to move. `clm coverage --obsolete-tests` SHALL print, in place of the coverage, the line `# tests to delete: <n>; tests that only lose a marker: <m>` and then one line per test `obsolete_tests` returns for the checkout, in its order: `DELETE <file>::<name>`, a tab and `cites only removed: <id>[, <id>...]` when every marker on the test's lines cites a removed requirement, and otherwise `UNCITE <file>::<name>`, a tab and `loses: <id>[, <id>...]`. `clm coverage --deleted-tests <base>` SHALL print `# tests deleted since <base>: <n>` and then one line `DELETED <file>::<name>`, a tab and the IDs it cited, per test `deleted_tests` returns for the files of the revision `<base>` against the working tree's. Each SHALL exit 0; `--deleted-tests` SHALL exit 1 naming the revision when `<base>` resolves to no commit; the two flags together SHALL exit 2 as a usage error; and a graph that doesn't load SHALL fail as `clm coverage` fails.
+
+#### Scenario: an uncounted marker
+- GIVEN `a/x`, and `src/lib.rs` holding `req:a/x` at its current version in the body of a function with no test attribute, cited nowhere else
+- WHEN `clm coverage` runs
+- THEN it prints `a/x unbuilt`, and after the obsolete lines `a/x uncounted src/lib.rs:<line>`
+
+#### Scenario: a removed requirement's tests
+- GIVEN an `applied` change that removes `a/x`, a test `both` citing `a/x` and `a/y` and after it a test `only_x` citing `a/x` alone, both in `tests/t.rs`
+- WHEN `clm coverage --obsolete-tests` runs
+- THEN it prints `# tests to delete: 1; tests that only lose a marker: 1`, then `UNCITE tests/t.rs::both` with `loses: a/x`, then `DELETE tests/t.rs::only_x` with `cites only removed: a/x`
+
+#### Scenario: a branch that deletes a test
+- GIVEN a commit `b` whose `tests/t.rs` holds tests `one` and `two`, each citing `a/x`, and a working tree whose `tests/t.rs` holds only `one`
+- WHEN `clm coverage --deleted-tests b` runs
+- THEN it prints `# tests deleted since b: 1` and `DELETED tests/t.rs::two` with `a/x`
+
+#### Scenario: an unknown base
+- GIVEN no commit `nope`
+- WHEN `clm coverage --deleted-tests nope` runs
+- THEN it exits 1 naming `nope`
+
+#### Serves
+- capability/prove-by-tests
+- architecture/proven-by-tests
+
+#### Needs
+- check.coverage/test-lists
+- check.coverage/markers-in-tests

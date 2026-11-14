@@ -43,53 +43,6 @@ The root component's frontmatter MAY set `wiring` to a list of globs, written as
 
 ## MODIFIED Requirements
 
-### Requirement: exemptions <!-- base: 1b57cabdc63c21c7 -->
-A component's frontmatter MAY set `exemptions`, a list of entries that each exempt some of the component's own files from one rule `clm check` or the gate judges code by, for a time (`temporary-exemptions`). An entry SHALL hold `rule`, one of `undeclared-imports`, `tests-cite-their-owner`, `skipped-tests` and `own-files`, the last letting any component's build change the files it names (`gate/own-files`); `files`, a non-empty list of non-empty globs written as `paths` are; `until`, `backlog/<slug>` naming the backlog item whose work ends the exemption; and MAY hold `why`, one line saying why the rule can't be met yet. The model SHALL expose each component's entries in the order written, none when the key is absent. The model SHALL expose its check of an `exemptions` value, `clm_model::check_exemptions`: given the value as parsed YAML (a `&serde_yaml::Value`), it returns `Result<Vec<Exemption>, Vec<String>>`, the entries in the order written, or one message per problem, every problem of every entry and not only the first, each in the words loading reports: a message naming `exemptions` for a value that isn't a list, a null included, and a message naming `exemptions` and the entry's position for an entry that isn't a map, lacks `rule`, `files` or `until`, holds another key, names another rule, holds a `files` or `until` of the wrong shape, or holds a `why` that isn't a string. It judges one key's value and not a component's frontmatter, so it is not a frontmatter check that takes no component ID, which `optional-nodes` forbids. Loading and the model's frontmatter check (`optional-nodes`) SHALL judge a component's `exemptions` by that one check and no other rule, failing under `model/exemptions` with the file and each message the check gives, so a caller that holds entries outside a `SPEC.md`, as `clm survey --components` does (`init/survey-components`), refuses exactly what loading refuses. A glob that matches files other components own exempts nothing there, since an exemption covers only its own component's files. Whether `until` names an item that exists SHALL NOT be judged when loading, so the code fix that resolves the item doesn't fail on the exemption a spec change removes after it (`gate/exemption-names-its-item`, `check.health/exemptions-signal`).
-
-#### Scenario: an exemption parsed
-- GIVEN `specs/a/SPEC.md` with `exemptions: [{rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/x, why: "the suite builds the whole app"}]`
-- WHEN the model loads `specs/`
-- THEN `a` holds one exemption from `undeclared-imports` for `tests/test_api.py` until `backlog/x`, and loading reports nothing
-
-#### Scenario: a rule that can't be exempted
-- GIVEN `specs/a/SPEC.md` with an exemption whose `rule` is `paths-disjoint`
-- WHEN the model loads `specs/`
-- THEN loading fails naming `specs/a/SPEC.md`, `exemptions` and `paths-disjoint`
-
-#### Scenario: an exemption with no end
-- GIVEN `specs/a/SPEC.md` with an exemption that has no `until`
-- WHEN the model loads `specs/`
-- THEN loading fails naming `specs/a/SPEC.md`, `exemptions` and `until`
-
-#### Scenario: the exposed check agrees with loading
-- GIVEN an `exemptions` value of two entries whose second has `until: backlog/a/b`
-- WHEN the model's exemptions check runs on the value, and the model loads `specs/a/SPEC.md` holding it
-- THEN the check returns one message naming `exemptions`, entry 2 and `until`, and loading fails under `model/exemptions` naming `specs/a/SPEC.md` with that same message
-
-#### Scenario: a value that isn't a list
-- GIVEN the `exemptions` value `3`, and again a null value
-- WHEN the model's exemptions check runs on the value, and the model loads `specs/a/SPEC.md` holding it
-- THEN for each the check returns one message naming `exemptions`, and loading fails under `model/exemptions` with that same message and reports nothing under `model/valid-frontmatter`
-
-#### Scenario: a why that isn't a string
-- GIVEN an `exemptions` value whose one entry is valid apart from `why: 3`
-- WHEN the model's exemptions check runs on the value
-- THEN it returns one message naming `exemptions`, entry 1 and `why`
-
-#### Scenario: entries from the exposed check
-- GIVEN the `exemptions` value `[{rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/x}]`
-- WHEN the model's exemptions check runs on the value
-- THEN it returns one exemption from `undeclared-imports` for `tests/test_api.py` until `backlog/x`
-
-#### Scenario: files any build may change
-- GIVEN `specs/a/SPEC.md` with `exemptions: [{rule: own-files, files: ["src/a/shared/**"], until: backlog/x}]`
-- WHEN the model loads `specs/`
-- THEN `a` holds that entry, and loading reports nothing
-
-#### Serves
-- architecture/exemptions-end
-- capability/adopt-clm
-
 ### Requirement: parse-backlog <!-- base: fa4b09c88f9f0264 -->
 The model SHALL load every `backlog/<slug>.md` as a backlog item with frontmatter `title` (required), `kind` (`idea|deferred|question|bug|human-task|workaround`, required), `components` (component IDs, default empty, which an item may still write under the old key, `component-keys`), `origin` (a change ID, optional), `priority` (`P1` to `P5`, default `P5`, `priority-caps`) `blocks` (requirement IDs `<component>/<slug>`, or human-layer entry IDs `architecture/<slug>` and `capability/<slug>`, default empty: the requirements that can't be built until the item is resolved, `requirement-blocks`) and `requirement` (`<component>/<slug>@<version>`, required on a `workaround` item and rejected on any other kind: the requirement a build found hard to build, at the version it built, `workaround-flags`), `issues` (a list of positive whole numbers, default empty: the host's issues the item was taken in from, `issues-enter-through-the-backlog`) and `alerts` (a list of positive whole numbers, default empty: the host's dependency alerts the item was taken in from, `dependency-alerts-through-intake`) and `verify_failures` (a list of commit IDs, each 40 lower-case hex digits, default empty: the red `verified` results on `main` the item was taken in from, `verify-after-land`) and `unproven` (a list of `<component>/<slug>@<version>`, the version 8 lower-case hex digits, default empty, accepted on a `bug` item alone: the requirements a mutation pass found unproven at that version, `mutation-after-land`), rejecting unknown keys, any other `priority` value, an `issues` or `alerts` entry that isn't a positive whole number, a `verify_failures` entry that isn't 40 lower-case hex digits, an `unproven` entry of another shape and an `unproven` on an item of another kind. An `unproven` entry MAY name a requirement that no longer exists or a version that is no longer current: it then says nothing, so the spec change that rewords or removes the requirement edits no item. The model SHALL expose each item's `unproven` in the order written. A `blocks` entry, or a workaround item's `requirement`, MAY name a human-layer entry that exists (`human-layers`), whose version is its block's. It SHALL reject a `workaround` item whose `requirement` names a requirement that doesn't exist, or whose version isn't the first 8 hex digits of that requirement's current content hash, so the spec change that removes or rewrites a requirement deletes its flags or re-records them at the new version. It SHALL reject an item naming an origin change that doesn't exist, a component that neither exists nor is created by a delta with `create: true` of a change outside the archive, or a `blocks` entry naming a requirement that neither exists nor is added, under `## ADDED Requirements`, by a delta for its component of a change outside the archive, so the spec PR that removes a requirement edits the items that block it, and the spec PR that adds a requirement may file the item that blocks it. A change counts whatever its `status`, as for `components`; a delta that failed to load adds nothing. A `kind` that is the word `plain-terms-renames` replaced with `human-task` or `workaround` SHALL load as that kind, so an item from before that rename, in the tree or in a commit whose history `effort` reads, still loads (`renamed-words-still-load`). A `human-task` item is a step only a person can take, such as creating an account or setting a secret. A `workaround` item is a build's flag that a requirement was hard to build; `clm health` counts them (`check.health`).
 

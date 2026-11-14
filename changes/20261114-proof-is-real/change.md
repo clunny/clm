@@ -20,7 +20,7 @@ It adds checks and removes no requirement. It replaces one scenario and ends one
 Each part's choice is in its decision; in short:
 
 - **Which record makes a marker count** (`markers-count-in-tests`). Taken: none new. The marker must sit in a test, read from the file's text, and the land's existing rule already has every changed file in the selection of the check behind its verdict. Not taken: reading the test runner's results, which needs a format every project's check must write, a join per runner, and a ledger read wherever coverage is computed.
-- **The ownership rule's transitional case** (`own-files-at-the-gate`). Taken: a file that cites the building component is its to change, the reading the gate already uses for code fixes. Not taken: an exemption per owner of such files, eleven here, each open to every build.
+- **The ownership rule's transitional case** (`own-files-at-the-gate`). Taken: a file that cites the building component is its to change, the reading the gate already uses for code fixes. Not taken: an exemption per owner of such files, eleven here, each open to every build; a new exemption rule was cut from the change altogether.
 - **What the mutation pass judges** (`mutation-after-land`). Taken: requirements whose citing tests were added or changed, against the changed code first. Not taken: every re-cited requirement against a sample of its component, which a measurement showed misjudges sound tests.
 - **How a verdict reaches coverage.** Taken: a `bug` item naming the requirement under `unproven`, landed by verify, so coverage stays a function of the tree. Not taken: coverage reading the ledger, and a new state word.
 
@@ -28,18 +28,18 @@ Each part's choice is in its decision; in short:
 
 **The marker rule** (`check.coverage`, `check`).
 - `check.coverage/test-spans`: the library finds the tests and groups of tests in a Rust, TypeScript, JavaScript or Python file, and the markers outside them. Counting is unchanged by it.
-- `check.coverage/markers-in-tests`: only markers inside a test count in those languages; `clm coverage` lists the others as `uncounted`. In any other language every marker counts as before.
-- `check.coverage/test-lists`: `clm coverage --obsolete-tests` and `--deleted-tests <base>`, the lists phase 2 made by script.
-- `check/dangling-markers` and `check.affected/affected-files` read the markers outside tests too, so a marker that proves nothing still can't name what doesn't exist, and still selects its file.
+- `check.coverage/markers-in-tests`: only markers inside a test count in those languages. In any other language every marker counts as before.
+- `check.coverage/test-lists` and `check/coverage-lists`: `clm coverage` lists the markers outside tests as `uncounted`, and `--obsolete-tests` and `--deleted-tests <base>` print the lists phase 2 made by script.
+- `check/dangling-markers`, `check.affected/affected-files`, `rename/marker-rewrite` and `check.health/churn-signal` read every marker, outside tests too: such a marker still can't name what doesn't exist, still selects its file, is still renamed and still counts as churn.
 - On `main` at `9f2746dd`, 16 of 4,432 markers stop counting, all file-header comments in TypeScript test files, and five requirements become pending: `plugin.panel/build-rows`, `web.client-live/live-updates`, `web.client-live/push-renewal`, `web.views/backlog-item-page` and `web.views/home-waiting-on-you`. Their builds move the markers.
 - 118 tests in ten components build fixtures whose marker sits in a bare comment. `backlog/test-fixtures-hold-markers-outside-any-test` blocks `markers-in-tests` until one code branch has mended them.
 
 **The ownership rule** (`gate`, `model`, the root).
-- `gate/own-files` finds the files, `land/build-holds-own-files` refuses them at the land and in `clm land --check-only`, `model/wiring-globs` is the root's key, and `own-files` becomes a rule an exemption may name. The gate itself reads no branch name, as before.
-- The rule is off until the root sets `wiring`. This repository sets it in the later branch, with `upgrade`'s exemption, since without that exemption a build of `init` that writes a migration would be refused.
+- `gate/own-files` finds the files, `land/build-holds-own-files` refuses them at the land and in `clm land --check-only`, and `model/wiring-globs` is the root's key. The gate itself reads no branch name, as before.
+- The rule is off until the root sets `wiring`. This repository sets it in a later branch: first a build of `init` that writes one of `upgrade`'s migrations needs a way through (`backlog/a-template-and-its-migration-live-in-different-components`).
 
 **The mutation pass** (`verify`, `config`, `ledger`, `model`, `check.coverage`, `ci`).
-- `config/verify-setting` gains `mutate`; `verify/mutation-pass` and `verify/files-unproven`; `ledger/mutated-record`; `model/parse-backlog` gains `unproven`; `check.coverage/coverage-report` reads it.
+- `config/verify-setting` gains `mutate`; `verify/mutation-pass` and `verify/files-unproven`; `ledger/mutated-record`; `model/parse-backlog` gains `unproven`; `check.coverage/coverage-report` reads it; `orchestrator.triage/triage` leaves such an item to its component's build.
 - `ci/mutate-script` is this repository's command, with `cargo-mutants` and StrykerJS, and runs the coverage script at the end of each pass.
 - Nothing runs it until `clm.toml` sets `[verify] mutate`, which a later spec branch does.
 
@@ -53,9 +53,8 @@ The marker rule adds a scan of the marker-bearing files to `clm check`, tens of 
 
 It needs review, and can't be written until this change's builds are installed:
 - `ARCHITECTURE.md`: `path-ownership` becomes checked; `exemptions-end` is reworded to cover the land's rule; the blocks of `proven-by-tests` are rewritten.
-- The root's `wiring`.
+- The root's `wiring`, once a template and its migration share a component or the rule has a way to keep that exception.
 - `clm.toml`: `[verify] mutate` and the lcov path the pass writes.
-- `upgrade`'s `own-files` exemption for the migrations `init`'s builds write.
 - `path-ownership-by-prompt` is deleted.
 
 ## What it removes

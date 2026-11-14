@@ -16,7 +16,7 @@ Crate `clm-coverage`. Its library, which `clm-check` re-exports:
 - `status_report(graph, markers)` and `complete_changes`, built on `change_progress` (`status-report`).
 - `removed(graph)`: each requirement ID that a change outside the archive lists under `REMOVED Requirements` and no component holds, and each `capability/<slug>` that a change outside the archive lists under `removes_capabilities` and `CAPABILITIES.md` doesn't hold (`removed-capabilities`), with those changes' IDs sorted; what makes a marker *obsolete*, and what `check`'s `dangling-markers` and `removed-requirement-names` exempt or report.
 - `matches(glob, path)`: whether a `paths` glob matches a repository-relative path, as `pending` and `check`'s `paths-disjoint` read `paths`.
-- `obsolete_tests(graph, files)` and `deleted_tests(base_files, head_files)`: the tests a change's removals leave with nothing to cite, and the citing tests one tree holds that another doesn't (`test-lists`).
+- `uncounted(graph, outside)`, `obsolete_tests(graph, files)` and `deleted_tests(base_files, head_files)`: the markers outside tests by what they cite, the tests a change's removals leave with nothing to cite, and the citing tests one tree holds that another doesn't (`test-lists`); `clm coverage` prints them through `clm-check` (`check/coverage-lists`).
 - `owner(graph, path)`: the component that owns a repository-relative path (`owner`); `check.affected` reads it through `clm-check` (`check/path-ownership`).
 
 The crate builds for `wasm32-unknown-unknown` with its default features disabled (`coverage-builds-for-wasm`).
@@ -33,7 +33,7 @@ Crate `clm-coverage` holds the modules `coverage`, `pending`, `status` and `glob
 
 **Moves** (`progress-follows-moves`). Moves are what `status-report` defines. Only `ADDED Requirements` make a move, so neither delta needs `create: true` or `remove: true`, and a requirement moved between two existing components is a move too. A move's added text needn't match the removed text, and moves are not ordered against the change they're followed for: a rename may apply after a change whose deltas target the old component. The moves are computed once per call into a map from each moved ID to the IDs it moved to, and an ID is followed through it breadth first, stopping at the IDs the spec holds and visiting each ID once, so a chain of renames is followed and one that comes back is not followed forever. An ID that moved to more than one component (a split) counts as each of them, so a split can make `total` larger than the number of requirements the deltas list; the counted IDs are deduplicated after the mapping. `pending` reads the same map, through the same walk, for the requirements an obsolete one waits on; `report` and `removed` ignore the moves.
 
-**Tests** (`test-spans`, `markers-in-tests`, `markers-count-in-tests`). A marker proves something only where a test can run it, so the scan reads where the tests are. It reads three language families by their file extension, the ones `check/skipped-tests` reads, with a line scanner and no parser: a test's lines run from the comment and attribute lines directly above it to the line that closes its body, found by counting braces (Rust, TypeScript and JavaScript) or indentation (Python) outside line comments. That is approximate on purpose: a brace inside a string can end a span early or late, which costs one marker its standing and shows in `clm coverage`'s `uncounted` line, never a crash. In a file of any other extension CLM can't tell a test, so every marker counts as before; a language is added to the list by a change. Whether a test passed is not read from any runner: every file a branch changes is in the selection of the check behind its land's verdict (`land/land`, `check.affected/affected-files`), so the test that holds a new or re-cited marker ran in a check that passed, and what a check never ran shows after the land, when the mutation pass finds its tests kill nothing (`verify/mutation-pass`). It is a scanner and not three parsers because `clm-coverage` builds for `wasm32-unknown-unknown` for the Worker, which a parser generator's C runtime doesn't, and because it needs only where a test starts and ends, which a grammar for each language would be much code to learn. `markers_in` stays a function of one file's path and text, so the Worker and `clm view --at` count what the CLI counts with no ledger (`markers-from-files`).
+**Tests** (`test-spans`, `markers-in-tests`, `markers-count-in-tests`). A marker proves something only where a test can run it, so the scan reads where the tests are. It reads three language families by their file extension, the ones `check/skipped-tests` reads, with a line scanner and no parser: a test's lines run from the comment and attribute lines directly above it to the line that closes its body, found by counting braces (Rust), the call's parentheses (TypeScript and JavaScript) or indentation (Python) outside line comments. That is approximate on purpose: a brace inside a string can end a span early or late, which costs one marker its standing and shows in `clm coverage`'s `uncounted` line (`check/coverage-lists`), never a crash. In a file of any other extension CLM can't tell a test, so every marker counts as before; a language is added to the list by a change. Whether a test passed is not read from any runner: every file a branch changes is in the selection of the check behind its land's verdict (`land/land`, `check.affected/affected-files`), so the test that holds a new or re-cited marker ran in a check that passed, and what a check never ran shows after the land, when the mutation pass finds its tests kill nothing (`verify/mutation-pass`). It is a scanner and not three parsers because `clm-coverage` builds for `wasm32-unknown-unknown` for the Worker, which a parser generator's C runtime doesn't, and because it needs only where a test starts and ends, which a grammar for each language would be much code to learn. `markers_in` stays a function of one file's path and text, so the Worker and `clm view --at` count what the CLI counts with no ledger (`markers-from-files`).
 
 **Who reads which markers.** What asks whether a requirement is proven reads the markers that count: the coverage, `clm pending`, the size count, `check/tests-cite-their-owner`, the churn signal and the views. What asks which text names a requirement reads every marker, `scan`'s `outside` included: `check/dangling-markers`, the rename's rewrite (`marker_spans`) and test selection (`check.affected/affected-files`), which must still run a file for the component it cites when its marker sits outside a test.
 
@@ -44,9 +44,9 @@ Crate `clm-coverage` holds the modules `coverage`, `pending`, `status` and `glob
 
 ### Requirement: test-spans
 `clm-coverage` SHALL offer `tests_in(path, text)`, returning the tests and the named groups of tests in one file's text, in the order they start, each with its name, whether it is a group, and its first and last line, the first being the first of the comment and attribute lines directly above it with no blank or code line between, and SHALL find them by the file's extension:
-- `.rs`: a test is a function that an attribute whose path ends in `test`, `rstest` or `test_case` precedes (`#[test]`, `#[tokio::test]`), named by the function, from those lines to the line that closes its body; there are no groups.
-- `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` and `.cjs`: a test is a call of `it` or `test`, and a group a call of `describe` or `test.describe`, each with or without the modifiers `check/skipped-tests` reads and `.only`, `.each`, `.concurrent` and `.serial`, starting a line after leading whitespace, named by its first argument when that is a string literal and by an empty name otherwise, from those lines to the line that closes the call.
-- `.py`: a test is a function whose name starts `test`, and a group a class whose name starts `Test`, named by it, from the decorator and comment lines directly above it to the last line indented deeper than its `def` or `class` line.
+- `.rs`: a test is a function that an attribute precedes whose path's last segment is `test`, `rstest` or `test_case` or ends `_test` (`#[test]`, `#[tokio::test]`, `#[wasm_bindgen_test]`), named by the function, from those lines to the line that closes its body, found by counting braces outside line comments; there are no groups. A comment line between the attribute and the function is one of its lines.
+- `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs` and `.cjs`: a test is a call of `it` or `test`, and a group a call of `describe` or `test.describe`, each with or without the modifiers `check/skipped-tests` reads and `.only`, `.each`, `.concurrent` and `.serial`, starting a line after leading whitespace, named by its first argument when that is a string literal and by an empty name otherwise, from those lines to the line that closes the call, found by counting its parentheses outside line comments.
+- `.py`: a test is a function, `def` or `async def`, whose name starts `test`, and a group a class whose name starts `Test`, named by it alone, from the decorator and comment lines directly above it to the last line indented deeper than its `def` or `class` line.
 - any other extension: none.
 
 It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marker_spans` finds in `text` on a line that belongs to no test or group, as `Marker`s, and nothing for a Markdown file or a file of another extension than those above. `scan(root)` SHALL return them for every file it reads as `outside`, beside `req`. Both calls SHALL build without the `checkout` feature. Neither changes what `markers_in` returns or what `scan`'s `req` holds.
@@ -77,22 +77,22 @@ It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marke
 - THEN each returns nothing
 
 ### Requirement: markers-in-tests
-`markers_in(path, text)` and `scan(root)`'s `req` SHALL hold, for a file of an extension `test-spans` reads, only the markers on a line of a test or a group of tests, and for any other file every marker, none for Markdown, so a marker in code that isn't a test proves nothing (`markers-count-in-tests`). After the obsolete lines `clm coverage` SHALL print one line `<id> uncounted <file>:<line>[ <file>:<line>...]` for each requirement or capability that exists and that a marker outside a test cites, sorted by ID, so a build finds the markers to move. The capability test `crates/clm/tests/capability/prove_by_tests.rs` writes its marker inside a test function; this requirement's build adds to it that the same marker in a function with no test attribute leaves the requirement `unbuilt` and prints the `uncounted` line.
+`markers_in(path, text)` and `scan(root)`'s `req` SHALL hold, for a file of an extension `test-spans` reads, only the markers on a line of a test or a group of tests, and for any other file every marker, none for Markdown, so a marker in code that isn't a test proves nothing (`markers-count-in-tests`). The capability test `crates/clm/tests/capability/prove_by_tests.rs` writes its marker inside a test function; this requirement's build adds to it that the same marker in a function with no test attribute leaves the requirement `unbuilt`.
 
 #### Scenario: a marker in code that is no test
 - GIVEN `a/x`, and `src/lib.rs` holding `req:a/x` at its current version in the body of a function with no test attribute, cited nowhere else
 - WHEN `clm coverage` runs
-- THEN it prints `a/x unbuilt`, and after it `a/x uncounted src/lib.rs:<line>`
+- THEN it prints `a/x unbuilt`
 
 #### Scenario: a marker in a test
 - GIVEN the same marker in the body of a `#[test]` function in `tests/x.rs`
 - WHEN `clm coverage` runs
-- THEN it prints `a/x current tests/x.rs:<line>` and no `uncounted` line
+- THEN it prints `a/x current tests/x.rs:<line>`
 
 #### Scenario: a file-header marker
 - GIVEN `a.test.ts` whose first line is a comment holding `req:a/x`, followed by a blank line and tests
 - WHEN `clm coverage` runs
-- THEN it prints `a/x unbuilt` and `a/x uncounted a.test.ts:1`
+- THEN it prints `a/x unbuilt`
 
 #### Scenario: a language CLM doesn't read
 - GIVEN `a_test.go` holding `req:a/x` at its current version in a comment
@@ -107,29 +107,31 @@ It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marke
 #### Needs
 - check/dangling-markers
 - check.affected/affected-files
+- check.health/churn-signal
+- rename/marker-rewrite
 
 ### Requirement: test-lists
-`clm coverage --obsolete-tests` SHALL print, in place of the coverage, one line for each test (`test-spans`, groups left out) that holds a marker citing a requirement or capability a change outside the archive removed (`removed`), sorted by file and then by line: `DELETE <file>::<name>` followed by a tab and `cites only removed: <id>[, <id>...]` when every marker on the test's lines cites such a requirement, and otherwise `UNCITE <file>::<name>` followed by a tab and `loses: <id>[, <id>...]`, the IDs sorted, and before them the line `# tests to delete: <n>; tests that only lose a marker: <m>`. `clm coverage --deleted-tests <base>` SHALL print one line `DELETED <file>::<name>`, a tab and the IDs it cited, for each test that holds a marker in the tree at the revision `<base>` and that the working tree's file of that path, or its absence, holds no test of that name for, sorted the same way, and before them `# tests deleted since <base>: <n>`. Each SHALL exit 0, and exit 1 naming the revision when `<base>` resolves to no commit. The library calls behind them, `obsolete_tests` and `deleted_tests`, SHALL take the files' paths and texts, so they build without the `checkout` feature.
+`clm-coverage` SHALL offer, building without the `checkout` feature and taking files as paths and texts: `uncounted(graph, outside)`, returning, sorted by ID, each requirement or capability that exists, or that a change outside the archive removed (`removed`), and that a marker outside a test cites, with those markers' locations; `obsolete_tests(graph, files)`, returning each test (`test-spans`, groups left out) that holds a marker citing a requirement or capability a change outside the archive removed, sorted by file and then by line, with the removed IDs it cites, sorted, and whether every marker on the test's lines cites one; and `deleted_tests(base_files, head_files)`, returning each test that holds a marker in `base_files` and that `head_files` holds no test of that name in a file of that path for, sorted the same way, with the IDs it cited. A test is named `<file>::<name>`.
+
+#### Scenario: uncounted
+- GIVEN `a/x` existing, `a/gone` removed by an `applied` change, and markers outside a test citing `a/x` at `src/lib.rs:3` and `a/gone` at `src/lib.rs:9`
+- WHEN `uncounted` runs
+- THEN it returns `a/gone` with `src/lib.rs:9`, then `a/x` with `src/lib.rs:3`
 
 #### Scenario: a removed requirement's tests
-- GIVEN an `applied` change that removes `a/x`, a test `only_x` citing `a/x` alone and a test `both` citing `a/x` and `a/y`, both in `tests/t.rs`
-- WHEN `clm coverage --obsolete-tests` runs
-- THEN it prints `# tests to delete: 1; tests that only lose a marker: 1`, then `UNCITE tests/t.rs::both` with `loses: a/x` and `DELETE tests/t.rs::only_x` with `cites only removed: a/x`, in line order
+- GIVEN an `applied` change that removes `a/x`, a test `only_x` citing `a/x` alone and a test `both` citing `a/x` and `a/y`, both in `tests/t.rs`, `both` first
+- WHEN `obsolete_tests` runs
+- THEN it returns `tests/t.rs::both` with `a/x`, not every marker, then `tests/t.rs::only_x` with `a/x`, every marker
 
-#### Scenario: a branch that deletes a test
-- GIVEN a commit `b` whose `tests/t.rs` holds tests `one` and `two`, each citing `a/x`, and a working tree whose `tests/t.rs` holds only `one`
-- WHEN `clm coverage --deleted-tests b` runs
-- THEN it prints `# tests deleted since b: 1` and `DELETED tests/t.rs::two` with `a/x`
+#### Scenario: a deleted test
+- GIVEN base files whose `tests/t.rs` holds tests `one` and `two`, each citing `a/x`, and head files whose `tests/t.rs` holds only `one`
+- WHEN `deleted_tests` runs
+- THEN it returns `tests/t.rs::two` with `a/x`
 
 #### Scenario: a renamed test
-- GIVEN the same, with `two` renamed `second` in the working tree
+- GIVEN the same, with `two` renamed `second` at the head
 - WHEN it runs
-- THEN it lists `tests/t.rs::two` as deleted, since a program can't tell a rename from a removal
-
-#### Scenario: an unknown base
-- GIVEN no commit `nope`
-- WHEN `clm coverage --deleted-tests nope` runs
-- THEN it exits 1 naming `nope`
+- THEN it returns `tests/t.rs::two`, since a program can't tell a rename from a removal
 
 ## MODIFIED Requirements
 
