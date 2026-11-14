@@ -2,6 +2,7 @@
 
 // clm:reads Cargo.toml
 // clm:reads crates/clm/Cargo.toml
+// clm:reads crates/clm-runner/**
 
 use std::fs;
 use std::path::Path;
