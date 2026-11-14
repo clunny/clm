@@ -586,11 +586,9 @@ fn check_frontmatter(
             format!("`tests` must be a list of non-empty strings, not `{bad}`"),
         ));
     }
-    errors.extend(
-        bad_exemptions(&fm)
-            .into_iter()
-            .map(|m| v(path, EXEMPTIONS, m)),
-    );
+    if let Some(Err(problems)) = fm.get("exemptions").map(check_exemptions) {
+        errors.extend(problems.into_iter().map(|m| v(path, EXEMPTIONS, m)));
+    }
     if let Some(bad) = bad_size_budget(&fm) {
         errors.push(v(
             path,
@@ -676,15 +674,16 @@ fn bad_tests(fm: &serde_yaml::Value) -> Option<String> {
     (!ok).then(|| one_line(value))
 }
 
-/// What is wrong with the frontmatter's `exemptions`, one message per problem, each
-/// naming the key and, for an entry, its 1-based position.
-fn bad_exemptions(fm: &serde_yaml::Value) -> Vec<String> {
-    let Some(value) = fm.get("exemptions") else {
-        return Vec::new();
-    };
-    // A value that isn't a list is left to the typed parse.
+/// Check an `exemptions` value, as parsed YAML (`exemptions`): the entries in the order
+/// written, or one message per problem, every problem of every entry, each naming the key
+/// and, for an entry, its 1-based position. Loading and the frontmatter check judge a
+/// component's `exemptions` by this and no other rule.
+pub fn check_exemptions(value: &serde_yaml::Value) -> Result<Vec<Exemption>, Vec<String>> {
     let Some(entries) = value.as_sequence() else {
-        return Vec::new();
+        return Err(vec![format!(
+            "`exemptions` must be a list of entries, not `{}`",
+            one_line(value)
+        )]);
     };
     let mut problems = Vec::new();
     for (i, entry) in entries.iter().enumerate() {
@@ -741,8 +740,17 @@ fn bad_exemptions(fm: &serde_yaml::Value) -> Vec<String> {
                 }
             }
         }
+        if map.get("why").is_some_and(|why| !why.is_string()) {
+            problems.push(format!("{at} needs `why` to be a string"));
+        }
     }
-    problems
+    if !problems.is_empty() {
+        return Err(problems);
+    }
+    Ok(entries
+        .iter()
+        .filter_map(|e| serde_yaml::from_value(e.clone()).ok())
+        .collect())
 }
 
 /// The frontmatter's `outside` value, as one line of YAML, when it is present and not a
