@@ -2056,6 +2056,8 @@ fn a_rust_requirement_whose_test_notices_is_killed() {
         "package(=clm-check)",
         "binary_id(=clm-check::it)",
         "test(~proves_x)",
+        // A test in another package than the code: the baseline matches no test and still passes.
+        "-- --no-tests=pass -E",
     ] {
         assert!(run.contains(part), "no {part} in {run}");
     }

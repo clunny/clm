@@ -152,8 +152,10 @@ run_mutants() {
   shift
   rm -rf "$out"
   mkdir -p "$out"
+  # `--no-tests=pass`: cargo-mutants runs its unmutated baseline in the mutated files' package,
+  # where the filterset matches nothing when the citing tests are another package's.
   cargo mutants --test-tool nextest --output "$out" "${mutants_args[@]}" "$@" \
-    -- -E "$filterset" || status=$?
+    -- --no-tests=pass -E "$filterset" || status=$?
   # 0 all caught, 2 some missed, 3 some timed out; anything else judged nothing: the tests fail
   # in the unmutated tree, or a filterset doesn't parse.
   case $status in
