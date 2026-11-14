@@ -143,6 +143,11 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // the two overlap (`land/overlap-recheck`). After a check of this land's own that
         // passed on a merge commit, that commit stands for the head, and the overlap decides
         // whatever the new tree's key already counts as.
+        // Only for the head it was made from: a branch pushed since starts afresh.
+        let chain = chain.filter(|c| {
+            repo.git(&["rev-parse", &format!("{c}^2")])
+                .is_ok_and(|parent| parent == head)
+        });
         let overlap_head = chain.map_or_else(|| head.clone(), str::to_string);
         let overlap = match &merged {
             Some((_, key))
