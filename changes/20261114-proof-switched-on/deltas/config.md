@@ -20,7 +20,7 @@ This repository's `clm.toml` SHALL set `[verify]` with `check = ".github/scripts
 - ci/mutate-script
 
 ### Requirement: health-lcov-here <!-- base: 1b7840261d716532 -->
-This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-build/lcov.info"`, the copy of the tracefile `.github/scripts/coverage.sh` writes that the mutation pass leaves in the place `clm verify` keeps from run to run (`ci/mutate-script`), and no other key of the table. The path is under the clone's main checkout, so `clm health` reads it there and reports `not found` in a linked worktree.
+This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-build/lcov.info"`, the copy of the tracefile `.github/scripts/coverage.sh` writes that the mutation pass leaves in the place `clm verify` keeps from run to run (`ci/mutate-script`), and no other key of the table. The path is under the clone's main checkout, so `clm health` reads it there and reports `not found` in a linked worktree, as it does before the first pass that judges a requirement and after `clm verify` clears that place at its size cap.
 
 #### Scenario: this repository
 - GIVEN this repository's `clm.toml`
@@ -32,3 +32,4 @@ This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-buil
 
 #### Needs
 - ci/coverage-script
+- ci/mutate-script

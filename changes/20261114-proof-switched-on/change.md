@@ -63,7 +63,9 @@ It removes no requirement, scenario or test. It ends two routes a build had here
 
 **Decisions.** `path-ownership-by-prompt` is deleted, and the five decisions that cite it are corrected. `own-files-at-the-gate`, `mutation-after-land` and `template-change-ships-its-migration` each gain what this change settled.
 
-**Backlog.** `the-written-exception-to-path-ownership-lets-a-build-re-cite-a` is resolved: the guide's list of what a build may change, rewritten by `20261114-proof-is-real`, already says a build may add, change or delete a test that cites it in another component's file, and the land now reads it the same way. `a-template-and-its-migration-live-in-different-components` records the direction settled here. `the-build-prompt-and-skills-still-tell-sessions-what-programs-now-refuse` gains the skill text that says one claim carries a fix across components.
+**Backlog.** `the-written-exception-to-path-ownership-lets-a-build-re-cite-a` is resolved: the guide's list of what a build may change, rewritten by `20261114-proof-is-real`, already says a build may add, change or delete a test that cites it in another component's file, and the land now reads it the same way. `a-template-and-its-migration-live-in-different-components` records the direction settled here. `the-build-prompt-and-skills-still-tell-sessions-what-programs-now-refuse` gains the skill text that says one claim carries a fix across components, and the build prompt's instruction to write `upgrade`'s migration in `init`'s branch. The session that lands this change does that item's work straight after, each component's part under its own claim, so the prompt and the skill stop telling a session to do what the land refuses.
+
+**The guide.** `clm guide how-it-works` says a fix that names several components is made one component at a time.
 
 ## What it ends
 
@@ -87,9 +89,16 @@ Nothing new. The ownership rule was built by `20261114-proof-is-real` and costs 
 
 ## Open questions
 
+From the architecture audit:
+- **The plan item still says the earlier order**, that the root sets `wiring` once `init`'s builds have a way to write `upgrade`'s migrations. It is rewritten when phase 3 is marked done, on a branch of its own after this one lands, as the plan's own rule for a finished phase says.
+- **`clm guide constraints` prints `path-ownership` as a principle until a `clm` built from this `main` is installed**, since the page is compiled into the binary.
+- **The skill and the build prompt name the two ended routes until the follow-up lands.** In that window a session that follows them is refused at `clm land --check-only`, with the rule's message saying what to do.
+
+From the design:
+
 - **Nothing in the land check runs the real mutation tools.** `ci/mutate-script`'s tests still use fakes; the fixture the script judges at each pass is what proves the tools, after the land. A build of `ci` that can't make StrykerJS judge the fixture under TypeScript 7 leaves the requirement unbuilt with a question item, and `config/verify-here` waits behind it.
 - **A failed pass is one line on stderr.** `verify/mutation-pass` prints `mutation: <command> failed with status <n>; nothing recorded` and the verification still passes. An unattended loop shows it to nobody. Whether a failed pass should file an item is left for the first one seen.
-- **`clm health` in a linked worktree** finds no tracefile, since `.clm/verify-build` is under the clone's main checkout, and prints `not found`.
+- **`clm health` in a linked worktree** finds no tracefile, since `.clm/verify-build` is under the clone's main checkout, and prints `not found`. The file is also written only by a pass that had a requirement to judge, so it can be some lands old, and it goes when `clm verify` clears that place at its size cap, until the next such pass.
 - **Tests written before the pass** are still never judged (`backlog/tests-written-before-the-mutation-pass-were-never-judged`).
 
 ## Constraints
