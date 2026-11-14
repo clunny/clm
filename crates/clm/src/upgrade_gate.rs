@@ -34,7 +34,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Setup { root } => at(root.as_deref(), false),
         C::Defect { .. } | C::Config { .. } | C::Init { .. } | C::Upgrade { .. } => at(None, false),
         C::Check { root, .. }
-        | C::Coverage { root }
+        | C::Coverage { root, .. }
         | C::Pending { root, .. }
         | C::Size { root, .. }
         | C::Apply { root, .. }

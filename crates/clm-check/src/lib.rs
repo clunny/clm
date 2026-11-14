@@ -23,6 +23,8 @@ mod disjoint;
 #[cfg(feature = "checkout")]
 mod entries;
 mod imports;
+#[cfg(feature = "checkout")]
+mod lists;
 mod ownership;
 #[cfg(feature = "checkout")]
 mod remove_by;
@@ -45,9 +47,10 @@ use std::path::Path;
 
 pub use attributes::linguist_excluded;
 pub use clm_coverage::{
-    ChangeProgress, Coverage, Marker, Pending, Row, STATE_NAMES, State, StatusReport,
-    change_progress, complete_changes, markers_in, matches, matches as path_matches, owner,
-    pending, removed, report, status_report,
+    ChangeProgress, Coverage, DeletedTest, Marker, ObsoleteTest, Pending, Row, STATE_NAMES, State,
+    StatusReport, TestSpan, Uncounted, change_progress, complete_changes, deleted_tests,
+    markers_in, markers_outside_tests, matches, matches as path_matches, obsolete_tests, owner,
+    pending, removed, report, status_report, tests_in, uncounted,
 };
 #[cfg(feature = "checkout")]
 pub use clm_coverage::{Scan, scan};
@@ -55,6 +58,8 @@ pub use clm_model::Violation;
 #[cfg(feature = "detectors")]
 pub use detectors::{Detector, detectors};
 pub use imports::undeclared_imports;
+#[cfg(feature = "checkout")]
+pub use lists::{coverage_lines, deleted_tests_lines, obsolete_tests_lines};
 #[cfg(feature = "detectors")]
 pub use size::size;
 pub use size::{Budgets, Count, Length, Size, TestPart, size_of};
