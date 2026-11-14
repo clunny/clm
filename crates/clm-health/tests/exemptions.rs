@@ -67,7 +67,7 @@ fn only_files_the_component_owns_count_and_none_is_a_zero_summary() {
         d,
         "specs/a/SPEC.md",
         "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"tests/a/**\"]\n\
-exemptions:\n  - rule: skipped-tests\n    files: [\"tests/**\"]\n    until: backlog/r\n---\n\n## Requirements\n",
+exemptions:\n  - rule: skipped-tests\n    files: [\"tests/**/*.py\"]\n    until: backlog/r\n---\n\n## Requirements\n",
     );
     write(
         d,
@@ -76,6 +76,7 @@ exemptions:\n  - rule: skipped-tests\n    files: [\"tests/**\"]\n    until: back
     );
     write(d, "tests/a/x.py", "x\n");
     write(d, "tests/b/y.py", "y\n");
+    write(d, "tests/a/n.txt", "n\n");
     write(
         d,
         "backlog/r.md",
