@@ -1057,6 +1057,95 @@ fn up_to_date(at: &At, base: &str, here: &Path) -> Result<Vec<Violation>, String
     Ok(violations)
 }
 
+/// A code file a build isn't to change, with the component that owns it (`own-files`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignFile {
+    pub path: String,
+    pub owner: String,
+}
+
+/// The code files `head` changes against the merge base with `base` that aren't
+/// `component`'s build's to change, sorted by path (`own-files`). Nothing when the root at
+/// the merge base sets no `wiring` or its specs hold no `component`. `head` is read only as
+/// a revision (`evaluate-at`).
+pub fn foreign_files(
+    repo: &Path,
+    base: &str,
+    head: &str,
+    component: &str,
+) -> Result<Vec<ForeignFile>, String> {
+    let head = clm_git::git(
+        repo,
+        &[
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            &format!("{head}^{{commit}}"),
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
+    let at = At {
+        repo,
+        merge_base: &merge_base,
+        head: &head,
+    };
+    let graph = load_specs_at(repo, &merge_base)?;
+    let Some(wiring) = graph.wiring() else {
+        return Ok(Vec::new());
+    };
+    if !graph.nodes.contains_key(component) {
+        return Ok(Vec::new());
+    }
+    let served: Vec<String> = graph
+        .nodes
+        .get(component)
+        .into_iter()
+        .flat_map(|n| &n.requirements)
+        .flat_map(|r| graph.effective_serves(&r.id))
+        .filter_map(|s| s.strip_prefix("capability/"))
+        .map(|slug| format!("req:capability/{slug}"))
+        .collect();
+    let cites = |text: &[u8], marker: &str, whole: bool| {
+        text.windows(marker.len())
+            .enumerate()
+            .filter(|(_, w)| *w == marker.as_bytes())
+            .any(|(i, _)| {
+                !whole
+                    || !text
+                        .get(i + marker.len())
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
+            })
+    };
+    let own_marker = format!("req:{component}/");
+    let mut found = Vec::new();
+    for (status, file) in changed_files(repo, &format!("{merge_base}...{head}"))? {
+        if is_spec_path(&file) {
+            continue;
+        }
+        let Some(owner) = clm_coverage::owner(&graph, Path::new(&file)) else {
+            continue;
+        };
+        if owner == component || wiring.iter().any(|g| clm_coverage::matches(g, &file)) {
+            continue;
+        }
+        let text_at = |rev: &str| show_bytes(repo, &format!("{rev}:{file}")).unwrap_or_default();
+        let (before, after) = (text_at(at.merge_base), text_at(at.head));
+        if cites(&before, &own_marker, false) || cites(&after, &own_marker, false) {
+            continue;
+        }
+        if status == 'M' && served.iter().any(|m| cites(&before, m, true)) {
+            continue;
+        }
+        found.push(ForeignFile {
+            path: file,
+            owner: owner.to_string(),
+        });
+    }
+    // `git diff` lists paths in byte order, so `found` is sorted by path.
+    Ok(found)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -389,6 +389,7 @@ dependencies = [
 name = "clm-gate"
 version = "0.26.0"
 dependencies = [
+ "clm-coverage",
  "clm-fingerprint",
  "clm-git",
  "clm-model",

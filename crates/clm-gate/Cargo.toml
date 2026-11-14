@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 clm-git.workspace = true
+clm-coverage = { workspace = true, default-features = false }
 clm-fingerprint.workspace = true
 clm-model.workspace = true
 clm-rename.workspace = true
