@@ -59,7 +59,7 @@ const RENAME: &str = "git branch -m master main";
 
 #[test]
 fn a_repository_on_master() {
-    // req:init/init-names-missing-main@a3a17a23
+    // req:init/init-names-missing-main@ae42df80
     let dir = repo("master");
     commit(dir.path());
     let out = init(dir.path(), &Options::default()).unwrap();
@@ -77,7 +77,7 @@ fn a_repository_on_master() {
 
 #[test]
 fn an_empty_repository_whose_unborn_branch_is_master() {
-    // req:init/init-names-missing-main@a3a17a23
+    // req:init/init-names-missing-main@ae42df80
     let dir = repo("master");
     let out = init(dir.path(), &Options::default()).unwrap();
     assert!(first_step(&out).unwrap().contains(RENAME));
@@ -85,7 +85,7 @@ fn an_empty_repository_whose_unborn_branch_is_master() {
 
 #[test]
 fn a_remote_on_master() {
-    // req:init/init-names-missing-main@a3a17a23
+    // req:init/init-names-missing-main@ae42df80
     let remote = repo("master");
     commit(remote.path());
     let dir = clone_of("master", remote.path());
@@ -99,7 +99,7 @@ fn a_remote_on_master() {
 
 #[test]
 fn a_remote_branch_ending_in_main_is_not_main() {
-    // req:init/init-names-missing-main@a3a17a23
+    // req:init/init-names-missing-main@ae42df80
     let remote = repo("master");
     commit(remote.path());
     git(remote.path(), &["branch", "feature/main"]);
@@ -110,7 +110,7 @@ fn a_remote_branch_ending_in_main_is_not_main() {
 
 #[test]
 fn main_already_there() {
-    // req:init/init-names-missing-main@a3a17a23
+    // req:init/init-names-missing-main@ae42df80
     let dir = repo("main");
     commit(dir.path());
     git(dir.path(), &["switch", "-q", "-c", "feature"]);

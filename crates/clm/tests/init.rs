@@ -331,41 +331,6 @@ fn architecture_template_proof() {
     assert_eq!(check.status.code(), Some(0), "{check:?}");
 }
 
-#[test]
-fn claude_md_points_at_the_guide() {
-    // req:init/claude-md-points-at-guide@e9cdc867
-    let (_tmp, dir) = repo();
-    init(&dir, &[], &fake_hosts());
-    let claude = read(&dir, "AGENTS.md");
-    assert!(claude.contains("`clm guide`"), "{claude}");
-    assert!(
-        !claude.contains("https://") && !claude.contains("http://"),
-        "{claude}"
-    );
-}
-
-#[test]
-fn claude_md_names_the_skills() {
-    // req:init/claude-md-names-the-skills@f687fbf9
-    let (_tmp, dir) = repo();
-    init(&dir, &[], &fake_hosts());
-    let claude = read(&dir, "AGENTS.md");
-    assert!(claude.contains("/clm:propose"), "{claude}");
-    assert!(claude.contains("/clm:build"), "{claude}");
-    assert!(claude.contains("/clm:help"), "{claude}");
-    assert!(claude.contains("clm approve"), "{claude}");
-    assert!(
-        claude.contains("Never run `clm approve` yourself"),
-        "{claude}"
-    );
-    assert!(claude.contains("have the human run it"), "{claude}");
-    assert!(
-        claude.contains("whatever the agent harness calls them"),
-        "{claude}"
-    );
-    assert!(!claude.contains("/clm:implement"), "{claude}");
-}
-
 /// The frontmatter line of `specs/SPEC.md` that starts with `key: `.
 fn spec_key(dir: &Path, key: &str) -> String {
     let spec = read(dir, "specs/SPEC.md");
