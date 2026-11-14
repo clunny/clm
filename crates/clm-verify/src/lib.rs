@@ -9,6 +9,7 @@ mod chain;
 mod due;
 mod import;
 mod kept;
+mod mutate;
 mod run;
 mod tree;
 
@@ -43,6 +44,9 @@ pub struct Outcome {
     pub line: String,
     pub notes: Vec<String>,
     pub code: u8,
+    /// The position in the chain of the commit this outcome verified with a passing check
+    /// here, which the mutation pass may follow (`mutation-pass`).
+    pub(crate) mutate: Option<usize>,
 }
 
 impl Outcome {
@@ -51,6 +55,7 @@ impl Outcome {
             line: line.into(),
             notes: Vec::new(),
             code,
+            mutate: None,
         }
     }
 }
@@ -134,6 +139,8 @@ pub(crate) struct Ctx<'a> {
     pub(crate) affected_all: Vec<String>,
     /// `[land] target_cap_gb`, the cap on the build place (`verify-build-cap`).
     pub(crate) cap_gb: u64,
+    /// `max_builds`: the pass takes the slot after the build places (`mutation-pass`).
+    pub(crate) max_builds: u64,
     pub(crate) host: clm_config::Host,
     /// `origin/main`.
     pub(crate) base: String,
@@ -164,6 +171,7 @@ impl<'a> Ctx<'a> {
         Ok(Ok(Ctx {
             affected_all: settings.affected.value.map(|a| a.all).unwrap_or_default(),
             cap_gb: settings.land.value.map_or(DEFAULT_CAP_GB, |l| l.cap_gb()),
+            max_builds: settings.max_builds.value,
             root,
             env,
             verify,
@@ -186,20 +194,36 @@ impl<'a> Ctx<'a> {
 /// Runs one `clm verify` command in the repository at `root`. `env` is the environment
 /// `config` reads.
 pub fn verify(root: &Path, request: &Request, env: &Env) -> Result<Outcome, Error> {
+    verify_announcing(root, request, env, |_| {})
+}
+
+/// `verify`, calling `announce` with the outcome as soon as the result is recorded, before the
+/// mutation pass a green run goes on to, so the caller can print the outcome line first
+/// (`mutation-pass`). The pass's own notes come last in the returned outcome's notes.
+pub fn verify_announcing(
+    root: &Path,
+    request: &Request,
+    env: &Env,
+    announce: impl FnOnce(&Outcome),
+) -> Result<Outcome, Error> {
     let ctx = match Ctx::open(root, env)? {
         Ok(ctx) => ctx,
         Err(source) => {
-            return Ok(Outcome::new(
-                format!("verify off: no [verify] in {source}"),
-                0,
-            ));
+            let outcome = Outcome::new(format!("verify off: no [verify] in {source}"), 0);
+            announce(&outcome);
+            return Ok(outcome);
         }
     };
     let state = State::load(&ctx)?;
-    match request {
+    let mut outcome = match request {
         Request::Due { work_done, dry_run } => due::due(&ctx, &state, *work_done, *dry_run),
         Request::Commit(sha) => run::commit(&ctx, &state, sha),
         Request::Import => import::import_all(&ctx, &state),
         Request::Bisect(sha) => bisect::bisect_red(&ctx, &state, sha),
+    }?;
+    announce(&outcome);
+    if let Some(end) = outcome.mutate {
+        outcome.notes.extend(mutate::pass(&ctx, &state, end));
     }
+    Ok(outcome)
 }

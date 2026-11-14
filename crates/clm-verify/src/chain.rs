@@ -70,6 +70,17 @@ impl State {
             .rposition(|c| self.passed(c) == Some(true))
     }
 
+    /// The commit a mutation pass on position `end` starts from: the newest commit before it
+    /// that a `mutated` record names, else the last verified commit (`mutation-pass`).
+    pub(crate) fn mutation_base(&self, end: usize) -> Option<String> {
+        let mutated = self.chain[..end]
+            .iter()
+            .rposition(|c| self.fold.mutations.contains_key(c));
+        mutated
+            .or_else(|| self.last_verified(end))
+            .map(|i| self.chain[i].clone())
+    }
+
     /// The lands after the last verified commit before position `end`, up to `end`
     /// inclusive, oldest first, and that commit's position.
     pub(crate) fn unverified(&self, end: usize) -> (Option<usize>, &[String]) {

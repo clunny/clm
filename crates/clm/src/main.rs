@@ -2196,10 +2196,19 @@ fn landed(
 /// `clm verify`: the one `verify ...` line on stdout, notes on stderr, and the outcome's exit
 /// code; 1 with the reason when it can't run, 2 when git fails.
 fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
-    match clm_verify::verify(root, request, &clm_config::process_env) {
+    // The outcome is printed as soon as the result is recorded, before a mutation pass runs;
+    // the pass's own notes follow.
+    let mut shown = 0;
+    let announce = |outcome: &clm_verify::Outcome| {
+        println!("{}", outcome.line);
+        for note in &outcome.notes {
+            eprintln!("clm verify: {note}");
+        }
+        shown = outcome.notes.len();
+    };
+    match clm_verify::verify_announcing(root, request, &clm_config::process_env, announce) {
         Ok(outcome) => {
-            println!("{}", outcome.line);
-            for note in outcome.notes {
+            for note in &outcome.notes[shown..] {
                 eprintln!("clm verify: {note}");
             }
             ExitCode::from(outcome.code)

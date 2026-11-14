@@ -27,7 +27,7 @@ pub(crate) struct Probe {
 
 /// The `[env]` variables `commit`'s `clm.toml` and the clone's `clm.local.toml` give, as
 /// `(name, value)` sorted by name (`verify-env`).
-fn env_of(ctx: &Ctx, commit: &str) -> Result<Vec<(String, String)>, Error> {
+pub(crate) fn env_of(ctx: &Ctx, commit: &str) -> Result<Vec<(String, String)>, Error> {
     let source = format!("{commit}:{}clm.toml", ctx.prefix);
     let text = match ctx.git(&["rev-parse", "--verify", "--quiet", &source]) {
         Ok(_) => Some(ctx.git(&["show", &source])?),
@@ -149,7 +149,9 @@ pub(crate) fn verify_at(ctx: &Ctx, state: &State, end: usize) -> Result<Outcome,
     )?;
     if run.passed {
         let _ = std::fs::remove_file(&log);
-        return record(ctx, state, end, None, None, true, None);
+        let mut outcome = record(ctx, state, end, None, None, true, None)?;
+        outcome.mutate = Some(end);
+        return Ok(outcome);
     }
     let (_, lands) = state.unverified(end);
     let found = match lands {
