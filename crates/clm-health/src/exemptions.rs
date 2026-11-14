@@ -19,9 +19,19 @@ fn name(rule: ExemptRule) -> &'static str {
 /// Each exemption a component holds, with how many tracked files the component owns that it
 /// names. `Git` when git can't list the files.
 pub(crate) fn section(root: &Path, graph: &Graph) -> Result<Section, Failure> {
+    if graph
+        .nodes
+        .values()
+        .all(|n| n.frontmatter.exemptions.is_empty())
+    {
+        return Ok(Section::of("exemption", "exemptions", Vec::new()));
+    }
     let files = clm_git::tracked_files(root).map_err(|e| Failure::Git(e.to_string()))?;
     let mut lines = Vec::new();
     for (id, node) in &graph.nodes {
+        if node.frontmatter.exemptions.is_empty() {
+            continue;
+        }
         let owned: Vec<String> = files
             .iter()
             .filter(|f| clm_check::owner(graph, f) == Some(id.as_str()))

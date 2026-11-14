@@ -58,6 +58,77 @@ fn scenario_work_done() {
 }
 
 #[test]
+fn each_suffix_follows_its_own_condition() {
+    // req:check.health/exemptions-signal@f1b32bd2
+    let dir = repo();
+    let d = dir.path();
+    component(d);
+    // The item is gone but a file is named; then the item exists and no file is.
+    write(d, "tests/a/x.py", "x\n");
+    git(d, &["add", "-A"]);
+    assert_eq!(
+        section(&report(d), "exemption")[1],
+        "specs/a/SPEC.md: health/exemption: a: undeclared-imports until backlog/r: 1 files; item gone"
+    );
+    git(d, &["rm", "-q", "-f", "tests/a/x.py"]);
+    write(
+        d,
+        "backlog/r.md",
+        "---\ntitle: R\nkind: bug\ncomponents: [a]\n---\n\nr\n",
+    );
+    git(d, &["add", "-A"]);
+    assert_eq!(
+        section(&report(d), "exemption")[1],
+        "specs/a/SPEC.md: health/exemption: a: undeclared-imports until backlog/r: 0 files; matches nothing"
+    );
+}
+
+#[test]
+fn components_in_id_order_with_each_rule_word_and_only_tracked_files() {
+    // req:check.health/exemptions-signal@f1b32bd2
+    let dir = repo();
+    let d = dir.path();
+    let spec = |dir: &str, rules: &[&str]| {
+        let mut s = format!(
+            "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"{dir}/**\"]\nexemptions:\n"
+        );
+        for r in rules {
+            s.push_str(&format!(
+                "  - rule: {r}\n    files: [\"t/**\"]\n    until: backlog/r\n"
+            ));
+        }
+        s + "---\n\n## Requirements\n"
+    };
+    write(
+        d,
+        "specs/b/SPEC.md",
+        &spec("u", &["tests-cite-their-owner"]),
+    );
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &spec("t", &["skipped-tests", "undeclared-imports"]),
+    );
+    write(
+        d,
+        "backlog/r.md",
+        "---\ntitle: R\nkind: bug\ncomponents: [a]\n---\n\nr\n",
+    );
+    write(d, "t/x.py", "x\n");
+    git(d, &["add", "-A"]);
+    write(d, "t/untracked.py", "x\n");
+    assert_eq!(
+        section(&report(d), "exemption"),
+        [
+            "health/exemption: 3 exemptions",
+            "specs/a/SPEC.md: health/exemption: a: skipped-tests until backlog/r: 1 files",
+            "specs/a/SPEC.md: health/exemption: a: undeclared-imports until backlog/r: 1 files",
+            "specs/b/SPEC.md: health/exemption: b: tests-cite-their-owner until backlog/r: 0 files; matches nothing",
+        ]
+    );
+}
+
+#[test]
 fn only_files_the_component_owns_count_and_none_is_a_zero_summary() {
     // req:check.health/exemptions-signal@f1b32bd2
     let dir = repo();
