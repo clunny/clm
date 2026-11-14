@@ -405,7 +405,7 @@ A capability SHALL count as *removed* while a change outside the archive, whatev
 - `.py`: a test is a function, `def` or `async def`, whose name starts `test`, and a group a class whose name starts `Test`, named by it alone, from the decorator and comment lines directly above it to the last line indented deeper than its `def` or `class` line.
 - any other extension: none.
 
-It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marker_spans` finds in `text` on a line that belongs to no test or group, as `Marker`s, and nothing for a Markdown file or a file of another extension than those above. `scan(root)` SHALL return them for every file it reads as `outside`, beside `req`. Both calls SHALL build without the `checkout` feature. Neither changes what `markers_in` returns or what `scan`'s `req` holds.
+It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marker_spans` finds in `text` on a line that belongs to no test or group, as `Marker`s, and nothing for a Markdown file or a file of another extension than those above. `scan(root)` SHALL return them for every file it reads as `outside`, beside `req`. Both calls SHALL build without the `checkout` feature. Which markers `markers_in` returns and `scan`'s `req` holds is `markers-in-tests`'s to say, not this requirement's: `outside` holds the markers outside tests whether or not `req` holds them too.
 
 #### Scenario: a Rust test and a helper
 - GIVEN the text of `t.rs`: a comment line holding `req:a/x`, then `#[test]`, then `fn proves_x() {`, a line holding `req:a/y`, `}`, a blank line, and `fn helper() {` with a line holding `req:a/z` and `}`
