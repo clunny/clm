@@ -53,10 +53,9 @@ fn an_idea_that_changes_a_capability_waits_for_approval() {
     // The idea changes what the product is for, so the spec branch edits `CAPABILITIES.md`.
     repo.git(&["switch", "-q", "-c", "spec/20261030-c-quickly"]);
     let capabilities = std::fs::read_to_string(repo.root.join("CAPABILITIES.md")).unwrap();
-    repo.write(
-        "CAPABILITIES.md",
-        &capabilities.replace("A person can c.", "A person can c, quickly."),
-    );
+    let edited = capabilities.replace("A person can c.", "A person can c, quickly.");
+    assert_ne!(edited, capabilities, "the fixture's capability text moved");
+    repo.write("CAPABILITIES.md", &edited);
     repo.write(
         "changes/20261030-c-quickly/change.md",
         "---\nstatus: applied\n---\n\n## Intent\n\nc, quickly.\n",
@@ -77,4 +76,10 @@ fn an_idea_that_changes_a_capability_waits_for_approval() {
     assert!(!land.status.success(), "{text}");
     assert!(text.contains("gate/approval"), "{text}");
     assert_eq!(repo.origin_main(), before, "{text}");
+
+    // Once the human approves it, it lands.
+    let approve = repo.clm(&["approve", "spec/20261030-c-quickly"]);
+    assert!(approve.status.success(), "{}", printed(&approve));
+    let commit = landed(&repo.clm(&["land", "spec/20261030-c-quickly"]));
+    assert_eq!(repo.origin_main(), commit);
 }
