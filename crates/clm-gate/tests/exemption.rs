@@ -109,8 +109,13 @@ fn a_widened_exemption_is_tested_and_an_old_one_is_not() {
     commit(d, "exempt on main");
     git(d, &["checkout", "-q", "pr"]);
     git(d, &["merge", "-q", "--ff-only", "main"]);
-    write(d, "docs/decisions/d.md", "A decision.\n");
-    commit(d, "unrelated");
+    // the branch rewords the component, leaving its exemption as it was
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &format!("{}\nMore.\n", component(EXEMPTION)),
+    );
+    commit(d, "reword");
     let out = evaluate_at(d, "main", "pr", false).unwrap();
     assert!(
         out.violations
@@ -131,4 +136,35 @@ fn a_widened_exemption_is_tested_and_an_old_one_is_not() {
             .count(),
         1
     );
+}
+
+// req:gate/exemption-names-its-item@9eb8dcde
+#[test]
+fn another_item_or_a_new_component_is_tested() {
+    let dir = base();
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    commit(d, "exempt on main");
+    git(d, &["checkout", "-q", "pr"]);
+    git(d, &["merge", "-q", "--ff-only", "main"]);
+    // the same rule and files, now until another item
+    let moved = EXEMPTION.replace("backlog/x", "backlog/y");
+    write(d, "specs/a/SPEC.md", &component(&moved));
+    commit(d, "move");
+    let out = evaluate_at(d, "main", "pr", false).unwrap();
+    let rules: Vec<&str> = out.violations.iter().map(|v| v.rule).collect();
+    assert_eq!(rules, ["gate/exemption-names-its-item"]);
+    // a component new on the branch counts every exemption
+    write(d, "backlog/y.md", ITEM);
+    write(d, "specs/b/SPEC.md", &component(EXEMPTION));
+    commit(d, "new component");
+    let out = evaluate_at(d, "main", "pr", false).unwrap();
+    let paths: Vec<String> = out
+        .violations
+        .iter()
+        .filter(|v| v.rule == "gate/exemption-names-its-item")
+        .map(|v| v.path.display().to_string())
+        .collect();
+    assert_eq!(paths, ["specs/b/SPEC.md"]);
 }
