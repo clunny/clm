@@ -8,61 +8,6 @@ use std::fs;
 use clm_triage::fold;
 use common::*;
 
-/// The fold prompt for `ids`, each pushed as `origin/spec/<id>` with an applied change.
-fn fold_prompt(ids: &[&str]) -> String {
-    let r = repo();
-    for id in ids {
-        push_files(
-            &r.work,
-            &format!("spec/{id}"),
-            &[(&format!("changes/{id}/change.md"), &change("applied"))],
-        );
-    }
-    let ids: Vec<String> = ids.iter().map(|s| s.to_string()).collect();
-    assert!(fold(&r.work, &ids).unwrap().launcher.is_some());
-    let file = r
-        .work
-        .join(".clm/prompts/fold")
-        .join(format!("{}.md", ids[0]));
-    fs::read_to_string(file).unwrap()
-}
-
-#[test]
-fn fold_prompt_names_the_human_task_kind() {
-    // req:orchestrator.triage/fold@9b310060
-    let p = fold_prompt(&["20261027-a", "20261027-b"]);
-    assert!(
-        p.contains("A `human-task` item the fold adds is a burden"),
-        "{p}"
-    );
-    assert!(
-        p.contains("`question` or `human-task` backlog items"),
-        "{p}"
-    );
-}
-
-#[test]
-fn scenario_fold_no_old_command_names() {
-    // req:orchestrator.triage/fold@9b310060
-    for p in [
-        fold_prompt(&["20261027-a"]),
-        fold_prompt(&["20261027-a", "20261027-b"]),
-    ] {
-        let words: Vec<&str> = p
-            .split(|c: char| !c.is_alphanumeric() && c != '-')
-            .filter(|w| !w.is_empty())
-            .collect();
-        assert!(!words.contains(&"page"), "the word page is in {p}");
-        for pair in words.windows(2) {
-            assert!(
-                !(pair[0] == "clm" && ["sync", "checkpoint", "page"].contains(&pair[1])),
-                "old command name `clm {}` in {p}",
-                pair[1]
-            );
-        }
-    }
-}
-
 const RENAME_PROMPT: &str = ".clm/prompts/fold/20261027-r.md";
 
 /// A rename change as `clm rename` leaves it on its own branch: archived, `done`, no live

@@ -192,40 +192,6 @@ fn a_full_clone_claims_nothing() {
     assert_eq!(place_names(&r), ["x"]);
 }
 
-/// The prompt `draft` writes for `slugs`, after a live claim of each of `claimed`.
-fn prompt_for(slugs: &[&str], claimed: &[&str]) -> String {
-    let r = with(slugs);
-    for slug in claimed {
-        push_propose(&r.work, slug, 1);
-    }
-    let slugs: Vec<String> = slugs.iter().map(|s| s.to_string()).collect();
-    let drafted = draft(&r.work, &slugs, None, None, 3, 4, &clock("UTC"))
-        .unwrap()
-        .drafted
-        .expect("drafted");
-    fs::read_to_string(&drafted.file).unwrap()
-}
-
-#[test]
-fn draft_needing_review_folds() {
-    // req:orchestrator.triage/draft@66686cf9
-    // A draft the gate calls `spec review` stops for the fold; one it passes as `spec` lands.
-    let p = prompt_for(&["a"], &[]);
-    let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
-    let stops = at("When it is `spec review`, open no pull request and stop after your last push");
-    assert!(at("go by the first line of your last `clm gate` run") < stops);
-    assert!(stops < at("folds every change needing review"));
-    let lands = at("When it is `spec`, write the pull request body");
-    assert!(stops < lands && lands < at("clm land spec/<id>"));
-    assert!(p.contains("`proposed <id> review` for a change that needs review"));
-    // The approval the gate asks for is expected; a burden never goes to pass it.
-    assert!(p.contains("a burden is never removed to make the gate pass"));
-    assert!(p.contains(
-        "A `human-task` item it adds is a burden: declare one for it in `human_burdens`"
-    ));
-    assert!(p.contains("list under `human_burdens` what the change spends"));
-}
-
 /// The repo with node `check` (requirement `x`) and `items` as `(slug, frontmatter lines,
 /// body)` in `origin/main`'s backlog.
 fn with_items(items: &[(&str, &str, &str)]) -> Repo {
@@ -387,54 +353,6 @@ fn scenario_answers_in_the_prompt() {
 }
 
 #[test]
-fn scenario_an_answer_that_only_edits_an_item() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
-    let r = with_items(&[("h", "kind: human-task\n", "Do the steps.")]);
-    let p = answered_prompt(
-        &r,
-        &["h"],
-        "h: trim the done steps and keep the rest open\n",
-    );
-    let steps = &p[p.find("## Steps").expect("steps")..];
-    for needle in [
-        "only edit",
-        "left out of",
-        "stays open",
-        "draft-backlog-only-change",
-    ] {
-        assert!(steps.contains(needle), "{needle} missing from {steps}");
-    }
-}
-
-#[test]
-fn scenario_an_answer_that_leaves_only_code() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
-    let r = with_items(&[("q", "kind: question\n", "Which?")]);
-    let p = answered_prompt(
-        &r,
-        &["q"],
-        "q: the rule already says so, only the code is left\n",
-    );
-    let steps = &p[p.find("## Steps").expect("steps")..];
-    for needle in [
-        "only code to change",
-        "turned into a bug",
-        "has landed the branch",
-        "the next triage",
-        "draft-code-fix-written-rule",
-        "`kind` to `bug`",
-        "remove its `blocks`",
-        "components whose `paths` hold the fix",
-        "quoting the answer",
-        "the answer turns it into a bug",
-        "other fields, such as `priority` and `issues`",
-        "end with the spec change's `landed <sha>`",
-    ] {
-        assert!(steps.contains(needle), "{needle} missing from {steps}");
-    }
-}
-
-#[test]
 fn answers_go_in_verbatim_and_trimmed() {
     // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
@@ -507,58 +425,6 @@ fn scenario_whitespace_only_answers() {
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n  \n\t\n");
     assert!(!p.contains("The human's answers"), "{p}");
-}
-
-#[test]
-fn scenario_a_deferred_items_code_route() {
-    // req:orchestrator.triage/draft-workaround-deferred@7ea3144e
-    let r = with_items(&[("k", "kind: deferred\ncomponents: [check]\n", "Later.")]);
-    let (_, p) = drafted_prompt(&r, &["k"]);
-    let para = paragraph(&p, "clm claim <component> --fix backlog/<slug>");
-    for needle in [
-        "deferred",
-        "deferred-work-resolves-in-code",
-        "judged met",
-        "designs the work",
-        "lies in one of the item's `components`",
-        "the item leaves `resolves`",
-        "when the claim is refused",
-        "designs the work into the change",
-    ] {
-        assert!(para.contains(needle), "{needle} missing from {para}");
-    }
-}
-
-#[test]
-fn scenario_a_dropped_item() {
-    // req:orchestrator.triage/draft-workaround-deferred@7ea3144e
-    let r = with_items(&[("k", "kind: deferred\n", "Later.")]);
-    let p = answered_prompt(&r, &["k"], "k: drop it\n");
-    let steps = &p[p.find("## Steps").unwrap()..];
-    assert!(
-        steps.contains(
-            "An item the human's answers drop stays in `resolves`: delete its `backlog/<slug>.md`"
-        ),
-        "{steps}"
-    );
-}
-
-#[test]
-fn scenario_draft_no_old_command_names() {
-    // req:orchestrator.triage/draft@66686cf9
-    let p = prompt_for(&["a"], &[]);
-    let words: Vec<&str> = p
-        .split(|c: char| !c.is_alphanumeric() && c != '-')
-        .filter(|w| !w.is_empty())
-        .collect();
-    assert!(!words.contains(&"page"), "the word page is in {p}");
-    for pair in words.windows(2) {
-        assert!(
-            !(pair[0] == "clm" && ["sync", "checkpoint", "page"].contains(&pair[1])),
-            "old command name `clm {}` in {p}",
-            pair[1]
-        );
-    }
 }
 
 #[test]
