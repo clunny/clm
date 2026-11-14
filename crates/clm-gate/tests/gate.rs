@@ -53,7 +53,7 @@ fn rules(outcome: &clm_gate::Outcome) -> Vec<&str> {
 
 #[test]
 fn mixed_pr_is_blocked() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     let dir = repo();
     write(
         dir.path(),
@@ -70,7 +70,7 @@ fn mixed_pr_is_blocked() {
 
 #[test]
 fn mixed_build_branch_says_to_leave_it_unbuilt() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     let dir = repo();
     git(dir.path(), &["checkout", "-q", "-b", "impl/a"]);
     write(
@@ -98,7 +98,7 @@ fn mixed_build_branch_says_to_leave_it_unbuilt() {
 
 #[test]
 fn code_only_pr_is_code() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     let dir = repo();
     write(dir.path(), "crates/x/src/lib.rs", "pub fn y() {}\n");
     commit_all(dir.path(), "code");
@@ -110,7 +110,7 @@ fn code_only_pr_is_code() {
 
 #[test]
 fn every_spec_path_counts_as_spec() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     let dir = repo();
     for rel in [
         "specs/b/SPEC.md",
@@ -129,7 +129,7 @@ fn every_spec_path_counts_as_spec() {
 
 #[test]
 fn paths_git_would_quote_are_classified() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     // `git diff --name-status` quotes non-ASCII paths unless `-z` is used.
     for file in ["docs/naïve.md", "specs/é/SPEC.md"] {
         let dir = repo();

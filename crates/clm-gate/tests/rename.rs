@@ -37,9 +37,17 @@ const ROOT: &str = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Cont
 const A: &str = "---\ntitle: A\nstatus: specd\nowners: [\"@a\"]\n---\n\n## Contract\nc\n\n## Design\nthe spine\n\n## Requirements\n\n### Requirement: x\nX SHALL hold.\n\n#### Scenario: holds\n- ok\n";
 const ARCH: &str = "# Arch\n\n## Requirements\n\n### Requirement: law\nA law SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Enforced by\n- a/x\n";
 
-/// A repository on `main` with node `a`, then a branch `pr` holding the committed result of
-/// `clm rename r` for a change whose `renames` hold `renames` and whose other frontmatter
-/// is `extra`.
+/// The test file of the fixture, which cites `a/<slug>`. The marker is built from pieces
+/// so this file cites nothing of `a`.
+const TEST_FILE: &str = "crates/a/tests/t.rs";
+
+fn test_file(slug: &str) -> String {
+    format!("// {}:a/{slug}@00000000\n#[test]\nfn t() {{}}\n", "req")
+}
+
+/// A repository on `main` with node `a` and a test file citing `a/x`, then a branch `pr`
+/// holding the committed result of `clm rename r` for a change whose `renames` hold
+/// `renames` and whose other frontmatter is `extra`.
 fn renamed(renames: &str, extra: &str) -> TempDir {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -48,6 +56,7 @@ fn renamed(renames: &str, extra: &str) -> TempDir {
     write(d, "specs/a/SPEC.md", A);
     write(d, "ARCHITECTURE.md", ARCH);
     write(d, "crates/a/src/lib.rs", "pub fn a() {}\n");
+    write(d, TEST_FILE, &test_file("x"));
     commit(d, "base");
     git(d, &["checkout", "-q", "-b", "pr"]);
     let change =
@@ -64,18 +73,30 @@ const TERM_RENAME: &str = "  - term: spine\n    to: trunk\n";
 
 #[test]
 fn a_rename_branch_is_a_spec_branch() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     let dir = renamed(ID_RENAME, "");
+    assert_marker_rewritten(dir.path());
     let out = evaluate_at(dir.path(), "main", "HEAD", false).unwrap();
     assert_eq!(out.kind, Kind::Spec, "{:?}", out.violations);
     assert!(!out.review);
     assert!(out.violations.is_empty(), "{:?}", out.violations);
 }
 
+/// The rename rewrote the test file's marker, so the branch's diff holds a code file.
+fn assert_marker_rewritten(d: &Path) {
+    assert_eq!(
+        fs::read_to_string(d.join(TEST_FILE)).unwrap(),
+        test_file("y")
+    );
+    let changed = git(d, &["diff", "--name-only", "main", "HEAD"]);
+    assert!(changed.lines().any(|f| f == TEST_FILE), "{changed}");
+}
+
 #[test]
 fn a_rename_branch_with_a_code_edit_is_mixed() {
-    // req:gate/classify@17132c50
+    // req:gate/classify@3c5847d8
     let dir = renamed(ID_RENAME, "");
+    assert_marker_rewritten(dir.path());
     write(dir.path(), "crates/a/src/lib.rs", "pub fn b() {}\n");
     commit(dir.path(), "extra");
     let out = evaluate_at(dir.path(), "main", "HEAD", true).unwrap();
