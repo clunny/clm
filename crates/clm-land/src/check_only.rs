@@ -37,6 +37,13 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
         Some(_) => repo.env_of(std::fs::read(repo.root.join("clm.toml")).ok().as_deref())?,
         None => Vec::new(),
     };
+    // A build learns of a file another component owns before the check runs
+    // (`land/build-holds-own-files`).
+    if let Some(branch) = clm_git::current_branch(&repo.root)?
+        && let Some(base) = repo.rev(&format!("refs/remotes/{}/main", clm_git::REMOTE))?
+    {
+        crate::own_files::check(&repo, &branch, &base, "HEAD")?;
+    }
     let before = Tree::read(&repo)?;
     if let Some(land) = &repo.settings.land.value {
         // The slot of the place that names the checked-out branch, 0 when `HEAD` is detached

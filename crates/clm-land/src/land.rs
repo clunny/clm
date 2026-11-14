@@ -63,6 +63,9 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         let base = repo
             .rev(repo.base())?
             .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
+        // A build holds its own files, before the lock, the merge and any check
+        // (`land/build-holds-own-files`).
+        crate::own_files::check(&repo, &branch, &base, &head)?;
         // A signed repository signs this land's record, so a lander without a key is
         // refused before any check runs (`land/signed-land`).
         let signed = repo.approval.signed(&base)?;
