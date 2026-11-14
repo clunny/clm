@@ -1,5 +1,6 @@
 // req:web.views/home-waiting-on-you@46bb33db
 import { describe, expect, it } from 'vitest';
+import type { Answering } from './answers';
 import { architecture, capabilities, constraint, cost, review, snapshot } from './fixtures';
 import { homeCount, renderHome } from './home';
 import type { BacklogView, Snapshot } from './types';
@@ -16,13 +17,17 @@ const reviews = () => [review({ branch: 'spec/x', approvals: [] }), review({ bra
 const unflagged = () => capabilities({ report: { ...capabilities().report, capabilities: [cost('d', 1)] } });
 const noneFlagged = () => architecture({ architecture: [constraint('g', 0)] });
 const flagged = () => capabilities({ report: { ...capabilities().report, capabilities: [cost('c', 3, { flagged: true }), cost('d', 1)] } });
+const answering: Answering = { answers: [], offline: false, onAnswer: async () => null };
 const links = {
+  answering,
   reviewLink: (b: string) => `#/o/a/prs/${encodeURIComponent(b)}`,
   itemLink: (s: string) => `#/o/a/backlog/${s}`,
   capLink: (s: string) => `#/o/a/capabilities/${s}`,
   archLink: (s: string) => `#/o/a/architecture/${s}`,
 };
 const section = (e: HTMLElement, name: string) => e.querySelector<HTMLElement>(`.hsec[data-section=${name}]`);
+/** The labels of the answer buttons under each entry of the section, in order. */
+const buttons = (s: HTMLElement | null) => [...(s?.querySelectorAll<HTMLElement>('.hent-row') ?? [])].map((r) => [...r.querySelectorAll('button.answer')].map((b) => b.textContent));
 const entries = (s: HTMLElement | null) => [...(s?.querySelectorAll<HTMLAnchorElement>('a.hent') ?? [])].map((a) => [a.textContent, a.getAttribute('href')]);
 
 describe('home: waiting on you', () => {
@@ -35,8 +40,12 @@ describe('home: waiting on you', () => {
       ['Title q', '#/o/a/backlog/q'],
       ['Title h', '#/o/a/backlog/h'],
     ]);
+    expect(buttons(section(view, 'answer'))).toEqual([['yes', 'no'], ['Done']]);
     expect(entries(section(view, 'flagged'))).toEqual([['c', '#/o/a/capabilities/c']]);
     expect(entries(section(view, 'session'))).toEqual([['Title r', '#/o/a/backlog/r']]);
+    // req:web.views/answer-buttons@c08a8031: no other entry offers a button.
+    expect(buttons(section(view, 'session'))).toEqual([[]]);
+    expect(view.querySelectorAll('button')).toHaveLength(3);
     expect(section(view, 'session')!.textContent).toContain('/clm:triage');
     expect(view.textContent).not.toContain('Title i');
     expect(homeCount(snap, reviews())).toBe(3);
