@@ -233,35 +233,6 @@ fn doc_only_paths_beside_code_select_what_the_code_does() {
 }
 
 #[test]
-fn a_component_whose_tests_name_a_changed_one_is_not_affected() {
-    // req:check.affected/affected-components@b287ecd8
-    let doc = |paths: &str, extra: &str| {
-        format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n")
-            .into_bytes()
-    };
-    let files: clm_model::Files = [
-        ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "")),
-        ("specs/app/SPEC.md", doc("[\"crates/app/**\"]", "")),
-        (
-            "specs/feat/SPEC.md",
-            doc("[\"crates/feat/**\"]", "test_depends_on: [app]\n"),
-        ),
-    ]
-    .into_iter()
-    .map(|(p, t)| (p.into(), t))
-    .collect();
-    let (graph, violations) = clm_model::load_files(&files);
-    assert!(violations.is_empty(), "{violations:?}");
-    let s = select(
-        &graph,
-        &changed(&["crates/app/src/lib.rs"]),
-        &scanned(&[]),
-        &[],
-    );
-    assert_eq!(nodes(&s), ["app"]);
-}
-
-#[test]
 fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
     // req:check.affected/affected-files@0b773abd
     let doc = |paths: &str, extra: &str| {

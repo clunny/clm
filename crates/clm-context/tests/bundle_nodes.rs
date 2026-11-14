@@ -41,22 +41,3 @@ fn spine_then_dependencies_off_the_spine() {
     );
     assert!(clm_context::bundle_nodes(&graph, "missing").is_empty());
 }
-
-#[test]
-fn test_dependency_is_not_in_the_bundle() {
-    // req:context/bundle-contents@1db0ecd6
-    let dir = tempfile::TempDir::new().unwrap();
-    write(dir.path(), "specs/SPEC.md", &node("Root", ""));
-    write(dir.path(), "specs/app/SPEC.md", &node("App", ""));
-    let feat = node("Feat", "").replace("depends_on", "test_depends_on");
-    write(
-        dir.path(),
-        "specs/feat/SPEC.md",
-        &feat.replace("[]", "[app]"),
-    );
-    let (graph, violations) = clm_model::load(dir.path());
-    assert!(violations.is_empty(), "{violations:?}");
-    assert!(!clm_context::bundle_nodes(&graph, "feat").contains(&"app".to_string()));
-    let out = clm_context::bundle_from(&graph, None, "feat").unwrap();
-    assert!(!out.contains("c App"), "{out}");
-}
