@@ -2,7 +2,7 @@
 title: Affected
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, ledger, vcs]
+depends_on: [model, check, check.coverage, ledger, vcs]
 paths: ["crates/clm-affected/**"]
 successor: ""
 serves: [capability/land-safely]
