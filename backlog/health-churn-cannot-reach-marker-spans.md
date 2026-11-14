@@ -4,6 +4,9 @@ kind: question
 components: [check.health, check.coverage, check]
 origin: 20261114-proof-is-real
 blocks: [check.health/churn-signal]
+choices:
+  - "Add check.coverage to check.health depends_on"
+  - "Have check re-export marker_spans"
 ---
 
 `check.health/churn-signal` now counts the markers `marker_spans` finds, whether or not they sit in a test. `marker_spans` lives in `clm-coverage` (`check.coverage/marker-spans`). `check.health` depends on `check`, not `check.coverage`, and `clm-check` re-exports no `marker_spans`, so `crates/clm-health` can't call it without an import its `depends_on` doesn't allow (`undeclared-imports`).
