@@ -339,7 +339,7 @@ fn scenario_nested_nodes() {
 
 #[test]
 fn scenario_node_detail_from_the_command() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let dir = two_nodes();
     write(
         dir.path(),
