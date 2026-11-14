@@ -43,6 +43,7 @@ describe('home: waiting on you', () => {
     expect(buttons(section(view, 'answer'))).toEqual([['yes', 'no'], ['Done']]);
     expect(entries(section(view, 'flagged'))).toEqual([['c', '#/o/a/capabilities/c']]);
     expect(entries(section(view, 'session'))).toEqual([['Title r', '#/o/a/backlog/r']]);
+    // req:web.views/answer-buttons@c08a8031: no other entry offers a button.
     expect(buttons(section(view, 'session'))).toEqual([[]]);
     expect(view.querySelectorAll('button')).toHaveLength(3);
     expect(section(view, 'session')!.textContent).toContain('/clm:triage');
