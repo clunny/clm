@@ -664,7 +664,7 @@ fn an_ambiguous_slug_is_not_reported() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn code_that_still_names_a_rewritten_entry_leaves_the_requirement_behind() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -682,7 +682,7 @@ fn code_that_still_names_a_rewritten_entry_leaves_the_requirement_behind() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn a_held_back_marker_still_takes_the_new_id() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -697,7 +697,7 @@ fn a_held_back_marker_still_takes_the_new_id() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn code_that_still_names_a_rewritten_id_leaves_the_requirement_behind() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -722,7 +722,7 @@ fn code_that_still_names_a_rewritten_id_leaves_the_requirement_behind() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn a_file_holding_a_marker_of_the_requirement_holds_it_back() {
     let dir = slug_repo("crates/y/**");
     let d = dir.path();
@@ -737,7 +737,7 @@ fn a_file_holding_a_marker_of_the_requirement_holds_it_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn another_components_code_naming_it_does_not_hold_the_marker_back() {
     let dir = slug_repo("crates/**");
     let d = dir.path();
@@ -757,7 +757,7 @@ fn another_components_code_naming_it_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn a_term_left_in_the_code_does_not_hold_the_marker_back() {
     let dir = repo();
     let d = dir.path();
@@ -789,7 +789,7 @@ fn a_term_left_in_the_code_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn a_term_spelt_like_a_rewritten_slug_does_not_hold_the_marker_back() {
     let dir = repo();
     let d = dir.path();
@@ -1074,7 +1074,7 @@ fn cite(id: &str, version: &str) -> String {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn current_and_behind_markers_follow_a_rename() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1100,7 +1100,7 @@ fn current_and_behind_markers_follow_a_rename() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn a_behind_marker_stays_behind() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1113,7 +1113,7 @@ fn a_behind_marker_stays_behind() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn a_reworded_requirement_keeps_its_marker_current() {
     let dir = markers_repo(
         "the sprocket of a component",
@@ -1132,7 +1132,7 @@ fn a_reworded_requirement_keeps_its_marker_current() {
 }
 
 #[test]
-// req:rename/marker-rewrite@8ae3d4f6
+// req:rename/marker-rewrite@f5ba4d47
 fn other_requirements_markers_and_bare_markers_are_handled() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1330,4 +1330,18 @@ fn items_by_the_components_key() {
     let d = dir.path();
     rename(d, "r").unwrap();
     assert!(read(d, "backlog/x.md").contains("components: [a.c]"));
+}
+
+#[test]
+// req:rename/marker-rewrite@f5ba4d47
+fn a_marker_outside_a_test_is_rewritten() {
+    let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
+    let d = dir.path();
+    let code = |id: &str| format!("// {}{id}\nfn helper() {{}}\n", "req:");
+    write(d, "src/lib.rs", &code("a/x"));
+    git(d, &["init", "-q"]);
+    git(d, &["add", "-A"]);
+    assert!(!clm_coverage::scan(d).outside.is_empty());
+    clm_rename::rename(d, "r").unwrap();
+    assert_eq!(read(d, "src/lib.rs"), code("a/y"));
 }
