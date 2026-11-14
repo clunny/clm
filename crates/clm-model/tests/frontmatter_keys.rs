@@ -39,7 +39,7 @@ fn change(root: &Path, dir: &str, status: &str, keys: &str) {
 
 #[test]
 fn declared_frontmatter_keys_are_parsed() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     let dir = repo("");
     change(
         dir.path(),
@@ -62,8 +62,92 @@ fn declared_frontmatter_keys_are_parsed() {
 }
 
 #[test]
+fn removed_capabilities_are_parsed() {
+    // req:model/parse-changes@d4cfec66
+    let dir = repo("");
+    change(
+        dir.path(),
+        "x",
+        "proposed",
+        "removes_capabilities: [watch, old-runner, watch]\n",
+    );
+    change(dir.path(), "y", "proposed", "");
+    change(
+        dir.path(),
+        "z",
+        "proposed",
+        "removes_capabilities: [capability/watch]\n",
+    );
+    change(dir.path(), "b", "proposed", "removes_capabilities:\n");
+    let (graph, violations) = load(dir.path());
+    assert_eq!(
+        graph.changes["x"].frontmatter.removes_capabilities,
+        ["watch", "old-runner"]
+    );
+    assert!(
+        graph.changes["y"]
+            .frontmatter
+            .removes_capabilities
+            .is_empty()
+    );
+    assert!(
+        graph.changes["b"]
+            .frontmatter
+            .removes_capabilities
+            .is_empty()
+    );
+    assert!(!graph.changes.contains_key("z"));
+    assert_eq!(rules(&violations), ["model/parse-changes"]);
+    assert_eq!(violations[0].path, Path::new("changes/z/change.md"));
+    assert!(
+        violations[0].message.contains("capability/watch"),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn malformed_capability_slugs_are_rejected() {
+    // req:model/parse-changes@d4cfec66
+    for bad in ["[Watch]", "[\"\"]", "[a_b]", "[a.b]", "watch", "[[a]]"] {
+        let dir = repo("");
+        change(
+            dir.path(),
+            "z",
+            "proposed",
+            &format!("removes_capabilities: {bad}\n"),
+        );
+        let (graph, violations) = load(dir.path());
+        assert!(!graph.changes.contains_key("z"), "{bad}");
+        assert_eq!(rules(&violations), ["model/parse-changes"], "{bad}");
+    }
+}
+
+#[test]
+fn a_capability_still_in_the_file_is_accepted() {
+    // req:model/parse-changes@d4cfec66
+    let dir = repo("");
+    write(
+        dir.path(),
+        "CAPABILITIES.md",
+        "## Capabilities\n\n### Capability: watch\nw\n\n#### Why\nx\n\n#### Scenario: s\n- GIVEN a\n- WHEN b\n- THEN c\n",
+    );
+    change(
+        dir.path(),
+        "x",
+        "proposed",
+        "removes_capabilities: [watch, never-held]\n",
+    );
+    let (graph, violations) = load(dir.path());
+    assert!(violations.is_empty(), "{violations:?}");
+    assert_eq!(
+        graph.changes["x"].frontmatter.removes_capabilities,
+        ["watch", "never-held"]
+    );
+}
+
+#[test]
 fn malformed_key_names_are_rejected() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     for bad in [
         "[1st]", "[_x]", "[a-b]", "[\"\"]", "[a.b]", "colour", "[[a]]",
     ] {
@@ -214,7 +298,7 @@ fn errors_point_at_the_file_lines() {
 
 #[test]
 fn bare_frontmatter_keys_declare_none() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     let dir = repo("");
     change(dir.path(), "x", "proposed", "frontmatter_keys:\n");
     let (graph, violations) = load(dir.path());
