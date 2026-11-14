@@ -10,6 +10,7 @@ mod derived;
 mod exe;
 mod land;
 mod lock;
+mod own_files;
 mod reconnect;
 mod runner;
 mod scratch;
