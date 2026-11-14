@@ -1337,11 +1337,16 @@ fn items_by_the_components_key() {
 fn a_marker_outside_a_test_is_rewritten() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
-    let code = |id: &str| format!("// {}{id}\nfn helper() {{}}\n", "req:");
-    write(d, "src/lib.rs", &code("a/x"));
+    let old = version_of(d, "a/x");
+    let code = |id: &str, v: &str| format!("// {}{id}{v}\nfn helper() {{}}\n", "req:");
+    write(d, "src/lib.rs", &code("a/x", &format!("@{old}")));
+    write(d, "src/bare.rs", &code("a/x", ""));
     git(d, &["init", "-q"]);
     git(d, &["add", "-A"]);
-    assert!(!clm_coverage::scan(d).outside.is_empty());
+    let outside = clm_coverage::scan(d).outside;
+    assert!(outside.iter().any(|m| m.path == Path::new("src/lib.rs")));
     clm_rename::rename(d, "r").unwrap();
-    assert_eq!(read(d, "src/lib.rs"), code("a/y"));
+    let new = version_of(d, "a/y");
+    assert_eq!(read(d, "src/lib.rs"), code("a/y", &format!("@{new}")));
+    assert_eq!(read(d, "src/bare.rs"), code("a/y", ""));
 }
