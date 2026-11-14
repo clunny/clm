@@ -7,6 +7,21 @@ use std::path::PathBuf;
 use clm_model::{Graph, Layer, Violation};
 
 use crate::Marker;
+#[cfg(feature = "checkout")]
+use crate::Scan;
+
+/// Every `req:` marker of a scan, those outside a test included (`Scan::outside`), each once
+/// by its file, line and ID: a marker that proves nothing still can't name what doesn't exist.
+#[cfg(feature = "checkout")]
+pub(crate) fn every_marker(scan: &Scan) -> Vec<Marker> {
+    let mut seen = std::collections::BTreeSet::new();
+    scan.req
+        .iter()
+        .chain(&scan.outside)
+        .filter(|m| seen.insert((m.path.clone(), m.line, m.id.clone())))
+        .cloned()
+        .collect()
+}
 
 /// `dangling-markers` violations. `removed` is `clm_coverage::removed(graph)`.
 pub fn violations(
@@ -41,4 +56,34 @@ pub fn violations(
             })
         })
         .collect()
+}
+
+#[cfg(all(test, feature = "checkout"))]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    fn marker(id: &str, line: usize) -> Marker {
+        Marker {
+            id: id.to_string(),
+            version: None,
+            path: PathBuf::from("src/lib.rs"),
+            line,
+        }
+    }
+
+    #[test]
+    fn a_marker_only_outside_a_test_is_judged_and_one_in_both_lists_once() {
+        // req:check/dangling-markers@5bc0f97f
+        let scan = Scan {
+            req: vec![marker("a/both", 2)],
+            outside: vec![marker("a/both", 2), marker("a/outside", 5)],
+            remove_by: Vec::new(),
+        };
+        let (graph, _) = clm_model::load(std::path::Path::new("/nonexistent-clm-root"));
+        let found = violations(&graph, &every_marker(&scan), &BTreeMap::new());
+        let lines: Vec<String> = found.iter().map(|v| v.path.display().to_string()).collect();
+        assert_eq!(lines, ["src/lib.rs:2", "src/lib.rs:5"]);
+    }
 }

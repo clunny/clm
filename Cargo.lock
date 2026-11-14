@@ -277,6 +277,7 @@ name = "clm-affected"
 version = "0.26.0"
 dependencies = [
  "clm-check",
+ "clm-coverage",
  "clm-git",
  "clm-ledger",
  "clm-model",

@@ -145,16 +145,22 @@ struct Scan {
 impl Scan {
     /// Records what the scan of one file's `text` finds.
     fn add(&mut self, path: String, text: &str) {
-        let ids = clm_check::markers_in(Path::new(&path), text)
-            .into_iter()
-            .map(|m| m.id)
-            .collect();
+        let ids = cited_ids(text);
         self.cited.insert(path.clone(), ids);
         let globs = reads_in(text);
         if !globs.is_empty() {
             self.reads.insert(path, globs);
         }
     }
+}
+
+/// The requirement IDs every `req:` marker of a file's text cites, inside a test or outside one
+/// (`affected-files`): a file is selected for the component it cites wherever its marker sits.
+fn cited_ids(text: &str) -> Vec<String> {
+    clm_coverage::marker_spans(text)
+        .into_iter()
+        .map(|span| span.id)
+        .collect()
 }
 
 /// The files `check`'s coverage scan reads, tracked or untracked and not ignored, UTF-8 and
@@ -253,4 +259,21 @@ pub fn affected_overlap(
         affected_between(root, &base, a, all)?,
         affected_between(root, &base, b, all)?,
     ))
+}
+
+#[cfg(test)]
+mod cited_ids_tests {
+    use super::cited_ids;
+
+    #[test]
+    fn a_marker_outside_a_test_is_cited_like_one_inside() {
+        // req:check.affected/affected-files@6074ba2c
+        let marker = |id: &str| format!("// {}{id}", concat!("req", ":"));
+        let text = format!(
+            "{}\nfn helper() {{}}\n\n#[test]\nfn t() {{\n    {}\n}}\n",
+            marker("a/outside"),
+            marker("a/inside@0123abcd")
+        );
+        assert_eq!(cited_ids(&text), ["a/outside", "a/inside"]);
+    }
 }
