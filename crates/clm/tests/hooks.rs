@@ -149,17 +149,22 @@ fn session_start_states_the_defect_rule() {
     // asking: no settings, so `defects` is `ask`.
     let text = start(&clm_repo(None));
     let claims = text.find("\nclaims\n").expect("claims section");
-    assert!(text[claims..].contains("clm defect"), "{text}");
-    assert!(text.contains("<<'EOF'"), "{text}");
-    assert!(!text.contains("--fix"), "{text}");
+    let rule = &text[claims..];
+    assert!(rule.contains("clm defect"), "{text}");
+    assert!(rule.contains("<<'EOF'"), "{text}");
+    assert!(
+        !rule.contains("--fix") && !rule.contains("backlog/"),
+        "{text}"
+    );
     // backlog: the backlog route.
     let text = start(&clm_repo(Some("defects = \"backlog\"\n")));
+    let rule = &text[text.find("\nclaims\n").expect("claims section")..];
     for needle in [
         "clm defect",
         "backlog/",
         "clm claim <component> --fix backlog/<slug>",
     ] {
-        assert!(text.contains(needle), "{needle}: {text}");
+        assert!(rule.contains(needle), "{needle}: {text}");
     }
     // off
     let text = start(&clm_repo(Some("defects = \"off\"\n")));
