@@ -74,8 +74,9 @@ fn read_lock(crate_dir: &Path) -> Result<Vec<(String, String, String)>, String> 
 }
 
 /// Checks the lock of the crate at `crate_dir` against the migrations `ids` it holds: every locked
-/// migration must still exist and hash as locked.
-pub fn check_lock(crate_dir: &Path, ids: &[&str]) -> Result<(), String> {
+/// migration must still exist and hash as locked. Only the lock tests check it.
+#[cfg(test)]
+pub(crate) fn check_lock(crate_dir: &Path, ids: &[&str]) -> Result<(), String> {
     for (id, version, hash) in read_lock(crate_dir)? {
         if !ids.contains(&id.as_str()) {
             return Err(format!(

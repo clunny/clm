@@ -24,7 +24,7 @@ fn crate_with(ids: &[&str]) -> TempDir {
 #[test]
 fn the_shipped_migrations_match_the_lock() {
     let ids: Vec<&str> = migrations().iter().map(|m| m.id).collect();
-    crate::check_lock(Path::new(env!("CARGO_MANIFEST_DIR")), &ids).unwrap();
+    crate::lock::check_lock(Path::new(env!("CARGO_MANIFEST_DIR")), &ids).unwrap();
 }
 
 // req:upgrade/shipped-migrations-frozen@b7c05840
@@ -54,9 +54,9 @@ fn the_directory_hash_covers_names_bytes_and_order() {
 fn an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version() {
     let dir = crate_with(&["m"]);
     crate::append_lock(dir.path(), "0.2.0", &["m"]).unwrap();
-    crate::check_lock(dir.path(), &["m"]).unwrap();
+    crate::lock::check_lock(dir.path(), &["m"]).unwrap();
     fs::write(dir.path().join("src/migrations/m/text/old.txt"), "edited\n").unwrap();
-    let err = crate::check_lock(dir.path(), &["m"]).unwrap_err();
+    let err = crate::lock::check_lock(dir.path(), &["m"]).unwrap_err();
     assert!(err.contains("`m`") && err.contains("0.2.0"), "{err}");
 }
 
@@ -65,7 +65,7 @@ fn an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version() {
 fn a_locked_migration_the_binary_lacks_fails_the_lock() {
     let dir = crate_with(&["m"]);
     crate::append_lock(dir.path(), "0.2.0", &["m"]).unwrap();
-    let err = crate::check_lock(dir.path(), &[]).unwrap_err();
+    let err = crate::lock::check_lock(dir.path(), &[]).unwrap_err();
     assert!(err.contains("`m`") && err.contains("0.2.0"), "{err}");
 }
 
