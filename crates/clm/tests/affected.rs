@@ -113,7 +113,7 @@ fn nothing_changed_prints_nothing() {
 
 #[test]
 fn uncommitted_untracked_and_deleted() {
-    // req:check.affected/affected-files@83ad81e2
+    // req:check.affected/affected-files@0b773abd
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/old.rs", "fn o() {}\n");
@@ -268,7 +268,7 @@ fn the_base_defaults_to_origin_main() {
 
 #[test]
 fn selects_through_the_markers_of_the_files_the_scan_reads() {
-    // req:check.affected/affected-files@83ad81e2
+    // req:check.affected/affected-files@0b773abd
     let dir = repo("");
     let root = dir.path();
     // Cites `a`, so selected though `d` owns it.
@@ -525,7 +525,7 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
 
 #[test]
 fn why_prints_the_chain_through_a_dependency() {
-    // req:check.affected/why-chain@c7f542ba
+    // req:check.affected/why-chain@bf835003
     // req:clm/affected-why-command@2b2b52c9
     let dir = repo("");
     let root = dir.path();
@@ -544,7 +544,7 @@ fn why_prints_the_chain_through_a_dependency() {
 
 #[test]
 fn why_says_not_selected_and_all() {
-    // req:check.affected/why-chain@c7f542ba
+    // req:check.affected/why-chain@bf835003
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -561,7 +561,7 @@ fn why_says_not_selected_and_all() {
 
 #[test]
 fn why_with_readers_exits_1_naming_both_flags() {
-    // req:check.affected/why-chain@c7f542ba
+    // req:check.affected/why-chain@bf835003
     // req:clm/affected-why-command@2b2b52c9
     let dir = repo("");
     let out = clm_affected_with(
@@ -577,7 +577,7 @@ fn why_with_readers_exits_1_naming_both_flags() {
 
 #[test]
 fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
-    // req:check.affected/why-chain@c7f542ba
+    // req:check.affected/why-chain@bf835003
     let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -591,7 +591,7 @@ fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
 
 #[test]
 fn why_reads_the_scan_for_readers_and_citations() {
-    // req:check.affected/why-chain@c7f542ba
+    // req:check.affected/why-chain@bf835003
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -831,4 +831,37 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
     let out = clm_affected_args(root, &["--overlap", "x2", "y2"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(stdout(&out).starts_with("node c\n"), "{out:?}");
+}
+
+#[test]
+fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
+    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/why-chain@bf835003
+    let dir = repo("");
+    let root = dir.path();
+    // `d` depends on nothing the change reaches, but exempts a test from `undeclared-imports`.
+    write(
+        root,
+        "specs/d/SPEC.md",
+        "---\ntitle: N\nstatus: active\nowners: []\npaths: [\"crates/d/**\"]\ndepends_on: []\nexemptions:\n  - rule: undeclared-imports\n    files: [\"crates/d/tests/t.rs\"]\n    until: backlog/x\n---\n",
+    );
+    write(root, "crates/d/tests/t.rs", "fn t() {}\n");
+    write(root, "crates/d/tests/u.rs", "fn u() {}\n");
+    commit_all(root, "exempt");
+    git(root, &["branch", "-f", "main", "HEAD"]);
+    // Nothing changed: no component is affected, so nothing is selected.
+    assert_eq!(stdout(&clm_affected(root, "main")), "");
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "a");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let printed = stdout(&out);
+    assert!(printed.contains("file crates/d/tests/t.rs\n"), "{printed}");
+    assert!(!printed.contains("crates/d/tests/u.rs"), "{printed}");
+    let out = clm_affected_with(root, "main", &["--why", "crates/d/tests/t.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "crates/d/tests/t.rs exempt from undeclared-imports\n"
+    );
 }
