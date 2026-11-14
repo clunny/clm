@@ -2,7 +2,7 @@
 title: Build loop
 status: active
 owners: ["@clunny"]
-depends_on: [orchestrator, orchestrator.run, orchestrator.triage, orchestrator.checkpoint, verify, upgrade, land, view, agent-harness, config, vcs, model]
+depends_on: [orchestrator, orchestrator.run, orchestrator.triage, orchestrator.checkpoint, verify, upgrade, land, view, agent-harness, config, vcs, host, model]
 paths: ["crates/clm-loop/**"]
 successor: ""
 serves: [capability/build-from-spec, architecture/agent-harness-adapters, architecture/git-is-truth]
@@ -17,10 +17,11 @@ serves: [capability/build-from-spec, architecture/agent-harness-adapters, archit
 - `clm build returned <name> --result <line> [--cause <cause> [--until <time>]]` records a run's return and prints the actions to take now.
 - `clm build approved <batch>` records that the human approved a fold batch through `clm approve`, and prints the actions to take now.
 - `clm build cleared disk` records that the human freed the disk, and prints the actions to take now.
+- `clm build release <component>` records the human's word that a component's build is given up and its work discarded: it deletes the build's branch on `origin`, renames the clone's `impl/<component>` to `released/<component>/<time>`, keeping its commits and worktree for the human, frees its place and forgets its run, so the plan builds the component afresh from `origin/main` once it is ready, and prints the actions to take now.
 - `clm build wait [--interval <minutes>]` waits until a step would act, renewing the lease, and prints why it woke.
 - `clm build stop --drain|--now` records a request to drain or to stop the loop.
 
-An action is one line on stdout: `launch <name> <kind> <model> <prompt-file>`, `resume <name> <task-id> <message-file>`, `stop <name> <task-id>`, `run <name> <command>`, `wait`, `say <file>` or `end`. A run's `<name>` is `build:<component>`, `draft:<change-id>`, `fold:<first-id>`, `archive:<id>`, `land:<batch>` or `verify`; its `<kind>` is `build`, `draft`, `fold` or `archive`. A `--cause` is the session's reading of why a run that didn't land ended: `limit` (with `--until <time>` when the error says when it lifts), `disk`, `outage`, `tool`, `work`, `context`, `blocked`, `stopped` (the loop stopped it), or `running` for a run whose task the agent harness still lists as running background work. `start`, `step`, `returned`, `approved`, `cleared` and `wait` fetch `origin`; `launched` and `stop` don't. Every command exits 0 on success, 1 when the work isn't possible (with the reason on stderr), and 2 when git fails.
+An action is one line on stdout: `launch <name> <kind> <model> <prompt-file>`, `resume <name> <task-id> <message-file>`, `stop <name> <task-id>`, `run <name> <command>`, `wait`, `say <file>` or `end`. A run's `<name>` is `build:<component>`, `draft:<change-id>`, `fold:<first-id>`, `archive:<id>`, `land:<batch>` or `verify`; its `<kind>` is `build`, `draft`, `fold` or `archive`. A `--cause` is the session's reading of why a run that didn't land ended: `limit` (with `--until <time>` when the error says when it lifts), `disk`, `outage`, `tool`, `work`, `context`, `blocked`, `stopped` (the loop stopped it), or `running` for a run whose task the agent harness still lists as running background work. `start`, `step`, `returned`, `approved`, `cleared`, `release` and `wait` fetch `origin`; `launched` and `stop` don't. Every command exits 0 on success, 1 when the work isn't possible (with the reason on stderr), and 2 when git fails.
 
 As a library it offers `plan(snapshot)`, a pure function from what a step read to `view`'s queue model, and `stored_plan(root)`, the plan the clone's last step stored with its runs as the loop file holds them now, read without fetching, so `view.repo` shows what the loop acts on (`views-rendered-by-clm`).
 
@@ -38,6 +39,8 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 **The lease.** The holder renews it with every command it runs and every interval while `clm build wait` runs; it is live for 15 minutes after the last renewal. 15 minutes is a constant, not a setting (`yagni`): it only has to outlast the wait's interval, which is at most 7 minutes. A session that dies takes its subagents and its `clm build wait` with it, so the lease lapses and the next `start` adopts the loop. Runs the file lists as planned, running or stopped belong to a session that is gone: *orphans*. A build orphan is relaunched with `clm run`, which resumes its branch; a draft orphan with `clm draft --resume`, which continues its spec branch (`orchestrator.triage/draft-resume`); a `land:` or `verify` orphan is run again, since `clm land` of a landed branch and `clm verify --due` are safe to repeat; a fold or archive orphan is dropped and the plan computes it again, its prompt continuing a branch it finds on `origin`. `--take-over` is the human's word that a live lease's session is gone; since that session's subagents may still be running when it isn't, an orphan whose branch the last fetch saw advance within the last 15 minutes is relaunched only once it has stayed still for 15 minutes, so two subagents never push over one branch.
 
 **Stops.** Each run counts its stops by cause. What stopped from outside the work is resumed in the same subagent, keeping its context: a limit or a full disk each time it recurs, once it clears, and an outage or a tool failure once, at once. What went wrong in the work is given one resume, then a rebuild with a new subagent on the session's model. A rebuilt run that stops again for the cause that rebuilt it is escalated, as is a run that runs out of context twice. These are `resume-sound-builds`' criteria, now code.
+
+**Releasing a build** (`release`). The human gives up a component's build when its session died and they don't want it resumed, or when it went wrong in a way no resume would mend. Deleting `origin/impl/<component>` alone isn't a release: `clm run` refuses a local `impl/<component>` that has no `origin/impl/<component>`, since it may hold commits nobody pushed (`orchestrator.run`'s `run`), so every step would skip the component until someone moved the local branch by hand, a step no skill states. So a release is one command, and the session needs no step of its own (`build-loop-in-clm`). It runs `clm branch delete impl/<component>` for the remote branch, so the rule that a clone deletes only a tip it pushed stays `host`'s, and a refusal there (another clone's claim, or a branch that moved since the fetch) leaves the clone as it was. It then renames the local `impl/<component>` to `released/<component>/<time>` with `git branch -m` through `clm-git`, which git allows while another worktree has the branch checked out and which moves that worktree's `HEAD` with it, and runs `clm run --finish <component>` to free the place, so the place's rules stay `orchestrator.run`'s. A release discards nothing the clone holds: the build's commits stay on the renamed branch and its worktree, with any uncommitted work, stays where it is, for the human to delete or take from, so the command needs no guard beyond the allow rule `clm build` already has, and no worktree rule of `orchestrator.run`'s moves into the loop. Running it again after a failure finishes the release, since `clm branch delete` of a branch already gone does nothing. Not taken: `clm branch delete` deleting the local branch too, which would give a command unattended sessions run with no classifier judging it (`unattended-steps-run-clm`) the power to discard commits nobody pushed; deleting the local branch and the worktree in the release, which would need a guard asking the human, since the same allow rule covers `clm build`, and would copy `run-finish`'s worktree rules into the loop; and `clm run` resuming a local branch with no remote, which would drop `run`'s guard against building on commits nobody pushed.
 
 **Escalations** need no subagent. A `question` item is a file the loop writes itself: it builds a tree from `origin/main`'s with the item added through a temporary index, as `orchestrator`'s `next` reads a tree, commits it with `git commit-tree`, pushes the commit as `loop/<slug>` and lands that branch with `clm land` from the main worktree. A branch outside `impl/`, `spec/`, `propose/` and `autosync/` that only adds a backlog item lands on checks as a small change (`small-change-no-claim`, `gate/backlog-additions`), so `gate` needs no rule for it; its `/` keeps it out of the claim namespaces (`nested-branches-not-claims`).
 
@@ -341,3 +344,26 @@ The plan SHALL hold the human's queue, each entry with what the human does about
 
 #### Needs
 - view/queue-view
+
+### Requirement: release
+`clm build release <component>` SHALL fetch `origin` and, after refreshing the take-over holds as a step does, refuse with exit 1, changing nothing and naming the run, when the loop file lists `build:<component>` as `planned` and not an orphan, as `running` and not an orphan, or as an orphan a take-over holds (`take-over-holds-moving-orphans`); a run that is `stopped` or `returned`, or an orphan no take-over holds, doesn't refuse it. Otherwise it SHALL run `clm branch delete impl/<component>` and, when that exits other than 0, print its stderr and exit 1 when it exited 1 and 2 otherwise, changing nothing more. Then, when the local `impl/<component>` exists, it SHALL rename it to `released/<component>/<time>`, `<time>` the UTC time as `YYYYMMDDTHHMMSSZ`, with `git branch -m`, also when a worktree has it checked out, and print `kept released/<component>/<time>`; it SHALL remove no worktree and delete no local branch. It SHALL then run `clm run --finish <component>`, remove `build:<component>` from the loop file, and print the actions to take now as `clm build step` does. A component with no branch on `origin`, no local branch and no run SHALL be released with exit 0.
+
+#### Scenario: a dead session's build released
+- GIVEN the loop file listing `build:a` as an orphan no take-over holds, `origin/impl/a` pushed from this clone, and a worktree at `.claude/worktrees/agent-1` with the local `impl/a` checked out at a commit `c` that `origin/impl/a` lacks, and an untracked file `notes.txt`
+- WHEN `clm build release a` runs
+- THEN it exits 0, `origin` has no `impl/a`, the clone has no local `impl/a`, it printed `kept released/a/` with the time, that branch is at `c` and the worktree has it checked out with `notes.txt` still there, `clm run --finish a` ran, and the loop file lists no `build:a`
+
+#### Scenario: a live run
+- GIVEN the loop file listing `build:a` as running with task ID `t-1`, not an orphan, and `origin/impl/a` pushed from this clone
+- WHEN `clm build release a` runs
+- THEN it exits 1 naming `build:a`, `clm branch delete` didn't run, and the local `impl/a` and the loop file are unchanged
+
+#### Scenario: another clone's claim
+- GIVEN a `clm branch delete impl/a` that exits 1 saying this clone didn't push the tip, and a local `impl/a`
+- WHEN `clm build release a` runs
+- THEN it exits 1 with that reason on stderr, the local `impl/a` is unchanged, and `clm run --finish a` didn't run
+
+#### Scenario: nothing to release
+- GIVEN no `origin/impl/a`, no local `impl/a` and no run `build:a`
+- WHEN `clm build release a` runs
+- THEN it exits 0 and prints no `kept` line
