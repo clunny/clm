@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [builder-check-text-lives-in-the-propose-skill-file, reconsider-plugin-builder-check, workaround-plugin-builder-check-1]
 ---
 
