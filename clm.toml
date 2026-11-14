@@ -31,10 +31,11 @@ all = [
 [build]
 setup = 'for d in plugin-panel capabilities/panel web web/site capabilities/web; do test ! -f "$d/package.json" || (cd "$d" && npm ci --ignore-scripts) || exit 1; done'
 
-# `clm health`'s `unexercised` signal reads this lcov tracefile, which
-# .github/scripts/coverage.sh writes (lcov-coverage-signal); the counts keep their defaults.
+# `clm health`'s `unexercised` signal reads this lcov tracefile, the copy of what
+# .github/scripts/coverage.sh writes that the mutation pass leaves in the place `clm verify`
+# keeps (health-lcov-here, lcov-coverage-signal); the counts keep their defaults.
 [health]
-lcov = "target/lcov.info"
+lcov = ".clm/verify-build/lcov.info"
 
 # `clm check` runs these (check/detectors). ci-check.sh and the release install their tools
 # with .github/scripts/detector-tools.sh, whose install line each `hint` repeats.
@@ -71,9 +72,10 @@ hint = "scripts/retired-terms.sh needs only sh and grep"
 
 # The whole suite runs after lands that checked only where the branch and `main` overlap
 # (verify-here, land/overlap-recheck): on this machine, once the build queue drains and at least
-# every 20 lands. See `clm guide ci-and-deployment`.
+# every 20 lands, and the mutation pass follows each run that passed. See `clm guide ci-and-deployment`.
 [verify]
 check = ".github/scripts/ci-check.sh"
 mode = "local"
 triggers = ["queue-drained"]
 every = { lands = 20 }
+mutate = ".github/scripts/mutate.sh"
