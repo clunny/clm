@@ -89,6 +89,14 @@ enum Command {
     /// List every requirement as current, behind or unbuilt (with citing markers), then the
     /// obsolete ones.
     Coverage {
+        /// Print, in place of the coverage, the tests a removed requirement leaves with
+        /// nothing to cite.
+        #[arg(long, conflicts_with = "deleted_tests")]
+        obsolete_tests: bool,
+        /// Print, in place of the coverage, the citing tests of this revision that the
+        /// working tree no longer holds.
+        #[arg(long, value_name = "BASE")]
+        deleted_tests: Option<String>,
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -987,20 +995,27 @@ fn dispatch() -> ExitCode {
                 ExitCode::FAILURE
             }
         }
-        Command::Coverage { root } => match clm_check::coverage(&repo_root(root)) {
-            Ok(report) => {
-                for line in report {
-                    println!("{line}");
+        Command::Coverage {
+            obsolete_tests,
+            deleted_tests,
+            root,
+        } => {
+            let root = repo_root(root);
+            let result = match (&deleted_tests, obsolete_tests) {
+                (Some(base), _) => clm_check::deleted_tests_lines(&root, base),
+                (None, true) => clm_check::obsolete_tests_lines(&root),
+                (None, false) => clm_check::coverage_lines(&root),
+            };
+            match result {
+                Ok(lines) => {
+                    for line in lines {
+                        println!("{line}");
+                    }
+                    ExitCode::SUCCESS
                 }
-                ExitCode::SUCCESS
+                Err(violations) => report(&violations),
             }
-            Err(violations) => {
-                for v in &violations {
-                    println!("{}", clm_check::format(v));
-                }
-                ExitCode::FAILURE
-            }
-        },
+        }
         Command::Pending { node, at, root } => {
             let (head, result) =
                 clm_view_repo::pending(&repo_root(root), node.as_deref(), at.as_deref());
