@@ -121,6 +121,20 @@ The old names of the commands `renamed-commands` names, the subcommands `sync`, 
 - orchestrator.run/prompt-serves
 - plugin.hooks.guard/approve-guard
 
+## ADDED Requirements
+
+### Requirement: no-runner-crate
+The workspace SHALL hold no crate `clm-runner`, and `clm` SHALL have no `runner` subcommand: unattended builds run through `/clm:build` in a session (`build-loop-in-clm`). The root's build deletes `crates/clm-runner/`, which the root owns once `orchestrator.runner` is removed, and takes its dependency out of `Cargo.toml`, `Cargo.lock` and `crates/clm/Cargo.toml`, its dispatch out of `crates/clm/src/`, and `crates/clm/tests/runner.rs`, whose tests ran the removed command (`no-dead-code`).
+
+#### Scenario: crate and command gone
+- GIVEN the workspace
+- WHEN a test in `clm` reads the root `Cargo.toml` and `crates/clm/Cargo.toml`, lists `crates/`, and runs `clm runner`
+- THEN neither file names `clm-runner`, no `crates/clm-runner/` directory exists, and `clm runner` exits 2 as an unknown subcommand
+
+#### Serves
+- architecture/no-dead-code
+- capability/no-dead-weight
+
 ## REMOVED Requirements
 
 ### Requirement: claude-md-pushes-with-clm <!-- base: af3228bd880abd68 -->

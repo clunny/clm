@@ -30,5 +30,4 @@ When the repository's current branch isn't `main` and neither a local `main` nor
 ## REMOVED Requirements
 
 ### Requirement: claude-md-points-at-guide <!-- base: e9cdc867e5675500 -->
-### Requirement: template-says-pull-request <!-- base: 603d3610e8e6dc1b -->
 ### Requirement: claude-md-names-the-skills <!-- base: f687fbf909bda787 -->
