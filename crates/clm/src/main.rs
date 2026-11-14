@@ -331,26 +331,6 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-    /// Build what `clm next` lists unattended: prepare each component with `clm run`, run
-    /// `claude -p` headless in a worktree of its own, and finish it with `clm run --finish`
-    /// when it exits. Runs on Linux and macOS.
-    Runner {
-        /// Passed to every `claude` session unchecked (required).
-        #[arg(long)]
-        permission_mode: Option<String>,
-        /// Minutes to wait between looks for work when nothing finishes (a positive number).
-        #[arg(long, default_value = "5", value_parser = interval_minutes)]
-        interval: std::time::Duration,
-        /// Exit once nothing more can be started and every session has exited.
-        #[arg(long)]
-        once: bool,
-        /// Hours without a commit after which a claim lapses.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
     /// Run the clone's build loop: decide every step of draining the queue and print the
     /// actions the session carries out with the agent harness's subagents.
     Build {
@@ -1407,21 +1387,6 @@ fn dispatch() -> ExitCode {
                 Err(clm_triage::DraftError::Failed(e)) => orchestrated("draft", Err(e)),
             }
         }
-        Command::Runner {
-            permission_mode,
-            interval,
-            once,
-            expiry,
-            root,
-        } => ExitCode::from(clm_runner::runner(&clm_runner::Options {
-            clm: std::env::current_exe().unwrap_or_else(|_| PathBuf::from("clm")),
-            claude: "claude".into(),
-            root: repo_root(root),
-            permission_mode,
-            interval,
-            once,
-            expiry,
-        })),
         Command::Build { action, root } => build(repo_root(root), cwd, action),
         Command::WrapUp { root } => wrap_up(root),
         Command::Rebase { root } => rebase(root),
@@ -2105,15 +2070,6 @@ fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
         }
         Err(e) => failed("build", &e),
     }
-}
-
-/// `clm runner --interval`: a positive decimal number of minutes.
-fn interval_minutes(s: &str) -> Result<std::time::Duration, String> {
-    let minutes: f64 = s.parse().map_err(|_| format!("`{s}` isn't a number"))?;
-    if minutes.is_nan() || minutes <= 0.0 {
-        return Err(format!("`{s}` isn't a positive number of minutes"));
-    }
-    std::time::Duration::try_from_secs_f64(minutes * 60.0).map_err(|e| format!("`{s}`: {e}"))
 }
 
 /// `repo_root`, except that with no CLM repository found, as before `clm init`, it's the

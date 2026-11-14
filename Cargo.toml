@@ -38,7 +38,6 @@ clm-verify = { path = "crates/clm-verify" }
 clm-triage = { path = "crates/clm-triage" }
 clm-unreferenced = { path = "crates/clm-unreferenced" }
 clm-affected = { path = "crates/clm-affected" }
-clm-runner = { path = "crates/clm-runner" }
 clm-web-live = { path = "crates/clm-web-live" }
 clm-web-platform = { path = "crates/clm-web-platform" }
 clm-web-review = { path = "crates/clm-web-review" }
