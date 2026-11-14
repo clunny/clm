@@ -1,4 +1,3 @@
-// req:web.views/home-waiting-on-you@46bb33db
 import { describe, expect, it } from 'vitest';
 import type { Answering } from './answers';
 import { architecture, capabilities, constraint, cost, review, snapshot } from './fixtures';
@@ -30,6 +29,7 @@ const section = (e: HTMLElement, name: string) => e.querySelector<HTMLElement>(`
 const buttons = (s: HTMLElement | null) => [...(s?.querySelectorAll<HTMLElement>('.hent-row') ?? [])].map((r) => [...r.querySelectorAll('button.answer')].map((b) => b.textContent));
 const entries = (s: HTMLElement | null) => [...(s?.querySelectorAll<HTMLAnchorElement>('a.hent') ?? [])].map((a) => [a.textContent, a.getAttribute('href')]);
 
+// req:web.views/home-waiting-on-you@46bb33db
 describe('home: waiting on you', () => {
   it('what waits: Review, Answer, Flagged and Answer in a session, in that order, with the badge at 3', () => {
     const snap = waiting();
