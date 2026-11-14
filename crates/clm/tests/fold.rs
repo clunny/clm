@@ -87,7 +87,7 @@ fn local_branches(r: &Repo) -> String {
 
 #[test]
 fn scenario_several_changes_folded() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "resolves: [x]\n");
     spec_branch(&r, "20261027-b", "applied", "");
@@ -183,7 +183,7 @@ fn scenario_several_changes_folded() {
 
 #[test]
 fn scenario_fold_branch_name_taken() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     spec_branch(&r, "20261027-b", "applied", "");
@@ -204,7 +204,7 @@ fn scenario_fold_branch_name_taken() {
 
 #[test]
 fn scenario_one_change() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "resolves: [x]\n");
     let ran = fold(&r, &["20261027-a"]);
@@ -237,7 +237,7 @@ fn scenario_one_change() {
 
 #[test]
 fn scenario_missing_or_unapplied_change_left() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     spec_branch(&r, "20261027-p", "proposed", "");
@@ -277,7 +277,7 @@ fn scenario_missing_or_unapplied_change_left() {
 
 #[test]
 fn scenario_nothing_to_fold() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     let ran = fold(&r, &["20261027-z"]);
     assert_eq!(ran.code, Some(1), "{}", ran.stderr);
@@ -287,7 +287,7 @@ fn scenario_nothing_to_fold() {
 
 #[test]
 fn changes_fold_in_the_order_given() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     spec_branch(&r, "20261027-b", "applied", "");
@@ -309,7 +309,7 @@ fn changes_fold_in_the_order_given() {
 
 #[test]
 fn the_launcher_names_the_file_by_its_absolute_path() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     let out = output(
@@ -329,7 +329,7 @@ fn the_launcher_names_the_file_by_its_absolute_path() {
 
 #[test]
 fn an_earlier_fold_prompt_is_replaced_and_clm_is_excluded() {
-    // req:orchestrator.triage/fold@8b73785c
+    // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
     write(

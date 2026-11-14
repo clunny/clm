@@ -121,7 +121,7 @@ fn local_branches(r: &Repo) -> String {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let (r, f) = (with_items(), fake());
     let before = local_branches(&r);
     let worktrees = git(&r.work, &["worktree", "list", "--porcelain"]);
@@ -235,7 +235,7 @@ fn scenario_items_claimed_and_prompt_written() {
 
 #[test]
 fn a_p5_draft_sets_no_priority() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -246,7 +246,7 @@ fn a_p5_draft_sets_no_priority() {
 
 #[test]
 fn scenario_one_item_refused() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["a", "b"]);
@@ -266,7 +266,7 @@ fn scenario_one_item_refused() {
 
 #[test]
 fn scenario_nothing_claimed() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let (r, f) = (with_items(), fake());
     push_propose(&r.work, "b", 1);
     let ran = clm_draft(&r, &f, &["b"]);
@@ -277,7 +277,7 @@ fn scenario_nothing_claimed() {
 
 #[test]
 fn an_unknown_item_is_left() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["nope", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -286,7 +286,7 @@ fn an_unknown_item_is_left() {
 
 #[test]
 fn a_slug_given_twice_is_claimed_once() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let (r, f) = (with_items(), fake());
     let ran = clm_draft(&r, &f, &["a", "a"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -876,7 +876,7 @@ fn clm_triage_prints_the_lines_and_exits_0() {
 
 #[test]
 fn clm_draft_reads_relative_answers_from_where_it_runs() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items();
     write(&r.work, ".clm/answers.md", "b: keep it small\n");
     let ran = clm_draft(&r, &fake(), &["--answers", ".clm/answers.md", "b"]);
@@ -895,7 +895,7 @@ fn clm_draft_reads_relative_answers_from_where_it_runs() {
 
 #[test]
 fn clm_draft_reads_answers_from_a_subdirectory_it_runs_in() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     // With no `--root`, `clm` finds the repository above the subdirectory; a relative
     // path is still read against the subdirectory.
     let r = with_items();
@@ -920,7 +920,7 @@ fn clm_draft_reads_answers_from_a_subdirectory_it_runs_in() {
 
 #[test]
 fn clm_draft_answers_conflict_with_finish_and_fold() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items();
     write(&r.work, "answers.md", "x\n");
     for args in [
@@ -1020,7 +1020,7 @@ fn a_prompt_that_cant_be_written_frees_the_place() {
 
 #[test]
 fn clm_draft_passes_the_declared_setup_into_the_prompt() {
-    // req:orchestrator.triage/draft-prompt-setup@53070272
+    // req:orchestrator.triage/draft-prompt-setup@45e6b734
     let r = with_items();
     let ran = clm_draft(&r, &fake(), &["b"]);
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
@@ -1038,7 +1038,7 @@ fn clm_draft_passes_the_declared_setup_into_the_prompt() {
 
 #[test]
 fn scenario_a_draft_that_pushed() {
-    // req:orchestrator.triage/draft-resume@62d8d617
+    // req:orchestrator.triage/draft-resume@e71d0780
     let r = with_items();
     let id = "20261112-x";
     push_files(
@@ -1051,7 +1051,7 @@ fn scenario_a_draft_that_pushed() {
     assert_eq!(drafted_id(&ran), id);
     assert!(ran.stdout.contains(".clm/prompts/draft/20261112-x.md"));
     let prompt = fs::read_to_string(r.work.join(".clm/prompts/draft/20261112-x.md")).unwrap();
-    assert!(prompt.contains("git switch -c spec/20261112-x --no-track origin/spec/20261112-x"));
+    assert!(prompt.contains("git switch -C spec/20261112-x --no-track origin/spec/20261112-x"));
     assert!(prompt.contains("clm gate --base origin/main"), "same steps");
     assert!(prompt.contains("`left <slug>: <reason>`"), "same rules");
     assert!(
@@ -1065,7 +1065,7 @@ fn scenario_a_draft_that_pushed() {
 
 #[test]
 fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
-    // req:orchestrator.triage/draft-resume@62d8d617
+    // req:orchestrator.triage/draft-resume@e71d0780
     let r = with_items();
     let id = "20261112-v";
     push_files(
@@ -1091,7 +1091,7 @@ fn resume_reuses_the_drafts_own_place_when_the_cap_is_full() {
 
 #[test]
 fn resume_takes_the_newer_of_the_two_spec_branches() {
-    // req:orchestrator.triage/draft-resume@62d8d617
+    // req:orchestrator.triage/draft-resume@e71d0780
     let r = with_items();
     let id = "20261112-w";
     let path = format!("changes/{id}/change.md");
@@ -1103,13 +1103,13 @@ fn resume_takes_the_newer_of_the_two_spec_branches() {
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     let prompt = fs::read_to_string(r.work.join(format!(".clm/prompts/draft/{id}.md"))).unwrap();
     assert!(prompt.contains(&format!(
-        "git switch -c spec/{id} --no-track origin/autosync/spec/{id}"
+        "git switch -C spec/{id} --no-track origin/autosync/spec/{id}"
     )));
 }
 
 #[test]
 fn scenario_nothing_pushed() {
-    // req:orchestrator.triage/draft-resume@62d8d617
+    // req:orchestrator.triage/draft-resume@e71d0780
     let r = with_items();
     let ran = clm_draft_env(&r, &fake(), &["--resume", "20261112-y"], &[]);
     assert_eq!(ran.code, Some(1), "{}", ran.stderr);
@@ -1123,7 +1123,7 @@ fn scenario_nothing_pushed() {
 
 #[test]
 fn resume_with_no_free_place_takes_nothing() {
-    // req:orchestrator.triage/draft-resume@62d8d617
+    // req:orchestrator.triage/draft-resume@e71d0780
     let r = with_items();
     let id = "20261112-z";
     push_files(

@@ -472,7 +472,7 @@ fn prompt_for(
         Some(remote) => format!(
             "Your change ID, `<id>` below, is `{id}`: `clm draft` holds this clone's place by \
              it. First check `git branch --show-current`, then run \
-             `git switch -c spec/{id} --no-track {REMOTE}/{remote}`. Read \
+             `git switch -C spec/{id} --no-track {REMOTE}/{remote}`. Read \
              `changes/{id}/change.md`, with the human's answers it quotes, and \
              `git log {REMOTE}/main..HEAD`, then each backlog item its `resolves` names in \
              `backlog/<slug>.md` on `{REMOTE}/main`, and carry the draft on from where its \
