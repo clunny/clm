@@ -18,6 +18,8 @@ mod claude_md_names_help;
 mod constraints_copy;
 #[path = "migrations/20261108-toolchain-neutral-land-builds/mod.rs"]
 mod land_dir;
+#[path = "migrations/20261114-proof-is-real/mod.rs"]
+mod markers_in_tests;
 #[path = "migrations/20261107-slow-tests-after-land/mod.rs"]
 mod offer_verify;
 #[path = "migrations/20261112-a-draft-s-clm/mod.rs"]
@@ -43,6 +45,7 @@ pub(crate) static LIST: &[Migration] = &[
     agents_md::MIGRATION,
     setup_allow_rules::MIGRATION,
     build_allow_rules::MIGRATION,
+    markers_in_tests::MIGRATION,
 ];
 
 /// `(migration, note it supersedes)`: a note whose edit is to a text the later migration has

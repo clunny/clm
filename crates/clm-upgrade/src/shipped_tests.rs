@@ -687,10 +687,15 @@ fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
     .unwrap();
     assert_eq!(
         list(dir.path()).unwrap(),
-        format!("{LAND_DIR_ID} {LAND_DIR_LINE}\n{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n")
+        format!(
+            "{LAND_DIR_ID} {LAND_DIR_LINE}\n{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n{PROOF_ID} advised note {PROOF_TITLE}\n"
+        )
     );
     let out = apply(dir.path()).unwrap();
-    assert_eq!(out, format!("note {LAND_DIR_ID}\nnote {BUILD_SETUP_ID}\n"));
+    assert_eq!(
+        out,
+        format!("note {LAND_DIR_ID}\nnote {BUILD_SETUP_ID}\nnote {PROOF_ID}\n")
+    );
     assert_eq!(
         read_toml(&dir),
         format!(
@@ -712,7 +717,7 @@ fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_othe
     .unwrap();
     assert_eq!(
         list(dir.path()).unwrap(),
-        format!("{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n")
+        format!("{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n{PROOF_ID} advised note {PROOF_TITLE}\n")
     );
     fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
     assert!(list(dir.path()).unwrap().contains(LAND_DIR_ID));
@@ -825,10 +830,10 @@ fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
     fs::write(dir.path().join("clm.toml"), before).unwrap();
     assert_eq!(
         list(dir.path()).unwrap(),
-        format!("{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n")
+        format!("{BUILD_SETUP_ID} {BUILD_SETUP_LINE}\n{PROOF_ID} advised note {PROOF_TITLE}\n")
     );
     let out = apply(dir.path()).unwrap();
-    assert_eq!(out, format!("note {BUILD_SETUP_ID}\n"));
+    assert_eq!(out, format!("note {BUILD_SETUP_ID}\nnote {PROOF_ID}\n"));
     assert_eq!(
         read_toml(&dir),
         before.replace("20261109-land-still-sets-cargo", latest().unwrap())
@@ -845,7 +850,10 @@ fn the_build_setup_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_o
         format!("upgraded = \"{BUILD_SETUP_ID}\"\n"),
     )
     .unwrap();
-    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    assert_eq!(
+        list(dir.path()).unwrap(),
+        format!("{PROOF_ID} advised note {PROOF_TITLE}\n")
+    );
     fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
     assert!(list(dir.path()).unwrap().contains(BUILD_SETUP_ID));
     fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
@@ -948,4 +956,57 @@ fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md()
 fn a_claude_md_that_imports_agents_md_has_nothing_pending() {
     let dir = project(NEW_ARCHITECTURE, "# Ours\n@AGENTS.md\n");
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+const PROOF_ID: &str = "20261114-proof-is-real";
+const PROOF_TITLE: &str =
+    "A marker now counts only inside a test: see what stops counting before the next build";
+
+// req:upgrade/migration-markers-in-tests@ea97d66c
+#[test]
+fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    let before = "upgraded = \"20261112-build-loop-in-clm\"\n\n[land]\ncheck = \"true\"\n";
+    fs::write(dir.path().join("clm.toml"), before).unwrap();
+    assert_eq!(
+        list(dir.path()).unwrap(),
+        format!("{PROOF_ID} advised note {PROOF_TITLE}\n")
+    );
+    let out = apply(dir.path()).unwrap();
+    assert_eq!(out, format!("note {PROOF_ID}\n"));
+    assert_eq!(
+        read_toml(&dir),
+        before.replace("20261112-build-loop-in-clm", latest().unwrap())
+    );
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+}
+
+// req:upgrade/migration-markers-in-tests@ea97d66c
+#[test]
+fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(
+        dir.path().join("clm.toml"),
+        format!("upgraded = \"{PROOF_ID}\"\n"),
+    )
+    .unwrap();
+    assert_eq!(list(dir.path()).unwrap(), "up to date\n");
+    fs::write(dir.path().join("clm.toml"), "# [verify]\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(PROOF_ID));
+    fs::write(dir.path().join("clm.toml"), "upgraded = [\n").unwrap();
+    assert!(list(dir.path()).unwrap().contains(PROOF_ID));
+    fs::remove_file(dir.path().join("clm.toml")).unwrap();
+    assert!(!list(dir.path()).unwrap().contains(PROOF_ID));
+}
+
+// req:upgrade/migration-markers-in-tests@ea97d66c
+#[test]
+fn the_proof_note_names_what_a_project_needs_to_know() {
+    let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
+    fs::write(dir.path().join("clm.toml"), "").unwrap();
+    let note = crate::note(dir.path(), PROOF_ID).unwrap();
+    assert!(note.starts_with(&format!("{PROOF_TITLE}\n")), "{note}");
+    for needle in ["clm coverage", "uncounted", "wiring", "[verify] mutate"] {
+        assert!(note.contains(needle), "{needle}: {note}");
+    }
 }
