@@ -235,7 +235,7 @@ fn both_landed(f: &Fixture, first: Child, second: Child) -> String {
 
 #[test]
 fn overlapping_lands() {
-    // req:land/land-target-lock@66ccebd0
+    // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.write("hold", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -265,7 +265,7 @@ fn overlapping_lands() {
 
 #[test]
 fn a_callers_target_takes_the_lock_too() {
-    // req:land/land-target-lock@66ccebd0
+    // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.write("hold", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -308,7 +308,7 @@ fn a_callers_target_takes_the_lock_too() {
 
 #[test]
 fn held_through_the_gate_on_the_merge() {
-    // req:land/land-target-lock@66ccebd0
+    // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.write("check-sleeps", "2");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -336,7 +336,7 @@ fn held_through_the_gate_on_the_merge() {
 
 #[test]
 fn checked_code_takes_no_lock() {
-    // req:land/land-target-lock@66ccebd0
+    // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();

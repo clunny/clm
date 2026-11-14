@@ -58,7 +58,7 @@ fn starts(f: &Fixture) -> Vec<String> {
 
 #[test]
 fn turns_in_arrival_order() {
-    // req:land/lock-queue@7af00d95
+    // req:land/lock-queue@f4acb98c
     let f = Fixture::new("");
     logging_check(&f);
     let names = ["wa", "wb", "wc"];
@@ -96,7 +96,7 @@ fn turns_in_arrival_order() {
 
 #[test]
 fn a_checked_land_goes_first() {
-    // req:land/lock-queue@7af00d95
+    // req:land/lock-queue@f4acb98c
     let f = Fixture::new("");
     logging_check(&f);
     f.write("readers-out", "file crates/a/tests/r.rs\n");
@@ -159,7 +159,7 @@ fn a_is_p1(f: &Fixture) {
 
 #[test]
 fn a_p1_land() {
-    // req:land/lock-queue@7af00d95
+    // req:land/lock-queue@f4acb98c
     let f = Fixture::new("");
     a_is_p1(&f);
     logging_check(&f);
