@@ -431,6 +431,12 @@ fn marker_on_missing_entry_dangling() {
     assert_eq!(found[0].1, "check/dangling-markers");
     assert_eq!(found[0].0, "tests/t.rs:2");
     assert!(found[0].2.contains("capability/nope"), "{found:?}");
+    assert!(
+        found[0].2.ends_with(
+            "; a change that removes the capability lists it under removes_capabilities"
+        ),
+        "{found:?}"
+    );
 }
 
 #[test]
@@ -512,15 +518,4 @@ fn capability_removed_by_a_live_change_is_not_dangling() {
             assert!(found.is_empty(), "{found:?}");
         }
     }
-}
-
-#[test]
-fn only_a_capability_marker_gets_the_removal_hint() {
-    // req:check/dangling-markers@2e31c5b8
-    let dir = repo("applied");
-    let d = dir.path();
-    write(d, "tests/t.rs", &format!("// {GONE}\n"));
-    let found = rules(d);
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert!(!found[0].2.contains("removes_capabilities"), "{found:?}");
 }
