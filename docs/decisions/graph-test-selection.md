@@ -10,7 +10,7 @@ status: accepted
 - A diff maps to nodes through each node's `paths`; the *affected* nodes are those plus every node that depends on one of them, directly or indirectly (`depends_on`).
 - A file belongs to the nodes its `req:` markers cite, so an integration test citing requirements of several nodes runs when any of them is affected. A file with no marker belongs to the node whose `paths` hold it, as `node-size` counts it (`tests-count-where-cited`): helpers and smoke tests run with their node.
 - A changed file always runs, so an edited test is run by the land that edits it.
-- Changes under the doc-only paths `code_key` leaves out select nothing: they change no code.
+- Changes under the doc-only paths `code_key` leaves out change no code, so they select only the files whose `clm:reads` markers name them (`doc-readers-marked`).
 - A changed file no node's `paths` hold, or one a glob in `clm.toml`'s `[affected] all` matches, selects everything. The glob list is for files a node owns whose reach is wider than its dependants, such as a lockfile, the toolchain pin or a CLI's dispatch.
 
 The selection is as sound as `paths` and `depends_on`: a test that exercises code of a node it neither cites nor lives in, through a dependency the graph doesn't declare, can be skipped. `check`'s rules already fail an undeclared dependency, and the full suite still runs wherever the check runs outside a land: in every build session before it lands, by hand, and in the release's `prepare` job (`release-by-dispatch`).
@@ -25,7 +25,7 @@ Rejected:
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `land-checks-stay-fast` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `land-checks-stay-fast` states this in short; the rule in full:
 
 A project's `[land] check` SHALL run the tests `CLM_SELECTION` names, or every test when it is unset, empty or names `all`, and those tests SHALL be fast, deterministic and able to run beside other runs (`tests-run-concurrently`); every file a test reads SHALL be one the spec graph connects it to: a file of the component that owns it or of one it depends on (`depends_on`), or one a `req:` or `clm:reads` marker in it names. A test that is slow, fails or passes from run to run on the same tree, or needs a resource no other run may share belongs in `[verify]`, after the land (`verify-after-land`). CLM builds a land's verdict from checks of its parts: a land whose branch's head was checked whole runs only the tests the branch and what `main` gained since can both affect (`land/overlap-recheck`), so the tests' honesty about what they read is what that verdict rests on.
 

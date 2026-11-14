@@ -4,7 +4,7 @@ date: 2026-10-29
 status: accepted
 ---
 
-Supersedes `continuous-evals-at-land`, `skill-evals-at-land` and `superpowers-upgrade-check`, and refines `unattended-superpowers`. Part of the re-founding (`docs/the-clm-project.md`), whose capability list the human accepted with this cut.
+Refines `unattended-superpowers`. Part of the re-founding (`docs/the-clm-project.md`), whose capability list the human accepted with this cut.
 
 **What goes.** The `superpowers-unattended` cases under `plugin/evals/`, `clm superpowers eval`, `clm superpowers upgrade` with its judge and `orchestrator`'s `claim_upkeep`, the check script's eval step, and the `clm` plugin's skill eval cases with their wrapper and land-time step (never built: they waited on a cost ceiling and a sandbox install only the human could give).
 

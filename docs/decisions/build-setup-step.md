@@ -14,7 +14,7 @@ A project declares in `clm.toml`'s `[build] setup` the shell command that makes 
 
 **Why `[land] check` doesn't use it.** CI, `[verify]` and a land's own tree run the check in trees no build prepared, so the check stays self-sufficient, installing what it needs itself, as the starter `scripts/clm-check.sh` does with `npm ci`. Running the setup before every land's check too would cost each land an install for nothing.
 
-**What `clm init` seeds.** With `--lang typescript`, `[build] setup = "test ! -f package.json || npm ci"`, so a repository with no code yet passes it. Rust needs none: cargo resolves from the worktree's own manifest and compiles into its own `target/`. Python gets none: a shared virtualenv is chosen by whatever runs the tests, so a setup alone can't redirect it, and the project decides where its environment lives. `/clm:init` tells the human the rule and, for an existing codebase, proposes the setup its toolchains need (`plugin.init/init-skill-build-setup`); an existing project is told by an advised note migration (`upgrade/migration-build-setup`).
+**What `clm init` seeds.** With `--lang typescript`, `[build] setup = "test ! -f package.json || npm ci"`, so a repository with no code yet passes it. Rust needs none: cargo resolves from the worktree's own manifest and compiles into its own `target/`. Python gets none: a shared virtualenv is chosen by whatever runs the tests, so a setup alone can't redirect it, and the project decides where its environment lives. `/clm:init` tells the human the rule and, for an existing codebase, proposes the setup its toolchains need; an existing project is told by an advised note migration (`upgrade/migration-build-setup`).
 
 **Alternatives.**
 - *Only state the rule in the build prompt.* Rejected: the failure is silent, and each session would rediscover what to install.
@@ -24,7 +24,7 @@ A project declares in `clm.toml`'s `[build] setup` the shell command that makes 
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `tests-run-in-their-own-tree` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `tests-run-in-their-own-tree` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 A build's tests SHALL run against the code and the dependencies of the tree it builds in, never against another checkout's: a toolchain whose lookup reaches a parent directory, or an environment the clone's checkouts share, must not resolve the main checkout's packages or source in its place. A build's tree is a fresh worktree inside the main checkout with nothing installed, so the project declares in `[build] setup` the command that makes such a tree ready to run its tests, such as one installing its dependencies into it, and every session that tests code in such a tree (a `clm run` build, a draft's code fix, a skill's hand-run fix) runs it with `clm setup` before its first test run there; CLM names no toolchain, and the project's command holds what its toolchains need (`build-setup-step`).
 

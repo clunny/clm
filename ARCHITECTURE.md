@@ -385,7 +385,6 @@ The guard prevents accidents and is not a hard boundary: it rests on each harnes
 - plugin.hooks.guard.shell/guard-checkout
 - plugin/hooks-wired
 - plugin/codex-hooks-wired
-- orchestrator.runner/runner-needs-guard
 - host/branch-push
 - host/branch-delete
 - ledger/verify

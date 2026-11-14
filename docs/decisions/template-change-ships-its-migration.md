@@ -10,7 +10,7 @@ When a change alters the text of a file `clm init` writes and projects already h
 
 **Why `init`'s build.** The template change is the cause, and `init` already depends on `upgrade` (it stamps `upgraded` with `latest()`), so its build reads `upgrade`'s list of migrations anyway. The migration's text is fixed by the requirement as written (its `old` the released script, its `new` the one `init`'s requirement states), so the build decides nothing of `upgrade`'s behaviour that the spec leaves open.
 
-Amends `path-ownership` with a fourth exception, beside the forced fixes, the re-cited markers and the capability tests, and refines `path-ownership-by-prompt`: the build prompt states it (`orchestrator.run/template-migration-fix`), and the build's review and spec audit read the migration under `## Fixes in other components`.
+This is an exception of `path-ownership`, beside the re-cited markers and the capability tests, and refines `path-ownership-by-prompt`: the build prompt states it, and the build's review and spec audit read the migration under `## Fixes in other components`.
 
 **Rejected.**
 - *Leave the template file out of the corpus comparison while the two builds land.* Weakens the check `upgrades-carry-migrations` rests on, for a window nobody would remember to close.

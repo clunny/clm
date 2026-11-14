@@ -358,17 +358,6 @@ The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".claude/settings.
 - architecture/method-in-the-plugin
 - capability/adopt-clm
 
-### Requirement: claude-md-points-at-guide
-The `AGENTS.md` that `clm init` writes SHALL point at the guide by naming `clm guide`, and SHALL hold no URL (`http://` or `https://`).
-
-#### Scenario: pointer
-- GIVEN an empty repository
-- WHEN `clm init` runs
-- THEN its `AGENTS.md` holds `clm guide` and no `https://`
-
-#### Serves
-- architecture/method-in-the-plugin
-
 ### Requirement: survey-tracked-through-git
 `clm survey` SHALL list the tracked files it maps through `clm-git`'s `tracked_files`, and `clm survey --components` SHALL list the files a component's `paths` match through `clm-git`'s `tracked_matching` (`tracked-files-in-git-layer`). No file under `crates/clm-init/src` SHALL run `git ls-files` itself (`no-dead-code`).
 
@@ -566,22 +555,6 @@ The text `clm-init` prints and writes SHALL say component, components, ancestors
 #### Serves
 - architecture/plain-terms
 
-### Requirement: claude-md-names-the-skills
-The `AGENTS.md` that `clm init` writes SHALL name `/clm:propose`, `/clm:build` and `/clm:help`, saying they are the `propose`, `build` and `help` skills whatever the agent harness calls them, and SHALL NOT name `/clm:implement`. It SHALL tell the session never to run `clm approve` itself, but to have the human run it, through the agent harness's confirmation or in their own terminal (`approval-policy`).
-
-#### Scenario: a new repository
-- GIVEN a repository with no `AGENTS.md`
-- WHEN `clm init` runs
-- THEN its `AGENTS.md` holds `/clm:propose`, `/clm:build`, `/clm:help` and `clm approve`, and not `/clm:implement`
-
-#### Serves
-- architecture/method-in-the-plugin
-- capability/work-from-any-agent-harness
-
-#### Needs
-- plugin.build/skill-named-build
-- plugin/help-skill
-
 ### Requirement: init-without-manifest
 For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first change to the CLM root (the parent of the script's own directory), wherever it is run from, and then run each language's line only when its manifest exists there: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
 
@@ -764,7 +737,7 @@ When the `clm.toml` that `clm init` leaves sets `host = "none"`, it SHALL call `
 - host/none-keeps-a-remote
 
 ### Requirement: init-names-missing-main
-When the repository's current branch isn't `main` and neither a local `main` nor the remote's `main` exists, `clm init` SHALL still write its files and SHALL print, as the first line under `Next steps (yours):`, that CLM lands only on a branch named `main` (`trunk-named-main`) and the command that renames the current branch to it, `git branch -m <current> main`, with, when the repository has a remote, that the remote's default branch, CI triggers and branch protection keyed to the old name move with it. It SHALL print no such line when `main` exists locally or on the remote, and SHALL rename nothing itself.
+When the repository's current branch isn't `main` and neither a local `main` nor the remote's `main` exists, `clm init` SHALL still write its files and SHALL print, as the first line under `Next steps (yours):`, that CLM lands only on a branch named `main` (`trunk-is-main`) and the command that renames the current branch to it, `git branch -m <current> main`, with, when the repository has a remote, that the remote's default branch, CI triggers and branch protection keyed to the old name move with it. It SHALL print no such line when `main` exists locally or on the remote, and SHALL rename nothing itself.
 
 #### Scenario: a repository on master
 - GIVEN a git repository with one commit on `master`, no `main` and no remote

@@ -4,7 +4,7 @@ date: 2026-11-13
 status: accepted
 ---
 
-`ARCHITECTURE.md` stated this as the entry `regenerate-dont-merge` until 2026-11-13, when it was merged into `hash-based-staleness` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `hash-based-staleness` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 Derived files SHALL be regenerated, never merged. Indexes, registries and the applied `specs/` are rebuilt from their sources (`derived-specs-fingerprint`).
 

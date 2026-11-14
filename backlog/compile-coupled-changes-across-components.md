@@ -7,7 +7,7 @@ kind: idea
 
 CLM builds one component at a time. A build changes only its own `paths` (`path-ownership`), and builds are ordered only by `#### Needs`. But the code of different components is often tied together at compile time: a change to one crate's types can stop another crate compiling until both move together. When a change creates such a tie, it may have no build order the rules allow, and nothing finds that out until a build gets stuck after the change was approved and applied.
 
-This has come up three times, and each time it was settled with one more exception in `path-ownership` and `forced-fixes-cover-additions`:
+This has come up three times, and each time it was settled with one more exception in `path-ownership`:
 - compile-only fixes forced by a removal from a Contract;
 - the same fixes forced by an added field;
 - an arm for a variant added to a type another component matches exhaustively (`20261106-spec-change-widens-an`, after `20261106-azure-devops-host` could not be built in any order).

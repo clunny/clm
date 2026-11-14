@@ -4,24 +4,23 @@ date: 2026-10-23
 status: accepted
 ---
 
-CLM is built with CLM, and its sessions should use the CLM being built, not the last release. A release lags `main` by dozens of PRs, and the plugin's skills only reach a session through a release, since Claude Code caches a GitHub-sourced plugin by `plugin.json`'s version. So on the maintainer's machine this repo runs:
-- **The binary from `main`.** `.claude/settings.local.json` sets `CLM_BIN` to `~/.cargo/bin/clm`, which the plugin's `bin/clm` shim runs. An untracked `.git/hooks/post-merge` rebuilds it after a pull on `main` that changes `crates/`, `Cargo.toml` or `Cargo.lock`, in the background: `cargo install --locked --path crates/clm --target-dir target/install`, logged to `.git/clm-install.log`. (`rebuild-on-origin-main` later replaced that hook with a `reference-transaction` hook that rebuilds whenever `origin/main` moves.)
-- **The plugin from the checkout.** `.claude/settings.local.json` redefines the `clm` marketplace as `{ "source": { "source": "directory", "path": "<checkout>" } }`. Claude Code then rewrites the user-level marketplace record (`~/.claude/plugins/known_marketplaces.json`) to that folder, and loads `clm@clm` from `<checkout>/plugin` in place, with no cache. The first session after the edit still runs the cached copy; later ones run the folder.
+CLM is built with CLM, and its sessions should use the CLM being built, not the last release. A release lags `main` by dozens of PRs, and the plugin's skills only reach a session through a release, since Claude Code caches a GitHub-sourced plugin by `plugin.json`'s version. So a clone of this repository that a human has set up with `scripts/dev-install.sh` (`dev-install-script`) runs:
+- **The binary from `main`.** The main worktree's `.claude/settings.local.json` sets `CLM_BIN` to `clm-dev/bin/clm` under the clone's common git directory, which the plugin's `bin/clm` shim runs (`dev-install-scoped`). A `reference-transaction` hook rebuilds it in the background whenever `origin/main` moves and the move changes `crates/`, `Cargo.toml` or `Cargo.lock` (`rebuild-on-origin-main`). Every land's push moves `origin/main`, so the binary follows lands made from build worktrees, which never merge in the main checkout.
+- **The plugin from the checkout.** A marketplace named `clm-dev`, whose root is the main worktree, is added through a manifest file under `.clm/` (`dev-marketplace-in-place`), and the settings file enables `<name>@clm-dev` and turns off `<name>@clm`. Claude Code loads the plugins from the main worktree in place, with no cache.
 
-(`dev-install-scoped` later moved the binary and the plugin into the clone with a `clm-dev` marketplace, so other projects keep the release. Claude Code had by then begun reading the main checkout's local settings from a linked worktree, and `claude plugin marketplace add clunny/clm`, named below, doesn't reset a directory record.)
-
-The shared `.claude/settings.json` is unchanged: fresh clones, teammates and adopters get the released plugin from GitHub.
+The setup stays inside the clone: the `clm` marketplace record every project on the machine shares stays on GitHub, and no `clm` is installed on `PATH`, so every other project keeps the release (`dev-install-scoped`). The shared `.claude/settings.json` is unchanged: fresh clones, teammates and adopters get the released plugin from GitHub.
 
 Consequences:
-- Every session on the machine runs the checkout's working tree `plugin/`, including worktree and `clm run` sessions, which don't read `settings.local.json`, because the user-level record wins. Skill edits apply at the next session or `/reload-plugins`. Keep the main checkout on `main`: on a branch that edits `plugin/`, every session runs that version.
+- Every session in the clone runs the main worktree's `plugin/`, worktree sessions and builds included, because Claude Code reads the main checkout's local settings from a linked worktree. Skill edits apply at the next session or `/reload-plugins`. Keep the main checkout on `main`: on a branch that edits `plugin/`, every session runs that version.
+- A worktree runs `origin/main`'s build of `clm`, not its branch's, so a branch isn't judged by the `clm` it is changing.
 - Released users still run the release, so a skill change that only breaks against the released binary won't show here. Releases and the plugin's eval cases still matter.
-- `clm --version` doesn't change between releases, so it can't tell which build is installed. `.git/clm-install.log` shows the last rebuild, and for a minute or so after a pull the old binary still runs. After `cargo clean` the next rebuild is a full one.
-- During `/clm:implement`, builds land from their own worktrees through `clm land`, so the main checkout doesn't merge and a `post-merge` hook doesn't run: the installed `clm` kept the rules of the commit it was built from for the rest of the session. This was accepted on 2026-10-30 (`20261030-clm-run-hands-out`) and then cost whole sessions, once a landed change added something the stale binary couldn't parse. `rebuild-on-origin-main` replaces the hook: the rebuild now follows `refs/remotes/origin/main`, which every land's push moves.
-- To go back to the release, remove the `extraKnownMarketplaces` entry and re-add the GitHub marketplace (`claude plugin marketplace add clunny/clm`). Removing the entry alone leaves the user-level record on the folder.
+- `clm --version` names the commit it was built from (`dev-install-script`), which tells which build is installed. For a few minutes after `origin/main` moves, the old binary still runs.
+- To go back to the release, run `scripts/dev-install.sh --remove`.
 
-Nothing checked in depends on this setup, and the hook and settings live only on the maintainer's machine. `backlog/dev-install-from-main` proposes making them reproducible.
+Nothing that ships to adopters depends on this setup. The hook, the binary and the settings live only in the clone, written by the tracked script, which a human runs once per clone; a session never runs it.
 
 Alternatives considered:
-- `claude --plugin-dir <checkout>/plugin` with `clm@clm` turned off locally. It works per session, but needs a launch flag every time, and `clm run`'s sessions wouldn't get it.
-- A separately named directory marketplace (`clm-dev`). It avoids rewriting the shared `clm` record, but keeps worktree sessions on the release, and wasn't needed once the same-name override was tested.
+- `claude --plugin-dir <checkout>/plugin` with `clm@clm` turned off locally. It works per session, but needs a launch flag every time, and unattended builds wouldn't get it.
+- Redefining the shared `clm` marketplace as a directory at the checkout, with the binary in `~/.cargo/bin`. It was the first setup. Every project on the machine then ran the checkout's plugin and `main`'s binary, ahead of the plugin's shim on `PATH` (`dev-install-scoped`).
+- A `post-merge` hook in the main worktree to rebuild the binary. `main` moves through `clm land`'s push from the worktree that lands, so the main worktree never merges and the hook never runs; a landed change that added something the stale binary couldn't parse cost whole sessions (`rebuild-on-origin-main`).
 - Releasing after each plugin change. Every release costs a human dispatch, and the binary was already tracking `main`.

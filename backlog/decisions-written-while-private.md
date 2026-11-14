@@ -16,7 +16,7 @@ CLM's development moved to a public repository with a fresh history. Some decisi
 These decisions give the repository being private as a reason:
 
 - `binary-from-releases`: downloads use `gh release download` because the repository was private. A public release doesn't need `gh`, so the install requirement could change.
-- `gate-without-branch-protection` and `guard-blocks-push-to-main`: branch protection wasn't available on a private repository on GitHub Free. It's available now. Leaving pushes to `main` unrestricted is still the choice, because `clm land` and the release workflow's version bump both push there directly.
+- `guard-blocks-push-to-main`: branch protection wasn't available on a private repository on GitHub Free. It's available now. Leaving pushes to `main` unrestricted is still the choice, because `clm land` and the release workflow's version bump both push there directly.
 - `land-locally`: cites metered Actions minutes on a private repository.
 - `init-cli-and-skill`, `guide-from-docs` and `static-linux-binaries`: rejected options partly because the repository was private.
 - `web-repo-replica`: matched the same search and needs reading to see whether it applies.

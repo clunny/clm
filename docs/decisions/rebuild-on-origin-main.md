@@ -12,7 +12,7 @@ The design was wrong in its trigger, not its aim: it watched the one place `main
 - **Only when Rust changed.** The installed binary's `--version` names its commit (`dev-install-script`); a diff from there to `origin/main` over `crates/`, `Cargo.toml` and `Cargo.lock` decides.
 - **One at a time, ending at the latest.** A lock directory holding the rebuild's process ID. A rebuild that finds it held by a running process leaves the work to that one, which reads `origin/main` again after each install, so a burst of lands ends with the binary at the last of them.
 
-This keeps `no-shared-install`: a build still never installs `clm`. The rebuild is the human's setup acting on what reached `main`, as the `post-merge` hook was, and it only moves the binary forward along `main`, which every build merges anyway. `cargo install` renames the new binary into place, so a `clm` that is running keeps its file, and `clm land` runs from a copy of itself (`land/land-binary-copy`).
+A build still never installs `clm`. The rebuild is the human's setup acting on what reached `main`, as the `post-merge` hook was, and it only moves the binary forward along `main`, which every build merges anyway. `cargo install` renames the new binary into place, so a `clm` that is running keeps its file, and `clm land` runs from a copy of itself (`land/land-binary-copy`).
 
 Consequences:
 - A session's `clm` reaches a landed Rust change once the background rebuild finishes, a few minutes; in that window the old binary still runs.

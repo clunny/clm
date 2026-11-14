@@ -6,7 +6,7 @@ status: accepted
 
 Claude Code can isolate a session in a git worktree, and then checks every Bash command it runs to show it stays inside that worktree. It refuses any command containing the word `hash`, which it reads as the shell builtin that runs a string: `clm hash plugin` and `cargo run -p clm -- hash plugin` alike. `propose` takes every delta base from that command and `implement` every marker version, so an isolated session could do neither except by writing a placeholder base and reading the real one out of `clm check`'s `apply/stale-base` message (`clm-hash-is-refused-in-worktree-isolated-claude-code-sessions`).
 
-The check is Claude Code's, and CLM is built on Claude Code (`github-and-claude-code`), so CLM adapts: the command is `clm hashes`, which still says what it prints, the bases a delta records and the versions a marker cites. `clm hash` was kept as a hidden alias while skills and docs moved (`expand-contract`), and `20261024-drop-hash-alias` removed it.
+The check is Claude Code's, and CLM is built on Claude Code (`host-adapters`), so CLM adapts: the command is `clm hashes`, which still says what it prints, the bases a delta records and the versions a marker cites. `clm hash` was kept as a hidden alias while skills and docs moved (`expand-contract`), and `20261024-drop-hash-alias` removed it.
 
 A new `clm` subcommand shouldn't be a word a shell treats as a builtin that runs or evaluates its arguments (`hash`, `eval`, `exec`, `command`, `builtin`, `source`), since the isolation check may refuse it the same way.
 

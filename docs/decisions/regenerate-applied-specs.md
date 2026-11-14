@@ -10,6 +10,4 @@ The deltas, not `specs/`, are what the author wrote, so they're where any real c
 
 Only a branch that adds an `applied` change is regenerated. `main`'s side of a `specs/` conflict is kept on any branch that adds a change, whatever its status (`keep-main-specs-on-spec-branches`). Branches that add no change and touch `specs/`, such as a finish branch setting `status: active`, are rebased like any other file.
 
-Regenerating can change the PR's diff when `main` changed nearby text, in which case `pinned-approval` drops a `HARD` PR's approval. That is intended: the human approved a diff, and they should see the new one.
-
-Superseded on that point by `derived-specs-fingerprint`: regenerating onto a changed `specs/` leaves the fingerprint, and the approval, alone when the deltas and the other authored files are unchanged.
+Regenerating onto a changed `specs/` leaves the branch's fingerprint, and so its approval, alone when the deltas and the other authored files are unchanged: on a branch that adds a change the fingerprint covers the authored files, and `clm land` verifies that `specs/` is derived from them (`derived-specs-fingerprint`). A delta that had to be rebased is authored text, so it changes the fingerprint, and the human approves the new diff (`approve-pins-the-review`).

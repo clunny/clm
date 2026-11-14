@@ -1,0 +1,190 @@
+# removed requirements: 120
+# tests deleted: 187; tests that only lose a marker: 1
+DELETE crates/clm-run/tests/prompt.rs::push_retries_transient_rejections_only	cites only removed: orchestrator.run/prompt-commands
+DELETE crates/clm-run/tests/prompt.rs::removal_rule_for_an_obsolete_requirement_is_in_every_prompt	cites only removed: orchestrator.run/stays-in-its-component
+DELETE crates/clm-run/tests/prompt.rs::scenario_a_land_still_running	cites only removed: orchestrator.run/background-work-stopped
+DELETE crates/clm-run/tests/prompt.rs::scenario_a_turn_ends_while_waiting	cites only removed: orchestrator.run/background-work-stopped
+DELETE crates/clm-run/tests/prompt.rs::scenario_a_waiting_turn_sends_no_report	cites only removed: orchestrator.run/background-work-stopped
+DELETE crates/clm-run/tests/prompt.rs::scenario_ask_by_backlog	cites only removed: orchestrator.run/ask-by-backlog
+DELETE crates/clm-run/tests/prompt.rs::scenario_background_work_stopped	cites only removed: orchestrator.run/background-work-stopped
+DELETE crates/clm-run/tests/prompt.rs::scenario_bounded_test_runs	cites only removed: orchestrator.run/bounded-test-runs
+DELETE crates/clm-run/tests/prompt.rs::scenario_capability_tests_follow_rule	cites only removed: orchestrator.run/capability-tests-follow-rule
+DELETE crates/clm-run/tests/prompt.rs::scenario_deferred_work_done	cites only removed: orchestrator.run/delete-fixed-items
+DELETE crates/clm-run/tests/prompt.rs::scenario_delete_fixed_items	cites only removed: orchestrator.run/delete-fixed-items
+DELETE crates/clm-run/tests/prompt.rs::scenario_entry_no_longer_holds	cites only removed: orchestrator.run/capability-tests-follow-rule
+DELETE crates/clm-run/tests/prompt.rs::scenario_no_legal_home	cites only removed: orchestrator.run/stays-in-its-component
+DELETE crates/clm-run/tests/prompt.rs::scenario_no_old_command_names	cites only removed: orchestrator.run/prompt-commands
+DELETE crates/clm-run/tests/prompt.rs::scenario_no_shared_install	cites only removed: orchestrator.run/no-shared-install
+DELETE crates/clm-run/tests/prompt.rs::scenario_own_files	cites only removed: orchestrator.run/stays-in-its-component
+DELETE crates/clm-run/tests/prompt.rs::scenario_prompt_commands	cites only removed: orchestrator.run/prompt-commands
+DELETE crates/clm-run/tests/prompt.rs::scenario_prompt_doc_readers	cites only removed: orchestrator.run/prompt-doc-readers
+DELETE crates/clm-run/tests/prompt.rs::scenario_prompt_question_choices	cites only removed: orchestrator.run/prompt-question-choices
+DELETE crates/clm-run/tests/prompt.rs::scenario_prompt_spot_checks	cites only removed: orchestrator.run/prompt-spot-checks
+DELETE crates/clm-run/tests/prompt.rs::scenario_prompt_unopened_pr	cites only removed: orchestrator.run/prompt-unopened-pr
+DELETE crates/clm-run/tests/prompt.rs::scenario_pushes_through_clm_fresh_and_resumed	cites only removed: orchestrator.run/prompt-pushes-through-clm
+DELETE crates/clm-run/tests/prompt.rs::scenario_recorded_check_explained	cites only removed: orchestrator.run/prompt-recorded-check
+DELETE crates/clm-run/tests/prompt.rs::scenario_recorded_check_needs_a_check_command	cites only removed: orchestrator.run/prompt-recorded-check
+DELETE crates/clm-run/tests/prompt.rs::scenario_review_every_diff	cites only removed: orchestrator.run/review-every-diff
+DELETE crates/clm-run/tests/prompt.rs::scenario_scratch_files	cites only removed: orchestrator.run/scratch-files
+DELETE crates/clm-run/tests/prompt.rs::scenario_template_migration_fix	cites only removed: orchestrator.run/template-migration-fix
+DELETE crates/clm-run/tests/prompt.rs::scenario_tree_held_during_the_check	cites only removed: orchestrator.run/check-tree-still
+DELETE crates/clm-run/tests/prompt.rs::scenario_tree_not_held_without_check_command	cites only removed: orchestrator.run/check-tree-still
+DELETE crates/clm-runner/src/guard.rs::enabled_and_project_enabled_here	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/src/guard.rs::name_part_before_at	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/src/guard.rs::not_a_list	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::finished_session_looks_again_without_waiting	cites only removed: orchestrator.runner/runner-finish
+DELETE crates/clm-runner/tests/runner.rs::first_look_refused_exits_1	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::later_look_failure_goes_on	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::mode_passed_unchecked	cites only removed: orchestrator.runner/runner-prerequisites
+DELETE crates/clm-runner/tests/runner.rs::no_free_place_waits_for_the_interval	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::plugin_list_after_the_prerequisites	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::plugin_list_failure_printed	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::plugin_list_runs_in_the_main_worktree	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::project_disabled_in_the_main_worktree_refused	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::run_git_failure_stops_the_look	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::scenario_clean_leftover_replaced	cites only removed: orchestrator.runner/runner-worktree-leftover
+DELETE crates/clm-runner/tests/runner.rs::scenario_dirty_leftover_kept	cites only removed: orchestrator.runner/runner-worktree-leftover
+DELETE crates/clm-runner/tests/runner.rs::scenario_first_look_fails_in_git	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::scenario_landed_build_finished	cites only removed: orchestrator.runner/runner-finish
+DELETE crates/clm-runner/tests/runner.rs::scenario_leftover_git_cant_remove	cites only removed: orchestrator.runner/runner-worktree-leftover
+DELETE crates/clm-runner/tests/runner.rs::scenario_no_claude	cites only removed: orchestrator.runner/runner-prerequisites
+DELETE crates/clm-runner/tests/runner.rs::scenario_no_free_place	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::scenario_no_permission_mode	cites only removed: orchestrator.runner/runner-prerequisites
+DELETE crates/clm-runner/tests/runner.rs::scenario_once_drains_the_queue	cites only removed: orchestrator.runner/runner-once-and-stop
+DELETE crates/clm-runner/tests/runner.rs::scenario_plugin_disabled	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::scenario_plugin_enabled	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::scenario_plugin_missing	cites only removed: orchestrator.runner/runner-needs-guard
+DELETE crates/clm-runner/tests/runner.rs::scenario_ready_node_launched	cites only removed: orchestrator.runner/runner-launch
+DELETE crates/clm-runner/tests/runner.rs::scenario_refused_node_skipped	cites only removed: orchestrator.runner/runner-refusals
+DELETE crates/clm-runner/tests/runner.rs::scenario_running_node_not_prepared_again	cites only removed: orchestrator.runner/runner-launch
+DELETE crates/clm-runner/tests/runner.rs::scenario_silent_failure	cites only removed: orchestrator.runner/runner-finish
+DELETE crates/clm-runner/tests/runner.rs::scenario_stopped_by_a_signal	cites only removed: orchestrator.runner/runner-once-and-stop
+DELETE crates/clm-runner/tests/runner.rs::scenario_the_sessions_prompt	cites only removed: orchestrator.runner/paragraph-says-pull-request
+DELETE crates/clm-runner/tests/runner.rs::scenario_unwritable_leftover_replaced	cites only removed: orchestrator.runner/runner-worktree-leftover
+DELETE crates/clm-runner/tests/runner.rs::session_output_goes_to_the_log	cites only removed: orchestrator.runner/runner-launch
+DELETE crates/clm-runner/tests/runner.rs::signal_ends_a_wait_at_once	cites only removed: orchestrator.runner/runner-once-and-stop
+DELETE crates/clm-runner/tests/runner.rs::untracked_leftover_kept	cites only removed: orchestrator.runner/runner-worktree-leftover
+DELETE crates/clm-runner/tests/says_component.rs::the_printed_text_says_component	cites only removed: orchestrator.runner/says-component
+DELETE crates/clm-runner/tests/says_component.rs::the_scanner_reports_old_words_and_spares_ids	cites only removed: orchestrator.runner/says-component
+DELETE crates/clm-triage/tests/draft.rs::prompt_names_choices_beside_question_items	cites only removed: orchestrator.triage/draft-question-choices
+DELETE crates/clm-triage/tests/draft.rs::scenario_background_work_stopped	cites only removed: orchestrator.triage/background-work-stopped
+DELETE crates/clm-triage/tests/draft.rs::scenario_bounded_test_runs_prompt	cites only removed: orchestrator.triage/bounded-test-runs
+DELETE crates/clm-triage/tests/draft.rs::scenario_builder_check_model_draft_prompt	cites only removed: orchestrator.triage/builder-check-model
+DELETE crates/clm-triage/tests/draft.rs::scenario_builder_check_order_draft_prompt	cites only removed: orchestrator.triage/builder-check-order
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_adds_glossary_terms	cites only removed: orchestrator.triage/draft-adds-glossary-terms
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_architecture_audit_prompt	cites only removed: orchestrator.triage/draft-architecture-audit
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_backlog_only_change	cites only removed: orchestrator.triage/draft-backlog-only-change
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_capability_test_fixes_draft_prompt	cites only removed: orchestrator.triage/draft-capability-test-fixes
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_code_fix_written_rule	cites only removed: orchestrator.triage/draft-code-fix-written-rule
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_contract_step_deferred_prompt	cites only removed: orchestrator.triage/draft-contract-step-deferred
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_corrects_bug_components	cites only removed: orchestrator.triage/draft-corrects-bug-components
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_corrects_test_plumbing_components	cites only removed: orchestrator.triage/draft-corrects-bug-components
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_hand_edit_check	cites only removed: orchestrator.triage/draft-hand-edit-check
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_records_promised_code_work_prompt	cites only removed: orchestrator.triage/draft-records-promised-code-work
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_restraint	cites only removed: orchestrator.triage/draft-restraint
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_scratch_files	cites only removed: orchestrator.triage/draft-scratch-files
+DELETE crates/clm-triage/tests/draft.rs::scenario_prompts_push_through_clm_draft_prompt	cites only removed: orchestrator.triage/prompts-push-through-clm
+DELETE crates/clm-triage/tests/fold.rs::scenario_builder_check_model_fold_prompt	cites only removed: orchestrator.triage/builder-check-model
+DELETE crates/clm-triage/tests/fold.rs::scenario_builder_check_order_fold_prompt	cites only removed: orchestrator.triage/builder-check-order
+DELETE crates/clm-triage/tests/fold.rs::scenario_draft_architecture_audit_fold_prompt	cites only removed: orchestrator.triage/draft-architecture-audit
+DELETE crates/clm-triage/tests/fold.rs::scenario_draft_capability_test_fixes_fold_prompt	cites only removed: orchestrator.triage/draft-capability-test-fixes
+DELETE crates/clm-triage/tests/fold.rs::scenario_draft_scratch_files_fold_prompt	cites only removed: orchestrator.triage/draft-scratch-files
+DELETE crates/clm-triage/tests/fold.rs::scenario_prompts_push_through_clm_fold_prompt	cites only removed: orchestrator.triage/prompts-push-through-clm
+DELETE crates/clm/tests/claude_md.rs::agents_md_holds_the_instructions	cites only removed: clm/claude-md-pushes-with-clm
+DELETE crates/clm/tests/claude_md.rs::claude_md_alone_pushes_through_clm	cites only removed: clm/claude-md-pushes-with-clm
+DELETE crates/clm/tests/claude_md.rs::claude_md_pushes_through_clm	cites only removed: clm/claude-md-pushes-with-clm
+DELETE crates/clm/tests/claude_md.rs::git_push_in_either_file_fails	cites only removed: clm/claude-md-pushes-with-clm
+DELETE crates/clm/tests/claude_md.rs::no_clm_branch_push_fails	cites only removed: clm/claude-md-pushes-with-clm
+DELETE crates/clm/tests/init.rs::claude_md_names_the_skills	cites only removed: init/claude-md-names-the-skills
+DELETE crates/clm/tests/init.rs::claude_md_points_at_the_guide	cites only removed: init/claude-md-points-at-guide
+DELETE crates/clm/tests/plugin.rs::architecture_audit	cites only removed: plugin/architecture-audit
+DELETE crates/clm/tests/plugin.rs::configure_skill	cites only removed: plugin/configure-skill
+DELETE crates/clm/tests/plugin.rs::contribution_skill	cites only removed: plugin/contribution-skill
+DELETE crates/clm/tests/plugin.rs::health_skill	cites only removed: plugin/health-skill
+DELETE crates/clm/tests/plugin.rs::help_skill	cites only removed: plugin/help-skill
+DELETE crates/clm/tests/plugin.rs::plugin_names_the_renamed_commands	cites only removed: plugin/renamed-commands
+DELETE crates/clm/tests/plugin.rs::plugin_says_architectural_constraint	cites only removed: plugin/says-architectural-constraint
+DELETE crates/clm/tests/plugin.rs::plugin_says_new_words	cites only removed: plugin/skills-say-new-words
+DELETE crates/clm/tests/plugin.rs::skills_check_for_defects_before_a_pr	cites only removed: plugin/defect-check-before-pr
+DELETE crates/clm/tests/plugin.rs::skills_check_the_permission_rules	cites only removed: plugin/unattended-permissions-check
+DELETE crates/clm/tests/plugin.rs::skills_cut_branches_in_worktrees	cites only removed: plugin/session-worktrees
+DELETE crates/clm/tests/plugin.rs::skills_follow_the_agent_harness	cites only removed: plugin/skills-follow-agent-harness
+DELETE crates/clm/tests/plugin.rs::skills_push_with_clm	cites only removed: plugin/skills-push-with-clm
+DELETE crates/clm/tests/plugin.rs::skills_run_verify	cites only removed: plugin/skills-run-verify
+DELETE crates/clm/tests/plugin.rs::skills_say_component	cites only removed: plugin/skills-say-component
+DELETE crates/clm/tests/plugin.rs::skills_say_how_a_recommendation_is_chosen	cites only removed: plugin/recommend-the-right-design
+DELETE crates/clm/tests/plugin.rs::skills_write_enforcement	cites only removed: plugin/skills-write-enforcement
+DELETE crates/clm/tests/plugin.rs::skills_write_serves	cites only removed: plugin/skills-write-serves
+DELETE crates/clm/tests/plugin.rs::verify_skill	cites only removed: plugin/verify-skill
+DELETE crates/clm/tests/plugin.rs::view_command_falls_back_without_claiming_absence	cites only removed: plugin/view-fallback-wording
+DELETE crates/clm/tests/plugin.rs::wrap_up_left_lines	cites only removed: plugin/wrap-up-left-lines
+DELETE crates/clm/tests/plugin_agents.rs::spec_auditor_flags_unstated_fixes	cites only removed: plugin.agents/auditor-flags-unstated-fixes
+DELETE crates/clm/tests/plugin_agents.rs::spec_auditor_keeps_its_checkout	cites only removed: plugin.agents/spec-auditor-keeps-checkout
+DELETE crates/clm/tests/plugin_build.rs::build_skill_approves_in_session	cites only removed: plugin.build/build-approves-in-session
+DELETE crates/clm/tests/plugin_build.rs::build_skill_is_named_build	cites only removed: plugin.build/skill-named-build
+DELETE crates/clm/tests/plugin_build.rs::build_skill_points_at_the_queue	cites only removed: plugin.build/build-keeps-the-human-in-sight
+DELETE crates/clm/tests/plugin_build.rs::build_skill_reads_the_cause	cites only removed: plugin.build/build-reads-the-cause
+DELETE crates/clm/tests/plugin_build.rs::build_skill_runs_the_loop	cites only removed: plugin.build/build-runs-the-loop
+DELETE crates/clm/tests/plugin_init.rs::init_follows_agent_harness	cites only removed: plugin.init/init-follows-agent-harness
+DELETE crates/clm/tests/plugin_init.rs::init_skill	cites only removed: plugin.init/init-skill
+DELETE crates/clm/tests/plugin_init.rs::init_skill_asks_verify	cites only removed: plugin.init/init-skill-asks-verify
+DELETE crates/clm/tests/plugin_init.rs::init_skill_build_setup	cites only removed: plugin.init/init-skill-build-setup
+DELETE crates/clm/tests/plugin_init.rs::init_skill_concurrent_tests	cites only removed: plugin.init/init-skill-concurrent-tests
+DELETE crates/clm/tests/plugin_init.rs::init_skill_gives_tests_their_component	cites only removed: plugin.init/init-skill-gives-tests-their-component
+DELETE crates/clm/tests/plugin_init.rs::init_skill_marks_doc_readers	cites only removed: plugin.init/init-skill-marks-doc-readers
+DELETE crates/clm/tests/plugin_init.rs::init_skill_marks_lockfiles	cites only removed: plugin.init/init-skill-marks-lockfiles
+DELETE crates/clm/tests/plugin_propose.rs::builder_check_asks_capability_tests	cites only removed: plugin.propose/builder-check-capability-tests
+DELETE crates/clm/tests/plugin_propose.rs::builder_check_asks_migrations	cites only removed: plugin.propose/builder-check-asks-migrations
+DELETE crates/clm/tests/plugin_propose.rs::propose_adds_glossary_terms	cites only removed: plugin.propose/propose-adds-glossary-terms
+DELETE crates/clm/tests/plugin_propose.rs::propose_adds_settings_sections	cites only removed: plugin.propose/propose-adds-settings-sections
+DELETE crates/clm/tests/plugin_propose.rs::propose_archives_design_only_changes	cites only removed: plugin.propose/propose-archives-design-only
+DELETE crates/clm/tests/plugin_propose.rs::propose_brainstorms	cites only removed: plugin.propose/propose-brainstorms
+DELETE crates/clm/tests/plugin_propose.rs::propose_claims_items_before_designing	cites only removed: plugin.propose/propose-claims
+DELETE crates/clm/tests/plugin_propose.rs::propose_clears_workarounds	cites only removed: plugin.propose/propose-clears-workarounds
+DELETE crates/clm/tests/plugin_propose.rs::propose_code_fixes_need_a_written_rule	cites only removed: plugin.propose/code-fix-needs-a-written-rule
+DELETE crates/clm/tests/plugin_propose.rs::propose_elaborates_ideas	cites only removed: plugin.propose/propose-elaborates-ideas
+DELETE crates/clm/tests/plugin_propose.rs::propose_fix_runs_setup	cites only removed: plugin.propose/propose-fix-runs-setup
+DELETE crates/clm/tests/plugin_propose.rs::propose_follows_agent_harness	cites only removed: plugin.propose/propose-follows-agent-harness
+DELETE crates/clm/tests/plugin_propose.rs::propose_harness_only_work	cites only removed: plugin.propose/propose-harness-only-work
+DELETE crates/clm/tests/plugin_propose.rs::propose_in_a_fork	cites only removed: plugin.propose/propose-in-a-fork
+DELETE crates/clm/tests/plugin_propose.rs::propose_nests_splits	cites only removed: plugin.propose/propose-nests-splits
+DELETE crates/clm/tests/plugin_propose.rs::propose_offers_code_fixes	cites only removed: plugin.propose/propose-code-fixes
+DELETE crates/clm/tests/plugin_propose.rs::propose_replacing_constraints	cites only removed: plugin.propose/propose-replacing-constraints
+DELETE crates/clm/tests/plugin_propose.rs::propose_sets_priority	cites only removed: plugin.propose/propose-priority
+DELETE crates/clm/tests/plugin_triage.rs::triage_archives_complete	cites only removed: plugin.triage/triage-archives-complete
+DELETE crates/clm/tests/plugin_triage.rs::triage_caps_drafts	cites only removed: plugin.triage/triage-caps-drafts
+DELETE crates/clm/tests/plugin_triage.rs::triage_carries_answers	cites only removed: plugin.triage/triage-answers
+DELETE crates/clm/tests/plugin_triage.rs::triage_checks_splits	cites only removed: plugin.triage/triage-checks-splits
+DELETE crates/clm/tests/plugin_triage.rs::triage_enters_branch_worktree	cites only removed: plugin.triage/triage-enters-branch-worktree
+DELETE crates/clm/tests/plugin_triage.rs::triage_folds_renames_alone	cites only removed: plugin.triage/triage-folds-renames-alone
+DELETE crates/clm/tests/plugin_triage.rs::triage_follows_agent_harness	cites only removed: plugin.triage/triage-follows-agent-harness
+DELETE crates/clm/tests/plugin_triage.rs::triage_launches_drafts	cites only removed: plugin.triage/triage-skill
+DELETE crates/clm/tests/plugin_triage.rs::triage_revises_a_declined_fold	cites only removed: plugin.triage/triage-revises-declined-fold
+DELETE crates/clm/tests/plugin_triage.rs::triage_shows_a_menu	cites only removed: plugin.triage/triage-menu
+DELETE crates/clm/tests/plugin_triage.rs::triage_takes_the_inbox_in	cites only removed: plugin.triage/triage-contributions
+DELETE crates/clm/tests/plugin_triage.rs::triage_takes_web_answers	cites only removed: plugin.triage/triage-web-answers
+DELETE crates/clm/tests/plugin_triage.rs::triage_verify_log	cites only removed: plugin.triage/triage-verify-log
+DELETE crates/clm/tests/plugin_triage.rs::triage_waiting_drafts	cites only removed: plugin.triage/triage-waiting-drafts
+DELETE crates/clm/tests/plugin_upgrade.rs::upgrade_skill	cites only removed: plugin.upgrade/upgrade-skill
+DELETE crates/clm/tests/plugin_upgrade.rs::upgrade_skill_notes_without_edit	cites only removed: plugin.upgrade/upgrade-skill-notes-without-edit
+DELETE crates/clm/tests/plugin_upgrade.rs::upgrade_skill_offers_verify	cites only removed: plugin.upgrade/upgrade-skill-offers-verify
+DELETE crates/clm/tests/plugin_upgrade.rs::upgrade_skill_settings_by_hand	cites only removed: plugin.upgrade/upgrade-skill-settings-by-hand
+UNMARK crates/clm/tests/run.rs::scenario_prompt_commands_and_pr_body	keeps orchestrator.run/prompt-pr-body; loses orchestrator.run/prompt-commands
+DELETE crates/clm/tests/runner.rs::missing_permission_mode_is_the_runners_refusal	cites only removed: orchestrator.runner/runner-prerequisites
+DELETE crates/clm-triage/tests/draft.rs::draft_needing_review_folds	text-scan test of split requirement orchestrator.triage/draft
+DELETE crates/clm-triage/tests/draft.rs::scenario_draft_no_old_command_names	text-scan test of split requirement orchestrator.triage/draft
+DELETE crates/clm-triage/tests/draft.rs::scenario_an_answer_that_only_edits_an_item	text-scan test of split requirement orchestrator.triage/draft-answers
+DELETE crates/clm-triage/tests/draft.rs::scenario_an_answer_that_leaves_only_code	text-scan test of split requirement orchestrator.triage/draft-answers
+DELETE crates/clm-triage/tests/draft.rs::scenario_a_deferred_items_code_route	text-scan test of split requirement orchestrator.triage/draft-workaround-deferred
+DELETE crates/clm-triage/tests/draft.rs::scenario_a_dropped_item	text-scan test of split requirement orchestrator.triage/draft-workaround-deferred
+DELETE crates/clm-triage/tests/fold.rs::fold_prompt_names_the_human_task_kind	text-scan test of split requirement orchestrator.triage/fold
+DELETE crates/clm-triage/tests/fold.rs::scenario_fold_no_old_command_names	text-scan test of split requirement orchestrator.triage/fold
+DELETE crates/clm/tests/plugin.rs::skills_name_clm_hashes	text-scan test of split requirement plugin/skills
+DELETE crates/clm/tests/plugin.rs::propose_pushes_with_lease_after_rebase	text-scan test of split requirement plugin/skills
+DELETE crates/clm-run/tests/prompt.rs::scenario_workaround_binary_without_the_command	text-scan test of split requirement orchestrator.run/prompt-workaround
+DELETE crates/clm-run/tests/prompt.rs::scenario_budget_in_land_terms	text-scan test of split requirement orchestrator.run/pending-prompt
+DELETE crates/clm-run/tests/prompt.rs::scenario_why_no_pipe	text-scan test of split requirement orchestrator.run/prompt-check-command
+DELETE crates/clm-runner/tests/runner.rs::child	cites nothing; tests clm runner, which is removed
+DELETE crates/clm/tests/runner.rs::interval_must_be_a_positive_number	cites nothing; tests clm runner, which is removed
+DELETE crates/clm/tests/plugin.rs::skills_run_a_builder_check	cites plugin/builder-check, removed by 20261113-builder-check-text-lives (already obsolete on main)
+DELETE crates/clm/tests/plugin.rs::builder_check_reapplies_through_rebase	cites plugin/builder-check, removed by 20261113-builder-check-text-lives (already obsolete on main)

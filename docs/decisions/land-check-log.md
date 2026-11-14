@@ -1,10 +1,10 @@
 ---
-title: "A failing land check leaves its output at target/land-logs/<branch>.log and repeats its last lines"
+title: "A failing land check leaves its output at .clm/land-logs/<branch>.log and repeats its last lines"
 date: 2026-10-28
 status: accepted
 ---
 
-`clm land` copies `[land] check`'s stdout and stderr, through one pipe so their order holds, to its own stderr and to `<main>/target/land-logs/<branch>.log`. When the check fails it prints the last 40 lines of that output again under a line naming the check, and the refusal names the log, which stays; when the check passes the log is removed. A log that can't be created is a warning, and the check runs with its output to stderr alone.
+`clm land` copies `[land] check`'s stdout and stderr, through one pipe so their order holds, to its own stderr and to `<main>/.clm/land-logs/<branch>.log`, under the `.clm/` every project ignores (`land-places-ignored`). When the check fails it prints the last 40 lines of that output again under a line naming the check, and the refusal names the log, which stays; when the check passes the log is removed. A log that can't be created is a warning, and the check runs with its output to stderr alone.
 
 **Why.** Three builds in one session saw `clm land` fail with only `` `.github/scripts/ci-check.sh` fails on the merge with main ``: the script's output had streamed past and the tool that ran the land showed a cut-off copy. Each build landed again, which passed, and none could name the failing test, so none could report it (`defect-reports`); one of the failures was a real CLM defect, a test binary reused from a deleted scratch tree (`fixed-land-tree`). A land's merged tree is gone when the land ends, so the output is the only evidence. The tail serves a tool that keeps the end of long output; the file serves one that keeps only the start, and anyone reading afterwards.
 

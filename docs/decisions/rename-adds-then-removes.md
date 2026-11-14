@@ -8,7 +8,7 @@ status: accepted
 
 Now a rename is written as two requirements of the provider, in the same change:
 
-- an **adding** requirement that offers the new name beside the old and needs nothing. It must leave every user's code building as it stands: a second name (a new value, field, type or function) that users don't yet read, never a widened type that a user matches exhaustively, so the provider's build breaks no one;
+- an **adding** requirement that offers the new name beside the old and needs nothing. It must leave every user's code building as it stands: a second name (a new value, field, type or function) that users don't yet read, never a widened type that a user matches exhaustively, and never a struct field that users' struct literals would have to set, so the provider's build breaks no one. Where the rename needs such a field, the provider first offers a constructor or defaults, each user moves to them in a requirement of its own, and the field comes last (`coupled-changes-sequence`);
 - a **removing** requirement that withdraws the old name, stated as an added or modified requirement (not `REMOVED Requirements`) so it can carry a `#### Needs` naming each user's move.
 
 Each user's move is a requirement of that user that needs the adding requirement. The adding requirement's build marks the old name `clm:remove-by <change-id>`, naming the change, which stays live until the removal is built (`expand-contract`, `check/remove-by-markers`). The needs then run one way (add, then moves, then removal), the queue builds them in that order, and no second change or deferred item is needed. The builder check asks the subagent to search each user's code for exhaustive uses (a `match`, a `switch` with no default, a `Record` keyed by the type) that the adding requirement must not break.
@@ -19,8 +19,4 @@ Refines `contract-removal-needs` and `expand-contract`.
 
 Rejected:
 - **A deferred contract change for every rename.** It works, but it leaves a change `proposed` and a `deferred` item for the human to judge, when needs within one change order the same steps with nothing to remember.
-- **Allow a build to edit its users' code for a rename.** `architecture/path-ownership` keeps each build inside its component; `clm run`'s compile-only fixes cover only what a removal forces, not a move to a name the users choose to read.
-
-(Amended 2026-11-04, `20261104-clm-run-allows-compile`: `clm run`'s compile-only fixes now cover what an addition forces too (`forced-fixes-cover-additions`), so the rejected option above reads "cover only what a removal or an addition forces". A rename's adding requirement that adds a struct field may rely on that fix, setting the field in users' struct literals to the value under which the provider behaves as before, since their behaviour stays as it stands; a user's move to the new name is still never such a fix.)
-
-(Amended 2026-11-12, `20261112-components-own-their-tests`: a rename's adding requirement that adds a struct field no longer relies on a forced fix in users' struct literals; the provider first offers a constructor or defaults and each user moves to them in a requirement of its own (`coupled-changes-sequence`).)
+- **Allow a build to edit its users' code for a rename.** `architecture/path-ownership` keeps each build inside its component, and no build makes a fix in another component's code, not even a compile-only one (`coupled-changes-sequence`).

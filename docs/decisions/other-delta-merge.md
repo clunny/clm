@@ -8,9 +8,9 @@ A spec branch that applies a change rewrites the sections its deltas modify. A `
 
 So after regenerating, `clm sync` merges the stale deltas of every live `proposed` or `approved` change it didn't regenerate against the regenerated tree, with the same three-way merge, the same `merged` line and a commit of its own, `Merge <movers> into <change>`, naming the regenerated changes that moved the elements; what doesn't merge cleanly stops the run with the same report, naming those changes. An `applied` change's bases differ from the tree by nature and an archived change is history, so neither is read.
 
-Editing another change's delta on this branch is what the hand merge did, and the gate already rates it by what moved (`modified-delta-tiers-by-element`): a Design merge is `AUTO`, a requirement `SOFT`, a Contract `HARD`. The merged text is in the branch's diff, `clm check` judges it, and a HARD branch's fingerprint changes, so a human approves the merged text again.
+Editing another change's delta on this branch is what the hand merge did. The merged text is in the branch's diff and `clm check` judges it. A merged delta is authored text, so on a branch that needs review (`yes-no-review`) the fingerprint changes and a human approves the merged text again (`derived-specs-fingerprint`).
 
 Alternatives considered:
 - **Leave the other delta stale and let `clm check` ignore a stale base that this branch caused.** The branch would land with a delta that applies the old section over the new one when its change is applied, dropping this branch's text (`stale-delta-shows-main`).
 - **Have the other change's author rebase after this branch lands.** Until then this branch fails `clm check` and can't land; the author would be rebasing onto text they can't see.
-- **Merge only the deltas on `main`, not a `proposed` change the branch adds.** A proposed change beside an applied one on the same branch is stale the same way, and the fold flow (`triage-folds-hard-drafts`) puts several changes on one branch.
+- **Merge only the deltas on `main`, not a `proposed` change the branch adds.** A proposed change beside an applied one on the same branch is stale the same way, and the fold flow (`clm draft --fold`, `yes-no-review`) puts several changes on one branch.

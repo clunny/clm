@@ -14,7 +14,7 @@ Autosync gives backup and visibility. Convergence, which the question also raise
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `autosync-policy` until 2026-11-13, when it moved down here; its rules serve the capability `work-concurrently` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md` holds no entry for this; its rules serve the capability `work-concurrently` (`human-layer-entries-stay-short`). The rule in full:
 
 Spec-work snapshots SHALL go only to `autosync/<branch>`, never to the spec branch itself, a pull request's head or `main`, so half-finished edits can't land.
 

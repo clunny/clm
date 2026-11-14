@@ -10,7 +10,7 @@ The expiry is a flag (`--expiry`, default 4 hours) for now. If teams need a shar
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `lease-claims` until 2026-11-13, when it moved down here; its rules serve the capability `work-concurrently` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md` holds no entry for this; its rules serve the capability `work-concurrently` (`human-layer-entries-stay-short`). The rule in full:
 
 Claims SHALL be compare-and-swap pushes with an expiry and takeover, so that of two sessions racing for the same component or backlog item exactly one wins.
 
