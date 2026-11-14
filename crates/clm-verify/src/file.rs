@@ -92,7 +92,7 @@ fn candidates(ctx: &Ctx, state: &State) -> Result<Vec<Candidate>, Error> {
             "--format=",
             &range,
             "--",
-            &path,
+            &format!(":(top){path}"),
         ])?;
         if added.trim().is_empty() {
             out.push(Candidate {
