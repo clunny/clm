@@ -143,7 +143,8 @@ impl fmt::Display for Coverage {
 }
 
 /// Each requirement ID that a change outside the archive lists under `REMOVED Requirements`
-/// and no node holds, with the IDs of those changes, sorted: what makes a marker obsolete
+/// and no node holds, and each `capability/<slug>` it lists under `removes_capabilities`
+/// that `CAPABILITIES.md` doesn't hold (`removed-capabilities`), with the IDs of those changes, sorted: what makes a marker obsolete
 /// rather than dangling (`removed-requirements-build-out`).
 pub fn removed(graph: &Graph) -> BTreeMap<String, Vec<String>> {
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -154,6 +155,16 @@ pub fn removed(graph: &Graph) -> BTreeMap<String, Vec<String>> {
                 if graph.requirement(&id).is_none() {
                     out.entry(id).or_default().push(c.id.clone());
                 }
+            }
+        }
+    }
+    // A capability a change removes by hand: listed, and no longer in `CAPABILITIES.md`
+    // (`removed-capabilities`).
+    for c in graph.changes.values().filter(|c| !c.archived) {
+        for slug in &c.frontmatter.removes_capabilities {
+            let id = format!("capability/{slug}");
+            if graph.requirement(&id).is_none() {
+                out.entry(id).or_default().push(c.id.clone());
             }
         }
     }

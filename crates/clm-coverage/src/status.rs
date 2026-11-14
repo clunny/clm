@@ -75,7 +75,8 @@ pub struct ChangeProgress {
     /// those moves took it to; for any other, all of them.
     pub total: usize,
     /// The markers (`<file>:<line>`, in the order of `markers`) citing a requirement its
-    /// deltas remove that the spec no longer holds.
+    /// deltas remove that the spec no longer holds, or a capability it lists under
+    /// `removes_capabilities` that `CAPABILITIES.md` no longer holds.
     pub obsolete: Vec<String>,
     /// `archive-on-sync`: `applied` or `implementing`, everything counted current, and
     /// nothing obsolete.
@@ -146,6 +147,12 @@ fn progress<'g>(
                         .iter()
                         .map(move |r| format!("{}/{}", d.node, r.slug))
                 })
+                .chain(
+                    c.frontmatter
+                        .removes_capabilities
+                        .iter()
+                        .map(|slug| format!("capability/{slug}")),
+                )
                 .filter(|id| state(id) == Some(State::Obsolete))
                 .collect();
             let obsolete: Vec<String> = if removed.is_empty() {

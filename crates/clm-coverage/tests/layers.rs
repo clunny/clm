@@ -257,7 +257,7 @@ fn capabilities_pending_on_capability_node() {
 
 #[test]
 fn entries_on_the_roots_row() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -286,7 +286,7 @@ fn entries_on_the_roots_row() {
 
 #[test]
 fn capabilities_on_the_capability_nodes_row() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(dir.path(), "specs/capability/SPEC.md", CAPABILITY_NODE);
     let graph = graph(dir.path());

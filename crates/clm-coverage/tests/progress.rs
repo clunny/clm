@@ -22,7 +22,7 @@ fn progress(
 
 #[test]
 fn scenario_same_counts_as_status() {
-    // req:check.coverage/change-progress@dac448cb
+    // req:check.coverage/change-progress@e4335c5a
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -63,7 +63,7 @@ fn scenario_same_counts_as_status() {
 
 #[test]
 fn scenario_removed_requirement_still_cited() {
-    // req:check.coverage/change-progress@dac448cb
+    // req:check.coverage/change-progress@e4335c5a
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -80,7 +80,7 @@ fn scenario_removed_requirement_still_cited() {
 
 #[test]
 fn every_live_change_whatever_its_status_and_none_archived() {
-    // req:check.coverage/change-progress@dac448cb
+    // req:check.coverage/change-progress@e4335c5a
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);

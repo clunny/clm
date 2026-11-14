@@ -229,7 +229,7 @@ fn scenario_aligned_columns() {
 #[test]
 fn scenario_changes_grouped() {
     // req:view/status-report@538240fb
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -249,7 +249,7 @@ fn scenario_changes_grouped() {
 
 #[test]
 fn scenario_complete_change() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     // req:view/status-report@538240fb
     let dir = base();
     let d = dir.path();
@@ -268,7 +268,7 @@ fn scenario_complete_change() {
 
 #[test]
 fn scenario_groups_in_order() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = base();
     let d = dir.path();
     change(d, "20260101-a", "applied", &["x"]);
@@ -486,7 +486,7 @@ fn summary_orders_statuses_states_and_kinds() {
 #[test]
 fn scenario_nothing_in_flight() {
     // req:view/status-report@538240fb
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     // req:orchestrator/status-claims@726cb7c5 (not a git repository)
     let dir = base();
     let d = dir.path();
@@ -514,7 +514,7 @@ fn scenario_nothing_in_flight() {
 #[test]
 fn invalid_graph_prints_violations() {
     // req:view/status-report@538240fb
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = base();
     write(dir.path(), "specs/b/SPEC.md", "---\ntitle: B\n---\n");
     let out = clm_status(dir.path());
