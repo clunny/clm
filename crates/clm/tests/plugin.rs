@@ -362,11 +362,19 @@ fn skills_point_at_the_guide() {
         );
     }
     // a page that doesn't exist
-    let gaps = guide_gaps("x", "Run `clm guide no-such-page`.", &pages);
+    let gaps = guide_gaps("skills/x/SKILL.md", "Run `clm guide no-such-page`.", &pages);
     assert!(
-        gaps.len() == 1 && gaps[0].contains("no-such-page"),
+        gaps.len() == 1
+            && gaps[0].contains("no-such-page")
+            && gaps[0].contains("skills/x/SKILL.md"),
         "{gaps:?}"
     );
+    // `index` is the guide's README, and `constraints` is generated.
+    for page in ["index", "constraints", "spec-format"] {
+        assert!(pages.contains(&page.to_owned()), "{pages:?}");
+        assert!(guide_gaps("x", &format!("Run `clm guide {page}`."), &pages).is_empty());
+    }
+    assert!(!pages.contains(&"README".to_owned()), "{pages:?}");
     assert!(guide_gaps("x", "Run `clm guide <page>`.", &pages).is_empty());
     assert!(guide_gaps("x", "Run `clm guide spec-format`.", &pages).is_empty());
 }
