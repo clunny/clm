@@ -12,7 +12,7 @@ resolves:
 
 ## Intent
 
-Phase 2 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims`: delete. It removes `clm runner` and its component, the requirements that are satisfied only by a sentence existing in a skill, an agent definition, a prompt or an instruction file, the superseded decisions, and the stale workaround flags. Nothing is added but one decision that records the rule, and the backlog items that name what a program could hold instead.
+Phase 2 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims`: delete. It removes `clm runner` and its component, the requirements that are satisfied only by a sentence existing in a skill, an agent definition, a prompt or an instruction file, the superseded decisions, and the stale workaround flags. Nothing is added but one decision that records the rule, one requirement of the root that states the runner is gone, so that its build removes the crate and the command, and the backlog items that name what a program could hold instead.
 
 ## Problem
 
@@ -27,9 +27,10 @@ The audit of 2026-11-13 found about 130 requirements whose tests check for strin
 
 ## Outcome
 
-- 121 requirements are removed and 24 are split: each split one keeps its ID and the part a program computes, and loses its wording clauses and the scenarios that state only wording.
+- 120 requirements are removed and 24 are split: each split one keeps its ID and the part a program computes, and loses its wording clauses and the scenarios that state only wording.
 - Six components are removed: `orchestrator.runner`, and `plugin.propose`, `plugin.triage`, `plugin.init`, `plugin.build` and `plugin.upgrade`, whose skill files `plugin` owns again. 57 components become 51.
 - `plugin/skills` is the one requirement that says the skills ship: exactly the ten, each with a description. It takes that over from nine removed requirements.
+- `clm/no-runner-crate` is added, as `clm/no-watch-crate` was for the last removed crate: no crate `clm-runner` and no `runner` subcommand. Without it nothing but obsolete markers would make the removal pending, and a build could satisfy those by deleting the tests alone.
 - Ten more requirements change only to drop a `#### Needs` line or a citation that named something removed; no scenario of theirs changes.
 - `ARCHITECTURE.md`: `land-locally` no longer lists `orchestrator.runner/runner-needs-guard` under `#### Enforced by`. No other entry names a removed requirement.
 - 51 decisions are deleted (the 50 superseded ones and `machine-runners`). What seven of them still held is restated in the decision that replaced each. 86 amended decisions are folded into one current text each. Citations of the deleted names are repointed in the specs and the decisions.
@@ -39,10 +40,10 @@ The audit of 2026-11-13 found about 130 requirements whose tests check for strin
 
 ## What is removed
 
-121 requirements, in 12 components. Six components go whole.
+120 requirements, in 12 components. Six components go whole.
 
 - **`clm`** (1): `claude-md-pushes-with-clm`.
-- **`init`** (3): `claude-md-points-at-guide`, `template-says-pull-request`, `claude-md-names-the-skills`.
+- **`init`** (2): `claude-md-points-at-guide`, `claude-md-names-the-skills`.
 - **`orchestrator.run`** (18): `prompt-commands`, `ask-by-backlog`, `delete-fixed-items`, `no-shared-install`, `background-work-stopped`, `check-tree-still`, `scratch-files`, `prompt-spot-checks`, `review-every-diff`, `capability-tests-follow-rule`, `prompt-pushes-through-clm`, `prompt-recorded-check`, `bounded-test-runs`, `template-migration-fix`, `prompt-unopened-pr`, `prompt-doc-readers`, `prompt-question-choices`, `stays-in-its-component`.
 - **`orchestrator.runner`** (9, the whole component): `runner-launch`, `runner-refusals`, `runner-finish`, `runner-worktree-leftover`, `runner-prerequisites`, `runner-once-and-stop`, `runner-needs-guard`, `paragraph-says-pull-request`, `says-component`.
 - **`orchestrator.triage`** (17): `background-work-stopped`, `draft-code-fix-written-rule`, `draft-restraint`, `draft-backlog-only-change`, `builder-check-model`, `draft-scratch-files`, `builder-check-order`, `draft-contract-step-deferred`, `draft-corrects-bug-components`, `draft-hand-edit-check`, `draft-adds-glossary-terms`, `draft-architecture-audit`, `draft-capability-test-fixes`, `prompts-push-through-clm`, `bounded-test-runs`, `draft-records-promised-code-work`, `draft-question-choices`.
@@ -72,20 +73,21 @@ Each keeps its ID and loses the clauses that state fixed wording.
 
 ## Tests
 
-`deleted-tests.txt` in this directory lists the 188 tests that go whole and the one that only loses a marker. A script produced it from this change's deltas and the markers on the branch: a test is listed when every requirement it cites is removed, or when it is a text-scan test of a split requirement, named by hand after reading it. A build deletes no test that isn't on the list. A test that mixes computed assertions with wording needles is not on it: it keeps the computed assertions, loses the needles and is re-cited at the requirement's new version.
+`deleted-tests.txt` in this directory lists the 187 tests that go whole and the one that only loses a marker. A script produced it from this change's deltas and the markers on the branch: a test is listed when every requirement it cites is removed, or when it is a text-scan test of a split requirement, named by hand after reading it. A build deletes no test that isn't on the list. A test that mixes computed assertions with wording needles is not on it: it keeps the computed assertions, loses the needles and is re-cited at the requirement's new version.
 
 Four removed requirements of `orchestrator.run` had one computed part each, that their text appears only when `[land] check` is set: `background-work-stopped`, `bounded-test-runs`, `check-tree-still` and `prompt-recorded-check`. `prompt-check-command` states that condition and `scenario_no_check_command` proves it over the whole prompt, so their two condition tests are duplicates and are on the list.
 
 ## For the builds
 
-- **The root** deletes `crates/clm-runner/`, the `clm runner` dispatch and its `Cargo` entries, and `crates/clm/tests/runner.rs`. The crate is under the root's `paths` from this change on, so no file is unowned; the glob matches nothing once the crate is gone. The root's test files also hold the tests of the removed skill requirements (`plugin_propose.rs`, `plugin_triage.rs`, `plugin_init.rs`, `plugin_build.rs`, `plugin_upgrade.rs`, `claude_md.rs`), which go whole.
+- **Each build removes or cuts the tests that cite its own requirements, wherever they sit.** Most of them are in the root's files under `crates/clm/tests/`, since the CLI's tests prove other components through the binary (`backlog/clm-s-cli-tests-prove-other-components-through-the-binary`, the plan's phase 4). `clm pending <component>` names each obsolete marker with its file, and a build removes the test it marks (`removed-requirements-build-out`) and re-cites or cuts a test of a requirement that changed (`stale-markers-keep-behind`).
+- **The root** deletes `crates/clm-runner/`, the `clm runner` dispatch (the `Runner` command in `crates/clm/src/main.rs` and its arm in `crates/clm/src/upgrade_gate.rs`) and its `Cargo` entries, and `crates/clm/tests/runner.rs` (`clm/no-runner-crate`). The crate is under the root's `paths` from this change on, so no file is unowned; the glob matches nothing once the crate is gone. The root's test files also hold the tests of the removed skill requirements (`plugin_propose.rs`, `plugin_triage.rs`, `plugin_init.rs`, `plugin_build.rs`, `plugin_upgrade.rs`, `claude_md.rs`), which go whole.
 - **`orchestrator.run`** and **`orchestrator.triage`** delete the listed tests and cut the mixed ones. The prompts' text stays as it is, but for the removed requirement names it cites (`backlog/dead-decision-names-in-code-comments-and-skills`).
 - **`plugin`** cuts `skills`, `skills_point_at_the_guide` and `launch_models` to their computed assertions, and `skills` gains the check that `plugin/skills/` holds exactly the ten.
 - The glossary keeps its `clm runner` lines, and the root's `paths` the crate's glob, until the command and the crate are gone (`backlog/the-glossary-still-lists-clm-runner`).
 
 ## Constraints
 
-- Only deleting. No surviving requirement is reworded beyond the cut; that is the plan's phase 5. The `says-component` family, the migration notes of `upgrade`, and the wording lints on `init`'s templates and on help text scan source or templates, not prompts, and wait for phase 5.
+- Only deleting. No surviving requirement is reworded beyond the cut; that is the plan's phase 5. The `says-component` family, the migration notes of `upgrade`, and the retired-word lints on `init`'s templates and on help text scan source or templates, not prompts, and wait for phase 5. Two requirements of `init` do go here: they pin sentences of the `AGENTS.md` that `clm init` writes, which is an instruction file.
 - No migration: `clm runner` has no settings key and `clm init` writes nothing for it, and no file a project holds changes.
 - The live changes `20261113-land-starvation` and `20261112-components-own-their-tests` are untouched; their deltas still cite two of the dead names, in text this change repoints in `specs/`.
 - `20261113-builder-check-text-lives` is live too. The requirement it added, `plugin.propose/builder-check`, is removed here, so nothing of it is left to build but the removal of `plugin/builder-check`'s two obsolete tests; it is archived once they are gone.
@@ -101,3 +103,13 @@ Four removed requirements of `orchestrator.run` had one computed part each, that
 - The tests that failed when a sentence was edited out of a skill, an agent, a prompt or an instruction file. The sentences stay. Where a program already refuses the outcome a sentence warns of, nothing is lost; where none does and one could, a backlog item names it; the rest waits for the skill evals of the plan's phase 6.
 - The history of how 86 decisions changed, which git keeps.
 - `machine-runners` was the one deleted decision still accepted. Its record that hosted sandboxes were declined, and what a headless runner would start from, is kept in `builds-in-subagents`.
+
+## Open questions
+
+From the builder check and the architecture audit; none holds the change.
+
+- **Most of the tests to delete are in files the root owns.** A build of `plugin`, `plugin.agents`, `init` or `orchestrator.run` deletes or cuts tests under `crates/clm/tests/`. The pending list hands each build those markers and `removed-requirements-build-out` says the build removes what they mark, but `path-ownership`'s written exception names only re-citing. A build that reads it strictly files a `question` and stops; the answer is that it may. Phase 4 moves the tests to their components.
+- **A capability test still reads fixed prompt text.** `crates/clm/tests/capability/right_model_per_task.rs` asserts three sentences of the build prompt about naming a subagent's model, which `orchestrator.run/review-model` no longer states. The test passes while the prompt keeps them. Whether the capability's proof should rest on prompt wording is phase 3's question.
+- **Two split requirements keep a fixed sentence under a computed condition.** `orchestrator.run/prompt-serves` and `capability-waits-for-changed-rule` say what the capability component's prompt tells the session. What a test can prove is that the sentence is there for that component and for no other; the wording itself is unpinned in effect. Left as borderline for phase 5.
+- **The build budget's number is unpinned.** `scenario_budget_in_land_terms` asserted the prompt's "at most 6 requirements", a constant. It goes with the wording.
+- **`clm/claude-md-pushes-with-clm` was a lint a program ran**, on this repository's `AGENTS.md`. It is removed as a scan of instruction text; `backlog/a-session-s-raw-git-push-is-refused-by-nothing` names the guard as the program that would hold the rule.

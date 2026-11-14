@@ -1,5 +1,5 @@
-# removed requirements: 121
-# tests deleted: 184; tests that only lose a marker: 1
+# removed requirements: 120
+# tests deleted: 187; tests that only lose a marker: 1
 DELETE crates/clm-run/tests/prompt.rs::push_retries_transient_rejections_only	cites only removed: orchestrator.run/prompt-commands
 DELETE crates/clm-run/tests/prompt.rs::removal_rule_for_an_obsolete_requirement_is_in_every_prompt	cites only removed: orchestrator.run/stays-in-its-component
 DELETE crates/clm-run/tests/prompt.rs::scenario_a_land_still_running	cites only removed: orchestrator.run/background-work-stopped
@@ -97,7 +97,6 @@ DELETE crates/clm/tests/claude_md.rs::git_push_in_either_file_fails	cites only r
 DELETE crates/clm/tests/claude_md.rs::no_clm_branch_push_fails	cites only removed: clm/claude-md-pushes-with-clm
 DELETE crates/clm/tests/init.rs::claude_md_names_the_skills	cites only removed: init/claude-md-names-the-skills
 DELETE crates/clm/tests/init.rs::claude_md_points_at_the_guide	cites only removed: init/claude-md-points-at-guide
-DELETE crates/clm/tests/init.rs::template_says_pull_request	cites only removed: init/template-says-pull-request
 DELETE crates/clm/tests/plugin.rs::architecture_audit	cites only removed: plugin/architecture-audit
 DELETE crates/clm/tests/plugin.rs::configure_skill	cites only removed: plugin/configure-skill
 DELETE crates/clm/tests/plugin.rs::contribution_skill	cites only removed: plugin/contribution-skill
