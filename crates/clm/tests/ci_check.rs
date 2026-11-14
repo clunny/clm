@@ -1352,10 +1352,9 @@ fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
     // req:ci/coverage-script@b19a3b0a
     let tree = coverage_tree();
     // The tool writes real paths, `pwd -P`'s; the shell's `$PWD` names the checkout by its link.
-    tree.fake(
-        "cargo",
-        &CARGO_COVERAGE.replace("\"$PWD/crates", "\"$(pwd -P)/crates"),
-    );
+    let physical = CARGO_COVERAGE.replace("\"$PWD/crates", "\"$(pwd -P)/crates");
+    assert_ne!(physical, CARGO_COVERAGE);
+    tree.fake("cargo", &physical);
     let link = tree.dir.path().join("link");
     std::os::unix::fs::symlink(tree.work(), &link).unwrap();
     let out = Command::new(".github/scripts/coverage.sh")

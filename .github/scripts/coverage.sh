@@ -19,7 +19,8 @@ real=$(pwd -P)
 # tracefile reads the same from any checkout of the repository. `index` compares plainly, so a
 # root with regex characters needs no escaping.
 relative_to_root() {
-  awk -v a="SF:$root/" -v b="SF:$real/" '
+  a="SF:$root/" b="SF:$real/" awk '
+    BEGIN { a = ENVIRON["a"]; b = ENVIRON["b"] }
     index($0, a) == 1 { print "SF:" substr($0, length(a) + 1); next }
     index($0, b) == 1 { print "SF:" substr($0, length(b) + 1); next }
     { print }' "$1" >"$2"
