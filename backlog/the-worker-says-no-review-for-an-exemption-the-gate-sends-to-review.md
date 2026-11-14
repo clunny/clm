@@ -1,6 +1,6 @@
 ---
 title: "The web Worker says an exemption-only spec branch needs no review where the gate says it does"
-kind: bug
+kind: deferred
 components: [gate, web.worker.review]
 ---
 
