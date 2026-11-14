@@ -201,6 +201,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     let mut chain: Option<String> = None;
     // The head and base whose overlap printed nothing (`land/overlap-recheck`).
     let mut overlap_nothing: Option<(String, String)> = None;
+    // The head and base whose selection printed nothing, asked once across a restart.
+    let mut selection_nothing: Option<(String, String)> = None;
     for attempt in 1..=ATTEMPTS {
         let mut p = prepare(chain.as_deref())?;
         // The priority this land's tickets carry, worked out once, before its first wait
@@ -387,8 +389,14 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             runs = true;
             recheck = Some(Recheck::Selected);
         } else if check.is_some() && !overlapped {
-            match repo.selection(exe, dir.path(), &base, checked) {
-                Selected::Nothing => {}
+            let pair = (head.clone(), base.clone());
+            let result = if selection_nothing.as_ref() == Some(&pair) {
+                Selected::Nothing
+            } else {
+                repo.selection(exe, dir.path(), &base, checked)
+            };
+            match result {
+                Selected::Nothing => selection_nothing = Some(pair),
                 Selected::Tests(s) => {
                     if !checked {
                         recheck_files = s.files();
