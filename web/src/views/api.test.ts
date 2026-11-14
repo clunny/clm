@@ -1,4 +1,4 @@
-// req:web/installable@e711892d (offline data with its age) and the retry on 401 that the Worker's
+// Offline data with its age, and the retry on 401 that the Worker's
 // one-use refresh tokens need (changes/20261022-web-ui/tasks/web.md).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError, Offline, SignedOut, get, post, send } from './api';
@@ -35,6 +35,7 @@ afterEach(() => vi.unstubAllGlobals());
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 describe('api.get', () => {
+  // req:web/installable@e711892d
   it('retries once on 401, since a parallel request may have refreshed the session', async () => {
     const fetch = vi
       .fn()
@@ -46,6 +47,7 @@ describe('api.get', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  // req:web/installable@e711892d
   it('is signed out after two 401s, and forgets the kept data', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 1 })));
     await get('/api/repos/o/a/snapshot');
@@ -55,6 +57,7 @@ describe('api.get', () => {
     expect(caches.store.size).toBe(0);
   });
 
+  // req:web/installable@e711892d
   it('offline: returns the last response with the time it was fetched', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 'old' })));
     vi.setSystemTime(new Date(1_000_000));
@@ -65,6 +68,7 @@ describe('api.get', () => {
     expect(res).toEqual({ data: { v: 'old' }, cachedAt: 1_000_000 });
   });
 
+  // req:web/installable@e711892d
   it('offline with nothing kept: says so', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(get('/api/repos/o/b/snapshot')).rejects.toBeInstanceOf(Offline);
@@ -105,6 +109,7 @@ describe('a refresh a notice asked for', () => {
 
 // req:web.client-live/notify-switch@bc04aecc
 describe('api.send', () => {
+  // req:web/installable@e711892d
   it('deletes with a JSON body, and a failed get carries its status', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 })).mockResolvedValueOnce(new Response('', { status: 404 }));
     vi.stubGlobal('fetch', fetch);

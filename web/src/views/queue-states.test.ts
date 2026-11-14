@@ -1,4 +1,3 @@
-// req:web.views/queue-states@340afeed
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,6 +16,7 @@ const GONE = [
 ];
 
 describe('queue states', () => {
+  // req:web.views/queue-states@340afeed
   it('the totals give the states in the order claimed, ready, blocked, and know no waiting state', () => {
     const totals = (by_state: Record<string, number>) => {
       const f = flight({ totals: { pending_nodes: 4, by_state, live_changes: 1, requirements_pending: 4 } });
@@ -28,6 +28,7 @@ describe('queue states', () => {
     expect(totals({ waiting: 1, blocked: 1 })).toBe('1 blocked, 1 waiting');
   });
 
+  // req:web.views/queue-states@340afeed
   it('a waiting node has no label of its own: it shows its state as the app gets it', () => {
     const f = flight();
     f.nodes[1] = { ...f.nodes[1], state: 'waiting' };
@@ -37,6 +38,7 @@ describe('queue states', () => {
     expect(top).not.toContain('Waiting');
   });
 
+  // req:web.views/queue-states@340afeed
   it('a node is drawn without reading paths from the flight model', () => {
     const f = flight();
     f.nodes[0] = { ...f.nodes[0], paths: ['web/.npmrc'] } as (typeof f.nodes)[0];
@@ -44,6 +46,7 @@ describe('queue states', () => {
     expect(view.textContent).not.toContain('web/.npmrc');
   });
 
+  // req:web.views/queue-states@340afeed
   it('no source file under web/src names the state the queue no longer has', () => {
     const files = readdirSync(SRC, { recursive: true, encoding: 'utf8' }).filter((f) => /\.\w+$/.test(f));
     expect(files.length).toBeGreaterThan(0);

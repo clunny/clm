@@ -1,4 +1,3 @@
-// req:web.views/answer-buttons@c08a8031
 import { describe, expect, it, vi } from 'vitest';
 import { answerButtons, type Answering } from './answers';
 import { renderBacklogItem } from './backlog';
@@ -13,6 +12,7 @@ const labels = (e: HTMLElement | '') => (e ? [...e.querySelectorAll<HTMLButtonEl
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 describe('answer buttons', () => {
+  // req:web.views/answer-buttons@c08a8031
   it('a question offers one button per choice in order, a human-task Done, and no other item any', () => {
     expect(labels(answerButtons(item('q', 'question', { choices: ['yes', 'no', 'later'] }), answering()))).toEqual(['yes', 'no', 'later']);
     expect(labels(answerButtons(item('h', 'human-task'), answering()))).toEqual(['Done']);
@@ -21,6 +21,7 @@ describe('answer buttons', () => {
     expect(answerButtons(item('b', 'bug'), answering())).toBe('');
   });
 
+  // req:web.views/answer-buttons@c08a8031
   it('answered: two quick taps post once, and the person\'s own answer is drawn chosen', async () => {
     const q = item('q', 'question', { choices: ['yes', 'no'] });
     let release = () => {};
@@ -45,6 +46,7 @@ describe('answer buttons', () => {
     expect(onAnswer).toHaveBeenCalledTimes(2);
   });
 
+  // req:web.views/answer-buttons@c08a8031
   it('done: Done sends done', async () => {
     const onAnswer = vi.fn(async () => null);
     const page = renderBacklogItem(snapshot(), 'setup', null, '#/o/a/backlog', answering({ onAnswer }));
@@ -53,6 +55,7 @@ describe('answer buttons', () => {
     expect(onAnswer.mock.calls).toEqual([['setup', 'done']]);
   });
 
+  // req:web.views/answer-buttons@c08a8031
   it('a refusal shows why under the buttons and keeps them enabled', async () => {
     const view = answerButtons(item('q', 'question', { choices: ['yes', 'no'] }), answering({ onAnswer: async () => 'Not sent (422).' })) as HTMLElement;
     view.querySelector<HTMLButtonElement>('button[data-answer=yes]')!.click();
@@ -65,6 +68,7 @@ describe('answer buttons', () => {
     expect(thrown.querySelector('.err')!.textContent).toBe('Not sent: offline.');
   });
 
+  // req:web.views/answer-buttons@c08a8031
   it('offline: the buttons are disabled and send nothing', () => {
     const onAnswer = vi.fn(async () => null);
     const view = answerButtons(item('q', 'question', { choices: ['yes', 'no'] }), answering({ offline: true, onAnswer })) as HTMLElement;
@@ -74,6 +78,7 @@ describe('answer buttons', () => {
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
+  // req:web.views/answer-buttons@c08a8031
   it('Home draws the buttons under each Answer entry', () => {
     const snap = snapshot({ backlog: [item('q', 'question', { choices: ['yes', 'no'] }), item('h', 'human-task')] });
     const home = renderHome({

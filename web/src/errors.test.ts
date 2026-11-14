@@ -1,10 +1,11 @@
-// req:web/honest-errors@444ce2bc: the retry schedule, the words for each failure, and what the
+// The retry schedule, the words for each failure, and what the
 // API client does with a 5xx.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError, Offline, get } from './views/api';
 import { classify, failureText, retryDelay } from './errors';
 
 describe('retryDelay', () => {
+  // req:web/honest-errors@444ce2bc
   it('backs off 5, 10, 20, then every 60 seconds', () => {
     expect([0, 1, 2, 3, 4, 9].map(retryDelay)).toEqual([5000, 10000, 20000, 60000, 60000, 60000]);
   });
@@ -14,6 +15,7 @@ describe('failures', () => {
   beforeEach(() => vi.stubGlobal('navigator', { onLine: true }));
   afterEach(() => vi.unstubAllGlobals());
 
+  // req:web/honest-errors@444ce2bc
   it('a 404 is about access, a preparing 503 gives its share, other failures retry', () => {
     expect(classify(new HttpError('/x', 404))).toEqual({ kind: 'no-access' });
     expect(classify(new HttpError('/x', 403))).toEqual({ kind: 'no-access' });
@@ -24,6 +26,7 @@ describe('failures', () => {
     expect(classify(new Offline())).toEqual({ kind: 'retry' });
   });
 
+  // req:web/honest-errors@444ce2bc
   it('retry text says nothing about access', () => {
     expect(failureText({ kind: 'retry' }).text).toBe("CLM couldn't load the repo just now and is retrying.");
     expect(failureText({ kind: 'retry' }).text).not.toMatch(/account|App/);
@@ -41,6 +44,7 @@ describe('api.get on a 5xx', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  // req:web/honest-errors@444ce2bc
   it('falls back to the kept copy, but not for a live refresh or a preparing 503', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('{"v":1}', { status: 200 })));
     await get('/p');

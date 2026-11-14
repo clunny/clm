@@ -1,4 +1,3 @@
-// req:web.views/full-document@fcfa5b34
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { blocks, renderFullDocument } from './full-document';
 import { SPEC_AFTER, SPEC_BEFORE } from './fixtures';
@@ -21,6 +20,7 @@ function open(mode: 'inline' | 'after' | 'before' = 'inline') {
 }
 
 describe('full document', () => {
+  // req:web.views/full-document@fcfa5b34
   it('open at first change: Design is change 1 of 2, and next brings the requirement', () => {
     const { view, scrolled } = open();
     expect(view.total).toBe(2);
@@ -40,6 +40,7 @@ describe('full document', () => {
     expect(view.current()).toBe(0);
   });
 
+  // req:web.views/full-document@fcfa5b34
   it('shows the whole file as it reads at the head, unchanged text dimmed, changes marked', () => {
     const { view } = open();
     const text = view.el.querySelector('.fdoc')!.textContent!;
@@ -48,6 +49,7 @@ describe('full document', () => {
     expect(view.el.querySelector('.chg ins')?.textContent).toContain('now changed');
   });
 
+  // req:web.views/full-document@fcfa5b34
   it('folds long unchanged runs, and a fold opens', () => {
     const { view } = open();
     const fold = view.el.querySelector<HTMLButtonElement>('.fold')!;
@@ -57,6 +59,7 @@ describe('full document', () => {
     expect(view.el.querySelector('.fdoc')!.textContent).toContain('Fifth.');
   });
 
+  // req:web.views/full-document@fcfa5b34
   it('j and k step through the changes', () => {
     const { view } = open();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'j' }));
@@ -66,6 +69,7 @@ describe('full document', () => {
     view.close();
   });
 
+  // req:web.views/full-document@fcfa5b34
   it('after and before modes show one side, still numbered', () => {
     expect(open('after').view.el.querySelector('.chg del')).toBeNull();
     const before = open('before').view;
@@ -73,6 +77,7 @@ describe('full document', () => {
     expect(before.el.querySelector('.chg')?.textContent).not.toContain('now changed');
   });
 
+  // req:web.views/full-document@fcfa5b34
   it('the outline marks where the changes are', () => {
     const { view } = open();
     const entries = [...view.el.querySelectorAll('.toc .t')].map((t) => [t.textContent, !!t.querySelector('.m')]);
@@ -86,6 +91,7 @@ describe('full document', () => {
     ]);
   });
 
+  // req:web.views/full-document@fcfa5b34
   it('a file added whole is one change', () => {
     const changes = new Set(blocks(null, 'One.\n\nTwo.').map((b) => b.change));
     expect([...changes]).toEqual([0]);

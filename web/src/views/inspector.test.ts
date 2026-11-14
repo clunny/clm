@@ -1,9 +1,10 @@
-// req:web.views/graph-view@7bdf4eb6 (the inspector a selected node opens)
+// The inspector a selected node opens
 import { describe, expect, it, vi } from 'vitest';
 import { renderInspector } from './inspector';
 import { flight, implementation, review, snapshot } from './fixtures';
 
 describe('node inspector', () => {
+  // req:web.views/graph-view@7bdf4eb6
   it('shows the contract, dependencies, changes, work in flight and backlog of a node', () => {
     const insp = renderInspector(snapshot(), implementation(), [], 'b');
     expect(insp.querySelector('.contract')?.textContent).toContain('The b contract.');
@@ -16,16 +17,19 @@ describe('node inspector', () => {
     expect(insp.querySelector('.backlog')?.textContent).not.toContain('crash');
   });
 
+  // req:web.views/graph-view@7bdf4eb6
   it('names an unbuilt node unbuilt in its header', () => {
     const insp = renderInspector(snapshot(), null, [], 'b');
     expect(insp.querySelector('.top')?.textContent).toContain('unbuilt');
   });
 
+  // req:web.views/graph-view@7bdf4eb6
   it('says the work in flight is still loading until the implementation state arrives', () => {
     const insp = renderInspector(snapshot(), null, [], 'b');
     expect(insp.querySelector('.work')?.textContent).toContain('Loading');
   });
 
+  // req:web.views/graph-view@7bdf4eb6
   it("lists each spec branch's changes to the node, and only branches that touch it", () => {
     const touching = review();
     const other = review({ branch: 'spec/elsewhere' });
@@ -47,6 +51,7 @@ describe('node inspector', () => {
 describe('work in flight', () => {
   const reqs = (insp: HTMLElement) => [...insp.querySelectorAll<HTMLElement>('.work .rq')].map((r) => r.textContent);
 
+  // req:web.views/graph-view@7bdf4eb6
   it('obsolete marker of a removed node: a shows ready and 2 pending, a/x behind and gone/y obsolete with its markers', () => {
     const f = flight({
       nodes: [
@@ -70,6 +75,7 @@ describe('work in flight', () => {
     expect(reqs(insp)).toEqual(['a/x behind', 'gone/y obsolete · src/a.rs:12, tests/a.rs:3']);
   });
 
+  // req:web.views/graph-view@7bdf4eb6
   it('nothing pending: b, not listed, says nothing is pending; c, listed with none, lists no requirement', () => {
     const f = flight();
     f.nodes = [{ ...f.nodes[0], node: 'c', pending: [] }];
@@ -90,6 +96,7 @@ describe('work in flight', () => {
 
 // req:web.views/inspector-overlay@ca741eb0
 describe('inspector overlay', () => {
+  // req:web.views/graph-view@7bdf4eb6
   it('has a × button that closes it', () => {
     const onClose = vi.fn();
     const insp = renderInspector(snapshot(), null, [], 'b', onClose);
@@ -100,6 +107,7 @@ describe('inspector overlay', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // req:web.views/graph-view@7bdf4eb6
   it('closes on Escape while it is on the page, and not after it has left', () => {
     const onClose = vi.fn();
     const insp = renderInspector(snapshot(), null, [], 'b', onClose);
@@ -113,6 +121,7 @@ describe('inspector overlay', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // req:web.views/graph-view@7bdf4eb6
   it("its backlog items link to their pages: 'dark-mode' opens #/o/a/backlog/dark-mode", () => {
     const snap = snapshot();
     snap.backlog = [{ slug: 'dark-mode', kind: 'idea', title: 'Dark mode', nodes: ['a'], origin: null, blocks: [] }];
