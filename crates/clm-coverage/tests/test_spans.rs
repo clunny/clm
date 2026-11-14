@@ -61,7 +61,7 @@ mod tests {
         }
     }
 
-    #[ignore]
+    #[should_panic]
     #[wasm_bindgen_test]
     fn two() {}
 
