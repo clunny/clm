@@ -202,6 +202,25 @@ pub enum Body {
         #[serde(default)]
         run: Option<String>,
     },
+    /// What a mutation pass found on `commit` (`mutation-after-land`). A report, not a
+    /// land: never signed.
+    Mutated {
+        /// A commit of `main`, a full 40-hex ID.
+        #[serde(deserialize_with = "commit_id")]
+        commit: String,
+        /// The commit the pass started from.
+        #[serde(default, deserialize_with = "optional_commit_id")]
+        since: Option<String>,
+        /// Requirements whose mutants a test killed.
+        #[serde(deserialize_with = "requirement_ids")]
+        killed: Vec<String>,
+        /// Requirements, as `<component>/<slug>@<version>`, a mutant survived.
+        #[serde(deserialize_with = "versioned_ids")]
+        unproven: Vec<String>,
+        /// Requirements the pass couldn't judge.
+        #[serde(deserialize_with = "requirement_ids")]
+        not_judged: Vec<String>,
+    },
 }
 
 /// The two code keys a composed `checked` record was built from (`composed-check`).
@@ -267,6 +286,45 @@ fn commit_ids<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::
         .into_iter()
         .map(full_id)
         .collect()
+}
+
+/// Whether `id` is `<component>/<slug>`: two non-empty parts of lowercase letters, digits and
+/// `.`, `-`, `_`.
+fn requirement_id<E: serde::de::Error>(id: &str) -> Result<(), E> {
+    let part = |p: &str| {
+        !p.is_empty()
+            && p.chars()
+                .all(|c| matches!(c, 'a'..='z' | '0'..='9' | '.' | '-' | '_'))
+    };
+    match id.find('/') {
+        Some(at) if part(&id[..at]) && part(&id[at + 1..]) => Ok(()),
+        _ => Err(E::custom(format!("`{id}` is not a requirement ID"))),
+    }
+}
+
+fn requirement_ids<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    let ids = Vec::<String>::deserialize(d)?;
+    ids.iter().try_for_each(|id| requirement_id(id))?;
+    Ok(ids)
+}
+
+/// Entries `<component>/<slug>@<version>`, the version 8 lowercase hex digits.
+fn versioned_ids<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    let ids = Vec::<String>::deserialize(d)?;
+    for entry in &ids {
+        let versioned = entry.split_once('@').filter(|(_, version)| {
+            version.len() == 8 && version.chars().all(|c| matches!(c, '0'..='9' | 'a'..='f'))
+        });
+        match versioned {
+            Some((id, _)) => requirement_id(id)?,
+            None => {
+                return Err(serde::de::Error::custom(format!(
+                    "`{entry}` is not `<component>/<slug>@<version>`"
+                )));
+            }
+        }
+    }
+    Ok(ids)
 }
 
 /// One model's token counts in an `effort` record.
@@ -346,6 +404,7 @@ impl Body {
             Body::Effort { .. } => "effort",
             Body::Decided { .. } => "decided",
             Body::Verified { .. } => "verified",
+            Body::Mutated { .. } => "mutated",
         }
     }
 }
