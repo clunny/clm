@@ -19,29 +19,27 @@ fn a_build_names_its_model() {
         "{report}"
     );
 
-    // `/clm:build`, running on `opus`, prepares node `a`'s build with the command it
-    // runs, passing its own model. The skill's own `model` on the Agent tool, which launches
-    // the build, lies beyond the binary's boundary; `clm run`'s prompt names the model of
-    // every agent the build launches in turn.
-    let out = repo.clm(&["run", "a", "--review-model", "opus"]);
-    assert!(out.status.success(), "{}", printed(&out));
-    let prompt = fs::read_to_string(repo.root.join(".clm/prompts/a.md")).unwrap();
-    let paragraph = |words: &str| {
-        prompt
-            .split("\n\n")
-            .find(|p| p.contains(words))
-            .unwrap_or_else(|| panic!("no paragraph with {words}: {prompt}"))
+    // `/clm:build` prepares node `a`'s build with the command it runs, passing its own model.
+    // The skill's own `model` on the Agent tool, which launches the build, lies beyond the
+    // binary's boundary; `clm run`'s prompt names the model of every agent the build launches
+    // in turn. The proof rests on the values the program puts into the prompt, not on its
+    // wording (`prompt-text-is-source`): the build prepared for two session models names each
+    // in its prompt, and never the other.
+    let prompt_for = |model: &str| {
+        let out = repo.clm(&["run", "a", "--review-model", model]);
+        assert!(out.status.success(), "{}", printed(&out));
+        fs::read_to_string(repo.root.join(".clm/prompts/a.md")).unwrap()
     };
+    let opus = prompt_for("opus");
+    let other = prompt_for("session-model-x");
 
-    // The final review runs on the main session's model.
-    let review = paragraph("launch the `clm:spec-auditor` subagent");
-    assert!(review.contains("model: \"opus\""), "{review}");
-    // Every other agent runs on the cheaper model, named.
-    let others = paragraph("Name the model of every subagent you launch");
-    assert!(others.contains("`model: \"sonnet\"` for each"), "{others}");
-    assert!(
-        others.contains("never launch a subagent without naming its model"),
-        "{others}"
-    );
-    assert!(!others.contains("opus"), "{others}");
+    // The final review runs on the session's model, whatever it is.
+    assert!(opus.contains("model: \"opus\""), "{opus}");
+    assert!(!opus.contains("session-model-x"), "{opus}");
+    assert!(other.contains("model: \"session-model-x\""), "{other}");
+    assert!(!other.contains("opus"), "{other}");
+
+    // Every other agent runs on the model `clm agent-harness` names for builds.
+    assert!(opus.contains("model: \"sonnet\""), "{opus}");
+    assert!(other.contains("model: \"sonnet\""), "{other}");
 }
