@@ -69,7 +69,7 @@ fn all_gone(pids: &Path, count: usize) {
 #[test]
 fn queries_and_lookups_that_outlast_their_budget_block() {
     // req:plugin.hooks.guard/push-guard@dabbe399
-    // req:plugin.hooks.guard/release-guard@bbbfbcb2
+    // req:plugin.hooks.guard/release-guard@6e589859
     // req:plugin.hooks.guard/release-run-lookup@3024a9da
     let original = std::env::var("PATH").unwrap();
     let cwd = TempDir::new().unwrap();

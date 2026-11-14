@@ -440,7 +440,7 @@ fn guard_allows_every_other_event() {
 
 #[test]
 fn guard_blocks_cutting_releases() {
-    // req:plugin.hooks.guard/release-guard@bbbfbcb2
+    // req:plugin.hooks.guard/release-guard@6e589859
     for command in [
         // dispatching a release
         "gh workflow run release.yml -f version=0.2.0",
@@ -496,7 +496,7 @@ fn guard_blocks_cutting_releases() {
 
 #[test]
 fn guard_allows_reading_releases_and_runs() {
-    // req:plugin.hooks.guard/release-guard@bbbfbcb2
+    // req:plugin.hooks.guard/release-guard@6e589859
     for command in [
         // reading releases
         "gh release list",

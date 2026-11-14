@@ -131,7 +131,7 @@ fn guard_command_asks_with_the_reason() {
 
 #[test]
 fn guard_command_blocks_dispatching_a_release() {
-    // req:plugin.hooks.guard/release-guard@bbbfbcb2
+    // req:plugin.hooks.guard/release-guard@6e589859
     let event = serde_json::json!({
         "tool_name": "Bash",
         "tool_input": { "command": "gh workflow run release.yml -f version=0.2.0" },
@@ -209,7 +209,7 @@ fn take_calls(calls: &Path) -> Vec<String> {
 
 #[test]
 fn guard_blocks_rerunning_a_release_run() {
-    // req:plugin.hooks.guard/release-guard@bbbfbcb2
+    // req:plugin.hooks.guard/release-guard@6e589859
     // req:plugin.hooks.guard/release-run-lookup@3024a9da
     let fake = TempDir::new().unwrap();
     let calls = fake.path().join("calls");
