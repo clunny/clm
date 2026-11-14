@@ -17,7 +17,7 @@ The warning compares with `origin/main` as of the last fetch, so a checkout that
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `views-name-their-commit` until 2026-11-13, when it moved down here; its rules serve the capability `see-project-state` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md` holds no entry for this rule, which serves the capability `see-project-state` (`human-layer-entries-stay-short`); the rule in full:
 
 Every view SHALL name the commit it describes and warn when that commit is behind `origin/main`.
 

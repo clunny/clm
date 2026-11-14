@@ -6,7 +6,7 @@ status: accepted
 
 A repository whose trunk is `master` can't land: `clm land` refuses with "no `main` to land on", and nothing says so earlier (GitHub issue #283). The issue asked for a setting naming the base branch, filled by `clm init` and read by every command and skill in place of `main`.
 
-Decided: CLM supports only a trunk named `main` (`trunk-named-main`), and `clm init` says so up front, with the rename command, in a repository without one (`init/init-names-missing-main`).
+Decided: CLM supports only a trunk named `main` (`land-locally`), and `clm init` says so up front, with the rename command, in a repository without one (`init/init-names-missing-main`).
 
 Why:
 - A configurable trunk is a lasting cost on CLM, not a one-off: `main` and `origin/main` appear in roughly 800 places across the specs, the code, the skills and the generated prompts, and every future requirement, skill and test would have to use the setting instead. A missed literal is a bug that shows only in a repository on another branch name, which this repository's own checks never exercise.
@@ -21,7 +21,7 @@ Revisit if adopters keep asking for it and renaming is often impossible for them
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `trunk-named-main` until 2026-11-13, when it was merged into `land-locally` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `land-locally` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 A CLM repository's trunk SHALL be a branch named `main`: every command, skill and prompt names it so, and no setting names another branch. `clm init` SHALL say so up front in a repository without one, with the command that renames its branch, rather than leave the first `clm land` to find it (`trunk-is-main`).
 

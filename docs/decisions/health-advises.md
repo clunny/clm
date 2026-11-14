@@ -8,7 +8,7 @@ The checks were scattered (`clm check`, `clm pending`, `clm size`, `clm ledger v
 
 So `clm health` (node `check.health`) is one report of the repository's health, advisory throughout: it exits 0 whatever it finds, and no rule of `clm check`, `clm gate` or `clm land` reads it. It rolls up what the other commands show and adds what nothing showed: lapsed claims, stalled changes, unanswered questions, uncited decisions, history words in specs, Design-heavy nodes, size outliers, code no test exercises, and the per-requirement signals.
 
-A requirement's signals are counted by a program from committed files alone (`git-is-truth`): its `friction` flags (`friction-flags`), the archived changes that modified it, and whether its scenarios or exception clauses exceed a setting. They add up to a score, but only once a build has flagged the requirement: without a flag the score is zero, whatever the archive shows, because the archive of this repository already holds about thirty requirements rewritten three or more times, and counting them alone would have filed thirty questions on the first builds after this landed. With a flag, the rewrites and counts weigh in, and when the score reaches the `reconsider` threshold `clm sync` on the node's `impl/*` branch files one `question` item, `reconsider-<node>-<slug>`. The human decides: drop the requirement, change it, or redesign around it, through a spec change. Thresholds are settings of the repository (`[health]` in `clm.toml`), so a project tunes them in a reviewed file; the weights are code.
+A requirement's signals are counted by a program from committed files alone (`git-is-truth`): its `workaround` flags (`workaround-flags`), the archived changes that modified it, and whether its scenarios or exception clauses exceed a setting. They add up to a score, but only once a build has flagged the requirement: without a flag the score is zero, whatever the archive shows, because the archive of this repository already holds about thirty requirements rewritten three or more times, and counting them alone would have filed thirty questions on the first builds after this landed. With a flag, the rewrites and counts weigh in, and when the score reaches the `reconsider` threshold `clm rebase` on the node's `impl/*` branch files one `question` item, `reconsider-<node>-<slug>`. The human decides: drop the requirement, change it, or redesign around it, through a spec change. Thresholds are settings of the repository (`[health]` in `clm.toml`), so a project tunes them in a reviewed file; the weights are code.
 
 Bloat (history words, a heavy Design, outliers, unexercised code) is reported, not filed: the remedy is judgment, which the `health` skill supplies through the `spec-slimmer` subagent as a proposal, and a human takes it into `/clm:propose` or not.
 
@@ -21,7 +21,7 @@ Rejected:
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `health-advises` until 2026-11-13, when it moved down here; its rules serve the capability `know-health` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md` holds no entry for this; its rules serve the capability `know-health` (`human-layer-entries-stay-short`). The rule in full:
 
 `clm health` SHALL be advisory: it exits 0 whatever it finds, and no check, gate or land reads it.
 

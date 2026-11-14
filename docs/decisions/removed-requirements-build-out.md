@@ -10,9 +10,9 @@ A marker that cites a requirement a change outside the archive lists under `REMO
 
 This is `expand-contract` applied to requirements: the spec says what goes, and the build makes it go. The exemption is derived from the change's deltas, so nothing is written in the code to claim it.
 
+A capability removed by a hand edit of `CAPABILITIES.md` is built out the same way, once its change lists it under `removes_capabilities` (`removed-capabilities-build-out`).
+
 Rejected:
 - Letting the spec PR delete the tests. That makes spec PRs mixed.
 - Keeping the requirement with a `deprecated` mark. `spec-is-current` says removed requirements are deleted.
 - A `clm:remove-by` marker on each test. The spec author would have to edit the tests, which is the same mixed PR.
-
-(Amended 2026-11-13, `20261113-a-spec-branch-can`: a capability removed by a hand edit of `CAPABILITIES.md` is built out the same way, once its change lists it under `removes_capabilities` (`removed-capabilities-build-out`).)

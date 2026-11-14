@@ -4,7 +4,7 @@ date: 2026-11-03
 status: accepted
 ---
 
-Refines `dev-install-scoped`, replacing its "In place, through symlinks". That setup built `clm-dev` at `<common>/clm-dev/marketplace` and symlinked each plugin's folder to the main worktree. Claude Code refuses a plugin hook module whose real path lies outside the marketplace's directory, so `clm-panel@clm-dev` failed to load (`Path escapes plugin directory: ./register.tsx (hooks)`), and the clone's sessions had no panel.
+Refines `dev-install-scoped`. Its first layout built `clm-dev` at `<common>/clm-dev/marketplace` and symlinked each plugin's folder to the main worktree. Claude Code refuses a plugin hook module whose real path lies outside the marketplace's directory, so `clm-panel@clm-dev` failed to load (`Path escapes plugin directory: ./register.tsx (hooks)`), and the clone's sessions had no panel.
 
 **The marketplace's root is the main worktree.** `claude plugin marketplace add` takes a path to a manifest file, and resolves its `./` sources against the folder above the file's own, as it does for `.claude-plugin/marketplace.json`. So `scripts/dev-install.sh` writes the tracked manifest, renamed `clm-dev`, to `<main worktree>/.clm/dev-marketplace.json` and adds that file. The plugins then lie inside the marketplace, so nothing escapes it, and Claude Code reads them from the main worktree, so an edit still applies at the next session. `.clm/` is already ignored, so nothing tracked changes, and the shared `clm` record stays on GitHub. Adding the file under the name `clm-dev` re-points the record an earlier setup made and keeps its installed plugins.
 

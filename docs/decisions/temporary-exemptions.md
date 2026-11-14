@@ -11,8 +11,8 @@ What adoption, or any project at any time, still needs is a way to say "this own
 - **An exemption** in a component's frontmatter names one rule (`undeclared-imports`, `tests-cite-their-owner` or `skipped-tests`), the component's own files it covers, the backlog item whose work ends it (`until`), and optionally why. Those rules skip those files, and every other rule still applies to them.
 - **Adding or widening one needs review** (`gate/needs-review`, and `humans-review-intent` and `yes-no-review` list it); removing or narrowing one, or rewording its `why`, doesn't. A new exemption's item must exist when it's added (`gate/exemption-names-its-item`).
 - **It stays in sight**: `clm health` lists every exemption with how many files it still covers, and flags one whose item is gone or whose files are gone, for a change to remove. Neither is a `clm check` failure, so the build that fixes the code lands, and the exemption is removed by a spec change after it.
-- **Builds never add one** (`orchestrator.run/stays-in-its-component`); a build that would need one leaves its requirement unbuilt with a `question` item.
-- **Recovery uses them** (`plugin.init/init-skill-gives-tests-their-component`): what doesn't meet a rule at adoption gets an exemption and an item, never `outside`.
+- **Builds never add one**; a build that would need one leaves its requirement unbuilt with a `question` item.
+- **Recovery uses them**: what doesn't meet a rule at adoption gets an exemption and an item, never `outside`.
 
 **Exemption, not `outside`.** `outside` is code CLM makes no claims about: no owner, no requirements, no rules, whether not adopted yet or never meant to be, like vendored code (`incremental-adoption`, unchanged). Exempt code is adopted, owned and specified; it just doesn't meet one rule yet. Putting it in `outside` would have CLM look away from code it is responsible for.
 
@@ -30,7 +30,7 @@ Rejected:
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `exemptions-end` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `exemptions-end` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 A rule `clm check` judges code by SHALL hold for every file a component owns, except a file that one of that component's exemptions names for that rule; each exemption SHALL name its rule, its files and the backlog item whose work ends it, SHALL be added only by a change a human reviews, and SHALL stay in sight until a change removes it (`temporary-exemptions`). Code CLM makes no claims about at all, such as code not adopted yet or vendored code, is the root's `outside` instead (`incremental-adoption`).
 

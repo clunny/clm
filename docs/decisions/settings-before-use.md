@@ -31,7 +31,7 @@ Rejected:
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `settings-before-use` until 2026-11-13, when it was merged into `checks-relax-before-use` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `checks-relax-before-use` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 A new settings key or value SHALL be read by a landed requirement before this repository's `clm.toml` sets it, and only once the installed `clm` can read it.
 

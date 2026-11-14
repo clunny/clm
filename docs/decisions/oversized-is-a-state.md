@@ -11,7 +11,8 @@ A node is **oversized** when its spec or code count exceeds a budget its frontma
 What a program does with the state:
 - `clm size` prints `oversized` on the node's line.
 - `clm status` shows the cell `oversized` on the node's row and counts the oversized nodes in its summary; the `spec` view marks the node in its chart (`⚠ oversized`) and SVG (amber, `colour-meanings`).
-- `clm health` lists it under `oversized`. Until 2026-10-30, `clm sync` also filed `backlog/split-<node>.md` as a `kind: question`; it files nothing now (`oversized-shown-not-filed`).
+- `clm health` lists it under `oversized`.
+- Nothing files a backlog item for it: the state is the record (`oversized-shown-not-filed`).
 
 Nothing blocks on it. No check, gate or sync step fails because a node is oversized, and a build of an oversized node merges like any other. The rule the programs enforce is "every oversized node is visible", not "no node is oversized".
 

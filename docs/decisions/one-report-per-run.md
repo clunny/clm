@@ -4,7 +4,7 @@ date: 2026-11-08
 status: accepted
 ---
 
-Under `builds-in-subagents`, a build or draft that ends a turn while its own background command (such as `clm land`) still runs ends that turn with a `waiting: <command>` message, which is not its final message (`orchestrator.run/background-work-stopped`, `orchestrator.triage/background-work-stopped`). The orchestrating session's skills treat such a result as not returned (`plugin/build-waiting-builds`, `plugin/triage-waiting-drafts`). That design assumed every turn's last message reaches the orchestrator and that a later one can follow it.
+Under `builds-in-subagents`, a build or draft that ends a turn while its own background command (such as `clm land`) still runs ends that turn with a `waiting: <command>` message, which is not its final message. The orchestrating session's skills treat such a result as not returned (`plugin/build-waiting-builds`, `plugin/triage-waiting-drafts`). That design assumed every turn's last message reaches the orchestrator and that a later one can follow it.
 
 Claude Code now delivers a subagent's result through a hand-back tool (`SubagentHandback`) that accepts one report per run. A build sent its `waiting:` message through it; when its land finished, its final report, ending `landed <sha>`, was refused, and the orchestrating session never got the closing line, the pull request's findings or its `## CLM defects`, except by resuming the subagent with `SendMessage` and asking.
 

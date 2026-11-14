@@ -19,7 +19,7 @@ Every build place on a clone holds a *slot*: the smallest number from 1 up that 
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `tests-run-concurrently` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `tests-run-concurrently` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 A project's tests, and the check command that runs them, SHALL pass while other runs of them overlap on the same host, each in its own checkout: no test binds a fixed port, writes a fixed path outside its checkout and the system's temporary directory, or relies on a server or database another run shares. A port or path a run must know in advance, such as the port of a server the check starts, is keyed on `CLM_SLOT`, the number CLM gives each build and its checks, distinct among the builds of one clone, and 0 when unset (`build-slots`). CLM runs builds in parallel and runs their tests outside any lock, so making the tests able to overlap is the project's part of that.
 

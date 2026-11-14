@@ -1,15 +1,17 @@
 ---
-title: "The user guide is Markdown in docs/guide/, bundled into the web app"
+title: "The user guide is Markdown in docs/guide/, the only copy, printed by clm guide and published on the public site"
 date: 2026-10-22
 status: accepted
 ---
 
-CLM's user guide is `docs/guide/*.md` in this repository: the only copy. The web app's build bundles those files and shows them in a Guide view. CI deploys the app on release (`ci`), so the web shows the guide of the release people run, matching their plugin and `clm`. A test fails when a page isn't in the bundle.
+CLM's user guide is `docs/guide/*.md` in this repository: the only copy. It reaches readers two ways, both built from those files in place:
+- `clm guide` prints it, offline and at the version that runs (`guide-in-the-binary`).
+- CLM's public site shows it at `/guide/`, built by VitePress in `web.site` (`public-site`). The site is built from `main` and deployed by the site workflow a human dispatches (`site-worker-of-its-own`), so the web shows the guide as of that deploy.
 
-`docs/` is a spec path, so the guide changes through spec PRs, reviewed like the specs it explains. It describes CLM as released, not plans: future work stays in `backlog/`.
+The web app itself has no Guide view: `clm guide` already prints the guide at the version that runs, and no capability needs it inside the app.
 
-Rejected: the Worker fetching the guide from this repository at run time. The repository is private, so the App would need installing on it; each view would spend the Free plan's request budget (`web-on-free-plan`); and readers would get `main`'s guide, which may be ahead of their release.
+`docs/` is a spec path, so the guide changes on spec branches, on the same terms as the specs it explains (`yes-no-review`); an edit that only rewords or adds a page needs no change (`small-change-no-claim`). It describes CLM as released, not plans: future work stays in `backlog/`.
 
-**Amended 2026-10-29** (`20261029-refounding`). The web app no longer has a Guide view: `web/guide-view` was cut at the re-founding's mapping, since `clm guide` already prints the guide at the version that runs (`guide-in-the-binary`) and no capability needs it in a browser. The guide stays `docs/guide/*.md`, the only copy, changed through spec branches.
-
-**Amended 2026-11-01** (`20261101-public-site`). The guide is back on the web, as pages of CLM's public site at `/guide/`, built by VitePress in `web.site` from `docs/guide/*.md` in place, not as a view of the app (`public-site`). It is still the only copy, deployed on release, so the web shows the released guide.
+Rejected:
+- The Worker fetching the guide from this repository at run time. The App would need installing on the repository, and each view would spend the Free plan's request budget (`web-on-free-plan`).
+- The guide as a view inside the app. Slow first paint, unreadable by search engines, and behind the app's sign-in (`public-site`, `invite-only-web`).

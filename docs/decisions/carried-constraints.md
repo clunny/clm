@@ -16,7 +16,7 @@ The model compiles in CLM's `ARCHITECTURE.md`, so the carried set is the one the
 
 A repository whose own `ARCHITECTURE.md` holds `#### Carries` blocks is the source, CLM's own, and reads the set from its own file, so a spec branch that rewords a carried constraint is judged by the words it proposes.
 
-`clm guide constraints` is the one guide page generated rather than read from `docs/guide/`, amending `guide-in-the-binary`: a copy of the carried entries under `docs/guide/` would be a second source. `ARCHITECTURE.md` stays a doc-only path for `ledger`'s code key; the tests that read the compiled copy hold `clm:reads ARCHITECTURE.md` markers, so an edit to it runs them at land (`doc-readers-marked`).
+`clm guide constraints` is the one guide page generated rather than read from `docs/guide/`, the one exception to `guide-in-the-binary`: a copy of the carried entries under `docs/guide/` would be a second source. `ARCHITECTURE.md` stays a doc-only path for `ledger`'s code key; the tests that read the compiled copy hold `clm:reads ARCHITECTURE.md` markers, so an edit to it runs them at land (`doc-readers-marked`).
 
 The carried text keeps the decision and constraint names it cites, which are CLM's own; the bundle section and the page say so, since the rule is the text they give and the names only say where the reasons are.
 
@@ -30,7 +30,7 @@ Rejected:
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `carried-constraints` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `carried-constraints` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 CLM's constraints that govern how any project is built with it SHALL reach every project from the `clm` it runs, never as a copy that can fall behind. Each such entry of CLM's `ARCHITECTURE.md` holds a `#### Carries` block naming its tier: `method`, which a project can't replace; `replaceable`, whose `#### Guarantee` block states what CLM relies on, which a project may replace with its own constraint keeping that guarantee; or `default`, an opinion a project may drop. A project replaces or drops one with a `#### Replaces` block in an entry of its own `ARCHITECTURE.md`, an edit a human reviews; the `architecture-auditor` advises whether a replacement keeps the guarantee (`deterministic-enforcement`).
 

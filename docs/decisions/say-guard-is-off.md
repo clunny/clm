@@ -10,7 +10,7 @@ So `clm hook session-start` is the one hook that speaks: the shim prints a line 
 
 ## The rule in full
 
-`ARCHITECTURE.md` stated this as the entry `say-guard-is-off` until 2026-11-13, when it moved down here; its rule serves the capability `guard-sessions` (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md` holds no entry for this rule, which serves the capability `guard-sessions` (`human-layer-entries-stay-short`); the rule in full:
 
 When the plugin can't get a `clm` binary, its hooks SHALL let calls through, but session start MUST tell the session that CLM's state and the guard are unavailable.
 

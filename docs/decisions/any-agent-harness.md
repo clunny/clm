@@ -18,4 +18,4 @@ CLM is worked from Claude Code, Codex, and, as a generic tier, any agent that re
 
 **`.claude/worktrees/` stays** the worktree directory on every agent harness: only a directory, and renaming it would touch every tidy-up for nothing.
 
-**Staged.** Stage 1 is this change. The Antigravity CLI's adapter (stage 2), per-harness `clm runner` launches and cost tracking from other agent harnesses' transcripts (stage 3), and the build and draft prompts in neutral words are backlog items.
+**Staged.** Stage 1 is this change. The Antigravity CLI's adapter (stage 2), cost tracking from other agent harnesses' transcripts (stage 3), and the build and draft prompts in neutral words are backlog items.

@@ -14,4 +14,4 @@ status: accepted
 
 **Alternatives.** A `--prompt-file` flag alongside the old stdout keeps two outputs for one caller (`no-dead-code`). Having the subagent run `clm run` itself would put the claim and the leftover cleanup inside a worktree the build may be standing in.
 
-(Amended 2026-10-27, `20261027-triage-one-spec-branch`: `clm draft` and `clm draft --fold` write their prompts the same way, to `.clm/prompts/draft/<id>.md` and `.clm/prompts/fold/<first id>.md`, and print a launcher. A draft prompt holds the items rather than a context bundle, so it is a few KB, but the triage session still read and re-emitted one per group, and the launcher keeps every subagent prompt CLM writes on one pattern.)
+**Drafts and folds.** `clm draft` and `clm draft --fold` write their prompts the same way, to `.clm/prompts/draft/<id>.md` and `.clm/prompts/fold/<first id>.md`, and print a launcher. A draft prompt holds the items rather than a context bundle, so it is a few KB, but passed inline the triage session would still read and re-emit one per group, and the launcher keeps every subagent prompt CLM writes on one pattern.

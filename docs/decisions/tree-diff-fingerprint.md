@@ -17,6 +17,6 @@ Since `derived-specs-fingerprint`, that case no longer lapses an approval on a b
 Alternatives considered:
 - **Pin the diff options** (`--no-ext-diff --no-textconv --no-renames --full-index --src-prefix=a/ --dst-prefix=b/`, a fixed algorithm, `-U3`). Makes clones agree, but the Worker can't ask GitHub's compare API for that diff, and rebuilding it in wasm would mean reproducing git's xdiff byte for byte. Clones and the Worker would still disagree.
 - **Normalise GitHub's diff in the Worker** (re-expand renames from blobs, look up full blob IDs). Still depends on GitHub's algorithm choice matching git's, and adds a second diff pipeline to keep in step.
-- **Pin to the head commit.** Every rebase costs a re-approval, which `pinned-approval` rejected.
+- **Pin to the head commit.** Every rebase costs a re-approval, which `approve-pins-the-review` rejects.
 
-Changing the definition changes every fingerprint: `approved` records written before it no longer match any branch, so a HARD branch awaiting landing needs approving again. Recorded `landed` and `reviewed` records keep their stored values and still pair up, since `clm review` reads the fingerprint from the `landed` record rather than recomputing it. No transition period accepts both kinds: a lapsed approval fails closed, and keeping patch-id alongside would keep the mismatch this removes.
+Changing the definition changed every fingerprint: `approved` records written before it match no branch, so a branch then awaiting landing on an approval needed approving again. Recorded `landed` records keep their stored values. No transition period accepts both kinds: a lapsed approval fails closed, and keeping patch-id alongside would keep the mismatch this removes.

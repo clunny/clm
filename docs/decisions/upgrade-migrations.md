@@ -8,7 +8,7 @@ A project set up by one release of `clm` must keep working under any later one, 
 
 **Migrations.** `clm-upgrade` holds an ordered list of migrations. Each is named after the change that needed it and has a `done` check over the project's files. There are two kinds:
 - An **apply** migration is code that CLM runs. It is used only where CLM can rewrite exactly, such as a key rename.
-- A **note** migration is advice for the files the project owns in words. It may carry the old and new template texts, so a file nobody edited is rewritten without a person.
+- A **note** migration is advice for the files the project owns in words. It may carry the old and new template texts, so a file nobody edited is rewritten without a person. A note may also be advice that asks for no edit, such as telling a project its tests must now overlap; its `done` reads the stamp, so the upgrade that shows it marks it taken (`stamp-taken-notes`).
 
 Every **required** migration, one without which a later `clm` would misread the project, is an apply migration. What CLM must read correctly, it can rewrite exactly. So a note is always **advised**: it records drift from what `clm init` writes today, and never blocks.
 
@@ -35,8 +35,6 @@ The alternative was no stamp, deriving everything from the files on every comman
 - *The builder check.* `propose`'s builder check asks about migrations, so they are designed in the spec branch rather than found when the corpus test fails.
 
 **`init-next-steps`' upgrade steps go.** They covered projects set up before `20261025-forge-adapters`. That change landed before `v0.14.0`, the first published release, so no released project needs them. Keeping them would also leave a second upgrade mechanism beside migrations.
-
-**Amended 2026-11-07.** A note may also be advice that asks for no edit, such as telling a project its tests must now overlap; its `done` reads the stamp, so the upgrade that shows it marks it taken (`stamp-taken-notes`).
 
 **Not yet:**
 - *Rewriting `specs/`, `changes/` or test markers.* That needs a generated change, as `clm rename` makes, so `specs/` stays derived (`regenerate-dont-merge`). The first migration that needs it designs it (`yagni`).

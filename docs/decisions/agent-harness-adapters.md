@@ -4,7 +4,7 @@ date: 2026-11-13
 status: accepted
 ---
 
-`ARCHITECTURE.md` stated this as the entry `agent-harness-adapters` until 2026-11-13, when the entry was cut to its rule (`human-layer-entries-stay-short`). The text still holds:
+`ARCHITECTURE.md`'s entry `agent-harness-adapters` states this in short (`human-layer-entries-stay-short`); the rule in full:
 
 Every rule SHALL live in `clm` and git, never in an agent harness. An agent harness adapter only recognises its agent harness from the environment of the command it runs, translates the agent harness's hook events into `clm`'s and `clm`'s decisions back into the agent harness's format, and declares what the agent harness can do: make the human confirm a command, run a hook before a shell command, run hooks at a session's start and end, launch subagents, give a subagent a worktree of its own, and choose a subagent's model. Where a recognised agent harness lacks an ability, CLM degrades to a path that keeps every rule (the human's own terminal for an approval, builds one at a time where there are no subagents, the session's own model where it can't choose one), never to one that trusts the agent. An agent of the generic tier has no adapter, so CLM can't tell it from the human's terminal: there no guard runs and `clm approve` can't refuse, and what holds is what `approval-policy` and `guard-blocks-push-to-main` say under `#### Untested`.
 
