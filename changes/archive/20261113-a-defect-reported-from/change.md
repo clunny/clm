@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-defect-reported-from-the-build-session-stays-an-uncommitted
 ---
