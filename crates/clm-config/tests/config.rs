@@ -1999,6 +1999,18 @@ fn verify_mutate_prints_last_and_is_refused_when_empty_or_with_import() {
     let (value, layer) = s.get("verify").unwrap();
     assert_eq!(value, "mode=local,check=x,mutate=scripts/mutate.sh");
     assert_eq!(*layer, Layer::File(f.repo_file()));
+    let s = Fixture::new(
+        None,
+        Some(
+            "[verify]\ncheck = \"x\"\nmode = \"pipeline\"\nevery = { days = 2 }\nmutate = \"m\"\n",
+        ),
+    )
+    .load(&[])
+    .unwrap();
+    assert_eq!(
+        s.get("verify").unwrap().0,
+        "mode=pipeline,check=x,every.days=2,mutate=m"
+    );
     for bad in [
         "[verify]\ncheck = \"x\"\nmode = \"import\"\nworkflow = \"slow\"\nmutate = \"m\"\n",
         "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"\"\n",
@@ -2007,6 +2019,7 @@ fn verify_mutate_prints_last_and_is_refused_when_empty_or_with_import() {
         let e = Fixture::new(None, Some(bad)).load(&[]).unwrap_err();
         assert!(e.to_string().contains("clm.toml"), "{bad}: {e}");
         assert!(e.to_string().contains("verify"), "{bad}: {e}");
+        assert!(e.to_string().contains("mutate"), "{bad}: {e}");
     }
 }
 
