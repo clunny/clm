@@ -1903,7 +1903,7 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// It exits 2 when a mutant was missed, as `cargo mutants` does, and with the status in
 /// `bin/mutants-exit` for a run on the repository's files. A run of the script's fixture, which
 /// names one of its two tests, catches the mutants of the first and misses those of the second,
-/// unless `bin/fixture-catches-all` exists. The directory of each `cargo mutants` run goes to
+/// unless `bin/fixture-catches-all` or `bin/fixture-catches-none` exists. The directory of each `cargo mutants` run goes to
 /// `$CI_LOG.cwd`.
 const CARGO_MUTANTS: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
@@ -1928,7 +1928,7 @@ case " $* " in
   *"test(~fixture_blind)"*) mode=blind ;;
 esac
 case $mode in
-  notices) caught=1; missed=0 ;;
+  notices) caught=1; missed=0; [ ! -e "$bin/fixture-catches-none" ] || { caught=0; missed=1; } ;;
   blind) caught=0; missed=1; [ ! -e "$bin/fixture-catches-all" ] || { caught=1; missed=0; } ;;
   *)
     [ ! -e "$bin/mutants-exit" ] || exit "$(cat "$bin/mutants-exit")"
@@ -2389,6 +2389,13 @@ fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
             .any(|l| l.contains("crates/clm-check/src/lib.rs")),
         "{log:?}"
     );
+    assert!(result.is_empty(), "{result:?}");
+    // Nor does one that misses the mutants of the test that notices.
+    fs::remove_file(tree.dir.path().join("bin/fixture-catches-all")).unwrap();
+    tree.report("fixture-catches-none", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(stderr.contains("fixture"), "{stderr}");
     assert!(result.is_empty(), "{result:?}");
 }
 
