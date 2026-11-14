@@ -7,6 +7,7 @@ mod cmd;
 mod escalate;
 mod humans;
 mod plan;
+mod release;
 mod returned;
 mod state;
 mod step;
@@ -16,8 +17,9 @@ mod time;
 mod wait;
 
 pub use plan::{BacklogRow, Group, Launch, Plan, Snapshot, plan, plan_of, stored_plan};
-pub use state::{Batch, Escalation, Kind, LoopFile, Run, RunState, StopMode, read, update};
+pub use state::{Batch, Escalation, Hold, Kind, LoopFile, Run, RunState, StopMode, read, update};
 
+pub use release::release;
 pub use returned::returned;
 pub use step::{approved, cleared, launched, start, step, stop};
 pub use wait::wait;

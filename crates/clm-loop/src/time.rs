@@ -54,6 +54,28 @@ pub(crate) fn unix(text: &str) -> Option<u64> {
     u64::try_from(days * 86_400 + hh * 3600 + mm * 60 + ss - offset).ok()
 }
 
+/// `secs` (Unix) as UTC `YYYYMMDDTHHMMSSZ`, the time a released branch's name carries.
+pub(crate) fn compact(secs: u64) -> String {
+    let days = i64::try_from(secs / 86_400).unwrap_or(0);
+    let rest = secs % 86_400;
+    // Howard Hinnant's `civil_from_days`.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}{m:02}{d:02}T{:02}{:02}{:02}Z",
+        rest / 3600,
+        rest % 3600 / 60,
+        rest % 60
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -67,5 +89,12 @@ mod tests {
         assert_eq!(unix("2026-11-13T14:00:00.250Z"), Some(1_794_578_400));
         assert_eq!(unix("tomorrow"), None);
         assert_eq!(unix("2026-13-13T14:00:00Z"), None);
+    }
+
+    #[test]
+    fn writes_the_compact_time() {
+        assert_eq!(compact(0), "19700101T000000Z");
+        assert_eq!(compact(1_709_164_800), "20240229T000000Z");
+        assert_eq!(compact(1_794_578_400 + 61), "20261113T140101Z");
     }
 }

@@ -36,6 +36,9 @@ land)
   if [ -f "$F/land-exit" ]; then echo "land refused" >&2; exit "$(cat "$F/land-exit")"; fi
   git fetch -q origin && git push -q origin "origin/$2:refs/heads/main" && git push -q origin --delete "$2"
   echo "landed fake $2"; exit 0 ;;
+branch)
+  if [ -f "$F/branch-exit" ]; then cat "$F/branch-reason" >&2; exit "$(cat "$F/branch-exit")"; fi
+  git push -q origin --delete "$3" 2>/dev/null; exit 0 ;;
 verify)
   if [ -f "$F/verify-due" ]; then cat "$F/verify-due"; exit 0; fi
   exit 3 ;;

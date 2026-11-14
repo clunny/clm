@@ -495,7 +495,7 @@ fn tip(options: &Options, branch: &str) -> Option<(String, u64)> {
 
 /// Keeps each hold up to date: a branch that moved restarts its quiet time, and one that stayed
 /// at the same commit for 15 minutes lets its orphan go (`take-over-holds-moving-orphans`).
-fn refresh_holds(options: &Options) -> Result<(), Failure> {
+pub(crate) fn refresh_holds(options: &Options) -> Result<(), Failure> {
     let Some(file) = state::read(&options.root) else {
         return Ok(());
     };

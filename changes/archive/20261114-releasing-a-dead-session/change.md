@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - releasing-a-dead-session-s-claim-leaves-the-build-loop-skipping
 ---
