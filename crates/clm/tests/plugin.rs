@@ -1,5 +1,8 @@
 //! The plugin under `plugin/`: its package, hooks, skills, agent and `bin/clm` shim.
 // clm:reads docs/guide/**
+// clm:reads docs/spec-format.md
+// clm:reads plugin/skills/**
+// clm:reads plugin/agents/**
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -241,7 +244,11 @@ fn skill_gaps(dir: &Path) -> Vec<String> {
         }
     }
     for entry in fs::read_dir(dir).unwrap() {
-        let name = entry.unwrap().file_name().into_string().unwrap();
+        let entry = entry.unwrap();
+        if !entry.file_type().unwrap().is_dir() {
+            continue;
+        }
+        let name = entry.file_name().into_string().unwrap();
         if !SKILLS.contains(&name.as_str()) {
             gaps.push(format!("{name}: not one of the plugin's skills"));
         }
@@ -346,7 +353,7 @@ fn skills_point_at_the_guide() {
             .unwrap()
             .map(|entry| entry.unwrap().path()),
     );
-    assert!(files.len() >= 14, "{files:?}");
+    assert!(files.len() > SKILLS.len(), "{files:?}");
     for file in &files {
         let text = fs::read_to_string(file).unwrap();
         assert_eq!(
