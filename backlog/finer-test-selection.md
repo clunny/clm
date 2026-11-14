@@ -39,3 +39,12 @@ CLM's current approach is the first family's, with the graph declared in CLM's o
 - Which operating systems must tracing support, and what happens on the others: no audit, or a coarser one?
 - Does a finer mapping replace `clm:reads` markers, or only check them?
 - Which of this repository's catch-alls can narrow first, and what does each one cost today? `20261108-land-check-timing`'s step times and chains are the evidence.
+
+## Found on 2026-11-13
+
+Measured while `backlog/every-test-runs-in-the-land-check-the-browser-suites-included` was looked at, which holds the times.
+
+- **Most code lands run the whole `capabilities/web` suite, about a minute.** It ran on 13 of 21 code lands, 6 or more of them with no web file selected. `capability` has `depends_on: [clm]`, the root depends on every component, and its files hold no marker for another component, so nearly any code change selects every file of `capability`. This reading is from the specs and the ledger; it hasn't been confirmed by running `clm affected --why` on those lands.
+- **A finer rule, not taken.** Select a capability test only when the change touches a component whose rules serve the capability the test cites, using the `serves` links the spec holds. It would save about a minute on most code lands, the largest single gain for builds found that day. It trusts `serves`, which states intent, not imports: a component could break a capability it doesn't claim to serve, and only `[verify]` would show it. It is a change to `check.affected`, so to CLM's method, not only to this repository's script. The human set it aside on 2026-11-13.
+- **The Rust side** is the other minute on a code land: 55 seconds on every one, much of it through `[affected] all`'s `crates/clm/src/**`. That narrows with phase 4 of `backlog/a-passing-check-proves-less-than-the-spec-claims`, when each crate proves its requirements through its own entry point.
+- **A per-file rule in the check script gains little**: only site tests are ever selected alone, and a guide edit selects seven readers.
