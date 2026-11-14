@@ -191,6 +191,16 @@ fn a_capability_test_may_be_edited_never_deleted_by_a_serving_build() {
 
 // req:gate/own-files@b0116abb
 #[test]
+fn a_capability_citation_is_read_at_the_merge_base() {
+    let dir = base(Some("[]"));
+    let d = dir.path();
+    write(d, "tests/capability/see.rs", "fn see() {}\n");
+    commit(d, "drop the citation");
+    assert_eq!(foreign(d, "a"), Vec::new());
+}
+
+// req:gate/own-files@b0116abb
+#[test]
 fn a_capability_test_is_never_added_by_a_serving_build() {
     let dir = base(Some("[]"));
     let d = dir.path();
