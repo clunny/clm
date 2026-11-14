@@ -1,4 +1,3 @@
-// req:web.client-live/live-updates@468e272c
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LiveSocket, type SocketLike } from './live';
 
@@ -50,6 +49,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('the live socket', () => {
+  // req:web.client-live/live-updates@468e272c
   it('holds one socket for the repo on screen, and moves it when the repo changes', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -60,6 +60,7 @@ describe('the live socket', () => {
     expect(t.sockets.map((s) => s.url)).toEqual([URL_A, URL_B]);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('hidden: the socket is closed while hidden, and a new one opened when shown', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -72,6 +73,7 @@ describe('the live socket', () => {
     expect(t.sockets).toHaveLength(2);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('a notice refreshes with its delivery; a pong is no notice', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -82,6 +84,7 @@ describe('the live socket', () => {
     expect(t.notices).toEqual(['d1', undefined]);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('a silent drop: no pong within 10 seconds of a ping closes the socket and opens another', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -94,6 +97,7 @@ describe('the live socket', () => {
     expect(t.sockets).toHaveLength(2);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('a pong keeps the socket', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -108,6 +112,7 @@ describe('the live socket', () => {
     expect(t.sockets[0].sent).toEqual(['ping', 'ping', 'ping']);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('retries after any close, from 1 second doubling to at most 60', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -125,6 +130,7 @@ describe('the live socket', () => {
     expect(waits).toEqual([1, 2, 4, 8, 16, 32, 60, 60]);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('the delay resets to 1 second once a socket stays open for a minute', () => {
     const t = setup();
     t.live.want(URL_A);
@@ -143,6 +149,7 @@ describe('the live socket', () => {
     expect(t.sockets.length).toBe(n + 1);
   });
 
+  // req:web.client-live/live-updates@468e272c
   it('closing on purpose retries nothing', () => {
     const t = setup();
     t.live.want(URL_A);

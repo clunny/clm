@@ -1,4 +1,3 @@
-// req:web.client-live/push-shown@c8f12d9c
 import { describe, expect, it, vi } from 'vitest';
 import { onNotificationClick, onPush, type PushScope } from './push-sw';
 
@@ -46,6 +45,7 @@ function win(url: string): FakeWindow {
 const PAYLOAD = { title: 'o/a: waiting on you', body: 'Which region?', url: '/app/#/o/a/backlog' };
 
 describe('push messages', () => {
+  // req:web.client-live/push-shown@c8f12d9c
   it('notification click: shown with its title and body, tagged with its url, and a window opened there', async () => {
     const { self, shown, opened } = scope();
     const push = event({ data: { json: () => PAYLOAD } });
@@ -66,6 +66,7 @@ describe('push messages', () => {
     expect(opened).toEqual(['https://clm-app.dev/app/#/o/a/backlog']);
   });
 
+  // req:web.client-live/push-shown@c8f12d9c
   it('a click with an app window open focuses it and navigates it to the url', async () => {
     const other = win('https://example.com/');
     const app = win('https://clm-app.dev/app/#/o/a/graph');
@@ -79,6 +80,7 @@ describe('push messages', () => {
     expect(opened).toEqual([]);
   });
 
+  // req:web.client-live/push-shown@c8f12d9c
   it('a push without a payload, or with one that is not JSON, still shows a notification', async () => {
     for (const data of [null, { json: () => JSON.parse('not json') }]) {
       const { self, shown } = scope();
@@ -89,6 +91,7 @@ describe('push messages', () => {
     }
   });
 
+  // req:web.client-live/push-shown@c8f12d9c
   it('a window the worker does not control, which navigate rejects, gets a new window instead', async () => {
     const app = win('https://clm-app.dev/app/#/o/a/graph');
     app.navigate.mockImplementation(async () => {
@@ -101,6 +104,7 @@ describe('push messages', () => {
     expect(opened).toEqual(['https://clm-app.dev/app/#/o/a/backlog']);
   });
 
+  // req:web.client-live/push-shown@c8f12d9c
   it('a site page is open: it is not navigated, and a window is opened at the url', async () => {
     const site = win('https://clm-app.dev/guide/quickstart');
     const { self, opened } = scope([site]);
@@ -111,6 +115,7 @@ describe('push messages', () => {
     expect(opened).toEqual(['https://clm-app.dev/app/#/o/a/backlog']);
   });
 
+  // req:web.client-live/push-shown@c8f12d9c
   it('a message with no url is tagged with the app root', async () => {
     const { self, shown } = scope();
     const push = event({ data: { json: () => ({ title: 't' }) } });
@@ -119,6 +124,7 @@ describe('push messages', () => {
     expect(shown[0].options.tag).toBe('/app/');
   });
 
+  // req:web.client-live/push-shown@c8f12d9c
   it('a url on another origin opens the app instead', async () => {
     const { self, opened } = scope();
     const click = event({ notification: { data: { url: 'https://evil.example/x' }, close: vi.fn() } });

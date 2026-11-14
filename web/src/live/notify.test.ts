@@ -1,5 +1,3 @@
-// req:web.client-live/notify-switch@bc04aecc
-// req:web.client-live/push-renewal@d02c4647
 import { describe, expect, it, vi } from 'vitest';
 import { Notify, type NotifyEnv, type PushManagerLike, type SubscriptionLike } from './notify';
 
@@ -64,6 +62,7 @@ function toggle(e: HTMLElement) {
 }
 
 describe('Notify me', () => {
+  // req:web.client-live/notify-switch@bc04aecc
   it('turn on: subscribes with the key, posts the subscription once, and reads on', async () => {
     const t = setup({ key: 'k', subscribed: { '/api/repos/o/a': false } });
     const n = new Notify(t.env);
@@ -80,6 +79,7 @@ describe('Notify me', () => {
     expect(t.env.requestPermission).not.toHaveBeenCalled();
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('no key: a Worker answering 404 for the key shows no switch', async () => {
     const t = setup({ key: null });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -87,6 +87,7 @@ describe('Notify me', () => {
     expect(e.hidden).toBe(true);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('no Web Push or no service worker: no switch', async () => {
     const t = setup({ pushManager: false });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -94,6 +95,7 @@ describe('Notify me', () => {
     expect(e.hidden).toBe(true);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('its state is what the push route answers for the browser endpoint', async () => {
     const t = setup({ existing: 'https://fcm.googleapis.com/fcm/send/1', subscribed: { '/api/repos/o/a': true }, stored: { 'o/a': 'https://fcm.googleapis.com/fcm/send/1' } });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -101,6 +103,7 @@ describe('Notify me', () => {
     expect(t.asked).toEqual(['/api/repos/o/a https://fcm.googleapis.com/fcm/send/1']);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('off, and asks nothing, when the browser has no subscription', async () => {
     const t = setup({ existing: null });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -109,6 +112,7 @@ describe('Notify me', () => {
     expect(t.asked).toEqual([]);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('asks for permission when needed, and a refusal leaves it off and says so', async () => {
     const t = setup({ permission: 'default', answer: 'denied' });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -121,6 +125,8 @@ describe('Notify me', () => {
     expect(box(e).checked).toBe(false);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
+  // req:web.client-live/push-renewal@d02c4647
   it('turn off: deletes the endpoint, and unsubscribes the browser only when no other repo is on', async () => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': true, '/api/repos/o/b': true }, stored: { 'o/a': endpoint, 'o/b': endpoint } });
@@ -140,6 +146,7 @@ describe('Notify me', () => {
     expect(t.sent.map((x) => `${x.method} ${x.path}`)).toEqual(['DELETE /api/repos/o/a/push', 'DELETE /api/repos/o/b/push']);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('disabled offline', async () => {
     const t = setup({ online: false });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -147,6 +154,7 @@ describe('Notify me', () => {
     expect(box(e).disabled).toBe(true);
   });
 
+  // req:web.client-live/push-renewal@d02c4647
   it('a renewed browser subscription: the old endpoint is deleted and the new one posted for each repo that was on', async () => {
     const t = setup({ existing: 'https://fcm.googleapis.com/fcm/send/renewed', stored: { 'o/a': 'https://fcm.googleapis.com/fcm/send/old', 'o/b': 'https://fcm.googleapis.com/fcm/send/renewed' } });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -159,6 +167,7 @@ describe('Notify me', () => {
     await vi.waitFor(() => expect(shown(e)).toBe(true));
   });
 
+  // req:web.client-live/push-renewal@d02c4647
   it('a renewal whose post fails keeps the old endpoint and is tried again', async () => {
     const t = setup({ existing: 'https://fcm.googleapis.com/fcm/send/renewed', stored: { 'o/a': 'https://fcm.googleapis.com/fcm/send/old' } });
     let fail = true;
@@ -176,6 +185,7 @@ describe('Notify me', () => {
     e.remove();
   });
 
+  // req:web.client-live/push-renewal@d02c4647
   it('without storage, turning a repo off never unsubscribes the browser', async () => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': true } });
@@ -199,6 +209,7 @@ describe('Notify me', () => {
     expect(t.current()!.unsubscribe).not.toHaveBeenCalled();
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('tapping the message leaves the switch as it is', async () => {
     const t = setup({ permission: 'default', answer: 'denied' });
     const e = new Notify(t.env).switchFor('o', 'a');
@@ -210,6 +221,7 @@ describe('Notify me', () => {
     expect(t.env.requestPermission).toHaveBeenCalledTimes(1);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('refresh asks the push route again, with fresh, for the switches on screen', async () => {
     const t = setup({ existing: 'https://fcm.googleapis.com/fcm/send/1', subscribed: { '/api/repos/o/a': false } });
     const fresh: (string | undefined)[] = [];
@@ -233,6 +245,7 @@ describe('Notify me', () => {
     e.remove();
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('redrawn with a known state: shows it at once, and keeps it when the ask fails', async () => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': true }, stored: { 'o/a': endpoint } });
@@ -254,6 +267,8 @@ describe('Notify me', () => {
     expect(box(again).checked).toBe(true);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
+  // req:web.client-live/push-renewal@d02c4647
   it('turn on over an existing browser subscription posts it, remembers it, and turning off then unsubscribes', async () => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': false } });
@@ -270,6 +285,7 @@ describe('Notify me', () => {
     expect(JSON.parse(t.store.get('clm-push')!)).toEqual({});
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('a post the Worker refuses leaves the switch off and says so', async () => {
     const t = setup({ subscribed: { '/api/repos/o/a': false } });
     t.env.send = async () => new Response(null, { status: 403 });
@@ -280,6 +296,7 @@ describe('Notify me', () => {
     expect(box(e).checked).toBe(false);
   });
 
+  // req:web.client-live/notify-switch@bc04aecc
   it('a delete the Worker refuses leaves the switch on and says so', async () => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': true }, stored: { 'o/a': endpoint } });
