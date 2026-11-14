@@ -147,6 +147,20 @@ pub fn compact(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Comp
                     .find(|r| r.writer == writer)
                     .is_some_and(|newest| newest.id != record.id)
         }),
+        // The caller's newest for each commit stays, and every one that holds an `unproven`
+        // entry; one the fold didn't see is newer than all it saw.
+        Body::Mutated {
+            commit, unproven, ..
+        } => {
+            unproven.is_empty()
+                && fold.mutations.get(commit).is_some_and(|all| {
+                    all.iter().any(|r| r.id == record.id)
+                        && all
+                            .iter()
+                            .find(|r| r.writer == writer)
+                            .is_some_and(|newest| newest.id != record.id)
+                })
+        }
         Body::Landed { .. }
         | Body::Subscribed { .. }
         | Body::Unsubscribed { .. }

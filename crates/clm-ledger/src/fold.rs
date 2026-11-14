@@ -50,6 +50,8 @@ pub struct Fold {
     pub decisions: BTreeMap<String, Vec<Record>>,
     /// `verified` by commit, the newest by `at` first.
     pub verifications: BTreeMap<String, Vec<Record>>,
+    /// `mutated` by commit, the newest by `at` first.
+    pub mutations: BTreeMap<String, Vec<Record>>,
     /// Each record's line as read, by `id`: its JSON object, `sig` included, so a signature
     /// is checked against the fields the line holds, a field a newer `clm` added included.
     pub lines: BTreeMap<String, Map<String, Value>>,
@@ -215,6 +217,7 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
             Body::Decided { capability, .. } => (&mut fold.decisions, capability),
             // Ascending here; the newest comes first once all are in.
             Body::Verified { commit, .. } => (&mut fold.verifications, commit),
+            Body::Mutated { commit, .. } => (&mut fold.mutations, commit),
             Body::Effort { .. } => {
                 fold.efforts.insert(record.id.clone(), record.clone());
                 continue;
@@ -245,7 +248,11 @@ pub fn fold_records(sources: &[(&str, &str)]) -> Fold {
         };
         index.entry(key.clone()).or_default().push(record.clone());
     }
-    for records in fold.verifications.values_mut() {
+    for records in fold
+        .verifications
+        .values_mut()
+        .chain(fold.mutations.values_mut())
+    {
         records.reverse();
     }
     fold
@@ -344,6 +351,18 @@ pub fn show(fold: &Fold) -> Vec<String> {
                     let result = if *passed { "passed" } else { "failed" };
                     format!("{commit} {result}")
                 }
+                Body::Mutated {
+                    commit,
+                    killed,
+                    unproven,
+                    not_judged,
+                    ..
+                } => format!(
+                    "{commit} {} killed {} unproven {} not judged",
+                    killed.len(),
+                    unproven.len(),
+                    not_judged.len()
+                ),
             };
             format!("{kind} {what} {writer} {at}")
         })
