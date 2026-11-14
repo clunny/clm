@@ -46,3 +46,19 @@ fn reworded_requirement() {
         "{text}"
     );
 }
+
+#[test]
+fn a_marker_in_code_that_is_no_test_proves_nothing() {
+    // req:capability/prove-by-tests@9c0b4ad0
+    let repo = Repo::init();
+    let marker = format!("{}{}", concat!("req", ":a/x@"), version(&repo, "x"));
+    repo.write(
+        "tests/x.rs",
+        &format!("fn helper() {{\n    // {marker}\n}}\n"),
+    );
+    repo.commit("a helper citing x");
+    let out = repo.clm(&["coverage"]);
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(out.status.success(), "{}", printed(&out));
+    assert!(text.lines().any(|l| l.trim() == "a/x unbuilt"), "{text}");
+}

@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Layer, Requirement};
 
-use crate::spans::markers_outside_tests;
+use crate::spans::split_markers;
 
 /// A marker at `path:line` (1-based): a requirement ID for `req:<id>`, a change ID for
 /// `clm:remove-by <change-id>`.
@@ -301,8 +301,8 @@ fn proof(entry: &Requirement, current: &BTreeSet<String>) -> Option<Proof> {
 pub struct Scan {
     /// `req:<id>` markers.
     pub req: Vec<Marker>,
-    /// The `req:` markers on no line of a test or group of tests (`test-spans`): what
-    /// `req` holds in a file of a language `tests_in` reads, less the markers inside tests.
+    /// The `req:` markers on no line of a test or group of tests (`test-spans`), which
+    /// `req` leaves out (`markers-in-tests`).
     pub outside: Vec<Marker>,
     /// `clm:remove-by <change-id>` markers; each `id` is the change's.
     pub remove_by: Vec<Marker>,
@@ -376,7 +376,13 @@ fn scan_text(path: &Path, text: &str, scan: &mut Scan) {
     if path.extension().is_some_and(|e| e == "md") {
         return;
     }
-    scan.outside.extend(markers_outside_tests(path, text));
+    // A marker counts where a test can run it (`markers-in-tests`): in a language
+    // `tests_in` reads only those on a test's lines, in any other file every marker.
+    let split = split_markers(path, text);
+    if let Some((inside, outside)) = &split {
+        scan.req.extend(inside.iter().cloned());
+        scan.outside.extend(outside.iter().cloned());
+    }
     for (i, line) in text.lines().enumerate() {
         let marker = |id, version| Marker {
             id,
@@ -384,11 +390,13 @@ fn scan_text(path: &Path, text: &str, scan: &mut Scan) {
             path: path.to_path_buf(),
             line: i + 1,
         };
-        scan.req.extend(
-            parse_markers(line)
-                .into_iter()
-                .map(|s| marker(s.id, s.version)),
-        );
+        if split.is_none() {
+            scan.req.extend(
+                parse_markers(line)
+                    .into_iter()
+                    .map(|s| marker(s.id, s.version)),
+            );
+        }
         scan.remove_by.extend(
             parse_removal_markers(line)
                 .into_iter()

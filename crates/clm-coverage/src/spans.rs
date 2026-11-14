@@ -53,24 +53,30 @@ pub fn tests_in(path: &Path, text: &str) -> Vec<TestSpan> {
 /// The `req:` markers in `text` on no line of a test or group, as `Marker`s: nothing for a
 /// Markdown file or a language `tests_in` doesn't read.
 pub fn markers_outside_tests(path: &Path, text: &str) -> Vec<Marker> {
-    if family(path).is_none() {
-        return Vec::new();
-    }
+    split_markers(path, text).map_or_else(Vec::new, |(_, outside)| outside)
+}
+
+/// The `req:` markers of a file of a language `tests_in` reads, split into those on a line
+/// of a test or group and those on none; `None` for any other file.
+pub(crate) fn split_markers(path: &Path, text: &str) -> Option<(Vec<Marker>, Vec<Marker>)> {
+    family(path)?;
     let tests = tests_in(path, text);
-    let mut out = Vec::new();
+    let (mut inside, mut outside) = (Vec::new(), Vec::new());
     for (i, line) in text.lines().enumerate() {
         let n = i + 1;
-        if tests.iter().any(|t| t.first <= n && n <= t.last) {
-            continue;
-        }
-        out.extend(parse_markers(line).into_iter().map(|s| Marker {
+        let into = if tests.iter().any(|t| t.first <= n && n <= t.last) {
+            &mut inside
+        } else {
+            &mut outside
+        };
+        into.extend(parse_markers(line).into_iter().map(|s| Marker {
             id: s.id,
             version: s.version,
             path: path.to_path_buf(),
             line: n,
         }));
     }
-    out
+    Some((inside, outside))
 }
 
 /// `line` up to a `//` comment (Rust, TypeScript, JavaScript).
