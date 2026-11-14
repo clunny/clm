@@ -17,7 +17,7 @@ depends_on: [model, context, vcs, gate.fingerprint, rename, check.coverage]
 
 `clm-gate` also offers `settings_unchanged(before, after)`: given `clm.toml`'s bytes on each side of a diff (`Option<&[u8]>`, `None` where the file doesn't exist), whether its settings are the same once the upgrade notes `upgraded` and `declined_migrations`, comments and formatting are set aside, false when either side isn't UTF-8 TOML. `land` reads it to count a land whose `clm.toml` changed only so as checked (`land/settings-unchanged-is-checked`).
 
-On a build branch it also refuses a changed file that isn't the build's to change (`own-files`), once the root sets `wiring`.
+`clm-gate` also offers `foreign_files(repo, base, head, component)`: the code files `head` changes against `base` that aren't `component`'s build's to change, each with its owner, none when the root at the merge base sets no `wiring` (`own-files`). The gate itself reads no branch name, so `clm gate` doesn't report them: `clm land`, which knows the branch, applies the rule (`land/build-holds-own-files`), as it applies `files-outside-spec-paths` to a spec branch.
 
 ## MODIFIED Design
 
@@ -45,61 +45,55 @@ A branch behind `<ref>` may land (`land-locally`). `clm land` merges `<ref>` int
 
 **Evaluating another commit** (`gate/evaluate-at`). `evaluate_at(repo, base, head, approved)` is the gate for `head` against `base` as `clm gate --base <base>` gives it with `head` checked out: it reads `head` only as a revision, through `git diff <merge-base>...<head>`, `git show <head>:<path>`, `git ls-tree <head>`, `git log <merge-base>..<head>` and `git merge-tree --write-tree <base> <head>`, never the working tree or the index, so it gives the same verdict whatever is checked out. A violation's path names the range as `<base>..<head>` with the revisions as given, so `clm gate`'s output stays `<base>..HEAD`. `clm gate` calls it with `HEAD`. `ledger`'s `verify --review` calls it for each signed land, with the land's first parent as `base` and the merge commit as `head`, to recompute the land's kind and whether it needed review without a checkout per land.
 
-**A build's own files** (`own-files`, `own-files-at-the-gate`). `path-ownership` was kept by the build prompt alone; the gate now refuses what the prompt asked for. It judges only a branch named `impl/<component>`, the name the claim gave it (`is_build_branch`), since no other branch has a component: a small change on a branch of another name is not judged. The specs it reads are the merge base's, already loaded for the code-fix check, now for every build branch; a file's owner is `check.coverage`'s `owner`, which the gate depends on for it. Four kinds of file are the build's to change beside its own. The root's `wiring` names the shared ones. A file that cites the component, the gate's existing reading of where a test belongs (`fixes-count-where-cited`), covers the tests Cargo keeps in another package's directory, added, edited or deleted, until each crate proves its requirements through its own entry point (`backlog/clm-s-cli-tests-prove-other-components-through-the-binary`). A capability test may be edited, never added or deleted, by a build whose component serves the capability it cites, since a behaviour and the test that observes it at the boundary can't land apart (`capability-tests-follow-rules`). And an `own-files` exemption opens the files an owner names until its item is done. That a wiring edit adds only the build's own entry, and that a capability-test edit keeps what its scenarios state, stay judgements no program makes. The rule is off until the root sets `wiring`, as `check`'s path ownership is off until it sets `outside`, so a project adopts it when it has named its wiring.
-
+**A build's own files** (`own-files`, `own-files-at-the-gate`). `path-ownership` was kept by the build prompt alone; a program now refuses what the prompt asked for. The gate stays a function of two trees and one flag and reads no branch name (`spec-branches-hold-spec-paths`), so `foreign_files` takes the component as an argument and `clm land`, which knows the branch, calls it for a branch named `impl/<component>`: no other branch has a component, and a small change on a branch of another name is not judged. The specs it reads are the merge base's, loaded as for the code-fix check; a file's owner is `check.coverage`'s `owner`, which the gate depends on for it. Four kinds of file are the build's to change beside its own. The root's `wiring` names the shared ones. A file that cites the component, the gate's existing reading of where a test belongs (`fixes-count-where-cited`), covers the tests Cargo keeps in another package's directory, added, edited or deleted, until each crate proves its requirements through its own entry point (`backlog/clm-s-cli-tests-prove-other-components-through-the-binary`); it opens the whole file, since a new test's imports and helpers lie outside any test. A capability test may be edited, never added or deleted, by a build whose component serves the capability it cites, since a behaviour and the test that observes it at the boundary can't land apart (`capability-tests-follow-rules`). And an `own-files` exemption opens the files an owner names until its item is done. That a wiring edit adds only the build's own entry, and that a capability-test edit keeps what its scenarios state, stay judgements no program makes. The rule is off until the root sets `wiring`, as `check`'s path ownership is off until it sets `outside`, so a project adopts it when it has named its wiring.
 
 ## ADDED Requirements
 
 ### Requirement: own-files
-When the root component at the merge base sets `wiring` (`model/wiring-globs`), and the branch is named `impl/<component>` for a component the specs at the merge base hold, the gate SHALL report each code file (one outside the spec paths) that the branch adds, modifies or deletes and that is none of:
-- a file `<component>` owns, by `check.coverage/owner` over the specs at the merge base;
+`clm-gate` SHALL offer `foreign_files(repo, base, head, component)`, returning, when the root component at the merge base of `base` and `head` sets `wiring` (`model/wiring-globs`) and the specs there hold `component`, each code file (one outside the spec paths) that `head` adds, modifies or deletes against the merge base and that is none of:
+- a file `component` owns, by `check.coverage/owner` over the specs at the merge base;
 - a file no component owns, which `check/unowned-files` judges;
 - a file one of the root's `wiring` globs matches;
-- a file whose text at the merge base or at `HEAD` holds `req:<component>/`, searched as `code-fix-resolves-bug` searches it;
-- a file the branch modifies, without adding or deleting it, whose text at the merge base holds `req:capability/<slug>` for a capability that the effective `serves` of one of `<component>`'s requirements names;
+- a file whose text at the merge base or at `head` holds `req:<component>/`, searched as `code-fix-resolves-bug` searches it;
+- a file `head` modifies, without adding or deleting it, whose text at the merge base holds `req:capability/<slug>` for a capability that the effective `serves` of one of `component`'s requirements names;
 - a file that an `own-files` exemption of its owner names (`model/exemptions`);
 
-as `<file>: gate/own-files: owned by `<owner>`; impl/<component> changes its own files, the wiring, a test that cites it and a capability test it serves. Build this in `<owner>`, or leave the requirement unbuilt and add a question item that blocks it`, and exit 1. It SHALL report nothing under this rule when the root sets no `wiring`, for a branch of any other name, `impl/archive/<id>` included, and for a merged tree `clm land` judges by its commit.
+each with the component that owns it, sorted by path. It SHALL return nothing when the root sets no `wiring` or the specs at the merge base hold no such component. It SHALL read `head` only as a revision, as `evaluate-at` does, and `clm gate`'s output and exit status SHALL NOT change with it.
 
 #### Scenario: another component's source
-- GIVEN a root with `wiring: []`, components `a` with `paths: ["crates/a/**"]` and `b` with `paths: ["crates/b/**"]`, and branch `impl/a` changing `crates/a/src/lib.rs` and `crates/b/src/lib.rs`
-- WHEN `clm gate --base main` runs
-- THEN its first line is `code`, it reports `crates/b/src/lib.rs` under `gate/own-files` naming `b`, and exits 1
+- GIVEN a root with `wiring: []`, components `a` with `paths: ["crates/a/**"]` and `b` with `paths: ["crates/b/**"]`, and a branch changing `crates/a/src/lib.rs` and `crates/b/src/lib.rs`
+- WHEN `foreign_files` runs for `a`, and `clm gate --base main` runs
+- THEN the first returns `crates/b/src/lib.rs` with owner `b`, and the gate prints `code` and exits 0
 
 #### Scenario: wiring
-- GIVEN the same with the root's `wiring: ["Cargo.lock"]` and `impl/a` changing `crates/a/src/lib.rs` and `Cargo.lock`, which the root owns
-- WHEN the gate runs
-- THEN it reports nothing and exits 0
+- GIVEN the same with the root's `wiring: ["Cargo.lock"]` and a branch changing `crates/a/src/lib.rs` and `Cargo.lock`, which the root owns
+- WHEN `foreign_files` runs for `a`
+- THEN it returns nothing
 
 #### Scenario: a test that cites the component
 - GIVEN the same with `impl/a` adding a test citing `a/x` to `crates/b/tests/cli.rs`, and deleting `crates/b/tests/old.rs`, which cited `a/y` at the merge base
-- WHEN the gate runs
-- THEN it reports nothing
+- WHEN `foreign_files` runs for `a`
+- THEN it returns nothing
 
 #### Scenario: a capability test the component serves
-- GIVEN the same, `a/x` serving `capability/see`, a component `capability` owning `tests/capability/see.rs`, which cites `capability/see`, and `impl/a` modifying that file
-- WHEN the gate runs, and again when `impl/a` deletes the file instead
-- THEN the first reports nothing, and the second reports the file under `gate/own-files`
+- GIVEN the same, `a/x` serving `capability/see`, a component `capability` owning `tests/capability/see.rs`, which cites `capability/see`, and a branch modifying that file
+- WHEN `foreign_files` runs for `a`, and again when the branch deletes the file instead
+- THEN the first returns nothing, and the second returns the file with owner `capability`
 
 #### Scenario: an exemption
-- GIVEN the same with `b` holding `exemptions: [{rule: own-files, files: ["crates/b/shared/**"], until: backlog/x}]` and `impl/a` changing `crates/b/shared/mod.rs`
-- WHEN the gate runs
-- THEN it reports nothing
+- GIVEN the same with `b` holding `exemptions: [{rule: own-files, files: ["crates/b/shared/**"], until: backlog/x}]` and a branch changing `crates/b/shared/mod.rs`
+- WHEN `foreign_files` runs for `a`
+- THEN it returns nothing
 
 #### Scenario: not switched on
-- GIVEN a root with no `wiring`, and `impl/a` changing `crates/b/src/lib.rs`
-- WHEN the gate runs
-- THEN it reports nothing under `gate/own-files`
+- GIVEN a root with no `wiring`, and a branch changing `crates/b/src/lib.rs`
+- WHEN `foreign_files` runs for `a`
+- THEN it returns nothing
 
-#### Scenario: a branch of another name
-- GIVEN a root with `wiring: []`, and branch `tidy-b` changing `crates/a/src/lib.rs` and `crates/b/src/lib.rs`
-- WHEN the gate runs
-- THEN it reports nothing under `gate/own-files`
-
-#### Scenario: land refuses
-- GIVEN the first scenario's branch pushed to `origin`
-- WHEN `clm land impl/a` runs
-- THEN it exits 1 with the gate's line, and `main` is unchanged
+#### Scenario: an unknown component
+- GIVEN a root with `wiring: []` and no component `z`
+- WHEN `foreign_files` runs for `z`
+- THEN it returns nothing
 
 #### Serves
 - architecture/path-ownership

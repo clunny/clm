@@ -8,7 +8,7 @@ status: accepted
 
 What adoption, or any project at any time, still needs is a way to say "this owned code doesn't meet that rule yet" without switching the rule off, and without pretending the code is unowned. So:
 
-- **An exemption** in a component's frontmatter names one rule (`undeclared-imports`, `tests-cite-their-owner` or `skipped-tests`), the component's own files it covers, the backlog item whose work ends it (`until`), and optionally why. Those rules skip those files, and every other rule still applies to them.
+- **An exemption** in a component's frontmatter names one rule (`undeclared-imports`, `tests-cite-their-owner`, `skipped-tests` or, since `own-files-at-the-gate`, `own-files`), the component's own files it covers, the backlog item whose work ends it (`until`), and optionally why. Those rules skip those files, and every other rule still applies to them.
 - **Adding or widening one needs review** (`gate/needs-review`, and `humans-review-intent` and `yes-no-review` list it); removing or narrowing one, or rewording its `why`, doesn't. A new exemption's item must exist when it's added (`gate/exemption-names-its-item`).
 - **It stays in sight**: `clm health` lists every exemption with how many files it still covers, and flags one whose item is gone or whose files are gone, for a change to remove. Neither is a `clm check` failure, so the build that fixes the code lands, and the exemption is removed by a spec change after it.
 - **Builds never add one**; a build that would need one leaves its requirement unbuilt with a `question` item.
@@ -46,3 +46,5 @@ A rule `clm check` judges code by SHALL hold for every file a component owns, ex
 
 **Untested**
 When an exemption's work is done is the human's call, made by ordering its item in the backlog; `clm health` shows each exemption, how much it still covers and whether its item is gone.
+
+**`own-files` (2026-11-14).** The fourth rule is the land's, not `clm check`'s, and what it lifts differs: the owner's files it names may be changed by any component's build, where the other three excuse the owner's files from a check. It is the same shape otherwise, the owner's files, one rule, an item that ends it, a human's review to add it, and it is how a written exception to `path-ownership` that must outlast its cause is kept in sight, such as the migrations `init`'s builds write into `upgrade`.
