@@ -92,6 +92,10 @@ pub struct Frontmatter {
     /// (`outside-globs`).
     #[serde(default)]
     pub outside: Option<Vec<String>>,
+    /// The root's globs for the files every build may edit; set only on the root
+    /// (`wiring-globs`).
+    #[serde(default)]
+    pub wiring: Option<Vec<String>>,
     /// Globs of the node's test files, which it owns wherever they sit
     /// (`test-ownership-keys`).
     #[serde(default)]
@@ -301,6 +305,12 @@ impl Graph {
     /// the key (`outside-globs`).
     pub fn outside(&self) -> Option<&[String]> {
         self.nodes.get(ROOT_ID)?.frontmatter.outside.as_deref()
+    }
+
+    /// The root's `wiring` globs in the order written, absent when the root doesn't set
+    /// the key (`wiring-globs`).
+    pub fn wiring(&self) -> Option<&[String]> {
+        self.nodes.get(ROOT_ID)?.frontmatter.wiring.as_deref()
     }
 
     /// The node frontmatter keys that live changes, outside the archive and not
@@ -534,7 +544,7 @@ fn parent_id(id: &str) -> Option<String> {
 }
 
 /// The node frontmatter keys the model knows: `Frontmatter`'s fields.
-const KNOWN_KEYS: [&str; 14] = [
+const KNOWN_KEYS: [&str; 15] = [
     "title",
     "status",
     "owners",
@@ -547,6 +557,7 @@ const KNOWN_KEYS: [&str; 14] = [
     "optional",
     "size_budget",
     "outside",
+    "wiring",
     "tests",
     "exemptions",
 ];
@@ -572,11 +583,18 @@ fn check_frontmatter(
             format!("`optional` must be `true` or `false`, not `{bad}`"),
         ));
     }
-    if let Some(bad) = bad_outside(&fm) {
+    if let Some(bad) = bad_globs(&fm, "outside") {
         errors.push(v(
             path,
             OUTSIDE,
             format!("`outside` must be a list of non-empty globs, not `{bad}`"),
+        ));
+    }
+    if let Some(bad) = bad_globs(&fm, "wiring") {
+        errors.push(v(
+            path,
+            WIRING,
+            format!("`wiring` must be a list of non-empty globs, not `{bad}`"),
         ));
     }
     if let Some(bad) = bad_tests(&fm) {
@@ -630,8 +648,8 @@ fn check_frontmatter(
 /// The model's one check of a node's frontmatter, which loading runs and `apply` runs on
 /// a delta (`optional-nodes`): node `id`'s `fm_text` at `path`, given the keys live
 /// changes declare. The rules the text alone decides, then, once those pass, the root
-/// rules, `optional: true` on the root (`optional-nodes`) and `outside` on any other node
-/// (`outside-globs`). Those leave the frontmatter parsed, so they come back with it.
+/// rules, `optional: true` on the root (`optional-nodes`) and `outside` or `wiring` on any
+/// other node (`outside-globs`, `wiring-globs`). Those leave the frontmatter parsed, so they come back with it.
 pub fn check_node_frontmatter(
     id: &str,
     path: &Path,
@@ -654,9 +672,17 @@ pub fn check_node_frontmatter(
             format!("only the root sets `outside`, not component `{id}`"),
         ));
     }
+    if id != ROOT_ID && fm.wiring.is_some() {
+        violations.push(v(
+            path,
+            WIRING,
+            format!("only the root sets `wiring`, not component `{id}`"),
+        ));
+    }
     Ok((fm, violations))
 }
 
+const WIRING: &str = "model/wiring-globs";
 const OUTSIDE: &str = "model/outside-globs";
 const TEST_KEYS: &str = "model/test-ownership-keys";
 
@@ -757,10 +783,10 @@ pub fn check_exemptions(value: &serde_yaml::Value) -> Result<Vec<Exemption>, Vec
         .collect()
 }
 
-/// The frontmatter's `outside` value, as one line of YAML, when it is present and not a
-/// list of non-empty strings.
-fn bad_outside(fm: &serde_yaml::Value) -> Option<String> {
-    let value = fm.get("outside")?;
+/// The frontmatter's `key` value (`outside` or `wiring`), as one line of YAML, when it is
+/// present and not a list of non-empty strings.
+fn bad_globs(fm: &serde_yaml::Value, key: &str) -> Option<String> {
+    let value = fm.get(key)?;
     let globs = value.as_sequence().is_some_and(|items| {
         items
             .iter()

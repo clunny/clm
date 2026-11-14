@@ -114,6 +114,11 @@ pub struct BacklogFrontmatter {
     pub verify_failures: Vec<String>,
     /// The answers a `question` item offers, each trimmed (`backlog-choices`).
     pub choices: Vec<String>,
+    /// The requirements a mutation pass found unproven, each at the version it found, in
+    /// the order written; set on a `bug` item only. An entry may name a requirement that
+    /// no longer exists or a version no longer current, which then says nothing
+    /// (`mutation-after-land`).
+    pub unproven: Vec<RequirementAt>,
 }
 
 /// A backlog item's frontmatter as written, before `components` and its old key
@@ -143,6 +148,8 @@ struct RawBacklogFrontmatter {
     verify_failures: Vec<String>,
     #[serde(default)]
     choices: Vec<String>,
+    #[serde(default)]
+    unproven: Vec<String>,
 }
 
 /// A key's value when the key is written at all, a null included.
@@ -180,6 +187,17 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
                 "`verify_failures` entries must be 40 lower-case hex digits, not `{bad}`"
             ));
         }
+        let mut unproven = Vec::new();
+        for entry in raw.unproven {
+            match RequirementAt::try_from(entry.clone()) {
+                Ok(at) => unproven.push(at),
+                Err(_) => {
+                    return Err(format!(
+                        "`unproven` entries must be `<component>/<slug>@<version>`, with 8 lowercase hex digits, not `{entry}`"
+                    ));
+                }
+            }
+        }
         Ok(BacklogFrontmatter {
             title: raw.title,
             kind: raw.kind,
@@ -192,6 +210,7 @@ impl TryFrom<RawBacklogFrontmatter> for BacklogFrontmatter {
             alerts: raw.alerts,
             verify_failures: raw.verify_failures,
             choices: raw.choices.iter().map(|c| c.trim().to_string()).collect(),
+            unproven,
         })
     }
 }
@@ -308,6 +327,13 @@ fn parse_item(slug: &str, text: &str) -> (Option<BacklogItem>, Vec<Violation>) {
             "only a `workaround` item sets `requirement`"
         };
         violations.push(v(&path, BACKLOG, problem.into()));
+    }
+    if !frontmatter.unproven.is_empty() && frontmatter.kind != BacklogKind::Bug {
+        violations.push(v(
+            &path,
+            BACKLOG,
+            "only a `bug` item sets `unproven`".into(),
+        ));
     }
     if let Some(problem) = choices_problem(&frontmatter) {
         violations.push(v(&path, CHOICES, problem));
