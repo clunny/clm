@@ -505,7 +505,7 @@ Loading SHALL take `effort` only from the repository's `clm.toml` or the clone's
 - architecture/redesign-before-workaround
 
 ### Requirement: health-lcov-here
-This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-build/lcov.info"`, the copy of the tracefile `.github/scripts/coverage.sh` writes that the mutation pass leaves in the place `clm verify` keeps from run to run (`ci/mutate-script`), and no other key of the table. The path is under the clone's main checkout, so `clm health` reads it there and reports `not found` in a linked worktree.
+This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-build/lcov.info"`, the copy of the tracefile `.github/scripts/coverage.sh` writes that the mutation pass leaves in the place `clm verify` keeps from run to run (`ci/mutate-script`), and no other key of the table. The path is under the clone's main checkout, so `clm health` reads it there and reports `not found` in a linked worktree, as it does before the first pass that judges a requirement and after `clm verify` clears that place at its size cap.
 
 #### Scenario: this repository
 - GIVEN this repository's `clm.toml`
@@ -517,6 +517,7 @@ This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-buil
 
 #### Needs
 - ci/coverage-script
+- ci/mutate-script
 
 ### Requirement: component-size-setting
 Loading SHALL read the table `component_size` from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table whose keys `spec_tokens` and `code_tokens` are each optional and default to `12000` and `40000`, failing, naming the file and `component_size`, for a `component_size` that isn't a table, for any other key, or for a value that isn't a positive integer, and failing, naming the user's `config.toml` and the key, when that file sets it; `clm config get component_size` SHALL print `spec_tokens=<n>,code_tokens=<n>` and the layer: the path of the file that sets the table, `default` otherwise. A file that sets the table's old name, which `20261102-rename-node-to-component` kept beside it, SHALL fail, naming the file, the old name and `component_size`, and `clm config get` given the old name SHALL fail as it fails for any unknown key. `clm_config::node_size_from(text)` SHALL read `[component_size]`, and fail for a text that sets the old name. No `clm:remove-by 20261102-rename-node-to-component-contract` marker SHALL be left.
