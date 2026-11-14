@@ -178,7 +178,8 @@ pub fn removed(graph: &Graph) -> BTreeMap<String, Vec<String>> {
 }
 
 /// Every requirement in `graph`, the human layers' entries included, sorted by ID, as
-/// `current` (every marker at its version), `behind` (any marker not) or `unbuilt`, with the markers citing it, or, for an entry that stands
+/// `current` (every marker at its version), `behind` (any marker not) or `unbuilt` (also
+/// when a backlog item's `unproven` names it at its current version, whatever cites it), with the markers citing it, or, for an entry that stands
 /// by a `Proof`, as that; then, sorted by ID, each requirement or capability a live change removed that a
 /// marker still cites, as `obsolete`.
 pub fn report(graph: &Graph, markers: &[Marker]) -> Vec<Coverage> {

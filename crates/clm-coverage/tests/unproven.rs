@@ -60,3 +60,12 @@ fn unproven_at_an_older_version() {
     assert_ne!(version(&dir), "aaaaaaaa");
     assert_eq!(line(&dir, None), "n/x current t.rs:2");
 }
+
+#[test]
+fn unproven_beside_a_stale_marker() {
+    // req:check.coverage/coverage-report@533d2f1a
+    let dir = repo();
+    let v = version(&dir);
+    write(dir.path(), "backlog/u.md", &ITEM.replace("VERSION", &v));
+    assert_eq!(line(&dir, Some("bbbbbbbb")), "n/x unbuilt");
+}
