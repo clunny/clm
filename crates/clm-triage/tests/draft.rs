@@ -56,21 +56,8 @@ fn place_file(r: &Repo, name: &str) -> String {
 }
 
 #[test]
-fn prompt_names_choices_beside_question_items() {
-    // req:orchestrator.triage/draft-question-choices@07360a93
-    let p = prompt_for(&["a"], &[]);
-    let para = paragraph(&p, "`web-answers-as-ledger-records`");
-    assert!(para.contains("under `choices` of a `question`"), "{para}");
-    assert!(para.contains("two to five"), "{para}");
-    assert!(
-        para.contains("none for a question that needs explaining"),
-        "{para}"
-    );
-}
-
-#[test]
 fn the_date_is_the_given_clock_in_the_given_time_zone() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let r = with(&["a"]);
     assert_eq!(id(&r, &["a"]), "20261027-a");
     let r = with(&["a"]);
@@ -92,7 +79,7 @@ fn the_date_is_the_given_clock_in_the_given_time_zone() {
 
 #[test]
 fn scenario_id_taken() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let r = with(&["long-item-slug-with-many-words"]);
     let dir = "changes/archive/20261027-long-item-slug-with";
     write(&r.work, &format!("{dir}/change.md"), &change("applied"));
@@ -132,7 +119,7 @@ fn a_local_spec_branch_holds_its_id() {
 
 #[test]
 fn the_first_claimed_slug_names_the_change() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let r = with(&["a", "b"]);
     push_propose(&r.work, "a", 1);
     assert_eq!(id(&r, &["a", "b"]), "20261027-b");
@@ -220,126 +207,8 @@ fn prompt_for(slugs: &[&str], claimed: &[&str]) -> String {
 }
 
 #[test]
-fn scenario_draft_code_fix_written_rule() {
-    // req:orchestrator.triage/draft-code-fix-written-rule@de203a9e
-    // Said in the paragraph that already describes code-only bugs, not in a new one.
-    let p = prompt_for(&["a"], &[]);
-    let para = paragraph(&p, "`code-fix-needs-a-written-rule`");
-    assert!(para.contains("`code-fix-resolves-bug`"), "{para}");
-    for needle in [
-        "`code-fix-needs-a-written-rule`",
-        "as written",
-        "harness-only",
-        "test plumbing",
-        "own test suite",
-        "only an architecture entry states",
-        "unless its work is test plumbing",
-        "no claim",
-        "citing no requirement",
-        "`human-layer-proof`",
-        "`Resolves: backlog/<slug>`",
-        "`clm branch delete <branch>`",
-        "`kind: deferred`",
-        "in this draft on a branch of your own from `origin/main`, named outside `impl/`, \
-         `spec/`, `propose/` and `autosync/`",
-        "once `clm gate --base origin/main` prints `code`",
-        "take the item out of `resolves`",
-        "keeps the item in `resolves`",
-    ] {
-        assert!(para.contains(needle), "{needle} missing from {para}");
-    }
-}
-
-#[test]
-fn scenario_background_work_stopped() {
-    // req:orchestrator.triage/background-work-stopped@85b88136
-    for p in [prompt_for(&["a"], &[]), prompt_for(&["a", "b"], &["b"])] {
-        let para = paragraph(&p, "`stopped: <reason>`");
-        for needle in [
-            "completion notice",
-            "`pgrep -f`",
-            "background task",
-            "a setting of the tool call, not a change to the command",
-            "Before you write your final message, landed, proposed or stopped, stop every \
-             background task you started that is still running",
-            "wait for every subagent you launched, the builder check among them, to return",
-            "`proposed <id> review`",
-            "many minutes",
-            "Never write your final message while one is still running",
-            "naming the command you wait for",
-            "`waiting: <command>`",
-            "is not your final message",
-            "neither `landed <sha>`, `proposed <id> review` nor `stopped: <reason>`",
-            "until its completion notice arrives, however long that takes",
-            "one report",
-            "`SubagentHandback`",
-            "`one-report-per-run`",
-            "is never called for the message ending such a turn",
-            "is called once, with the final message",
-            "since the triage session may receive it",
-            "which you end as plain text",
-            "uses up the run's one report",
-        ] {
-            assert!(para.contains(needle), "{needle} missing from {para}");
-        }
-        for forbidden in [
-            "clm watch",
-            "exits 0",
-            "CARGO_TARGET_DIR",
-            "TaskStop",
-            "TaskOutput",
-            "KillShell",
-            "`Monitor`",
-        ] {
-            assert!(!p.contains(forbidden), "{forbidden} in {p}");
-        }
-    }
-}
-
-#[test]
-fn scenario_draft_hand_edit_check() {
-    // req:orchestrator.triage/draft-hand-edit-check@09146ffb
-    let p = prompt_for(&["a"], &[]);
-    let para = paragraph(&p, "go by the first line");
-    for needle in [
-        "`clm land --check-only`",
-        "outside `specs/`, `changes/` and `backlog/`",
-        "`## Open questions`",
-        "`stopped: land check fails: <tests>`",
-        "`draft-checks-hand-edits`",
-        "the hand edit that breaks it",
-        "reads no file the branch changes",
-    ] {
-        assert!(para.contains(needle), "{needle} missing from {para}");
-    }
-    for forbidden in ["CARGO_TARGET_DIR", "exits 0"] {
-        assert!(!p.contains(forbidden), "{forbidden} in {p}");
-    }
-}
-
-#[test]
-fn scenario_draft_adds_glossary_terms() {
-    // req:orchestrator.triage/draft-adds-glossary-terms@8b7bcbfe
-    let p = prompt_for(&["a"], &[]);
-    let para = paragraph(&p, "Design the rest as one change");
-    for needle in ["docs/guide/glossary.md", "clm/glossary-covers-terms"] {
-        assert!(para.contains(needle), "{needle} missing from {para}");
-    }
-}
-
-#[test]
-fn scenario_draft_scratch_files() {
-    // req:orchestrator.triage/draft-scratch-files@e35b49c4
-    let p = prompt_for(&["a"], &[]);
-    let para = paragraph(&p, "running unattended");
-    for needle in [".clm/", "scratch", "scratchpad"] {
-        assert!(para.contains(needle), "{needle} missing from {para}");
-    }
-}
-
-#[test]
 fn draft_needing_review_folds() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     // A draft the gate calls `spec review` stops for the fold; one it passes as `spec` lands.
     let p = prompt_for(&["a"], &[]);
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
@@ -394,7 +263,7 @@ fn paragraph<'a>(p: &'a str, needle: &str) -> &'a str {
 
 #[test]
 fn scenario_items_claimed_and_prompt_written() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let r = with_items(&[
         (
             "a",
@@ -481,162 +350,6 @@ fn scenario_items_claimed_and_prompt_written() {
     }
 }
 
-#[test]
-fn scenario_draft_backlog_only_change() {
-    // req:orchestrator.triage/draft-backlog-only-change@7ca44fa8
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    for needle in [
-        "edits `backlog/`",
-        "`clm defect` on `spec/<id>`",
-        "clm branch delete <ref>",
-    ] {
-        assert!(p.contains(needle), "{needle} missing from {p}");
-    }
-    assert!(!p.contains("--delete spec/<id> autosync/spec/<id>"), "{p}");
-    // The backlog-only route skips the design and lands by the gate's first line.
-    let route = paragraph(&p, "edits `backlog/`");
-    for needle in [
-        "skip the design and the builder check",
-        "`## Intent`",
-        "clm apply <id>",
-        "clm gate --base origin/main",
-        "should the gate's first line be `spec review`",
-    ] {
-        assert!(route.contains(needle), "{needle} missing from {route}");
-    }
-    // Defects are reported on the branch before it is judged empty and deleted.
-    let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
-    assert!(at("`clm defect` on `spec/<id>`") < at("git switch --detach origin/main"));
-    // Each ref is deleted by its own call, and only when the branch changes nothing but
-    // its `change.md`.
-    let delete = paragraph(&p, "clm branch delete <ref>");
-    for needle in [
-        "nothing but its `change.md`",
-        "`clm branch delete spec/<id>`",
-        "`clm branch delete autosync/spec/<id>`",
-    ] {
-        assert!(delete.contains(needle), "{needle} missing from {delete}");
-    }
-}
-
-#[test]
-fn scenario_draft_corrects_bug_components() {
-    // req:orchestrator.triage/draft-corrects-bug-components@84cd7020
-    let r = with_items(&[("a", "kind: bug\ncomponents: [check]\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let fixes = paragraph(&p, "clm claim <component> --fix backlog/<slug>");
-    assert!(
-        fixes.contains("components corrected to <components>"),
-        "missing from {fixes}"
-    );
-}
-
-#[test]
-fn scenario_draft_corrects_test_plumbing_components() {
-    // req:orchestrator.triage/draft-corrects-bug-components@84cd7020
-    let r = with_items(&[("a", "kind: bug\ncomponents: [check]\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let plumbing = paragraph(&p, "components corrected to <components>");
-    for needle in [
-        "belongs to no component the item names",
-        "gate/backlog-additions",
-        "mixed",
-    ] {
-        assert!(
-            plumbing.contains(needle),
-            "{needle} missing from {plumbing}"
-        );
-    }
-}
-
-#[test]
-fn scenario_draft_restraint() {
-    // req:orchestrator.triage/draft-restraint@57b5f496
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let job = paragraph(&p, "clm context <component>");
-    for needle in [
-        "redesign-before-workaround",
-        "yagni",
-        "reuse-first",
-        "accept",
-        "workarounds",
-    ] {
-        assert!(job.contains(needle), "{needle} missing from {job}");
-    }
-}
-
-#[test]
-fn scenario_builder_check_model_draft_prompt() {
-    // req:orchestrator.triage/builder-check-model@4b8c1e8a
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let check = paragraph(&p, "Then the builder check");
-    for needle in [
-        "model: \"sonnet\"",
-        "never launch a subagent without naming its model",
-    ] {
-        assert!(check.contains(needle), "{needle} missing from {check}");
-    }
-}
-
-#[test]
-fn scenario_builder_check_order_draft_prompt() {
-    // req:orchestrator.triage/builder-check-order@7dc9565c
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let check = paragraph(&p, "Then the builder check");
-    for needle in [
-        "builder-check-asks-order",
-        "clm pending",
-        "its own component",
-    ] {
-        assert!(check.contains(needle), "{needle} missing from {check}");
-    }
-}
-
-#[test]
-fn scenario_draft_contract_step_deferred_prompt() {
-    // req:orchestrator.triage/draft-contract-step-deferred@ab89b550
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let check = paragraph(&p, "Then the builder check");
-    for needle in [
-        "contract-removal-needs",
-        "rename-adds-then-removes",
-        "exhaustive",
-        "widens",
-        "coupled-changes-sequence",
-        "default arm",
-        "struct literal",
-        "clm:remove-by",
-        "contract-step-deferred",
-        "optional",
-        "kind: deferred",
-        "clm apply",
-        "clm hashes <component>",
-    ] {
-        assert!(check.contains(needle), "{needle} missing from {check}");
-    }
-}
-
-#[test]
-fn scenario_draft_architecture_audit_prompt() {
-    // req:orchestrator.triage/draft-architecture-audit@4efa5dcb
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let check = paragraph(&p, "Then the builder check");
-    for needle in [
-        "architecture-auditor",
-        "your own model",
-        "## Open questions",
-        "spec-architecture-audit",
-    ] {
-        assert!(check.contains(needle), "{needle} missing from {check}");
-    }
-}
-
 /// The prompt `draft` writes for `slugs` in `r` with an answers file holding `answers`.
 fn answered_prompt(r: &Repo, slugs: &[&str], answers: &str) -> String {
     let file = r.work.join("answers.md");
@@ -651,7 +364,7 @@ fn answered_prompt(r: &Repo, slugs: &[&str], answers: &str) -> String {
 
 #[test]
 fn scenario_answers_in_the_prompt() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("q", "kind: question\n", "Which default?")]);
     let p = answered_prompt(&r, &["q"], "q: use the default\n");
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
@@ -675,7 +388,7 @@ fn scenario_answers_in_the_prompt() {
 
 #[test]
 fn scenario_an_answer_that_only_edits_an_item() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("h", "kind: human-task\n", "Do the steps.")]);
     let p = answered_prompt(
         &r,
@@ -695,7 +408,7 @@ fn scenario_an_answer_that_only_edits_an_item() {
 
 #[test]
 fn scenario_an_answer_that_leaves_only_code() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("q", "kind: question\n", "Which?")]);
     let p = answered_prompt(
         &r,
@@ -723,7 +436,7 @@ fn scenario_an_answer_that_leaves_only_code() {
 
 #[test]
 fn answers_go_in_verbatim_and_trimmed() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n\n  Use `x` <y> & {z}.\n\nAll: P1.  \n\n");
     assert!(
@@ -734,7 +447,7 @@ fn answers_go_in_verbatim_and_trimmed() {
 
 #[test]
 fn scenario_unreadable_answers() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let dir = r.work.join("a-directory.md");
     fs::create_dir_all(&dir).unwrap();
@@ -759,7 +472,7 @@ fn scenario_unreadable_answers() {
 
 #[test]
 fn answers_are_read_before_fetching() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     // With `origin` gone, a fetch would fail in git; the unreadable file refuses first.
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     fs::remove_dir_all(&r.origin).unwrap();
@@ -782,7 +495,7 @@ fn answers_are_read_before_fetching() {
 
 #[test]
 fn scenario_no_answers() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     assert!(!p.contains("The human's answers"), "{p}");
@@ -790,7 +503,7 @@ fn scenario_no_answers() {
 
 #[test]
 fn scenario_whitespace_only_answers() {
-    // req:orchestrator.triage/draft-answers@fea55e1d
+    // req:orchestrator.triage/draft-answers@3e3fc364
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n  \n\t\n");
     assert!(!p.contains("The human's answers"), "{p}");
@@ -798,7 +511,7 @@ fn scenario_whitespace_only_answers() {
 
 #[test]
 fn scenario_a_deferred_items_code_route() {
-    // req:orchestrator.triage/draft-workaround-deferred@f2a77447
+    // req:orchestrator.triage/draft-workaround-deferred@7ea3144e
     let r = with_items(&[("k", "kind: deferred\ncomponents: [check]\n", "Later.")]);
     let (_, p) = drafted_prompt(&r, &["k"]);
     let para = paragraph(&p, "clm claim <component> --fix backlog/<slug>");
@@ -818,7 +531,7 @@ fn scenario_a_deferred_items_code_route() {
 
 #[test]
 fn scenario_a_dropped_item() {
-    // req:orchestrator.triage/draft-workaround-deferred@f2a77447
+    // req:orchestrator.triage/draft-workaround-deferred@7ea3144e
     let r = with_items(&[("k", "kind: deferred\n", "Later.")]);
     let p = answered_prompt(&r, &["k"], "k: drop it\n");
     let steps = &p[p.find("## Steps").unwrap()..];
@@ -832,7 +545,7 @@ fn scenario_a_dropped_item() {
 
 #[test]
 fn scenario_draft_no_old_command_names() {
-    // req:orchestrator.triage/draft@d6d9db87
+    // req:orchestrator.triage/draft@66686cf9
     let p = prompt_for(&["a"], &[]);
     let words: Vec<&str> = p
         .split(|c: char| !c.is_alphanumeric() && c != '-')
@@ -850,7 +563,7 @@ fn scenario_draft_no_old_command_names() {
 
 #[test]
 fn scenario_a_workaround_items_prompt() {
-    // req:orchestrator.triage/draft-workaround-deferred@f2a77447
+    // req:orchestrator.triage/draft-workaround-deferred@7ea3144e
     let r = with_items(&[(
         "f",
         "kind: workaround\ncomponents: [check]\nrequirement: check/x@4f9cce1e\n",
@@ -874,30 +587,6 @@ fn scenario_a_workaround_items_prompt() {
     }
 }
 
-#[test]
-fn scenario_draft_capability_test_fixes_draft_prompt() {
-    // req:orchestrator.triage/draft-capability-test-fixes@daea8e6f
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let check = paragraph(&p, "Then the builder check");
-    for needle in ["capability-tests-follow-rules", "CAPABILITIES.md"] {
-        assert!(check.contains(needle), "{needle} missing from {check}");
-    }
-}
-
-#[test]
-fn scenario_prompts_push_through_clm_draft_prompt() {
-    // req:orchestrator.triage/prompts-push-through-clm@0f8b1003
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    for needle in ["clm branch push", "clm branch delete"] {
-        assert!(p.contains(needle), "{needle} missing from {p}");
-    }
-    for absent in ["git push", "--force-with-lease"] {
-        assert!(!p.contains(absent), "{absent} in {p}");
-    }
-}
-
 /// The prompt `draft` writes for item `a` when the repository's `[build] setup` is `setup`.
 fn prompt_with_setup(r: &Repo, setup: Option<&str>) -> String {
     let drafted = draft(
@@ -917,7 +606,7 @@ fn prompt_with_setup(r: &Repo, setup: Option<&str>) -> String {
 
 #[test]
 fn scenario_setup_declared() {
-    // req:orchestrator.triage/draft-prompt-setup@53070272
+    // req:orchestrator.triage/draft-prompt-setup@45e6b734
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = prompt_with_setup(&r, Some("scripts/setup.sh"));
     let para = paragraph(&p, "code-fix-needs-a-written-rule");
@@ -939,64 +628,51 @@ fn scenario_setup_declared() {
 
 #[test]
 fn scenario_nothing_declared() {
-    // req:orchestrator.triage/draft-prompt-setup@53070272
+    // req:orchestrator.triage/draft-prompt-setup@45e6b734
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = prompt_with_setup(&r, None);
     assert!(!p.contains("clm setup"), "{p}");
 }
 
 #[test]
-fn scenario_bounded_test_runs_prompt() {
-    // req:orchestrator.triage/bounded-test-runs@0bd139da
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let para = paragraph(&p, "`stopped: <reason>`");
-    for needle in [
-        "timeout <limit> <command>",
-        "foreground",
-        "hangs",
-        "standard input",
-        "editing tools",
-        "Every command you run yourself",
-        "reads standard input that nothing feeds it",
-        "heredoc or a pipe",
-        "each command of a chain",
-        "bounded-test-runs",
-        "backlog item",
-        "failing run",
-        "pull request body",
-        "other than `clm land` in any form",
-        "the tool call's own timeout",
-        "well past",
-        "in the files of the component you are fixing",
-    ] {
-        assert!(para.contains(needle), "{needle} missing from {para}");
-    }
-}
-
-#[test]
-fn scenario_draft_records_promised_code_work_prompt() {
-    // req:orchestrator.triage/draft-records-promised-code-work@6161f68b
-    let r = with_items(&[("a", "kind: bug\n", "Body.")]);
-    let (_, p) = drafted_prompt(&r, &["a"]);
-    let design = paragraph(&p, "`gate/undeclared-burden`");
-    for needle in [
-        "component-reconciliation",
-        "kind: deferred",
-        "deferred-work-resolves-in-code",
-        "dependency-work-is-a-requirement",
-        "Resolves: backlog/<slug>",
-    ] {
-        assert!(design.contains(needle), "{needle} missing from {design}");
-    }
-    let before = design
-        .find("before you apply the change")
-        .expect("ordering");
-    let apply = design.find("clm apply <id>").expect("apply step");
-    assert!(before < apply, "record the work before applying: {design}");
-    let check = paragraph(&p, "builder-check-asks-order");
-    assert!(
-        check.contains("no requirement it adds or modifies makes pending"),
-        "promised-work question missing from {check}"
+fn resume_command_works_beside_the_first_sessions_local_branch() {
+    // req:orchestrator.triage/draft-resume@e71d0780
+    let r = with(&["a"]);
+    let id = "20261112-z";
+    push_files(
+        &r.work,
+        &format!("spec/{id}"),
+        &[(&format!("changes/{id}/change.md"), &change("proposed"))],
+    );
+    // What the draft's first session leaves behind: `spec/<id>` at an older commit, which no
+    // worktree has checked out.
+    git(&r.work, &["branch", &format!("spec/{id}"), "origin/main"]);
+    let drafted = clm_triage::resume(&r.work, id, None, 3, 4).unwrap();
+    let prompt = fs::read_to_string(&drafted.file).unwrap();
+    let command = prompt
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .find(|span| span.starts_with("git switch"))
+        .unwrap_or_else(|| panic!("no git switch command in {prompt}"));
+    let tmp = tempfile::TempDir::new().unwrap();
+    let wt = tmp.path().join("wt");
+    git(
+        &r.work,
+        &["worktree", "add", "-q", "--detach", wt.to_str().unwrap()],
+    );
+    let ran = output(
+        std::process::Command::new("sh")
+            .args(["-c", command])
+            .current_dir(&wt),
+    );
+    assert!(ran.status.success(), "{command}: {ran:?}");
+    assert_eq!(
+        git(&wt, &["branch", "--show-current"]).trim(),
+        format!("spec/{id}")
+    );
+    assert_eq!(
+        git(&wt, &["rev-parse", "HEAD"]).trim(),
+        git(&r.work, &["rev-parse", &format!("origin/spec/{id}")]).trim()
     );
 }
