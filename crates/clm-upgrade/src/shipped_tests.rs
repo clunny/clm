@@ -516,7 +516,7 @@ fn read_toml(dir: &TempDir) -> String {
     fs::read_to_string(dir.path().join("clm.toml")).unwrap()
 }
 
-// req:upgrade/migration-offer-verify@3243c239
+// req:upgrade/migration-offer-verify@04857c46
 #[test]
 fn an_older_project_is_offered_the_commented_verify_section() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -555,7 +555,7 @@ fn an_older_project_is_offered_the_commented_verify_section() {
     assert_eq!(read_toml(&dir), before);
 }
 
-// req:upgrade/migration-offer-verify@3243c239
+// req:upgrade/migration-offer-verify@04857c46
 #[test]
 fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -575,7 +575,7 @@ fn a_clm_toml_without_a_final_newline_gets_one_blank_line() {
     );
 }
 
-// req:upgrade/migration-offer-verify@3243c239
+// req:upgrade/migration-offer-verify@04857c46
 #[test]
 fn the_verify_migration_is_done_once_set_or_commented_or_without_a_clm_toml() {
     for line in ["# [verify]", "[verify]", "  # [verify]  "] {
@@ -891,7 +891,7 @@ fn read(dir: &TempDir, name: &str) -> String {
     fs::read_to_string(dir.path().join(name)).unwrap()
 }
 
-// req:upgrade/migration-agents-md@41da745b
+// req:upgrade/migration-agents-md@75947c8b
 #[test]
 fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
     let dir = unstamped(NEW_ARCHITECTURE, OLD_CLAUDE);
@@ -907,7 +907,7 @@ fn an_unedited_claude_md_moves_to_agents_md_as_init_writes_it() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-agents-md@41da745b
+// req:upgrade/migration-agents-md@75947c8b
 #[test]
 fn an_edited_claude_md_moves_whole() {
     let edited = format!("{OLD_CLAUDE}\nMy own rule.\n");
@@ -917,7 +917,7 @@ fn an_edited_claude_md_moves_whole() {
     assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
 }
 
-// req:upgrade/migration-agents-md@41da745b
+// req:upgrade/migration-agents-md@75947c8b
 #[test]
 fn both_files_keep_every_line_and_gain_the_import_first() {
     let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
@@ -928,7 +928,7 @@ fn both_files_keep_every_line_and_gain_the_import_first() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-agents-md@41da745b
+// req:upgrade/migration-agents-md@75947c8b
 #[test]
 fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md() {
     let dir = unstamped(NEW_ARCHITECTURE, "# Ours\n");
@@ -943,7 +943,7 @@ fn the_agents_md_migration_is_advised_and_done_once_moved_or_without_claude_md()
     assert!(!list(dir.path()).unwrap().contains(AGENTS_ID));
 }
 
-// req:upgrade/migration-agents-md@41da745b
+// req:upgrade/migration-agents-md@75947c8b
 #[test]
 fn a_claude_md_that_imports_agents_md_has_nothing_pending() {
     let dir = project(NEW_ARCHITECTURE, "# Ours\n@AGENTS.md\n");
