@@ -1,0 +1,8 @@
+A marker now counts only inside a test: see what stops counting before the next build
+A `req:` marker now counts as proof only when it sits inside a test, so a marker in a comment, a doc string or other code outside a test no longer makes its requirement current. A requirement whose only markers sit outside a test shows as unbuilt again, and a build brings it up to date.
+
+Run `clm coverage` before your next build: its `uncounted` lines list the markers that stopped counting, each with the file it sits in. Move each into the test it was meant to prove, or delete it.
+
+Two further checks are off until the project sets them. `wiring`, a key at the root of the spec's frontmatter, switches on the gate's ownership rule: a branch that changes files its component doesn't own needs review. `[verify] mutate`, a setting under `[verify]` in `clm.toml`, switches on the mutation pass, which breaks code on purpose after the land and reports a requirement whose tests don't notice. Leave both out to keep today's behaviour.
+
+Taking this note edits no file and leaves nothing to decline: `clm upgrade --apply` stamps `upgraded`, which marks it taken.
