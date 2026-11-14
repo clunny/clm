@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [health-churn-cannot-reach-marker-spans]
 ---
 
