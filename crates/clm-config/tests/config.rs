@@ -2011,6 +2011,16 @@ fn verify_mutate_prints_last_and_is_refused_when_empty_or_with_import() {
         s.get("verify").unwrap().0,
         "mode=pipeline,check=x,every.days=2,mutate=m"
     );
+    let s = Fixture::new(
+        None,
+        Some("[verify]\ncheck = \"x\"\nmode = \"local\"\ntriggers = [\"change-done\"]\nmutate = \"m\"\n"),
+    )
+    .load(&[])
+    .unwrap();
+    assert_eq!(
+        s.get("verify").unwrap().0,
+        "mode=local,check=x,triggers=change-done,mutate=m"
+    );
     for bad in [
         "[verify]\ncheck = \"x\"\nmode = \"import\"\nworkflow = \"slow\"\nmutate = \"m\"\n",
         "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"\"\n",
