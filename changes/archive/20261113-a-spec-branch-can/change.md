@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-spec-branch-can-t-remove-a-capability-entry-a-test-cites
 ---
