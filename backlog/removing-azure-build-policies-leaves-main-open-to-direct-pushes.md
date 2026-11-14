@@ -1,7 +1,7 @@
 ---
 title: "Removing Azure DevOps build-validation policies leaves main open to direct pushes"
 kind: idea
-components: [plugin.init]
+components: [plugin]
 ---
 
 ## Intent

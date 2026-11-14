@@ -1,7 +1,7 @@
 ---
 title: "The spec shapes the builder check warns about are refused by no program"
 kind: idea
-components: [check, plugin.propose]
+components: [check, plugin]
 ---
 
 The propose skill's builder-check step warns about shapes of a spec change that can't be built in order: a requirement that removes or renames part of a Contract another component's code uses and holds no `#### Needs` for that component's move (`contract-removal-needs`); a rename written as one requirement, not an adding one and a removing one (`rename-adds-then-removes`); a requirement that relies on work of another component that no requirement of that component states (`dependency-work-is-a-requirement`).

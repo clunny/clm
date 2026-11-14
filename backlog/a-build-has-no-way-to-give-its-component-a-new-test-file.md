@@ -1,7 +1,7 @@
 ---
 title: "A build has no way to give its component a new test file, so its tests land in another component's files"
 kind: idea
-components: [orchestrator.run, check, plugin.init]
+components: [orchestrator.run, check, plugin]
 ---
 
 ## Intent
