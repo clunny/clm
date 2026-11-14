@@ -46,7 +46,7 @@ fn lines(graph: &clm_model::Graph, list: &[(&str, &str)]) -> Vec<String> {
 
 #[test]
 fn undeclared_dependency() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let graph = graph("[]");
     assert_eq!(
         lines(&graph, &[("crates/a/Cargo.toml", "crates/b/Cargo.toml")]),
@@ -58,7 +58,7 @@ fn undeclared_dependency() {
 
 #[test]
 fn declared() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let graph = graph("[b]");
     assert_eq!(
         lines(&graph, &[("crates/a/Cargo.toml", "crates/b/Cargo.toml")]),
@@ -68,7 +68,7 @@ fn declared() {
 
 #[test]
 fn unowned_ends_and_imports_within_a_node() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let graph = graph("[]");
     let list = [
         ("crates/a/src/lib.rs", "tools/x.rs"),
@@ -80,7 +80,7 @@ fn unowned_ends_and_imports_within_a_node() {
 
 #[test]
 fn a_parent_gets_no_exemption() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let graph = graph("[b]");
     // `a` depends on `b`, not on its child `b.c`; `b` doesn't depend on its child either.
     assert_eq!(
@@ -100,7 +100,7 @@ fn a_parent_gets_no_exemption() {
 
 #[test]
 fn not_in_run() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &node("[]", "[]"));
@@ -173,8 +173,8 @@ fn pending(a_deps: &str, contract: bool, fm_base: Option<&str>) -> (TempDir, clm
 const A_TO_B: [(&str, &str); 1] = [("crates/a/Cargo.toml", "crates/b/Cargo.toml")];
 
 /// `app` (`app/main.py`, depending on `feat`) and `feat` (`app/feat.py`, tests
-/// `tests/feat/**`, `test_depends_on: [app]`).
-fn app_and_feat() -> clm_model::Graph {
+/// `tests/feat/**`), with `exemptions` added to `feat`'s frontmatter when given.
+fn app_and_feat(exemptions: &str) -> clm_model::Graph {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &node("[]", "[]"));
@@ -190,7 +190,7 @@ fn app_and_feat() -> clm_model::Graph {
             "{}\n",
             node("[\"app/feat.py\"]", "[]").replace(
                 "---\n## Contract",
-                "tests: [\"tests/feat/**\"]\ntest_depends_on: [app]\n---\n## Contract"
+                &format!("tests: [\"tests/feat/**\"]\n{exemptions}---\n## Contract")
             )
         ),
     );
@@ -201,17 +201,41 @@ fn app_and_feat() -> clm_model::Graph {
 
 #[test]
 fn a_test_imports_the_entry_point() {
-    // req:check/undeclared-imports@1e2f49ba
-    let graph = app_and_feat();
+    // req:check/undeclared-imports@5d13552f
+    let graph = app_and_feat("");
+    assert_eq!(
+        lines(&graph, &[("tests/feat/test_x.py", "app/main.py")]),
+        [
+            "tests/feat/test_x.py: check/undeclared-imports: imports app/main.py of component `app`, and `feat` doesn't depend on `app`"
+        ]
+    );
+}
+
+#[test]
+fn exempt_until_refactored() {
+    // req:check/undeclared-imports@5d13552f
+    let graph = app_and_feat(
+        "exemptions: [{rule: undeclared-imports, files: [\"tests/feat/**\"], until: backlog/x}]\n",
+    );
     assert_eq!(
         lines(&graph, &[("tests/feat/test_x.py", "app/main.py")]),
         Vec::<String>::new()
+    );
+    // The exemption names tests, so production code of the component is still judged, and an
+    // exemption from another rule excuses nothing.
+    assert_eq!(lines(&graph, &[("app/feat.py", "app/main.py")]).len(), 1);
+    let other = app_and_feat(
+        "exemptions: [{rule: skipped-tests, files: [\"tests/feat/**\"], until: backlog/x}]\n",
+    );
+    assert_eq!(
+        lines(&other, &[("tests/feat/test_x.py", "app/main.py")]).len(),
+        1
     );
 }
 
 #[test]
 fn a_test_among_its_components_paths_imports_the_entry_point() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &node("[]", "[]"));
@@ -222,7 +246,7 @@ fn a_test_among_its_components_paths_imports_the_entry_point() {
     );
     let feat = node("[\"feat/**\"]", "[]").replace(
         "---\n## Contract",
-        "tests: [\"feat/test_*.py\"]\ntest_depends_on: [app]\n---\n## Contract",
+        "tests: [\"feat/test_*.py\"]\nexemptions: [{rule: undeclared-imports, files: [\"feat/test_*.py\"], until: backlog/x}]\n---\n## Contract",
     );
     write(root, "specs/feat/SPEC.md", &feat);
     let (graph, violations) = clm_model::load(root);
@@ -243,7 +267,7 @@ fn a_test_among_its_components_paths_imports_the_entry_point() {
 
 #[test]
 fn a_test_inside_another_components_paths_is_judged_as_its_owners() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &node("[]", "[]"));
@@ -251,7 +275,7 @@ fn a_test_inside_another_components_paths_is_judged_as_its_owners() {
     write(root, "specs/harness/SPEC.md", &node("[\"tests/**\"]", "[]"));
     let feat = node("[\"feat/**\"]", "[]").replace(
         "---\n## Contract",
-        "tests: [\"tests/feat/**\"]\ntest_depends_on: [app]\n---\n## Contract",
+        "tests: [\"tests/feat/**\"]\nexemptions: [{rule: undeclared-imports, files: [\"tests/feat/**\"], until: backlog/x}]\n---\n## Contract",
     );
     write(root, "specs/feat/SPEC.md", &feat);
     let (graph, violations) = clm_model::load(root);
@@ -270,8 +294,8 @@ fn a_test_inside_another_components_paths_is_judged_as_its_owners() {
 
 #[test]
 fn production_code_still_judged() {
-    // req:check/undeclared-imports@1e2f49ba
-    let graph = app_and_feat();
+    // req:check/undeclared-imports@5d13552f
+    let graph = app_and_feat("");
     assert_eq!(
         lines(&graph, &[("app/feat.py", "app/main.py")]),
         [
@@ -282,7 +306,7 @@ fn production_code_still_judged() {
 
 #[test]
 fn not_applied_yet() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let (_dir, graph) = pending("[b]", false, None);
     assert_eq!(
         lines(&graph, &A_TO_B),
@@ -294,7 +318,7 @@ fn not_applied_yet() {
 
 #[test]
 fn not_applied_yet_already_undeclared() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let (dir, graph) = pending("[]", true, None);
     // The delta applies, so the dedup is what keeps the second line out.
     let apply: Vec<_> = clm_check::run(dir.path())
@@ -312,7 +336,7 @@ fn not_applied_yet_already_undeclared() {
 
 #[test]
 fn not_applied_yet_stale_delta() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let (dir, graph) = pending("[b]", false, Some("0123456789abcdef"));
     assert_eq!(lines(&graph, &A_TO_B), Vec::<String>::new());
     let stale: Vec<_> = clm_check::run(dir.path())
@@ -321,4 +345,43 @@ fn not_applied_yet_stale_delta() {
         .filter(|r| *r == "apply/stale-base")
         .collect();
     assert_eq!(stale, ["apply/stale-base"]);
+}
+
+#[test]
+fn exemption_judged_on_the_graph_a_change_leaves() {
+    // req:check/undeclared-imports@5d13552f
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(root, "specs/SPEC.md", &node("[]", "[]"));
+    let exempt = node("[\"crates/a/**\"]", "[]").replace(
+        "---\n## Contract",
+        "exemptions: [{rule: undeclared-imports, files: [\"crates/a/**\"], until: backlog/x}]\n---\n## Contract",
+    );
+    write(root, "specs/a/SPEC.md", &exempt);
+    write(root, "specs/b/SPEC.md", &node("[\"crates/b/**\"]", "[]"));
+    let (graph, violations) = clm_model::load(root);
+    assert!(violations.is_empty(), "{violations:?}");
+    assert_eq!(lines(&graph, &A_TO_B), Vec::<String>::new());
+    // A change that drops the exemption leaves the edge undeclared.
+    let hashes = clm_apply::hashes(&graph.nodes["a"]);
+    let fm = &hashes.iter().find(|(n, _)| n == "frontmatter").unwrap().1;
+    write(
+        root,
+        "changes/20260101-y/change.md",
+        "---\nstatus: proposed\n---\n",
+    );
+    write(
+        root,
+        "changes/20260101-y/deltas/a.md",
+        &format!(
+            "---\ncomponent: a\nbase: {{ frontmatter: \"{fm}\" }}\n---\n## MODIFIED Frontmatter\n```yaml\nexemptions: []\n```\n"
+        ),
+    );
+    let (graph, _) = clm_model::load(root);
+    assert_eq!(
+        lines(&graph, &A_TO_B),
+        [
+            "crates/a/Cargo.toml: check/undeclared-imports: imports crates/b/Cargo.toml of component `b`, and `a` wouldn't depend on `b` after 20260101-y"
+        ]
+    );
 }

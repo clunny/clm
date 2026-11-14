@@ -3,10 +3,10 @@
 
 use std::path::PathBuf;
 
-use clm_model::{Graph, Layer, Violation};
+use clm_model::{ExemptRule, Graph, Layer, Violation};
 
 use crate::Marker;
-use crate::ownership::{is_test_of, owner, owners};
+use crate::ownership::{exempt, is_test_of, owner, owners};
 
 pub fn violations(graph: &Graph, markers: &[Marker]) -> Vec<Violation> {
     markers
@@ -26,6 +26,9 @@ pub fn violations(graph: &Graph, markers: &[Marker]) -> Vec<Violation> {
                 None => m.id.split_once('/')?.0,
             };
             let mine = owner(graph, &file)?;
+            if exempt(mine, ExemptRule::TestsCiteTheirOwner, &file) {
+                return None;
+            }
             (mine.id != cited).then(|| Violation {
                 path: PathBuf::from(m.to_string()),
                 rule: "check/tests-cite-their-owner",

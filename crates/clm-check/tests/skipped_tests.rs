@@ -48,7 +48,7 @@ fn found(root: &Path) -> Vec<String> {
 
 #[test]
 fn ignored_rust_test() {
-    // req:check/skipped-tests@f3cf0332
+    // req:check/skipped-tests@347f43dc
     let text = format!("#[test]\n{CITES}\nfn a() {{}}\n\n    {IGNORE}\n#[test]\nfn b() {{}}\n");
     let dir = repo(&[("tests/t.rs", text)]);
     assert_eq!(found(dir.path()), [format!("tests/t.rs:5: {MESSAGE}")]);
@@ -56,7 +56,7 @@ fn ignored_rust_test() {
 
 #[test]
 fn ignored_with_a_reason() {
-    // req:check/skipped-tests@f3cf0332
+    // req:check/skipped-tests@347f43dc
     let text = format!("{CITES}\n{}\n", concat!("#[ign", "ore = \"slow\"]"));
     let dir = repo(&[("tests/t.rs", text)]);
     assert_eq!(found(dir.path()), [format!("tests/t.rs:2: {MESSAGE}")]);
@@ -64,7 +64,7 @@ fn ignored_with_a_reason() {
 
 #[test]
 fn skipped_typescript_tests() {
-    // req:check/skipped-tests@f3cf0332
+    // req:check/skipped-tests@347f43dc
     let skips = [
         concat!("it.sk", "ip(\"x\", () => {})"),
         concat!("  test.sk", "ipIf(true)(\"x\", () => {})"),
@@ -83,7 +83,7 @@ fn skipped_typescript_tests() {
 
 #[test]
 fn not_skips_in_typescript() {
-    // req:check/skipped-tests@f3cf0332
+    // req:check/skipped-tests@347f43dc
     let text = format!(
         "{CITES}\n{}\n{}\n{}\n{}\n",
         concat!("audit.sk", "ip(1)"),
@@ -97,7 +97,7 @@ fn not_skips_in_typescript() {
 
 #[test]
 fn skipped_python_tests() {
-    // req:check/skipped-tests@f3cf0332
+    // req:check/skipped-tests@347f43dc
     let text = format!(
         "{CITES}\n\nimport pytest\n{}\ndef test_a():\n    {}\n  {}\n",
         concat!("@pytest.mark.sk", "ipif(True, reason=\"x\")"),
@@ -117,7 +117,7 @@ fn skipped_python_tests() {
 
 #[test]
 fn no_markers() {
-    // req:check/skipped-tests@f3cf0332
+    // req:check/skipped-tests@347f43dc
     let dir = repo(&[
         (
             "tests/slow.rs",
@@ -126,4 +126,33 @@ fn no_markers() {
         ("docs/t.md", format!("{CITES}\n{IGNORE}\n")),
     ]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
+}
+
+#[test]
+fn exempt_skip() {
+    // req:check/skipped-tests@347f43dc
+    let text = format!("#[test]\n{CITES}\nfn a() {{}}\n\n    {IGNORE}\n#[test]\nfn b() {{}}\n");
+    let dir = repo(&[("tests/t.rs", text.clone()), ("tests/u.rs", text)]);
+    let spec = dir.path().join("specs/a/SPEC.md");
+    let original = fs::read_to_string(&spec).unwrap();
+    // The exemption names `tests/t.rs` alone, so `tests/u.rs` is still reported, and an
+    // exemption from another rule excuses nothing.
+    let with = |frontmatter: &str| {
+        fs::write(
+            &spec,
+            original.replacen("owners: []\n", &format!("owners: []\n{frontmatter}\n"), 1),
+        )
+        .unwrap();
+        found(dir.path())
+    };
+    let own = "paths: [\"tests/**\"]\nexemptions: [{rule: skipped-tests, files: [\"tests/t.rs\"], until: backlog/x}]";
+    assert_eq!(with(own), [format!("tests/u.rs:5: {MESSAGE}")]);
+    let other = "paths: [\"tests/**\"]\nexemptions: [{rule: undeclared-imports, files: [\"tests/**\"], until: backlog/x}]";
+    assert_eq!(
+        with(other),
+        [
+            format!("tests/t.rs:5: {MESSAGE}"),
+            format!("tests/u.rs:5: {MESSAGE}")
+        ]
+    );
 }

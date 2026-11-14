@@ -4,26 +4,26 @@
 
 use std::path::PathBuf;
 
-use clm_model::{Graph, Violation};
+use clm_model::{ExemptRule, Graph, Violation};
 
-use crate::ownership::{is_test_of, owner};
+use crate::ownership::{exempt, owner};
 
 /// One undeclared import: importing file, imported file, and the IDs of nodes `a` and `b`.
 type Pair = (String, String, String, String);
 
 /// Each pair among `edges` that `graph` leaves undeclared: from a file of component `a` to a file
 /// of another component `b`, owners of their files (`paths-disjoint`), that `a`'s `depends_on`
-/// doesn't list; for a file `a`'s `tests` match, `depends_on` and `test_depends_on` together. An
-/// edge with an end no component owns is skipped.
+/// doesn't list, a file `a`'s `tests` match judged as any other. An edge with an end no
+/// component owns is skipped, and so is one from a file an exemption of `a` names for
+/// `undeclared-imports` (`model/exemptions`), by the exemptions of `graph`.
 fn pairs(graph: &Graph, edges: &[(String, String)]) -> Vec<Pair> {
     let mut out = Vec::new();
     for (from, to) in edges {
         let (Some(a), Some(b)) = (owner(graph, from), owner(graph, to)) else {
             continue;
         };
-        let declared = |deps: &Vec<String>| deps.contains(&b.id);
-        let allowed = declared(&a.frontmatter.depends_on)
-            || (is_test_of(a, from) && declared(&a.frontmatter.test_depends_on));
+        let allowed = a.frontmatter.depends_on.contains(&b.id)
+            || exempt(a, ExemptRule::UndeclaredImports, from);
         if b.id != a.id && !allowed {
             out.push((from.clone(), to.clone(), a.id.clone(), b.id.clone()));
         }

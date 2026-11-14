@@ -60,7 +60,7 @@ fn found(root: &Path) -> Vec<String> {
 
 #[test]
 fn another_components_requirement() {
-    // req:check/tests-cite-their-owner@27661ae3
+    // req:check/tests-cite-their-owner@1ddb042d
     let text = format!("// x\n// y\n// z\n{}", cite("b/y"));
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", text)]);
     assert_eq!(
@@ -73,21 +73,21 @@ fn another_components_requirement() {
 
 #[test]
 fn its_own_requirement() {
-    // req:check/tests-cite-their-owner@27661ae3
+    // req:check/tests-cite-their-owner@1ddb042d
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", cite("a/y"))]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn a_file_only_paths_own() {
-    // req:check/tests-cite-their-owner@27661ae3
+    // req:check/tests-cite-their-owner@1ddb042d
     let dir = repo(None, &[("src/a/t.rs", cite("b/y"))]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn a_marker_naming_nothing_is_left_to_dangling_markers() {
-    // req:check/tests-cite-their-owner@27661ae3
+    // req:check/tests-cite-their-owner@1ddb042d
     let dir = repo(
         Some("[\"tests/a/**\"]"),
         &[("tests/a/t.rs", cite("b/nope"))],
@@ -97,7 +97,7 @@ fn a_marker_naming_nothing_is_left_to_dangling_markers() {
 
 #[test]
 fn a_capability_is_the_capability_components() {
-    // req:check/tests-cite-their-owner@27661ae3
+    // req:check/tests-cite-their-owner@1ddb042d
     let dir = repo(
         Some("[\"tests/a/**\"]"),
         &[("tests/a/t.rs", cite("capability/c"))],
@@ -122,7 +122,7 @@ fn a_capability_is_the_capability_components() {
 
 #[test]
 fn run_listed_reports_it_too() {
-    // req:check/tests-cite-their-owner@27661ae3
+    // req:check/tests-cite-their-owner@1ddb042d
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", cite("b/y"))]);
     let files = ["specs/SPEC.md", "tests/a/t.rs"].map(std::path::PathBuf::from);
     let found: Vec<_> = clm_check::run_listed(dir.path(), &files)
@@ -130,4 +130,37 @@ fn run_listed_reports_it_too() {
         .filter(|v| v.rule == "check/tests-cite-their-owner")
         .collect();
     assert_eq!(found.len(), 1);
+}
+
+#[test]
+fn exempt_until_split() {
+    // req:check/tests-cite-their-owner@1ddb042d
+    let text = format!("// x\n// y\n// z\n{}", cite("b/y"));
+    let dir = repo(
+        Some("[\"tests/a/**\"]"),
+        &[("tests/a/t.rs", text.clone()), ("tests/a/u.rs", text)],
+    );
+    let spec = dir.path().join("specs/a/SPEC.md");
+    let original = fs::read_to_string(&spec).unwrap();
+    // Only the file the exemption names is excused, and only from this rule.
+    let with = |rule: &str, file: &str| {
+        let entry = format!(
+            "exemptions: [{{rule: {rule}, files: [\"{file}\"], until: backlog/x}}]\n---\n## Contract"
+        );
+        fs::write(&spec, original.replacen("---\n## Contract", &entry, 1)).unwrap();
+        found(dir.path())
+    };
+    let line = |f: &str| {
+        format!(
+            "{f}:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests"
+        )
+    };
+    assert_eq!(
+        with("tests-cite-their-owner", "tests/a/t.rs"),
+        [line("tests/a/u.rs")]
+    );
+    assert_eq!(
+        with("skipped-tests", "tests/a/**"),
+        [line("tests/a/t.rs"), line("tests/a/u.rs")]
+    );
 }

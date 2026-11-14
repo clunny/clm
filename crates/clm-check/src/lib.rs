@@ -110,7 +110,7 @@ fn run_with(
     violations.extend(dangling::violations(&graph, &markers.req, &removed));
     violations.extend(cites::violations(&graph, &markers.req));
     violations.extend(remove_by::violations(&graph, &markers.remove_by));
-    violations.extend(skipped::violations(root, &markers.req));
+    violations.extend(skipped::violations(root, &graph, &markers.req));
     violations
 }
 
