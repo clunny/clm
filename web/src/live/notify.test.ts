@@ -268,6 +268,7 @@ describe('Notify me', () => {
   });
 
   // req:web.client-live/notify-switch@bc04aecc
+  // req:web.client-live/push-renewal@d02c4647
   it('turn on over an existing browser subscription posts it, remembers it, and turning off then unsubscribes', async () => {
     const endpoint = 'https://fcm.googleapis.com/fcm/send/1';
     const t = setup({ existing: endpoint, subscribed: { '/api/repos/o/a': false } });
