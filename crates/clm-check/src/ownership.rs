@@ -1,5 +1,6 @@
-//! A file's owner, the one place `paths-disjoint`, `unowned-files`, `undeclared-imports` and
-//! `tests-cite-their-owner` read it (see specs/check/SPEC.md).
+//! A file's owner, the one place `paths-disjoint`, `unowned-files`, `undeclared-imports`,
+//! `tests-cite-their-owner` and `skipped-tests` read it, and the one place a component's
+//! exemptions are read (see specs/check/SPEC.md).
 
 use clm_model::{ExemptRule, Graph, Node};
 
