@@ -16,8 +16,8 @@ export interface HomeInput {
   itemLink: (slug: string) => string;
   capLink: (slug: string) => string;
   archLink: (slug: string) => string;
-  /** What the answer buttons need; without it Answer's entries draw none. */
-  answering?: Answering;
+  /** What the answer buttons need. */
+  answering: Answering;
 }
 
 /** Whether the person can answer the item from the app: a `question` with choices, or a `human-task`. */
@@ -43,7 +43,7 @@ const entry = (href: string, text: string, extra?: HTMLElement | '') => div('hen
 export function renderHome(i: HomeInput): HTMLElement {
   const { snap } = i;
   const review = toReview(i.reviews).map((r) => entry(i.reviewLink(r.branch), r.branch));
-  const answer = snap.backlog.filter(answerable).map((b) => entry(i.itemLink(b.slug), b.title, i.answering ? answerButtons(b, i.answering) : ''));
+  const answer = snap.backlog.filter(answerable).map((b) => entry(i.itemLink(b.slug), b.title, answerButtons(b, i.answering)));
   const flagged = [
     ...(i.caps?.report.capabilities ?? []).filter((c) => c.flagged).map((c) => entry(i.capLink(c.slug), c.slug)),
     ...(i.arch?.architecture ?? []).filter((c) => c.flagged).map((c) => entry(i.archLink(c.slug), c.slug)),
