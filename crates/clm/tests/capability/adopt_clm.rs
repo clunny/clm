@@ -18,7 +18,7 @@ const CAPABILITY: &str = "---\ncomponent: capability\ncreate: true\n---\n## Fron
 
 #[test]
 fn existing_codebase() {
-    // req:capability/adopt-clm@f0d2dc65
+    // req:capability/adopt-clm@a2b433ee
     let repo = Repo::empty();
     repo.write("src/greet.sh", "greet() { echo hi; }\n");
     repo.write("README.md", "# Greeter\n");
