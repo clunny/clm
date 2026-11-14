@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-defect-report-naming-a-component-that-no-longer-exists-stops]
 ---
 
