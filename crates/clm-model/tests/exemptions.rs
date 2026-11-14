@@ -220,3 +220,14 @@ fn entries_from_the_exposed_check() {
     assert_eq!(e[0].files, ["tests/test_api.py"]);
     assert_eq!(e[0].until, "backlog/x");
 }
+
+#[test]
+fn loading_reports_each_message() {
+    // req:model/exemptions@1b57cabd
+    let value = "[{rule: skipped-tests}, {files: [x]}]";
+    let msgs = check_exemptions(&yaml(value)).unwrap_err();
+    let (_, violations) = load(repo(&format!("\nexemptions: {value}")).path());
+    let got: Vec<&String> = violations.iter().map(|v| &v.message).collect();
+    assert_eq!(got, msgs.iter().collect::<Vec<_>>());
+    assert!(violations.iter().all(|v| v.rule == "model/exemptions"));
+}
