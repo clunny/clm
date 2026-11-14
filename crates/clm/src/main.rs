@@ -672,6 +672,9 @@ enum BuildAction {
     Approved { batch: String },
     /// Record that the human cleared a condition (`disk`).
     Cleared { condition: String },
+    /// Give up a component's build: delete its branch on origin, keep the local one as
+    /// `released/<component>/<time>`, free its place and forget its run.
+    Release { component: String },
     /// Wait until a step would act, renewing the lease, and print why it woke.
     Wait {
         /// Minutes between looks at `origin`: a positive number of at most 7.
@@ -2046,6 +2049,7 @@ fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
         } => clm_loop::returned(&options, &name, &result, cause.as_deref(), until.as_deref()),
         BuildAction::Approved { batch } => clm_loop::approved(&options, &batch),
         BuildAction::Cleared { condition } => clm_loop::cleared(&options, &condition),
+        BuildAction::Release { component } => clm_loop::release(&options, &component),
         BuildAction::Wait { interval } => match interval.parse::<f64>() {
             Ok(minutes) => clm_loop::wait(&options, minutes).map(|why| vec![why]),
             Err(_) => Err(clm_git::Failure::Refused(format!(
