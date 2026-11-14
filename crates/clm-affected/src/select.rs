@@ -77,7 +77,7 @@ pub fn select(
 
 /// Whether an exemption of `path`'s owner names it for `undeclared-imports`: it imports code
 /// the graph doesn't connect it to (`affected-files`).
-pub(crate) fn exempt_from_undeclared_imports(graph: &Graph, path: &str) -> bool {
+fn exempt_from_undeclared_imports(graph: &Graph, path: &str) -> bool {
     clm_check::owner(graph, Path::new(path)).is_some_and(|o| {
         graph.nodes[o].frontmatter.exemptions.iter().any(|e| {
             e.rule == clm_model::ExemptRule::UndeclaredImports

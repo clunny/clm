@@ -268,10 +268,17 @@ fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
         format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n")
             .into_bytes()
     };
-    let exempt = "exemptions:\n  - rule: undeclared-imports\n    files: [\"crates/feat/tests/t.rs\"]\n    until: backlog/x\n  - rule: skipped-tests\n    files: [\"crates/feat/tests/s.rs\"]\n    until: backlog/x\n";
+    let exempt = "exemptions:\n  - rule: undeclared-imports\n    files: [\"crates/feat/tests/t.rs\", \"crates/feat/tests/m.rs\"]\n    until: backlog/x\n  - rule: skipped-tests\n    files: [\"crates/feat/tests/s.rs\"]\n    until: backlog/x\n";
     let specs: clm_model::Files = [
         ("specs/SPEC.md", doc("[\"Cargo.lock\"]", "")),
-        ("specs/app/SPEC.md", doc("[\"crates/app/**\"]", "")),
+        (
+            "specs/app/SPEC.md",
+            // A glob over a file another component owns exempts nothing there.
+            doc(
+                "[\"crates/app/**\"]",
+                "exemptions:\n  - rule: undeclared-imports\n    files: [\"crates/feat/tests/n.rs\"]\n    until: backlog/x\n",
+            ),
+        ),
         ("specs/feat/SPEC.md", doc("[\"crates/feat/**\"]", exempt)),
     ]
     .into_iter()
@@ -283,12 +290,18 @@ fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
         ("crates/feat/tests/t.rs", &[]),
         ("crates/feat/tests/s.rs", &["zzz/x"]),
         ("crates/feat/tests/u.rs", &["zzz/x"]),
+        ("crates/feat/tests/m.rs", &["zzz/x"]),
+        ("crates/feat/tests/n.rs", &["zzz/x"]),
     ]);
     let s = select(&graph, &changed(&["crates/app/src/lib.rs"]), &scan, &[]);
     assert_eq!(nodes(&s), ["app"]);
     assert_eq!(
         files(&s),
-        ["crates/app/src/lib.rs", "crates/feat/tests/t.rs"]
+        [
+            "crates/app/src/lib.rs",
+            "crates/feat/tests/m.rs",
+            "crates/feat/tests/t.rs"
+        ]
     );
     let none = select(&graph, &changed(&[]), &scan, &[]);
     assert_eq!(files(&none), Vec::<&str>::new());
