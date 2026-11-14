@@ -5,7 +5,7 @@ resolves: [health-churn-cannot-reach-marker-spans]
 
 ## Intent
 
-`check.health` depends on `check.coverage`, so its build can call `marker_spans`, which `check.health/churn-signal` reads markers with since `20261114-proof-is-real`. This answers the question that build filed, and unblocks the last four requirements of phase 3 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims.md`.
+`check.health` depends on `check.coverage`, so its build can call `marker_spans`, which `check.health/churn-signal` reads markers with since `20261114-proof-is-real`. This answers the question that build filed, which the human answered in the session that proposed this change, taking the dependency over the re-export the item recommended, and unblocks the last four requirements of phase 3 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims.md`.
 
 ## Problem
 
@@ -18,7 +18,7 @@ resolves: [health-churn-cannot-reach-marker-spans]
 
 ## Outcome
 
-`check.health`'s frontmatter names `check.coverage`. `check-coverage-split` says which route a new call takes. The question item is deleted, so `check.health/churn-signal` is no longer blocked, and `check.coverage/markers-in-tests`, `check/coverage-lists` and `upgrade/migration-markers-in-tests` follow it. The change adds, modifies and removes no requirement, so it is archived on its own branch.
+`check.health`'s frontmatter names `check.coverage`, and its Design names `marker_spans` where it named `markers_in` for churn. `check-coverage-split` says which route a new call takes. The question item is deleted, so `check.health/churn-signal` is no longer blocked, and `check.coverage/markers-in-tests`, `check/coverage-lists` and `upgrade/migration-markers-in-tests` follow it. The change adds, modifies and removes no requirement, so it is archived on its own branch.
 
 `crates/clm-health` then imports `clm-coverage` for `marker_spans` and still reaches the calls it already uses through `clm-check`. Moving every consumer onto `check.coverage` directly would end the re-exports, and belongs with the plan's later phases.
 
