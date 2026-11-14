@@ -312,6 +312,29 @@ fn a_stale_citation_alone_makes_nothing_due() {
 }
 
 #[test]
+fn the_pass_starts_from_the_newest_mutated_record() {
+    // req:verify/mutation-pass@e561e63f
+    let p = pass(true, false);
+    p.f.write("mutate-result", "a/thing killed\n");
+    let middle = p.f.land(&[("crates/a/src/lib.rs", "9\n")], "middle");
+    let body = Body::Mutated {
+        commit: middle.clone(),
+        since: None,
+        killed: vec![],
+        unproven: vec![],
+        not_judged: vec![],
+    };
+    clm_ledger::append(&p.f.work(), body, &p.f.env()).unwrap();
+    land_new_test(&p);
+    p.f.due();
+    let Body::Mutated { since, commit, .. } = mutated(&p.f).pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!(since, Some(middle));
+    assert_eq!(commit, p.f.back(0));
+}
+
+#[test]
 fn the_pass_has_a_slot_of_its_own() {
     // req:verify/mutation-pass@e561e63f
     let p = pass(true, false);
