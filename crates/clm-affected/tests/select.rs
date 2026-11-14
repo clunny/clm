@@ -103,7 +103,7 @@ fn nothing_changed_selects_nothing() {
 
 #[test]
 fn cited_owned_and_changed_files() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     let files_scanned = scanned(&[
         ("crates/a/src/lib.rs", &[]),
         ("crates/a/src/util.rs", &[]),
@@ -132,7 +132,7 @@ fn cited_owned_and_changed_files() {
 
 #[test]
 fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     let s = select(
         &graph(),
         &changed(&["crates/b/src/lib.rs"]),
@@ -144,7 +144,7 @@ fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
 
 #[test]
 fn a_deleted_file_affects_its_owner_without_a_file_line() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     let gone = Changed {
         path: "crates/a/src/old.rs".into(),
         exists: false,
@@ -234,7 +234,7 @@ fn doc_only_paths_beside_code_select_what_the_code_does() {
 
 #[test]
 fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     let doc = |paths: &str, extra: &str| {
         format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n")
             .into_bytes()

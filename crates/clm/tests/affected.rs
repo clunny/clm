@@ -113,7 +113,7 @@ fn nothing_changed_prints_nothing() {
 
 #[test]
 fn uncommitted_untracked_and_deleted() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/old.rs", "fn o() {}\n");
@@ -268,7 +268,7 @@ fn the_base_defaults_to_origin_main() {
 
 #[test]
 fn selects_through_the_markers_of_the_files_the_scan_reads() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     let dir = repo("");
     let root = dir.path();
     // Cites `a`, so selected though `d` owns it.
@@ -295,6 +295,33 @@ fn selects_through_the_markers_of_the_files_the_scan_reads() {
     assert_eq!(
         stdout(&out),
         "node a\nnode b\nnode c\nfile crates/a/src/keep.rs\nfile crates/a/src/lib.rs\nfile crates/b/src/lib.rs\nfile crates/c/src/lib.rs\nfile crates/d/tests/cites.rs\n"
+    );
+}
+
+#[test]
+fn a_marker_outside_a_test_still_selects() {
+    // req:check.affected/affected-files@6074ba2c
+    let dir = repo("");
+    let root = dir.path();
+    // The only marker is a file-header comment, on no line of a test.
+    write(
+        root,
+        "crates/d/tests/t.ts",
+        concat!(
+            "// req",
+            ":a/x\n\nimport { it } from 'vitest';\nit('t', () => {});\n"
+        ),
+    );
+    commit_all(root, "files");
+    git(root, &["branch", "-f", "main"]);
+    write(root, "crates/a/src/lib.rs", "fn g() {}\n");
+    commit_all(root, "a");
+    let out = clm_affected(root, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(
+        stdout(&out).contains("file crates/d/tests/t.ts\n"),
+        "{}",
+        stdout(&out)
     );
 }
 
@@ -835,7 +862,7 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
 
 #[test]
 fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@0b773abd
+    // req:check.affected/affected-files@6074ba2c
     // req:check.affected/why-chain@bf835003
     let dir = repo("");
     let root = dir.path();
