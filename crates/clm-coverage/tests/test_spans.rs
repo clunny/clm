@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use clm_coverage::{TestSpan, markers_in, markers_outside_tests, tests_in};
+use clm_coverage::{TestSpan, markers_outside_tests, tests_in};
 
 // Fixture markers are built so the literal never appears whole (`dangling-markers`).
 const REQ: &str = "req";
@@ -247,17 +247,9 @@ fn markdown_has_no_tests_and_no_outside_markers() {
     assert!(markers_outside_tests(Path::new("n.md"), &text).is_empty());
 }
 
-#[test]
-fn markers_in_is_unchanged() {
-    // req:check.coverage/test-spans@2ed7e772
-    let text = format!("fn helper() {{\n    // {}\n}}\n", m("a/z"));
-    assert_eq!(markers_in(Path::new("t.rs"), &text).len(), 1);
-    assert_eq!(markers_outside_tests(Path::new("t.rs"), &text).len(), 1);
-}
-
 #[cfg(feature = "checkout")]
 #[test]
-fn scan_holds_the_outside_markers_beside_req() {
+fn scan_holds_the_outside_markers() {
     // req:check.coverage/test-spans@2ed7e772
     let dir = tempfile::TempDir::new().unwrap();
     let text = format!(
@@ -268,7 +260,7 @@ fn scan_holds_the_outside_markers_beside_req() {
     std::fs::write(dir.path().join("t.rs"), text).unwrap();
     let scan = clm_coverage::scan(dir.path());
     let ids = |v: &[clm_coverage::Marker]| v.iter().map(|m| m.id.clone()).collect::<Vec<_>>();
-    assert_eq!(ids(&scan.req), ["a/in", "a/out"]);
+    assert_eq!(ids(&scan.req), ["a/in"]);
     assert_eq!(ids(&scan.outside), ["a/out"]);
 }
 

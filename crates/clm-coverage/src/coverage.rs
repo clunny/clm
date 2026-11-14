@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Layer, Requirement};
 
-use crate::spans::markers_outside_tests;
+use crate::spans::{markers_outside_tests, reads, tests_in};
 
 /// A marker at `path:line` (1-based): a requirement ID for `req:<id>`, a change ID for
 /// `clm:remove-by <change-id>`.
@@ -299,10 +299,11 @@ fn proof(entry: &Requirement, current: &BTreeSet<String>) -> Option<Proof> {
 
 /// The markers in a repo's files.
 pub struct Scan {
-    /// `req:<id>` markers.
+    /// `req:<id>` markers that count: inside a test where `tests_in` reads the language
+    /// (`markers-in-tests`).
     pub req: Vec<Marker>,
-    /// The `req:` markers on no line of a test or group of tests (`test-spans`): what
-    /// `req` holds in a file of a language `tests_in` reads, less the markers inside tests.
+    /// The `req:` markers on no line of a test or group of tests (`test-spans`): those in a
+    /// file of a language `tests_in` reads that `req` leaves out.
     pub outside: Vec<Marker>,
     /// `clm:remove-by <change-id>` markers; each `id` is the change's.
     pub remove_by: Vec<Marker>,
@@ -333,8 +334,10 @@ pub fn scan(root: &Path) -> Scan {
     scan
 }
 
-/// The `req:<id>[@<version>]` markers in one file, `path` repo-relative: what `scan` finds
-/// in it. None for Markdown, where markers are examples rather than claims.
+/// The `req:<id>[@<version>]` markers in one file that count, `path` repo-relative: what
+/// `scan` finds in it. In a language `tests_in` reads, those on a line of a test or group;
+/// in any other file, every one. None for Markdown, where markers are examples rather than
+/// claims (`markers-in-tests`).
 pub fn markers_in(path: &Path, text: &str) -> Vec<Marker> {
     let mut scan = Scan {
         req: Vec::new(),
@@ -377,18 +380,27 @@ fn scan_text(path: &Path, text: &str, scan: &mut Scan) {
         return;
     }
     scan.outside.extend(markers_outside_tests(path, text));
+    // In a language `tests_in` reads, a marker counts only on a line of a test or group; in
+    // any other file every marker counts (`markers-in-tests`).
+    let tests = reads(path).then(|| tests_in(path, text));
     for (i, line) in text.lines().enumerate() {
+        let n = i + 1;
+        let counts = tests
+            .as_ref()
+            .is_none_or(|t| t.iter().any(|t| t.first <= n && n <= t.last));
         let marker = |id, version| Marker {
             id,
             version,
             path: path.to_path_buf(),
             line: i + 1,
         };
-        scan.req.extend(
-            parse_markers(line)
-                .into_iter()
-                .map(|s| marker(s.id, s.version)),
-        );
+        if counts {
+            scan.req.extend(
+                parse_markers(line)
+                    .into_iter()
+                    .map(|s| marker(s.id, s.version)),
+            );
+        }
         scan.remove_by.extend(
             parse_removal_markers(line)
                 .into_iter()
