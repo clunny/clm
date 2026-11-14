@@ -100,7 +100,13 @@ fn existing_codebase() {
     clm(&spec, &["apply", CHANGE]);
     spec.commit("the first spec graph");
 
-    // A node per part of the code, describing what it does today, and the check passes.
+    // A node for each part of the map the person agreed, and the check passes.
+    for part in ["clm", "greeter", "capability"] {
+        assert!(
+            tree.join("specs").join(part).join("SPEC.md").exists(),
+            "{part}"
+        );
+    }
     let greeter = fs::read_to_string(tree.join("specs/greeter/SPEC.md")).unwrap();
     assert!(greeter.contains("`greet` SHALL print `hi`."), "{greeter}");
     assert!(tree.join("specs/capability/SPEC.md").exists());
