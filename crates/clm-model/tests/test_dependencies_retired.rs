@@ -19,6 +19,7 @@ fn test_dependencies_retired() {
     }
     let (_, violations) = load(dir.path());
     assert_eq!(violations.len(), 1, "{violations:?}");
+    assert_eq!(violations[0].rule, "model/valid-frontmatter");
     assert_eq!(violations[0].path, Path::new("specs/a/SPEC.md"));
     assert!(violations[0].message.contains("test_depends_on"));
 }
