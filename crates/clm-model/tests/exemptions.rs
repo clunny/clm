@@ -184,7 +184,16 @@ fn a_value_that_isnt_a_list() {
 fn every_problem_of_every_entry() {
     // req:model/exemptions@1b57cabd
     let msgs = check_exemptions(&yaml("[{rule: skipped-tests}, {files: [x]}]")).unwrap_err();
-    assert!(msgs.len() >= 3, "{msgs:?}");
+    assert_eq!(msgs.len(), 4, "{msgs:?}");
+    let at = |n: &str, w: &str| {
+        msgs.iter()
+            .filter(|m| m.contains(n) && m.contains(w))
+            .count()
+    };
+    assert_eq!(at("entry 1", "files"), 1);
+    assert_eq!(at("entry 1", "until"), 1);
+    assert_eq!(at("entry 2", "rule"), 1);
+    assert_eq!(at("entry 2", "until"), 1);
 }
 
 #[test]
@@ -200,10 +209,13 @@ fn a_why_that_isnt_a_string() {
 #[test]
 fn entries_from_the_exposed_check() {
     // req:model/exemptions@1b57cabd
-    let value =
-        yaml("[{rule: undeclared-imports, files: [\"tests/test_api.py\"], until: backlog/x}]");
+    let value = yaml(
+        "[{rule: undeclared-imports, files: [\"tests/test_api.py\"], until: backlog/x, why: w}, {rule: skipped-tests, files: [y], until: backlog/z}]",
+    );
     let e = check_exemptions(&value).unwrap();
-    assert_eq!(e.len(), 1);
+    assert_eq!(e.len(), 2);
+    assert_eq!(e[0].why.as_deref(), Some("w"));
+    assert_eq!(e[1].rule, ExemptRule::SkippedTests);
     assert_eq!(e[0].rule, ExemptRule::UndeclaredImports);
     assert_eq!(e[0].files, ["tests/test_api.py"]);
     assert_eq!(e[0].until, "backlog/x");

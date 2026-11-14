@@ -747,10 +747,14 @@ pub fn check_exemptions(value: &serde_yaml::Value) -> Result<Vec<Exemption>, Vec
     if !problems.is_empty() {
         return Err(problems);
     }
-    Ok(entries
+    entries
         .iter()
-        .filter_map(|e| serde_yaml::from_value(e.clone()).ok())
-        .collect())
+        .enumerate()
+        .map(|(i, e)| {
+            serde_yaml::from_value(e.clone())
+                .map_err(|err| vec![format!("`exemptions` entry {}: {err}", i + 1)])
+        })
+        .collect()
 }
 
 /// The frontmatter's `outside` value, as one line of YAML, when it is present and not a
