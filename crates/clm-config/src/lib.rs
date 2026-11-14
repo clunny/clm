@@ -318,6 +318,9 @@ pub struct Verify {
     pub every_days: Option<u64>,
     /// The host pipeline whose runs `clm verify` reads; set exactly with `VerifyMode::Import`.
     pub workflow: Option<String>,
+    /// The command of the mutation pass (`verify/mutation-pass`); never empty, and never set
+    /// with `VerifyMode::Import`.
+    pub mutate: Option<String>,
 }
 
 impl fmt::Display for Verify {
@@ -335,6 +338,9 @@ impl fmt::Display for Verify {
         }
         if let Some(workflow) = &self.workflow {
             write!(f, ",workflow={workflow}")?;
+        }
+        if let Some(mutate) = &self.mutate {
+            write!(f, ",mutate={mutate}")?;
         }
         Ok(())
     }
@@ -1181,11 +1187,11 @@ fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
     if let Some(key) = table.keys().find(|k| {
         !matches!(
             k.as_str(),
-            "check" | "mode" | "triggers" | "every" | "workflow"
+            "check" | "mode" | "triggers" | "every" | "workflow" | "mutate"
         )
     }) {
         return Err(fail(format!(
-            "unknown key `{key}`, expected `check`, `mode`, `triggers`, `every` or `workflow`"
+            "unknown key `{key}`, expected `check`, `mode`, `triggers`, `every`, `workflow` or `mutate`"
         )));
     }
     let check = match table.get("check") {
@@ -1273,6 +1279,18 @@ fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
         }
         (None, _) => None,
     };
+    let mutate = match table.get("mutate") {
+        None => None,
+        Some(_) if mode == VerifyMode::Import => {
+            return Err(fail("`mutate` is not for `mode = \"import\"`".into()));
+        }
+        Some(toml::Value::String(m)) if !m.is_empty() => Some(m.clone()),
+        Some(other) => {
+            return Err(fail(format!(
+                "`mutate` must be a non-empty string, not {other}"
+            )));
+        }
+    };
     Ok(Verify {
         check,
         mode,
@@ -1280,6 +1298,7 @@ fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
         every_lands,
         every_days,
         workflow,
+        mutate,
     })
 }
 

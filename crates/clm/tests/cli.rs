@@ -1638,7 +1638,7 @@ fn check_fails_on_a_retired_term_in_a_spec() {
 
 #[test]
 fn config_get_verify_prints_the_table_and_the_file() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     let (out, file) = config_get_in_repo(
         Some("[verify]\ncheck = \"scripts/slow.sh\"\nmode = \"local\"\n"),
         "verify",

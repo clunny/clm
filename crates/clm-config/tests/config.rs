@@ -1887,7 +1887,7 @@ fn local_file_takes_skip_migrations_but_not_the_repository_state_keys() {
 
 #[test]
 fn verify_set_prints_its_fields_and_layer() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     let f = Fixture::new(
         None,
         Some(
@@ -1906,7 +1906,7 @@ fn verify_set_prints_its_fields_and_layer() {
 
 #[test]
 fn verify_every_and_workflow_print_after_the_triggers() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     let f = Fixture::new(
         None,
         Some(
@@ -1931,7 +1931,7 @@ fn verify_every_and_workflow_print_after_the_triggers() {
 
 #[test]
 fn verify_unset_is_nothing_from_default() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     let s = Fixture::new(None, Some("defects = \"off\"\n"))
         .load(&[])
         .unwrap();
@@ -1943,7 +1943,7 @@ fn verify_unset_is_nothing_from_default() {
 
 #[test]
 fn verify_local_file_may_set_it() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     let f = Fixture::new(None, Some("[verify]\ncheck = \"a\"\nmode = \"local\"\n"))
         .local("[verify]\ncheck = \"b\"\nmode = \"pipeline\"\n");
     let s = f.load(&[]).unwrap();
@@ -1954,7 +1954,7 @@ fn verify_local_file_may_set_it() {
 
 #[test]
 fn bad_verify_fails_naming_the_file_and_key() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     for bad in [
         "verify = \"x\"\n",
         "[verify]\nmode = \"local\"\n",
@@ -1989,8 +1989,30 @@ fn bad_verify_fails_naming_the_file_and_key() {
 }
 
 #[test]
+fn verify_mutate_prints_last_and_is_refused_when_empty_or_with_import() {
+    // req:config/verify-setting@93c5194a
+    let f = Fixture::new(
+        None,
+        Some("[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"scripts/mutate.sh\"\n"),
+    );
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("verify").unwrap();
+    assert_eq!(value, "mode=local,check=x,mutate=scripts/mutate.sh");
+    assert_eq!(*layer, Layer::File(f.repo_file()));
+    for bad in [
+        "[verify]\ncheck = \"x\"\nmode = \"import\"\nworkflow = \"slow\"\nmutate = \"m\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"\"\n",
+        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = 3\n",
+    ] {
+        let e = Fixture::new(None, Some(bad)).load(&[]).unwrap_err();
+        assert!(e.to_string().contains("clm.toml"), "{bad}: {e}");
+        assert!(e.to_string().contains("verify"), "{bad}: {e}");
+    }
+}
+
+#[test]
 fn verify_in_the_user_file_fails() {
-    // req:config/verify-setting@5bf87fcc
+    // req:config/verify-setting@93c5194a
     let e = Fixture::new(Some("[verify]\ncheck = \"x\"\nmode = \"local\"\n"), None)
         .load(&[])
         .unwrap_err();
