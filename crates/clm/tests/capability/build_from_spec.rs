@@ -32,9 +32,9 @@ fn build(repo: &Repo, dir: &Path, node: &str, tests_dir: &str, requirements: &[(
     git(&["switch", "-q", &format!("impl/{node}")]);
     for (slug, version) in requirements {
         let marker = format!("{}{node}/{slug}@{version}", concat!("req", ":"));
-        let file = dir.join(tests_dir).join(format!("t_{slug}.rs"));
+        let file = dir.join(tests_dir).join(format!("t_{slug}.sh"));
         fs::create_dir_all(file.parent().unwrap()).unwrap();
-        fs::write(file, format!("// {marker}\n#[test]\nfn t() {{}}\n")).unwrap();
+        fs::write(file, format!("# {marker}\ntrue\n")).unwrap();
     }
     git(&["add", "-A"]);
     git(&["commit", "-q", "-m", &format!("build {node}")]);
@@ -64,11 +64,8 @@ fn queue() -> (Repo, Versions, Versions) {
     // The fixture's capability is already proven, so only `a` and `b` are pending.
     let capability = &repo.hash("capability", "capability:c")[..8];
     repo.write(
-        "tests/c.rs",
-        &format!(
-            "// {}{capability}\n#[test]\nfn t() {{}}\n",
-            concat!("req", ":capability/c@")
-        ),
+        "tests/c.sh",
+        &format!("# {}{capability}\ntrue\n", concat!("req", ":capability/c@")),
     );
     repo.commit("node b, and c proven");
     repo.land_on_origin("true");
