@@ -853,7 +853,7 @@ fn scenario_no_place_no_release() {
 
 #[test]
 fn clm_triage_prints_the_lines_and_exits_0() {
-    // req:orchestrator.triage/triage@91b10ab7
+    // req:orchestrator.triage/triage@756e5c04
     let triage = |root: &std::path::Path| {
         output(
             Command::new(env!("CARGO_BIN_EXE_clm"))
