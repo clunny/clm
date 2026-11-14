@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - a-draft-is-launched-for-a-code-only-bug-while-its-component-is
   - a-resumed-draft-s-first-command-fails-when-the-clone-still-holds
