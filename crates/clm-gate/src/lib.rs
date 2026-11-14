@@ -230,6 +230,7 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
             None => needs_review_of(&paths, setting_changed, &changes),
         };
         violations.extend(undeclared_burdens(&at, &entries, &changes));
+        violations.extend(exemptions_name_their_items(&at, &entries)?);
     }
 
     match kind {
@@ -410,6 +411,100 @@ fn undeclared_burdens(
             message: "a `kind: human-task` item is a step only the human can take: declare it in a `change.md`'s `human_burdens`".into(),
         })
         .collect()
+}
+
+/// One entry of a component's `exemptions` as written: its rule, files and `until`.
+type RawExemption = (String, Vec<String>, String);
+
+/// The `exemptions` a `SPEC.md`'s frontmatter holds, in order; an entry of the wrong shape is
+/// left out, since loading rejects it (`model/exemptions`).
+fn exemptions_in(text: &str) -> Vec<RawExemption> {
+    let Some((yaml, _)) = clm_model::split_frontmatter(text) else {
+        return Vec::new();
+    };
+    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(yaml) else {
+        return Vec::new();
+    };
+    let Some(list) = value.get("exemptions").and_then(|v| v.as_sequence()) else {
+        return Vec::new();
+    };
+    list.iter()
+        .filter_map(|entry| {
+            let rule = entry.get("rule")?.as_str()?.to_string();
+            let until = entry.get("until")?.as_str()?.to_string();
+            let files = entry
+                .get("files")?
+                .as_sequence()?
+                .iter()
+                .map(|f| f.as_str().map(str::to_string))
+                .collect::<Option<Vec<_>>>()?;
+            Some((rule, files, until))
+        })
+        .collect()
+}
+
+/// `gate/exemption-names-its-item`: each exemption a component's `SPEC.md` holds at `head`
+/// that its file at the merge base doesn't already cover (added or widened, as
+/// `needs-review` counts them), whose `until` names no `backlog/<slug>.md` at `head`.
+fn exemptions_name_their_items(
+    at: &At,
+    entries: &[(char, &str)],
+) -> Result<Vec<Violation>, String> {
+    let mut out = Vec::new();
+    for &(status, file) in entries {
+        let is_component = file
+            .strip_prefix(SPECS)
+            .is_some_and(|f| f.ends_with("SPEC.md"))
+            && file != "specs/SPEC.md";
+        if !is_component || !matches!(status, 'A' | 'M') {
+            continue;
+        }
+        let now = exemptions_in(&String::from_utf8_lossy(&show_bytes(
+            at.repo,
+            &format!("{}:{file}", at.head),
+        )?));
+        if now.is_empty() {
+            continue;
+        }
+        let before = if status == 'A' {
+            Vec::new()
+        } else {
+            exemptions_in(&String::from_utf8_lossy(&show_bytes(
+                at.repo,
+                &format!("{}:{file}", at.merge_base),
+            )?))
+        };
+        for (rule, files, until) in now {
+            let covered = before.iter().any(|(r, fs, u)| {
+                *r == rule && *u == until && files.iter().all(|f| fs.contains(f))
+            });
+            if covered {
+                continue;
+            }
+            let item = until
+                .strip_prefix("backlog/")
+                .filter(|slug| !slug.is_empty() && !slug.contains('/'))
+                .map(|slug| format!("backlog/{slug}.md"));
+            let exists = match item {
+                Some(path) => {
+                    !clm_git::git(at.repo, &["ls-tree", "--name-only", at.head, "--", &path])
+                        .map_err(|e| e.to_string())?
+                        .is_empty()
+                }
+                None => false,
+            };
+            if !exists {
+                out.push(Violation {
+                    path: PathBuf::from(file),
+                    rule: "gate/exemption-names-its-item",
+                    message: format!(
+                        "exemption from {rule} until {until} names no backlog item; add it"
+                    ),
+                });
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// The repository and the two revisions the gate compares: the merge base and the head,
