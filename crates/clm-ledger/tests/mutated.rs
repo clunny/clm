@@ -53,6 +53,26 @@ fn folded_and_shown() {
 }
 
 #[test]
+fn shown_counts_each_list() {
+    // req:ledger/mutated-record@23c5c318
+    let text = line(
+        1,
+        'c',
+        "2026-01-01T00:00:00.000Z",
+        r#"["a/x","a/y"]"#,
+        r#"["b/y@0123abcd"]"#,
+        r#"["c/z","c/w","c/v"]"#,
+    );
+    assert_eq!(
+        show(&fold_records(&[("one", &text)])),
+        [format!(
+            "mutated {} 2 killed 1 unproven 3 not judged alice/1 2026-01-01T00:00:00.000Z",
+            id('c')
+        )]
+    );
+}
+
+#[test]
 fn newest_first_by_commit() {
     // req:ledger/mutated-record@23c5c318
     let text = [
@@ -80,6 +100,7 @@ fn bad_entry() {
         line(2, 'c', at, "[]", r#"["a/x@0123ABCD"]"#, "[]"),
         line(3, 'c', at, "[]", r#"["a/x@0123abc"]"#, "[]"),
         line(4, 'c', at, "[]", r#"["x@0123abcd"]"#, "[]"),
+        line(13, 'c', at, "[]", r#"["a/x@0123abcde"]"#, "[]"),
         line(5, 'c', at, r#"["a/x@0123abcd"]"#, "[]", "[]"),
         line(6, 'c', at, r#"["nope"]"#, "[]", "[]"),
         line(7, 'c', at, "[]", "[]", r#"[""]"#),
@@ -91,7 +112,7 @@ fn bad_entry() {
     ]
     .join("\n");
     let fold = fold_records(&[("one", &bad)]);
-    assert_eq!(fold.warnings.len(), 11, "{:?}", fold.warnings);
+    assert_eq!(fold.warnings.len(), 12, "{:?}", fold.warnings);
     assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
     assert_eq!(fold.mutations[&id('c')].len(), 1);
 }
