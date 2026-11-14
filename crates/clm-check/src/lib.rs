@@ -107,7 +107,11 @@ fn run_with(
     ));
     violations.extend(unowned::violations(root, &graph, &tracked));
     let markers = scan(root);
-    violations.extend(dangling::violations(&graph, &markers.req, &removed));
+    violations.extend(dangling::violations(
+        &graph,
+        &dangling::every_marker(&markers),
+        &removed,
+    ));
     violations.extend(cites::violations(&graph, &markers.req));
     violations.extend(remove_by::violations(&graph, &markers.remove_by));
     violations.extend(skipped::violations(root, &graph, &markers.req));

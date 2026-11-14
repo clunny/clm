@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 clm-model.workspace = true
 clm-check = { workspace = true, default-features = false }
+clm-coverage = { workspace = true, default-features = false }
 clm-ledger = { workspace = true, default-features = false }
 clm-git.workspace = true
 
