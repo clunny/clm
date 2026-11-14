@@ -20,3 +20,5 @@ A run of `[land] check` on a clone holds an exclusive advisory lock on `.clm/che
 - *Only warn in the method that fixed-port tests fail under parallel builds.* Rejected: it moves the defect to every adopter, and builds still waste their retries.
 - *A setting to turn the lock off for projects whose tests share nothing.* Not now (`yagni`): the runs the lock still covers are lands' checks, which already queue behind each other on the land lock when they compile; add it when the serialised checks are shown to be a bottleneck.
 - *Widening the lock to every test run a build makes.* Rejected: it serialises the builds themselves (`build-slots`).
+
+The mutation pass (`mutation-after-land`, 2026-11-14) is not one of these runs: it takes no check lock and gets a slot of its own, one past the build places, so it overlaps them as a build's own test runs do.

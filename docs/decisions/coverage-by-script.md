@@ -15,3 +15,5 @@ Rejected:
 - **A devDependency in `web/` and `plugin-panel/`.** Each is another node's file, so each would need a delta and a build (`dependency-work-is-a-requirement`), for a package only this script uses.
 - **`c8` around vitest.** Vitest transforms TypeScript in memory; `c8` maps V8's offsets onto the files on disk. `@vitest/coverage-v8` is the provider vitest ships for its own transforms.
 - **Listing `llvm-tools-preview` in `rust-toolchain.toml`.** Every `rustup show` would then install a component only this script uses.
+
+Since `mutation-after-land` (2026-11-14) the script is also run by `.github/scripts/mutate.sh` at the end of each mutation pass, after the land, so the tracefile is fresh without a person running it. No land, check or workflow runs it, as before.

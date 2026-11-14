@@ -58,6 +58,10 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Draft:** an unattended session that designs one change from backlog items (`clm draft`).
 - **Intake:** matching the host's open issues, pull requests and dependency alerts to the backlog, saying of each issue and alert whether it is new, taken in by an item (whose `issues` or `alerts` names it) or resolved (`clm intake`).
 - **Oversized:** a component whose spec or code is larger than its size budget (`clm size`).
+- **Wiring:** the files that wire every component into one product, such as a dispatch file and a workspace manifest, listed under `wiring` in the root component's frontmatter. Every build may edit them, and setting the key switches on the land's refusal of a build that changes another component's files.
+- **Uncounted:** a `req:` marker that sits outside any test, so it proves nothing; `clm coverage` lists it.
+- **Mutation pass:** after a land, `clm verify` has the project's `[verify] mutate` command change the code and see whether the tests of each newly built requirement fail. *Usually:* mutation testing.
+- **Unproven:** a requirement whose tests noticed no change in a mutation pass. A `bug` item names it, and it reads `unbuilt` until a build resolves the item.
 - **Exemption:** a temporary pass from one rule `clm check` judges code by, such as `undeclared-imports`, for some of a component's own files, written in its frontmatter with the backlog item whose work ends it (`until`). Adding one needs a human's review, and `clm health` lists each until a change removes it. Code CLM makes no claims about at all goes in the root's `outside` instead. *Usually:* a suppression with a ticket, or a lint baseline.
 - **Expand-contract:** changing a contract other components use in steps, each built in the files of the component it changes: add the new one beside the old, move each user over in a requirement of its own, then remove the old, marked meanwhile with `clm:remove-by <change-id>` (`coupled-changes-sequence`). *Usually:* parallel change.
 

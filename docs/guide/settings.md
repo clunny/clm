@@ -80,10 +80,14 @@ Where: `clm.toml` or `clm.local.toml`.
 
 ### `verify`
 
-`[verify]`: slow tests that run after a land instead of before it, so lands stay fast. `check`: the slow-test command. `mode`: `local` (`clm verify` runs it on this machine), `pipeline` (a host pipeline runs it and records the result) or `import` (`clm verify` reads the runs of the pipeline `workflow` names). Optional `triggers` (`change-done`, `queue-drained`, and `work-done` with `local` only) and `every` (`lands`, `days`): when a run is due.
+`[verify]`: slow tests that run after a land instead of before it, so lands stay fast. `check`: the slow-test command. `mode`: `local` (`clm verify` runs it on this machine), `pipeline` (a host pipeline runs it and records the result) or `import` (`clm verify` reads the runs of the pipeline `workflow` names). Optional `triggers` (`change-done`, `queue-drained`, and `work-done` with `local` only) and `every` (`lands`, `days`): when a run is due. Optional `mutate`: the command of the mutation pass, which runs after a passing run and asks whether the tests of each requirement built since the last pass fail when its code is changed.
 
 - **Unset** (the default): slow tests, if any, stay in `[land] check`, and every land waits for them.
 - **Set** to keep lands fast: a failing run is reported after the land, `/clm:triage` offers it to you, and once you take it in as a bug, code lands on the components it names wait until its fix lands. You trade catching a break before `main` for lands that don't wait.
+- **`mutate` unset** (the default): a test that asserts nothing still reads as proof.
+- **`mutate` set**: each pass costs machine time after the land, from minutes to an hour, and holds no land. A requirement whose tests notice no change gets a bug item and reads as not built until a build mends the test. Your command reads a plan from the file `CLM_MUTATE` names and writes one verdict per requirement to the file `CLM_MUTATE_RESULT` names, with the mutation tool of your language. Not with `mode = "import"`.
+
+The plan holds one block per requirement: `requirement <id>`, a `code <path>` line for each file of its component, `diff <path>` naming a diff of what changed in them since the last pass (left out when nothing did), a `test <file>`, tab, `<name>` line for each test that cites it, and `limit <n>`. Mutate the diff's lines first and then up to `<n>` more of the code files, running only those tests, and write `<id> killed` when they failed for a mutant, `<id> survived <n>` when `<n>` mutants were tried and they passed for all, or `<id> not-judged`. Exit 0 whatever the verdicts.
 
 Where: `clm.toml` or `clm.local.toml`. `clm verify` reads `clm.toml`'s `[verify]` as committed on `origin/main`, never from the checkout it runs in, so an edit takes effect once it lands.
 

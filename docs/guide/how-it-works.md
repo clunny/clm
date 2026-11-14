@@ -73,11 +73,11 @@ Work is per component, not per change. `clm next` lists the components ready to 
 
 ### What a build may change
 
-A build changes only its own component's files: those its `tests` match, wherever they sit, and those its `paths` match that no other component's `tests` match. A build whose requirement needs an edit outside them leaves it unbuilt and adds a `question` item that blocks it. There are these exceptions:
+A build changes only its own component's files: those its `tests` match, wherever they sit, and those its `paths` match that no other component's `tests` match. A build whose requirement needs an edit outside them leaves it unbuilt and adds a `question` item that blocks it. Once the root component's frontmatter sets `wiring`, even to `[]`, `clm land` refuses a build branch (`impl/<component>`) that changes any other file, and `clm land --check-only` says so before the land. There are these exceptions:
 
-- **Shared wiring.** A build edits the files its root's Design names as wiring every component into one product, such as a dispatch file, a workspace manifest and its lock file, only to add or change the entry its own component needs.
+- **Shared wiring.** A build edits the files the root's `wiring` globs name, those that wire every component into one product, such as a dispatch file, a workspace manifest and its lock file, only to add or change the entry its own component needs. The land checks the file, not the edit.
 - **A capability test follows its rule.** A build whose requirement changes what a capability test observes at the product's boundary updates that test's expectations to what the requirement states, keeps its citation and every check the capability's scenarios state, and names the test in its pull request. When the capability as written would no longer hold, the requirement stays unbuilt until a change edits the capability.
-- **A stale marker.** A build may re-cite, and bring up to the current text, a test in a file no component's `tests` match that cites one of its own requirements at another version.
+- **A test that cites the component.** A build may add, change or delete a test of its own requirements in a file another component owns, when no component's `tests` match it; the land lets through any file that holds a marker citing the building component. Giving the tests to their components with `tests` globs ends the need for it.
 
 A contract change that another component's code or tests use lands in steps, each built in the files of the component it changes, and each leaving `main` green: the provider offers the new beside the old, marked `clm:remove-by <change-id>`; each user moves in a requirement of its own that needs the first step; and the provider removes the old once every move is built. An addition a user must handle counts too. A user that matches an enum exhaustively first adds a default arm marked `clm:remove-by` the change, and removes it when it handles the new variant; one that builds a struct by literal first builds it through a constructor or defaults.
 
@@ -89,7 +89,9 @@ Each test cites the requirement it proves at the version it was built against, `
 - `behind`: a test cites an older version, because the requirement's text changed;
 - `obsolete`: a test cites it, but a change removed it.
 
-The check reads that text wherever it appears outside Markdown, strings and comments included, so a test that has to hold a requirement ID after `req:` without citing it, such as one that searches for citations, splits the string so the literal never appears whole (`"req" + ":a/x"`); the spec format's test references say more.
+In a Rust, TypeScript, JavaScript or Python file a marker counts only inside a test or a named group of tests (a `describe` block, a `Test` class), or in the comment directly above one; `clm coverage` lists a marker anywhere else as `uncounted`, and its requirement reads `unbuilt`. In a file of another language every marker counts. `clm check` still reads that text wherever it appears outside Markdown, strings and comments included, when it looks for a marker that names nothing, so a test that has to hold a requirement ID after `req:` without citing it, such as one that searches for citations, splits the string so the literal never appears whole (`"req" + ":a/x"`); the spec format's test references say more.
+
+When the project sets `[verify] mutate`, `clm verify` asks, after a land, whether the tests of each newly built requirement fail when its component's code is changed. A requirement whose tests notice nothing gets a `bug` item that names it under `unproven`, and reads `unbuilt` until a build deletes the item: by mending the test, or, when the test is sound and the sample missed it, by saying so in the commit that resolves the item.
 
 A change is complete once every requirement it added or changed is cited at its current version and no test cites one it removed; the next build's `clm rebase` then archives it. On an existing project, the first builds link your existing tests to the requirements they prove, write tests for the rest, and remove dead code.
 
