@@ -27,6 +27,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 ## Settled (2026-11-13, with the human)
 
 - **The freeze is on.** Until this plan is done, the build loop and triage work only on it. Defects are filed, and their default answer is "accept".
+- **One exception to the freeze: landing** (2026-11-13, by the human). `20261113-land-starvation` is built at `P1` beside the plan. On that day a land lost its check eight times in a row to a `main` that kept moving, and another took 53 minutes, so every phase's builds were waiting on lands. It answers one of the root causes under Problem, parallel land checks on one loaded machine, which no phase takes up. Its first step keeps a check that passed and gives each land a short turn to push in; its second, lands sharing one check, waits on a question item until the first is measured. It keeps `clm land` fast, as the next point requires. The freeze holds for everything else: an exception is the human's to make, never a session's.
 - **CLM has adopters.** Projects run published releases, so `upgrade` and its migrations stay, and every change in this plan that alters a file, key or format those projects hold ships its migration (`upgrades-carry-migrations`).
 - **`clm land` stays fast.** It gains only checks that take milliseconds. Anything slow runs after the land.
 - **Scope kept.** The web app, Azure DevOps, Codex, the site, blog and analytics, `right-model-per-task` and `watch-machine-load` are in use and stay.
@@ -66,6 +67,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 
 **3. Make proof real.**
 - `clm check`: a marker counts only inside a test, and only when that test passed in the check the build already ran on its branch head.
+  Since `20261113-land-starvation` a land's verdict can be kept from an earlier `main`, composed from an overlap re-check, or shared with other lands, so the phase's design says which record makes a marker count. The build's own `clm land --check-only` ran every test on the branch's head merged with `main`; a kept, composed or shared land check may have run only a selection, on a tree holding other branches. A marker counts on the first, never on a check that didn't run its test.
 - `clm land`: a diff outside the files of the branch's component is refused.
 - Verify: for each requirement changed or re-cited since the last run, mutate the changed code of its component and run its citing tests; when they kill nothing, the requirement returns to pending with a bug on the component. The coverage script runs in the same pass.
 
