@@ -9,7 +9,7 @@ use common::{Fixture, line, run};
 
 #[test]
 fn a_complete_change() {
-    // req:orchestrator.loop/plan-archive@6f3325b0
+    // req:orchestrator.loop/plan-archive@97501582
     let fx = Fixture::new();
     fx.set("wrap-up", "complete c\ncomplete d\n");
     let actions = start(&fx.options(), "opus", false).unwrap();
@@ -37,7 +37,7 @@ fn a_complete_change() {
 
 #[test]
 fn an_archive_branch_the_loop_doesnt_hold() {
-    // req:orchestrator.loop/plan-archive@6f3325b0
+    // req:orchestrator.loop/plan-archive@97501582
     let fx = Fixture::new();
     clm_git::git(
         &fx.work,
@@ -61,7 +61,7 @@ fn an_archive_branch_the_loop_doesnt_hold() {
 
 #[test]
 fn no_archive_while_stopping() {
-    // req:orchestrator.loop/plan-archive@6f3325b0
+    // req:orchestrator.loop/plan-archive@97501582
     let fx = Fixture::new();
     fx.set("wrap-up", "complete c\n");
     stop(&fx.options(), StopMode::Drain).unwrap();
