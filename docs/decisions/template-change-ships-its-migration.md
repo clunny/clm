@@ -10,7 +10,9 @@ When a change alters the text of a file `clm init` writes and projects already h
 
 **Why `init`'s build.** The template change is the cause, and `init` already depends on `upgrade` (it stamps `upgraded` with `latest()`), so its build reads `upgrade`'s list of migrations anyway. The migration's text is fixed by the requirement as written (its `old` the released script, its `new` the one `init`'s requirement states), so the build decides nothing of `upgrade`'s behaviour that the spec leaves open.
 
-This is an exception of `path-ownership`, beside the re-cited markers and the capability tests, and refines `path-ownership-by-prompt`: the build prompt states it, and the build's review and spec audit read the migration under `## Fixes in other components`.
+This was an exception of `path-ownership`, beside the re-cited markers and the capability tests, stated by the build prompt alone.
+
+**Ended (2026-11-14, `20261114-proof-switched-on`).** The land now refuses a build's change to another component's files (`own-files-at-the-gate`), and no clause keeps this exception: `init`'s build can no longer write in `upgrade`'s files. The reason above still holds, so neither half lands alone, and a requirement that changes a file `clm init` writes waits behind a question item until the migrations of those files live with them in one component (`backlog/a-template-and-its-migration-live-in-different-components`). That change takes up the option rejected below: the cycle it names is avoided when `upgrade`'s commands are given the list of migrations by their caller.
 
 **Rejected.**
 - *Leave the template file out of the corpus comparison while the two builds land.* Weakens the check `upgrades-carry-migrations` rests on, for a window nobody would remember to close.

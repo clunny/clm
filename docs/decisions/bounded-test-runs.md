@@ -13,7 +13,7 @@ So every command a build or draft runs itself, other than `clm land`, ends withi
 
 A test or check run its limit ends is a failing run: the session finds the hanging test as for any failure, fixes it when it is in the component it is working on, and otherwise records it as a backlog item and names it in its pull request body. The `clm run` and `clm draft` prompts say all of this. The waiting rules stay as they are: once every command a session waits on ends by itself, waiting for its notice is safe.
 
-The bound rests on the prompt, as the rule that a build stops its background work does and as `path-ownership-by-prompt` accepts for `path-ownership` (`deterministic-enforcement`): no program sees which commands a session runs or how, short of wrapping the agent's shell, and a session that ignores the instruction is no worse off than without it. The instruction is prompt source that no test pins (`prompt-text-is-source`).
+The bound rests on the prompt, as the rule that a build stops its background work does (`deterministic-enforcement`): no program sees which commands a session runs or how, short of wrapping the agent's shell, and a session that ignores the instruction is no worse off than without it. The instruction is prompt source that no test pins (`prompt-text-is-source`).
 
 `clm land`, and `clm land --check-only`, stay exempt and run as written: a land queues behind other lands with no time limit (`lock-queue`), and the check command is one plain command (`prompt-check-command`). A hang inside a land's check is the land's to bound (`backlog/a-hung-land-check-holds-every-land-of-the-clone`).
 

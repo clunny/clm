@@ -505,15 +505,18 @@ Loading SHALL take `effort` only from the repository's `clm.toml` or the clone's
 - architecture/redesign-before-workaround
 
 ### Requirement: health-lcov-here
-This repository's `clm.toml` SHALL set `[health]` with `lcov = "target/lcov.info"`, the tracefile `.github/scripts/coverage.sh` writes, and no other key of the table.
+This repository's `clm.toml` SHALL set `[health]` with `lcov = ".clm/verify-build/lcov.info"`, the copy of the tracefile `.github/scripts/coverage.sh` writes that the mutation pass leaves in the place `clm verify` keeps from run to run (`ci/mutate-script`), and no other key of the table. The path is under the clone's main checkout, so `clm health` reads it there and reports `not found` in a linked worktree.
 
 #### Scenario: this repository
 - GIVEN this repository's `clm.toml`
 - WHEN `clm config get health` runs against it
-- THEN it prints `reconsider=3,scenarios=6,exceptions=4,stale_days=30,lcov=target/lcov.info` and the file's path
+- THEN it prints `reconsider=3,scenarios=6,exceptions=4,stale_days=30,lcov=.clm/verify-build/lcov.info` and the file's path
 
 #### Serves
 - capability/know-health
+
+#### Needs
+- ci/coverage-script
 
 ### Requirement: component-size-setting
 Loading SHALL read the table `component_size` from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table whose keys `spec_tokens` and `code_tokens` are each optional and default to `12000` and `40000`, failing, naming the file and `component_size`, for a `component_size` that isn't a table, for any other key, or for a value that isn't a positive integer, and failing, naming the user's `config.toml` and the key, when that file sets it; `clm config get component_size` SHALL print `spec_tokens=<n>,code_tokens=<n>` and the layer: the path of the file that sets the table, `default` otherwise. A file that sets the table's old name, which `20261102-rename-node-to-component` kept beside it, SHALL fail, naming the file, the old name and `component_size`, and `clm config get` given the old name SHALL fail as it fails for any unknown key. `clm_config::node_size_from(text)` SHALL read `[component_size]`, and fail for a text that sets the old name. No `clm:remove-by 20261102-rename-node-to-component-contract` marker SHALL be left.
@@ -697,15 +700,19 @@ The guide's page `docs/guide/settings.md` SHALL hold, for every key `clm config 
 - THEN it reports nothing
 
 ### Requirement: verify-here
-This repository's `clm.toml` SHALL set `[verify]` with `check = ".github/scripts/ci-check.sh"`, `mode = "local"`, `triggers = ["queue-drained"]` and `every = { lands = 20 }`, and no other key of the table, so the whole suite runs after lands that checked only where the branch and `main` overlap (`land/overlap-recheck`), on this machine, once the build queue drains and at least every 20 lands.
+This repository's `clm.toml` SHALL set `[verify]` with `check = ".github/scripts/ci-check.sh"`, `mode = "local"`, `triggers = ["queue-drained"]`, `every = { lands = 20 }` and `mutate = ".github/scripts/mutate.sh"`, and no other key of the table, so the whole suite runs after lands that checked only where the branch and `main` overlap (`land/overlap-recheck`), on this machine, once the build queue drains and at least every 20 lands, and the mutation pass follows each run that passed (`verify/mutation-pass`, `ci/mutate-script`).
 
 #### Scenario: this repository
 - GIVEN this repository's `clm.toml`
 - WHEN `clm config get verify` runs against it
-- THEN it prints `mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20` and the file's path
+- THEN it prints `mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh` and the file's path
 
 #### Serves
 - capability/land-safely
+- capability/prove-by-tests
+
+#### Needs
+- ci/mutate-script
 
 ### Requirement: committed-settings
 `clm_config::load_committed(root, text, source, env)` SHALL return the settings `load(Some(root), env)` returns, except that the repository's layer SHALL be read from `text`, the contents of a `clm.toml` committed somewhere, or be absent when `text` is `None`, and never from `<root>/clm.toml`; the clone's `clm.local.toml`, the variables and the user's file SHALL be read as `load` reads them. Each value the text sets SHALL have `source`, such as `origin/main:clm.toml`, as its layer, and wherever `load` fails for a `clm.toml` holding that text (an unknown key, an invalid value, a repository-only rule broken, text that isn't TOML) it SHALL fail naming `source` and the key. It exists for a command that judges a commit by the settings committed at it rather than by the checkout it runs in (`verify/settings-from-main`).

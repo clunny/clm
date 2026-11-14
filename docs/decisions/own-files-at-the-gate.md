@@ -4,7 +4,7 @@ date: 2026-11-14
 status: accepted
 ---
 
-`path-ownership` was kept by the build prompt (`path-ownership-by-prompt`), and a sentence in a prompt enforces nothing (`three-kinds-of-rule`). That decision weighed a gate rule and set it aside for its edge cases. Most are gone: builds no longer make compile-only fixes in other components, and the commits `clm rebase` adds touch only spec paths.
+`path-ownership` was kept by the build prompt alone, and a sentence in a prompt enforces nothing (`three-kinds-of-rule`). A gate rule had been weighed on 2026-10-30 and set aside for its edge cases. Most are gone: builds no longer make compile-only fixes in other components, and the commits `clm rebase` adds touch only spec paths.
 
 For a branch named `impl/<component>`, each changed code file is refused that is none of: the component's own; a file no component owns; a file the root's `wiring` globs name; a file that cites the component (`req:<component>/` at the merge base or at the head); a capability test, edited and not added or deleted, citing a capability the component serves. The gate reads no branch name (`spec-branches-hold-spec-paths`), so it offers the list as a library call and `clm land`, which knows the branch, refuses; `clm land --check-only` says so first.
 
@@ -17,5 +17,18 @@ For a branch named `impl/<component>`, each changed code file is refused that is
 With that clause and this repository's wiring, 29 of those 429 builds (7%) would have been refused: most changed a root test file that cites another component, as when a change to the ledger's records broke `land`'s CLI tests, and the rest a parent's shared test helper, a child's source file or another component's code. Those are the coupled changes `expand-contract` builds in steps. One more build was `init` writing `upgrade`'s migrations alone, the written exception `template-change-ships-its-migration`. The rule has no clause for it: before this repository sets `wiring`, a template and its migration must share a component (`backlog/a-template-and-its-migration-live-in-different-components`), or a change must give the rule a way to keep that exception. An exemption rule for it was drafted and cut, since adding a value to the model's list of rules breaks `check.health`'s match on it for one use that is not yet needed (`yagni`).
 
 Rejected:
-- **A commit trailer naming each file outside the component**, as `path-ownership-by-prompt` rejected it.
+- **A commit trailer naming each file outside the component**: a convention invented to work around the rule on its first day.
 - **Judging hunks, not files**, so that only the lines of a test citing the component may change in a shared file. A new test's imports and helpers lie outside any test, and the rule it would refine is transitional.
+
+**Switched on here (2026-11-14, `20261114-proof-switched-on`).** This repository's root names its wiring: `Cargo.toml`, `Cargo.lock`, `crates/clm/Cargo.toml`, `crates/clm/src/main.rs` and `crates/clm/src/upgrade_gate.rs`. `ARCHITECTURE.md`'s `path-ownership` is a checked entry from that land, in force for a project once its root names its wiring.
+
+The list is what builds touched. The real `foreign_files` was run over the last 300 `impl/*` lands, back to 2026-11-08, with a wiring list given to it. With an empty list 48 would have been refused. The 27 a list saves changed, outside their own files, only `crates/clm/src/main.rs` (15 edits), `Cargo.lock` (14), `crates/clm/Cargo.toml` (4), `crates/clm/src/upgrade_gate.rs` (4), `clm.toml` (4) and `Cargo.toml` (2). The earlier draft's `crates/clm/src/**` opened four more source files of the root that no other build touched. `clm.toml` is left out: it is `config`'s, and each of this repository's settings is a requirement of `config` that its build makes (`config/verify-here`), so the four builds that edited it would rightly have waited for `config`'s.
+
+With that list 21 of the 300 (7%) would have been refused:
+- ten were a split's child build that also edited or deleted the parent's copy, which `nested-splits` gives to the parent's build: nine builds of the `plugin.*` skill components, since removed, in `crates/clm/tests/plugin.rs`, and `web.views` in 39 of `web`'s files;
+- four were `init` writing `upgrade`'s migration and mending `upgrade`'s tests;
+- seven were coupled changes: a fix of 17 files in ten components on one branch, `check` editing `check.affected`'s source, `ledger` editing `land`'s, and four edits to another component's tests or to the capability suite's harness.
+
+**No clause for a template and its migration.** Each of the four `init` builds also edited `upgrade`'s existing tests, so naming the migration files in the wiring would have let none of them through, and it would have opened `upgrade`'s files to every build for good. An exemption can only cover a component's own files, so one for this would sit on `upgrade` and be the same thing with an end date. The exception exists because one behaviour, what a project set up earlier holds, is split over two components. So the rule refuses it, and a change of its own puts the migrations of the files `clm init` writes with those files (`backlog/a-template-and-its-migration-live-in-different-components`). Until it is built, a requirement that changes such a file waits behind a question item.
+
+**No clause for a fix that spans components.** `clm claim <component> --fix` let one branch carry a fix across every component a `bug` or `deferred` item names. The rule refuses the files of the other components, and no clause was added for them: work is per component (`component-reconciliation`), so each component's part is fixed under its own claim and the last deletes the item.

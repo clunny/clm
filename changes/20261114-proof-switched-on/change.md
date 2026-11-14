@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [the-written-exception-to-path-ownership-lets-a-build-re-cite-a]
 human_burdens:
   - "The mutation pass spends this machine's time after lands, for as long as it is on: a `cargo-mutants` and StrykerJS run and an instrumented run of the whole suite, at least every 20 lands and when the queue drains."

@@ -90,15 +90,24 @@ A principle for how every rule is built; each entry's label and its `#### Enforc
 #### Carries
 - method
 
+#### Scenario: a test that notices nothing
+- GIVEN a project that sets `[verify] mutate`, and a land that adds a test citing a requirement, whose mutation command reports that the test passed for every change made to the code
+- WHEN `clm verify --due` runs, and then `clm pending`
+- THEN a `bug` item names the requirement as unproven, and `clm pending` lists it
+
 #### Enforced by
 - check.coverage/coverage-report
 - check.coverage/pending-report
 - check.coverage/markers-from-files
+- check.coverage/test-spans
+- check.coverage/markers-in-tests
 - check/skipped-tests
 - land/land
+- verify/mutation-pass
+- verify/files-unproven
 
 #### Untested
-Today the check reads a marker wherever it sits, whether or not its test ran, and CLM knows no eval proof (`backlog/a-passing-check-proves-less-than-the-spec-claims`).
+A marker counts only inside a test in the languages CLM reads, and anywhere in a file of another language. Whether the test ran is read from no test runner: it rests on the land's check having selected every file the branch changed (`markers-count-in-tests`). Whether a test would fail if the code were wrong is judged only after the land, only where the project sets `[verify] mutate`, only for tests added or changed since, and never for a browser test (`mutation-after-land`). CLM knows no eval proof yet (`backlog/a-passing-check-proves-less-than-the-spec-claims`).
 
 ### Constraint: no-silent-drift
 **Checked.** A divergence between spec and code that CLM can detect SHALL fail the check or the land. A requirement not yet built is pending, not drift.
@@ -239,18 +248,30 @@ A writing discipline; `clm apply` deletes what a change removes.
 That a build works through its component highest priority first is a session's conduct.
 
 ### Constraint: path-ownership
-**Principle.** Every code file SHALL have one owning component, and a build SHALL change only its own component's files; a change that another component must follow is built in steps, each by its owner's build (`expand-contract`). The exceptions, for shared wiring and for a capability test that follows its rule, are in the guide (`clm guide how-it-works`).
+**Checked.** Every code file SHALL have one owning component, and once the root names its `wiring`, a build SHALL change only its own component's files; a change that another component must follow is built in steps, each by its owner's build (`expand-contract`). What else a build may change, the wiring and the tests that cite it, is in the guide (`clm guide how-it-works`).
 
 #### Scenario: removal another component still uses
 - GIVEN a build of `a` whose requirement removes a Contract function that component `b`'s code still calls, and no requirement of `b` that moves it off
 - WHEN it builds
 - THEN it leaves the requirement unbuilt, keeps `b` building, and adds a `question` item that blocks the requirement
 
+#### Scenario: a build changes another component's file
+- GIVEN a root that names its `wiring`, and a branch `impl/a` that changes a source file of component `b`
+- WHEN `clm land impl/a` runs
+- THEN it refuses, naming the file and `b`, before it runs any check
+
 #### Carries
 - method
 
+#### Enforced by
+- check/paths-disjoint
+- check/tests-cite-their-owner
+- model/wiring-globs
+- gate/own-files
+- land/build-holds-own-files
+
 #### Untested
-Which files a component owns is checked (`check/paths-disjoint`, `check/tests-cite-their-owner`). That a build stays in them is not yet: no gate or land check refuses a file outside them, so the build's instructions keep it there and its review reads the diff.
+The land judges which files a build changes, not the edit: that a wiring edit adds only the build's own entry, and that an edit to a capability test keeps what the capability states, are judgements. A branch named outside `impl/` has no component and isn't judged, and a project whose root names no `wiring` is held to this by its builds' instructions alone (`own-files-at-the-gate`).
 
 ### Constraint: incremental-adoption
 **Checked.** Once the root spec sets `outside`, every tracked code file SHALL be owned by a component or declared `outside`, so an existing codebase is adopted a part at a time and nothing is unowned by accident.
