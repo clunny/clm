@@ -17,3 +17,5 @@ choices:
 - Have `check` re-export `marker_spans` beside `markers_in`, which its Design lists.
 
 Either is a spec change (a `depends_on` entry, or a line of `check`'s Design and a requirement carrying it); `churn-signal` stays unbuilt until it lands, and its tests keep citing the old version, so the component stays `behind`.
+
+Recommended: the re-export. `check`'s Design already has dependents call `clm-coverage`'s library through `clm-check` (`check-coverage-split`), so it adds no second import path. Only `churn-signal` waits; the component's other requirements are current.
