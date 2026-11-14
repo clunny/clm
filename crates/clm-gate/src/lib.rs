@@ -1142,7 +1142,7 @@ pub fn foreign_files(
             owner: owner.to_string(),
         });
     }
-    found.sort_by(|a, b| a.path.cmp(&b.path));
+    // `git diff` lists paths in byte order, so `found` is sorted by path.
     Ok(found)
 }
 
