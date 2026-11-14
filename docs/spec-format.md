@@ -23,6 +23,7 @@ tests: ["tests/check/**"]   # optional; this component's test files, owned where
 exemptions:             # optional; files temporarily exempt from one code rule, each until a backlog item's work is done (`temporary-exemptions`)
   - { rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/give-features-their-own-tests, why: "the suite still builds the whole app" }
 outside: ["src/web/**"]   # root only, optional; code no component owns yet, while a codebase is adopted a part at a time (`incremental-adoption`)
+wiring: ["Cargo.toml", "src/main.rs"]   # root only, optional; files every component's build may edit, and the switch for the gate's ownership rule (`own-files-at-the-gate`)
 ---
 
 ## Contract
@@ -50,7 +51,7 @@ The check SHALL fail when code under a component's `paths` imports code owned by
 - **Needs** (`requirement-needs`). A requirement may hold one `#### Needs` block among its scenarios, each line `- <component>/<slug>` naming a requirement of another component that must be current before this one can be built. The model rejects a need naming no requirement, one on the same component, or a cycle. The queue treats a requirement whose needs aren't current like one a backlog item blocks (`requirement-blocks`): left out of its component's work until they are.
 - **Path ownership** (`incremental-adoption`). Every tracked file outside `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md` and `CLAUDE.md` is code, and, once the root sets `outside` (even to `[]`), `clm check` fails one that no component's `paths` match unless a glob of the root's `outside` does (`check/unowned-files`). `outside` names the code not yet adopted; a file a component's `paths` also match is the component's, and a glob that matches no file outside every component fails the check, so the list shrinks as later changes give that code components.
 - **Children** (`nested-splits`). A component may hold children: `specs/<component>/<part>/SPEC.md` is component `<component>.<part>`, a full component with its own frontmatter, requirements and `paths` (still disjoint from every other component's). A child's builds receive its parent's Contract and Design with their ancestors (`ancestor-scoped-context`), and the views draw it inside its parent. A component is split by nesting, never into new siblings: see `docs/guide/shaping-the-graph.md` and `slim-components`.
-- **Requirement status is derived, never written.** A requirement is *current* if a passing test cites it at its current version, *behind* if tests cite it only at older versions, and *unbuilt* if none cites it (`versioned-markers`). The last two are *pending*.
+- **Requirement status is derived, never written.** A requirement is *current* if a passing test cites it at its current version, *behind* if tests cite it only at older versions, and *unbuilt* if none cites it (`versioned-markers`). In a Rust, TypeScript, JavaScript or Python file a citation counts only inside a test or a named group of tests, or in the comment directly above one (`markers-count-in-tests`); and a requirement that a `bug` item names under `unproven` reads *unbuilt* until the item is resolved (`mutation-after-land`). The last two are *pending*.
 - Each element's **content hash** is computed from its normalized text: the requirement block, contract section, design section and frontmatter. These hashes are what deltas and test markers record (`hash-based-staleness`). A requirement's **version** is the first 8 hex digits of its hash, and leaves out its `#### Serves` block: the hash is that version followed by the last 8 hex digits of the whole block's hash, so a Serves-only edit makes deltas on the rule stale but no test `behind` (`serves-in-the-base`).
 
 ## The human layers: `ARCHITECTURE.md` and `CAPABILITIES.md`
@@ -186,6 +187,7 @@ origin: 20261021-coverage # optional: the change during which it came up
 priority: P3              # optional: P1..P5, default P5 (capped slots, see below)
 blocks: [check/skipped-tests]   # optional: requirements that can't be built until this is resolved
 choices: [yes, no]        # optional, `question` items only: the 2 to 5 answers that settle it, each a short line
+unproven: [check/skipped-tests@0123abcd]   # optional, `bug` items only, written by `clm verify`: requirements whose tests noticed no change to their code
 ---
 Enough context to act on later.
 ```

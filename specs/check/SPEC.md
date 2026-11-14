@@ -68,7 +68,7 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - THEN it exits 1 naming the delta and the stale element
 
 ### Requirement: dangling-markers
-`clm check` SHALL report every `req:<id>` marker in a scanned file whose `<id>` names no existing requirement or human-layer entry (`model/human-layers`), giving the file and line; and every marker that cites an architecture entry, or an entry holding `#### Untested`, with the message `architecture entries are proven by the rules their #### Enforced by names, not by tests` or `<id> is untested`, since a test never proves either (`human-layer-proof`); unless a change outside the archive lists `<id>` under `REMOVED Requirements` in one of its deltas, or `<id>` is a capability that a change outside the archive lists under `removes_capabilities` and `CAPABILITIES.md` doesn't hold (`check.coverage/removed-capabilities`): that code is obsolete and is removed when the component is next built (`removed-requirements-build-out`, `removed-capabilities-build-out`). The message for a marker whose `<id>` is `capability/<slug>` and names no entry, with no such change, SHALL end `; a change that removes the capability lists it under removes_capabilities`, so the author of a branch that removes a cited capability learns how to land it. Once the change is archived, the marker SHALL be reported as before. An `abandoned` change is archived (`archive-done`), so it grants no exemption; a requirement another change adds back under the same ID is a new requirement once that change applies, and the marker then cites it as usual.
+`clm check` SHALL report every `req:<id>` marker in a scanned file whose `<id>` names no existing requirement or human-layer entry (`model/human-layers`), giving the file and line; and every marker that cites an architecture entry, or an entry holding `#### Untested`, with the message `architecture entries are proven by the rules their #### Enforced by names, not by tests` or `<id> is untested`, since a test never proves either (`human-layer-proof`); unless a change outside the archive lists `<id>` under `REMOVED Requirements` in one of its deltas, or `<id>` is a capability that a change outside the archive lists under `removes_capabilities` and `CAPABILITIES.md` doesn't hold (`check.coverage/removed-capabilities`): that code is obsolete and is removed when the component is next built (`removed-requirements-build-out`, `removed-capabilities-build-out`). The message for a marker whose `<id>` is `capability/<slug>` and names no entry, with no such change, SHALL end `; a change that removes the capability lists it under removes_capabilities`, so the author of a branch that removes a cited capability learns how to land it. Once the change is archived, the marker SHALL be reported as before. An `abandoned` change is archived (`archive-done`), so it grants no exemption; a requirement another change adds back under the same ID is a new requirement once that change applies, and the marker then cites it as usual. It SHALL judge the markers outside a test (`check.coverage/test-spans`, `markers_outside_tests`) as it judges those `scan` returns, each marker once, so a marker that proves nothing still can't name what doesn't exist.
 
 #### Scenario: marker on an entry
 - GIVEN a test citing `capability/approve`, an entry of `CAPABILITIES.md`, and another citing `capability/nope`, which isn't one
@@ -100,7 +100,13 @@ The counting itself is `size_of(graph, files, markers, defaults)` (`size-of-list
 - WHEN `clm check` runs
 - THEN it exits 1 reporting `tests/t.rs:3` and `a/gone`
 
+#### Scenario: a dangling marker outside a test
+- GIVEN `src/lib.rs` holding `req:a/nope` in a function with no test attribute, and no requirement `a/nope`
+- WHEN `clm check` runs
+- THEN it reports the marker once as `check/dangling-markers`, naming the file and line
+
 #### Needs
+- check.coverage/test-spans
 - model/human-layers
 - check.coverage/removed-capabilities
 

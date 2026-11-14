@@ -6,6 +6,7 @@ depends_on: [model, check, check.affected, check.unreferenced, check.health, gat
 paths: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/build.rs", "crates/clm/src/**", "crates/clm/tests/*.rs", "crates/clm-runner/**", "rust-toolchain.toml", ".claude/settings.json", ".gitattributes", "scripts/dev-install.sh", "scripts/retired-terms.sh", "scripts/retired-terms.txt", "README.md", "CONTRIBUTING.md", "LICENSE"]
 outside: []
 serves: [capability/install-and-release, architecture/platform]
+wiring: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/src/**", "clm.toml"]
 ---
 
 ## Contract
