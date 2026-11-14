@@ -54,6 +54,7 @@ pub const CHANGE_KEYS: &[&str] = &[
     "priority",
     "frontmatter_keys",
     "renames",
+    "removes_capabilities",
 ];
 
 impl ChangeStatus {
@@ -82,6 +83,9 @@ pub struct ChangeFrontmatter {
     /// Node frontmatter keys this change adds, accepted on any node while it is live
     /// (`declared-frontmatter-keys`).
     pub frontmatter_keys: Vec<String>,
+    /// The capabilities whose `CAPABILITIES.md` entries the change's branch removes by
+    /// hand, each once, in the order written (`parse-changes`).
+    pub removes_capabilities: Vec<String>,
     /// The raw `renames`, checked by `load_change` into `Change::renames`
     /// (`rename-records`).
     renames: Option<serde_yaml::Value>,
@@ -121,6 +125,8 @@ struct RawChangeFrontmatter {
     priority: Priority,
     #[serde(default, deserialize_with = "key_names")]
     frontmatter_keys: Vec<String>,
+    #[serde(default, deserialize_with = "capability_slugs")]
+    removes_capabilities: Vec<String>,
     #[serde(default)]
     renames: Option<serde_yaml::Value>,
 }
@@ -147,6 +153,7 @@ impl TryFrom<RawChangeFrontmatter> for ChangeFrontmatter {
             resolves: raw.resolves,
             priority: raw.priority,
             frontmatter_keys: raw.frontmatter_keys,
+            removes_capabilities: raw.removes_capabilities,
             renames: raw.renames,
         })
     }
@@ -168,6 +175,27 @@ fn key_names<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::E
         ))),
         None => Ok(keys),
     }
+}
+
+/// A list of capability slugs, each once: lowercase ASCII letters, digits and `-`, and
+/// not empty (`human-layers`).
+fn capability_slugs<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<String>, D::Error> {
+    // A bare `removes_capabilities:` is null: the default, none.
+    let mut slugs = Option::<Vec<String>>::deserialize(d)?.unwrap_or_default();
+    let bad = slugs.iter().find(|s| {
+        s.is_empty()
+            || !s
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    });
+    if let Some(s) = bad {
+        return Err(serde::de::Error::custom(format!(
+            "`removes_capabilities` entry `{s}` isn't a capability slug"
+        )));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    slugs.retain(|s| seen.insert(s.clone()));
+    Ok(slugs)
 }
 
 /// A frontmatter key that is accepted, whatever its value, and holds nothing.

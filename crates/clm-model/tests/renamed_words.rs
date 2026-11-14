@@ -78,7 +78,7 @@ fn a_bad_status_is_still_rejected() {
 
 #[test]
 fn burdens_by_the_new_key_and_the_old() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     let change = |key: &str| format!("---\nstatus: proposed\n{key}: [a paid model run]\n---\n");
     let new = clean(&[("changes/x/change.md", &change("human_burdens"))]);
     assert_eq!(new.changes["x"].frontmatter.burdens, ["a paid model run"]);
@@ -88,7 +88,7 @@ fn burdens_by_the_new_key_and_the_old() {
 
 #[test]
 fn the_old_burdens_key() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     let archived = "---\nstatus: done\nburdens: [a paid model run]\n---\n";
     let live = "---\nstatus: proposed\nburdens: [a paid model run]\n---\n";
     let both = "---\nstatus: proposed\nburdens: [a paid model run]\nhuman_burdens: [a paid model run]\n---\n";
@@ -115,7 +115,7 @@ fn the_old_burdens_key() {
 
 #[test]
 fn a_bare_burdens_key_is_both_keys_present() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     let both = "---\nstatus: proposed\nburdens:\nhuman_burdens:\n---\n";
     one_violation(
         &[("changes/x/change.md", both)],

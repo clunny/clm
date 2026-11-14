@@ -26,7 +26,7 @@ const DONE: &str = "---\nstatus: done\nfrom: backlog/idea\n---\n";
 
 #[test]
 fn archived_changes_load_and_are_flagged() {
-    // req:model/parse-changes@e3b5847d
+    // req:model/parse-changes@d4cfec66
     let dir = repo(&[
         ("changes/archive/x/change.md", DONE),
         ("changes/y/change.md", "---\nstatus: proposed\n---\n"),
