@@ -5,6 +5,6 @@ components: [upgrade, clm]
 origin: 20261113-phase-2-delete
 ---
 
-`clm.toml` allows `clm_upgrade::check_lock` in the `unreferenced-public-items` detector "until `clm upgrade --lock` calls `append_lock`". It does now, so the condition is met, but deleting the line alone fails the detector: only the crate's own unit tests call `check_lock`.
+One thing is still owed, and it is `clm`'s. `upgrade/shipped-migrations-frozen`'s scenario "locking a release" runs `clm upgrade --lock`, and the test of the command in `crates/clm/tests/upgrade.rs` (`lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project`) asserts only that it exits 0 and the lock file exists, not the lines it appended: one per migration the lock doesn't list, naming the version, with every existing line unchanged. The fix is code-only, a stronger test in `crates/clm/tests/upgrade.rs`.
 
-Two things are owed. `upgrade/shipped-migrations-frozen`'s scenario "locking a release" runs `clm upgrade --lock`, and the test of the command in `crates/clm/tests/upgrade.rs` asserts only that it exits 0 and the lock file exists, not the line it appended. And `check_lock` should stop being public, or be used from outside its library by that test, so the allowance can go in the same diff (`unreferenced-allow-then-narrow`).
+The other half is done: `check_lock` is no longer public and its allowance in `clm.toml` is gone (commit `3b11efe0`, on `main`).
