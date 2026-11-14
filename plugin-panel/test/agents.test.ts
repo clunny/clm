@@ -47,6 +47,7 @@ function started(...specs: [string, string, string, string?][]): AgentRun[] {
 }
 
 describe('runs', () => {
+  // req:plugin.panel/build-rows@84e4b711
   test('a run is named by the first of its first five lines that is a loop run line, never its description', () => {
     expect(runEntry(PROMPT('git'))).toBe('build:git')
     expect(runEntry('loop run build:plugin.panel')).toBe('build:plugin.panel')
@@ -77,6 +78,7 @@ describe('runs', () => {
     })
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a description a listed run already has is the next round', () => {
     const list = started(['a1', 'build git', PROMPT('git')], ['a2', 'Build  Git!', PROMPT('git')], ['a3', 'build init', PROMPT('init')])
     expect(list.map(r => r.round)).toEqual([1, 2, 1])
@@ -147,6 +149,7 @@ describe('updates', () => {
     expect(list[0]?.costUsd).toBeCloseTo(1)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('TodoWrite replaces the task list; k, n and the current step follow it', () => {
     const todos = [
       { content: 'one', status: 'completed' },
@@ -304,6 +307,7 @@ describe('drawing', () => {
     expect(rows[5]).toContain('0:31')
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('children follow oldest first, indented two cells a level up to four levels', () => {
     let list = gitBuild()
     const child = (id: string, parentId: string, description: string, at: number) =>
@@ -482,6 +486,7 @@ describe('drawing', () => {
     expect(between(text(queueLines(cut, list, 0)), '  build:plugin.p…', '  build:plugin ')[0]).toMatch(/build panel/)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a build of a node the chart no longer lists goes under agents', () => {
     const list = startRun([], { id: 'b1', type: 'general-purpose', description: 'build web', model: 'm', prompt: PROMPT('web'), at: 0 })
     const all = text(queueLines(CHART, list, 0))
