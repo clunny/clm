@@ -251,9 +251,31 @@ fn an_added_exemption_needs_review() {
     write(d, "backlog/x.md", ITEM);
     commit(d, "exempt");
     assert_eq!(review_of(d), (Kind::Spec, true));
+}
+
+// req:gate/needs-review@48a7ac76
+#[test]
+fn a_new_component_or_another_rule_needs_review() {
+    let dir = base();
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    commit(d, "exempt on main");
+    git(d, &["checkout", "-q", "pr"]);
+    git(d, &["merge", "-q", "--ff-only", "main"]);
     // a component new on the branch counts every exemption
     write(d, "specs/b/SPEC.md", &component(EXEMPTION));
     commit(d, "new component");
+    assert_eq!(review_of(d), (Kind::Spec, true));
+    // the same files and item under another rule
+    git(d, &["reset", "-q", "--hard", "main"]);
+    let other = EXEMPTION.replace("skipped-tests", "undeclared-imports");
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &component(&format!("{EXEMPTION}{}", &other["exemptions:\n".len()..])),
+    );
+    commit(d, "rule");
     assert_eq!(review_of(d), (Kind::Spec, true));
 }
 
