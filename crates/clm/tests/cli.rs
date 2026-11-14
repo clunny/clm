@@ -829,7 +829,7 @@ fn check_fails_stale_pending_change_but_ignores_applied_one() {
 
 #[test]
 fn coverage_command_prints_report() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(
         dir.path(),

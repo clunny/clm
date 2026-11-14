@@ -75,7 +75,7 @@ fn line(graph: &clm_model::Graph, markers: &[clm_coverage::Marker], id: &str) ->
 
 #[test]
 fn capabilities_cited_like_rules() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = repo(&[arch("a", &["n/x"], false)]);
     let graph = graph(dir.path());
     let markers = [
@@ -114,7 +114,7 @@ fn capabilities_cited_like_rules() {
 
 #[test]
 fn architecture_entries() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = repo(&[
         arch("a", &["n/x", "n/y"], false),
         arch("b", &["n/x", "n/z"], false),
