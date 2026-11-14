@@ -7,7 +7,9 @@
 
 mod coverage;
 mod glob;
+mod lists;
 mod pending;
+mod spans;
 mod status;
 
 pub use coverage::{
@@ -17,7 +19,9 @@ pub use coverage::{
 #[cfg(feature = "checkout")]
 pub use coverage::{Scan, scan};
 pub use glob::matches;
+pub use lists::{DeletedTest, ObsoleteTest, Uncounted, deleted_tests, obsolete_tests, uncounted};
 pub use pending::{Pending, owner, pending};
+pub use spans::{TestSpan, markers_outside_tests, tests_in};
 pub use status::{
     ChangeProgress, Row, StatusReport, change_progress, complete_changes, status_report,
 };

@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use clm_coverage::{marker_spans, markers_in};
+use clm_coverage::{marker_spans, markers_in, markers_outside_tests};
 
 // Fixture markers are built so the literal never appears whole (`dangling-markers`).
 const REQ: &str = "req";
@@ -8,7 +8,7 @@ const REMOVE_BY: &str = "clm:remove";
 
 #[test]
 fn scenario_two_markers_on_a_line() {
-    // req:check.coverage/marker-spans@3ee7977d
+    // req:check.coverage/marker-spans@11d19af5
     let text = format!("// {REQ}:a/x@11111111 and {REQ}:b/y");
     let spans = marker_spans(&text);
     assert_eq!(spans.len(), 2);
@@ -21,29 +21,48 @@ fn scenario_two_markers_on_a_line() {
 }
 
 #[test]
-fn scenario_the_same_markers_as_markers_in() {
-    // req:check.coverage/marker-spans@3ee7977d
+fn scenario_every_marker_of_the_file() {
+    // req:check.coverage/marker-spans@11d19af5
     let text = [
-        format!("// {REQ}:a/x@11111111 and x{REQ}:a/no"),
-        format!("fn f() {{}} // {REMOVE_BY}-by 20260101-gone"),
-        format!("\tlet s = \"é {REQ}:n.m/y-z@abc\"; {REQ}:b/y@12345678\r"),
-        format!("{REQ}:c/z"),
+        "#[test]".to_string(),
+        "fn proves() {".to_string(),
+        format!("    // {REQ}:a/x@11111111"),
+        "}".to_string(),
+        "fn helper() {".to_string(),
+        format!("    // {REQ}:b/y@22222222 {REMOVE_BY}-by 20260101-gone and x{REQ}:c/no"),
+        "}".to_string(),
     ]
     .join("\n");
+    let path = Path::new("t.rs");
     let spans = marker_spans(&text);
-    let from_spans: Vec<_> = spans
+    let ids: Vec<_> = spans
         .iter()
-        .map(|s| (s.id.clone(), s.version.clone()))
+        .map(|s| (s.id.as_str(), s.version.as_deref()))
         .collect();
-    let from_markers: Vec<_> = markers_in(Path::new("t.rs"), &text)
-        .into_iter()
-        .map(|m| (m.id, m.version))
-        .collect();
-    assert_eq!(from_spans, from_markers);
-    assert_eq!(from_spans.len(), 4);
+    assert_eq!(ids, [("a/x", Some("11111111")), ("b/y", Some("22222222"))]);
+    let inside = markers_in(path, &text);
+    let outside = markers_outside_tests(path, &text);
+    let key = |id: &str, version: &Option<String>| (id.to_string(), version.clone());
+    assert_eq!(
+        key(&spans[0].id, &spans[0].version),
+        key(&inside[0].id, &inside[0].version)
+    );
+    assert_eq!(outside.len(), 1);
+    assert_eq!(
+        key(&spans[1].id, &spans[1].version),
+        key(&outside[0].id, &outside[0].version)
+    );
     for s in &spans {
         assert!(text[s.range.clone()].starts_with("req:"));
     }
-    assert_eq!(text[spans[2].range.clone()], format!("{REQ}:b/y@12345678"));
-    assert_eq!(text[spans[3].range.clone()], format!("{REQ}:c/z"));
+}
+
+#[test]
+fn ranges_hold_after_multibyte_text_and_carriage_returns() {
+    // req:check.coverage/marker-spans@11d19af5
+    let text = format!("\tlet s = \"\u{e9} {REQ}:n.m/y-z@abc\"; {REQ}:b/y@12345678\r\n{REQ}:c/z");
+    let spans = marker_spans(&text);
+    assert_eq!(spans.len(), 3);
+    assert_eq!(text[spans[1].range.clone()], format!("{REQ}:b/y@12345678"));
+    assert_eq!(text[spans[2].range.clone()], format!("{REQ}:c/z"));
 }

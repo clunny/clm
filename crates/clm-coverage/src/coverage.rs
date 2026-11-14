@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Layer, Requirement};
 
+use crate::spans::markers_outside_tests;
+
 /// A marker at `path:line` (1-based): a requirement ID for `req:<id>`, a change ID for
 /// `clm:remove-by <change-id>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -287,6 +289,9 @@ fn proof(entry: &Requirement, current: &BTreeSet<String>) -> Option<Proof> {
 pub struct Scan {
     /// `req:<id>` markers.
     pub req: Vec<Marker>,
+    /// The `req:` markers on no line of a test or group of tests (`test-spans`): what
+    /// `req` holds in a file of a language `tests_in` reads, less the markers inside tests.
+    pub outside: Vec<Marker>,
     /// `clm:remove-by <change-id>` markers; each `id` is the change's.
     pub remove_by: Vec<Marker>,
 }
@@ -304,6 +309,7 @@ pub fn scan(root: &Path) -> Scan {
 
     let mut scan = Scan {
         req: Vec::new(),
+        outside: Vec::new(),
         remove_by: Vec::new(),
     };
     for rel in files {
@@ -320,6 +326,7 @@ pub fn scan(root: &Path) -> Scan {
 pub fn markers_in(path: &Path, text: &str) -> Vec<Marker> {
     let mut scan = Scan {
         req: Vec::new(),
+        outside: Vec::new(),
         remove_by: Vec::new(),
     };
     scan_text(path, text, &mut scan);
@@ -335,9 +342,10 @@ pub struct MarkerSpan {
     pub range: Range<usize>,
 }
 
-/// The `req:` markers in `text`, as `markers_in` finds them (same order, ID and version),
-/// each with its byte range, so a caller that rewrites markers in place rewrites exactly the
-/// markers the coverage counts (`marker-spans`). It reads no path, so the caller decides
+/// Every `req:` marker in `text`, inside a test or not, in the order they appear, with the
+/// ID and version `markers_in` and `markers_outside_tests` give it and its byte range, so a
+/// caller that rewrites markers in place rewrites the markers the coverage counts and the
+/// ones it reports as uncounted (`marker-spans`). It reads no path, so the caller decides
 /// which files to read.
 pub fn marker_spans(text: &str) -> Vec<MarkerSpan> {
     let mut out = Vec::new();
@@ -356,6 +364,7 @@ fn scan_text(path: &Path, text: &str, scan: &mut Scan) {
     if path.extension().is_some_and(|e| e == "md") {
         return;
     }
+    scan.outside.extend(markers_outside_tests(path, text));
     for (i, line) in text.lines().enumerate() {
         let marker = |id, version| Marker {
             id,
@@ -429,7 +438,7 @@ fn follows_word(line: &str, at: usize) -> bool {
 /// Each `req:<node-id>/<slug>[@<version>]` marker in `line`, with its byte range, where
 /// `req:` doesn't follow a word character. The version is `@` followed by exactly 8 lowercase
 /// hex digits, as `clm hashes` prints them; anything else after the slug leaves the marker bare.
-fn parse_markers(line: &str) -> Vec<MarkerSpan> {
+pub(crate) fn parse_markers(line: &str) -> Vec<MarkerSpan> {
     let mut ids = Vec::new();
     for (at, _) in line.match_indices("req:") {
         if follows_word(line, at) {
