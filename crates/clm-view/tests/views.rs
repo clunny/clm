@@ -1765,7 +1765,7 @@ fn spec_node(v: &Value, id: &str) -> Value {
 
 #[test]
 fn scenario_node_detail() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let (g, markers) = detailed();
     let a = spec_node(&json(&spec_view(&g, &markers, None)), "a");
     assert_eq!(a["contract"], "Alpha does X.");
@@ -1790,7 +1790,7 @@ fn scenario_node_detail() {
 
 #[test]
 fn scenario_nothing_touches_it() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let (g, markers) = detailed();
     let v = json(&spec_view(&g, &markers, None));
     let root = spec_node(&v, "clm");
@@ -1805,7 +1805,7 @@ fn scenario_nothing_touches_it() {
 
 #[test]
 fn node_detail_leaves_out_abandoned_changes_and_sorts_by_id() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x", "y"])),
@@ -1828,7 +1828,7 @@ fn node_detail_leaves_out_abandoned_changes_and_sorts_by_id() {
 
 #[test]
 fn node_detail_names_a_change_once_however_many_deltas_name_the_node() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x", "y"])),
@@ -1842,7 +1842,7 @@ fn node_detail_names_a_change_once_however_many_deltas_name_the_node() {
 
 #[test]
 fn node_backlog_goes_by_kind_before_slug() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let item = |kind: &str| format!("---\ntitle: T\nkind: {kind}\ncomponents: [a, a]\n---\n");
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -1876,7 +1876,7 @@ fn node_backlog_goes_by_kind_before_slug() {
 
 #[test]
 fn scenario_charts_unchanged() {
-    // req:view/component-detail@5158adfc
+    // req:view/component-detail@d0431adf
     let (g, markers) = detailed();
     let view = spec_chart(&g, &markers);
     for format in [Format::Text, Format::Ansi, Format::Svg] {
