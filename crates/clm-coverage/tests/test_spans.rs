@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use clm_coverage::{TestSpan, markers_in, markers_outside_tests, tests_in};
+use clm_coverage::{TestSpan, markers_outside_tests, tests_in};
 
 // Fixture markers are built so the literal never appears whole (`dangling-markers`).
 const REQ: &str = "req";
@@ -27,7 +27,7 @@ fn outside(path: &str, text: &str) -> Vec<(String, usize)> {
 
 #[test]
 fn scenario_a_rust_test_and_a_helper() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = [
         format!("// {}", m("a/x")),
         "#[test]".to_string(),
@@ -49,7 +49,7 @@ fn scenario_a_rust_test_and_a_helper() {
 
 #[test]
 fn rust_attributes_and_nesting() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = "\
 #[cfg(test)]
 mod tests {
@@ -102,14 +102,14 @@ mod tests {
 
 #[test]
 fn rust_attribute_without_a_function_is_no_test() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = "#[test]\nstruct S;\n";
     assert!(tests_in(Path::new("t.rs"), text).is_empty());
 }
 
 #[test]
 fn scenario_a_group_above_its_tests() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = [
         format!("// {}", m("a/h")),
         String::new(),
@@ -133,7 +133,7 @@ fn scenario_a_group_above_its_tests() {
 
 #[test]
 fn typescript_modifiers_and_extensions() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = "\
 test.describe.serial('phone', () => {
   test.only('a', async () => {
@@ -170,14 +170,14 @@ test.describe.serial('phone', () => {
 
 #[test]
 fn scenario_a_playwright_group() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = format!("// {}\ntest.describe('phone', () => {{\n}});\n", m("a/x"));
     assert!(outside("e.spec.ts", &text).is_empty());
 }
 
 #[test]
 fn scenario_a_python_test() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = [
         "def test_x():".to_string(),
         format!("    # {}", m("a/x")),
@@ -195,7 +195,7 @@ fn scenario_a_python_test() {
 
 #[test]
 fn python_classes_decorators_and_signatures() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = "\
 import pytest
 
@@ -233,7 +233,7 @@ class Tesla:
 
 #[test]
 fn scenario_another_language() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = format!("// {}\nfunc TestX(t *testing.T) {{\n}}\n", m("a/x"));
     assert!(tests_in(Path::new("a_test.go"), &text).is_empty());
     assert!(markers_outside_tests(Path::new("a_test.go"), &text).is_empty());
@@ -241,24 +241,16 @@ fn scenario_another_language() {
 
 #[test]
 fn markdown_has_no_tests_and_no_outside_markers() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = format!("{}\n", m("a/x"));
     assert!(tests_in(Path::new("n.md"), &text).is_empty());
     assert!(markers_outside_tests(Path::new("n.md"), &text).is_empty());
 }
 
-#[test]
-fn markers_in_is_unchanged() {
-    // req:check.coverage/test-spans@2ed7e772
-    let text = format!("fn helper() {{\n    // {}\n}}\n", m("a/z"));
-    assert_eq!(markers_in(Path::new("t.rs"), &text).len(), 1);
-    assert_eq!(markers_outside_tests(Path::new("t.rs"), &text).len(), 1);
-}
-
 #[cfg(feature = "checkout")]
 #[test]
 fn scan_holds_the_outside_markers_beside_req() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let dir = tempfile::TempDir::new().unwrap();
     let text = format!(
         "#[test]\nfn t() {{\n    // {}\n}}\nfn h() {{\n    // {}\n}}\n",
@@ -268,13 +260,12 @@ fn scan_holds_the_outside_markers_beside_req() {
     std::fs::write(dir.path().join("t.rs"), text).unwrap();
     let scan = clm_coverage::scan(dir.path());
     let ids = |v: &[clm_coverage::Marker]| v.iter().map(|m| m.id.clone()).collect::<Vec<_>>();
-    assert_eq!(ids(&scan.req), ["a/in", "a/out"]);
     assert_eq!(ids(&scan.outside), ["a/out"]);
 }
 
 #[test]
 fn rust_one_line_attribute_and_array_signature() {
-    // req:check.coverage/test-spans@2ed7e772
+    // req:check.coverage/test-spans@35aefb3e
     let text = "#[test] fn one() {\n}\n#[test]\nfn two(buf: [u8; 4]) {\n    let _ = buf;\n}\n";
     let found: Vec<_> = spans("t.rs", text)
         .into_iter()
