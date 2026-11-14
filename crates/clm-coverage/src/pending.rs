@@ -91,6 +91,14 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
             }
         }
     }
+    for c in graph.changes.values().filter(|c| !c.archived) {
+        for slug in &c.frontmatter.removes_capabilities {
+            let p = priorities
+                .entry(format!("capability/{slug}"))
+                .or_insert(Priority::P5);
+            *p = (*p).min(c.frontmatter.priority);
+        }
+    }
     let mut blocks: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for item in graph.backlog.values() {
         for id in &item.frontmatter.blocks {

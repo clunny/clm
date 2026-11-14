@@ -79,7 +79,7 @@ fn renamed(d: &Path) {
 
 #[test]
 fn scenario_node_renamed_later_not_yet_built() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -93,7 +93,7 @@ fn scenario_node_renamed_later_not_yet_built() {
 
 #[test]
 fn scenario_node_renamed_later_built() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -110,7 +110,7 @@ fn scenario_node_renamed_later_built() {
 
 #[test]
 fn scenario_renamed_twice() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -131,7 +131,7 @@ fn scenario_renamed_twice() {
 
 #[test]
 fn a_split_counts_as_each_node_it_went_to() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -156,7 +156,7 @@ fn a_split_counts_as_each_node_it_went_to() {
 
 #[test]
 fn a_partial_split_counts_what_moved_and_what_stayed() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -191,8 +191,8 @@ fn a_partial_split_counts_what_moved_and_what_stayed() {
 
 #[test]
 fn progress_status_and_complete_changes_agree_on_a_rename() {
-    // req:check.coverage/change-progress@dac448cb
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/change-progress@e4335c5a
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -225,7 +225,7 @@ fn progress_status_and_complete_changes_agree_on_a_rename() {
 
 #[test]
 fn a_move_that_comes_back_is_followed_once() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -246,7 +246,7 @@ fn a_move_that_comes_back_is_followed_once() {
 
 #[test]
 fn only_applied_implementing_or_done_changes_move() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     for status in ["proposed", "approved", "abandoned"] {
         let dir = TempDir::new().unwrap();
         let d = dir.path();
@@ -264,7 +264,7 @@ fn only_applied_implementing_or_done_changes_move() {
 
 #[test]
 fn an_unapplied_change_follows_no_moves() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -279,7 +279,7 @@ fn an_unapplied_change_follows_no_moves() {
 
 #[test]
 fn an_id_the_spec_holds_is_not_followed_further() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
@@ -295,7 +295,7 @@ fn an_id_the_spec_holds_is_not_followed_further() {
 
 #[test]
 fn a_modified_requirement_makes_no_move() {
-    // req:check.coverage/status-report@47ccc387
+    // req:check.coverage/status-report@ba0eb7f0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     renamed(d);
