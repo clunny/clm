@@ -1,6 +1,6 @@
 ---
 title: "The written exception to path-ownership lets a build re-cite a test in another component's file but not remove an obsolete one"
-kind: bug
+kind: deferred
 components: [orchestrator.run]
 origin: 20261113-phase-2-delete
 ---
@@ -12,3 +12,5 @@ What happened: `clm pending <component>` lists each obsolete marker on the compo
 Expected: the exception list and the build-out rule agree, so a build knows it may remove a test that cites its own removed requirement wherever the file sits, or the pending list places such a marker on the component that owns the file.
 
 Rule or decision involved: `path-ownership`, `removed-requirements-build-out`, `stale-markers-keep-behind`.
+
+Waits on: phase 4 of `backlog/a-passing-check-proves-less-than-the-spec-claims`, which retires `path-ownership`'s transitional exceptions, this list among them. Until then a build goes by its prompt, which tells it to remove the tests at the locations `clm pending` lists.
