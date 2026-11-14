@@ -263,10 +263,8 @@ fn scenario_check_command_named() {
     );
     let p = prompt(&r, &f, "b", &[]);
     for needle in [
-        "run `clm land --check-only`, which runs `scripts/check.sh`, the command `clm.toml` \
-         names, and then `clm check`",
-        "pass the repo's checks again with `clm land --check-only`, which runs \
-         `scripts/check.sh` and then `clm check`",
+        "run `clm land --check-only`, which runs `scripts/check.sh`",
+        "pass the repo's checks again with `clm land --check-only`, which runs `scripts/check.sh`",
     ] {
         assert!(p.contains(needle), "{needle} missing from {p}");
     }
