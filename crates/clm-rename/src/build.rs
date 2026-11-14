@@ -241,9 +241,7 @@ fn rewrite_markers(
     // Each ID the markers now cite, to the requirement as it was.
     let was: BTreeMap<&str, &Was> = done.before.iter().map(|w| (w.new.as_str(), w)).collect();
     let rewrite = |writes: &mut Writes, edit: &dyn Fn(&MarkerSpan) -> Option<String>| {
-        let files: BTreeSet<PathBuf> = clm_coverage::scan(root)
-            .req
-            .into_iter()
+        let files: BTreeSet<PathBuf> = every_marker(clm_coverage::scan(root))
             .map(|m| m.path)
             .collect();
         for file in files {
@@ -286,9 +284,7 @@ fn rewrite_markers(
         .map(|slug| Path::new("backlog").join(format!("{slug}.md")))
         .collect();
     let hits = leftovers(root, &done.olds, &skip)?;
-    let holding: BTreeSet<(String, PathBuf)> = clm_coverage::scan(root)
-        .req
-        .into_iter()
+    let holding: BTreeSet<(String, PathBuf)> = every_marker(clm_coverage::scan(root))
         .map(|m| (m.id, m.path))
         .collect();
     let behind = |w: &Was| {
@@ -305,6 +301,13 @@ fn rewrite_markers(
         let current = span.version.as_deref() == Some(w.version.as_str());
         (current && now != w.version && !behind(w)).then(|| marker(&w.new, Some(now)))
     })
+}
+
+/// Every `req:` marker the scan found, those outside a test included, since the rewrite
+/// renames what text names a requirement, not only what proves it (`marker-rewrite`). A
+/// marker may come twice; each caller collects into a set.
+fn every_marker(scan: clm_coverage::Scan) -> impl Iterator<Item = clm_coverage::Marker> {
+    scan.req.into_iter().chain(scan.outside)
 }
 
 /// Rewrites the `requirement` of each backlog item that records one (`flag-rerecord`), as
@@ -972,4 +975,26 @@ fn leftovers(
     }
     hits.sort_by(|a, b| (&a.file, a.line, &a.old).cmp(&(&b.file, b.line, &b.old)));
     Ok(hits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    // req:rename/marker-rewrite@f5ba4d47
+    fn a_marker_only_outside_a_test_is_read() {
+        let marker = clm_coverage::Marker {
+            id: "a/x".into(),
+            version: None,
+            path: PathBuf::from("src/lib.rs"),
+            line: 1,
+        };
+        let scan = clm_coverage::Scan {
+            req: Vec::new(),
+            outside: vec![marker.clone()],
+            remove_by: Vec::new(),
+        };
+        assert_eq!(every_marker(scan).collect::<Vec<_>>(), vec![marker]);
+    }
 }
