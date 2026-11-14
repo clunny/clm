@@ -419,7 +419,8 @@ type RawExemption = (String, Vec<String>, String);
 /// The `exemptions` a `SPEC.md`'s frontmatter holds, in order; an entry of the wrong shape is
 /// left out, since loading rejects it (`model/exemptions`).
 fn exemptions_in(text: &str) -> Vec<RawExemption> {
-    let Some((yaml, _)) = clm_model::split_frontmatter(text) else {
+    let text = text.replace("\r\n", "\n");
+    let Some((yaml, _)) = clm_model::split_frontmatter(&text) else {
         return Vec::new();
     };
     let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(yaml) else {

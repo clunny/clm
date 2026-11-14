@@ -153,7 +153,12 @@ fn another_item_or_a_new_component_is_tested() {
     write(d, "specs/a/SPEC.md", &component(&moved));
     commit(d, "move");
     let out = evaluate_at(d, "main", "pr", false).unwrap();
-    let rules: Vec<&str> = out.violations.iter().map(|v| v.rule).collect();
+    let rules: Vec<&str> = out
+        .violations
+        .iter()
+        .map(|v| v.rule)
+        .filter(|r| *r == "gate/exemption-names-its-item")
+        .collect();
     assert_eq!(rules, ["gate/exemption-names-its-item"]);
     // a component new on the branch counts every exemption
     write(d, "backlog/y.md", ITEM);
@@ -167,4 +172,67 @@ fn another_item_or_a_new_component_is_tested() {
         .map(|v| v.path.display().to_string())
         .collect();
     assert_eq!(paths, ["specs/b/SPEC.md"]);
+}
+
+fn named(out: &clm_gate::Outcome) -> usize {
+    out.violations
+        .iter()
+        .filter(|v| v.rule == "gate/exemption-names-its-item")
+        .count()
+}
+
+// req:gate/exemption-names-its-item@9eb8dcde
+#[test]
+fn narrowing_a_new_rule_and_each_offender() {
+    let dir = base();
+    let d = dir.path();
+    let two = EXEMPTION.replace("[\"src/a/**\"]", "[\"src/a/**\", \"tests/**\"]");
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "specs/a/SPEC.md", &component(&two));
+    commit(d, "exempt on main");
+    git(d, &["checkout", "-q", "pr"]);
+    git(d, &["merge", "-q", "--ff-only", "main"]);
+    // narrowed, and only its `why` changed: never blocks
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    commit(d, "narrow");
+    assert_eq!(named(&evaluate_at(d, "main", "pr", false).unwrap()), 0);
+    let why = format!("{two}    why: because\n");
+    write(d, "specs/a/SPEC.md", &component(&why));
+    commit(d, "why");
+    assert_eq!(named(&evaluate_at(d, "main", "pr", false).unwrap()), 0);
+    // another rule over the same files and item is an added exemption
+    let other = two.replace("skipped-tests", "undeclared-imports");
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &component(&format!("{two}{}", &other["exemptions:\n".len()..])),
+    );
+    commit(d, "rule");
+    assert_eq!(named(&evaluate_at(d, "main", "pr", false).unwrap()), 1);
+    // each offender is reported, in every file
+    write(d, "specs/b/SPEC.md", &component(&other));
+    commit(d, "b");
+    assert_eq!(named(&evaluate_at(d, "main", "pr", false).unwrap()), 2);
+}
+
+// req:gate/exemption-names-its-item@9eb8dcde
+#[test]
+fn an_item_on_main_counts_and_only_a_spec_branch_is_judged() {
+    let dir = base();
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "backlog/x.md", ITEM);
+    commit(d, "item on main");
+    git(d, &["checkout", "-q", "pr"]);
+    git(d, &["merge", "-q", "--ff-only", "main"]);
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    commit(d, "exempt");
+    assert_eq!(named(&evaluate_at(d, "main", "pr", false).unwrap()), 0);
+    // a code branch is no spec branch: its exemption is the check's, not the gate's
+    git(d, &["rm", "-q", "backlog/x.md"]);
+    write(d, "src/a/lib.rs", "pub fn a() {}\n");
+    commit(d, "code, and the item gone");
+    let out = evaluate_at(d, "main", "pr", false).unwrap();
+    assert_eq!(out.kind, Kind::Mixed);
+    assert_eq!(named(&out), 0);
 }
