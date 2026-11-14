@@ -178,7 +178,8 @@ pub fn removed(graph: &Graph) -> BTreeMap<String, Vec<String>> {
 }
 
 /// Every requirement in `graph`, the human layers' entries included, sorted by ID, as
-/// `current` (every marker at its version), `behind` (any marker not) or `unbuilt`, with the markers citing it, or, for an entry that stands
+/// `current` (every marker at its version), `behind` (any marker not) or `unbuilt` (also
+/// when a backlog item's `unproven` names it at its current version, whatever cites it), with the markers citing it, or, for an entry that stands
 /// by a `Proof`, as that; then, sorted by ID, each requirement or capability a live change removed that a
 /// marker still cites, as `obsolete`.
 pub fn report(graph: &Graph, markers: &[Marker]) -> Vec<Coverage> {
@@ -199,8 +200,19 @@ pub fn report(graph: &Graph, markers: &[Marker]) -> Vec<Coverage> {
         .requirements()
         .map(|r| (r.id.as_str(), r.version()))
         .collect();
-    let existing = by_id.into_iter().map(|(id, markers)| {
+    // What the mutation pass found unproven, at the version it found: a verdict that names
+    // an older version, or a requirement that is gone, says nothing (`mutation-after-land`).
+    let unproven: BTreeSet<(&str, &str)> = graph
+        .backlog
+        .values()
+        .flat_map(|item| &item.frontmatter.unproven)
+        .map(|at| (at.id.as_str(), at.version.as_str()))
+        .collect();
+    let existing = by_id.into_iter().map(|(id, mut markers)| {
         let version = versions.get(id).copied();
+        if version.is_some_and(|v| unproven.contains(&(id, v))) {
+            markers.clear();
+        }
         // One marker at another version keeps the requirement behind, even beside current
         // ones (`stale-markers-keep-behind`).
         let stale = |m: &Marker| m.version.as_deref() != version;

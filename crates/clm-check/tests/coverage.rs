@@ -174,7 +174,7 @@ fn only_files_git_would_track_are_scanned() {
 
 #[test]
 fn scenario_mixed_coverage() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -202,7 +202,7 @@ fn scenario_mixed_coverage() {
 
 #[test]
 fn scenario_stale_marker_beside_a_current_one() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -219,7 +219,7 @@ fn scenario_stale_marker_beside_a_current_one() {
 
 #[test]
 fn report_carries_the_state_and_markers() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = repo("applied");
     let d = dir.path();
     let g = graph(d);
@@ -288,7 +288,7 @@ fn marker_dangles_again_once_the_removing_change_is_archived() {
 
 #[test]
 fn scenario_obsolete_marker() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = repo("applied");
     let d = dir.path();
     removing_change(d, false);
@@ -306,7 +306,7 @@ fn scenario_obsolete_marker() {
 
 #[test]
 fn removed_requirement_without_markers_is_not_reported() {
-    // req:check.coverage/coverage-report@1fec41ce
+    // req:check.coverage/coverage-report@533d2f1a
     let dir = repo("applied");
     removing_change(dir.path(), false);
     assert_eq!(lines(dir.path()), ["a/x unbuilt", "a/y unbuilt"]);
