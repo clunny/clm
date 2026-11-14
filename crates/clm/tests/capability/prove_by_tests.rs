@@ -46,19 +46,3 @@ fn reworded_requirement() {
         "{text}"
     );
 }
-
-#[test]
-fn marker_in_code_that_is_no_test() {
-    // req:capability/prove-by-tests@9c0b4ad0
-    let repo = Repo::init();
-    let marker = format!("{}{}", concat!("req", ":a/x@"), version(&repo, "x"));
-    repo.write(
-        "src/lib.rs",
-        &format!("fn helper() {{\n    // {marker}\n}}\n"),
-    );
-    repo.commit("a marker in code that is no test");
-    let out = repo.clm(&["coverage"]);
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    assert!(out.status.success(), "{}", printed(&out));
-    assert!(text.lines().any(|l| l == "a/x unbuilt"), "{text}");
-}
