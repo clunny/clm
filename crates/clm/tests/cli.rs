@@ -585,7 +585,7 @@ fn import_repo(a_deps: &str, b_paths: &str) -> TempDir {
 
 #[test]
 fn check_reports_an_undeclared_import() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     let dir = import_repo("[]", "[\"crates/b/**\"]");
     let line = "crates/a/Cargo.toml: check/undeclared-imports: imports crates/b/Cargo.toml of component `b`, and `a` doesn't depend on `b`\n";
     let out = clm_check(dir.path());
@@ -603,7 +603,7 @@ fn check_reports_an_undeclared_import() {
 
 #[test]
 fn check_passes_a_declared_or_unowned_import() {
-    // req:check/undeclared-imports@1e2f49ba
+    // req:check/undeclared-imports@5d13552f
     for dir in [
         import_repo("[b]", "[\"crates/b/**\"]"),
         import_repo("[]", "[\"crates/b/src/**\"]"),

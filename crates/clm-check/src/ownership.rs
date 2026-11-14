@@ -1,7 +1,7 @@
 //! A file's owner, the one place `paths-disjoint`, `unowned-files`, `undeclared-imports` and
 //! `tests-cite-their-owner` read it (see specs/check/SPEC.md).
 
-use clm_model::{Graph, Node};
+use clm_model::{ExemptRule, Graph, Node};
 
 use crate::matches;
 
@@ -46,4 +46,13 @@ pub(crate) fn owner<'g>(graph: &'g Graph, file: &str) -> Option<&'g Node> {
 /// Whether one of `node`'s `tests` globs matches `file`.
 pub(crate) fn is_test_of(node: &Node, file: &str) -> bool {
     node.frontmatter.tests.iter().any(|g| matches(g, file))
+}
+
+/// Whether `node` has an exemption from `rule` whose `files` match `file`
+/// (`model/exemptions`).
+pub(crate) fn exempt(node: &Node, rule: ExemptRule, file: &str) -> bool {
+    node.frontmatter
+        .exemptions
+        .iter()
+        .any(|e| e.rule == rule && e.files.iter().any(|g| matches(g, file)))
 }

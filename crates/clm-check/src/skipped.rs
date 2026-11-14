@@ -4,18 +4,24 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use clm_model::Violation;
+use clm_model::{ExemptRule, Graph, Violation};
 
 use crate::Marker;
+use crate::ownership::{exempt, owner};
 
-/// Each line that skips a test, in each file holding one of `markers`.
-pub fn violations(root: &Path, markers: &[Marker]) -> Vec<Violation> {
+/// Each line that skips a test, in each file holding one of `markers` that no exemption of its
+/// owner names for `skipped-tests` (`model/exemptions`).
+pub fn violations(root: &Path, graph: &Graph, markers: &[Marker]) -> Vec<Violation> {
     let files: BTreeSet<&Path> = markers.iter().map(|m| m.path.as_path()).collect();
     let mut out = Vec::new();
     for file in files {
         let Some(skips) = rule_for(file) else {
             continue;
         };
+        let name = file.to_string_lossy();
+        if owner(graph, &name).is_some_and(|n| exempt(n, ExemptRule::SkippedTests, &name)) {
+            continue;
+        }
         let Ok(text) = std::fs::read_to_string(root.join(file)) else {
             continue;
         };
