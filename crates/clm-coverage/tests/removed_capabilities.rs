@@ -6,7 +6,9 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use clm_coverage::{Marker, change_progress, pending, removed, report, status_report};
+use clm_coverage::{
+    Marker, change_progress, complete_changes, pending, removed, report, status_report,
+};
 use clm_model::{Graph, Priority};
 use common::{ROOT, graph, marker, spec, write};
 use tempfile::TempDir;
@@ -201,4 +203,6 @@ fn scenario_removed_capability_still_cited_in_progress_and_status() {
     let row = |markers: &[Marker]| status_report(&g, markers).changes[0].1[0].clone();
     assert_eq!(row(&markers), ["20260101-c", "0/0 requirements"]);
     assert_eq!(row(&[]), ["20260101-c", "0/0 requirements", "complete"]);
+    assert!(complete_changes(&g, &markers).is_empty());
+    assert_eq!(complete_changes(&g, &[]), ["20260101-c"]);
 }
