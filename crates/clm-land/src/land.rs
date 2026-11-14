@@ -1,6 +1,7 @@
-//! `clm land [<branch>]` (`land/land`, `land/landed-branch-cleanup`, `land/offline-land`,
+//! `clm land [<branch>]` (`land/land`, `land/landed-branch-cleanup`, `land/landed-change-releases-claims`, `land/offline-land`,
 //! `land/selected-tests`, `land/signed-land`).
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use clm_git::REMOTE;
@@ -203,6 +204,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     let mut overlap_nothing: Option<(String, String)> = None;
     // The head and base whose selection printed nothing, asked once across a restart.
     let mut selection_nothing: Option<(String, String)> = None;
+    let mut claim_tips: BTreeMap<String, String> = BTreeMap::new();
     for attempt in 1..=ATTEMPTS {
         let mut p = prepare(chain.as_deref())?;
         // The priority this land's tickets carry, worked out once, before its first wait
@@ -248,6 +250,11 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             env_vars,
             env_changed,
         } = p;
+        // The `propose/*` claims this attempt's last fetch read, which a spec land releases
+        // leased on them (`land/landed-change-releases-claims`).
+        if branch.starts_with("spec/") {
+            claim_tips = propose_tips(&repo);
+        }
         for warning in warnings {
             if !out.warnings.contains(&warning) {
                 out.warnings.push(warning);
@@ -599,6 +606,10 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             ));
         }
         cleanup(&repo, &branch, &head, on_origin, &mut out.warnings);
+        if branch.starts_with("spec/") {
+            let added = changes_added(&repo, &base, &head, &changes);
+            release_claims(&repo, &merge, &added, &claim_tips, &mut out.warnings);
+        }
         if let (Some((seconds, steps)), Some(target)) = (&timed, target_seconds) {
             let past = fold.timed_lands(crate::time_report::LANDS);
             let over = slow.as_deref().map(|s| (s, steps.as_slice()));
@@ -952,6 +963,86 @@ fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mu
         && let Err(e) = repo.git(&["branch", "--quiet", "-D", branch])
     {
         warnings.push(format!("kept the local `{branch}`: {e}"));
+    }
+}
+
+/// The tip of each `origin/propose/<slug>` on the refs as fetched, by slug.
+fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
+    let prefix = format!("refs/remotes/{}/propose/", clm_git::REMOTE);
+    let listed = repo
+        .git(&["for-each-ref", "--format=%(objectname) %(refname)", &prefix])
+        .unwrap_or_default();
+    listed
+        .lines()
+        .filter_map(|l| {
+            let (sha, name) = l.split_once(' ')?;
+            Some((name.strip_prefix(&prefix)?.to_string(), sha.to_string()))
+        })
+        .collect()
+}
+
+/// The ones of `changes` the head adds: neither `changes/<id>/change.md` nor
+/// `changes/archive/<id>/change.md` at the merge base of `base` and `head`.
+fn changes_added(repo: &Repo, base: &str, head: &str, changes: &[String]) -> Vec<String> {
+    let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
+        return Vec::new();
+    };
+    let held = |path: String| {
+        repo.git(&["cat-file", "-e", &format!("{merge_base}:{path}")])
+            .is_ok()
+    };
+    changes
+        .iter()
+        .filter(|id| {
+            !held(format!("changes/{id}/change.md"))
+                && !held(format!("changes/archive/{id}/change.md"))
+        })
+        .cloned()
+        .collect()
+}
+
+/// Deletes on `origin` the `propose/<slug>` claim of each item the changes `added` name in
+/// `from` or `resolves`, leased on the tip in `tips`, and says `released propose/<slug>`; a
+/// failure warns (`land/landed-change-releases-claims`).
+fn release_claims(
+    repo: &Repo,
+    merge: &str,
+    added: &[String],
+    tips: &BTreeMap<String, String>,
+    warnings: &mut Vec<String>,
+) {
+    let mut slugs = BTreeSet::new();
+    for id in added {
+        let text = repo
+            .git(&["show", &format!("{merge}:changes/{id}/change.md")])
+            .or_else(|_| repo.git(&["show", &format!("{merge}:changes/archive/{id}/change.md")]));
+        let Some(front) = text
+            .ok()
+            .and_then(|t| clm_model::parse_change_frontmatter(&t))
+        else {
+            continue;
+        };
+        let from = front
+            .from
+            .as_deref()
+            .and_then(|f| f.strip_prefix("backlog/"));
+        slugs.extend(from.map(str::to_string));
+        slugs.extend(front.resolves);
+    }
+    let host = clm_host::adapter(repo.settings.host.value);
+    for slug in slugs {
+        let Some(tip) = tips.get(&slug) else {
+            continue;
+        };
+        let branch = format!("propose/{slug}");
+        match host.branch_delete(&repo.root, &branch, tip) {
+            Ok(()) => warnings.push(format!("released {branch}")),
+            Err(
+                clm_host::Error::Refused(why)
+                | clm_host::Error::Git(why)
+                | clm_host::Error::Nowhere(why),
+            ) => warnings.push(format!("kept `{branch}` on origin: {why}")),
+        }
     }
 }
 
