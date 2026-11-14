@@ -1284,7 +1284,7 @@ fn tracefile_sources(tree: &Tree) -> Vec<String> {
 
 #[test]
 fn coverage_writes_one_tracefile_from_three_suites() {
-    // req:ci/coverage-script@dd389308
+    // req:ci/coverage-script@a291994e
     let tree = coverage_tree();
     let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
     assert!(ok, "{log:?} {stderr}");
@@ -1345,7 +1345,7 @@ fn coverage_writes_one_tracefile_from_three_suites() {
 
 #[test]
 fn a_failing_coverage_suite_fails_the_script() {
-    // req:ci/coverage-script@dd389308
+    // req:ci/coverage-script@a291994e
     let tree = coverage_tree();
     // A tracefile from an earlier run stays as it was.
     fs::create_dir_all(tree.work().join("target")).unwrap();
@@ -1364,7 +1364,7 @@ fn a_failing_coverage_suite_fails_the_script() {
 
 #[test]
 fn nothing_else_runs_coverage() {
-    // req:ci/coverage-script@dd389308
+    // req:ci/coverage-script@a291994e
     for path in [
         script_path("ci-check.sh"),
         script_path("detector-tools.sh"),
@@ -1383,7 +1383,7 @@ fn nothing_else_runs_coverage() {
 
 #[test]
 fn coverage_tools_are_pinned() {
-    // req:ci/coverage-script@dd389308
+    // req:ci/coverage-script@a291994e
     let lines = script_lines("coverage.sh");
     let tools = lines
         .iter()
