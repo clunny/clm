@@ -6,7 +6,7 @@ resolves:
 
 ## Intent
 
-Giving up a component's build becomes one command, `clm build release <component>`: it deletes the build's branch on `origin` and in the clone, with the worktree that has it checked out, frees its place and forgets its run, so the loop builds the component afresh once it is ready, with no step left for the session to do by hand. It refuses, changing nothing, what only the human can judge: a run that may still be alive, uncommitted work in the build's worktree, the branch checked out in the human's own checkout, and another clone's claim. The build skill's sentence that releases a claim with `clm branch delete` alone changes to name the command, through a deferred item on `plugin`, once the command is built.
+Giving up a component's build becomes one command, `clm build release <component>`: it deletes the build's branch on `origin`, renames the clone's `impl/<component>` to `released/<component>/<time>`, keeping its commits and its worktree for the human, frees its place and forgets its run, so the loop builds the component afresh once it is ready, with no step left for the session to do by hand. It refuses, changing nothing, while the build's run may still be alive or when the claim is another clone's. The build skill's sentence that releases a claim with `clm branch delete` alone changes to name the command, through a deferred item on `plugin`, once the command is built.
 
 ## Problem
 
@@ -14,24 +14,24 @@ The build skill says to release a given-up build's claim by deleting `impl/<comp
 
 ## Approaches
 
-- **Taken: a loop command, `clm build release <component>`.** The human's word is recorded as `clm build cleared disk` records theirs, and the command does both halves in the safe order: it checks everything local first, then deletes the remote branch through `clm branch delete` (whose rule that a clone deletes only a tip it pushed stays `host`'s), then the worktree, the local branch and the place (through `clm run --finish`), and drops the run from the loop file, which would otherwise relaunch it as an orphan.
+- **Taken: a loop command, `clm build release <component>`, that sets the local branch aside.** The human's word is recorded as `clm build cleared disk` records theirs. The remote delete goes through `clm branch delete`, whose rule that a clone deletes only a tip it pushed stays `host`'s, and the place through `clm run --finish`, whose rules stay `orchestrator.run`'s. Renaming the local branch out of `impl/` is what the session did by hand; it discards nothing the clone holds, so the command needs no guard beyond the allow rule `clm build` already has, and it copies none of `run-finish`'s worktree rules into the loop. The run is dropped from the loop file, which would otherwise relaunch it as an orphan.
+- **Not taken: deleting the local branch and its worktree in the release.** It would discard commits nobody pushed and uncommitted work under an allow rule no classifier judges, needing a guard asking the human (an audit finding), and it would copy `orchestrator.run`'s rules for which build worktrees may be removed into the loop (`build-loop-in-clm`, another audit finding).
 - **Not taken: `clm branch delete` also deleting the local branch.** Unattended sessions run it with no classifier judging it (`unattended-steps-run-clm`); it would gain the power to discard commits nobody pushed, and it knows nothing of the loop's runs or places.
-- **Not taken: `clm run` resuming a local branch whose remote is gone.** It would drop `run`'s guard against building on commits nobody pushed, for every build, to serve the one case where the human has said to discard them.
-- **Not taken: a longer sentence in the skill** (remove the worktree, then `git branch -D`). Prose a model follows, against `build-loop-in-clm`, and the skill tells the session never to run a command aimed at a run's worktree.
+- **Not taken: `clm run` resuming a local branch whose remote is gone.** It would drop `run`'s guard against building on commits nobody pushed, for every build.
+- **Not taken: a longer sentence in the skill** (rename the branch by hand). Prose a model follows, against `build-loop-in-clm`.
 
 ## Outcome
 
-- `orchestrator.loop`: the Contract names `clm build release <component>`, the Design says why it is one command and what it refuses, and the requirement `release` states it.
+- `orchestrator.loop`: the Contract names `clm build release <component>`, the Design says why it is one command and why it sets the branch aside, the requirement `release` states it, and `depends_on` names `host`, whose `clm branch delete` it runs.
 - `backlog/the-build-skill-releases-a-claim-by-hand` (`kind: deferred`, `plugin`): once `orchestrator.loop/release` is current, the build skill's sentence names the command instead of `clm branch delete`. What a skill tells a session is source, not a requirement (`prompt-text-is-source`), and the loop's build can't edit `plugin`'s files (`path-ownership`), so a code branch on `plugin` does it.
 
 ## Constraints
 
-- A release discards commits the build's branch holds that `origin` lacks: that is what giving the build up means, and it runs only on the human's word.
-- A worktree with uncommitted work refuses the release, and is the human's to clear: `vcs`'s `remove_worktree` never forces a removal.
+- A release leaves a `released/<component>/<time>` branch, and the dead session's worktree checked out on it, in the clone until the human deletes them. Nothing cleans them up: deleting them is discarding work, which is the human's call.
 
 ## Edge cases
 
-- A failure after the remote delete (a worktree git can't remove) exits 2; running the release again finishes it, since `clm branch delete` of a branch already gone exits 0.
+- A failure after the remote delete exits 2; running the release again finishes it, since `clm branch delete` of a branch already gone exits 0.
 - A component with no branch anywhere and no run is released with exit 0, changing nothing.
 
 ## Open questions
