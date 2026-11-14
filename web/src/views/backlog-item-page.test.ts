@@ -48,6 +48,7 @@ describe('a backlog item page', () => {
   it('an item with no priority or answers shows none', () => {
     const snap = snapshot();
     const page = renderBacklogItem(snap, 'crash', null, '#/o/a/backlog');
+    expect(page.textContent).not.toContain('Origin');
     expect(page.querySelector('.prio')).toBeNull();
     expect(page.querySelector('.given')).toBeNull();
     expect(page.querySelector('.answers')).toBeNull();
