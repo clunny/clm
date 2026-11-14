@@ -17,7 +17,7 @@ fn launches(actions: &[String]) -> Vec<&String> {
 
 #[test]
 fn no_subagents() {
-    // req:orchestrator.loop/loop-follows-agent-harness@3f186db6
+    // req:orchestrator.loop/loop-follows-agent-harness@bad451e4
     let fx = Fixture::new();
     let mut options = fx.options();
     options.agent_harness = AgentHarness::None;
@@ -48,7 +48,7 @@ fn no_subagents() {
 
 #[test]
 fn no_isolated_worktrees_and_no_model_choice() {
-    // req:orchestrator.loop/loop-follows-agent-harness@3f186db6
+    // req:orchestrator.loop/loop-follows-agent-harness@bad451e4
     let fx = Fixture::new();
     let mut options = fx.options();
     options.agent_harness = AgentHarness::Codex;
@@ -68,7 +68,7 @@ fn no_isolated_worktrees_and_no_model_choice() {
 
 #[test]
 fn claude_code_needs_neither() {
-    // req:orchestrator.loop/loop-follows-agent-harness@3f186db6
+    // req:orchestrator.loop/loop-follows-agent-harness@bad451e4
     let fx = Fixture::new();
     fx.set("next", "a\nb\n");
     let actions = start(&fx.options(), "opus", false).unwrap();
@@ -80,7 +80,7 @@ fn claude_code_needs_neither() {
 
 #[test]
 fn an_archive_waits_for_a_run_without_subagents() {
-    // req:orchestrator.loop/loop-follows-agent-harness@3f186db6
+    // req:orchestrator.loop/loop-follows-agent-harness@bad451e4
     let fx = Fixture::new();
     let mut options = fx.options();
     options.agent_harness = AgentHarness::None;
