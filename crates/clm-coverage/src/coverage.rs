@@ -356,8 +356,8 @@ pub struct MarkerSpan {
 
 /// Every `req:` marker in `text`, inside a test or not, in the order they appear, with the
 /// ID and version `markers_in` and `markers_outside_tests` give it and its byte range, so a
-/// caller that rewrites markers in place rewrites the markers the coverage counts and the
-/// ones it reports as uncounted (`marker-spans`). It reads no path, so the caller decides
+/// caller that rewrites markers in place rewrites the markers `markers_in` returns and the
+/// ones only `markers_outside_tests` returns (`marker-spans`). It reads no path, so the caller decides
 /// which files to read.
 pub fn marker_spans(text: &str) -> Vec<MarkerSpan> {
     let mut out = Vec::new();
