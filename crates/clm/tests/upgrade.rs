@@ -88,6 +88,7 @@ fn stamp_too_new(root: &Path) {
 }
 
 // req:clm/upgrade-command@86c8b58e
+// req:upgrade/shipped-migrations-frozen@b7c05840
 #[test]
 fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
     let dir = initialised();
@@ -103,11 +104,43 @@ fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
     assert!(copied.success());
     let out = clm(dir.path(), &["upgrade", "--lock", "0.1.0"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert!(
-        dir.path()
-            .join("crates/clm-upgrade/migrations.lock")
-            .exists()
-    );
+    let lock = dir.path().join("crates/clm-upgrade/migrations.lock");
+    let first = fs::read_to_string(&lock).unwrap();
+    let mut ids: Vec<String> = fs::read_dir(&migrations)
+        .unwrap()
+        .map(|e| e.unwrap())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    ids.sort();
+    let mut locked: Vec<String> = first
+        .lines()
+        .map(|l| {
+            let fields: Vec<&str> = l.split(' ').collect();
+            assert_eq!(fields.len(), 3, "{l}");
+            assert_eq!(fields[1], "0.1.0", "{l}");
+            fields[0].to_string()
+        })
+        .collect();
+    locked.sort();
+    assert_eq!(locked, ids, "one line per migration");
+
+    // A lock that doesn't list the last migration gains its line alone, naming the new
+    // version, and keeps every other line as it was.
+    let lines: Vec<&str> = first.lines().collect();
+    let (dropped, kept) = lines.split_last().unwrap();
+    let kept = kept.iter().map(|l| format!("{l}\n")).collect::<String>();
+    fs::write(&lock, &kept).unwrap();
+    let out = clm(dir.path(), &["upgrade", "--lock", "0.3.0"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let after = fs::read_to_string(&lock).unwrap();
+    assert!(after.starts_with(&kept), "{after}");
+    let added: Vec<&str> = after[kept.len()..].lines().collect();
+    let (id, hash) = {
+        let fields: Vec<&str> = dropped.split(' ').collect();
+        (fields[0], fields[2])
+    };
+    assert_eq!(added, [format!("{id} 0.3.0 {hash}")]);
 
     stamp_too_new(dir.path());
     let too_new = clm(dir.path(), &["upgrade", "--lock", "0.1.0"]);
