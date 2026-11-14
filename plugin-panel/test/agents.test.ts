@@ -1,4 +1,3 @@
-// req:plugin.panel/build-rows@84e4b711
 import ts from 'typescript'
 import { describe, expect, test } from 'vitest'
 
@@ -48,6 +47,7 @@ function started(...specs: [string, string, string, string?][]): AgentRun[] {
 }
 
 describe('runs', () => {
+  // req:plugin.panel/build-rows@84e4b711
   test('a run is named by the first of its first five lines that is a loop run line, never its description', () => {
     expect(runEntry(PROMPT('git'))).toBe('build:git')
     expect(runEntry('loop run build:plugin.panel')).toBe('build:plugin.panel')
@@ -78,6 +78,7 @@ describe('runs', () => {
     })
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a description a listed run already has is the next round', () => {
     const list = started(['a1', 'build git', PROMPT('git')], ['a2', 'Build  Git!', PROMPT('git')], ['a3', 'build init', PROMPT('init')])
     expect(list.map(r => r.round)).toEqual([1, 2, 1])
@@ -148,6 +149,7 @@ describe('updates', () => {
     expect(list[0]?.costUsd).toBeCloseTo(1)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('TodoWrite replaces the task list; k, n and the current step follow it', () => {
     const todos = [
       { content: 'one', status: 'completed' },
@@ -279,6 +281,7 @@ function gitBuild(): AgentRun[] {
 const glyphs = (lines: Span[][]) => lines.flat().filter(s => ['●', '✓', '✗'].includes(s.text))
 
 describe('drawing', () => {
+  // req:plugin.panel/build-rows@84e4b711
   test('a build is drawn under its entry line, with its facts', () => {
     const rows = between(text(queueLines(CHART, gitBuild(), 61_000)), '  build:git ', '  build:init ')
     const joined = rows.join('\n')
@@ -293,6 +296,7 @@ describe('drawing', () => {
     expect(glyphs(queueLines(CHART, gitBuild(), 61_000))).toEqual([{ text: '●', color: 'yellow' }])
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a nested subagent follows its build, indented and prefixed └, before the next node', () => {
     const list = startRun(gitBuild(), { id: 'c1', parentId: 'b1', type: 'code-review', description: 'code review', model: 'claude-sonnet-5-0', prompt: 'Review.', at: 30_000 })
     const rows = between(text(queueLines(CHART, list, 61_000)), '  build:git ', '  build:init ')
@@ -303,6 +307,7 @@ describe('drawing', () => {
     expect(rows[5]).toContain('0:31')
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('children follow oldest first, indented two cells a level up to four levels', () => {
     let list = gitBuild()
     const child = (id: string, parentId: string, description: string, at: number) =>
@@ -392,6 +397,7 @@ describe('drawing', () => {
     expect(queueLines(CHART, onSessionEnd(list, 'clear'), 0)).toEqual(CHART)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a subagent that is not a build follows the chart under agents while it runs, and the totals count it', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = applyStep(list, 'x1', 'claude-haiku-4-5', undefined, usage(1_000))
@@ -409,6 +415,7 @@ describe('drawing', () => {
     expect(done.at(-1)).toMatch(/^≈\$\d+\.\d\d · 114k tokens · 1:01 · Opus 5\.5 ×1 · Haiku 4\.5 ×1$/)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a later round of a build sits above the first under its node', () => {
     let list = applyComplete(gitBuild(), 'b1', false, 20_000)
     list = startRun(list, { id: 'b2', type: 'general-purpose', description: 'build git', model: 'claude-opus-5-5', prompt: PROMPT('git'), at: 30_000 })
@@ -479,6 +486,7 @@ describe('drawing', () => {
     expect(between(text(queueLines(cut, list, 0)), '  build:plugin.p…', '  build:plugin ')[0]).toMatch(/build panel/)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a build of a node the chart no longer lists goes under agents', () => {
     const list = startRun([], { id: 'b1', type: 'general-purpose', description: 'build web', model: 'm', prompt: PROMPT('web'), at: 0 })
     const all = text(queueLines(CHART, list, 0))
@@ -491,6 +499,7 @@ describe('drawing', () => {
     expect(all[all.indexOf('agents') + 1]).toMatch(/^ +● orphan$/)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('the rows go under their entries, then the unplaced runs under agents, then the totals', () => {
     let list = startRun(gitBuild(), { id: 'x1', type: 'Explore', description: 'look around', model: 'claude-haiku-4-5', prompt: 'Look.', at: 10_000 })
     list = startRun(list, { id: 'i1', type: 'general-purpose', description: 'build init', model: 'claude-opus-5-5', prompt: PROMPT('init'), at: 20_000 })
@@ -574,6 +583,7 @@ describe('hooks events', () => {
 })
 
 describe('build-rows', () => {
+  // req:plugin.panel/build-rows@84e4b711
   test('on every surface alike the build rows go under their running entry, as the terminal draws them', () => {
     const all = text(queueLines(CHART, gitBuild(), 61_000))
     const rows = between(all, '  build:git ', '  build:init ')
@@ -588,6 +598,7 @@ describe('waiting', () => {
   const build = () => onSpawn([], spawn, { agentId: 'b1', model: 'claude-opus-5-5' }, 0)
   const rows = (list: AgentRun[], at: number) => between(text(queueLines(CHART, list, at)), '  build:git ', '  build:init ')
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a launcher prompt names its entry on its first line', () => {
     const launcher = 'loop run build:git\nRead the file `.clm/prompts/git.md` with the Read tool.'
     const list = started(['b1', 'build git', launcher])
@@ -595,6 +606,7 @@ describe('waiting', () => {
     expect(text(queueLines(CHART, list, 5_000))).not.toContain('agents')
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('a loop run line past the fifth line is no run', () => {
     const quoted = 'one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\nloop run build:git'
     const all = text(queueLines(CHART, started(['x1', 'review', quoted]), 5_000))

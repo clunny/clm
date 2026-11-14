@@ -336,6 +336,7 @@ describe('node-inspector', () => {
     expect(started).toHaveLength(3)
   })
 
+  // req:plugin.panel/build-rows@84e4b711
   test('the Queue tab draws its run rows under the running entries and the Flight tab draws none', () => {
     const queue = ansiLines('loop not held\nrunning\n  build:a  P5\nnext up\n  none\n')
     const { lines } = chartLines({ tab: 'queue', chart: queue, own: { stdout: '', stderr: '', exitCode: 0 }, selected: null, unfolded: [] })
