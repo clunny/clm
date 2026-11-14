@@ -17,13 +17,13 @@ An item a landed change names in `resolves` stays held by *on main* until its fi
 
 ## Approaches
 
-- **`clm land` releases the claims on the items its landed changes name** (taken). The land already reads the landed change IDs for its `landed` record, already deletes the landed `spec/*` branch through `host`'s `branch delete` leased on a tip, and knows which items the change names. Those are the items its spec work held, and `clm claim` refuses an item named by spec work in flight, so a live claim on one is the change's own session's, or a lapsed one nothing else holds. Leasing on the fetched tip keeps a claim another session took over in the meantime.
+- **`clm land` releases the claims on the items its landed changes name** (taken). The land already reads the landed change IDs for its `landed` record, already deletes the landed `spec/*` branch through `host`'s `branch delete` leased on a tip, and knows which items the change names. Only changes the branch adds count: a branch that edits a change already on `main` releases nothing, since that change's `from` items may since have been claimed afresh. The items an added change names are the items its spec work held, and `clm claim` refuses an item named by spec work in flight, so a live claim on one is the change's own session's, or a lapsed one nothing else holds. Leasing on the fetched tip keeps a claim another session took over in the meantime.
 - **`clm wrap-up` releases them.** Not taken: wrap-up tidies the local clone, can't tell which claims the session took, and an unattended session may never run it.
 - **The propose skill tells the session to delete its claims after the land.** Not taken: an instruction, not a check, and the instruction route already failed once; the land knows everything it needs.
 
 ## Outcome
 
-- `land/landed-change-releases-claims`: after pushing a `spec/*` branch, `clm land` deletes `propose/<slug>` for each item its changes name in `from` or `resolves`, leased on the fetched tip, writing `released propose/<slug>` to stderr; a failed delete warns and never fails the land.
+- `land/landed-change-releases-claims`: after pushing a `spec/*` branch, `clm land` deletes `propose/<slug>` for each item the changes it adds name in `from` or `resolves`, leased on the fetched tip, writing `released propose/<slug>` to stderr; a failed delete warns and never fails the land.
 
 `clm draft --finish`'s release of a draft's claims stays: it also releases claims on items a draft left out of its change, and it already skips a claim that is gone. The propose skill's idea-elaboration steps keep their delete: an idea branch has no `change.md`, so the land has nothing to read for it.
 
