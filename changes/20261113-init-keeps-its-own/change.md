@@ -39,10 +39,11 @@ No capability test sees anything different at the product's boundary: none passe
 ## Edge cases
 
 - A null `exemptions` value (`exemptions:` with nothing after it) is refused by both, as a value that isn't a list.
-- The survey stops at the map's first component with a refused value or reports every component's; either is "refused as a map that doesn't parse is". The requirement fixes only that each message of a refused value is printed, so the build may keep the simpler early return.
+- A map with several components whose values are refused: the survey may stop at the first, printing every message for that component's value, as it stops at a map's first parse error. The requirement says so.
+- A `why` that isn't a string is refused by the check with a message naming the entry, where the typed parse reported it under `model/valid-frontmatter` without the entry's position.
 
 No workaround is known to be needed.
 
 ## Open questions
 
-None.
+None. The architecture audit had no findings; its two observations (what the survey prints when several components are refused, and how the exposed check sits beside `model/optional-nodes`' rule against a frontmatter check with no component ID) are settled in the requirements' text.
