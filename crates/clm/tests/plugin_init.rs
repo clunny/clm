@@ -502,16 +502,19 @@ const INIT_HARNESS: &[&str] = &[
 /// What `init-skill-gives-tests-their-component` asks of the `init` skill.
 const INIT_TEST_OWNERS: &[&str] = &[
     "`tests` globs",
-    "`test_depends_on`",
+    "`exemptions`",
+    "`until`",
     "components-own-their-tests",
+    "temporary-exemptions",
     "never list test files one by one",
-    "`kind: deferred`",
+    "belongs to the component that holds the entry point",
 ];
 
 #[test]
 fn init_skill_gives_tests_their_component() {
-    // req:plugin.init/init-skill-gives-tests-their-component@342b4d5f
+    // req:plugin.init/init-skill-gives-tests-their-component@9fd2ae07
     let body = skill_body("init");
+    assert!(!body.contains("test_depends_on"));
     assert_eq!(lacks("init", &body, INIT_TEST_OWNERS), Vec::<String>::new());
     for needle in INIT_TEST_OWNERS {
         let gaps = lacks("init", &body.replace(needle, "elided"), INIT_TEST_OWNERS);
