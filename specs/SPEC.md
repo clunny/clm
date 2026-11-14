@@ -1065,3 +1065,15 @@ Before running any command except `--version`, `help`, `guide` and `hook`, in a 
 
 #### Serves
 - capability/watch-machine-load
+
+### Requirement: no-runner-crate
+The workspace SHALL hold no crate `clm-runner`, and `clm` SHALL have no `runner` subcommand: unattended builds run through `/clm:build` in a session (`build-loop-in-clm`). The root's build deletes `crates/clm-runner/`, which the root owns once `orchestrator.runner` is removed, and takes its dependency out of `Cargo.toml`, `Cargo.lock` and `crates/clm/Cargo.toml`, its dispatch out of `crates/clm/src/`, and `crates/clm/tests/runner.rs`, whose tests ran the removed command (`no-dead-code`).
+
+#### Scenario: crate and command gone
+- GIVEN the workspace
+- WHEN a test in `clm` reads the root `Cargo.toml` and `crates/clm/Cargo.toml`, lists `crates/`, and runs `clm runner`
+- THEN neither file names `clm-runner`, no `crates/clm-runner/` directory exists, and `clm runner` exits 2 as an unknown subcommand
+
+#### Serves
+- architecture/no-dead-code
+- capability/no-dead-weight
