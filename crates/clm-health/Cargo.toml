@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 clm-model.workspace = true
 clm-check.workspace = true
+clm-coverage.workspace = true
 clm-orchestrator.workspace = true
 clm-git.workspace = true
 clm-effort.workspace = true
