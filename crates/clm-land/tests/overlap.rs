@@ -52,7 +52,7 @@ fn has_recheck_line(warnings: &[String]) -> bool {
 
 #[test]
 fn main_moved_on_an_unrelated_component() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     let (head, base, basis, merge_base) = moved(&f);
     // The check lock held by another process: the land takes neither lock, so it doesn't wait.
@@ -101,7 +101,7 @@ fn main_moved_on_an_unrelated_component() {
 
 #[test]
 fn a_dependant_of_both() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     let (head, base, basis, _) = moved(&f);
     f.write("overlap-out", "file crates/c/tests/t.rs\n");
@@ -129,7 +129,7 @@ fn a_dependant_of_both() {
 
 #[test]
 fn an_all_line_runs_every_test() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     moved(&f);
     f.write("overlap-out", "all crates/c/Cargo.toml\n");
@@ -146,7 +146,7 @@ fn an_all_line_runs_every_test() {
 
 #[test]
 fn the_overlap_fails() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     moved(&f);
     f.write("affected-fails", "");
@@ -165,7 +165,7 @@ fn the_overlap_fails() {
 
 #[test]
 fn the_head_was_never_checked_whole() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
@@ -184,7 +184,7 @@ fn the_head_was_never_checked_whole() {
 
 #[test]
 fn mains_head_was_not_checked() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
@@ -198,7 +198,7 @@ fn mains_head_was_not_checked() {
 
 #[test]
 fn a_head_that_contains_main_is_not_composed() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     f.mark_checked("origin/impl/a");
@@ -214,7 +214,7 @@ fn a_head_that_contains_main_is_not_composed() {
 
 #[test]
 fn checks_made_with_another_command_do_not_count() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
     let base = f.advance_main("crates/b/src/lib.rs", "// b\n");
@@ -236,11 +236,117 @@ fn checks_made_with_another_command_do_not_count() {
 
 #[test]
 fn a_land_says_how_it_checked() {
-    // req:land/overlap-recheck@272fc09e
+    // req:land/overlap-recheck@0431f136
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     f.mark_checked("origin/main");
     clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
     let (_, recheck, files) = landed(&f);
     assert_eq!((recheck, files), (Some(Recheck::Checked), None));
+}
+
+/// `impl/a` unchecked and in its check, which waits for the file `release`, while `impl/b`,
+/// whose code is checked, lands on `main`; then the check ends. Returns the outcome of
+/// `impl/a`'s land.
+fn main_moves_during_the_check(f: &Fixture, first: &str, other: &str) -> clm_land::Output {
+    f.write("hold", "");
+    let (a, b) = (f.linked("wa", first), f.linked("wb", other));
+    let env = f.env(&[]);
+    std::thread::scope(|s| {
+        let land = s.spawn(|| clm_land::land(&a, None, &env));
+        let started = std::time::Instant::now();
+        while f.lines("check-order.log").is_empty() {
+            assert!(started.elapsed().as_secs() < 30, "the check never started");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // The other branch changes no file the readers select.
+        let _ = std::fs::remove_file(f.path("readers-out"));
+        let landed = clm_land::land(&b, None, &env).unwrap();
+        assert!(landed.lines[0].starts_with("landed "), "{:?}", landed.lines);
+        f.write("release", "");
+        land.join().unwrap().unwrap()
+    })
+}
+
+#[test]
+fn main_moved_during_the_check_on_an_unrelated_component() {
+    // req:land/overlap-recheck@0431f136
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
+    f.branch("impl/b", &[("crates/b/src/lib.rs", "// b\n")]);
+    f.mark_checked("origin/impl/b");
+    let out = main_moves_during_the_check(&f, "impl/a", "impl/b");
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+    assert_eq!(f.lines("check-order.log").len(), 2, "one start and its end");
+    assert_eq!(f.lines("check.log").len(), 1);
+    assert!(
+        out.warnings.iter().any(|w| w.starts_with("re-check: none")),
+        "{:?}",
+        out.warnings
+    );
+    // The record for the tree it landed names the merge commit it checked and the `main` it
+    // landed on.
+    let main = f.remote("main");
+    let key = clm_ledger::code_key(&f.path("origin.git"), &main).unwrap();
+    let checked_keys: Vec<String> = f
+        .records()
+        .into_iter()
+        .filter_map(|r| match r.body {
+            Body::Checked {
+                code_key,
+                basis: None,
+                ..
+            } => Some(code_key),
+            _ => None,
+        })
+        .collect();
+    let [Some(basis)] = &basis_of(&f, &key)[..] else {
+        panic!("{:?}", basis_of(&f, &key))
+    };
+    assert!(checked_keys.contains(&basis.head), "{basis:?}");
+    let base = f.git(&f.work(), &["rev-parse", &format!("{main}^1")]);
+    assert_eq!(
+        basis.base,
+        clm_ledger::code_key(&f.path("origin.git"), &base).unwrap()
+    );
+    assert_ne!(basis.head, basis.base);
+    let (_, recheck, files) = landed(&f);
+    assert_eq!((recheck, files), (Some(Recheck::None), None));
+}
+
+#[test]
+fn main_moved_during_a_readers_check() {
+    // req:land/overlap-recheck@0431f136
+    let f = Fixture::new("");
+    f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
+    f.branch("impl/b", &[("crates/b/src/lib.rs", "// b\n")]);
+    f.mark_checked("origin/main");
+    f.mark_checked("origin/impl/b");
+    f.write("readers-out", "file crates/a/tests/t.rs\n");
+    let out = main_moves_during_the_check(&f, "spec/x", "impl/b");
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+    assert_eq!(f.lines("check.log").len(), 1);
+}
+
+#[test]
+fn main_moved_during_the_check_with_a_dependant_in_common() {
+    // req:land/overlap-recheck@0431f136
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("crates/a/src/lib.rs", "// a\n")]);
+    f.branch("impl/b", &[("crates/b/src/lib.rs", "// b\n")]);
+    f.mark_checked("origin/impl/b");
+    f.write("overlap-out", "file crates/c/tests/t.rs\n");
+    let out = main_moves_during_the_check(&f, "impl/a", "impl/b");
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+    assert_eq!(f.lines("check.log").len(), 2, "its check ran twice");
+    assert_eq!(
+        std::fs::read_to_string(f.path("selection-copy")).unwrap(),
+        "file crates/c/tests/t.rs\n"
+    );
+    assert!(
+        out.warnings
+            .contains(&"re-check: overlap, 1 files".to_string()),
+        "{:?}",
+        out.warnings
+    );
 }

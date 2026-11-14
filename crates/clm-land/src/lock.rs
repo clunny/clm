@@ -357,6 +357,18 @@ pub(crate) fn land(target: &Path, rank: Rank) -> Result<Held, Error> {
     take(Path::new(&path), rank, &prefix, tell)
 }
 
+/// Locks `push.lock` in `places`, the push turn (`land/push-turn`): ordinary tickets, so the
+/// turns go in the order they were asked.
+pub(crate) fn push(places: &Path) -> Result<Held, Error> {
+    let path = places.join("push.lock");
+    take(
+        &path,
+        Rank::ORDINARY,
+        "waiting for another land's push",
+        tell,
+    )
+}
+
 /// Locks `check.lock` in `places`, the check lock, passing each waiting line to `say`.
 pub(crate) fn check(places: &Path, rank: Rank, say: impl FnMut(&str)) -> Result<Held, Error> {
     let path = places.join("check.lock");
@@ -384,7 +396,7 @@ mod tests {
 
     #[test]
     fn a_free_lock_is_taken_at_once_and_leaves_no_ticket() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let held = take(&path, Rank::ORDINARY, "p", |_| panic!("said")).unwrap();
@@ -400,7 +412,7 @@ mod tests {
     #[test]
     fn a_run_outside_the_queue_counts_one_ahead_and_is_waited_for() {
         // req:land/check-lock@a6608578
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let held = outsider(&path);
@@ -494,7 +506,7 @@ mod tests {
 
     #[test]
     fn turns_go_in_arrival_order_and_each_line_counts_the_runs_ahead() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let (got, first) = run_in_order(&[
             ("a", Rank::ORDINARY),
             ("b", Rank::ORDINARY),
@@ -506,7 +518,7 @@ mod tests {
 
     #[test]
     fn priority_lane_runs_go_first_but_cannot_starve_the_rest() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let p = rank(Lane::Priority, Priority::P5);
         let (got, _) = run_in_order(&[
             ("o", Rank::ORDINARY),
@@ -524,7 +536,7 @@ mod tests {
 
     #[test]
     fn p1_goes_first_priority_lane_before_ordinary() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let (got, _) = run_in_order(&[
             ("pri5", rank(Lane::Priority, Priority::P5)),
             ("ord1", rank(Lane::Ordinary, Priority::P1)),
@@ -535,7 +547,7 @@ mod tests {
 
     #[test]
     fn below_p1_the_priority_lane_goes_first_then_the_highest_priority() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let (got, _) = run_in_order(&[
             ("ord2", rank(Lane::Ordinary, Priority::P2)),
             ("pri4", rank(Lane::Priority, Priority::P4)),
@@ -547,7 +559,7 @@ mod tests {
 
     #[test]
     fn p1_does_not_wait_for_the_cap() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let (got, _) = run_in_order_after(
             &[
                 ("ord5", Rank::ORDINARY),
@@ -560,7 +572,7 @@ mod tests {
 
     #[test]
     fn a_priority_lane_p1_run_goes_before_the_cap_runs() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let (got, _) = run_in_order_after(
             &[
                 ("ord5", Rank::ORDINARY),
@@ -573,7 +585,7 @@ mod tests {
 
     #[test]
     fn the_cap_lets_an_ordinary_run_pass_after_six_below_p1() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let (got, _) = run_in_order_after(
             &[
                 ("ord5", Rank::ORDINARY),
@@ -586,7 +598,7 @@ mod tests {
 
     #[test]
     fn the_ticket_of_an_ended_run_holds_no_turn() {
-        // req:land/lock-queue@7af00d95
+        // req:land/lock-queue@f4acb98c
         let dir = tempfile::tempdir().unwrap();
         let path = lock_path(&dir);
         let outside = outsider(&path);

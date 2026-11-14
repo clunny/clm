@@ -56,7 +56,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     };
     // 1. Fetch, pick the head, fold, and merge the trees: before the worktree it checks in
     // exists, a land knows whether its check will run.
-    let prepare = || -> Result<Prepared, Error> {
+    let prepare = |chain: Option<&str>| -> Result<Prepared, Error> {
         repo.fetch()?;
         let (head, on_origin) = repo.approval.head(&branch, true)?;
         let base = repo
@@ -140,15 +140,18 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             _ => false,
         };
         // Unchecked code whose head and base were each checked whole may be checked only where
-        // the two overlap (`land/overlap-recheck`).
+        // the two overlap (`land/overlap-recheck`). After a check of this land's own that
+        // passed on a merge commit, that commit stands for the head, and the overlap decides
+        // whatever the new tree's key already counts as.
+        let overlap_head = chain.map_or_else(|| head.clone(), str::to_string);
         let overlap = match &merged {
             Some((_, key))
                 if check.is_some()
                     && !env_changed
-                    && !via_settings
-                    && !checked_with(&fold, key, &command) =>
+                    && (chain.is_some()
+                        || (!via_settings && !checked_with(&fold, key, &command))) =>
             {
-                overlap_basis(&repo, &fold, &head, &base, &command)?
+                overlap_basis(&repo, &fold, &overlap_head, &base, &command)?
             }
             _ => None,
         };
@@ -163,6 +166,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             merged,
             via_settings,
             overlap,
+            overlap_head,
             behind,
             warnings,
             command,
@@ -183,15 +187,27 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         ..Default::default()
     };
     let mut temp: Option<Scratch> = None;
+    // The land lock and the push turn, kept across attempts: a land that must start again
+    // under them holds them still (`land/land-target-lock`, `land/push-turn`).
+    let mut lock: Option<lock::Held> = None;
+    let mut turn: Option<lock::Held> = None;
+    // The merge commit whose check this land passed, when `main` moved after it
+    // (`land/overlap-recheck`).
+    let mut chain: Option<String> = None;
+    // The head and base whose overlap printed nothing (`land/overlap-recheck`).
+    let mut overlap_nothing: Option<(String, String)> = None;
     for attempt in 1..=ATTEMPTS {
-        let mut p = prepare()?;
+        let mut p = prepare(chain.as_deref())?;
         // The priority this land's tickets carry, worked out once, before its first wait
         // of the attempt (`land/lock-queue`).
         let mut priority: Option<Priority> = None;
-        let mut lock = None;
-        if let Some(target) = &target
+        if lock.is_none()
+            && let Some(target) = &target
             && check_runs(&p)
         {
+            // A check runs, so the turn is taken after it, never held while waiting for the
+            // lock (`land/push-turn`).
+            turn = None;
             // Unchecked code: the check runs every test the branch can break, so an ordinary
             // ticket (`land/lock-queue`).
             let rank = Rank {
@@ -201,7 +217,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             let held = lock::land(target, rank)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
             if held.waited {
-                p = prepare()?;
+                p = prepare(chain.as_deref())?;
             }
             if check_runs(&p) {
                 lock = Some(held);
@@ -218,6 +234,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             merged,
             via_settings,
             overlap,
+            overlap_head,
             behind,
             warnings,
             command,
@@ -320,13 +337,25 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // each can break (`land/overlap-recheck`). A failed overlap goes on as any land does.
         let mut overlapped = false;
         if let (Some(basis), Some(_)) = (&overlap, &check) {
-            match repo.overlap(exe, dir.path(), &head, &base) {
+            // A land that starts again under the push turn asks the same question of the
+            // same commits only once.
+            let pair = (overlap_head.clone(), base.clone());
+            let result = if overlap_nothing.as_ref() == Some(&pair) {
+                Selected::Nothing
+            } else {
+                repo.overlap(exe, dir.path(), &overlap_head, &base)
+            };
+            match result {
                 Selected::Nothing => {
-                    let merge_base = repo.git(&["merge-base", &base, &head])?;
+                    overlap_nothing = Some(pair);
+                    let merge_base = repo.git(&["merge-base", &base, &overlap_head])?;
                     let short = repo.git(&["rev-parse", "--short", &merge_base])?;
-                    out.warnings.push(format!(
+                    let line = format!(
                         "re-check: none, the branch and main since {short} affect no test in common"
-                    ));
+                    );
+                    if !out.warnings.contains(&line) {
+                        out.warnings.push(line);
+                    }
                     runs = false;
                     overlapped = true;
                     composed = Some(basis.clone());
@@ -368,6 +397,12 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 recheck = Some(Recheck::Selected);
             }
         }
+        // A land that runs no check takes the push turn and no other lock, before the fetch
+        // its push relies on, so it starts again under the turn (`land/push-turn`).
+        if !runs && lock.is_none() && turn.is_none() {
+            turn = Some(lock::push(&places)?);
+            continue;
+        }
         // Readers to run on checked code, or a selection on code whose overlap was ruled out:
         // the check compiles into the shared target, so under its lock and in the land tree,
         // not the temporary worktree.
@@ -389,11 +424,19 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         };
         let land_tree_for_readers;
         let dir: &Scratch = match &target {
-            Some(target) if late_lock && runs => {
+            Some(target) if late_lock && runs && lock.is_none() => {
                 // A readers' selection that ran takes the priority lane; one that failed, so
                 // that every test runs, the ordinary (`land/lock-queue`).
-                lock = Some(lock::land(target, check_rank)?);
+                turn = None;
+                let held = lock::land(target, check_rank)?;
+                let waited = held.waited;
+                lock = Some(held);
                 drop(temp.take());
+                // The land it waited for moved `main` meanwhile: merge with that one
+                // (`land/land-target-lock`).
+                if waited {
+                    continue;
+                }
                 land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
                 &land_tree_for_readers
             }
@@ -463,6 +506,18 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 basis: composed,
             })?;
         }
+        // The push turn, once a check has passed; `main` as `origin` holds it under the turn
+        // is the one the push relies on, and when it moved, only what this land's changes and
+        // its new commits can both break is checked again (`land/push-turn`,
+        // `land/overlap-recheck`).
+        if turn.is_none() {
+            turn = Some(lock::push(&places)?);
+            repo.fetch()?;
+            if repo.rev(repo.base())?.as_deref() != Some(base.as_str()) {
+                chain = Some(merge.clone());
+                continue;
+            }
+        }
         let verdict = repo.gate(exe, dir.path(), approved, &hint)?;
         let (kind, review) = match verdict {
             Verdict::Code => (LandKind::Code, false),
@@ -498,8 +553,10 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         if push_main(&repo, &merge, &base, &branch)? == Pushed::Moved {
             out.warnings
                 .push(format!("main moved during attempt {attempt}; trying again"));
+            chain = Some(merge.clone());
             continue;
         }
+        drop(turn.take());
         // The lock covered the gate on the merge commit, `clm check` and the push, so no other
         // land checked its commit out before this one was on `main`. The cap on the shared
         // target (`land/land-target-cap`) runs under it too; the rest runs outside it.
@@ -508,7 +565,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         {
             crate::cap::apply(target, land.cap_gb(), &mut out.warnings);
         }
-        drop(lock);
+        drop(lock.take());
         drop(temp.take());
 
         // 8. The effort read before the first attempt and the record, in one commit, and the
@@ -751,6 +808,9 @@ struct Prepared {
     /// The code keys of the head and the base, when both were checked whole and the merged tree
     /// may be checked only where they overlap (`land/overlap-recheck`).
     overlap: Option<Basis>,
+    /// The commit that stands for the head in the overlap: the merge commit this land's own
+    /// check passed on when `main` moved after it, else the head.
+    overlap_head: String,
     /// Whether `head` is behind in `specs/`: it adds or applies a change and `specs/` changed
     /// on both sides, with no conflict outside it (`land/regenerates-behind-specs`).
     behind: bool,
