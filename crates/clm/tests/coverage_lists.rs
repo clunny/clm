@@ -212,3 +212,20 @@ fn a_graph_that_doesnt_load_fails_each_list() {
         assert_eq!(clm(d, args).status.code(), Some(1), "{args:?}");
     }
 }
+
+#[test]
+fn the_count_line_counts_deletes_and_uncites_apart() {
+    // req:check/coverage-lists@58f414a9
+    let dir = repo(&["y"]);
+    let d = dir.path();
+    removing_change(d);
+    let x = format!("{REQ}a/x");
+    let one =
+        format!("#[test]\nfn one() {{\n    // {x}\n}}\n\n#[test]\nfn two() {{\n    // {x}\n}}\n");
+    write(d, "tests/t.rs", &one);
+    let o = clm(d, &["--obsolete-tests"]);
+    assert_eq!(
+        out(&o).lines().next().unwrap(),
+        "# tests to delete: 2; tests that only lose a marker: 0"
+    );
+}
