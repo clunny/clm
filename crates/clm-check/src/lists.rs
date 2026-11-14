@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Violation};
 
-use crate::{deleted_tests, obsolete_tests, report, scan, uncounted};
+use crate::{deleted_tests, obsolete_tests, scan, uncounted};
 
 const RULE: &str = "check/coverage-lists";
 
@@ -15,13 +15,12 @@ const RULE: &str = "check/coverage-lists";
 /// `<id> uncounted <file>:<line>[ ...]` line per entry whose markers stand outside every
 /// test. `Err` carries spec violations that make the report unreliable.
 pub fn coverage_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> {
-    let graph = load(root)?;
-    let scan = scan(root);
-    let mut lines: Vec<String> = report(&graph, &scan.req)
+    let mut lines: Vec<String> = crate::coverage(root)?
         .iter()
         .map(ToString::to_string)
         .collect();
-    for entry in uncounted(&graph, &scan.outside) {
+    let graph = load(root)?;
+    for entry in uncounted(&graph, &scan(root).outside) {
         let at: Vec<String> = entry.markers.iter().map(ToString::to_string).collect();
         lines.push(format!("{} uncounted {}", entry.id, at.join(" ")));
     }

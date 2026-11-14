@@ -229,3 +229,39 @@ fn the_count_line_counts_deletes_and_uncites_apart() {
         "# tests to delete: 2; tests that only lose a marker: 0"
     );
 }
+
+#[test]
+fn uncounted_lines_follow_the_obsolete_lines() {
+    // req:check/coverage-lists@58f414a9
+    let dir = repo(&["y"]);
+    let d = dir.path();
+    removing_change(d);
+    let y = cite(d, "y");
+    write(
+        d,
+        "tests/t.rs",
+        &format!("#[test]\nfn t() {{\n    // {REQ}a/x\n}}\n"),
+    );
+    write(d, "src/lib.rs", &format!("fn f() {{\n    // {y}\n}}\n"));
+    let o = clm(d, &[]);
+    let lines: Vec<String> = out(&o).lines().map(String::from).collect();
+    let obsolete = lines
+        .iter()
+        .position(|l| l.starts_with("a/x obsolete"))
+        .unwrap();
+    let uncounted = lines
+        .iter()
+        .position(|l| l.starts_with("a/y uncounted"))
+        .unwrap();
+    assert!(obsolete < uncounted, "{lines:?}");
+}
+
+#[test]
+fn plain_coverage_fails_on_a_graph_that_doesnt_load() {
+    // req:check/coverage-lists@58f414a9
+    let dir = repo(&["x"]);
+    write(dir.path(), "specs/a/SPEC.md", "not a spec");
+    let o = clm(dir.path(), &[]);
+    assert_eq!(o.status.code(), Some(1));
+    assert!(out(&o).contains("specs/a/SPEC.md"), "{}", out(&o));
+}
