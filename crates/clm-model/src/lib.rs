@@ -96,10 +96,6 @@ pub struct Frontmatter {
     /// (`test-ownership-keys`).
     #[serde(default)]
     pub tests: Vec<String>,
-    /// The nodes its test files may import beyond `depends_on`; not part of the
-    /// dependency DAG. clm:remove-by 20261113-temporary-exemptions (`test-dependencies-retired`)
-    #[serde(default)]
-    pub test_depends_on: Vec<String>,
     /// The rules the node's own files are temporarily exempt from (`exemptions`).
     #[serde(default)]
     pub exemptions: Vec<Exemption>,
@@ -538,7 +534,7 @@ fn parent_id(id: &str) -> Option<String> {
 }
 
 /// The node frontmatter keys the model knows: `Frontmatter`'s fields.
-const KNOWN_KEYS: [&str; 15] = [
+const KNOWN_KEYS: [&str; 14] = [
     "title",
     "status",
     "owners",
@@ -552,7 +548,6 @@ const KNOWN_KEYS: [&str; 15] = [
     "size_budget",
     "outside",
     "tests",
-    "test_depends_on",
     "exemptions",
 ];
 

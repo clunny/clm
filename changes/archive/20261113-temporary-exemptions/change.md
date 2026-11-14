@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/clm-s-cli-tests-belong-to-the-root
 ---
 
