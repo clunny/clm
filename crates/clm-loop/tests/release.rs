@@ -191,3 +191,54 @@ fn nothing_to_release() {
     let lines = release(&fx.options(), "a").unwrap();
     assert!(lines.iter().all(|l| !l.starts_with("kept")), "{lines:?}");
 }
+
+#[test]
+fn a_planned_run_is_refused_and_a_returned_one_is_not() {
+    // req:orchestrator.loop/release@4d5201e5
+    let fx = Fixture::new();
+    built_branch(&fx);
+    fx.add_run(run(
+        "build:a",
+        Kind::Build,
+        "sonnet",
+        RunState::Planned,
+        None,
+    ));
+    assert!(release(&fx.options(), "a").is_err());
+    fx.change_run("build:a", |r| r.state = RunState::Returned);
+    release(&fx.options(), "a").unwrap();
+    assert!(fx.file().run("build:a").is_none());
+}
+
+#[test]
+fn a_hold_that_went_quiet_lets_the_release_go_ahead() {
+    // req:orchestrator.loop/release@4d5201e5
+    let fx = Fixture::new();
+    built_branch(&fx);
+    orphan(&fx);
+    let tip = git(&fx, &["rev-parse", "origin/impl/a"]);
+    fx.change_run("build:a", |r| {
+        r.hold = Some(clm_loop::Hold {
+            tip,
+            since: clm_git::now() - 16 * 60,
+        });
+    });
+    release(&fx.options(), "a").unwrap();
+    assert!(!origin_has(&fx, "impl/a"));
+}
+
+#[test]
+fn the_kept_name_carries_a_utc_time_and_the_actions_follow() {
+    // req:orchestrator.loop/release@4d5201e5
+    let fx = Fixture::new();
+    built_branch(&fx);
+    let lines = release(&fx.options(), "a").unwrap();
+    let kept = lines[0].strip_prefix("kept released/a/").unwrap();
+    let ok = kept.char_indices().all(|(i, c)| match i {
+        8 => c == 'T',
+        15 => c == 'Z',
+        _ => c.is_ascii_digit(),
+    });
+    assert!(ok && kept.len() == 16, "{kept}");
+    assert!(fx.ran("wrap-up") > 0, "the step's actions were read");
+}
