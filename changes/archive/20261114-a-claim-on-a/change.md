@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-claim-on-a-backlog-item-stays-live-after-its-change-lands-and]
 ---
 
