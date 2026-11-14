@@ -135,6 +135,15 @@ fn appended_unsigned_even_in_a_signed_repository() {
     std::fs::create_dir_all(a.join("docs")).unwrap();
     std::fs::write(a.join("docs/allowed_signers"), "alice ssh-ed25519 AAAA\n").unwrap();
     let home = dir.path();
+    for args in [&["add", "docs"][..], &["commit", "-qm", "signers"][..]] {
+        let status = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&a)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+    assert!(clm_ledger::signed(&a, "HEAD").unwrap());
     let done = clm_ledger::append(&a, body('c', &[]), &env(home, &[])).unwrap();
     let fold = clm_ledger::fold(&a).unwrap();
     assert_eq!(fold.mutations[&id('c')][0].id, done.record.id);
