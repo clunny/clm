@@ -219,6 +219,7 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
         // modifies, a status-only edit included, as the Worker passes them.
         let changes = change_frontmatters(&at, &entries, &new_archived)?;
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
+        let added = added_exemptions(&at, &entries)?;
         review = match &replayed {
             // Its replayed edits to the human layers change no intent (`needs-review`).
             Some(text) => {
@@ -227,10 +228,11 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
                         .iter()
                         .any(|fm| fm.as_ref().is_none_or(change_needs_review))
             }
-            None => needs_review_of(&paths, setting_changed, &changes),
+            // Relaxing a rule, or widening a relaxation, is always seen by a human.
+            None => needs_review_of(&paths, setting_changed, &changes) || !added.is_empty(),
         };
         violations.extend(undeclared_burdens(&at, &entries, &changes));
-        violations.extend(exemptions_name_their_items(&at, &entries)?);
+        violations.extend(exemptions_name_their_items(&at, &added)?);
     }
 
     match kind {
@@ -444,13 +446,18 @@ fn exemptions_in(text: &str) -> Vec<RawExemption> {
         .collect()
 }
 
-/// `gate/exemption-names-its-item`: each exemption a component's `SPEC.md` holds at `head`
-/// that its file at the merge base doesn't already cover (added or widened, as
-/// `needs-review` counts them), whose `until` names no `backlog/<slug>.md` at `head`.
-fn exemptions_name_their_items(
-    at: &At,
-    entries: &[(char, &str)],
-) -> Result<Vec<Violation>, String> {
+/// An exemption a component's `SPEC.md` holds at `head` that its file at the merge base
+/// doesn't cover: added or widened, as `needs-review` counts them (`temporary-exemptions`).
+struct AddedExemption {
+    file: String,
+    rule: String,
+    until: String,
+}
+
+/// Every added or widened exemption: one with no exemption of the same `rule` and `until`
+/// at the merge base whose `files` hold all of its own, every exemption of a new
+/// component counting.
+fn added_exemptions(at: &At, entries: &[(char, &str)]) -> Result<Vec<AddedExemption>, String> {
     let mut out = Vec::new();
     for &(status, file) in entries {
         let is_component = file
@@ -479,30 +486,44 @@ fn exemptions_name_their_items(
             let covered = before.iter().any(|(r, fs, u)| {
                 *r == rule && *u == until && files.iter().all(|f| fs.contains(f))
             });
-            if covered {
-                continue;
-            }
-            let item = until
-                .strip_prefix("backlog/")
-                .filter(|slug| !slug.is_empty() && !slug.contains('/'))
-                .map(|slug| format!("backlog/{slug}.md"));
-            let exists = match item {
-                Some(path) => {
-                    !clm_git::git(at.repo, &["ls-tree", "--name-only", at.head, "--", &path])
-                        .map_err(|e| e.to_string())?
-                        .is_empty()
-                }
-                None => false,
-            };
-            if !exists {
-                out.push(Violation {
-                    path: PathBuf::from(file),
-                    rule: "gate/exemption-names-its-item",
-                    message: format!(
-                        "exemption from {rule} until {until} names no backlog item; add it"
-                    ),
+            if !covered {
+                out.push(AddedExemption {
+                    file: file.to_string(),
+                    rule,
+                    until,
                 });
             }
+        }
+    }
+    Ok(out)
+}
+
+/// `gate/exemption-names-its-item`: each added or widened exemption whose `until` names no
+/// `backlog/<slug>.md` at `head`.
+fn exemptions_name_their_items(
+    at: &At,
+    added: &[AddedExemption],
+) -> Result<Vec<Violation>, String> {
+    let mut out = Vec::new();
+    for AddedExemption { file, rule, until } in added {
+        let item = until
+            .strip_prefix("backlog/")
+            .filter(|slug| !slug.is_empty() && !slug.contains('/'))
+            .map(|slug| format!("backlog/{slug}.md"));
+        let exists = match item {
+            Some(path) => !clm_git::git(at.repo, &["ls-tree", "--name-only", at.head, "--", &path])
+                .map_err(|e| e.to_string())?
+                .is_empty(),
+            None => false,
+        };
+        if !exists {
+            out.push(Violation {
+                path: PathBuf::from(file),
+                rule: "gate/exemption-names-its-item",
+                message: format!(
+                    "exemption from {rule} until {until} names no backlog item; add it"
+                ),
+            });
         }
     }
     Ok(out)

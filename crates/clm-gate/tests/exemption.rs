@@ -236,3 +236,68 @@ fn an_item_on_main_counts_and_only_a_spec_branch_is_judged() {
     assert_eq!(out.kind, Kind::Mixed);
     assert_eq!(named(&out), 0);
 }
+
+fn review_of(d: &Path) -> (Kind, bool) {
+    let out = evaluate_at(d, "main", "pr", false).unwrap();
+    (out.kind, out.review)
+}
+
+// req:gate/needs-review@48a7ac76
+#[test]
+fn an_added_exemption_needs_review() {
+    let dir = base();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    write(d, "backlog/x.md", ITEM);
+    commit(d, "exempt");
+    assert_eq!(review_of(d), (Kind::Spec, true));
+    // a component new on the branch counts every exemption
+    write(d, "specs/b/SPEC.md", &component(EXEMPTION));
+    commit(d, "new component");
+    assert_eq!(review_of(d), (Kind::Spec, true));
+}
+
+// req:gate/needs-review@48a7ac76
+#[test]
+fn a_widened_exemption_needs_review_but_a_narrowed_or_removed_one_does_not() {
+    let dir = base();
+    let d = dir.path();
+    let two = EXEMPTION.replace("[\"src/a/**\"]", "[\"src/a/**\", \"tests/**\"]");
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "specs/a/SPEC.md", &component(&two));
+    commit(d, "exempt on main");
+    git(d, &["checkout", "-q", "pr"]);
+    git(d, &["merge", "-q", "--ff-only", "main"]);
+    // narrowed
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    commit(d, "narrow");
+    assert_eq!(review_of(d), (Kind::Spec, false));
+    // only its `why` changed
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &component(&format!("{two}    why: because\n")),
+    );
+    commit(d, "why");
+    assert_eq!(review_of(d), (Kind::Spec, false));
+    // removed
+    write(d, "specs/a/SPEC.md", &component(""));
+    commit(d, "remove");
+    assert_eq!(review_of(d), (Kind::Spec, false));
+    // widened past main's, or moved to another item
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "specs/a/SPEC.md", &component(EXEMPTION));
+    commit(d, "narrow on main");
+    git(d, &["checkout", "-q", "pr"]);
+    git(d, &["reset", "-q", "--hard", "main"]);
+    write(d, "specs/a/SPEC.md", &component(&two));
+    commit(d, "widen");
+    assert_eq!(review_of(d), (Kind::Spec, true));
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &component(&EXEMPTION.replace("backlog/x", "backlog/y")),
+    );
+    commit(d, "another item");
+    assert_eq!(review_of(d), (Kind::Spec, true));
+}
