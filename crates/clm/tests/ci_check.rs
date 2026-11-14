@@ -1954,7 +1954,9 @@ bin=$(dirname "$0")
 cfg=$3
 report=$(grep -o '"fileName": "[^"]*"' "$cfg" | sed -e 's/^"fileName": "//' -e 's/"$//')
 if grep -q clm-mutate-fixture "$cfg"; then
-  if grep -q 'fixture.ts:1-1' "$cfg" || [ -e "$bin/stryker-fixture-kills-all" ]; then
+  if [ -e "$bin/stryker-fixture-kills-none" ]; then
+    killed=0; survived=1
+  elif grep -q 'fixture.ts:1-1' "$cfg" || [ -e "$bin/stryker-fixture-kills-all" ]; then
     killed=1; survived=0
   else
     killed=0; survived=1
@@ -2423,6 +2425,16 @@ fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
     );
     assert!(result.is_empty(), "{result:?}");
     assert!(!tree.work().join("web/clm-mutate-fixture").exists());
+    // Nor does one that leaves the mutants of the test that notices alive.
+    fs::remove_file(tree.dir.path().join("bin/stryker-fixture-kills-all")).unwrap();
+    tree.report("stryker-fixture-kills-none", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("StrykerJS") && stderr.contains("fixture"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
 }
 
 /// Every file under `dir`, but `target/`, which the script's coverage step writes, with its
