@@ -39,6 +39,11 @@ lines_in() { if [ -f "$1" ]; then wc -l <"$1" | tr -d ' '; else echo 0; fi; }
 rust_ready=false
 rust_tools() {
   if $rust_ready; then return; fi
+  # Each mutant's tests run under nextest, which only test-tools.sh installs (ci/test-tools).
+  if ! cargo nextest --version >/dev/null 2>&1; then
+    echo "mutate.sh: cargo-nextest is missing; install cargo-nextest first" >&2
+    exit 1
+  fi
   case $(cargo mutants --version 2>/dev/null || true) in
     *" $MUTANTS_VERSION") ;;
     *) cargo install --locked --version "$MUTANTS_VERSION" cargo-mutants ;;
@@ -84,6 +89,7 @@ count_outcomes() {
 run_mutants() {
   local out=$1 status=0
   shift
+  rm -rf "$out"
   mkdir -p "$out"
   cargo mutants --test-tool nextest --output "$out" "${mutants_args[@]}" "$@" \
     -- -E "$filterset" || status=$?
@@ -168,13 +174,17 @@ ts_tools() {
 # The `<path>:<first>-<last>` ranges of the diff's added lines in the files under `$1/`, paths
 # relative to it, which StrykerJS mutates.
 diff_ranges() {
-  awk -v dir="$1/" '
+  local dir=$1 diff=$2 wanted
+  shift 2
+  wanted=$(printf '%s\n' "$@")
+  awk -v dir="$dir/" -v wanted="$wanted" '
+    BEGIN { n = split(wanted, w, "\n"); for (i = 1; i <= n; i++) ok[w[i]] = 1 }
     /^\+\+\+ / { path = ""; p = $2; sub(/^b\//, "", p)
-      if (index(p, dir) == 1) path = substr(p, length(dir) + 1); next }
+      if (index(p, dir) == 1 && (substr(p, length(dir) + 1) in ok)) path = substr(p, length(dir) + 1); next }
     /^@@/ && path != "" {
       split($3, a, ","); first = substr(a[1], 2) + 0; count = (a[2] == "" ? 1 : a[2] + 0)
       if (count > 0) print path ":" first "-" (first + count - 1)
-    }' "$2"
+    }' "$diff"
 }
 
 # Runs StrykerJS in $1 on the `--mutate` values after it, with the test files `tests`; adds its
@@ -182,6 +192,7 @@ diff_ranges() {
 run_stryker() {
   local dir=$1 report=$2 base cfg status=0 args=() m
   shift 2
+  rm -rf "${work:?}/$report"
   mkdir -p "$work/$report"
   base=
   for f in vite.config.ts vite.config.mts vite.config.js vitest.config.ts vitest.config.mts vitest.config.js; do
@@ -197,7 +208,7 @@ run_stryker() {
   {
     echo "$base"
     [ -n "$base" ] || echo "const base: any = {};"
-    echo "export default { ...base, root: '$root/$dir', test: { ...base.test, include: [$includes] } };"
+    echo "export default { ...base, test: { ...base.test, include: [$includes] } };"
   } >"$cfg"
   for m in "$@"; do args+=(--mutate "$m"); done
   (
@@ -220,8 +231,8 @@ judge_ts() {
   ts_tests=()
   for f in ${code[@]+"${code[@]}"}; do
     case $f in
-      web/src/*.ts | web/src/*.tsx | web/src/*/*) [ -n "$dir" ] || dir=web ;;
-      plugin-panel/*) [ -n "$dir" ] || dir=plugin-panel ;;
+      web/src/*.ts | web/src/*.tsx) [ -n "$dir" ] || dir=web ;;
+      plugin-panel/*.ts | plugin-panel/*.tsx) [ -n "$dir" ] || dir=plugin-panel ;;
       *) continue ;;
     esac
     case $f in "$dir"/*) files+=("${f#"$dir"/}") ;; esac
@@ -241,7 +252,7 @@ judge_ts() {
   if [ -n "$diff" ]; then
     while IFS= read -r r; do
       [ -z "$r" ] || ranges+=("$r")
-    done < <(diff_ranges "$dir" "$diff")
+    done < <(diff_ranges "$dir" "$diff" "${files[@]}")
     if [ "${#ranges[@]}" -gt 0 ]; then run_stryker "$dir" s1 "${ranges[@]}"; fi
   fi
   if [ "$caught" -eq 0 ]; then
@@ -290,7 +301,7 @@ finish_block() {
   echo "$id $v" >>"$result"
 }
 
-while IFS= read -r line || [ -n "$line" ]; do
+while IFS= read -r -u 3 line || [ -n "$line" ]; do
   case $line in
     "requirement "*)
       finish_block
@@ -305,7 +316,7 @@ while IFS= read -r line || [ -n "$line" ]; do
     "test "*) tests+=("${line#test }") ;;
     "limit "*) limit=${line#limit } ;;
   esac
-done <"$plan"
+done 3<"$plan"
 finish_block
 
 .github/scripts/coverage.sh

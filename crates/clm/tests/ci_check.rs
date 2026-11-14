@@ -2063,6 +2063,19 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
         .position(|l| l.starts_with("web$ npx stryker run "))
         .unwrap_or_else(|| panic!("{log:?}"));
     assert!(install < run, "{log:?}");
+    let pinned = |pkg: &str| {
+        log[install].split_whitespace().any(|w| {
+            w.strip_prefix(&format!("@stryker-mutator/{pkg}@"))
+                .is_some_and(|v| {
+                    v.split('.').count() == 3 && v.split('.').all(|p| p.parse::<u32>().is_ok())
+                })
+        })
+    };
+    assert!(
+        pinned("core") && pinned("vitest-runner"),
+        "{}",
+        log[install]
+    );
     assert!(
         log[run].contains("--testRunner vitest") && log[run].contains("--mutate src/app.ts:4-5"),
         "{}",
