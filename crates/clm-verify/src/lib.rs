@@ -209,10 +209,9 @@ pub fn verify_announcing(
     let ctx = match Ctx::open(root, env)? {
         Ok(ctx) => ctx,
         Err(source) => {
-            return Ok(Outcome::new(
-                format!("verify off: no [verify] in {source}"),
-                0,
-            ));
+            let outcome = Outcome::new(format!("verify off: no [verify] in {source}"), 0);
+            announce(&outcome);
+            return Ok(outcome);
         }
     };
     let state = State::load(&ctx)?;
