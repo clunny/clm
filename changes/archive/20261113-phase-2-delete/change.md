@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - moving-the-builder-check-rule-builds-tests-the-plan-deletes
   - runner-loop-on-the-stepper
