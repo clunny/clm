@@ -62,7 +62,9 @@ fn scenario_states() {
     write(
         d,
         "t.rs",
-        &format!("// {REQ}a/x@11111111\n// {REQ}a/z@{z}\n\n\n\n\n\n\n// {REQ}a/gone\n"),
+        &in_test(&format!(
+            "// {REQ}a/x@11111111\n// {REQ}a/z@{z}\n\n\n\n\n\n\n// {REQ}a/gone\n"
+        )),
     );
     let (code, out) = clm_pending(d, Some("a"));
     assert_eq!(code, Some(0), "{out}");
@@ -126,7 +128,11 @@ fn scenario_need_satisfied() {
     // req:check.coverage/pending-report@4a6b0203
     let dir = needs_repo();
     let d = dir.path();
-    write(d, "t.rs", &format!("// {REQ}b/z@{}\n", version(d, "b/z")));
+    write(
+        d,
+        "t.rs",
+        &in_test(&format!("// {REQ}b/z@{}\n", version(d, "b/z"))),
+    );
     let (_, out) = clm_pending(d, Some("a"));
     let y = out.lines().find(|l| l.starts_with("a/y ")).unwrap();
     assert_eq!(y, format!("a/y {} unbuilt", version(d, "a/y")));
@@ -138,7 +144,11 @@ fn scenario_nothing_pending() {
     let dir = repo();
     let d = dir.path();
     let cite = |id: &str| format!("// {REQ}{id}@{}\n", version(d, id));
-    write(d, "t.rs", &(cite("a/x") + &cite("a/y") + &cite("a/z")));
+    write(
+        d,
+        "t.rs",
+        &in_test(&(cite("a/x") + &cite("a/y") + &cite("a/z"))),
+    );
     assert_eq!(clm_pending(d, Some("a")), (Some(0), String::new()));
     let (code, out) = clm_pending(d, None);
     assert_eq!((code, out.as_str()), (Some(0), ""));
@@ -188,8 +198,12 @@ fn scenario_removed_node_from_the_cli() {
         "specs/v/SPEC.md",
         "---\ntitle: V\nstatus: active\nowners: []\npaths: [\"crates/v/**\"]\n---\n",
     );
-    write(d, "crates/v/tests/t.rs", &format!("\n\n\n// {REQ}g/x\n"));
-    write(d, "old/t.rs", &format!("// {REQ}g/x\n"));
+    write(
+        d,
+        "crates/v/tests/t.rs",
+        &in_test(&format!("\n\n\n// {REQ}g/x\n")),
+    );
+    write(d, "old/t.rs", &in_test(&format!("// {REQ}g/x\n")));
     assert_eq!(
         clm_pending(d, Some("v")),
         (Some(0), "g/x obsolete crates/v/tests/t.rs:4\n".to_string())
@@ -199,4 +213,25 @@ fn scenario_removed_node_from_the_cli() {
         (Some(0), "g/x obsolete old/t.rs:1\n".to_string())
     );
     assert_eq!(clm_pending(d, Some("g")).0, Some(1));
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

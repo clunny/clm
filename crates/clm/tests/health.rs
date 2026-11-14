@@ -74,7 +74,11 @@ fn scenario_findings_dont_fail_it() {
     // req:check.health/health-report@a5dd24b1
     let dir = repo();
     let d = dir.path();
-    write(d, "src/t.rs", &format!("// {}:a/ghost@00000000\n", "req"));
+    write(
+        d,
+        "src/t.rs",
+        &in_test(&format!("// {}:a/ghost@00000000\n", "req")),
+    );
     write(
         d,
         "clm.toml",
@@ -410,4 +414,25 @@ fn land_time_line(clm_toml: &str, expected: &str) {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert!(stdout.lines().any(|l| l == expected), "{stdout}");
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

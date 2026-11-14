@@ -20,6 +20,27 @@ fn write(root: &Path, rel: &str, content: &str) {
     fs::write(path, content).unwrap();
 }
 
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
+}
+
 /// A spec for node `a` with one requirement per slug.
 fn spec(slugs: &[&str]) -> String {
     let mut s = String::from("---\ntitle: A\nstatus: active\nowners: []\n---\n\n## Requirements\n");
@@ -90,7 +111,7 @@ fn dangling_marker_reports_file_and_line() {
     // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
-    write(d, "tests/t.rs", &format!("\n\n// {GONE}\n"));
+    write(d, "tests/t.rs", &in_test(&format!("\n\n// {GONE}\n")));
     let found = rules(d);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].1, "check/dangling-markers");
@@ -103,7 +124,11 @@ fn bare_and_versioned_markers_both_count_for_dangling() {
     // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     let d = dir.path();
-    write(d, "tests/t.rs", &format!("// {GONE}@01234567\n// {X}\n"));
+    write(
+        d,
+        "tests/t.rs",
+        &in_test(&format!("// {GONE}@01234567\n// {X}\n")),
+    );
     let found = rules(d);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].0, "tests/t.rs:1");
@@ -124,9 +149,13 @@ fn only_files_git_would_track_are_scanned() {
     };
     git(&["init", "-q"]);
     write(d, ".gitignore", "target/\n");
-    write(d, "target/debug/build.rs", &format!("// {GONE}\n"));
+    write(
+        d,
+        "target/debug/build.rs",
+        &in_test(&format!("// {GONE}\n")),
+    );
     assert_eq!(rules(d), []);
-    write(d, "untracked.rs", &format!("// {GONE}\n"));
+    write(d, "untracked.rs", &in_test(&format!("// {GONE}\n")));
     assert_eq!(rules(d).len(), 1);
 }
 
@@ -143,7 +172,9 @@ fn scenario_mixed_coverage() {
     write(
         d,
         "t.rs",
-        &format!("\n// {x}\n\n// {REQ}a/y@bbbbbbbb\n\n// {REQ}a/z\n"),
+        &in_test(&format!(
+            "\n// {x}\n\n// {REQ}a/y@bbbbbbbb\n\n// {REQ}a/z\n"
+        )),
     );
     assert_eq!(
         lines(d),
@@ -168,7 +199,7 @@ fn scenario_stale_marker_beside_a_current_one() {
     write(
         d,
         "crates/b/t.rs",
-        &format!("\n\n\n\n\n\n// {REQ}a/x@bbbbbbbb\n"),
+        &in_test(&format!("\n\n\n\n\n\n// {REQ}a/x@bbbbbbbb\n")),
     );
     assert_eq!(lines(d), ["a/x behind crates/b/t.rs:7"]);
 }
@@ -182,7 +213,7 @@ fn report_carries_the_state_and_markers() {
     write(
         d,
         "t.rs",
-        &format!("// {}\n// {}\n", cite(&g, "a/x"), cite(&g, "a/x")),
+        &in_test(&format!("// {}\n// {}\n", cite(&g, "a/x"), cite(&g, "a/x"))),
     );
     let report = coverage(d).unwrap();
     assert_eq!(report[0].id, "a/x");
@@ -218,7 +249,11 @@ fn marker_of_requirement_a_live_change_removed_is_obsolete_not_dangling() {
     // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     removing_change(dir.path(), false);
-    write(dir.path(), "tests/t.rs", &format!("\n\n// {GONE}\n"));
+    write(
+        dir.path(),
+        "tests/t.rs",
+        &in_test(&format!("\n\n// {GONE}\n")),
+    );
     assert_eq!(rules(dir.path()), []);
 }
 
@@ -227,7 +262,11 @@ fn marker_dangles_again_once_the_removing_change_is_archived() {
     // req:check/dangling-markers@2e31c5b8
     let dir = repo("applied");
     removing_change(dir.path(), true);
-    write(dir.path(), "tests/t.rs", &format!("\n\n// {GONE}\n"));
+    write(
+        dir.path(),
+        "tests/t.rs",
+        &in_test(&format!("\n\n// {GONE}\n")),
+    );
     let found = rules(dir.path());
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].1, "check/dangling-markers");
@@ -241,7 +280,7 @@ fn scenario_obsolete_marker() {
     let d = dir.path();
     removing_change(d, false);
     let x = cite(&graph(d), "a/x");
-    write(d, "t.rs", &format!("\n// {x}\n\n\n// {GONE}\n"));
+    write(d, "t.rs", &in_test(&format!("\n// {x}\n\n\n// {GONE}\n")));
     assert_eq!(
         lines(d),
         [
@@ -269,7 +308,11 @@ fn scenario_same_as_checkout() {
     write(d, "specs/a/SPEC.md", &spec(&["x", "y", "z"]));
     let g = graph(d);
     let x = cite(&g, "a/x");
-    write(d, "t.rs", &format!("// {x}\n// {REQ}a/y@00000000\n"));
+    write(
+        d,
+        "t.rs",
+        &in_test(&format!("// {x}\n// {REQ}a/y@00000000\n")),
+    );
     write(d, "n.md", &format!("See {REQ}a/z.\n"));
     let git = |args: &[&str]| {
         let out = Command::new("git")
@@ -308,8 +351,9 @@ fn scenario_same_as_checkout() {
 #[test]
 fn markers_in_carries_versions() {
     // req:check.coverage/markers-from-files@f29b72b7
-    let text =
-        format!("{REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD\n");
+    let text = in_test(&format!(
+        "// {REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD\n"
+    ));
     let found = clm_check::markers_in(Path::new("t.rs"), &text);
     let seen: Vec<(&str, Option<&str>)> = found
         .iter()
@@ -404,7 +448,11 @@ fn marker_on_entry_not_dangling() {
         "CAPABILITIES.md",
         "## Capabilities\n\n### Capability: approve\nOne can approve.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n",
     );
-    write(d, "tests/t.rs", &format!("// {REQ}capability/approve\n"));
+    write(
+        d,
+        "tests/t.rs",
+        &in_test(&format!("// {REQ}capability/approve\n")),
+    );
     // With an entry, `a`'s rules must serve one (`check/untraced`).
     let a = fs::read_to_string(d.join("specs/a/SPEC.md")).unwrap();
     write(
@@ -424,7 +472,7 @@ fn marker_on_missing_entry_dangling() {
     write(
         d,
         "tests/t.rs",
-        &format!("\n// {REQ}capability/nope@01234567\n"),
+        &in_test(&format!("\n// {REQ}capability/nope@01234567\n")),
     );
     let found = rules(d);
     assert_eq!(found.len(), 1, "{found:?}");
@@ -463,9 +511,9 @@ fn marker_on_architecture_or_untested_entry_reported() {
     write(
         d,
         "tests/t.rs",
-        &format!(
+        &in_test(&format!(
             "// {REQ}architecture/single-source@01234567\n\n// {REQ}capability/watch\n// {REQ}architecture/both\n"
-        ),
+        )),
     );
     let arch =
         "architecture entries are proven by the rules their #### Enforced by names, not by tests";
@@ -499,7 +547,7 @@ fn capability_removed_by_a_live_change_is_not_dangling() {
         let tmp = repo("applied");
         let d = tmp.path();
         write(d, "CAPABILITIES.md", "## Capabilities\n");
-        write(d, "tests/t.rs", &format!("\n\n// {gone}\n"));
+        write(d, "tests/t.rs", &in_test(&format!("\n\n// {gone}\n")));
         write(
             d,
             &format!("{dir}/change.md"),

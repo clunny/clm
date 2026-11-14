@@ -622,7 +622,10 @@ fn a_change_main_archived_is_not_reapplied() {
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
     // `main` then builds and archives `y`, as its task and `finish` PRs do.
-    main_moves(&r, &[("src/x.rs", concat!("// req", ":a/x\n"))]);
+    main_moves(
+        &r,
+        &[("src/x.rs", concat!("// req", ":a/x\n#[test]\nfn t() {}\n"))],
+    );
     let other = r.work.with_file_name("other");
     fs::create_dir_all(other.join("changes/archive")).unwrap();
     git(&other, &["mv", "changes/y", "changes/archive/y"]);
@@ -687,7 +690,7 @@ fn the_result_is_judged_by_check() {
     write(
         &r.work,
         "src/test.rs",
-        &format!("// {}\n", concat!("req", ":a/p")),
+        &format!("// {}\n#[test]\nfn t() {{}}\n", concat!("req", ":a/p")),
     );
     commit(&r.work, "test a/p");
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &[]))]);
@@ -709,7 +712,7 @@ fn version(r: &Repo, id: &str) -> String {
 
 /// A test file citing `id` at `version`, built so this file never cites it itself.
 fn citing(id: &str, version: &str) -> String {
-    format!("// {}:{id}@{version}\n", "req")
+    format!("// {}:{id}@{version}\n#[test]\nfn t() {{}}\n", "req")
 }
 
 /// Node `a`'s SPEC.md with requirement `a/p` modified.
@@ -762,7 +765,11 @@ fn spec_changed_is_reported_with_the_check_result() {
     // req:sync/spec-changed@14245755
     let r = repo("impl/a");
     // A marker nothing defines: `clm check` must still run and report it (step 7).
-    write(&r.work, "src/test.rs", &format!("// {}:a/zz\n", "req"));
+    write(
+        &r.work,
+        "src/test.rs",
+        &format!("// {}:a/zz\n#[test]\nfn t() {{}}\n", "req"),
+    );
     commit(&r.work, "dangling");
     main_moves(&r, &[("specs/a/SPEC.md", &a_with_p_modified(&r))]);
 
@@ -1095,7 +1102,11 @@ fn obsolete_marker_holds_it() {
     write(
         &r.work,
         "src/test.rs",
-        &format!("{}// {}:a/p\n", citing("a/x", &x), "req"),
+        &format!(
+            "{}// {}:a/p\n#[test]\nfn t() {{}}\n",
+            citing("a/x", &x),
+            "req"
+        ),
     );
     commit(&r.work, "tests");
 
@@ -1323,7 +1334,7 @@ fn the_settings_error_comes_before_the_check() {
     write(
         &r.work,
         "src/test.rs",
-        &format!("// {}\n", concat!("req", ":a/p")),
+        &format!("// {}\n#[test]\nfn t() {{}}\n", concat!("req", ":a/p")),
     );
     commit(&r.work, "test a/p");
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &[]))]);
@@ -1374,7 +1385,10 @@ fn the_settings_are_loaded_from_head_in_a_temporary_worktree() {
 
 /// A test file citing `a/missing`, a requirement no node has.
 fn cites_missing() -> String {
-    format!("// {}\n", concat!("req", ":a/missing"))
+    format!(
+        "// {}\n#[test]\nfn t() {{}}\n",
+        concat!("req", ":a/missing")
+    )
 }
 
 #[test]

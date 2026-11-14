@@ -275,7 +275,7 @@ fn selects_through_the_markers_of_the_files_the_scan_reads() {
     write(
         root,
         "crates/d/tests/cites.rs",
-        concat!("// req", ":a/x@12345678\n"),
+        concat!("// req", ":a/x@12345678\n#[test]\nfn t() {}\n"),
     );
     // A removal marker isn't a `req:` marker: its owner `a` selects it.
     write(

@@ -105,7 +105,11 @@ fn scenario_stalled_change() {
     change(d, "20260104-f", "proposed", &["v"]);
     let (graph, _) = clm_model::load(d);
     let version = graph.requirement("a/z").unwrap().version().to_string();
-    write(d, "src/t.rs", &format!("// {}:a/z@{version}\n", "req"));
+    write(
+        d,
+        "src/t.rs",
+        &format!("// {}:a/z@{version}\n#[test]\nfn t() {{}}\n", "req"),
+    );
     git(d, &["add", "-A"]);
     let out = report(d);
     assert_eq!(

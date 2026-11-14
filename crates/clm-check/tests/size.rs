@@ -301,9 +301,9 @@ fn file_names_with_spaces_count() {
     assert!(line(dir.path(), "a").contains("\tcode 100/1000"));
 }
 
-/// A file of `bytes` bytes whose first line is `first`.
+/// A file of `bytes` bytes whose first line is `first`, a comment directly above a test.
 fn sized(first: &str, bytes: usize) -> Vec<u8> {
-    let mut text = format!("{first}\n").into_bytes();
+    let mut text = format!("{first}\n#[test]\nfn t() {{}}\n").into_bytes();
     assert!(text.len() < bytes);
     text.resize(bytes, b'x');
     text
@@ -503,7 +503,7 @@ fn untracked_files_with_markers_dont_count() {
 fn with_inline_tests(marker: &str) -> Vec<u8> {
     let mut text = vec![b's'; 399];
     text.push(b'\n');
-    let mut tests = format!("#[cfg(test)]\n{marker}\n").into_bytes();
+    let mut tests = format!("#[cfg(test)]\n{marker}\n#[test]\nfn t() {{}}\n").into_bytes();
     tests.resize(800, b't');
     text.extend(tests);
     text
@@ -542,14 +542,14 @@ fn inline_tests_without_markers() {
 fn only_an_exact_cfg_test_line_splits_a_rust_file() {
     // req:check/node-size@a70a5200
     // Not exactly `#[cfg(test)]`: one part, holding a marker, so `b`'s only.
-    let mut rust = format!("#[cfg(test)] mod t;\n{CITES_B}\n").into_bytes();
+    let mut rust = format!("#[cfg(test)] mod t;\n{CITES_B}\n#[test]\nfn t() {{}}\n").into_bytes();
     rust.resize(400, b'r');
     // Not Rust: one part holding a marker, so `b`'s only.
-    let mut other = format!("#[cfg(test)]\n{CITES_B}\n").into_bytes();
+    let mut other = format!("#[cfg(test)]\n{CITES_B}\nit('t', () => {{}});\n").into_bytes();
     other.resize(800, b'p');
     let dir = two_nodes(&[
         ("src/a/u.rs", &rust),
-        ("src/a/u.py", &other),
+        ("src/a/u.ts", &other),
         ("src/a/lib.rs", &[b'a'; 400]),
     ]);
     assert!(

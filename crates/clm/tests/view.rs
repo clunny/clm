@@ -298,7 +298,9 @@ fn scenario_nested_nodes() {
     write(
         dir.path(),
         "tests/t.rs",
-        &format!("// {REQ}check.drift/x@{x}\n// {REQ}check.drift/y@00000000\n"),
+        &in_test(&format!(
+            "// {REQ}check.drift/x@{x}\n// {REQ}check.drift/y@00000000\n"
+        )),
     );
     let v = json(&clm(dir.path(), &["view", "spec", "--format", "json"]));
     assert_eq!(v["view"], "spec");
@@ -462,7 +464,7 @@ fn scenario_a_removed_nodes_markers() {
         "---\ncomponent: gone\nremove: true\n---\n## REMOVED Requirements\n\n\
          ### Requirement: x <!-- base: 0123456789abcdef -->\n",
     );
-    write(d, "src/a/t.rs", &format!("// {REQ}gone/x\n"));
+    write(d, "src/a/t.rs", &in_test(&format!("// {REQ}gone/x\n")));
     let out = clm(d, &["view", "spec", "--format", "json"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let v = json(&out);
@@ -673,7 +675,7 @@ fn scenario_change_progress() {
     write(
         dir.path(),
         "tests/t.rs",
-        &format!("// {REQ}n/x@{x}\n// {REQ}n/y@00000000\n"),
+        &in_test(&format!("// {REQ}n/x@{x}\n// {REQ}n/y@00000000\n")),
     );
     let v = json(&clm(dir.path(), &["view", "flight", "--format", "json"]));
     assert_eq!(v["changes"][0]["status"], "applied");
@@ -703,7 +705,11 @@ fn scenario_requirement_removed_later() {
     );
     let (graph, _) = clm_model::load(dir.path());
     let x = graph.requirement("n/x").unwrap().version();
-    write(dir.path(), "tests/t.rs", &format!("// {REQ}n/x@{x}\n"));
+    write(
+        dir.path(),
+        "tests/t.rs",
+        &in_test(&format!("// {REQ}n/x@{x}\n")),
+    );
     let v = json(&clm(dir.path(), &["view", "flight", "--format", "json"]));
     let d = &v["changes"][0]["changes"][0];
     assert_eq!(d["change"], "d");
@@ -729,7 +735,11 @@ fn scenario_removed_requirement_still_cited() {
         "changes/d/deltas/n.md",
         "---\ncomponent: n\n---\n## REMOVED Requirements\n### Requirement: x\n",
     );
-    write(dir.path(), "tests/t.rs", &format!("//\n//\n// {REQ}n/x\n"));
+    write(
+        dir.path(),
+        "tests/t.rs",
+        &in_test(&format!("//\n//\n// {REQ}n/x\n")),
+    );
     let v = json(&clm(dir.path(), &["view", "flight", "--format", "json"]));
     let d = &v["changes"][0]["changes"][0];
     assert_eq!(d["change"], "d", "{v:#}");
@@ -895,11 +905,36 @@ fn scenario_nothing_blocked() {
     // `b` depends on `a`: with `a` converged, `b` is ready.
     let (graph, _) = clm_model::load(dir.path());
     let x = graph.requirement("a/x").unwrap().version();
-    write(dir.path(), "tests/t.rs", &format!("// {REQ}a/x@{x}\n"));
+    write(
+        dir.path(),
+        "tests/t.rs",
+        &in_test(&format!("// {REQ}a/x@{x}\n")),
+    );
     let out = clm(dir.path(), &["view", "blockers"]);
     let text = stdout(&out);
     assert_eq!(out.status.code(), Some(0), "{text}");
     let lines: Vec<&str> = text.lines().collect();
     let at = lines.iter().position(|l| *l == "blockers").expect(&text);
     assert_eq!(&lines[at + 1..], ["nothing is blocked"], "{text}");
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

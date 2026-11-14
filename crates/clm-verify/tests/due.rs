@@ -148,7 +148,11 @@ fn queue_drained_waits_for_the_last_pending_requirement() {
     f.land(&[("a.txt", "2\n")], "two");
     // Component `a` holds a requirement no test cites.
     assert!(f.dry(false).line.starts_with("verify not-due"));
-    let cited = format!("// {}{}\n", concat!("req", ":a/thing@"), hash_of_thing(&f));
+    let cited = format!(
+        "// {}{}\n#[test]\nfn t() {{}}\n",
+        concat!("req", ":a/thing@"),
+        hash_of_thing(&f)
+    );
     f.land(&[("crates/a/src/lib.rs", &cited)], "built");
     assert_eq!(f.dry(false).line, "verify due queue-drained");
 }

@@ -831,7 +831,11 @@ fn check_fails_stale_pending_change_but_ignores_applied_one() {
 fn coverage_command_prints_report() {
     // req:check.coverage/coverage-report@1fec41ce
     let dir = change_repo("---\ncomponent: clm\n---\n");
-    write(dir.path(), "t.rs", concat!("// req", ":clm/r\n"));
+    write(
+        dir.path(),
+        "t.rs",
+        concat!("// req", ":clm/r\n#[test]\nfn t() {}\n"),
+    );
     let (code, out) = clm(dir.path(), &["coverage"]);
     assert_eq!(code, Some(0));
     assert_eq!(out, "clm/r behind t.rs:1\n");
@@ -840,7 +844,7 @@ fn coverage_command_prints_report() {
     write(
         dir.path(),
         "t.rs",
-        &format!("// {}clm/r@{v}\n", concat!("req", ":")),
+        &in_test(&format!("// {}clm/r@{v}\n", concat!("req", ":"))),
     );
     let (_, out) = clm(dir.path(), &["coverage"]);
     assert_eq!(out, "clm/r current t.rs:1\n");
@@ -1645,4 +1649,25 @@ fn config_get_verify_prints_the_table_and_the_file() {
     );
     let (out, _) = config_get_in_repo(None, "verify");
     assert_eq!(out, "\tdefault\n");
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

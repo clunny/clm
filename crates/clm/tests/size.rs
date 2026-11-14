@@ -151,7 +151,9 @@ fn settings_that_cant_be_loaded_exit_1() {
 fn a_test_counts_toward_the_node_it_cites() {
     // req:check/node-size@a70a5200
     let dir = repo(BUDGETS);
-    let mut test = concat!("// req", ":b/x\n").as_bytes().to_vec();
+    let mut test = concat!("// req", ":b/x\n#[test]\nfn t() {}\n")
+        .as_bytes()
+        .to_vec();
     test.resize(800, b't');
     write(dir.path(), "src/a/tests/b.rs", &test);
     git(dir.path(), &["add", "src/a/tests/b.rs"]);

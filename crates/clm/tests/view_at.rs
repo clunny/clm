@@ -87,7 +87,7 @@ fn ahead_of_the_checkout() -> TempDir {
     init(d);
     let (graph, _) = clm_model::load(d);
     let x = graph.requirement("a/x").unwrap().version().to_string();
-    write(d, "tests/t.rs", &format!("// {REQ}a/x@{x}\n"));
+    write(d, "tests/t.rs", &in_test(&format!("// {REQ}a/x@{x}\n")));
     git(d, &["add", "-A"]);
     git(d, &["commit", "-qm", "cite"]);
     git(d, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
@@ -386,4 +386,25 @@ fn pending_names_its_commit_beside_violations_and_narrows_alike() {
     let view = clm(d, &["view", "spec", "--at", "origin/main"]);
     assert_eq!(view.status.code(), Some(1), "{view:?}");
     assert_eq!(stdout(&view), stdout(&bad));
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

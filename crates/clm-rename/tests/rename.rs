@@ -567,7 +567,10 @@ fn done_and_archived() {
     write(
         d,
         "crates/x/tests/t.rs",
-        &format!("// {}\n", concat!("req", ":a/x@11111111")),
+        &format!(
+            "// {}\n#[test]\nfn t() {{}}\n",
+            concat!("req", ":a/x@11111111")
+        ),
     );
     let source = change("  - requirement: a/x\n    to: y\n", "resolves: [gone]\n");
     write(d, "changes/r/change.md", &source);
@@ -582,7 +585,10 @@ fn done_and_archived() {
     );
     assert_eq!(
         read(d, "crates/x/tests/t.rs"),
-        format!("// {}\n", concat!("req", ":a/y@11111111"))
+        format!(
+            "// {}\n#[test]\nfn t() {{}}\n",
+            concat!("req", ":a/y@11111111")
+        )
     );
     let archived = read(d, "changes/archive/r/change.md");
     assert_eq!(archived, source.replace("status: proposed", "status: done"));
@@ -1064,7 +1070,7 @@ fn pending_ids(d: &Path) -> Vec<String> {
 }
 
 fn cite(id: &str, version: &str) -> String {
-    format!("// {}{id}@{version}\n", "req:")
+    format!("// {}{id}@{version}\n#[test]\nfn t() {{}}\n", "req:")
 }
 
 #[test]
@@ -1075,7 +1081,7 @@ fn current_and_behind_markers_follow_a_rename() {
     let old = version_of(d, "a/x");
     let code = |id: &str, v1: &str, v2: &str| {
         format!(
-            "fn keep() {{}}\n{}fn t() {{}}\n{}fn u() {{}} // other text stays\n",
+            "fn keep() {{}}\n{}{}fn u() {{}} // other text stays\n",
             cite(id, v1),
             cite(id, v2)
         )
@@ -1130,14 +1136,20 @@ fn a_reworded_requirement_keeps_its_marker_current() {
 fn other_requirements_markers_and_bare_markers_are_handled() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
-    let body = format!("// {}b/z@12345678 and {}a/x\n", "req:", "req:");
+    let body = format!(
+        "// {}b/z@12345678 and {}a/x\n#[test]\nfn t() {{}}\n",
+        "req:", "req:"
+    );
     write(d, "crates/x/tests/t.rs", &body);
     git(d, &["init", "-q"]);
     git(d, &["add", "-A"]);
     clm_rename::rename(d, "r").unwrap();
     assert_eq!(
         read(d, "crates/x/tests/t.rs"),
-        format!("// {}b/z@12345678 and {}a/y\n", "req:", "req:")
+        format!(
+            "// {}b/z@12345678 and {}a/y\n#[test]\nfn t() {{}}\n",
+            "req:", "req:"
+        )
     );
 }
 
