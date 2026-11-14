@@ -36,3 +36,14 @@ When `clm wrap-up` names complete changes, no `impl/archive/*` branch is on `ori
 
 #### Needs
 - view/queue-view
+
+### Requirement: loop-follows-agent-harness <!-- base: 3f186db6c8c44aca -->
+The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) and follow them: where `subagents` is `no`, it SHALL launch one run at a time, its `launch` lines saying to run the prompt in the session itself; where `isolated-worktrees` is `no`, it SHALL add the run's worktree at `.claude/worktrees/agent-<name>` from `origin/main`, `<name>` with `:` as `-`, before printing the `launch`, and its prompt SHALL say to work there; where `model-choice` is `no`, every run SHALL be on the session's model. An agent harness that can't send a message to a subagent or stop one keeps every rule through the session's reports: an undelivered resume is rebuilt (`stop-causes`), and under `stop --now` a run the session can't stop is waited for and reported with cause `stopped`.
+
+#### Scenario: no subagents
+- GIVEN an agent harness whose `subagents` is `no`, and components `a` and `b` ready with `max_builds` 3
+- WHEN `clm build step` runs
+- THEN it prints one `launch`, for `build:a`, and none for `b` until `build:a` returns
+
+#### Needs
+- view/queue-view

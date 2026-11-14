@@ -17,7 +17,7 @@ Consequences:
 - `clm --version` names the commit it was built from (`dev-install-script`), which tells which build is installed. For a few minutes after `origin/main` moves, the old binary still runs.
 - To go back to the release, run `scripts/dev-install.sh --remove`.
 
-Nothing that ships to adopters depends on this setup. The hook, the binary and the settings live only in the clone, written by the tracked script, which a human runs once per clone; a session never runs it (`no-shared-install`).
+Nothing that ships to adopters depends on this setup. The hook, the binary and the settings live only in the clone, written by the tracked script, which a human runs once per clone; a session never runs it.
 
 Alternatives considered:
 - `claude --plugin-dir <checkout>/plugin` with `clm@clm` turned off locally. It works per session, but needs a launch flag every time, and unattended builds wouldn't get it.

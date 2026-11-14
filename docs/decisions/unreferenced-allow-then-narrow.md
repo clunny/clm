@@ -17,4 +17,4 @@ Rejected:
 - **Narrow every crate first, then add the detector with no allow-list.** Nine other nodes' builds before anything is enforced, and the kept items need entries anyway.
 - **`--allow <crate>` for each crate with findings.** Shorter, but it switches the detector off for most of the workspace until each clean-up lands.
 - **Fix the detector's false positives first** (`20261027-unreferenced-false-positives`, `unreferenced-signature-types`). Those are `check.unreferenced` spec changes; once one lands and `clm` is reinstalled from that `main`, the kept entries it makes stale are removed in a later branch, so adoption needn't wait.
-- **Install `clm` in `.github/scripts/detector-tools.sh`.** It would replace the developer's own `clm` on every check run (`no-shared-install`), and the build under test is the right binary for the test anyway; `ci/detector-tools` exempts a detector run by `clm` instead.
+- **Install `clm` in `.github/scripts/detector-tools.sh`.** It would replace the developer's own `clm` on every check run, and the build under test is the right binary for the test anyway; `ci/detector-tools` exempts a detector run by `clm` instead.

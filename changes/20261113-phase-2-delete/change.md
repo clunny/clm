@@ -81,13 +81,14 @@ Four removed requirements of `orchestrator.run` had one computed part each, that
 - **The root** deletes `crates/clm-runner/`, the `clm runner` dispatch and its `Cargo` entries, and `crates/clm/tests/runner.rs`. The crate is under the root's `paths` from this change on, so no file is unowned; the glob matches nothing once the crate is gone. The root's test files also hold the tests of the removed skill requirements (`plugin_propose.rs`, `plugin_triage.rs`, `plugin_init.rs`, `plugin_build.rs`, `plugin_upgrade.rs`, `claude_md.rs`), which go whole.
 - **`orchestrator.run`** and **`orchestrator.triage`** delete the listed tests and cut the mixed ones. The prompts' text stays as it is, but for the removed requirement names it cites (`backlog/dead-decision-names-in-code-comments-and-skills`).
 - **`plugin`** cuts `skills`, `skills_point_at_the_guide` and `launch_models` to their computed assertions, and `skills` gains the check that `plugin/skills/` holds exactly the ten.
-- The glossary keeps its `clm runner` lines until the command is gone (`backlog/the-glossary-still-lists-clm-runner`).
+- The glossary keeps its `clm runner` lines, and the root's `paths` the crate's glob, until the command and the crate are gone (`backlog/the-glossary-still-lists-clm-runner`).
 
 ## Constraints
 
 - Only deleting. No surviving requirement is reworded beyond the cut; that is the plan's phase 5. The `says-component` family, the migration notes of `upgrade`, and the wording lints on `init`'s templates and on help text scan source or templates, not prompts, and wait for phase 5.
 - No migration: `clm runner` has no settings key and `clm init` writes nothing for it, and no file a project holds changes.
 - The live changes `20261113-land-starvation` and `20261112-components-own-their-tests` are untouched; their deltas still cite two of the dead names, in text this change repoints in `specs/`.
+- `20261113-builder-check-text-lives` is live too. The requirement it added, `plugin.propose/builder-check`, is removed here, so nothing of it is left to build but the removal of `plugin/builder-check`'s two obsolete tests; it is archived once they are gone.
 
 ## Decisions
 
@@ -99,3 +100,4 @@ Four removed requirements of `orchestrator.run` had one computed part each, that
 - `clm runner`: running builds headless from a plain terminal, cron or a service with no session open. Unattended builds need a session running `/clm:build`.
 - The tests that failed when a sentence was edited out of a skill, an agent, a prompt or an instruction file. The sentences stay. Where a program already refuses the outcome a sentence warns of, nothing is lost; where none does and one could, a backlog item names it; the rest waits for the skill evals of the plan's phase 6.
 - The history of how 86 decisions changed, which git keeps.
+- `machine-runners` was the one deleted decision still accepted. Its record that hosted sandboxes were declined, and what a headless runner would start from, is kept in `builds-in-subagents`.
