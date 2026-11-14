@@ -14,6 +14,27 @@ fn write(root: &Path, rel: &str, content: &str) {
     fs::write(path, content).unwrap();
 }
 
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
+}
+
 fn repo() -> TempDir {
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
@@ -45,7 +66,7 @@ fn change(root: &Path, id: &str, status: &str, adds: &[&str]) {
 fn cite_x(root: &Path) {
     let g = graph(root);
     let v = g.requirement("a/x").unwrap().version().to_string();
-    write(root, "t.rs", &format!("// {REQ}a/x@{v}\n"));
+    write(root, "t.rs", &in_test(&format!("// {REQ}a/x@{v}\n")));
 }
 
 #[test]
@@ -69,7 +90,11 @@ fn a_requirement_cited_only_at_an_old_version_is_not_current() {
     let dir = repo();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
-    write(d, "t.rs", &format!("// {REQ}a/x@00000000\n// {REQ}a/y\n"));
+    write(
+        d,
+        "t.rs",
+        &in_test(&format!("// {REQ}a/x@00000000\n// {REQ}a/y\n")),
+    );
     let report = clm_check::status(d).unwrap();
     assert_eq!(report.nodes[0], ["a", "active", "0/2"]);
     assert_eq!(report.changes[0].1, [["20260101-c", "0/2 requirements"]]);
@@ -96,7 +121,7 @@ fn scenario_complete_change() {
     change(d, "20260101-c", "applied", &["x", "y"]);
     let g = graph(d);
     let cite = |id: &str| format!("// {REQ}{id}@{}\n", g.requirement(id).unwrap().version());
-    write(d, "t.rs", &(cite("a/x") + &cite("a/y")));
+    write(d, "t.rs", &in_test(&(cite("a/x") + &cite("a/y"))));
     let report = clm_check::status(d).unwrap();
     assert_eq!(
         report.changes[0].1,
@@ -161,7 +186,7 @@ fn a_requirement_added_back_cited_at_an_old_version_does_not_hold_the_change_bac
     let d = dir.path();
     change(d, "20260101-c", "applied", &[]);
     removes(d, "20260101-c", "x");
-    write(d, "t.rs", &format!("// {REQ}a/x@00000000\n"));
+    write(d, "t.rs", &in_test(&format!("// {REQ}a/x@00000000\n")));
     let g = graph(d);
     let markers = clm_check::markers_in(
         Path::new("t.rs"),
@@ -195,7 +220,11 @@ fn scenario_removed_requirement_still_cited() {
     removes(d, "20260101-c", "gone");
     let g = graph(d);
     let x = g.requirement("a/x").unwrap().version().to_string();
-    write(d, "t.rs", &format!("// {REQ}a/x@{x}\n// {REQ}a/gone\n"));
+    write(
+        d,
+        "t.rs",
+        &in_test(&format!("// {REQ}a/x@{x}\n// {REQ}a/gone\n")),
+    );
     let report = clm_check::status(d).unwrap();
     assert_eq!(report.changes[0].1, [["20260101-c", "1/1 requirements"]]);
 }
@@ -218,7 +247,7 @@ fn an_unapplied_change_is_never_complete() {
         );
         let g = graph(d);
         let x = g.requirement("a/x").unwrap().version().to_string();
-        write(d, "t.rs", &format!("// {REQ}a/x@{x}\n"));
+        write(d, "t.rs", &in_test(&format!("// {REQ}a/x@{x}\n")));
         let report = clm_check::status(d).unwrap();
         assert_eq!(
             report.changes[0].1,

@@ -37,7 +37,7 @@ fn clm_repo(top: &Path, rel: &str) {
     write(
         &root,
         "tests/t.rs",
-        &format!("// {}\n", concat!("req", ":a/missing")),
+        &in_test(&format!("// {}\n", concat!("req", ":a/missing"))),
     );
     fs::create_dir_all(root.join("changes")).unwrap();
 }
@@ -286,4 +286,25 @@ fn no_clm_repository() {
     let here = clm(&src, &["check", "--root", "."]);
     assert_ne!(here, clm(top, &["check", "--root", "."]));
     assert_eq!(clm(&src, &["check"]), here);
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

@@ -176,10 +176,10 @@ pub fn load(root: &Path) -> Graph {
 }
 
 /// Writes `src/<file>` citing each of `ids` at its current version in the checkout. The
-/// marker is built so this source never cites them itself.
+/// marker is built so this source never cites them itself, and sits above a test.
 pub fn cite(root: &Path, file: &str, ids: &[&str]) {
     let graph = load(root);
-    let text: String = ids
+    let mut text: String = ids
         .iter()
         .map(|id| {
             format!(
@@ -189,6 +189,7 @@ pub fn cite(root: &Path, file: &str, ids: &[&str]) {
             )
         })
         .collect();
+    text.push_str("#[test]\nfn t() {}\n");
     write(root, &format!("src/{file}"), &text);
 }
 

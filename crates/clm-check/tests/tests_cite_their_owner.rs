@@ -6,9 +6,9 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
-/// Written so the marker literal never appears whole in this file.
+/// A test citing `id`, written so the marker literal never appears whole in this file.
 fn cite(id: &str) -> String {
-    format!("// {}:{id}\n", concat!("req", ""))
+    format!("// {}:{id}\n#[test]\nfn t() {{}}\n", concat!("req", ""))
 }
 
 fn write(root: &Path, rel: &str, content: &str) {

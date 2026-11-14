@@ -65,7 +65,7 @@ fn base() -> TempDir {
 /// `tests/<file>.rs` citing `ids` at their current versions.
 fn cite(root: &Path, file: &str, ids: &[&str]) {
     let (graph, _) = clm_model::load(root);
-    let text: String = ids
+    let mut text: String = ids
         .iter()
         .map(|id| {
             format!(
@@ -74,6 +74,7 @@ fn cite(root: &Path, file: &str, ids: &[&str]) {
             )
         })
         .collect();
+    text.push_str("#[test]\nfn t() {}\n");
     write(root, &format!("tests/{file}.rs"), &text);
 }
 

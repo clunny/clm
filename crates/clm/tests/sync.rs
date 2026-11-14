@@ -228,7 +228,11 @@ fn sync_leaves_no_temporary_worktree() {
     // req:sync/judged-by-check@bfefb55e
     let (_dir, work) = node_a("");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
-    write(&work, "src/a/t.rs", concat!("// req", ":a/missing\n"));
+    write(
+        &work,
+        "src/a/t.rs",
+        concat!("// req", ":a/missing\n#[test]\nfn t() {}\n"),
+    );
     commit(&work, "a violation");
 
     let (code, stdout) = rebase_without_user_settings(&work);

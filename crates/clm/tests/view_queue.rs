@@ -152,7 +152,7 @@ fn no_loop_yet_at_a_commit_reads_that_commit() {
     write(
         d,
         "tests/t.rs",
-        &format!("// {}a/x@{x}\n", concat!("req", ":")),
+        &in_test(&format!("// {}a/x@{x}\n", concat!("req", ":"))),
     );
     git(d, &["add", "-A"]);
     git(d, &["commit", "-qm", "cite"]);
@@ -230,4 +230,25 @@ fn the_queue_has_no_svg_form_and_a_missing_commit_is_named() {
     let none = clm(d, &["view", "queue", "--at", "nowhere"]);
     assert_eq!(none.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&none.stderr).contains("nowhere"));
+}
+
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
 }

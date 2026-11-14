@@ -57,7 +57,10 @@ fn ignored_rust_test() {
 #[test]
 fn ignored_with_a_reason() {
     // req:check/skipped-tests@347f43dc
-    let text = format!("{CITES}\n{}\n", concat!("#[ign", "ore = \"slow\"]"));
+    let text = format!(
+        "{CITES}\n{}\n#[test]\nfn a() {{}}\n",
+        concat!("#[ign", "ore = \"slow\"]")
+    );
     let dir = repo(&[("tests/t.rs", text)]);
     assert_eq!(found(dir.path()), [format!("tests/t.rs:2: {MESSAGE}")]);
 }

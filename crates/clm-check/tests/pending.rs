@@ -14,6 +14,27 @@ fn write(root: &Path, rel: &str, content: &str) {
     fs::write(path, content).unwrap();
 }
 
+/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
+/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
+fn in_test(s: &str) -> String {
+    let (head, body) = match s.strip_prefix('\n') {
+        Some(rest) => ("", rest),
+        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
+    };
+    let nl = if body.ends_with('\n') || body.is_empty() {
+        ""
+    } else {
+        "\n"
+    };
+    if s.starts_with('\n') {
+        format!("#[test]\nfn t() {{{body}{nl}}}\n")
+    } else if body.is_empty() {
+        format!("{s}#[test]\nfn t() {{}}\n")
+    } else {
+        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
+    }
+}
+
 fn spec(slugs: &[&str]) -> String {
     let mut s = String::from("---\ntitle: A\nstatus: active\nowners: []\n---\n\n## Requirements\n");
     for slug in slugs {
@@ -67,7 +88,9 @@ fn scenario_states() {
     write(
         d,
         "t.rs",
-        &format!("// {REQ}a/x@11111111\n// {REQ}a/z@{z}\n\n\n\n\n\n\n// {REQ}a/gone\n"),
+        &in_test(&format!(
+            "// {REQ}a/x@11111111\n// {REQ}a/z@{z}\n\n\n\n\n\n\n// {REQ}a/gone\n"
+        )),
     );
     assert_eq!(
         lines(d, Some("a")),
@@ -100,11 +123,17 @@ fn scenario_stale_marker_in_another_components_files() {
     let g = graph(d);
     let x = version(&g, "a/x");
     let q = version(&g, "b/q");
-    write(d, "crates/a/t.rs", &format!("\n// {REQ}a/x@{x}\n"));
+    write(
+        d,
+        "crates/a/t.rs",
+        &in_test(&format!("\n// {REQ}a/x@{x}\n")),
+    );
     write(
         d,
         "crates/b/t.rs",
-        &format!("\n\n\n\n\n\n// {REQ}a/x@11111111\n// {REQ}b/q@{q}\n"),
+        &in_test(&format!(
+            "\n\n\n\n\n\n// {REQ}a/x@11111111\n// {REQ}b/q@{q}\n"
+        )),
     );
     assert_eq!(lines(d, Some("a")), [format!("a/x {x} behind 11111111")]);
     assert_eq!(lines(d, Some("b")), Vec::<String>::new());
@@ -120,7 +149,9 @@ fn behind_lists_each_distinct_cited_version_and_none() {
     write(
         d,
         "t.rs",
-        &format!("// {REQ}a/x@22222222\n// {REQ}a/x\n// {REQ}a/x@11111111\n// {REQ}a/x@22222222\n"),
+        &in_test(&format!(
+            "// {REQ}a/x@22222222\n// {REQ}a/x\n// {REQ}a/x@11111111\n// {REQ}a/x@22222222\n"
+        )),
     );
     let found = lines(d, Some("a"));
     assert_eq!(found[0], format!("a/x {x} behind 11111111,22222222,none"));
@@ -202,7 +233,11 @@ fn scenario_need_satisfied() {
     let d = dir.path();
     let g = graph(d);
     let (y, z, w) = (version(&g, "a/y"), version(&g, "b/z"), version(&g, "b/w"));
-    write(d, "t.rs", &format!("// {REQ}b/z@{z}\n// {REQ}b/w@{w}\n"));
+    write(
+        d,
+        "t.rs",
+        &in_test(&format!("// {REQ}b/z@{z}\n// {REQ}b/w@{w}\n")),
+    );
     assert_eq!(line_for(d, "a/y"), format!("a/y {y} unbuilt"));
 }
 
@@ -216,7 +251,7 @@ fn a_behind_need_still_blocks() {
     write(
         d,
         "t.rs",
-        &format!("// {REQ}b/z@11111111\n// {REQ}b/w@{w}\n"),
+        &in_test(&format!("// {REQ}b/z@11111111\n// {REQ}b/w@{w}\n")),
     );
     assert!(line_for(d, "a/y").ends_with(" unbuilt blocked b/z"));
 }
@@ -238,7 +273,7 @@ fn a_behind_requirement_names_a_repeated_need_once() {
         "backlog/h.md",
         "---\ntitle: H\nkind: human\nblocks: [a/y]\n---\n",
     );
-    write(d, "t.rs", &format!("// {REQ}a/y@11111111\n"));
+    write(d, "t.rs", &in_test(&format!("// {REQ}a/y@11111111\n")));
     assert!(
         line_for(d, "a/y").ends_with(" behind 11111111 blocked backlog/h,backlog/q,b/z"),
         "{}",
@@ -256,7 +291,7 @@ fn scenario_nothing_pending() {
     write(
         d,
         "t.rs",
-        &format!("{}{}{}", cite("a/x"), cite("a/y"), cite("a/z")),
+        &in_test(&format!("{}{}{}", cite("a/x"), cite("a/y"), cite("a/z"))),
     );
     assert_eq!(lines(d, Some("a")), Vec::<String>::new());
 }
@@ -358,7 +393,11 @@ fn scenario_removed_node() {
     let dir = removed_node_repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
-    write(d, "crates/v/tests/t.rs", &format!("\n\n\n// {REQ}g/x\n"));
+    write(
+        d,
+        "crates/v/tests/t.rs",
+        &in_test(&format!("\n\n\n// {REQ}g/x\n")),
+    );
     assert_eq!(lines(d, Some("v")), ["g/x obsolete crates/v/tests/t.rs:4"]);
     let all = clm_check::pending_in(d, None).unwrap();
     let gx: Vec<_> = all.iter().filter(|p| p.id == "g/x").collect();
@@ -374,8 +413,16 @@ fn scenario_removed_node_files_of_two_nodes() {
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
     node_with_paths(d, "w", r#"["crates/w/**"]"#);
-    write(d, "crates/v/t.rs", &format!("\n\n\n// {REQ}g/x\n"));
-    write(d, "crates/w/t.rs", &format!("\n\n\n\n\n\n// {REQ}g/x\n"));
+    write(
+        d,
+        "crates/v/t.rs",
+        &in_test(&format!("\n\n\n// {REQ}g/x\n")),
+    );
+    write(
+        d,
+        "crates/w/t.rs",
+        &in_test(&format!("\n\n\n\n\n\n// {REQ}g/x\n")),
+    );
     let gx: Vec<(String, String)> = clm_check::pending_in(d, None)
         .unwrap()
         .iter()
@@ -397,7 +444,7 @@ fn scenario_removed_node_unowned_file() {
     let dir = removed_node_repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
-    write(d, "old/t.rs", &format!("\n\n\n// {REQ}g/x\n"));
+    write(d, "old/t.rs", &in_test(&format!("\n\n\n// {REQ}g/x\n")));
     assert_eq!(lines(d, Some("clm")), ["g/x obsolete old/t.rs:4"]);
     assert_eq!(lines(d, Some("v")), Vec::<String>::new());
 }
@@ -411,8 +458,12 @@ fn the_deepest_owner_then_the_first_by_id_takes_a_removed_nodes_marker() {
     node_with_paths(d, "v.inner", r#"["crates/v/inner/**"]"#);
     node_with_paths(d, "w", r#"["crates/**"]"#);
     node_with_paths(d, "u", r#"["crates/v/**"]"#);
-    write(d, "crates/v/inner/t.rs", &format!("// {REQ}g/x\n"));
-    write(d, "crates/v/t.rs", &format!("// {REQ}g/x\n"));
+    write(
+        d,
+        "crates/v/inner/t.rs",
+        &in_test(&format!("// {REQ}g/x\n")),
+    );
+    write(d, "crates/v/t.rs", &in_test(&format!("// {REQ}g/x\n")));
     let owners: Vec<(String, String)> = clm_check::pending_in(d, None)
         .unwrap()
         .iter()
@@ -437,7 +488,7 @@ fn an_obsolete_marker_whose_node_exists_stays_on_that_node() {
     let dir = repo();
     let d = dir.path();
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
-    write(d, "crates/v/t.rs", &format!("// {REQ}a/gone\n"));
+    write(d, "crates/v/t.rs", &in_test(&format!("// {REQ}a/gone\n")));
     assert_eq!(lines(d, Some("a")), {
         let g = graph(d);
         [
@@ -461,7 +512,7 @@ fn a_node_gone_without_a_removal_delta_moves_too() {
         "---\ncomponent: g\n---\n## REMOVED Requirements\n\n### Requirement: x <!-- base: 0123456789abcdef -->\n",
     );
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
-    write(d, "crates/v/t.rs", &format!("// {REQ}g/x\n"));
+    write(d, "crates/v/t.rs", &in_test(&format!("// {REQ}g/x\n")));
     assert_eq!(lines(d, Some("v")), ["g/x obsolete crates/v/t.rs:1"]);
 }
 
@@ -476,8 +527,8 @@ fn a_top_level_node_is_deeper_than_the_root() {
         "---\ntitle: R\nstatus: active\nowners: []\npaths: [\"crates/**\"]\n---\n",
     );
     node_with_paths(d, "v", r#"["crates/v/**"]"#);
-    write(d, "crates/v/t.rs", &format!("// {REQ}g/x\n"));
-    write(d, "crates/w/t.rs", &format!("// {REQ}g/x\n"));
+    write(d, "crates/v/t.rs", &in_test(&format!("// {REQ}g/x\n")));
+    write(d, "crates/w/t.rs", &in_test(&format!("// {REQ}g/x\n")));
     assert_eq!(lines(d, Some("v")), ["g/x obsolete crates/v/t.rs:1"]);
     assert_eq!(lines(d, Some("clm")), ["g/x obsolete crates/w/t.rs:1"]);
 }
@@ -513,7 +564,7 @@ fn a_removed_node_is_an_unknown_node() {
     // req:check.coverage/pending-report@4a6b0203
     let dir = removed_node_repo();
     let d = dir.path();
-    write(d, "t.rs", &format!("// {REQ}g/x\n"));
+    write(d, "t.rs", &in_test(&format!("// {REQ}g/x\n")));
     assert!(clm_check::pending_in(d, Some("g")).is_err());
     let unknown = clm_check::pending_in(d, Some("nope")).unwrap_err();
     assert_eq!(unknown[0].rule, "check.coverage/pending-report");
@@ -569,7 +620,7 @@ fn paths_match_as_git_glob_pathspecs_do() {
         let d = dir.path();
         node_with_paths(d, "v", &format!("[{pattern:?}]"));
         for f in files {
-            write(d, f, &format!("// {REQ}g/x\n"));
+            write(d, f, &in_test(&format!("// {REQ}g/x\n")));
         }
         let git = |args: &[&str]| {
             let out = std::process::Command::new("git")

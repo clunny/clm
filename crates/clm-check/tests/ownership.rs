@@ -49,7 +49,11 @@ fn one_glob() {
 fn scan_stays_public() {
     // req:check/path-ownership@5c51292c
     let dir = TempDir::new().unwrap();
-    write(dir.path(), "t.rs", concat!("// req", ":a/x@00000000\n"));
+    write(
+        dir.path(),
+        "t.rs",
+        concat!("// req", ":a/x@00000000\n#[test]\nfn t() {}\n"),
+    );
     let scan: clm_check::Scan = clm_check::scan(dir.path());
     assert_eq!(scan.req.len(), 1);
     assert_eq!(

@@ -452,10 +452,15 @@ fn behind_and_obsolete() -> Repo {
     t.push_str(&format!("// {}:b/x@deadbeef\n", "req"));
     // A bare marker, which cites no version.
     t.push_str(&format!("// {}:b/x\n", "req"));
+    t.push_str("#[test]\nfn t() {}\n");
     write(w, "t.rs", &t);
     // A marker at the current version, which the prompt doesn't name.
     let now = load(w).requirement("b/x").unwrap().version().to_string();
-    write(w, "crates/b/t.rs", &format!("// {}:b/x@{now}\n", "req"));
+    write(
+        w,
+        "crates/b/t.rs",
+        &format!("// {}:b/x@{now}\n#[test]\nfn t() {{}}\n", "req"),
+    );
     push_main(w, "b moved, gone removed");
     r
 }

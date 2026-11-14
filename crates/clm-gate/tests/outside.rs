@@ -46,7 +46,7 @@ fn base() -> TempDir {
     write(
         d,
         "crates/a/tests/t.rs",
-        concat!("// req", ":a/x@00000000\n"),
+        concat!("// req", ":a/x@00000000\n#[test]\nfn t() {}\n"),
     );
     commit(d, "base");
     dir

@@ -46,7 +46,11 @@ fn model_violations_are_findings_under_check() {
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &spec("[\"src/**\"]", &["x"]));
-    write(d, "src/t.rs", &format!("// {}:a/ghost@00000000\n", "req"));
+    write(
+        d,
+        "src/t.rs",
+        &format!("// {}:a/ghost@00000000\n#[test]\nfn t() {{}}\n", "req"),
+    );
     git(d, &["add", "-A"]);
     let out = report(d);
     let check = section(&out, "check");
