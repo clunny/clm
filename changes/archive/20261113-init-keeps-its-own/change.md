@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - init-keeps-its-own-copy-of-the-exemption-rules
 ---
