@@ -13,9 +13,11 @@ The other item, a draft launched for a code-only bug whose component a build hol
 
 ## Problem
 
-**The resumed draft.** `clm draft --resume <id>` writes a prompt whose first command is `git switch -c spec/<id> --no-track origin/spec/<id>`. `-c` refuses a branch name that exists. The build loop resumes an orphaned draft in the clone that launched it (`orchestrator.loop`), and that clone holds the local branch `spec/<id>` the first session made, which outlives the session's worktree. So the command fails in the usual case of a resume, not in a rare one, and the session has to work out for itself what to do. `draft-resume` says the session "switches its checkout to that branch as `spec/<change-id>`", but its tests only read the command's text, so they pass while the command fails.
+**The resumed draft.** `clm draft --resume <id>` writes a prompt whose first command is `git switch -c spec/<id> --no-track origin/spec/<id>`. `-c` refuses a branch name that exists. The build loop relaunches an orphaned draft with `clm draft --resume`, one loop per clone (`orchestrator.loop`). When that clone is the one the first session ran in, it holds the local branch `spec/<id>` that session made, which outlives the session's worktree, as it did for `20261113-no-test-reads-what`. So the command fails where a resume is most likely to run, and the session has to work out for itself what to do. `draft-resume` says the session "switches its checkout to that branch as `spec/<change-id>`", but its tests only read the command's text, so they pass while the command fails.
 
 The design isn't wrong; the requirement didn't say which clone states the command must work in, and nothing ran it.
+
+The plan in force makes "accept" the default answer to a defect during the freeze. This one departs from it because the plan's own builds depend on it: the build loop relaunches every orphaned draft through this command, and a requirement that reads as proven while its command fails is the fault the plan exists to remove.
 
 **The draft for a claimed component.** A draft judged a bug code-only, asked for `clm claim clm --fix`, and was refused because a build held `impl/clm`. It left the item, and a later draft did the same.
 
@@ -43,14 +45,16 @@ For the draft on a claimed component, accepted (see below). The fixes considered
 
 ## Outcome
 
-- `orchestrator.triage/draft-resume` gains one sentence and one scenario, *the first session's local branch is still there*. Its build changes the command in the resume prompt (`crates/clm-triage/src/draft.rs`) and the two tests in `crates/clm/tests/draft.rs` that assert the command's text, `scenario_a_draft_that_pushed` and `resume_takes_the_newer_of_the_two_spec_branches`, and adds the test that runs the command.
-- `backlog/a-draft-is-launched-for-a-code-only-bug-while-its-component-is.md` is deleted as accepted, and `backlog/a-resumed-draft-s-first-command-fails-when-the-clone-still-holds.md` when the change is applied.
+- `orchestrator.triage/draft-resume` gains one sentence and one scenario, *the first session's local branch is still there*. Its build changes the command in the resume prompt (`crates/clm-triage/src/draft.rs`) and writes the test that runs the command under `crates/clm-triage/tests/`, the component's own files. In `crates/clm/tests/draft.rs`, which is the root's, it only re-cites the tests that cite `draft-resume` and brings the two that assert the command's text, `scenario_a_draft_that_pushed` and `resume_takes_the_newer_of_the_two_spec_branches`, up to the new command, as `path-ownership`'s exception for a stale marker allows; it writes no new test there (`components-own-their-tests`).
+- `backlog/a-draft-is-launched-for-a-code-only-bug-while-its-component-is.md` is deleted on this branch as accepted, and `backlog/a-resumed-draft-s-first-command-fails-when-the-clone-still-holds.md` when the change is archived after its build.
 
 No capability test sees anything different at the product's boundary: the capability tests that reach `clm draft --resume` do so through the build loop and read no command from the prompt.
 
 ## Constraints
 
-- `draft-resume` relies on no requirement that isn't current.
+- `draft-resume` relies on no requirement that isn't current (builder check).
+- "That branch on `origin`" is the one the prompt names, `origin/spec/<id>` or `origin/autosync/spec/<id>`, whichever is newer: the session's `spec/<id>` ends at that ref's commit either way.
+- The test takes the command from the prompt file as the code span that starts with `git switch`, the only one in a resume prompt's first step, and runs it as written in a worktree it adds to the fixture's clone.
 - `clm draft --resume` still creates no local branch and makes no worktree; only the command the session runs changes.
 
 ## Edge cases and workarounds
@@ -60,4 +64,4 @@ No capability test sees anything different at the product's boundary: the capabi
 
 ## Open questions
 
-None.
+- The architecture audit observed that the acceptance is recorded only in this change, so once it is archived a session that meets the same refused claim may file the defect again. Left: a decision file for a cost accepted only while the freeze lasts would outlive its reason, and phase 5 of the plan, which reshapes the routes onto `main`, is where a refused fix claim gets its lasting answer. A second report would be answered from this change in `changes/archive/`.
