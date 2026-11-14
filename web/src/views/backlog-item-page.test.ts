@@ -1,4 +1,3 @@
-// req:web.views/backlog-item-page@c5058fba
 import { describe, expect, it } from 'vitest';
 import type { Answering } from './answers';
 import { renderBacklogItem } from './backlog';
@@ -18,6 +17,7 @@ const answering: Answering = {
   onAnswer: async () => null,
 };
 
+// req:web.views/backlog-item-page@c5058fba
 describe('a backlog item page', () => {
   it('an item in full: title, kind, priority, components, origin, blocks, the answer by its person, buttons, and the body as Markdown', () => {
     const page = renderBacklogItem(q(), 'q', null, '#/o/a/backlog', answering);
@@ -48,6 +48,7 @@ describe('a backlog item page', () => {
   it('an item with no priority or answers shows none', () => {
     const snap = snapshot();
     const page = renderBacklogItem(snap, 'crash', null, '#/o/a/backlog');
+    expect(page.textContent).not.toContain('Origin');
     expect(page.querySelector('.prio')).toBeNull();
     expect(page.querySelector('.given')).toBeNull();
     expect(page.querySelector('.answers')).toBeNull();
