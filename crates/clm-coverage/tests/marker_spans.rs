@@ -56,3 +56,13 @@ fn scenario_every_marker_of_the_file() {
         assert!(text[s.range.clone()].starts_with("req:"));
     }
 }
+
+#[test]
+fn ranges_hold_after_multibyte_text_and_carriage_returns() {
+    // req:check.coverage/marker-spans@11d19af5
+    let text = format!("\tlet s = \"\u{e9} {REQ}:n.m/y-z@abc\"; {REQ}:b/y@12345678\r\n{REQ}:c/z");
+    let spans = marker_spans(&text);
+    assert_eq!(spans.len(), 3);
+    assert_eq!(text[spans[1].range.clone()], format!("{REQ}:b/y@12345678"));
+    assert_eq!(text[spans[2].range.clone()], format!("{REQ}:c/z"));
+}

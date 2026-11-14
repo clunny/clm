@@ -219,60 +219,33 @@ const MODIFIERS: [&str; 7] = [
 ];
 
 /// A call of `it`, `test` or `describe` (`test.describe`) at the start of a line, with the
-/// modifiers: its group flag, whether its name is in a second group of arguments
-/// (`it.each(table)('name', fn)`), and the text from its first `(`.
-fn script_call(line: &str) -> Option<(bool, bool, &str)> {
+/// modifiers: its group flag and the text from its first `(`.
+fn script_call(line: &str) -> Option<(bool, &str)> {
     let mut rest = line.trim_start();
     let head = ["describe", "test", "it"]
         .into_iter()
         .find(|h| rest.starts_with(h))?;
     rest = &rest[head.len()..];
     let mut group = head == "describe";
-    let mut curried = false;
     while let Some(after) = rest.strip_prefix('.') {
         let word: String = after
             .chars()
             .take_while(|c| c.is_alphanumeric() || *c == '_')
             .collect();
-        if head == "test" && word == "describe" && !group && !curried {
+        if head == "test" && word == "describe" && !group {
             group = true;
         } else if MODIFIERS.contains(&word.as_str()) {
-            curried |= word == "each" || word == "skipIf";
         } else {
             return None;
         }
         rest = &after[word.len()..];
     }
     let rest = rest.trim_start();
-    rest.starts_with('(').then_some((group, curried, rest))
+    rest.starts_with('(').then_some((group, rest))
 }
 
 /// The first argument of the call starting at `args` (its `(`) when it is a string literal.
-fn script_name(curried: bool, args: &str) -> String {
-    let mut args = args;
-    // `it.each(table)('name', ...)` and `it.skipIf(cond)('name', ...)` name the test in
-    // the second call.
-    if curried {
-        let mut depth = 0;
-        let mut end = None;
-        for (at, c) in args.char_indices() {
-            match c {
-                '(' => depth += 1,
-                ')' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        end = Some(at + 1);
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-        match end.map(|e| args[e..].trim_start()) {
-            Some(next) if next.starts_with('(') => args = next,
-            _ => return String::new(),
-        }
-    }
+fn script_name(args: &str) -> String {
     let inner = args[1..].trim_start();
     let Some(quote) = inner
         .chars()
@@ -289,12 +262,12 @@ fn script_name(curried: bool, args: &str) -> String {
 fn script_tests(lines: &[&str]) -> Vec<TestSpan> {
     let mut out = Vec::new();
     for (at, line) in lines.iter().enumerate() {
-        let Some((group, curried, args)) = script_call(line) else {
+        let Some((group, args)) = script_call(line) else {
             continue;
         };
         let first = first_above(lines, at, is_comment);
         out.push(TestSpan {
-            name: script_name(curried, args),
+            name: script_name(args),
             group,
             first: first + 1,
             last: script_close(lines, at) + 1,

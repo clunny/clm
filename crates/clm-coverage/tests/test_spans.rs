@@ -155,7 +155,7 @@ test.describe.serial('phone', () => {
             ("phone".to_string(), true, 1, 12),
             ("a".to_string(), false, 2, 4),
             ("b".to_string(), false, 5, 5),
-            ("c %s".to_string(), false, 6, 8),
+            (String::new(), false, 6, 8),
             (String::new(), false, 9, 9),
         ]
     );
