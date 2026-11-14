@@ -1284,7 +1284,7 @@ fn tracefile_sources(tree: &Tree) -> Vec<String> {
 
 #[test]
 fn coverage_writes_one_tracefile_from_three_suites() {
-    // req:ci/coverage-script@a291994e
+    // req:ci/coverage-script@b19a3b0a
     let tree = coverage_tree();
     let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
     assert!(ok, "{log:?} {stderr}");
@@ -1330,22 +1330,61 @@ fn coverage_writes_one_tracefile_from_three_suites() {
         "{}",
         log[panel_run]
     );
+    // Every path relative to the root, none naming the tree.
+    let sources = tracefile_sources(&tree);
+    assert_eq!(
+        sources,
+        [
+            "crates/clm/src/main.rs",
+            "web/src/app.ts",
+            "web/abs.ts",
+            "plugin-panel/src/app.ts",
+            "plugin-panel/abs.ts",
+        ]
+    );
     let root = fs::canonicalize(tree.work()).unwrap();
+    let root = root.to_str().unwrap();
+    assert!(sources.iter().all(|s| !s.contains(root)), "{sources:?}");
+}
+
+#[test]
+fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
+    // req:ci/coverage-script@b19a3b0a
+    let tree = coverage_tree();
+    // The tool writes real paths, `pwd -P`'s; the shell's `$PWD` names the checkout by its link.
+    tree.fake(
+        "cargo",
+        &CARGO_COVERAGE.replace("\"$PWD/crates", "\"$(pwd -P)/crates"),
+    );
+    let link = tree.dir.path().join("link");
+    std::os::unix::fs::symlink(tree.work(), &link).unwrap();
+    let out = Command::new(".github/scripts/coverage.sh")
+        .current_dir(&link)
+        .env("PWD", &link)
+        .env("PATH", tree.path())
+        .env("CI_LOG", tree.dir.path().join("log"))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert_eq!(
         tracefile_sources(&tree),
         [
-            format!("{}/crates/clm/src/main.rs", root.display()),
-            "web/src/app.ts".to_owned(),
-            format!("{}/web/abs.ts", root.display()),
-            "plugin-panel/src/app.ts".to_owned(),
-            format!("{}/plugin-panel/abs.ts", root.display()),
+            "crates/clm/src/main.rs",
+            "web/src/app.ts",
+            "web/abs.ts",
+            "plugin-panel/src/app.ts",
+            "plugin-panel/abs.ts",
         ]
     );
 }
 
 #[test]
 fn a_failing_coverage_suite_fails_the_script() {
-    // req:ci/coverage-script@a291994e
+    // req:ci/coverage-script@b19a3b0a
     let tree = coverage_tree();
     // A tracefile from an earlier run stays as it was.
     fs::create_dir_all(tree.work().join("target")).unwrap();
@@ -1364,7 +1403,7 @@ fn a_failing_coverage_suite_fails_the_script() {
 
 #[test]
 fn nothing_else_runs_coverage() {
-    // req:ci/coverage-script@a291994e
+    // req:ci/coverage-script@b19a3b0a
     for path in [
         script_path("ci-check.sh"),
         script_path("detector-tools.sh"),
@@ -1383,7 +1422,7 @@ fn nothing_else_runs_coverage() {
 
 #[test]
 fn coverage_tools_are_pinned() {
-    // req:ci/coverage-script@a291994e
+    // req:ci/coverage-script@b19a3b0a
     let lines = script_lines("coverage.sh");
     let tools = lines
         .iter()
