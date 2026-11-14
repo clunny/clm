@@ -263,6 +263,55 @@ fn an_item_resolved_with_its_test_unchanged_is_not_judged_again() {
 }
 
 #[test]
+fn every_citing_test_is_in_the_plan_and_a_stale_citation_is_none() {
+    // req:verify/mutation-pass@e561e63f
+    let p = pass(true, false);
+    p.f.write("mutate-result", "a/thing killed\n");
+    let two = format!(
+        "{}{}",
+        test_file(&p.version, "let _ = 1;"),
+        test_file(&p.version, "let _ = 2;").replace("proves_x", "proves_y")
+    );
+    p.f.land(
+        &[
+            ("crates/a/tests/x.rs", &two),
+            ("crates/a/tests/y.rs", &test_file(&p.version, "let _ = 3;")),
+            // A test citing the requirement at an old version proves nothing of it.
+            (
+                "crates/a/tests/stale.rs",
+                &test_file("11111111", "let _ = 4;").replace("proves_x", "proves_old"),
+            ),
+        ],
+        "tests",
+    );
+    p.f.due();
+    let plan = p.f.lines("plan");
+    for test in [
+        "test crates/a/tests/x.rs\tproves_x",
+        "test crates/a/tests/x.rs\tproves_y",
+        "test crates/a/tests/y.rs\tproves_x",
+    ] {
+        assert!(plan.contains(&test.to_string()), "{plan:?}");
+    }
+    assert!(!plan.iter().any(|l| l.contains("proves_old")), "{plan:?}");
+}
+
+#[test]
+fn a_stale_citation_alone_makes_nothing_due() {
+    // req:verify/mutation-pass@e561e63f
+    let p = pass(true, false);
+    p.f.land(
+        &[(
+            "crates/a/tests/stale.rs",
+            &test_file("11111111", "let _ = 4;"),
+        )],
+        "stale",
+    );
+    p.f.due();
+    assert!(!p.f.path("mutate-ran").exists());
+}
+
+#[test]
 fn the_pass_has_a_slot_of_its_own() {
     // req:verify/mutation-pass@e561e63f
     let p = pass(true, false);
