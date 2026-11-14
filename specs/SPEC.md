@@ -2,8 +2,8 @@
 title: CLM
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.runner, orchestrator.loop, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, agent-harness, machine]
-paths: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/build.rs", "crates/clm/src/**", "crates/clm/tests/*.rs", "rust-toolchain.toml", ".claude/settings.json", ".gitattributes", "scripts/dev-install.sh", "scripts/retired-terms.sh", "scripts/retired-terms.txt", "README.md", "CONTRIBUTING.md", "LICENSE"]
+depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.loop, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, agent-harness, machine]
+paths: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/build.rs", "crates/clm/src/**", "crates/clm/tests/*.rs", "crates/clm-runner/**", "rust-toolchain.toml", ".claude/settings.json", ".gitattributes", "scripts/dev-install.sh", "scripts/retired-terms.sh", "scripts/retired-terms.txt", "README.md", "CONTRIBUTING.md", "LICENSE"]
 outside: []
 serves: [capability/install-and-release, architecture/platform]
 ---
@@ -12,7 +12,7 @@ serves: [capability/install-and-release, architecture/platform]
 CLM is installed as a Claude Code plugin plus a `clm` CLI, and runs on git alone: a git host is an optional layer that holds the remote and, when it has one, a pull request per branch (`host-adapters`). A repo adopts CLM by running `/clm:init`, which sets up its tooling with `clm init` and proposes its first spec graph, drafted from a short conversation for a new project or recovered from the code for an existing one (`init-cli-and-skill`). From then on, spec changes flow through `changes/`, code is produced only by the implement flow, and every branch lands on `main` through `clm land`, which runs the checks on the machine that runs it and records what it did in the ledger (`land-locally`, `per-writer-ledgers`).
 
 ## Design
-The children split the work into deterministic core (`model`, `check` with its children `check.coverage`, `check.affected`, `check.unreferenced` and `check.health`, `apply`, `context`), coordination (`orchestrator` with its children `orchestrator.run`, `orchestrator.checkpoint`, `orchestrator.triage`, `orchestrator.runner` and `orchestrator.loop`, and `sync` with its child `sync.regenerate`), records and landing (`ledger`, `gate` with its child `gate.fingerprint`, `land` with its child `land.approval`, and `rename`, whose replay the gate trusts), plumbing (`vcs`, `host`), presentation (`view`), integration (`plugin` with `plugin.hooks`, which holds `plugin.hooks.guard` and its `plugin.hooks.guard.shell`, and `plugin.panel`, `ci`, and `web` with `web.worker` (with its children `web.worker.platform` and `web.worker.review`), `web.client-live` and `web.live`), settings (`config`), adoption (`init`), and the capability layer's tests (`capability`). The core has no knowledge of Claude Code, of any host or of the web. The plugin has no logic that must hold, because such logic belongs in the CLI (`deterministic-enforcement`). `web` reuses the core, the queue, the views and the ledger compiled to WebAssembly, so it shows what `clm` would report, and it decides nothing. `crates/clm` only parses arguments and dispatches: `clm config` to `clm-config`, `clm defect` to `clm-hooks`, `clm init`, `clm survey` and `clm guide` to `clm-init`, `clm status` and `clm view` to `clm-view-repo`, `clm land`, `clm approve` and `clm reconnect` to `clm-land`, `clm ledger` to `clm-ledger`, `clm effort`, `clm capabilities` and `clm architecture` to `clm-effort`, `clm machine` to `clm-machine`, passing it `max_builds`, `clm triage`, `clm draft` and `clm intake` to `clm-triage`, passing `clm intake` the `host` setting, `clm runner` to `clm-runner`, passing it its own executable as the `clm` it runs, `clm build` to `clm-loop`, passing it `max_builds` and its own executable as the `clm` it runs, `clm unreferenced` to `clm-unreferenced`, `clm rename` to `clm-rename`, `clm health` and `clm workaround` to `clm-health`, and `clm pr`, `clm branch` and `clm issue` to `clm-host`, passing each the settings it needs from `config`. Every command with a `--root` option defaults it to the CLM repository found from the current directory as `session-start` finds it: the first of the current directory and its parents that holds `specs/SPEC.md`, looking no further up than the first directory that holds `.git`. With none found, it is the current directory, except for `clm survey` and `clm unreferenced`, which then use the top of the git repository, so `/clm:init` maps the whole repository from any directory (`init-finds-its-repository`), and a project without CLM's specs gets its whole workspace checked. `clm init` takes no `--root`, but writes in the CLM repository found the same way, or at the top of the git repository when there is none (`init/init-root`). Running from a subdirectory then gives the same answer as running from the root. A linked worktree, such as `.clm/worktrees/<change>/<item>`, has its own `.git` file, so the search stays in the worktree. A CLM repository in a subdirectory of a larger git repository still works.
+The children split the work into deterministic core (`model`, `check` with its children `check.coverage`, `check.affected`, `check.unreferenced` and `check.health`, `apply`, `context`), coordination (`orchestrator` with its children `orchestrator.run`, `orchestrator.checkpoint`, `orchestrator.triage` and `orchestrator.loop`, and `sync` with its child `sync.regenerate`), records and landing (`ledger`, `gate` with its child `gate.fingerprint`, `land` with its child `land.approval`, and `rename`, whose replay the gate trusts), plumbing (`vcs`, `host`), presentation (`view`), integration (`plugin` with `plugin.hooks`, which holds `plugin.hooks.guard` and its `plugin.hooks.guard.shell`, and `plugin.panel`, `ci`, and `web` with `web.worker` (with its children `web.worker.platform` and `web.worker.review`), `web.client-live` and `web.live`), settings (`config`), adoption (`init`), and the capability layer's tests (`capability`). The core has no knowledge of Claude Code, of any host or of the web. The plugin has no logic that must hold, because such logic belongs in the CLI (`deterministic-enforcement`). `web` reuses the core, the queue, the views and the ledger compiled to WebAssembly, so it shows what `clm` would report, and it decides nothing. `crates/clm` only parses arguments and dispatches: `clm config` to `clm-config`, `clm defect` to `clm-hooks`, `clm init`, `clm survey` and `clm guide` to `clm-init`, `clm status` and `clm view` to `clm-view-repo`, `clm land`, `clm approve` and `clm reconnect` to `clm-land`, `clm ledger` to `clm-ledger`, `clm effort`, `clm capabilities` and `clm architecture` to `clm-effort`, `clm machine` to `clm-machine`, passing it `max_builds`, `clm triage`, `clm draft` and `clm intake` to `clm-triage`, passing `clm intake` the `host` setting, `clm build` to `clm-loop`, passing it `max_builds` and its own executable as the `clm` it runs, `clm unreferenced` to `clm-unreferenced`, `clm rename` to `clm-rename`, `clm health` and `clm workaround` to `clm-health`, and `clm pr`, `clm branch` and `clm issue` to `clm-host`, passing each the settings it needs from `config`. Every command with a `--root` option defaults it to the CLM repository found from the current directory as `session-start` finds it: the first of the current directory and its parents that holds `specs/SPEC.md`, looking no further up than the first directory that holds `.git`. With none found, it is the current directory, except for `clm survey` and `clm unreferenced`, which then use the top of the git repository, so `/clm:init` maps the whole repository from any directory (`init-finds-its-repository`), and a project without CLM's specs gets its whole workspace checked. `clm init` takes no `--root`, but writes in the CLM repository found the same way, or at the top of the git repository when there is none (`init/init-root`). Running from a subdirectory then gives the same answer as running from the root. A linked worktree, such as `.clm/worktrees/<change>/<item>`, has its own `.git` file, so the search stays in the worktree. A CLM repository in a subdirectory of a larger git repository still works.
 
 The repo declares its build environment once. `rust-toolchain.toml` pins the Rust toolchain to an exact version, with `rustfmt`, `clippy` and the `wasm32-unknown-unknown` target, and rustup installs it on first use on every machine and in every `clm run` worktree (`pinned-rust-toolchain`). Moving the pin is a code PR that fixes any new lints in the same diff. `.claude/settings.json` lists what unattended sessions may run beyond `clm run`'s own commands: `cargo`, a narrow set of npm commands that can't run a dependency's install script, and `.github/scripts/ci-check.sh`, for a session that runs the script itself (`unattended-commands`). A build runs exactly the checks `clm land` runs with `clm land --check-only` (`land-check-command`): Claude Code's worktree isolation refused the script's path in a build, and the `clm` command names none. The script installs Playwright's browser with `--with-deps` only when `CI` is `true` (`ci/browser-install`), so running it never reaches `sudo`. A test in `crates/clm/tests/` reads both files.
 
@@ -49,7 +49,6 @@ The root's `paths` name `crates/clm`'s manifest, build script, sources and top-l
 | `orchestrator.run` | `clm run`: the prompt and launch of an unattended build |
 | `orchestrator.checkpoint` | `clm wrap-up`: what a session leaves behind |
 | `orchestrator.triage` | `clm triage` and `clm draft`: the backlog grouped into unattended drafts |
-| `orchestrator.runner` | `clm runner`: unattended headless builds on a machine the human owns |
 | `ledger` | Approvals, checks and lands as records in per-writer ledger branches |
 | `land` | `clm land`, `clm approve`, `clm reconnect`: landing on `main` from the machine that runs it |
 | `land.approval` | Whether a branch's diff is approved or held, and `clm approve` (crate `clm-approval`) |
@@ -504,8 +503,6 @@ The old names of the commands `renamed-commands` names, the subcommands `sync`, 
 
 #### Needs
 - orchestrator.checkpoint/checkpoint
-- plugin/renamed-commands
-- orchestrator.run/prompt-commands
 - orchestrator.triage/draft
 - orchestrator.triage/fold
 - gate/up-to-date
@@ -601,9 +598,6 @@ Then it SHALL remove the lock, also when it stopped on a failure, and, unless it
 - rename/requirement-rename
 - init/init-files
 - init/template-says-architectural-constraint
-- plugin.init/init-skill
-- plugin/skills-write-enforcement
-- plugin/says-architectural-constraint
 - effort/architecture-list
 - effort/architecture-page
 - effort/architecture-decide-command
@@ -897,30 +891,6 @@ For every entry under `crates/clm-upgrade/corpus/`, a copy upgraded with the bui
 #### Serves
 - architecture/upgrades-carry-migrations
 - capability/upgrade-clm
-
-### Requirement: claude-md-pushes-with-clm
-This repository's instructions, its `CLAUDE.md` and, when it exists, the `AGENTS.md` that `CLAUDE.md` imports (`init`'s layout, which `upgrade/migration-agents-md` moves a project to), SHALL NOT contain `git push`. Wherever they tell a session to push a branch to `origin` they SHALL name `clm branch push`, as the skills do (`plugin/skills-push-with-clm`), so a session in this repository that follows them under Claude Code's auto mode runs only `clm` commands to write to `origin` (`unattended-steps-run-clm`). The rule holds whichever of the two files holds the instructions, before and after the migration, so taking `migration-agents-md` here keeps it true. Its test reads both files and holds a `clm:reads` marker for each (`doc-readers-marked`).
-
-#### Scenario: CLAUDE.md alone pushes through clm
-- GIVEN the repository's `CLAUDE.md` holding the instructions and no `AGENTS.md`
-- WHEN a test reads them
-- THEN `CLAUDE.md` doesn't contain `git push`, and it contains `clm branch push`
-
-#### Scenario: AGENTS.md holds the instructions
-- GIVEN a `CLAUDE.md` of the one line `@AGENTS.md` and an `AGENTS.md` holding the instructions
-- WHEN a test reads them
-- THEN neither file contains `git push`, and their texts together contain `clm branch push`
-
-#### Scenario: a git push in either file
-- GIVEN a `CLAUDE.md` and an `AGENTS.md`, one of which contains `git push`
-- WHEN the test's check runs on their texts
-- THEN it fails, naming that file
-
-#### Serves
-- capability/guard-sessions
-
-#### Needs
-- host/branch-push
 
 ### Requirement: init-host-values
 `clm init --host <host>` SHALL accept `none`, `git`, `github` and `azure`, passing each to `clm-init` as the `host` setting of that name, and SHALL refuse any other value through its argument parser, exiting non-zero and writing nothing.

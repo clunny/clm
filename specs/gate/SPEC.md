@@ -42,7 +42,7 @@ A branch behind `<ref>` may land (`land-locally`). `clm land` merges `<ref>` int
 ## Requirements
 
 ### Requirement: classify
-The gate SHALL classify a PR as `spec` if every changed file is a spec path, or if `rename/replay` accepts it (`replays(repo, <merge-base>, HEAD)` is true), `code` if no changed file is a spec path, and `mixed` otherwise. It SHALL block `mixed` PRs, telling the author to split them, and, when the branch is `impl/<component>`, telling its build that a build edits no spec path: it leaves a requirement that needs a spec edit unbuilt and adds a `question` backlog item whose `blocks` names it (`orchestrator.run/stays-in-its-component`, `requirement-blocks`).
+The gate SHALL classify a PR as `spec` if every changed file is a spec path, or if `rename/replay` accepts it (`replays(repo, <merge-base>, HEAD)` is true), `code` if no changed file is a spec path, and `mixed` otherwise. It SHALL block `mixed` PRs, telling the author to split them, and, when the branch is `impl/<component>`, telling its build that a build edits no spec path: it leaves a requirement that needs a spec edit unbuilt and adds a `question` backlog item whose `blocks` names it (`requirement-blocks`).
 
 #### Scenario: mixed build branch
 - GIVEN branch `impl/a` that changes `crates/a/lib.rs` and `specs/a/SPEC.md`

@@ -358,17 +358,6 @@ The `specs/SPEC.md` that `clm init` writes SHALL set `paths: [".claude/settings.
 - architecture/method-in-the-plugin
 - capability/adopt-clm
 
-### Requirement: claude-md-points-at-guide
-The `AGENTS.md` that `clm init` writes SHALL point at the guide by naming `clm guide`, and SHALL hold no URL (`http://` or `https://`).
-
-#### Scenario: pointer
-- GIVEN an empty repository
-- WHEN `clm init` runs
-- THEN its `AGENTS.md` holds `clm guide` and no `https://`
-
-#### Serves
-- architecture/method-in-the-plugin
-
 ### Requirement: survey-tracked-through-git
 `clm survey` SHALL list the tracked files it maps through `clm-git`'s `tracked_files`, and `clm survey --components` SHALL list the files a component's `paths` match through `clm-git`'s `tracked_matching` (`tracked-files-in-git-layer`). No file under `crates/clm-init/src` SHALL run `git ls-files` itself (`no-dead-code`).
 
@@ -453,17 +442,6 @@ The `ARCHITECTURE.md` that `clm init` writes SHALL say, in its preamble, that ea
 - capability/adopt-clm
 - architecture/method-in-the-plugin
 - architecture/carried-constraints
-
-### Requirement: template-says-pull-request
-No file under `crates/clm-init/templates/` SHALL call a host's pull request a page: none SHALL hold `page's` (only the guide, which `clm guide` prints, has pages).
-
-#### Scenario: the written architecture
-- GIVEN an empty repository
-- WHEN `clm init` runs
-- THEN its `ARCHITECTURE.md` holds no `page's URL`, and no line of a file under `crates/clm-init/templates/` holds `page's`
-
-#### Serves
-- architecture/plain-terms
 
 ### Requirement: survey-components
 `clm survey --components <file>` SHALL read the map's list of components from its top-level key `components` and an optional top-level `outside`, a list of globs like the root's `outside` (`model/outside-globs`). Its *code files* SHALL be those `check/unowned-files` reads: the files the index holds under the repository, binary files and `.github/` included, other than those under `specs/`, `changes/`, `backlog/` or `docs/` and other than `ARCHITECTURE.md`, `CAPABILITIES.md` and `CLAUDE.md`. Over them it SHALL report each code file no component covers and no `outside` glob matches (`survey/uncovered`), each code file two components cover (`survey/overlap`), and each `outside` glob that matches no code file outside every component (`survey/stale-outside`, with the message `outside glob <glob> matches no file outside every component`); a file a component covers and an `outside` glob matches is the component's. It SHALL report each import edge from one component's file to another component's file that its `depends_on` doesn't allow (`survey/undeclared-edge`), and each `depends_on` cycle (`survey/cycle`); an edge with an end in a file no component covers SHALL NOT be reported. A glob matches a file as the git pathspec `:(glob)<glob>` does. A map whose `outside` isn't a list of non-empty strings SHALL be refused as a map that doesn't parse is. The code files are listed apart from the files `clm survey`'s map reads for import edges, which still skip `.github/` and binary files (`survey-map`). A component of the map MAY set `tests` and `exemptions` as a component's frontmatter does (`model/test-ownership-keys`, `model/exemptions`): a file a component's `tests` match is that component's whatever `paths` match it, a file two components' `tests` match is `survey/overlap`, an edge from a file of a component's `tests` is judged against its `depends_on` as any of its files is, and an edge from a file an exemption of its component names for `undeclared-imports` SHALL NOT be reported (`components-own-their-tests`, `temporary-exemptions`). An exemption the model would refuse (`model/exemptions`), and a map that sets `test_depends_on`, SHALL be refused as a map that doesn't parse is. It SHALL exit 1 when it reports any and 0 with no output otherwise. A map that sets `nodes`, the key `20261102-rename-node-to-component` kept beside `components`, SHALL fail with exit 1, naming the file, `nodes` and `components`, and the old flag SHALL fail as clap fails for an unknown argument (`clm/node-names-retired`). No `clm:remove-by 20261102-rename-node-to-component-contract` marker SHALL be left.
@@ -565,22 +543,6 @@ The text `clm-init` prints and writes SHALL say component, components, ancestors
 
 #### Serves
 - architecture/plain-terms
-
-### Requirement: claude-md-names-the-skills
-The `AGENTS.md` that `clm init` writes SHALL name `/clm:propose`, `/clm:build` and `/clm:help`, saying they are the `propose`, `build` and `help` skills whatever the agent harness calls them, and SHALL NOT name `/clm:implement`. It SHALL tell the session never to run `clm approve` itself, but to have the human run it, through the agent harness's confirmation or in their own terminal (`approval-policy`).
-
-#### Scenario: a new repository
-- GIVEN a repository with no `AGENTS.md`
-- WHEN `clm init` runs
-- THEN its `AGENTS.md` holds `/clm:propose`, `/clm:build`, `/clm:help` and `clm approve`, and not `/clm:implement`
-
-#### Serves
-- architecture/method-in-the-plugin
-- capability/work-from-any-agent-harness
-
-#### Needs
-- plugin.build/skill-named-build
-- plugin/help-skill
 
 ### Requirement: init-without-manifest
 For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first change to the CLM root (the parent of the script's own directory), wherever it is run from, and then run each language's line only when its manifest exists there: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
@@ -764,7 +726,7 @@ When the `clm.toml` that `clm init` leaves sets `host = "none"`, it SHALL call `
 - host/none-keeps-a-remote
 
 ### Requirement: init-names-missing-main
-When the repository's current branch isn't `main` and neither a local `main` nor the remote's `main` exists, `clm init` SHALL still write its files and SHALL print, as the first line under `Next steps (yours):`, that CLM lands only on a branch named `main` (`trunk-named-main`) and the command that renames the current branch to it, `git branch -m <current> main`, with, when the repository has a remote, that the remote's default branch, CI triggers and branch protection keyed to the old name move with it. It SHALL print no such line when `main` exists locally or on the remote, and SHALL rename nothing itself.
+When the repository's current branch isn't `main` and neither a local `main` nor the remote's `main` exists, `clm init` SHALL still write its files and SHALL print, as the first line under `Next steps (yours):`, that CLM lands only on a branch named `main` (`trunk-is-main`) and the command that renames the current branch to it, `git branch -m <current> main`, with, when the repository has a remote, that the remote's default branch, CI triggers and branch protection keyed to the old name move with it. It SHALL print no such line when `main` exists locally or on the remote, and SHALL rename nothing itself.
 
 #### Scenario: a repository on master
 - GIVEN a git repository with one commit on `master`, no `main` and no remote

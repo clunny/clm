@@ -609,7 +609,6 @@ The components `queue_from_refs` reports `ready` SHALL be exactly those `clm nex
 - capability/build-from-spec
 
 #### Needs
-- plugin.build/build-runs-the-loop
 - orchestrator.loop/build-wait
 
 ### Requirement: archived-spec-work
