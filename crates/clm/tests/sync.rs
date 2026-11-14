@@ -428,7 +428,7 @@ fn scenario_rebase_by_its_new_name() {
 
 #[test]
 fn scenario_an_old_name_is_refused() {
-    // req:clm/old-command-names-retired@94b2cc25
+    // req:clm/old-command-names-retired@ad3289be
     let (_dir, work) = conflicting();
     let before = head(&work);
     for old in ["sync", "checkpoint", "page"] {

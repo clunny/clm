@@ -50,7 +50,6 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Triage { root, .. }
         | C::Intake { root, .. }
         | C::Draft { root, .. }
-        | C::Runner { root, .. }
         | C::Build { root, .. }
         | C::WrapUp { root }
         | C::Rebase { root }

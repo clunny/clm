@@ -332,7 +332,7 @@ fn the_help_of_every_command_is_written_and_scanned() {
 #[test]
 fn the_repository_holds_no_retired_term() {
     // req:clm/node-names-retired@2d40cbc7
-    // req:clm/architecture-term-retired@dcff8eb7
+    // req:clm/architecture-term-retired@926dc04b
     // req:clm/old-state-and-key-names-retired@381faa28
     // req:clm/retired-terms@78943b19
     let root = repo_root();
@@ -352,7 +352,7 @@ fn the_repository_holds_no_retired_term() {
 
 #[test]
 fn the_old_command_names_are_on_the_list() {
-    // req:clm/old-command-names-retired@94b2cc25
+    // req:clm/old-command-names-retired@ad3289be
     let list = retired();
     for term in [
         "clm sync",
@@ -383,7 +383,7 @@ fn the_old_command_names_are_on_the_list() {
 
 #[test]
 fn the_old_architecture_term_is_on_the_list() {
-    // req:clm/architecture-term-retired@dcff8eb7
+    // req:clm/architecture-term-retired@926dc04b
     let list = retired();
     assert!(list.iter().any(|t| t == "architecture requirement"));
     assert!(list.iter().any(|t| t == "architecture requirements"));
@@ -406,7 +406,7 @@ fn the_old_architecture_term_is_on_the_list() {
 
 #[test]
 fn architecture_holds_constraint_blocks() {
-    // req:clm/architecture-term-retired@dcff8eb7
+    // req:clm/architecture-term-retired@926dc04b
     let text = fs::read_to_string(repo_root().join("ARCHITECTURE.md")).unwrap();
     assert!(text.contains("\n## Constraints\n"));
     assert!(text.contains("\n### Constraint: "));
