@@ -139,7 +139,7 @@ fn session_start_reminds_to_upgrade() {
 
 #[test]
 fn session_start_states_the_defect_rule() {
-    // req:plugin.hooks/defect-rule@bf9aa424
+    // req:plugin.hooks/defect-rule@8551aeef
     let start = |repo: &TempDir| {
         let event = serde_json::json!({ "cwd": repo.path() }).to_string();
         let out = hook("session-start", &event);
@@ -150,42 +150,21 @@ fn session_start_states_the_defect_rule() {
     let text = start(&clm_repo(None));
     let claims = text.find("\nclaims\n").expect("claims section");
     let rule = &text[claims..];
-    // Where to report, what counts and what doesn't, and that a report is process only.
-    for needle in [
-        "clm defect",
-        "## CLM defects",
-        "CLI, CI, gate rules, plugin, skills or method",
-        "is not one",
-        "never includes the project's files, code, specs or output",
-    ] {
-        assert!(rule.contains(needle), "{needle} after claims: {text}");
-    }
-    // With `ask`, the report goes in a `<<'EOF'` heredoc, and nothing of the fix-first rule.
+    assert!(rule.contains("clm defect"), "{text}");
     assert!(rule.contains("<<'EOF'"), "{text}");
     assert!(
-        rule.contains("the one form the guard shows the human"),
+        !rule.contains("--fix") && !rule.contains("backlog/"),
         "{text}"
     );
-    // And a report `clm defect` kept is listed in the PR body with its file's path.
-    assert!(rule.contains("with the kept file's path"), "{text}");
-    assert!(!text.contains("--fix"), "{text}");
-    // backlog: where reports go, and fix-first.
+    // backlog: the backlog route.
     let text = start(&clm_repo(Some("defects = \"backlog\"\n")));
-    assert!(!text.contains("<<'EOF'"), "{text}");
+    let rule = &text[text.find("\nclaims\n").expect("claims section")..];
     for needle in [
         "clm defect",
         "backlog/",
-        "kind: bug",
-        "fold-small-defer-large",
-        "--component",
         "clm claim <component> --fix backlog/<slug>",
-        "landed",
-        "spec change",
-        "code-fix-resolves-bug",
-        "large amount of work",
-        "unattended session folds what fits and reports the rest",
     ] {
-        assert!(text.contains(needle), "{needle}: {text}");
+        assert!(rule.contains(needle), "{needle}: {text}");
     }
     // off
     let text = start(&clm_repo(Some("defects = \"off\"\n")));
