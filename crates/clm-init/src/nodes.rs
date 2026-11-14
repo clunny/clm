@@ -63,63 +63,25 @@ struct Node {
     exemptions: Option<serde_yaml::Value>,
 }
 
-/// The `files` globs of `node`'s exemptions from `undeclared-imports`; an error naming
-/// `exemptions` and the entry's position for one the model would refuse
-/// (`model/exemptions`): not a map, no `rule`, `files` or `until`, another key, another
-/// rule, or a `files` or `until` of the wrong shape.
-fn exemption_globs(node: &Node) -> Result<Vec<String>, String> {
+/// The `files` globs of `node`'s exemptions from `undeclared-imports`, judged by the
+/// model's own check of the value (`clm_model::check_exemptions`, `model/exemptions`); on a
+/// refusal, one line per message the check gives, each naming `file` and the component.
+fn exemption_globs(file: &Path, node: &Node) -> Result<Vec<String>, String> {
     let Some(value) = &node.exemptions else {
         return Ok(Vec::new());
     };
-    let entries = value
-        .as_sequence()
-        .ok_or("`exemptions` must be a list".to_owned())?;
-    let mut globs = Vec::new();
-    for (i, entry) in entries.iter().enumerate() {
-        let bad = |why: &str| format!("`exemptions` entry {}: {why}", i + 1);
-        let map = entry.as_mapping().ok_or_else(|| bad("not a map"))?;
-        for key in map.keys() {
-            if !matches!(key.as_str(), Some("rule" | "files" | "until" | "why")) {
-                return Err(bad(
-                    "holds a key other than `rule`, `files`, `until` and `why`",
-                ));
-            }
-        }
-        let get = |key: &str| map.get(key);
-        let rule = get("rule")
-            .ok_or_else(|| bad("lacks `rule`"))?
-            .as_str()
-            .unwrap_or_default();
-        if !matches!(
-            rule,
-            "undeclared-imports" | "tests-cite-their-owner" | "skipped-tests"
-        ) {
-            return Err(bad(&format!(
-                "names the rule `{rule}`, which can't be exempted"
-            )));
-        }
-        let files = get("files")
-            .ok_or_else(|| bad("lacks `files`"))?
-            .as_sequence()
-            .filter(|l| !l.is_empty())
-            .and_then(|l| {
-                l.iter()
-                    .map(|g| g.as_str().filter(|g| !g.is_empty()).map(str::to_owned))
-                    .collect::<Option<Vec<_>>>()
-            })
-            .ok_or_else(|| bad("`files` must be a non-empty list of non-empty globs"))?;
-        let until = get("until")
-            .ok_or_else(|| bad("lacks `until`"))?
-            .as_str()
-            .unwrap_or_default();
-        if until.strip_prefix("backlog/").is_none_or(str::is_empty) {
-            return Err(bad("`until` must be `backlog/<slug>`"));
-        }
-        if rule == "undeclared-imports" {
-            globs.extend(files);
-        }
-    }
-    Ok(globs)
+    let entries = clm_model::check_exemptions(value).map_err(|messages| {
+        messages
+            .iter()
+            .map(|m| format!("{}: {}: {m}", file.display(), node.id))
+            .collect::<Vec<_>>()
+            .join("\n")
+    })?;
+    Ok(entries
+        .into_iter()
+        .filter(|e| e.rule == clm_model::ExemptRule::UndeclaredImports)
+        .flat_map(|e| e.files)
+        .collect())
 }
 
 /// What's wrong with the node map `yaml` (read from `file`) for the repository at `root`,
@@ -244,8 +206,7 @@ pub fn check_nodes(root: &Path, file: &Path, yaml: &str) -> Result<Vec<Violation
     // Each component's files an exemption names for `undeclared-imports`.
     let mut exempt_files: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for node in list {
-        let globs =
-            exemption_globs(node).map_err(|e| format!("{}: {}: {e}", file.display(), node.id))?;
+        let globs = exemption_globs(file, node)?;
         exempt_files.insert(&node.id, matching(root, &globs)?);
     }
     for (from, to) in surveyed.edges.keys() {
