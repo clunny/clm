@@ -2,6 +2,7 @@
 //! specs/check/health/SPEC.md). Nothing gates on it.
 
 mod churn;
+mod exemptions;
 mod flag;
 mod land_time;
 mod lcov;
@@ -157,6 +158,7 @@ pub fn report(root: &Path, settings: &Settings, expiry: u64) -> Result<Report, F
             spec::outlier_size(&graph, &sizes),
             lcov::unexercised(root, &graph, settings.lcov.as_deref()),
             requirements::workaround(&graph),
+            exemptions::section(root, &graph)?,
             requirements::rewritten(&graph),
             churn::section(root, &graph)?,
             land_time::section(root, settings.land_check_target_seconds)?,
