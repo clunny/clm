@@ -69,7 +69,7 @@ fn removed_capabilities_are_parsed() {
         dir.path(),
         "x",
         "proposed",
-        "removes_capabilities: [watch, old-runner, watch]\n",
+        "removes_capabilities: [watch, old-runner, watch, v2]\n",
     );
     change(dir.path(), "y", "proposed", "");
     change(
@@ -82,7 +82,7 @@ fn removed_capabilities_are_parsed() {
     let (graph, violations) = load(dir.path());
     assert_eq!(
         graph.changes["x"].frontmatter.removes_capabilities,
-        ["watch", "old-runner"]
+        ["watch", "old-runner", "v2"]
     );
     assert!(
         graph.changes["y"]
