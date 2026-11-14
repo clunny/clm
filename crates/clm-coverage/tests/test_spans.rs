@@ -271,3 +271,17 @@ fn scan_holds_the_outside_markers_beside_req() {
     assert_eq!(ids(&scan.req), ["a/in", "a/out"]);
     assert_eq!(ids(&scan.outside), ["a/out"]);
 }
+
+#[test]
+fn rust_one_line_attribute_and_array_signature() {
+    // req:check.coverage/test-spans@2ed7e772
+    let text = "#[test] fn one() {\n}\n#[test]\nfn two(buf: [u8; 4]) {\n    let _ = buf;\n}\n";
+    let found: Vec<_> = spans("t.rs", text)
+        .into_iter()
+        .map(|(n, _, a, b)| (n, a, b))
+        .collect();
+    assert_eq!(
+        found,
+        [("one".to_string(), 1, 2), ("two".to_string(), 3, 6)]
+    );
+}

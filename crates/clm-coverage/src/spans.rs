@@ -112,7 +112,7 @@ fn closing(lines: &[&str], at: usize, open: char, close: char) -> usize {
                 }
             }
         }
-        if !opened && line.contains(';') {
+        if !opened && code(line).trim_end().ends_with(';') {
             return i;
         }
     }
@@ -175,12 +175,12 @@ fn rust_tests(lines: &[&str]) -> Vec<TestSpan> {
             brackets +=
                 code(line).matches('[').count() as i32 - code(line).matches(']').count() as i32;
             let in_attribute = balance_before > 0 || line.trim_start().starts_with("#[");
-            if !in_attribute && brackets <= 0 {
+            if brackets <= 0 {
                 if let Some(name) = fn_name(code(line)) {
                     function = Some((j, name));
                     break;
                 }
-                if !(line.trim().is_empty() || is_comment(line)) {
+                if !in_attribute && !(line.trim().is_empty() || is_comment(line)) {
                     break;
                 }
             }
