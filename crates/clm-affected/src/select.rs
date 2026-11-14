@@ -65,7 +65,7 @@ pub fn select(
                 .iter()
                 .any(|id| nodes.contains(id.split('/').next().unwrap_or(id)))
         };
-        if hit {
+        if hit || (!nodes.is_empty() && exempt_from_undeclared_imports(graph, path)) {
             selected.insert(path.clone());
         }
     }
@@ -73,6 +73,17 @@ pub fn select(
         nodes: nodes.into_iter().collect(),
         files: selected.into_iter().collect(),
     }
+}
+
+/// Whether an exemption of `path`'s owner names it for `undeclared-imports`: it imports code
+/// the graph doesn't connect it to (`affected-files`).
+fn exempt_from_undeclared_imports(graph: &Graph, path: &str) -> bool {
+    clm_check::owner(graph, Path::new(path)).is_some_and(|o| {
+        graph.nodes[o].frontmatter.exemptions.iter().any(|e| {
+            e.rule == clm_model::ExemptRule::UndeclaredImports
+                && e.files.iter().any(|g| clm_check::path_matches(g, path))
+        })
+    })
 }
 
 /// `nodes` and every node that depends on one of them, directly or indirectly.

@@ -64,6 +64,9 @@ pub fn why_chain(
         Some(component) => (vec![format!("{path} cites {component}")], component),
         None => {
             let owner = clm_check::owner(graph, Path::new(path)).expect("a selected file is owned");
+            if !affected.contains(owner) {
+                return vec![format!("{path} exempt from undeclared-imports")];
+            }
             (vec![format!("{path} owned by {owner}")], owner)
         }
     };
