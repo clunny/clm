@@ -216,6 +216,9 @@ class TestThing:
 
 def test_c(): pass
 def other(): pass
+class Tesla:
+    def helper(self):
+        pass
 ";
     assert_eq!(
         spans("test_a.py", text),
