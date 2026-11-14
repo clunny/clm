@@ -260,9 +260,15 @@ fn main_moves_during_the_check(f: &Fixture, first: &str, other: &str) -> clm_lan
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         // The other branch changes no file the readers select.
+        let readers = std::fs::read_to_string(f.path("readers-out"));
         let _ = std::fs::remove_file(f.path("readers-out"));
         let landed = clm_land::land(&b, None, &env).unwrap();
         assert!(landed.lines[0].starts_with("landed "), "{:?}", landed.lines);
+        // The readers' selection is the same again, so that the check can't be skipped
+        // for want of one.
+        if let Ok(readers) = readers {
+            f.write("readers-out", &readers);
+        }
         f.write("release", "");
         land.join().unwrap().unwrap()
     })
@@ -278,6 +284,7 @@ fn main_moved_during_the_check_on_an_unrelated_component() {
     let out = main_moves_during_the_check(&f, "impl/a", "impl/b");
     assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     assert_eq!(f.lines("check-order.log").len(), 2, "one start and its end");
+    assert!(!out.warnings.iter().any(|w| w.contains("main moved")));
     assert_eq!(f.lines("check.log").len(), 1);
     assert!(
         out.warnings.iter().any(|w| w.starts_with("re-check: none")),
@@ -326,6 +333,11 @@ fn main_moved_during_a_readers_check() {
     let out = main_moves_during_the_check(&f, "spec/x", "impl/b");
     assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     assert_eq!(f.lines("check.log").len(), 1);
+    assert!(
+        out.warnings.iter().any(|w| w.starts_with("re-check: none")),
+        "{:?}",
+        out.warnings
+    );
 }
 
 #[test]
@@ -339,6 +351,7 @@ fn main_moved_during_the_check_with_a_dependant_in_common() {
     let out = main_moves_during_the_check(&f, "impl/a", "impl/b");
     assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     assert_eq!(f.lines("check.log").len(), 2, "its check ran twice");
+    assert!(!out.warnings.iter().any(|w| w.contains("main moved")));
     assert_eq!(
         std::fs::read_to_string(f.path("selection-copy")).unwrap(),
         "file crates/c/tests/t.rs\n"
