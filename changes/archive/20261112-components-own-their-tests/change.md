@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-build-has-no-way-to-give-its-component-a-new-test-file, compile-coupled-changes-across-components]
 ---
 
