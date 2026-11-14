@@ -18,10 +18,10 @@ use crate::{Ctx, Error, run, tree};
 const LIMIT: usize = 20;
 
 /// A test citing a requirement at its current version.
-struct Cite {
-    id: String,
-    path: String,
-    name: String,
+pub(crate) struct Cite {
+    pub(crate) id: String,
+    pub(crate) path: String,
+    pub(crate) name: String,
     first: usize,
     last: usize,
 }
@@ -116,7 +116,7 @@ fn run_pass(ctx: &Ctx, state: &State, end: usize, command: &str) -> Result<Vec<S
 
 /// Every test of the tree citing a requirement of a component at its current version, groups
 /// left out (`check.coverage/test-spans`).
-fn cites(dir: &Path, graph: &clm_model::Graph) -> Result<Vec<Cite>, Error> {
+pub(crate) fn cites(dir: &Path, graph: &clm_model::Graph) -> Result<Vec<Cite>, Error> {
     let mut found: Vec<Cite> = Vec::new();
     for path in clm_git::tracked_files(dir)? {
         let Ok(text) = fs::read_to_string(dir.join(&path)) else {
@@ -220,7 +220,7 @@ fn body(text: &str, first: usize, last: usize) -> Vec<String> {
 }
 
 /// A directory for the plan, the result and the diff, in `TMPDIR`.
-fn scratch(ctx: &Ctx) -> Result<tempfile::TempDir, Error> {
+pub(crate) fn scratch(ctx: &Ctx) -> Result<tempfile::TempDir, Error> {
     let parent = (ctx.env)("TMPDIR")
         .filter(|t| !t.is_empty())
         .map_or_else(std::env::temp_dir, PathBuf::from);

@@ -75,6 +75,18 @@ impl Fixture {
             &check,
             &format!("#!/bin/sh\nDIR='{}'\n{CHECK}", d.display()),
         );
+        // The commands a land runs besides the check: a gate that finds a spec branch, a
+        // `clm check` that passes and a selection that names nothing.
+        for (name, body) in [
+            ("gate", "echo spec"),
+            ("clm-check", "exit 0"),
+            ("affected", ":"),
+        ] {
+            write_exec(
+                &f.path(&format!("bin/{name}")),
+                &format!("#!/bin/sh\n{body}\n"),
+            );
+        }
         fs::create_dir_all(f.path("tmp")).unwrap();
         fs::create_dir_all(f.work()).unwrap();
         f.git(&f.work(), &["init", "-q", "-b", "main"]);
@@ -174,6 +186,15 @@ impl Fixture {
         let map: BTreeMap<String, String> = [
             ("HOME", self.dir.path().display().to_string()),
             ("TMPDIR", self.path("tmp").display().to_string()),
+            ("CLM_GATE", self.path("bin/gate").display().to_string()),
+            (
+                "CLM_CHECK",
+                self.path("bin/clm-check").display().to_string(),
+            ),
+            (
+                "CLM_AFFECTED",
+                self.path("bin/affected").display().to_string(),
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))

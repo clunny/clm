@@ -7,6 +7,7 @@
 mod bisect;
 mod chain;
 mod due;
+mod file;
 mod import;
 mod kept;
 mod mutate;
@@ -224,6 +225,17 @@ pub fn verify_announcing(
     announce(&outcome);
     if let Some(end) = outcome.mutate {
         outcome.notes.extend(mutate::pass(&ctx, &state, end));
+    }
+    // What the pass found reaches `main` as backlog items, whether or not a run was due
+    // (`files-unproven`); only a clone in `local` mode holds the right to land them.
+    let dry = matches!(request, Request::Due { dry_run: true, .. });
+    let due = matches!(request, Request::Due { .. });
+    if due
+        && !dry
+        && ctx.verify.mode == clm_config::VerifyMode::Local
+        && ctx.verify.mutate.is_some()
+    {
+        outcome.notes.extend(file::file(&ctx));
     }
     Ok(outcome)
 }
