@@ -90,7 +90,7 @@ impl Line {
 }
 
 /// `clm triage`: the changes holding backlog items, the groups of untaken `bug` items cut
-/// to [`BUDGET`], the untaken `question`, `human-task`, `idea`, `deferred` and `workaround` items,
+/// to [`BUDGET`] (a `bug` holding `unproven` entries is no draft), the untaken `question`, `human-task`, `idea`, `deferred` and `workaround` items,
 /// sorted most urgent first.
 pub fn triage(root: &Path, expiry_hours: u64) -> Result<Triage, Error> {
     let taken = taken_items(root, expiry_hours)?;
@@ -118,6 +118,10 @@ pub fn triage(root: &Path, expiry_hours: u64) -> Result<Triage, Error> {
         // `matches!`, never an exhaustive `match`: a kind the model adds later gets no line.
         let kind = &item.frontmatter.kind;
         if matches!(kind, BacklogKind::Bug) {
+            // Its component's build resolves unproven entries by mending the test.
+            if !item.frontmatter.unproven.is_empty() {
+                continue;
+            }
             groups.entry(nodes).or_default().push(item);
         } else if matches!(kind, BacklogKind::Question | BacklogKind::Human) {
             lines.push(line("human", &item.slug, &nodes, &[item], false));
