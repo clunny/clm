@@ -103,6 +103,8 @@ fn an_edit_of_a_landed_change_releases_nothing() {
 fn a_code_land_releases_nothing() {
     // req:land/landed-change-releases-claims@0e64ba8a
     let f = Fixture::new("");
+    // Even a gate that calls the land a spec land: the branch isn't `spec/*`.
+    f.write("gate-out", "spec\n");
     items(&f);
     f.branch("impl/a", &[("changes/c/change.md", CHANGE)]);
     let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
