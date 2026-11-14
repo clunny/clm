@@ -659,7 +659,7 @@ fn named_unproven() {
 #[test]
 fn unproven_on_another_kind() {
     // req:model/parse-backlog@acf8c931
-    for kind in ["idea", "deferred", "question", "human-task"] {
+    for kind in ["idea", "deferred", "question", "human-task", "workaround"] {
         let text = format!("---\ntitle: T\nkind: {kind}\nunproven: [a/x@0123abcd]\n---\n");
         let dir = repo(&[("backlog/u.md", &text)]);
         let (_, violations) = load(dir.path());
