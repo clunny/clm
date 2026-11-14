@@ -111,3 +111,24 @@ fn a_code_land_releases_nothing() {
     assert!(on_origin(&f, "q"));
     assert!(released(&out).is_empty());
 }
+
+#[test]
+fn skips_what_it_cannot_read_and_names_a_slug_once() {
+    // req:land/landed-change-releases-claims@0e64ba8a
+    let f = Fixture::new("");
+    f.write("gate-out", "spec\n");
+    items(&f);
+    let twice = "---\nstatus: proposed\nfrom: backlog/q\nresolves: [q]\n---\n\nx\n";
+    let other = "---\nstatus: proposed\nfrom: r\nresolves: []\n---\n\nx\n";
+    f.branch(
+        "spec/c",
+        &[
+            ("changes/c/change.md", twice),
+            ("changes/e/change.md", other),
+            ("changes/g/change.md", "no frontmatter\n"),
+        ],
+    );
+    let out = clm_land::land(&f.work(), Some("spec/c"), &f.env(&[])).unwrap();
+    assert_eq!(released(&out), ["released propose/q"], "{:?}", out.warnings);
+    assert!(on_origin(&f, "r"));
+}
