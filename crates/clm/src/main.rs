@@ -1653,6 +1653,7 @@ fn dispatch() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        // `Cli` has no options of its own, so the command's arguments follow `clm affected`.
         Command::Affected(args) => ExitCode::from(clm_affected::command(
             std::env::args_os().skip(2),
             &repo_root(args.root),
@@ -1664,7 +1665,7 @@ fn dispatch() -> ExitCode {
                         clm_check::format(&settings_violation(e, "check.affected/affected-all"))
                     })
             },
-            &mut Stdout,
+            &mut Stdout(std::io::stdout().lock()),
             &mut std::io::stderr(),
         )),
         Command::Machine {
@@ -2397,18 +2398,18 @@ fn health(root: &Path, expiry: u64) -> ExitCode {
 
 /// Standard output for a crate's call: a write that fails panics as `println!` does, so a
 /// reader that has gone ends the command as for any print (`closed-stdout`).
-struct Stdout;
+struct Stdout(std::io::StdoutLock<'static>);
 
 impl std::io::Write for Stdout {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        std::io::stdout()
+        self.0
             .write_all(buf)
             .unwrap_or_else(|e| panic!("failed printing to stdout: {e}"));
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        std::io::stdout()
+        self.0
             .flush()
             .unwrap_or_else(|e| panic!("failed printing to stdout: {e}"));
         Ok(())
