@@ -1,5 +1,6 @@
-//! `clm affected`: the nodes and files a change can break (specs/check/affected/SPEC.md).
+//! `clm affected`: the components and files a change can break (specs/check/affected/SPEC.md).
 
+mod command;
 mod readers;
 mod select;
 mod why;
@@ -11,6 +12,7 @@ use std::path::Path;
 use clm_git::{Error, Failure, Options};
 use clm_model::Graph;
 
+pub use command::{Args, Settings, command};
 pub use readers::{readers, reads_in};
 pub use select::{Changed, Selection, overlap, select};
 pub use why::why_chain;

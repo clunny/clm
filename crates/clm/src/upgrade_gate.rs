@@ -59,12 +59,12 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Verify { root, .. }
         | C::Approve { root, .. }
         | C::Reconnect { root }
-        | C::Affected { root, .. }
         | C::Health { root, .. }
         | C::Workaround { root, .. }
         | C::Unreferenced { root, .. }
         | C::Survey { root, .. }
         | C::Fingerprint { root, .. } => given(root),
+        C::Affected(args) => given(&args.root),
         C::Capabilities {
             command: Some(Capabilities::Decide { root: inner, .. }),
             root,
