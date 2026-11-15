@@ -486,14 +486,7 @@ pub fn prompt(job: &Job) -> String {
          `CAPABILITIES.md` now states it, no longer holds is not such a fix: leave the \
          requirement unbuilt, keeping the behaviour the test checks, and add a `question` \
          backlog item whose `components` name both components, with `blocks` naming the \
-         requirement, and which names the entry, so a spec change edits it. When a requirement \
-         you build changes the text of a file `clm init` writes that projects already hold, \
-         neither it nor the `upgrade` migration that carries the change lands alone, since \
-         the upgrade corpus test fails a land of either half, and `clm land` refuses your \
-         branch when it changes `upgrade`'s files (`path-ownership`, \
-         `template-change-ships-its-migration`): leave the requirement unbuilt and add a \
-         `question` backlog item whose `components` name both components, with `blocks` \
-         naming the requirement, and which names the file and the migration.{waits} Keep the \
+         requirement, and which names the entry, so a spec change edits it. {waits} Keep the \
          code lean and true to the component's Contract and Design, folding in the cleanups the spec asks for. When the list \
          is long, you may open your pull request and land once the tree is green with at most \
          {BUDGET} requirements built, leaving the rest pending for the next run; list what you \
