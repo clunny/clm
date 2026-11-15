@@ -35,11 +35,16 @@ fn every_form_that_takes_a_list_answers_over_the_list_it_is_given() {
         !from_list.is_empty(),
         "the fixture leaves something pending"
     );
-    // Over no migrations nothing is pending, whatever the project holds.
+    // A list of the caller's own is the one each form reads, not the crate's.
+    let one = &own[..1];
+    assert_eq!(latest_in(one), Some(own[0].id));
+    fs::write(b.path().join("clm.toml"), "").unwrap();
+    let few = ids(pending_in(one, pairs, b.path()).unwrap());
     assert!(
-        pending_in(&[], pairs, b.path()).is_err()
-            || ids(pending_in(&[], pairs, b.path()).unwrap()).is_empty()
+        few.len() <= 1 && few.iter().all(|id| *id == own[0].id),
+        "{few:?}"
     );
+    assert!(pending_in(&[], pairs, b.path()).unwrap().is_empty());
     assert_eq!(require_current_in(own, pairs, a.path()), Ok(()));
     let listed = list_in(own, pairs, a.path()).unwrap();
     assert_eq!(listed.lines().count(), from_list.len(), "{listed}");

@@ -50,10 +50,10 @@ fn leftovers(crates: &Path, marker: &str) -> Vec<String> {
         for form in FORMS {
             if own_source {
                 let exported = text.contains(&format!("pub fn {form}("))
-                    || text
-                        .lines()
-                        .filter(|l| l.trim_start().starts_with("pub use"))
-                        .any(|l| words(&l.replace(&format!("{form}::"), "")).contains(&form));
+                    || text.split("pub use ").skip(1).any(|rest| {
+                        let stmt = rest.split(';').next().unwrap();
+                        words(&stmt.replace(&format!("{form}::"), "")).contains(&form)
+                    });
                 if exported {
                     found.push(format!("{shown}: exports `{form}`"));
                 }
