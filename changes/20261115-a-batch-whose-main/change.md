@@ -7,7 +7,7 @@ resolves: [a-batch-whose-main-moved-under-its-check-runs-again-from-nothing]
 
 Lands taken together keep the check they passed when `main` moves under it, as a land alone does: only the tests the lands and `main`'s new commits can both break run again, and the lands still reach `main` in one push. Today such a batch pushes nothing and every land in it runs a check of its own.
 
-This finishes `20261113-land-starvation`, the landing work the human excepted from the plan's freeze on 2026-11-13 and again, for the lands taken together, on 2026-11-15. It adds no new intent: `land`'s Design and the decision `batched-lands` already say a batch keeps its check this way. No requirement said it, so the build left it out.
+This finishes `20261113-land-starvation`, the landing work the human excepted from the plan's freeze on 2026-11-13 and again, for the lands taken together, on 2026-11-15. It adds no new intent: `land`'s Design and the decision `batched-lands` already say a batch keeps its check this way. No requirement said it, so the build left it out. Whether building it is inside that exception is the human's call, so a question item holds the requirement back until they answer.
 
 ## Problem
 
@@ -48,4 +48,4 @@ It is not rare. A land with nothing to check takes only the push turn (`land/pus
 
 ## Open questions
 
-- **Whether this is inside the landing exception to the freeze.** The session read it as inside: it completes a change the exception names, to that change's own Design. The human's approval of this change is the answer; a no leaves the item in the backlog.
+- **Whether this is inside the landing exception to the freeze.** The session read it as inside: it completes a change the exception names, to that change's own Design. An exception is the human's to make, and this change lands on checks with no review, so `backlog/whether-the-batch-s-kept-check-is-inside-the-landing-exception` asks, and blocks `land/batch-keeps-its-check` until it is answered.
