@@ -24,16 +24,26 @@ fn git_leaves_the_directory() {
     std::fs::write(d.join("f"), "x").unwrap();
     let bin = dir.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
+    let real_git = String::from_utf8(
+        std::process::Command::new("which")
+            .arg("git")
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let real_git = real_git.trim();
     let script = format!(
         "#!/bin/sh\n\
          if [ \"$1\" = worktree ] && [ \"$2\" = remove ]; then\n\
-         /usr/bin/git \"$@\"\n\
-         mkdir -p {w}\n\
-         echo x > {w}/f\n\
-         ln -s {d} {w}/out\n\
+         {git} \"$@\"\n\
+         mkdir -p '{w}'\n\
+         echo x > '{w}/f'\n\
+         ln -s '{d}' '{w}/out'\n\
          exit 1\n\
          fi\n\
-         exec /usr/bin/git \"$@\"\n",
+         exec {git} \"$@\"\n",
+        git = real_git,
         w = w.display(),
         d = d.display()
     );

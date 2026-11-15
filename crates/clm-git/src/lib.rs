@@ -732,11 +732,11 @@ pub fn remove_worktree(root: &Path, path: &Path) -> Result<(), Error> {
 fn remove_worktree_within(root: &Path, path: &Path, limit: Duration) -> Result<(), Error> {
     let arg = path.to_string_lossy();
     let resolved = resolve(path);
-    let listed_before = lists_worktree(root, &resolved);
+    let listed_before = lists_worktree(root, &resolved) == Some(true);
     let _ = git(root, &["worktree", "unlock", &arg]);
     make_writable(path);
     let removal = git(root, &["worktree", "remove", &arg]);
-    if exists(path) && listed_before && !lists_worktree(root, &resolved) {
+    if exists(path) && listed_before && lists_worktree(root, &resolved) == Some(false) {
         let started = Instant::now();
         loop {
             make_writable(path);
@@ -778,12 +778,14 @@ fn resolve(path: &Path) -> PathBuf {
 }
 
 /// Whether git lists a worktree at `resolved`, comparing with symbolic links resolved.
-fn lists_worktree(root: &Path, resolved: &Path) -> bool {
-    git(root, &["worktree", "list", "--porcelain"]).is_ok_and(|out| {
-        out.lines()
-            .filter_map(|l| l.strip_prefix("worktree "))
-            .any(|listed| resolve(Path::new(listed)) == resolved)
-    })
+fn lists_worktree(root: &Path, resolved: &Path) -> Option<bool> {
+    git(root, &["worktree", "list", "--porcelain"])
+        .ok()
+        .map(|out| {
+            out.lines()
+                .filter_map(|l| l.strip_prefix("worktree "))
+                .any(|listed| resolve(Path::new(listed)) == resolved)
+        })
 }
 
 /// Gives the owner read, write and execute permission on `dir` and every directory under
@@ -855,7 +857,11 @@ mod tests {
             "{took:?}"
         );
         assert!(w.exists());
-        assert!(!git(&root, &["worktree", "list"]).unwrap().contains("/w\n"));
+        assert!(
+            !git(&root, &["worktree", "list", "--porcelain"])
+                .unwrap()
+                .contains("/w\n")
+        );
     }
 
     #[test]
