@@ -2,7 +2,7 @@
 title: "A passing check proves less than the spec claims, and the spec keeps growing"
 kind: idea
 components: [clm]
-blocks: [capability/measure-by-evals]
+blocks: [capability/measure-by-evals, ci/npm-installs-bounded]
 ---
 
 ## Intent
@@ -32,6 +32,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 - **The landing exception covers step two** (2026-11-15, by the human). The measurement the question item asked for was taken that day from the ledger: 103 lands that ran a check since step one, a busy share of 30% overall (55% in the busiest stretch, 4% in the quietest; the ledger marks no sessions, so a stretch ends where 30 minutes pass between lands), a median check of 94 seconds. Under one half, so batching saves little at this load. The human chose to build it anyway: other projects may run many more builds at once. The question item is deleted and `land`'s next build builds `land/batched-lands`, `land/failed-batch` and `land/unrecorded-land-finished`. What it leans on, test selection that no program checks, is `backlog/no-check-runs-a-test-the-selection-misses`, filed and not built first; the guide's paragraph is `backlog/the-guide-doesn-t-say-waiting-lands-share-one-check`.
 - **Two more exceptions to the freeze** (2026-11-15, by the human). `20261115-a-batch-whose-main` is built as part of the landing exception: lands taken together keep their check when `main` moves under it, which `land`'s Design said and no requirement did, so the build of step two left it out. `20261115-the-build-loop-waits` is built as an exception of its own: the build loop waited 50 minutes on a build that had landed and then couldn't end a drain, and every remaining phase is built through that loop. Both are stated as requirements with scenarios, so a later build or prune can't drop them unseen.
 - **Builds run on `opus`, an exception to the freeze** (2026-11-15, by the human). Builds on `sonnet` made too many mistakes, and every remaining phase is built by them. `20261115-builds-run-on-opus` changes the one fixed value; making it a setting, or a choice per task, is `backlog/every-build-runs-on-one-fixed-model-whatever-the-task`. No measurement backs it yet.
+- **The npm fix waits for the plan's end** (2026-11-15, by the human). `20261115-a-stalled-npm-install` bounds each npm install in the check scripts at 300 seconds; it is not the plan's work, and the human kept the freeze for it. This item blocks its one requirement, `ci/npm-installs-bounded`, in place of the question item that asked. When the plan is done, take `ci/npm-installs-bounded` out of this item's `blocks` and `ci`'s next build builds it. Until then, when the machine sits idle during a verify or a land, find the `npm` process with no CPU time and kill it; the verify or land fails and is run again.
 - **CLM has adopters.** Projects run published releases, so `upgrade` and its migrations stay, and every change in this plan that alters a file, key or format those projects hold ships its migration (`upgrades-carry-migrations`).
 - **`clm land` stays fast.** It gains only checks that take milliseconds. Anything slow runs after the land.
 - **Scope kept.** The web app, Azure DevOps, Codex, the site, blog and analytics, `right-model-per-task` and `watch-machine-load` are in use and stay.
