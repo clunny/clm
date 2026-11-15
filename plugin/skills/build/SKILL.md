@@ -17,7 +17,7 @@ Start the loop with `clm build start --session-model <alias>`, `<alias>` the ali
 - `launch`: start a background subagent with the Agent tool, as a `general-purpose` agent with `isolation: "worktree"` and the line's model, its prompt the named file's text unchanged. Then run `clm build launched <name> <task-id>`. When the line says to run it in the session, do its work here instead.
 - `resume`: send the file's text with `SendMessage`. When it can't be delivered, report it with `clm build returned <name> --result none --cause tool`.
 - `stop`: stop the run with `TaskStop`. Where the agent harness can't stop a subagent, wait for it to return and report it with `--cause stopped`.
-- `run`: run the command as a background Bash command, and report its last line with `clm build returned`.
+- `run`: run the command as a background Bash command. Then run `clm build launched <name> <task-id>` with that command's task ID, so that no later step prints the action again while it runs. Report its last line with `clm build returned`.
 - `wait`: run `clm build wait` as a background Bash command.
 - `say`: show the file's text to the human once.
 - `end`: end the loop.
