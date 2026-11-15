@@ -12,7 +12,7 @@ When a change alters the text of a file `clm init` writes and projects already h
 
 This was an exception of `path-ownership`, beside the re-cited markers and the capability tests, stated by the build prompt alone.
 
-**Ended (2026-11-14, `20261114-proof-switched-on`).** The land now refuses a build's change to another component's files (`own-files-at-the-gate`), and no clause keeps this exception: `init`'s build can no longer write in `upgrade`'s files. The reason above still holds, so neither half lands alone, and a requirement that changes a file `clm init` writes waits behind a question item until the migrations of those files live with them in one component (`backlog/a-template-and-its-migration-live-in-different-components`). That change takes up the option rejected below: the cycle it names is avoided when `upgrade`'s commands are given the list of migrations by their caller.
+**Ended (2026-11-14, `20261114-proof-switched-on`), and answered (`20261114-migrations-with-templates`).** The land now refuses a build's change to another component's files (`own-files-at-the-gate`), and no clause keeps this exception. The reason above still holds, so neither half lands alone; they now land together because they are one component's: a migration written today lives in `init` (`migrations-live-with-init`), and the build that changes a file `clm init` writes writes the migration and its tests in `init`'s own files. That takes up the option rejected below: the cycle it names is avoided because `upgrade`'s engine is given the list of migrations by its caller.
 
 **Rejected.**
 - *Leave the template file out of the corpus comparison while the two builds land.* Weakens the check `upgrades-carry-migrations` rests on, for a window nobody would remember to close.

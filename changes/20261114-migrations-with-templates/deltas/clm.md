@@ -1,0 +1,154 @@
+---
+component: clm
+base: { design: "59eb135eb1a01abb" }
+---
+
+## MODIFIED Design
+The children split the work into deterministic core (`model`, `check` with its children `check.coverage`, `check.affected`, `check.unreferenced` and `check.health`, `apply`, `context`), coordination (`orchestrator` with its children `orchestrator.run`, `orchestrator.checkpoint`, `orchestrator.triage` and `orchestrator.loop`, and `sync` with its child `sync.regenerate`), records and landing (`ledger`, `gate` with its child `gate.fingerprint`, `land` with its child `land.approval`, and `rename`, whose replay the gate trusts), plumbing (`vcs`, `host`), presentation (`view`), integration (`plugin` with `plugin.hooks`, which holds `plugin.hooks.guard` and its `plugin.hooks.guard.shell`, and `plugin.panel`, `ci`, and `web` with `web.worker` (with its children `web.worker.platform` and `web.worker.review`), `web.client-live` and `web.live`), settings (`config`), adoption (`init`), and the capability layer's tests (`capability`). The core has no knowledge of Claude Code, of any host or of the web. The plugin has no logic that must hold, because such logic belongs in the CLI (`deterministic-enforcement`). `web` reuses the core, the queue, the views and the ledger compiled to WebAssembly, so it shows what `clm` would report, and it decides nothing. `crates/clm` only parses arguments and dispatches: `clm config` to `clm-config`, `clm defect` to `clm-hooks`, `clm init`, `clm survey` and `clm guide` to `clm-init`, `clm status` and `clm view` to `clm-view-repo`, `clm land`, `clm approve` and `clm reconnect` to `clm-land`, `clm ledger` to `clm-ledger`, `clm effort`, `clm capabilities` and `clm architecture` to `clm-effort`, `clm machine` to `clm-machine`, passing it `max_builds`, `clm triage`, `clm draft` and `clm intake` to `clm-triage`, passing `clm intake` the `host` setting, `clm build` to `clm-loop`, passing it `max_builds` and its own executable as the `clm` it runs, `clm unreferenced` to `clm-unreferenced`, `clm rename` to `clm-rename`, `clm health` and `clm workaround` to `clm-health`, and `clm pr`, `clm branch` and `clm issue` to `clm-host`, passing each the settings it needs from `config`. Every command with a `--root` option defaults it to the CLM repository found from the current directory as `session-start` finds it: the first of the current directory and its parents that holds `specs/SPEC.md`, looking no further up than the first directory that holds `.git`. With none found, it is the current directory, except for `clm survey` and `clm unreferenced`, which then use the top of the git repository, so `/clm:init` maps the whole repository from any directory (`init-finds-its-repository`), and a project without CLM's specs gets its whole workspace checked. `clm init` takes no `--root`, but writes in the CLM repository found the same way, or at the top of the git repository when there is none (`init/init-root`). Running from a subdirectory then gives the same answer as running from the root. A linked worktree, such as `.clm/worktrees/<change>/<item>`, has its own `.git` file, so the search stays in the worktree. A CLM repository in a subdirectory of a larger git repository still works.
+
+The repo declares its build environment once. `rust-toolchain.toml` pins the Rust toolchain to an exact version, with `rustfmt`, `clippy` and the `wasm32-unknown-unknown` target, and rustup installs it on first use on every machine and in every `clm run` worktree (`pinned-rust-toolchain`). Moving the pin is a code PR that fixes any new lints in the same diff. `.claude/settings.json` lists what unattended sessions may run beyond `clm run`'s own commands: `cargo`, a narrow set of npm commands that can't run a dependency's install script, and `.github/scripts/ci-check.sh`, for a session that runs the script itself (`unattended-commands`). A build runs exactly the checks `clm land` runs with `clm land --check-only` (`land-check-command`): Claude Code's worktree isolation refused the script's path in a build, and the `clm` command names none. The script installs Playwright's browser with `--with-deps` only when `CI` is `true` (`ci/browser-install`), so running it never reaches `sudo`. A test in `crates/clm/tests/` reads both files.
+
+The root `.gitattributes` marks every lockfile the repository tracks, each `Cargo.lock` and each `package-lock.json`, `linguist-generated` (`lockfiles-generated`), so none counts toward its component's size (`check/node-size`): a session never reads a lockfile. The lines are written bare, by file name with no `/` (`Cargo.lock linguist-generated`, `package-lock.json linguist-generated`), so they mark a file of that name at any depth, a new npm package's included, and `git check-attr` reports each as `set`. `crates/clm` also dispatches `clm size` to `clm-check`, and `clm affected` to `clm-affected` with `config`'s `[affected] all` globs, and loads `config`'s `component_size` and passes it to `clm size` and to `clm rebase`'s split-item step, as it passes `detectors` to `clm check`, and loads `config`'s `health` and passes it to `clm health` and to `clm rebase`'s reconsider step the same way (`check.health`).
+
+The root's `paths` name `crates/clm`'s manifest, build script, sources and top-level test files, not the whole crate, so that `crates/clm/tests/capability/`, the capability tests' target, belongs to `capability` alone (`check/paths-disjoint`).
+
+`crates/clm/src/main.rs` is dispatch only, and the build of whichever component gains or changes a command edits it, with `crates/clm/src/upgrade_gate.rs`, the list of commands that run in a project behind on a required migration, and `crates/clm/Cargo.toml`, `Cargo.toml` and `Cargo.lock` when the component adds a crate: the root's own builds cover only the root's requirements. Those five files are the root's `wiring` (`model/wiring-globs`), and naming them turns the land's ownership rule on here (`land/build-holds-own-files`, `own-files-at-the-gate`). They are the files in which each component registers itself with the product; the root's other source files are its own behaviour and stay out (`own-files-at-the-gate` holds the measurement behind the list). `clm.toml` stays out too: it is `config`'s, and each setting this repository makes is a requirement of `config`. `upgrade`'s migrations stay out, and need no entry: a migration written today is `init`'s, beside the file it carries a change of (`migrations-live-with-init`). Two builds in one wave may both touch those files; `clm rebase`'s rebase reports the conflict and the session resolves it.
+
+**Running CLM's own repository on its own build** (`dogfood-from-main`, `dev-install-script`). `scripts/dev-install.sh` is a POSIX `sh` script for clones of CLM's own repository, not something CLM ships or `clm init` writes: it makes a clone's sessions, and only those, run `main`'s `clm` and the checkout's plugin, where they would otherwise run the release; every other project on the machine keeps the release (`dev-install-scoped`). A human runs it once per clone; builds never run it. It works on the clone's *main worktree*, the first worktree `git worktree list --porcelain` lists (as `config` finds it for `clm.local.toml`), whichever worktree it runs from, because Claude Code reads `.claude/settings.local.json` only there and the hook lives in the git directory every worktree shares. It merges JSON with `jq` (`reuse-first`); everything else is `git`, `cargo`, `claude` and `sh`. It installs the binary in `<common>/clm-dev`, in the git directory every worktree shares, at `bin/clm`, which becomes `CLM_BIN`. Its Claude Code marketplace, named `clm-dev`, is the main worktree itself (`dev-marketplace-in-place`): the tracked `.claude-plugin/marketplace.json` with its `name` changed, written to `.clm/dev-marketplace.json` there, which git ignores, and added as a manifest file. Claude Code resolves a manifest file's `./` sources against the folder above the file's own, so the plugins load in place from the main worktree, inside the marketplace's root, and a skill edit applies at the next session. A plugin folder symlinked out of a marketplace doesn't do: Claude Code refuses a plugin hook module whose real path lies outside the marketplace, as the panel's does. The resolution was measured, not documented, so the setup reads `claude plugin list --json` and stops when a `clm-dev` plugin fails to load. `settings.local.json` enables those plugins and turns off their `@clm` namesakes, which the tracked settings enable, and a linked worktree reads that file from the main worktree, so one file covers the clone and its worktrees, while the `clm` marketplace record every project shares stays on GitHub. A plain `clm` outside a session finds nothing: only a session's `PATH` holds the shim. The rebuild installs where the settings' `CLM_BIN` points, so a clone set up before `dev-install-scoped` keeps being rebuilt until its human runs the script again, and `CLAUDE.md` tells a session to ask for that. **The rebuild follows `origin/main`** (`rebuild-on-origin-main`). `main` moves through `clm land`, which pushes it from whichever worktree lands, so the main worktree rarely merges and a `post-merge` hook there misses most of what lands. Every way `main` moves on this clone moves `refs/remotes/origin/main` (a land's push updates it, as does any fetch or pull, a rebasing one included), and a ref update in any worktree runs the `reference-transaction` hook in the git directory they share. So the hook is a `reference-transaction` hook of a few lines: on the `committed` state, when a line of its input names `refs/remotes/origin/main`, it runs the tracked script with `--rebuild`; on anything else it exits at once, since git runs it for every ref update. A change to the rebuild reaches every clone with the next pull, without reinstalling the hook. The hook marks itself with the line `# clm dev-install`, which is how the script tells its own hook from someone else's. The rebuild builds `origin/main`'s commit, not the main worktree's: it keeps its own source, `clm-install-src` in the common git directory, a `git clone --shared --no-checkout` of the clone that borrows its objects, checked out detached at the commit to build, so it never touches a worktree a human or a session works in, and is no worktree of the clone, so nothing that lists worktrees sees it; `build.rs` reads the commit there, so `clm --version` names `origin/main`'s commit. It skips the build when the installed binary's `--version` names `origin/main`'s commit, or a commit from which nothing under `crates/`, `Cargo.toml` or `Cargo.lock` changed. One rebuild runs at a time, holding the lock directory `clm-install.lock` (with its process ID) in the common git directory; a rebuild that finds the lock held by a running process leaves it to that one, which reads `origin/main` again once it has installed and builds again when it moved, so a burst of lands ends with the binary at the last of them. `cargo install` replaces the binary by renaming, so a `clm` already running keeps its own file, and `clm land` runs from a copy of itself (`land/land-binary-copy`). Every setup run deletes a `post-merge` hook holding `# clm dev-install`, which earlier runs wrote.
+
+**Which build runs.** `crates/clm/build.rs` reads the commit the source was built from with `git rev-parse HEAD` in the crate's directory and passes its first 12 hex digits to the compiler; `clm --version` appends it. It finds the worktree's git directory and the common one with `git rev-parse --git-dir --git-common-dir` and declares `cargo:rerun-if-changed` on whichever of these exist: the worktree's `HEAD`, the common directory's `packed-refs`, and its `refs/heads/` directory, which cargo scans recursively and whose entries git replaces by rename on every commit. It never declares a path that doesn't exist, since cargo would then rerun the script, and relink `clm`, on every build. So a commit or a pull rebuilds the string without rebuilding anything else, a detached `HEAD` (`clm land`'s scratch tree, the release checkout) is covered by `HEAD` itself, and a source outside a git checkout, or a machine without `git`, builds with no commit and no error. The string's formatting, `version_string(package_version, commit)`, sits in `crates/clm/src/version.rs`, which `build.rs` includes with `#[path]` and which holds its own unit test; `main.rs` only hands clap the string the build script produced. The build script is not the binary, so `git-through-layer`, which is about what `clm` runs, doesn't cover it. Release binaries are built from a checkout of the release commit and so show it too.
+
+**A reader that leaves** (`closed-stdout`). The Rust runtime ignores `SIGPIPE`, so a print to a stdout whose reader has gone fails, and `println!` turns the failure into a panic wherever it stands. `crates/clm/src/closed_stdout.rs` handles that panic in one place: `main` installs a panic hook, then runs the dispatch inside `catch_unwind`. The hook is silent for a message that is std's `failed printing to stdout: ` with an `(os error N)` for which `std::io::Error::from_raw_os_error(N).kind()` is `BrokenPipe`, since the error's text differs between platforms while its kind doesn't, and passes every other panic to the default hook. `main` exits 141 for that panic, the status a shell reports for a tool `SIGPIPE` killed, which no command's own exit codes use, and resumes unwinding for any other. It unwinds, not exits in the hook, so destructors still remove temporary trees and release locks. std's wording is matched because the toolchain is pinned (`pinned-toolchain`) and the rule's test runs the real binary, so a pin move that changes it fails that test. Every print to stdout is on the main thread. Restoring `SIGPIPE`'s default is not an option: it would also kill `clm` silently when a child that `clm-git`'s `run` feeds exits before reading.
+
+**Component map.** One line per component; each component's Contract says the rest. Adding or splitting a component edits this table, and needs no review.
+
+| Component | Responsibility |
+|---|---|
+| `clm` (root) | The product: plugin + `clm` CLI |
+| `model` | Parse specs and changes into the spec graph; content hashes |
+| `check` | Deterministic checks: schema, graph integrity, drift, test coverage, staleness |
+| `check.coverage` | Markers and coverage: which requirements are current or pending, which changes are complete |
+| `check.affected` | `clm affected`: the components and files a change can break, read from the spec graph, so a land runs only their tests |
+| `check.unreferenced` | `clm unreferenced`: a dead-code detector for public items nothing else in the workspace uses |
+| `check.health` | `clm health`: one advisory report of the repository's health, and `clm workaround`: a build's flag that a requirement was hard to build |
+| `gate` | `clm gate`: whether a branch may land, and whether it needs review |
+| `gate.fingerprint` | `clm fingerprint`: the fingerprint an approval pins, from two tree listings (crate `clm-fingerprint`) |
+| `rename` | `clm rename`: a change's recorded renames carried out across specs, references and test markers, and the replay the gate trusts |
+| `apply` | `clm apply` and `clm hashes`: a change's deltas folded into `specs/` |
+| `context` | Deterministic context assembler (ancestors + one-hop contracts) |
+| `vcs` | The one place that runs `git` and `gh` (crate `clm-git`); every component that shells out calls it |
+| `orchestrator` | Component queue, component and backlog claims, proposals |
+| `orchestrator.run` | `clm run`: the prompt and launch of an unattended build |
+| `orchestrator.checkpoint` | `clm wrap-up`: what a session leaves behind |
+| `orchestrator.triage` | `clm triage` and `clm draft`: the backlog grouped into unattended drafts |
+| `ledger` | Approvals, checks and lands as records in per-writer ledger branches |
+| `land` | `clm land`, `clm approve`, `clm reconnect`: landing on `main` from the machine that runs it |
+| `land.approval` | Whether a branch's diff is approved or held, and `clm approve` (crate `clm-approval`) |
+| `verify` | `clm verify`: a project's slow tests run after the land, at the moments it chooses, and their result recorded |
+| `effort` | `clm effort record`, `clm capabilities` and `clm architecture`: the work each land spent, and what each capability and architectural constraint costs |
+| `machine` | `clm machine`: the machine's CPU load, available memory and free disk over the last 30 minutes, judged against what the clone's builds use |
+| `host` | The host adapter: pull requests, remote branch deletion and issues on GitHub or no host |
+| `view` | Views for people: `clm status` and `clm view` (spec, flight, blockers) as charts, SVG and JSON |
+| `sync` | Git integration: autosync, merge drivers, conflict resolution |
+| `sync.regenerate` | The regenerated `specs/` for `clm rebase` and `clm land`, its stale-delta merges and report (crate `clm-regenerate`) |
+| `plugin` | Claude Code plugin: packaging, shim, skills, subagents |
+| `plugin.hooks` | The rules behind `clm hook session-start`, `clm hook autosync` and `clm defect` |
+| `plugin.hooks.guard` | `clm hook guard`: which Bash commands a session's guard asks about or blocks |
+| `plugin.hooks.guard.shell` | How the guard reads a Bash command as the shell would |
+| `plugin.panel` | The `clm-panel` plugin: `/clm:view` and the CLM pane |
+| `ci` | The release workflow on GitHub Actions, and this repository's check script |
+| `web` | Optional hosted web app: the browser app, the deploy, the invited users |
+| `web.worker` | The Worker behind `web`: sign-in, the API, the webhook, the caches |
+| `web.worker.platform` | The layer the Worker's routes stand on: platform traits, HTTP, access, the GitHub client, file fetches, keys, live state, ledger reading and the web-ledger append |
+| `web.worker.review` | A spec branch in the Worker: the spec-branch list, the review, approve, comments and change requests |
+| `web.client-live` | The browser app's live socket, Notify me switch and push handlers |
+| `web.live` | The pushes from `web`: the Durable Object that tells open pages of changes, and Web Push |
+| `config` | Settings: environment, the clone's `clm.local.toml`, the repo's `clm.toml`, the user's `config.toml`, defaults |
+| `capability` | The capabilities' black-box tests, one file per capability (`human-layer-proof`) |
+| `init` | Adoption: `clm init` sets up a repo's tooling, `clm survey` maps an existing codebase, `clm guide` prints the guide |
+
+## MODIFIED Requirements
+
+### Requirement: upgrade-command <!-- base: 86c8b58ee3389469 -->
+`clm` SHALL dispatch `clm upgrade [--apply | --note <id> | --decline <id> | --lock <version>]` to `clm-upgrade`'s `list_in`, `apply_in`, `note_in` and `decline_in`, giving each `clm-init`'s `migrations()` and `supersedes()` (`init/all-migrations`), for the CLM repository found from the current directory (`root-from-cwd`). `--lock <version>` SHALL refuse a project too new for this binary as the other flags do, then append to `crates/clm-upgrade/migrations.lock` for `upgrade`'s own migrations and to `crates/clm-init/migrations.lock` for `init`'s own, creating the second when `init` holds one and the file doesn't exist, and print `locked <id>` for each line it added. The lock step SHALL be a function of the two crate directories and each crate's own IDs, `upgrade`'s `migrations()` and `init`'s `own_migrations()`, so a test gives it a list. Its build SHALL also bring the helper of `crates/clm/tests/capability/upgrade_clm.rs` that names the newest migration, which reads the highest directory under `crates/clm-upgrade/src/migrations/`, to read the `upgraded` a fresh `clm init` stamps, changing nothing the test observes (`capability-tests-follow-rules`).
+
+#### Scenario: dispatch
+- GIVEN a repository `clm init` has just set up
+- WHEN `clm upgrade` runs in a subdirectory of it
+- THEN it prints `up to date` and exits 0
+
+#### Scenario: a migration of init's is locked
+- GIVEN a copy of the workspace's two crate directories in which `init` holds one migration `z` no lock lists
+- WHEN the lock step runs for version `0.9.0` on the copy
+- THEN `crates/clm-init/migrations.lock` holds one line for `z` naming `0.9.0`, and `crates/clm-upgrade/migrations.lock` gains no line for it
+
+#### Needs
+- init/all-migrations
+- upgrade/migration-list
+- upgrade/upgrade-list
+- upgrade/upgrade-apply
+- upgrade/upgrade-note-and-decline
+- upgrade/shipped-migrations-frozen
+- init/init-stamps-upgraded
+
+#### Serves
+- capability/upgrade-clm
+
+### Requirement: upgrade-blocks-commands <!-- base: 8787b1c67f5b309c -->
+`clm` SHALL call `clm-upgrade`'s `require_current_in`, with `clm-init`'s `migrations()` and `supersedes()` (`init/all-migrations`), before running any command except `--version`, `help`, `status`, `guide`, `upgrade`, `defect`, `config`, `init`, `backlog`, `hook` and `view`, for the command's `--root` when it takes one and is given it, and otherwise for the CLM repository found from the current directory (`root-from-cwd`); outside any CLM repository it SHALL NOT call it. When the call fails, `clm` SHALL print its error to stderr and exit 4 without running the command. A command added later SHALL be blocked unless it is added to that list.
+
+#### Scenario: required migration pending
+- GIVEN a CLM repository with a pending `required` migration
+- WHEN `clm check` runs, then `clm status` and `clm upgrade`
+- THEN `clm check` exits 4, naming the migration and `clm upgrade`, and `clm status` and `clm upgrade` run as usual
+
+#### Scenario: upgraded by a newer clm
+- GIVEN a CLM repository whose `clm.toml` sets `upgraded` to an ID this binary doesn't hold
+- WHEN `clm land` runs
+- THEN it exits 4, saying the project needs a newer `clm`
+
+#### Scenario: advised only
+- GIVEN a CLM repository with only a pending `advised` migration
+- WHEN `clm check` runs
+- THEN it runs as usual
+
+#### Needs
+- init/all-migrations
+- upgrade/require-current
+
+#### Serves
+- capability/upgrade-clm
+
+### Requirement: upgrade-corpus <!-- base: 8a37317b03cde0d7 -->
+For every entry under `crates/clm-upgrade/corpus/`, a copy upgraded with the built `clm upgrade --apply`, and then with `clm upgrade --decline <id>` for each note migration offering the allow rules `clm init` seeds that the `clm upgrade` listing run after that names as pending, `20261107-projects-set-up-before` (`upgrade/migration-unattended-allow-rules`) and `20261112-a-draft-s-clm` (`upgrade/migration-setup-allow-rules`), whose file the comparison leaves out, SHALL be a project where `clm upgrade` prints `up to date`, `clm check` passes, and each file `clm init --lang rust --no-detectors --host none` writes, but `.claude/settings.json` and `specs/SPEC.md`, equals what the built `clm init` writes with those flags in a directory named `project`, as each entry's is. An entry written by a `clm init` that already seeds the allow rules (`init/init-seeds-permissions`) doesn't have such a migration pending, and `clm upgrade --decline` refuses a migration that isn't pending, so the test declines each only for an entry that has it pending; a release records its own entry before its tests run (`ci/release-records-upgrade-corpus`), so every entry from then on is such an entry. `clm.toml` SHALL be compared as parsed TOML, its `upgraded` and `declined_migrations` keys aside. The two files are left out (`corpus-skips-first-run-files`) because, unlike the others, `clm init` writes them only on a first run, before the repository has a `specs/SPEC.md`, and their text depends on the repository it ran in (the root's title and `outside`, the settings Claude Code already held), so no template text exists for a migration's `old` and `new`: a project set up before `init/init-seeds-permissions` has no settings file, so its root component rightly lists none in its `paths`, and the allow rules it lacks are offered by note migrations, which the test declines, since taking it is a hand edit, and checked by `upgrade-covers-allow-rules` instead. The test SHALL hold the IDs of those migrations in one list. A change that adds another note migration offering a text for a file the comparison leaves out SHALL add its ID to this requirement's list, and the root's build adds it to the test's; the migration is `init`'s (`init/all-migrations`), and its requirement SHALL need this one, so the root's test declines the note before the build that writes it lands, the list naming an ID the binary doesn't yet hold being no failure, since the test declines only what the listing names as pending. The test SHALL take the expected files from a function it is given, so a test can show that a template changed without a migration fails it. It lives in `crates/clm/tests/upgrade.rs`, since it runs the built binary.
+
+#### Scenario: every release upgrades
+- GIVEN the corpus entries `v0.14.0` to the latest release
+- WHEN each is upgraded so
+- THEN each ends `up to date`, passes `clm check`, and holds the files `clm init` writes today, `.claude/settings.json` and `specs/SPEC.md` aside
+
+#### Scenario: an entry set up with the allow rules
+- GIVEN an entry packed from a project the built `clm init --lang rust --no-detectors --host none` wrote in a directory named `project`, so neither `20261107-projects-set-up-before` nor `20261112-a-draft-s-clm` is pending for it
+- WHEN the test's check runs on it
+- THEN it runs no `clm upgrade --decline`, and the entry passes: `up to date`, `clm check` passing and the files equal
+
+#### Scenario: a template changed without a migration
+- GIVEN the corpus, and an expected `CLAUDE.md` with one word changed
+- WHEN the test's check runs against it
+- THEN it fails, naming `CLAUDE.md` and the corpus entry
+
+#### Needs
+- upgrade/upgrade-apply
+- upgrade/upgrade-note-and-decline
+- upgrade/corpus-seeded
+- upgrade/migration-carried-constraints-copy
+- upgrade/migration-claude-md-names-help
+- upgrade/migration-check-script-from-root
+- upgrade/migration-unattended-allow-rules
+- upgrade/migration-setup-allow-rules
+- config/upgrade-settings
+- init/init-stamps-upgraded
+
+#### Serves
+- architecture/upgrades-carry-migrations
+- capability/upgrade-clm

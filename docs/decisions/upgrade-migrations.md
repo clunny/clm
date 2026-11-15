@@ -39,3 +39,5 @@ The alternative was no stamp, deriving everything from the files on every comman
 **Not yet:**
 - *Rewriting `specs/`, `changes/` or test markers.* That needs a generated change, as `clm rename` makes, so `specs/` stays derived (`regenerate-dont-merge`). The first migration that needs it designs it (`yagni`).
 - *The gate replaying an upgrade branch,* as it replays a rename. It waits for the same need.
+
+**Refined (2026-11-14, `migrations-live-with-init`).** `clm-upgrade`'s own list is closed at thirteen migrations. A migration written since lives in `init`, which offers the whole list, and `upgrade`'s engine takes the list from its caller. The builder check's question stands; the requirement it adds is `init`'s.
