@@ -317,9 +317,11 @@ dependencies = [
 name = "clm-check"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-apply",
  "clm-coverage",
  "clm-git",
+ "clm-init",
  "clm-model",
  "libc",
  "tempfile",

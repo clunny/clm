@@ -3,6 +3,7 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
 use clm_model::Violation;
@@ -18,13 +19,13 @@ pub struct Detector {
     pub timeout: u64,
 }
 
-/// Runs each detector in order from `root`, without a shell, copying its output to stderr
-/// as it arrives.
-pub fn detectors(root: &Path, list: &[Detector]) -> Vec<Violation> {
-    list.iter().filter_map(|d| run_one(root, d)).collect()
+/// Runs each detector in order from `root`, without a shell, copying its output to `err` as
+/// it arrives.
+pub fn detectors(root: &Path, list: &[Detector], err: &mut dyn Write) -> Vec<Violation> {
+    list.iter().filter_map(|d| run_one(root, d, err)).collect()
 }
 
-fn run_one(root: &Path, d: &Detector) -> Option<Violation> {
+fn run_one(root: &Path, d: &Detector, err: &mut dyn Write) -> Option<Violation> {
     let message = match spawn(root, &d.command) {
         Err(e) => {
             let hint = d
@@ -35,15 +36,18 @@ fn run_one(root: &Path, d: &Detector) -> Option<Violation> {
             format!("{} could not run: {e}{hint}", d.name)
         }
         Ok(mut child) => {
+            let (lines, output) = channel();
             let copies = [
-                child.stdout.take().map(copy_to_stderr),
-                child.stderr.take().map(copy_to_stderr),
+                child.stdout.take().map(|s| copy_lines(s, lines.clone())),
+                child.stderr.take().map(|s| copy_lines(s, lines)),
             ];
             let copies: Vec<_> = copies.into_iter().flatten().collect();
-            let finished = wait_within(&mut child, &copies, Duration::from_secs(d.timeout));
+            let limit = Duration::from_secs(d.timeout);
+            let finished = wait_within(&mut child, &copies, limit, &output, err);
             for copy in copies {
                 let _ = copy.join();
             }
+            drain(&output, err);
             match finished {
                 Err(e) => format!("{} could not run: {e}", d.name),
                 Ok(None) => format!("{} timed out after {}s", d.name, d.timeout),
@@ -91,16 +95,28 @@ fn program_path(root: &Path, program: &str) -> PathBuf {
     }
 }
 
-/// Copies `stream` to our stderr line by line, on a thread of its own.
-fn copy_to_stderr(stream: impl Read + Send + 'static) -> std::thread::JoinHandle<()> {
+/// Sends `stream` to `lines` line by line, on a thread of its own, for the calling thread to
+/// write to its error stream.
+fn copy_lines(
+    stream: impl Read + Send + 'static,
+    lines: Sender<Vec<u8>>,
+) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         let mut reader = BufReader::new(stream);
         let mut line = Vec::new();
         while matches!(reader.read_until(b'\n', &mut line), Ok(n) if n > 0) {
-            let _ = std::io::stderr().lock().write_all(&line);
-            line.clear();
+            if lines.send(std::mem::take(&mut line)).is_err() {
+                return;
+            }
         }
     })
+}
+
+/// Writes every line the copies have sent so far to `err`.
+fn drain(output: &Receiver<Vec<u8>>, err: &mut dyn Write) {
+    for line in output.try_iter() {
+        let _ = err.write_all(&line);
+    }
 }
 
 /// Waits for `child` to exit and its output to be copied until `limit` has passed, then
@@ -111,10 +127,13 @@ fn wait_within(
     child: &mut Child,
     copies: &[std::thread::JoinHandle<()>],
     limit: Duration,
+    output: &Receiver<Vec<u8>>,
+    err: &mut dyn Write,
 ) -> std::io::Result<Option<std::process::ExitStatus>> {
     let deadline = Instant::now() + limit;
     let mut status = None;
     loop {
+        drain(output, err);
         if status.is_none() {
             status = child.try_wait().inspect_err(|_| kill(child))?;
         }

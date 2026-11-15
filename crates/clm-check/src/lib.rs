@@ -14,6 +14,8 @@ mod attributes;
 mod caps;
 #[cfg(feature = "checkout")]
 mod cites;
+#[cfg(feature = "commands")]
+mod commands;
 #[cfg(feature = "checkout")]
 mod dangling;
 #[cfg(feature = "detectors")]
@@ -55,6 +57,11 @@ pub use clm_coverage::{
 #[cfg(feature = "checkout")]
 pub use clm_coverage::{Scan, scan};
 pub use clm_model::Violation;
+#[cfg(feature = "commands")]
+pub use commands::{
+    BacklogArgs, CheckArgs, CheckInputs, CoverageArgs, Env, SizeArgs, backlog_command,
+    check_command, coverage_command, size_command,
+};
 #[cfg(feature = "detectors")]
 pub use detectors::{Detector, detectors};
 pub use imports::undeclared_imports;
