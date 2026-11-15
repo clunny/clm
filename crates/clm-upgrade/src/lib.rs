@@ -10,6 +10,8 @@ mod lock_tests;
 mod migrations;
 #[cfg(test)]
 mod open_list_tests;
+#[cfg(test)]
+mod pairs_tests;
 mod pending;
 #[cfg(test)]
 mod shipped_tests;
