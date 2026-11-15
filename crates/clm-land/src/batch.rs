@@ -181,6 +181,9 @@ impl Part {
     }
 }
 
+/// A land of the chain with the variables its check runs under and what it warns of.
+type Built = (Member, Vec<(String, String)>, Vec<String>);
+
 /// A land of the chain.
 struct Member {
     wanted: Wanted,
@@ -336,7 +339,7 @@ impl Batch<'_, '_, '_> {
         w: &Wanted,
         signed: bool,
         vars0: Option<&[(String, String)]>,
-    ) -> Result<(Member, Vec<(String, String)>, Vec<String>), Error> {
+    ) -> Result<Built, Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
         let (head, on_origin) = repo.approval.head(&w.branch, true)?;
         crate::own_files::check(repo, &w.branch, base, &head)?;
@@ -366,16 +369,7 @@ impl Batch<'_, '_, '_> {
             return Err(Error::Refused("its check environment differs".into()));
         }
         let message = format!("Merge {} into main", w.branch);
-        let commit = repo.git(&[
-            "commit-tree",
-            &tree,
-            "-p",
-            tip,
-            "-p",
-            &head,
-            "-m",
-            &message,
-        ])?;
+        let commit = repo.git(&["commit-tree", &tree, "-p", tip, "-p", &head, "-m", &message])?;
         dir.checkout(&commit)?;
         let judged = judge(
             repo, ctx.exe, dir, fold, &w.branch, tip, &head, signed, true,
@@ -414,7 +408,11 @@ impl Batch<'_, '_, '_> {
         for m in &chain.members {
             let prev = commits.last().unwrap_or(&chain.base).clone();
             let mut message = format!("Merge {} into main", m.wanted.branch);
-            let change = m.judged.changes.first().filter(|_| m.judged.kind == LandKind::Spec);
+            let change = m
+                .judged
+                .changes
+                .first()
+                .filter(|_| m.judged.kind == LandKind::Spec);
             if let Some(id) = change {
                 message.push_str(&format!("\n\nChange: {id}"));
             }
@@ -618,7 +616,11 @@ impl Batch<'_, '_, '_> {
                 code_key: Some(finals.key.clone()),
                 changes: m.judged.changes.clone(),
                 check_seconds: (i == 0).then_some(run.seconds),
-                steps: if i == 0 { run.steps.clone() } else { Vec::new() },
+                steps: if i == 0 {
+                    run.steps.clone()
+                } else {
+                    Vec::new()
+                },
                 recheck: Some(Recheck::Selected),
                 recheck_files: files,
             };

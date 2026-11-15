@@ -222,7 +222,10 @@ fn the_selection_covers_what_two_of_them_share() {
     let outs = land_all(&f, &["a", "b"], held);
     assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
     let copy = std::fs::read_to_string(f.path("selection-copy")).unwrap();
-    assert!(copy.lines().any(|l| l == "file crates/c/tests/t.rs"), "{copy}");
+    assert!(
+        copy.lines().any(|l| l == "file crates/c/tests/t.rs"),
+        "{copy}"
+    );
     assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
 }
 
@@ -270,6 +273,179 @@ fn a_ticket_that_names_no_branch_is_left_to_wait() {
     out.unwrap();
     assert_eq!(starts(&f), 1);
     assert_eq!(f.landed().len(), 1);
+}
+
+/// A `[land] check` that logs `start <tree>` and then, given `body` (a shell fragment run in
+/// the checked tree), exits with its status.
+fn check_with(f: &Fixture, body: &str) {
+    let text = format!(
+        "#!/bin/sh\necho \"start $(git rev-parse 'HEAD^{{tree}}')\" >> '{log}'\n{body}\n",
+        log = f.path("check-order.log").display()
+    );
+    common::write_exec(&f.path("bin/check"), &text);
+}
+
+/// A `clm affected` that names `crates/<n>/tests/t.rs` for a branch that adds `<n>_file.txt`
+/// to the tree, the file `--base` selects (`--overlap` and `--readers` print nothing).
+fn affected_by_files(f: &Fixture, names: &[&str]) -> String {
+    let mut body = String::from(
+        "#!/bin/sh\ncase \" $* \" in *--overlap*|*--readers*|*--why*) exit 0;; esac\n",
+    );
+    for n in names {
+        body.push_str(&format!(
+            "[ -e {n}_file.txt ] && echo 'file crates/{n}/tests/t.rs'\n"
+        ));
+    }
+    body.push_str("exit 0\n");
+    let path = f.path("bin/affected-files");
+    common::write_exec(&path, &body);
+    path.display().to_string()
+}
+
+fn branches(f: &Fixture, names: &[&str]) {
+    for n in names {
+        f.branch(&format!("impl/{n}"), &[(&format!("{n}_file.txt"), "x\n")]);
+    }
+}
+
+fn land_all_env(
+    f: &Fixture,
+    names: &[&str],
+    env: &(impl Fn(&str) -> Option<String> + Sync + 'static),
+) -> Vec<Result<clm_land::Output, clm_land::Error>> {
+    let held = hold(f);
+    std::thread::scope(|s| {
+        let mut runs = Vec::new();
+        for (i, name) in names.iter().enumerate() {
+            let work = f.work();
+            let branch = format!("impl/{name}");
+            runs.push(s.spawn(move || clm_land::land(&work, Some(&branch), env)));
+            wait_for_tickets(&f.work(), i + 1);
+        }
+        drop(held);
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    })
+}
+
+/// The merge commits `main` holds for these branches, newest first.
+fn on_main(f: &Fixture) -> Vec<String> {
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    subjects(f)
+        .into_iter()
+        .filter_map(|s| {
+            s.strip_prefix("Merge ")?
+                .strip_suffix(" into main")
+                .map(str::to_owned)
+        })
+        .collect()
+}
+
+#[test]
+fn the_failed_step_points_at_one_land() {
+    // req:land/failed-batch@b38c0772
+    let f = Fixture::new("");
+    check_with(
+        &f,
+        "if [ -e c_file.txt ]; then echo '::group::unit'; echo '::clm-selected::crates/c/tests/t.rs'; exit 1; fi",
+    );
+    branches(&f, &["a", "b", "c"]);
+    let affected = affected_by_files(&f, &["c"]);
+    let env = f.env(&[("CLM_AFFECTED", &affected)]);
+    let mut outs = land_all_env(&f, &["a", "b", "c"], &env);
+    let c = common::refused(outs.pop().unwrap());
+    assert!(c.contains(&f.check_command()), "{c}");
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    assert_eq!(on_main(&f)[..2], ["impl/b", "impl/a"]);
+    assert!(!on_main(&f).contains(&"impl/c".to_string()));
+    // Together, then the two together again, then `impl/c` alone.
+    assert_eq!(starts(&f), 3, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn no_step_says_who() {
+    // req:land/failed-batch@b38c0772
+    let f = Fixture::new("");
+    check_with(&f, "[ ! -e c_file.txt ]");
+    branches(&f, &["a", "b", "c"]);
+    let mut outs = land_all(&f, &["a", "b", "c"], hold(&f));
+    // `main` is unchanged by the first run: it is `a`'s own, alone, that lands.
+    let c = common::refused(outs.pop().unwrap());
+    assert!(c.contains(&f.check_command()), "{c}");
+    let a = outs.remove(0).unwrap();
+    assert!(
+        a.warnings
+            .iter()
+            .any(|w| w.contains("lands taken together failed")),
+        "{:?}",
+        a.warnings
+    );
+    assert!(outs.pop().unwrap().is_ok());
+    assert_eq!(on_main(&f)[..2], ["impl/b", "impl/a"]);
+    assert_eq!(starts(&f), 4, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn the_holders_own_branch_breaks_the_check() {
+    // req:land/failed-batch@b38c0772
+    let f = Fixture::new("");
+    check_with(&f, "[ ! -e a_file.txt ]");
+    branches(&f, &["a", "b", "c"]);
+    let mut outs = land_all(&f, &["a", "b", "c"], hold(&f));
+    assert!(outs.pop().unwrap().is_ok());
+    assert!(outs.pop().unwrap().is_ok());
+    let a = common::refused(outs.pop().unwrap());
+    assert!(a.contains(&f.check_command()), "{a}");
+    assert_eq!(on_main(&f)[..2], ["impl/c", "impl/b"]);
+    assert_eq!(starts(&f), 4, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn the_failed_step_names_a_path_of_no_land() {
+    // req:land/failed-batch@b38c0772
+    let f = Fixture::new("");
+    check_with(
+        &f,
+        "if [ -e c_file.txt ]; then echo '::group::docs'; echo '::clm-selected::docs/x.md'; exit 1; fi",
+    );
+    branches(&f, &["a", "b", "c"]);
+    let affected = affected_by_files(&f, &["c"]);
+    let env = f.env(&[("CLM_AFFECTED", &affected)]);
+    let mut outs = land_all_env(&f, &["a", "b", "c"], &env);
+    assert!(common::refused(outs.pop().unwrap()).contains(&f.check_command()));
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    // Together, and then each of the three alone.
+    assert_eq!(starts(&f), 4, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn more_than_four_suspects_are_halved() {
+    // req:land/failed-batch@b38c0772
+    let f = Fixture::new("");
+    check_with(&f, "[ ! -e f_file.txt ]");
+    let names = ["a", "b", "c", "d", "e", "f"];
+    branches(&f, &names);
+    let mut outs = land_all(&f, &names, hold(&f));
+    assert!(common::refused(outs.pop().unwrap()).contains(&f.check_command()));
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    assert_eq!(starts(&f), 6, "{:?}", f.lines("check-order.log"));
+    let main = on_main(&f);
+    assert_eq!(
+        main[..5],
+        ["impl/e", "impl/d", "impl/c", "impl/b", "impl/a"]
+    );
+    // `a`, `b` and `c` landed on one check: their records share a key.
+    let keys: Vec<_> = f
+        .landed()
+        .into_iter()
+        .filter_map(|b| match b {
+            Body::Landed {
+                branch, code_key, ..
+            } if ["impl/a", "impl/b", "impl/c"].contains(&branch.as_str()) => code_key,
+            _ => None,
+        })
+        .collect();
+    assert_eq!(keys.len(), 3);
+    assert!(keys.windows(2).all(|w| w[0] == w[1]), "{keys:?}");
 }
 
 #[test]

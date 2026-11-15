@@ -56,6 +56,13 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         let fold = clm_ledger::fold(&repo.root)?;
         // A land that waited for the lock may have been landed by the holder, with the lands
         // taken together on one check (`land/batched-lands`).
+        if let Some(commit) = crate::finish::unrecorded_commit(&repo, &fold, &head)? {
+            return Err(Bail::Unrecorded {
+                commit,
+                head,
+                on_origin,
+            });
+        }
         if woke && let Some(found) = crate::batch::landed_record(&repo, &fold, &branch, &head)? {
             return Err(Bail::Found {
                 found,
@@ -228,7 +235,26 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                     on_origin,
                 }) => {
                     let mut done = std::mem::take(&mut out);
-                    return Ok(finish_found(&repo, &branch, &head, on_origin, &found, &mut done));
+                    return Ok(finish_found(
+                        &repo, &branch, &head, on_origin, &found, &mut done,
+                    ));
+                }
+                Err(Bail::Unrecorded {
+                    commit,
+                    head,
+                    on_origin,
+                }) => {
+                    let ctx = crate::finish::Ctx {
+                        repo: &repo,
+                        exe,
+                        places: &places,
+                        check: check.as_deref(),
+                        branch: &branch,
+                        head: &head,
+                        on_origin,
+                        commit: &commit,
+                    };
+                    return crate::finish::finish(&ctx);
                 }
             }
         };
@@ -702,6 +728,13 @@ enum Bail {
         head: String,
         on_origin: bool,
     },
+    /// The head is on `main` through a merge commit no `landed` record names
+    /// (`land/unrecorded-land-finished`).
+    Unrecorded {
+        commit: String,
+        head: String,
+        on_origin: bool,
+    },
 }
 
 impl From<Error> for Bail {
@@ -724,7 +757,7 @@ impl From<clm_ledger::Error> for Bail {
 
 /// What a land does once the holder has landed it: the branch's deletion, the claims a spec
 /// land releases and a build's disk, and its `landed` line (`land/batched-lands`).
-fn finish_found(
+pub(crate) fn finish_found(
     repo: &Repo,
     branch: &str,
     head: &str,
@@ -820,7 +853,11 @@ pub(crate) fn free_build_target(repo: &Repo, branch: &str, out: &mut Output) {
 }
 
 /// The tree `git merge-tree` writes for `head` merged into `base`, or none when it conflicts.
-pub(crate) fn unconflicted_tree(repo: &Repo, base: &str, head: &str) -> Result<Option<String>, Error> {
+pub(crate) fn unconflicted_tree(
+    repo: &Repo,
+    base: &str,
+    head: &str,
+) -> Result<Option<String>, Error> {
     match clm_git::git(&repo.root, &["merge-tree", "--write-tree", base, head]) {
         Ok(out) => Ok(out.lines().next().map(str::to_string)),
         // Exit 1: conflicts.
@@ -1015,7 +1052,12 @@ pub(crate) const PUSH_RETRY_WAITS: [u64; 2] = [1, 2];
 /// moving, and the base is a refusal for another reason, pushed again after each wait. A
 /// `main` still at the base after the last push is a git failure a rerun can safely retry;
 /// a fetch that fails is one it can't, since the push may have gone through.
-pub(crate) fn push_main(repo: &Repo, merge: &str, base: &str, branch: &str) -> Result<Pushed, Error> {
+pub(crate) fn push_main(
+    repo: &Repo,
+    merge: &str,
+    base: &str,
+    branch: &str,
+) -> Result<Pushed, Error> {
     let lease = format!("--force-with-lease=refs/heads/main:{base}");
     let spec = format!("{merge}:refs/heads/main");
     let mut waits = PUSH_RETRY_WAITS.into_iter();
@@ -1062,7 +1104,13 @@ pub(crate) fn push_main(repo: &Repo, merge: &str, base: &str, branch: &str) -> R
 
 /// Deletes a landed claim branch from `origin`, leased on `head`, and the local branch when
 /// it is checked out nowhere and holds nothing the land didn't; a failure warns.
-pub(crate) fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mut Vec<String>) {
+pub(crate) fn cleanup(
+    repo: &Repo,
+    branch: &str,
+    head: &str,
+    on_origin: bool,
+    warnings: &mut Vec<String>,
+) {
     if !is_claim(branch) {
         return;
     }
@@ -1110,7 +1158,12 @@ pub(crate) fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
 
 /// The ones of `changes` the head adds: neither `changes/<id>/change.md` nor
 /// `changes/archive/<id>/change.md` at the merge base of `base` and `head`.
-pub(crate) fn changes_added(repo: &Repo, base: &str, head: &str, changes: &[String]) -> Vec<String> {
+pub(crate) fn changes_added(
+    repo: &Repo,
+    base: &str,
+    head: &str,
+    changes: &[String],
+) -> Vec<String> {
     let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
         return Vec::new();
     };

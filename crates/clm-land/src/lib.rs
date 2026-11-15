@@ -9,6 +9,7 @@ mod check_log;
 mod check_only;
 mod derived;
 mod exe;
+mod finish;
 mod land;
 mod lock;
 mod own_files;
