@@ -5,9 +5,9 @@ components: [check.unreferenced, clm, check]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
 choices:
-  - "They prove the root's routing: re-cite them to clm's requirements and leave them in crates/clm/tests"
-  - "Keep scenario_named_as_a_detector in the root, move the subdirectory test to clm's root-from-cwd"
-  - "Rewrite both scenarios so the crate's call can prove them, as a spec change"
+  - "Both stay as root tests of routing"
+  - "Detector stays; subdirectory to clm"
+  - "Rewrite both for the crate's call"
 ---
 
 `check.unreferenced/commands-in-crate` moved 11 of the 13 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `check.unreferenced` into `crates/clm-unreferenced/tests/command.rs`. Two stay in `crates/clm/tests/unreferenced.rs`, because what they observe exists only in a `clm` process, so replacing the helper that ran the binary by a call of the crate would change what they assert (the change's "What it removes" says such a test stays and its build files a `question` item that blocks `clm/routes-only`):
