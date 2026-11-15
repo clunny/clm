@@ -30,8 +30,12 @@ pub fn migrations() -> Vec<Migration> {
 
 /// `upgrade`'s pairs followed by this crate's.
 pub fn supersedes() -> Vec<(&'static str, &'static str)> {
+    pairs_with(OWN_SUPERSEDES)
+}
+
+fn pairs_with(own: &[(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
     let mut pairs = clm_upgrade::supersedes().to_vec();
-    pairs.extend_from_slice(OWN_SUPERSEDES);
+    pairs.extend_from_slice(own);
     pairs
 }
 
@@ -108,6 +112,14 @@ mod tests {
         .unwrap();
         let pending = pending_in(&list, &supersedes(), dir.path()).unwrap();
         assert!(pending.iter().any(|m| m.id == "z"), "z is pending");
+    }
+
+    // req:init/all-migrations@acba0c68
+    #[test]
+    fn this_crates_pairs_follow_upgrades() {
+        let pairs = pairs_with(&[("z", "20261105-clm-upgrade")]);
+        assert_eq!(pairs.last(), Some(&("z", "20261105-clm-upgrade")));
+        assert_eq!(pairs[..pairs.len() - 1], clm_upgrade::supersedes()[..]);
     }
 
     // req:init/all-migrations@acba0c68
