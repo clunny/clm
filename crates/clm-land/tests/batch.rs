@@ -151,3 +151,146 @@ fn three_waiting_lands_one_check() {
     let findings = clm_ledger::verify(&f.work(), "origin/main", None, false).unwrap();
     assert!(findings.is_empty(), "{findings:?}");
 }
+
+#[test]
+fn a_land_that_conflicts_with_one_before_it() {
+    // req:land/batched-lands@dbe8f4c4
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.branch("impl/a", &[("a2.txt", "x\n")]);
+    f.branch("impl/b", &[("a.txt", "b\n")]);
+    f.branch("impl/c", &[("a.txt", "c\n")]);
+    let held = hold(&f);
+    let mut outs = land_all(&f, &["a", "b", "c"], held);
+    let c = outs.pop().unwrap();
+    let why = common::refused(c);
+    assert!(why.contains("clm rebase"), "{why}");
+    assert!(outs.iter().all(|o| o.is_ok()));
+    assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    assert_eq!(
+        subjects(&f)[..2],
+        ["Merge impl/b into main", "Merge impl/a into main"]
+    );
+}
+
+#[test]
+fn a_land_the_gate_refuses_once_another_is_merged_before_it() {
+    // req:land/batched-lands@dbe8f4c4
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    f.branch("spec/b", &[("ARCHITECTURE.md", "# b\n")]);
+    // Passes except on `spec/b`'s merge commit when its first parent holds `a_file.txt`.
+    let gate = f.path("bin/gate-b");
+    common::write_exec(
+        &gate,
+        "#!/usr/bin/env bash\n\
+         if [ \"$(git log -1 --format=%s)\" = \"Merge spec/b into main\" ] && \
+         git cat-file -e HEAD^1:a_file.txt 2>/dev/null; then\n\
+         echo 'gate/approval: needs review'; exit 1; fi\n\
+         echo code\n",
+    );
+    let gate = gate.display().to_string();
+    let env = f.env(&[("CLM_GATE", &gate)]);
+    let held = hold(&f);
+    let (a, b) = std::thread::scope(|s| {
+        let a = s.spawn(|| clm_land::land(&f.work(), Some("impl/a"), &env));
+        wait_for_tickets(&f.work(), 1);
+        let b = s.spawn(|| clm_land::land(&f.work(), Some("spec/b"), &env));
+        wait_for_tickets(&f.work(), 2);
+        drop(held);
+        (a.join().unwrap(), b.join().unwrap())
+    });
+    a.unwrap();
+    let why = common::refused(b);
+    assert!(why.contains("gate/approval"), "{why}");
+    assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn the_selection_covers_what_two_of_them_share() {
+    // req:land/batched-lands@dbe8f4c4
+    let f = Fixture::new("");
+    f.write("readers-out", "file crates/a/tests/r.rs\n");
+    f.write("overlap-out", "file crates/c/tests/t.rs\n");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    f.branch("impl/b", &[("b_file.txt", "x\n")]);
+    f.mark_checked("origin/impl/a");
+    f.mark_checked("origin/impl/b");
+    let held = hold(&f);
+    let outs = land_all(&f, &["a", "b"], held);
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    let copy = std::fs::read_to_string(f.path("selection-copy")).unwrap();
+    assert!(copy.lines().any(|l| l == "file crates/c/tests/t.rs"), "{copy}");
+    assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn a_land_with_another_check_environment() {
+    // req:land/batched-lands@dbe8f4c4
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    let text = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
+    f.branch(
+        "impl/b",
+        &[("clm.toml", &format!("{text}\n[env]\nA = \"2\"\n"))],
+    );
+    let held = hold(&f);
+    let outs = land_all(&f, &["a", "b"], held);
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    assert_eq!(starts(&f), 2, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
+fn a_ticket_that_names_no_branch_is_left_to_wait() {
+    // req:land/batched-lands@dbe8f4c4
+    let f = Fixture::new("");
+    f.write("check-sleeps", "1");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    let held = hold(&f);
+    // A ticket of an older `clm`: empty, locked while its run lives.
+    let queue = f.work().join(".clm/land.queue");
+    std::fs::create_dir_all(&queue).unwrap();
+    std::fs::write(queue.join("next"), "1").unwrap();
+    let older = queue.join("00000000000000000000-ordinary-p5");
+    let file = std::fs::File::create(&older).unwrap();
+    file.lock().unwrap();
+    let env = f.env(&[]);
+    let out = std::thread::scope(|s| {
+        let land = s.spawn(|| clm_land::land(&f.work(), Some("impl/a"), &env));
+        wait_for_tickets(&f.work(), 2);
+        drop(held);
+        // The older ticket's turn is first, and its run never takes the lock: it ends.
+        std::thread::sleep(Duration::from_millis(500));
+        drop(file);
+        land.join().unwrap()
+    });
+    out.unwrap();
+    assert_eq!(starts(&f), 1);
+    assert_eq!(f.landed().len(), 1);
+}
+
+#[test]
+fn a_land_alone_lands_as_before() {
+    // req:land/batched-lands@dbe8f4c4
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    let out = clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
+    assert!(landed_lines(&out).starts_with("landed "));
+    let landed = f.landed();
+    assert_eq!(landed.len(), 1);
+    let Body::Landed {
+        check_seconds,
+        recheck,
+        ..
+    } = &landed[0]
+    else {
+        panic!()
+    };
+    assert!(check_seconds.is_some());
+    assert_eq!(*recheck, Some(Recheck::Selected));
+    assert_eq!(starts(&f), 1);
+    assert_eq!(f.parents(&f.work(), "origin/main").len(), 2);
+}

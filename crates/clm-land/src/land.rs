@@ -214,6 +214,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     // Whether the lock was waited for, so the next preparing looks for a land taken together
     // with the holder's (`land/batched-lands`).
     let mut woke = false;
+    // The rank the lock was just taken in, until the lands waiting for it are looked at.
+    let mut lock_rank: Option<Rank> = None;
     // Prepares an attempt, and ends the land when the holder landed this branch.
     macro_rules! prepared {
         ($woke:expr) => {
@@ -256,31 +258,35 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
             }
             if check_runs(&p) {
                 lock = Some(held);
-                // The lands waiting for the lock land with this one (`land/batched-lands`).
-                if let (Some(held), Some(check)) = (&lock, &check) {
-                    let ctx = crate::batch::Ctx {
-                        repo: &repo,
-                        exe,
-                        places: &places,
-                        target,
-                        check,
-                        branch: &branch,
-                        held,
-                        effort: &effort,
-                        rank,
-                    };
-                    match crate::batch::run(&ctx)? {
-                        crate::batch::Outcome::Landed(mut done) => {
-                            out.warnings.append(&mut done.warnings);
-                            done.warnings = std::mem::take(&mut out.warnings);
-                            return Ok(done);
-                        }
-                        crate::batch::Outcome::Proceed => {}
-                        crate::batch::Outcome::Restart(mut said) => {
-                            out.warnings.append(&mut said);
-                            continue;
-                        }
-                    }
+                lock_rank = Some(rank);
+            }
+        }
+        // The lands waiting for the lock land with this one, once, as it takes the lock
+        // (`land/batched-lands`).
+        if let (Some(rank), Some(held), Some(check), Some(target)) =
+            (lock_rank.take(), &lock, &check, &target)
+        {
+            let ctx = crate::batch::Ctx {
+                repo: &repo,
+                exe,
+                places: &places,
+                target,
+                check,
+                branch: &branch,
+                held,
+                effort: &effort,
+                rank,
+            };
+            match crate::batch::run(&ctx)? {
+                crate::batch::Outcome::Landed(mut done) => {
+                    out.warnings.append(&mut done.warnings);
+                    done.warnings = std::mem::take(&mut out.warnings);
+                    return Ok(done);
+                }
+                crate::batch::Outcome::Proceed => {}
+                crate::batch::Outcome::Restart(mut said) => {
+                    out.warnings.append(&mut said);
+                    continue;
                 }
             }
         }
@@ -503,6 +509,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 let held = lock::land(target, check_rank, &branch)?;
                 let waited = held.waited;
                 lock = Some(held);
+                lock_rank = Some(check_rank);
                 drop(temp.take());
                 // The land it waited for moved `main` meanwhile: merge with that one
                 // (`land/land-target-lock`).
