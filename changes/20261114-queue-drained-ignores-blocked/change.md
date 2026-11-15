@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [the-queue-drained-trigger-never-fires-while-any-requirement-is]
 ---
 
