@@ -16,7 +16,7 @@ That cost has changed. `#### Needs` orders builds across components (`needs-alon
 
 The builder check, which already searches other components' code for uses of what a change removes or widens, writes the steps. A tie it misses makes the build stop with a `question` item, and a small spec change adds the missing step. That's slower than a forced fix, but it's visible and leaves no build in another component's files.
 
-Two ties don't sequence, because `main` fails between the halves. **A capability test and the behaviour it observes** stay a permanent exception: a capability test observes the whole product, so it is atomic with any behaviour at the boundary (`capability-tests-follow-rules`). **A template `clm init` writes and its `upgrade` migration** stay an exception until the line between the components moves so that both live in one component (`backlog/a-template-and-its-migration-live-in-different-components`).
+Two ties don't sequence, because `main` fails between the halves. **A capability test and the behaviour it observes** stay a permanent exception: a capability test observes the whole product, so it is atomic with any behaviour at the boundary (`capability-tests-follow-rules`). **A template `clm init` writes and its `upgrade` migration** stayed an exception until the line between the components moved: since `20261114-migrations-with-templates` a migration written today lives in `init`, beside the file (`migrations-live-with-init`).
 
 Rejected:
 - **A `#### Touches` block per requirement, naming the other components its build edits and claiming them with it.** It makes the reaching-out declared and safe from parallel builds, but builds still edit files they don't own.
