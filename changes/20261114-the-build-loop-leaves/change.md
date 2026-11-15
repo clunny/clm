@@ -25,7 +25,8 @@ Is the design wrong? The loop's part is right: it finishes a run through `orches
 ## Outcome
 
 - `vcs`: the requirement `remove-worktree` states the second removal, its two guards (git listed the worktree before and no longer does), the 5 seconds and what it returns; the Design says why.
-- `orchestrator.run/run-finish` and `orchestrator.checkpoint/checkpoint` stay true as written: they still print `left <path>: ...` when `remove_worktree` returns an error, which now happens only for what can't be removed. Their tests of that line (a parent directory nobody can write to; a `git` that refuses) still hold, the first taking 5 seconds longer.
+- `vcs`: the limit is an argument of a function the crate doesn't export, so the tests of a directory nothing can remove wait milliseconds (`land-checks-stay-fast`, an audit finding).
+- `orchestrator.run/run-finish` and `orchestrator.checkpoint/checkpoint`: their rules stay as written, since they still print `left <path>: ...` when `remove_worktree` returns an error. Their scenarios of that line said the worktree was one `git worktree remove` "refuses or can't delete", and one git can't delete is now mostly removed, so each is narrowed to a `git` that refuses the worktree and leaves it listed (`spec-is-current`, an audit finding). `orchestrator.run`'s test of it moves from a parent directory nobody can write to, which would now wait 5 seconds, to such a `git`, as `orchestrator.checkpoint`'s already has; `orchestrator.run`'s Design says of `still on disk` what `vcs`'s now says.
 - `orchestrator.loop` doesn't change: it still passes a `left` line to a `say`, for the cases below.
 
 ## Constraints
