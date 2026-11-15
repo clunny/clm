@@ -25,7 +25,7 @@ fn project(config: &str) -> TempDir {
     dir
 }
 
-// req:clm/upgrade-blocks-commands@8787b1c6
+// req:clm/upgrade-blocks-commands@7672f217
 #[test]
 fn a_project_upgraded_by_a_newer_clm_stops_land_but_not_status() {
     let dir = project("upgraded = \"99990101-from-the-future\"\n");
@@ -38,7 +38,7 @@ fn a_project_upgraded_by_a_newer_clm_stops_land_but_not_status() {
     assert_ne!(status.status.code(), Some(4));
 }
 
-// req:clm/upgrade-blocks-commands@8787b1c6
+// req:clm/upgrade-blocks-commands@7672f217
 #[test]
 fn a_project_with_nothing_pending_runs_commands_and_a_non_project_is_not_judged() {
     let ok = project("defects = \"ask\"\n");

@@ -974,7 +974,10 @@ fn main() -> ExitCode {
 fn dispatch() -> ExitCode {
     let command = Cli::parse().command;
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    if let Some(error) = upgrade_gate::blocked(&command, &cwd, clm_upgrade::require_current) {
+    let required = |root: &Path| {
+        clm_upgrade::require_current_in(&clm_init::migrations(), &clm_init::supersedes(), root)
+    };
+    if let Some(error) = upgrade_gate::blocked(&command, &cwd, required) {
         eprintln!("{error}");
         return ExitCode::from(4);
     }
