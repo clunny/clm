@@ -28,7 +28,7 @@ It is not rare. A land with nothing to check takes only the push turn (`land/pus
 ## Outcome
 
 - When `main` moved while the check of lands taken together ran, the lands reach `main` in one push after at most an overlap check, each with its own merge commit, `landed` record and `landed` line.
-- When the rebuilt chain can't stand for what was checked (a land the new `main` refuses or conflicts with, a `main` whose code no `checked` record names, a changed check environment, a failed `--overlap`, or `main` moving once more before the push), the batch pushes nothing and its lands go on as they do today: the holder alone at once, the others on their own turns.
+- When the rebuilt chain can't stand for what was checked (a land the new `main` refuses or conflicts with, a `main` whose code no `checked` record names, a changed check environment or a failed `--overlap`), the batch pushes nothing and its lands go on as they do today: the holder alone at once, the others on their own turns.
 - When the overlap's check fails, every land taken is a suspect of a failed batch.
 - `land`'s Design gains the detail the build needs. Its Contract is unchanged, since it already says a land whose check passed runs again only the overlap.
 
@@ -41,11 +41,15 @@ It is not rare. A land with nothing to check takes only the push turn (`land/pus
 ## Edge cases
 
 - A land the rebuilt chain would have to leave out: the batch gives way, as above.
-- `main` moves again between the re-check and the push, which only a push from another clone or an older `clm` can do inside the push turn: the batch gives way. A land alone goes round again; a batch doesn't, so the holder's turn stays short.
+- `main` moves again between the re-check and the push, which only a push from another clone or an older `clm` can do inside the push turn: the batch goes round again with the commit it last checked, as a land alone does, and gives way after ten rounds.
 - The rebuilt tip's code key already counts as checked: no composed record is appended.
 - Lands taken together again after a failed batch, or as a half, are lands taken together: the rule holds for them too.
 - A chain of one (a land taken alone after others were left out) is not a batch and lands as `overlap-recheck` says.
 
 ## Open questions
+
+- **A batch that gives way costs more than a land alone does** (the audit, against `batched-lands`' "a push from another clone costs a batch what it costs any land"). Left as designed: when the new `main` refuses or conflicts with one land, the tree without that land is one no check ran on, so the holder can't keep the check for itself either. The decision's sentence holds whenever every land still merges.
+- **No scenario moves `main` a second time.** Inside the push turn only another clone or an older `clm` can do it, so a test needs a remote that moves `main` when pushed to. The build proves the round with such a fixture or flags the clause.
+- **The guide.** `backlog/the-guide-doesn-t-say-waiting-lands-share-one-check` now also asks for a sentence on this rule.
 
 - **Whether this is inside the landing exception to the freeze.** The session read it as inside: it completes a change the exception names, to that change's own Design. An exception is the human's to make, and this change lands on checks with no review, so `backlog/whether-the-batch-s-kept-check-is-inside-the-landing-exception` asks, and blocks `land/batch-keeps-its-check` until it is answered.
