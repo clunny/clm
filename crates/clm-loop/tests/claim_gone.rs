@@ -98,6 +98,22 @@ fn a_claim_gone_with_nothing_landed() {
 }
 
 #[test]
+fn an_orphan_is_finished_and_its_left_lines_are_said() {
+    // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
+    let fx = Fixture::new();
+    running(&fx, "t-1");
+    fx.change_run("build:a", |r| r.orphan = true);
+    fx.drop_claim("a");
+    fx.set("finish-a", "left notes.txt: not committed\n");
+
+    let actions = step(&fx.options()).unwrap();
+
+    assert_eq!(fx.ran("run --finish a"), 1);
+    assert!(said(line(&actions, "say ")).contains("left notes.txt: not committed"));
+    assert_eq!(fx.file().run("build:a").unwrap().state, RunState::Returned);
+}
+
+#[test]
 fn a_live_claim() {
     // req:orchestrator.loop/claim-gone-ends-a-build@e8bba4fc
     let fx = Fixture::new();
