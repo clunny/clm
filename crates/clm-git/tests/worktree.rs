@@ -26,7 +26,7 @@ fn mode(p: &Path) -> u32 {
 
 #[test]
 fn unwritable_directory_removed() {
-    // req:vcs/remove-worktree@ff9f14fb
+    // req:vcs/remove-worktree@ca5e9717
     let (dir, w) = setup();
     let root = dir.path().join("r");
     sh(&root, &["worktree", "lock", w.to_str().unwrap()]);
@@ -42,7 +42,7 @@ fn unwritable_directory_removed() {
 
 #[test]
 fn symbolic_link_not_followed() {
-    // req:vcs/remove-worktree@ff9f14fb
+    // req:vcs/remove-worktree@ca5e9717
     let (dir, w) = setup();
     let root = dir.path().join("r");
     let d = dir.path().join("d");
@@ -59,7 +59,7 @@ fn symbolic_link_not_followed() {
 
 #[test]
 fn git_refuses() {
-    // req:vcs/remove-worktree@ff9f14fb
+    // req:vcs/remove-worktree@ca5e9717
     let (dir, w) = setup();
     let root = dir.path().join("r");
     std::fs::write(w.join("untracked.txt"), "u").unwrap();
@@ -70,9 +70,42 @@ fn git_refuses() {
 
 #[test]
 fn still_on_disk_displays_path() {
-    // req:vcs/remove-worktree@ff9f14fb
+    // req:vcs/remove-worktree@ca5e9717
     let e = Error::StillOnDisk {
         path: "/x/w".into(),
     };
     assert_eq!(e.to_string(), "/x/w: still on disk");
+}
+
+#[test]
+fn removable_only_later() {
+    // req:vcs/remove-worktree@ca5e9717
+    let (dir, w) = setup();
+    let root = dir.path().join("r");
+    let parent = dir.path().to_path_buf();
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+    let giver = parent.clone();
+    let handle = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::fs::set_permissions(&giver, std::fs::Permissions::from_mode(0o700)).unwrap();
+    });
+    let result = remove_worktree(&root, &w);
+    handle.join().unwrap();
+    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+    result.unwrap();
+    assert!(!w.exists());
+    assert!(!sh(&root, &["worktree", "list"]).contains("/w "));
+}
+
+#[test]
+fn not_a_worktree() {
+    // req:vcs/remove-worktree@ca5e9717
+    let (dir, _w) = setup();
+    let root = dir.path().join("r");
+    let d = dir.path().join("d");
+    std::fs::create_dir(&d).unwrap();
+    std::fs::write(d.join("f"), "x").unwrap();
+    let err = remove_worktree(&root, &d).unwrap_err();
+    assert!(err.to_string().contains("git worktree remove"), "{err}");
+    assert!(d.join("f").exists());
 }
