@@ -907,11 +907,12 @@ fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
 
 /// A directory holding a `git` that, before it runs the first `push` naming `origin`, runs
 /// `before` (shell, with `$real` the real git and `$origin` the bare repository), and for
-/// `fail` instead fails every such `push` with that stderr and exit status.
+/// `fail` runs `before` and then fails every such `push` with that stderr and exit status,
+/// never running the real one.
 fn pushing_git(origin: &Path, before: &str, fail: Option<(&str, i32)>) -> TempDir {
     let bin = TempDir::new().unwrap();
     let on_push = if let Some((stderr, status)) = fail {
-        format!("echo '{stderr}' >&2\nexit {status}\n")
+        format!("{before}\necho '{stderr}' >&2\nexit {status}\n")
     } else {
         format!("[ -e \"$flag\" ] || {{ : > \"$flag\"\n{before}\n}}\n")
     };
@@ -1072,6 +1073,36 @@ fn origins_refusal_while_it_holds_the_tip_is_gits_failure() {
     claim_and_landed_branch(&r);
     let refused = (" ! [remote rejected] propose/q (failed to update ref)", 1);
     let bin = pushing_git(&r.origin, "", Some(refused));
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(!out.contains("wrap-up ok"), "{out}");
+    assert_eq!(code, Some(2), "{out}");
+    assert!(exists(&r.origin, "refs/heads/propose/q"));
+}
+
+/// The line a hosted `origin` was seen to answer with, which names the delete and gives its
+/// own reason, where a local `origin` prints the branch alone.
+const REFUSED_BY_A_HOST: &str = " ! [remote rejected] (delete) -> propose/q (cannot lock ref \
+     \"refs/heads/propose/q\": unable to resolve reference \"refs/heads/propose/q\")";
+
+#[test]
+fn a_hosts_refusal_of_a_branch_it_no_longer_has_counts_as_done() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let bin = pushing_git(&r.origin, DELETE_Q, Some((REFUSED_BY_A_HOST, 1)));
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(!out.lines().any(|l| l.contains("removed origin/propose/q")));
+    assert!(!out.contains("cannot lock ref"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+    assert!(!exists(&r.origin, "refs/heads/propose/q"));
+}
+
+#[test]
+fn a_hosts_refusal_while_it_holds_the_tip_is_gits_failure() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let bin = pushing_git(&r.origin, "", Some((REFUSED_BY_A_HOST, 1)));
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
     assert!(!out.contains("wrap-up ok"), "{out}");
     assert_eq!(code, Some(2), "{out}");
