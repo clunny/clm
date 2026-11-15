@@ -2,7 +2,7 @@
 title: Checkpoint
 status: active
 owners: ["@clunny"]
-depends_on: [orchestrator, ledger, check, vcs, model]
+depends_on: [orchestrator, ledger, check, check.coverage, vcs, model]
 paths: ["crates/clm-checkpoint/**"]
 successor: ""
 serves: [capability/wrap-up-session, architecture/git-is-truth]

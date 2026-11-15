@@ -2,7 +2,7 @@
 title: Run
 status: active
 owners: ["@clunny"]
-depends_on: [orchestrator, context, check, config, vcs, model]
+depends_on: [orchestrator, context, check, check.coverage, config, vcs, model]
 paths: ["crates/clm-run/**"]
 successor: ""
 serves: [capability/build-from-spec]

@@ -3,7 +3,7 @@ title: "Tests of components with no crate sit in the root's top-level test files
 kind: deferred
 components: [ci, plugin, plugin.agents, plugin.panel]
 origin: 20261115-tests-in-their-own-files
-blocks: [clm/routes-only]
+blocks: [clm/routes-only, gate/own-files]
 ---
 
 144 tests in `crates/clm/tests/` prove `ci` (121, in `ci_check.rs`, `release_workflow.rs` and `community_files.rs`), `plugin` (18, in `plugin.rs`), `plugin.agents` (4, in `plugin_agents.rs`) and `plugin.panel` (1, in `plugin.rs`). None runs the `clm` binary: they read workflows, scripts and plugin files. The files are the root's, so each build of those components edits a file it doesn't own, which only the clause "a file that cites the component" lets through (`own-files-at-the-gate`).

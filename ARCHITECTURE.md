@@ -248,7 +248,7 @@ A writing discipline; `clm apply` deletes what a change removes.
 That a build works through its component highest priority first is a session's conduct.
 
 ### Constraint: path-ownership
-**Checked.** Every code file SHALL have one owning component, and once the root names its `wiring`, a build SHALL change only its own component's files; a change that another component must follow is built in steps, each by its owner's build (`expand-contract`). What else a build may change, the wiring and the tests that cite it, is in the guide (`clm guide how-it-works`).
+**Checked.** Every code file SHALL have one owning component, and once the root names its `wiring`, a build SHALL change only its own component's files; a change that another component must follow is built in steps, each by its owner's build (`expand-contract`). What else a build may change is in the guide (`clm guide how-it-works`).
 
 #### Scenario: removal another component still uses
 - GIVEN a build of `a` whose requirement removes a Contract function that component `b`'s code still calls, and no requirement of `b` that moves it off

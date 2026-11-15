@@ -2,7 +2,7 @@
 title: Orchestrator
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, context, gate, vcs]
+depends_on: [model, check, check.coverage, context, gate, vcs]
 paths: ["crates/clm-orchestrator/**"]
 successor: ""
 serves: [capability/build-from-spec, capability/work-concurrently, architecture/component-reconciliation]

@@ -2,7 +2,7 @@
 title: View
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, orchestrator, context, vcs]
+depends_on: [model, check, check.coverage, orchestrator, context, vcs]
 paths: ["crates/clm-view/**"]
 successor: ""
 serves: [capability/see-project-state]

@@ -3,7 +3,7 @@ title: "Some tests prove a component from another component's files"
 kind: deferred
 components: [view, check.coverage, upgrade, land.approval, apply, view.repo, land]
 origin: 20261115-tests-in-their-own-files
-blocks: [clm/routes-only]
+blocks: [clm/routes-only, gate/own-files]
 ---
 
 Beside the tests that `commands-in-crate` moves, these prove a requirement from a file its component doesn't own, which only the clause "a file that cites the component" lets a build change (`own-files-at-the-gate`). Measured on `main` at `4f96740b`:

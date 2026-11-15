@@ -2,7 +2,7 @@
 title: View repository
 status: active
 owners: ["@clunny"]
-depends_on: [view, model, check, orchestrator, orchestrator.loop, vcs]
+depends_on: [view, model, check, check.coverage, orchestrator, orchestrator.loop, vcs]
 paths: ["crates/clm-view-repo/**"]
 successor: ""
 serves: [capability/see-project-state]

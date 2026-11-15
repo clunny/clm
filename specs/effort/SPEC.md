@@ -2,7 +2,7 @@
 title: Effort
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, ledger, config, vcs]
+depends_on: [model, check, check.coverage, ledger, config, vcs]
 paths: ["crates/clm-effort/**"]
 successor: ""
 serves: [capability/review-capability-cost, architecture/effort-accounted]
