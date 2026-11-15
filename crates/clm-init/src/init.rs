@@ -134,9 +134,10 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
         paths: Vec::new(),
     };
 
+    let migrations = crate::migrations();
     let toml = clm_toml(
         host,
-        clm_upgrade::latest(),
+        clm_upgrade::latest_in(&migrations),
         &langs,
         if opts.detectors { &langs } else { &[] },
     );
@@ -719,7 +720,7 @@ mod tests {
 
     #[test]
     fn clm_toml_is_stamped_with_the_newest_migration() {
-        // req:init/init-stamps-upgraded@37a0167c
+        // req:init/init-stamps-upgraded@e2f11c8e
         let text = clm_toml(Host::None, Some("20261105-x"), &[], &[]);
         let table: toml::Table = text.parse().unwrap();
         assert_eq!(table["upgraded"].as_str(), Some("20261105-x"));
