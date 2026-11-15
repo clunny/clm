@@ -1026,7 +1026,7 @@ Before running any command except `--version`, `help`, `guide` and `hook`, in a 
 #### Scenario: under Claude Code
 - GIVEN `CLAUDECODE=1`
 - WHEN `clm agent-harness` runs
-- THEN it prints `agent harness claude-code`, `confirm yes` and `build-model sonnet`
+- THEN it prints `agent harness claude-code`, `confirm yes` and `build-model <model>`, `<model>` the build model `agent-harness/abilities` gives Claude Code
 
 #### Needs
 - agent-harness/detect
