@@ -16,7 +16,7 @@ Phase 4 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims
 
 ## What it removes
 
-One requirement, `check/path-ownership`, whose every statement another requirement holds after this change. Its tests are deleted by `check`'s build as `obsolete`; the tests of `check.coverage/owner` prove `owner` and `matches` in `clm-coverage`'s own crate. The human agreed to this removal with `20261115-builds-change-only-their-own-files`, on whose branch this change was proposed.
+One requirement, `check/path-ownership`. What it states of `owner` and of matching one glob, `check.coverage/owner` holds after this change, with both scenarios and its `capability/work-concurrently` purpose. Not carried, since they state no behaviour: the name `path_matches` for `matches`, and the sentences "`scan(root)` stays public as it is" and "`size`'s counting is unchanged". Two sentences that only say a function is re-exported go too: the first of `check/coverage-lists`, and "re-exported through `clm-check`" in `check.coverage/state-names`. Its tests are deleted by `check`'s build as `obsolete`; the tests of `check.coverage/owner` prove `owner` and `matches` in `clm-coverage`'s own crate. The human agreed to this removal with `20261115-builds-change-only-their-own-files`, on whose branch this change was proposed.
 
 ## Constraints
 
