@@ -96,10 +96,10 @@ fn scenario_a_command_called_in_a_test() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), want);
     assert_eq!(String::from_utf8_lossy(&out.stderr), "");
 
-    // `--root` overrides the root the caller found, and `--expiry` is read.
+    // With no `--root`, the root the caller found; the first call passed `/nonexistent` and `--root`.
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let status = clm_health::health_command(
-        ["--expiry", "4"],
+        std::iter::empty::<&str>(),
         dir.path(),
         Ok(common::settings(12000, 40000)),
         &|_| None,
