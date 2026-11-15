@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 priority: P1
 from: backlog/queued-lands-each-run-a-full-check
 resolves: [a-land-with-a-full-check-to-run-can-lose-every-attempt-to-lands]

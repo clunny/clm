@@ -3,11 +3,13 @@
 //! through `clm-git`, the ledger through `clm-ledger`, branch deletion through `clm-host`; the
 //! gate and `clm check` run as commands from a copy of this binary (`exe`).
 
+mod batch;
 mod cap;
 mod check_log;
 mod check_only;
 mod derived;
 mod exe;
+mod finish;
 mod land;
 mod lock;
 mod own_files;
@@ -158,7 +160,20 @@ impl<'a> Repo<'a> {
     /// The gate on `dir`'s HEAD against the base, run from `exe` unless `CLM_GATE` names it,
     /// refused with what it printed when it blocks.
     fn gate(&self, exe: &Path, dir: &Path, approved: bool, hint: &str) -> Result<Verdict, Error> {
-        let mut args = vec!["--base", self.base()];
+        self.gate_on(exe, dir, self.base(), approved, hint)
+    }
+
+    /// As `gate`, against `base`: a land taken with others is judged against the commit
+    /// before its merge commit (`land/batched-lands`).
+    fn gate_on(
+        &self,
+        exe: &Path,
+        dir: &Path,
+        base: &str,
+        approved: bool,
+        hint: &str,
+    ) -> Result<Verdict, Error> {
+        let mut args = vec!["--base", base];
         if approved {
             args.push("--approved");
         }
@@ -265,6 +280,45 @@ impl<'a> Repo<'a> {
         fails: &str,
         how: CheckHow,
     ) -> Result<Timing, Error> {
+        let log = how.log;
+        let run = self.run_project_check(dir, check, vars, how)?;
+        let Some(log) = log else {
+            if !run.passed {
+                return Err(Error::Refused(format!("`{check}` {fails}")));
+            }
+            return Ok(Timing::of(run));
+        };
+        if run.passed {
+            let _ = std::fs::remove_file(log);
+            return Ok(Timing::of(run));
+        }
+        let mut why = format!("last {} lines of `{check}`:\n", check_log::TAIL);
+        for line in &run.tail {
+            why.push_str(line);
+            why.push('\n');
+        }
+        why.push_str(&format!("`{check}` {fails}"));
+        if let Some(step) = &run.step {
+            why.push_str(&format!(
+                "; the step open when it ended is `{}`, lines {} to {} of its output",
+                step.name, step.first, step.last
+            ));
+        }
+        if run.logged {
+            why.push_str(&format!("; its output is at {}", log.display()));
+        }
+        Err(Error::Refused(why))
+    }
+
+    /// The run of `[land] check` as `project_check` makes it, whatever its verdict, for a
+    /// caller that judges a failure itself (`land/failed-batch`).
+    fn run_project_check(
+        &self,
+        dir: &Path,
+        check: &str,
+        vars: &[(&str, &Path)],
+        how: CheckHow,
+    ) -> Result<runner::CheckRun, Error> {
         let CheckHow {
             env: vars_env,
             log,
@@ -294,7 +348,7 @@ impl<'a> Repo<'a> {
             .iter()
             .find(|(name, _)| *name == "CLM_SELECTION")
             .map(|(_, path)| *path);
-        let run = runner::run_in(
+        runner::run_in(
             &self.places()?,
             check,
             dir,
@@ -303,33 +357,7 @@ impl<'a> Repo<'a> {
             log,
             rank,
             crate::lock::tell,
-        )?;
-        let Some(log) = log else {
-            if !run.passed {
-                return Err(Error::Refused(format!("`{check}` {fails}")));
-            }
-            return Ok(Timing::of(run));
-        };
-        if run.passed {
-            let _ = std::fs::remove_file(log);
-            return Ok(Timing::of(run));
-        }
-        let mut why = format!("last {} lines of `{check}`:\n", check_log::TAIL);
-        for line in &run.tail {
-            why.push_str(line);
-            why.push('\n');
-        }
-        why.push_str(&format!("`{check}` {fails}"));
-        if let Some(step) = &run.step {
-            why.push_str(&format!(
-                "; the step open when it ended is `{}`, lines {} to {} of its output",
-                step.name, step.first, step.last
-            ));
-        }
-        if run.logged {
-            why.push_str(&format!("; its output is at {}", log.display()));
-        }
-        Err(Error::Refused(why))
+        )
     }
 
     /// What the branch can break, as `clm affected --base <base>` in `dir` prints it, or with
