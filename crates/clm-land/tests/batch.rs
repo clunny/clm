@@ -704,6 +704,23 @@ fn a_new_main_that_was_never_checked_breaks_the_batch_up() {
 }
 
 #[test]
+fn a_new_main_with_another_check_environment_breaks_the_batch_up() {
+    // req:land/batch-keeps-its-check@33f8f0c2
+    let f = Fixture::new("");
+    let text = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
+    kept_branches(&f, &[("d_file.txt", "x\n")]);
+    // `main` moves to one with another `[env]`, checked under the command the check ran with.
+    let outs = main_moves_during_the_batch_check(&f, || {
+        f.advance_main("clm.toml", &format!("{text}\n[env]\nA = \"2\"\n"));
+        f.git(&f.work(), &["fetch", "-q", "origin"]);
+        f.mark_checked("origin/main");
+    });
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    // The check that passed ran under the variables of the old `main`: each land checks alone.
+    assert_eq!(starts(&f), 3, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
 fn a_failing_overlap_check_is_a_failed_batch() {
     // req:land/batch-keeps-its-check@33f8f0c2
     let f = Fixture::new("");
