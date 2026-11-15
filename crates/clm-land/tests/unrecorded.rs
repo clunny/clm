@@ -168,3 +168,19 @@ fn a_merge_no_land_made() {
     assert_eq!(f.remote("main"), main);
     assert!(landed_for(&f).is_empty());
 }
+
+#[test]
+fn an_unapproved_branch_pushed_by_hand() {
+    // req:land/unrecorded-land-finished@6700f3ee
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a.txt", "x\n")]);
+    let (commits, _) = pushed(&f, &["impl/a"]);
+    f.mark_checked(&commits[0]);
+    // The gate holds it for review.
+    f.write("needs-approval", "");
+    let main = f.remote("main");
+    let why = common::refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
+    assert!(why.contains("ledger/unrecorded-land"), "{why}");
+    assert_eq!(f.remote("main"), main);
+    assert!(landed_for(&f).is_empty());
+}
