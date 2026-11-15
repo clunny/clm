@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-template-and-its-migration-live-in-different-components, a-mutation-pass-that-fails-before-any-has-been-recorded-loses]
 ---
 
