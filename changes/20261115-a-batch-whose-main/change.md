@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [a-batch-whose-main-moved-under-its-check-runs-again-from-nothing]
 ---
 
