@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves:
   - the-project-rationale-still-says-builds-run-on-sonnet
 ---
