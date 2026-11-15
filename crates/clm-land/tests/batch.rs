@@ -6,7 +6,7 @@ mod common;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use clm_ledger::{Body, Recheck};
+use clm_ledger::{Basis, Body, Recheck};
 use common::Fixture;
 
 /// Holds `.clm/land.lock` as another process would, with no ticket.
@@ -495,4 +495,244 @@ fn a_land_alone_lands_as_before() {
     assert_eq!(*recheck, Some(Recheck::Selected));
     assert_eq!(starts(&f), 1);
     assert_eq!(f.parents(&f.work(), "origin/main").len(), 2);
+}
+
+/// `impl/a` and `impl/b` waiting for the land lock, the holder's check held until `release`
+/// appears; once it has started, `other` runs, then the check is let go. Returns what the two
+/// `clm land`s returned.
+fn main_moves_during_the_batch_check(
+    f: &Fixture,
+    other: impl FnOnce(),
+) -> Vec<Result<clm_land::Output, clm_land::Error>> {
+    f.write("hold", "");
+    let env = f.env(&[]);
+    let held = hold(f);
+    std::thread::scope(|s| {
+        let mut runs = Vec::new();
+        for (i, name) in ["a", "b"].iter().enumerate() {
+            let (env, work) = (&env, f.work());
+            let branch = format!("impl/{name}");
+            runs.push(s.spawn(move || clm_land::land(&work, Some(&branch), env)));
+            wait_for_tickets(&f.work(), i + 1);
+        }
+        drop(held);
+        let started = Instant::now();
+        while f.lines("check-order.log").is_empty() {
+            assert!(started.elapsed().as_secs() < 30, "the check never started");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        other();
+        f.write("release", "");
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    })
+}
+
+/// Lands `impl/d`, whose code is checked, so that it runs no check.
+fn land_unrelated(f: &Fixture, env: &(impl Fn(&str) -> Option<String> + Sync + 'static)) {
+    let out = clm_land::land(&f.work(), Some("impl/d"), env).unwrap();
+    assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
+}
+
+/// Branches `impl/a`, `impl/b` and `impl/d`, the last marked as checked.
+fn kept_branches(f: &Fixture, d_files: &[(&str, &str)]) {
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    f.branch("impl/b", &[("b_file.txt", "x\n")]);
+    f.branch("impl/d", d_files);
+    f.mark_checked("origin/impl/d");
+}
+
+type LandedFields = (String, Option<u64>, Option<Recheck>, Option<u64>);
+
+fn landed_bodies(f: &Fixture) -> Vec<LandedFields> {
+    f.landed()
+        .into_iter()
+        .map(|b| match b {
+            Body::Landed {
+                code_key,
+                check_seconds,
+                recheck,
+                recheck_files,
+                ..
+            } => (code_key.unwrap(), check_seconds, recheck, recheck_files),
+            other => panic!("{other:?}"),
+        })
+        .collect()
+}
+
+#[test]
+fn a_batch_keeps_its_check_when_main_moves_on_an_unrelated_component() {
+    // req:land/batch-keeps-its-check@33f8f0c2
+    let f = Fixture::new("");
+    kept_branches(&f, &[("d_file.txt", "x\n")]);
+    let env = f.env(&[]);
+    let outs = main_moves_during_the_batch_check(&f, || land_unrelated(&f, &env));
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+    assert_eq!(
+        on_main(&f)[..3],
+        ["impl/b", "impl/a", "impl/d"],
+        "{:?}",
+        subjects(&f)
+    );
+    let chain: Vec<String> = f
+        .git(
+            &f.work(),
+            &["log", "--first-parent", "--format=%H", "-3", "origin/main"],
+        )
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(landed_lines(&outs[0]), format!("landed {} code", chain[1]));
+    assert_eq!(landed_lines(&outs[1]), format!("landed {} code", chain[0]));
+    assert!(
+        outs[0]
+            .warnings
+            .iter()
+            .any(|w| w.starts_with("re-check: none")),
+        "{:?}",
+        outs[0].warnings
+    );
+    // Both records say `none`, name one key, and the time is on the first alone.
+    let records: Vec<_> = landed_bodies(&f)
+        .into_iter()
+        .filter(|r| r.2 == Some(Recheck::None))
+        .collect();
+    assert_eq!(records.len(), 2, "{:?}", landed_bodies(&f));
+    assert_eq!(records[0].0, records[1].0);
+    assert_eq!(
+        records.iter().filter(|r| r.1.is_some()).count(),
+        1,
+        "{records:?}"
+    );
+    // The record for that key names the commit the check ran on and the `main` they landed on.
+    let key = records[0].0.clone();
+    let composed: Vec<Basis> = f
+        .records()
+        .into_iter()
+        .filter_map(|r| match r.body {
+            Body::Checked {
+                code_key,
+                basis: Some(basis),
+                ..
+            } if code_key == key => Some(basis),
+            _ => None,
+        })
+        .collect();
+    let [basis] = &composed[..] else {
+        panic!("{composed:?}")
+    };
+    let origin = f.path("origin.git");
+    // The `main` they landed on is the first parent of `impl/a`'s merge.
+    let main = f.git(&f.work(), &["rev-parse", &format!("{}^1", chain[1])]);
+    assert_eq!(basis.base, clm_ledger::code_key(&origin, &main).unwrap());
+    assert_ne!(basis.head, basis.base);
+    assert!(
+        f.records().into_iter().any(|r| matches!(
+            r.body,
+            Body::Checked { code_key, basis: None, .. } if code_key == basis.head
+        )),
+        "the key the check ran on is checked"
+    );
+    let findings = clm_ledger::verify(&f.work(), "origin/main", None, false).unwrap();
+    assert!(findings.is_empty(), "{findings:?}");
+}
+
+#[test]
+fn a_batch_checks_the_overlap_when_a_dependant_is_in_common() {
+    // req:land/batch-keeps-its-check@33f8f0c2
+    let f = Fixture::new("");
+    f.write("overlap-out", "file crates/c/tests/t.rs\n");
+    kept_branches(&f, &[("d_file.txt", "x\n")]);
+    let env = f.env(&[]);
+    let outs = main_moves_during_the_batch_check(&f, || land_unrelated(&f, &env));
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    assert_eq!(starts(&f), 2, "{:?}", f.lines("check-order.log"));
+    assert_eq!(
+        std::fs::read_to_string(f.path("selection-copy")).unwrap(),
+        "file crates/c/tests/t.rs\n"
+    );
+    assert!(
+        outs[0]
+            .warnings
+            .contains(&"re-check: overlap, 1 files".to_string()),
+        "{:?}",
+        outs[0].warnings
+    );
+    assert_eq!(on_main(&f)[..3], ["impl/b", "impl/a", "impl/d"]);
+    let records: Vec<_> = landed_bodies(&f)
+        .into_iter()
+        .filter(|r| r.2 == Some(Recheck::Overlap))
+        .collect();
+    assert_eq!(records.len(), 2, "{:?}", landed_bodies(&f));
+    assert!(records.iter().all(|r| r.3 == Some(1)));
+    assert_eq!(records.iter().filter(|r| r.1.is_some()).count(), 1);
+}
+
+#[test]
+fn a_land_that_conflicts_with_the_new_main_breaks_the_batch_up() {
+    // req:land/batch-keeps-its-check@33f8f0c2
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("a_file.txt", "x\n")]);
+    f.branch("impl/b", &[("a.txt", "b\n")]);
+    f.branch("impl/d", &[("a.txt", "d\n")]);
+    f.mark_checked("origin/impl/d");
+    let env = f.env(&[]);
+    let mut outs = main_moves_during_the_batch_check(&f, || land_unrelated(&f, &env));
+    let b = common::refused(outs.pop().unwrap());
+    assert!(b.contains("clm rebase"), "{b}");
+    outs.pop().unwrap().unwrap();
+    assert_eq!(starts(&f), 2, "{:?}", f.lines("check-order.log"));
+    assert_eq!(on_main(&f)[..2], ["impl/a", "impl/d"]);
+}
+
+#[test]
+fn a_new_main_that_was_never_checked_breaks_the_batch_up() {
+    // req:land/batch-keeps-its-check@33f8f0c2
+    let f = Fixture::new("");
+    kept_branches(&f, &[("d_file.txt", "x\n")]);
+    let outs = main_moves_during_the_batch_check(&f, || {
+        f.advance_main("crates/d/src/lib.rs", "// d\n");
+    });
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    assert_eq!(starts(&f), 3, "{:?}", f.lines("check-order.log"));
+    assert_eq!(on_main(&f)[..2], ["impl/b", "impl/a"]);
+    assert!(
+        outs.iter()
+            .all(|o| !o.warnings.iter().any(|w| w.starts_with("re-check:"))),
+        "{outs:?}"
+    );
+}
+
+#[test]
+fn a_failing_overlap_check_is_a_failed_batch() {
+    // req:land/batch-keeps-its-check@33f8f0c2
+    let f = Fixture::new("");
+    f.write("overlap-out", "file crates/c/tests/t.rs\n");
+    // The second run of the check fails; the first waits for the file `release`.
+    let log = f.path("check-order.log");
+    common::write_exec(
+        &f.path("bin/check"),
+        &format!(
+            "#!/bin/sh\necho \"start $(git rev-parse 'HEAD^{{tree}}')\" >> '{log}'\n\
+             n=$(grep -c '^start ' '{log}')\n\
+             if [ \"$n\" = 1 ]; then for _ in $(seq 600); do [ -e '{rel}' ] && break; sleep 0.1; done; fi\n\
+             [ \"$n\" != 2 ]\n",
+            log = log.display(),
+            rel = f.path("release").display()
+        ),
+    );
+    kept_branches(&f, &[("d_file.txt", "x\n")]);
+    let env = f.env(&[]);
+    let outs = main_moves_during_the_batch_check(&f, || land_unrelated(&f, &env));
+    let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
+    assert!(
+        outs[0]
+            .warnings
+            .iter()
+            .any(|w| w.contains("lands taken together failed")),
+        "{:?}",
+        outs[0].warnings
+    );
+    assert_eq!(starts(&f), 4, "{:?}", f.lines("check-order.log"));
+    assert_eq!(on_main(&f)[..3], ["impl/b", "impl/a", "impl/d"]);
 }

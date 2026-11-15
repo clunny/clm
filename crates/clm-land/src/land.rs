@@ -16,7 +16,7 @@ use crate::{Env, Error, Output, Repo, Verdict, is_claim};
 use clm_approval::{Approvals, Policy};
 use clm_model::Priority;
 
-const ATTEMPTS: usize = 10;
+pub(crate) const ATTEMPTS: usize = 10;
 
 /// How a land's failing check is reported.
 pub(crate) const ON_MERGE: &str = "fails on the merge with main";

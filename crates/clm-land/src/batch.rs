@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use clm_ledger::{Body, Entry, Fold, LandKind, Recheck};
+use clm_ledger::{Basis, Body, Entry, Fold, LandKind, Recheck, TimedStep};
 
 use crate::land::{
     ON_MERGE, Pushed, changes_added, cleanup, free_build_target, propose_tips, push_main,
@@ -213,6 +213,30 @@ struct Chain {
 struct Finals {
     commits: Vec<String>,
     key: String,
+}
+
+/// The chain a check passed on, held in the land tree, and how it was checked: the check
+/// the lands taken together keep when `main` moves (`land/batch-keeps-its-check`).
+struct Kept {
+    chain: Chain,
+    finals: Finals,
+    /// The land tree, holding the last of `finals`' commits.
+    dir: Scratch,
+    /// The seconds and steps of every run of the check that went into it.
+    seconds: u64,
+    steps: Vec<TimedStep>,
+    files: Option<u64>,
+    recheck: Recheck,
+}
+
+/// What a round of the kept check came to.
+enum Next {
+    /// The chain was built on the new `main` and checked.
+    Round(Box<Kept>),
+    /// The lands go on as lands never taken together.
+    GiveWay,
+    /// The check failed, and `failed-batch` has run.
+    Failed,
 }
 
 struct Batch<'c, 'a, 'r> {
@@ -478,7 +502,16 @@ impl Batch<'_, '_, '_> {
             Part::Files(files) => Some(files.len() as u64),
             _ => None,
         };
-        self.push(chain, &finals, &run, files, &dir)
+        let kept = Kept {
+            chain,
+            finals,
+            dir,
+            seconds: run.seconds,
+            steps: run.steps,
+            files,
+            recheck: Recheck::Selected,
+        };
+        self.push(kept)
     }
 
     /// Each land's part of the selection (what it would have run alone, with what it and each
@@ -577,65 +610,94 @@ impl Batch<'_, '_, '_> {
 
     /// The push turn, `main` unchanged, the records signed, one push, and every land's records
     /// before the lock is let go (`land/batched-lands`).
-    fn push(
-        &mut self,
-        chain: Chain,
-        finals: &Finals,
-        run: &crate::runner::CheckRun,
-        files: Option<u64>,
-        dir: &Scratch,
-    ) -> Result<(), Error> {
+    fn push(&mut self, first: Kept) -> Result<(), Error> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
         // The record the commits' `Checked:` lines name, before the push.
         repo.append(Body::Checked {
-            code_key: finals.key.clone(),
-            command: chain.command.clone(),
+            code_key: first.finals.key.clone(),
+            command: first.chain.command.clone(),
             basis: None,
         })?;
-        let turn = lock::push(ctx.places)?;
-        repo.fetch()?;
-        if repo.rev(repo.base())?.as_deref() != Some(chain.base.as_str()) {
-            // `main` moved under the check: the lands go on as before.
-            self.moved = true;
-            return Ok(());
-        }
-        let mut entries: Vec<Entry> = Vec::new();
-        for (i, m) in chain.members.iter().enumerate() {
-            let effort = if m.wanted.holder() {
-                ctx.effort.to_vec()
-            } else {
-                self.effort_of(&m.wanted.branch)
-            };
-            entries.extend(effort.into_iter().map(Into::into));
-            let landed = Body::Landed {
-                commit: finals.commits[i].clone(),
-                branch: m.wanted.branch.clone(),
-                kind: m.judged.kind,
-                review: m.judged.review,
-                fingerprint: m.judged.fingerprint.clone(),
-                code_key: Some(finals.key.clone()),
-                changes: m.judged.changes.clone(),
-                check_seconds: (i == 0).then_some(run.seconds),
-                steps: if i == 0 {
-                    run.steps.clone()
+        let efforts: Vec<Vec<Body>> = first
+            .chain
+            .members
+            .iter()
+            .map(|m| {
+                if m.wanted.holder() {
+                    ctx.effort.to_vec()
                 } else {
-                    Vec::new()
-                },
-                recheck: Some(Recheck::Selected),
-                recheck_files: files,
-            };
-            // Signed before the push, so a holder that can't sign lands no batch.
-            entries.push(if chain.signed {
-                repo.approval.sign(landed, clm_approval::LAND)?.into()
-            } else {
-                landed.into()
-            });
-        }
-        let tip = finals.commits.last().expect("a chain holds a land");
-        if push_main(repo, tip, &chain.base, ctx.branch)? == Pushed::Moved {
-            self.moved = true;
-            return Ok(());
-        }
+                    self.effort_of(&m.wanted.branch)
+                }
+            })
+            .collect();
+        let turn = lock::push(ctx.places)?;
+        let mut kept = first;
+        // Rounds of the check kept on a `main` that moved, before the push that goes through
+        // (`land/batch-keeps-its-check`).
+        let mut rounds = 0;
+        let entries = loop {
+            repo.fetch()?;
+            let now = repo.rev(repo.base())?;
+            if now.as_deref() != Some(kept.chain.base.as_str()) {
+                rounds += 1;
+                if rounds > crate::land::ATTEMPTS {
+                    self.moved = true;
+                    return Ok(());
+                }
+                match self.keep(kept, now)? {
+                    Next::Round(next) => kept = *next,
+                    Next::GiveWay => {
+                        self.moved = true;
+                        return Ok(());
+                    }
+                    Next::Failed => return Ok(()),
+                }
+                continue;
+            }
+            let (chain, finals) = (&kept.chain, &kept.finals);
+            let mut entries: Vec<Entry> = Vec::new();
+            for (i, m) in chain.members.iter().enumerate() {
+                entries.extend(efforts[i].iter().cloned().map(Into::into));
+                let landed = Body::Landed {
+                    commit: finals.commits[i].clone(),
+                    branch: m.wanted.branch.clone(),
+                    kind: m.judged.kind,
+                    review: m.judged.review,
+                    fingerprint: m.judged.fingerprint.clone(),
+                    code_key: Some(finals.key.clone()),
+                    changes: m.judged.changes.clone(),
+                    check_seconds: (i == 0).then_some(kept.seconds),
+                    steps: if i == 0 {
+                        kept.steps.clone()
+                    } else {
+                        Vec::new()
+                    },
+                    recheck: Some(kept.recheck),
+                    recheck_files: kept.files,
+                };
+                // Signed before the push, so a holder that can't sign lands no batch.
+                entries.push(if chain.signed {
+                    repo.approval.sign(landed, clm_approval::LAND)?.into()
+                } else {
+                    landed.into()
+                });
+            }
+            let tip = finals.commits.last().expect("a chain holds a land");
+            if push_main(repo, tip, &chain.base, ctx.branch)? == Pushed::Done {
+                break entries;
+            }
+            // `main` moved again: the next round counts it, the commit last checked standing
+            // for the one before.
+        };
+        let Kept {
+            chain,
+            finals,
+            dir,
+            seconds,
+            steps,
+            ..
+        } = kept;
+        let (finals, dir) = (&finals, &dir);
         drop(turn);
         self.pushed = true;
         let mut warnings = Vec::new();
@@ -673,15 +735,15 @@ impl Batch<'_, '_, '_> {
             .as_ref()
             .map(|l| l.target_seconds());
         if let Some(target) = target_seconds {
-            let slow = (run.seconds > target).then(|| {
-                crate::time_report::slowest(&run.steps, |path| {
+            let slow = (seconds > target).then(|| {
+                crate::time_report::slowest(&steps, |path| {
                     repo.why(ctx.exe, dir.path(), &chain.base, path)
                 })
             });
             let past = chain.fold.timed_lands(crate::time_report::LANDS);
-            let over = slow.as_deref().map(|s| (s, run.steps.as_slice()));
+            let over = slow.as_deref().map(|s| (s, steps.as_slice()));
             out.warnings
-                .extend(crate::time_report::lines(run.seconds, target, over, &past));
+                .extend(crate::time_report::lines(seconds, target, over, &past));
         }
         out.lines.push(format!(
             "landed {commit} {}",
@@ -692,6 +754,133 @@ impl Batch<'_, '_, '_> {
         }
         self.landed = Some(out);
         Ok(())
+    }
+
+    /// `main` is now at `now`, other than the base the chain was built on, inside the push
+    /// turn: keeps the check that passed on the chain's last commit `P`, and checks again only
+    /// what the lands taken and `main`'s new commits can both break, on the same lands merged
+    /// onto `now` (`land/batch-keeps-its-check`).
+    fn keep(&mut self, kept: Kept, now: Option<String>) -> Result<Next, Error> {
+        let (ctx, repo) = (self.ctx, self.ctx.repo);
+        let Some(now) = now else {
+            return Ok(Next::GiveWay);
+        };
+        let p = kept.finals.commits.last().expect("a chain holds a land");
+        let command = &kept.chain.command;
+        // `main`'s new commits must have been checked whole.
+        let fold = clm_ledger::fold(&repo.root)?;
+        let base_key = clm_ledger::code_key(&repo.root, &now)?;
+        if !crate::land::checked_with(&fold, &base_key, command) {
+            return Ok(Next::GiveWay);
+        }
+        let selected = repo.overlap(ctx.exe, kept.dir.path(), p, &now);
+        if matches!(selected, Selected::Failed) {
+            return Ok(Next::GiveWay);
+        }
+        // The same lands in the same order, under the same check variables, on the new `main`.
+        let wanted: Vec<Wanted> = kept
+            .chain
+            .members
+            .iter()
+            .map(|m| m.wanted.clone())
+            .collect();
+        let Some(chain) = self.build(&wanted)? else {
+            return Ok(Next::GiveWay);
+        };
+        if chain.members.len() < wanted.len() || chain.vars != kept.chain.vars {
+            return Ok(Next::GiveWay);
+        }
+        if chain.base != now {
+            // `main` moved again meanwhile: the next round asks about the one it moved to.
+            // Building the chain left another tree in the land tree.
+            kept.dir.checkout(p)?;
+            return Ok(Next::Round(Box::new(kept)));
+        }
+        let finals = self.finals(&chain)?;
+        let tip = finals.commits.last().expect("a chain holds a land").clone();
+        let dir = Scratch::land_tree(repo, ctx.places, &tip)?;
+        let (mut seconds, mut steps) = (kept.seconds, kept.steps.clone());
+        let (recheck, files, line) = match &selected {
+            Selected::Tests(selection) => {
+                let files = selection.files();
+                let line = match files {
+                    Some(n) => format!("re-check: overlap, {n} files"),
+                    None => "re-check: overlap, every test".to_string(),
+                };
+                (Recheck::Overlap, files, line)
+            }
+            _ => {
+                let merge_base = repo.git(&["merge-base", &now, p])?;
+                let short = repo.git(&["rev-parse", "--short", &merge_base])?;
+                let line = format!(
+                    "re-check: none, the branch and main since {short} affect no test in common"
+                );
+                (Recheck::None, None, line)
+            }
+        };
+        if !self.warnings.contains(&line) {
+            self.warnings.push(line);
+        }
+        // Every land taken is a suspect of a check that fails here.
+        let suspects = vec![Part::Failed; chain.members.len()];
+        if let Selected::Tests(selection) = &selected {
+            let vars: Vec<(&str, &Path)> = vec![
+                ("CLM_SELECTION", selection.path.as_path()),
+                ("CLM_LAND_DIR", ctx.target),
+            ];
+            let slot = repo.slot(ctx.branch)?;
+            let run = repo.run_project_check(
+                dir.path(),
+                ctx.check,
+                &vars,
+                CheckHow {
+                    env: &chain.vars,
+                    log: None,
+                    slot,
+                    rank: Some(ctx.rank),
+                },
+            )?;
+            if !run.passed {
+                // A signal, not an exit, is the holder's own failure.
+                if run.code.is_none() {
+                    return Err(Error::Refused(format!("`{}` {ON_MERGE}", ctx.check)));
+                }
+                self.failed(chain, &suspects, None)?;
+                return Ok(Next::Failed);
+            }
+            seconds += run.seconds;
+            steps.extend(run.steps);
+        }
+        match repo.clm_check(ctx.exe, dir.path(), true, ON_MERGE) {
+            Ok(()) => {}
+            Err(Error::Refused(_)) => {
+                self.failed(chain, &suspects, None)?;
+                return Ok(Next::Failed);
+            }
+            Err(e) => return Err(e),
+        }
+        // The record the commits' `Checked:` lines name, before the push, unless it counts as
+        // checked already.
+        let fold = clm_ledger::fold(&repo.root)?;
+        if !crate::land::checked_with(&fold, &finals.key, &chain.command) {
+            repo.append(Body::Checked {
+                code_key: finals.key.clone(),
+                command: chain.command.clone(),
+                basis: Some(Basis {
+                    head: kept.finals.key.clone(),
+                    base: base_key,
+                }),
+            })?;
+        }
+        Ok(Next::Round(Box::new(Kept {
+            chain,
+            finals,
+            dir,
+            seconds,
+            steps,
+            files,
+            recheck,
+        })))
     }
 
     /// `branch`'s effort records, as `clm effort record --branch` would append them.
