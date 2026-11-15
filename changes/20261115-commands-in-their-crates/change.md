@@ -36,7 +36,7 @@ Recorded in `commands-live-in-their-crates`:
 - **The root's Design** says who owns a command, and tells each build how its tests move while the old files still exist.
 - **Which commands stay the root's**: `clm contribution`, `clm upgrade`, `clm verify`, `clm machine`, `clm agent-harness`, `clm build` and `clm fingerprint`, whose behaviour the root's own requirements state. Whether those requirements belong to their components is left for the plan's phase 5.
 
-`moved-tests.txt` holds 882 lines, one per test and component it cites: the component, the file, the test's name and whether it runs the binary. 735 lines are tests of the 22 components above; the 147 others, of `ci`, the `plugin` family, `view`, `check.coverage` and `upgrade`, move under `20261115-tests-in-their-own-files`.
+`moved-tests.txt` holds 882 lines, one per test and component it cites: the component, the file, the test's name and whether it runs the binary. 674 lines are tests of the 22 components above; the 208 others, of `ci`, the `plugin` family, `view`, `check.coverage` and `upgrade`, move under `20261115-tests-in-their-own-files`.
 
 ## What it removes
 

@@ -3,7 +3,7 @@ title: Subagents
 status: active
 owners: ["@clunny"]
 depends_on: []
-paths: ["plugin/agents/**"]
+paths: ["plugin/agents/**", "crates/clm/tests/plugin_agents/**"]
 successor: ""
 serves: [architecture/method-in-the-plugin]
 ---

@@ -3,7 +3,7 @@ title: Plugin
 status: active
 owners: ["@clunny"]
 depends_on: [check, context, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, sync, config, view, plugin.hooks, plugin.panel, land, host, plugin.agents, agent-harness]
-paths: ["plugin/bin/**", "plugin/hooks/**", "plugin/commands/**", "plugin/.claude-plugin/**", "plugin/.codex-plugin/**", ".claude-plugin/**", ".agents/plugins/**", "plugin/skills/**"]
+paths: ["plugin/bin/**", "plugin/hooks/**", "plugin/commands/**", "plugin/.claude-plugin/**", "plugin/.codex-plugin/**", ".claude-plugin/**", ".agents/plugins/**", "plugin/skills/**", "crates/clm/tests/plugin/**"]
 successor: ""
 serves: [architecture/method-in-the-plugin, capability/work-from-any-agent-harness]
 ---
