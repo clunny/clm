@@ -1,0 +1,882 @@
+apply	crates/clm/tests/cli.rs	apply_exits_1_on_a_stale_asset_and_reports_removals	binary
+apply	crates/clm/tests/cli.rs	apply_reports_and_exits_1_writing_nothing	binary
+apply	crates/clm/tests/cli.rs	backlog_and_archive_commands	binary
+apply	crates/clm/tests/cli.rs	hash_is_no_command	binary
+apply	crates/clm/tests/cli.rs	hashes_fails_on_an_unknown_node	binary
+apply	crates/clm/tests/cli.rs	hashes_of_layers	binary
+apply	crates/clm/tests/cli.rs	hashes_of_the_capability_node_come_first	binary
+apply	crates/clm/tests/cli.rs	hashes_prints_asset_lines	binary
+apply	crates/clm/tests/cli.rs	hashes_prints_elements_usable_as_bases	binary
+check	crates/clm/tests/cli.rs	backlog_and_archive_commands	binary
+check	crates/clm/tests/cli.rs	check_fails_stale_pending_change_but_ignores_applied_one	binary
+check	crates/clm/tests/cli.rs	check_passes_a_declared_or_unowned_import	binary
+check	crates/clm/tests/cli.rs	check_reports_a_detector_that_cannot_run	binary
+check	crates/clm/tests/cli.rs	check_reports_an_undeclared_import	binary
+check	crates/clm/tests/cli.rs	check_reports_failing_detectors	binary
+check	crates/clm/tests/cli.rs	check_reports_marker_for_finished_change	binary
+check	crates/clm/tests/cli.rs	check_reports_settings_errors_and_still_runs_rules	binary
+check	crates/clm/tests/cli.rs	check_runs_detectors_from_the_repository_root	binary
+check	crates/clm/tests/cli.rs	check_stops_a_hanging_detector	binary
+check	crates/clm/tests/cli.rs	check_without_detectors_passes	binary
+check	crates/clm/tests/cli.rs	reports_every_violation_and_exits_1	binary
+check	crates/clm/tests/cli.rs	scenario_detectors_skipped_on_request	binary
+check	crates/clm/tests/cli.rs	scenario_relative_detector_tool_installed	binary
+check	crates/clm/tests/cli.rs	scenario_relative_detector_tool_not_installed	binary
+check	crates/clm/tests/cli.rs	this_repository_is_clean	binary
+check	crates/clm/tests/coverage_lists.rs	a_deleted_test_is_listed_against_a_base	binary
+check	crates/clm/tests/coverage_lists.rs	a_graph_that_doesnt_load_fails_each_list	binary
+check	crates/clm/tests/coverage_lists.rs	a_removed_requirements_tests_are_listed_by_what_they_lose	binary
+check	crates/clm/tests/coverage_lists.rs	an_uncounted_marker_is_listed_after_the_coverage	binary
+check	crates/clm/tests/coverage_lists.rs	an_unknown_base_exits_1_naming_it	binary
+check	crates/clm/tests/coverage_lists.rs	obsolete_tests_print_no_coverage	binary
+check	crates/clm/tests/coverage_lists.rs	plain_coverage_fails_on_a_graph_that_doesnt_load	binary
+check	crates/clm/tests/coverage_lists.rs	the_count_line_counts_deletes_and_uncites_apart	binary
+check	crates/clm/tests/coverage_lists.rs	the_two_flags_together_are_a_usage_error	binary
+check	crates/clm/tests/coverage_lists.rs	uncounted_lines_follow_the_obsolete_lines	binary
+check	crates/clm/tests/coverage_lists.rs	uncounted_markers_of_one_id_share_a_line	binary
+check	crates/clm/tests/size.rs	a_test_counts_toward_the_node_it_cites	binary
+check	crates/clm/tests/size.rs	defaults_from_config_when_unset	binary
+check	crates/clm/tests/size.rs	every_node_sorted_by_id	binary
+check	crates/clm/tests/size.rs	prints_the_node_with_the_repository_budgets	binary
+check	crates/clm/tests/size.rs	settings_that_cant_be_loaded_exit_1	binary
+check	crates/clm/tests/size.rs	spec_violations_dont_stop_the_report	binary
+check	crates/clm/tests/size.rs	unknown_node_exits_1	binary
+check.affected	crates/clm/tests/affected.rs	a_base_with_no_merge_base_exits_1_naming_it	binary
+check.affected	crates/clm/tests/affected.rs	a_deleted_file_no_node_holds_prints_all	binary
+check.affected	crates/clm/tests/affected.rs	a_dependant_of_both_is_what_they_share	binary
+check.affected	crates/clm/tests/affected.rs	a_file_no_node_holds_prints_all	binary
+check.affected	crates/clm/tests/affected.rs	a_git_failure_exits_2	binary
+check.affected	crates/clm/tests/affected.rs	a_marker_in_markdown_reads_nothing	binary
+check.affected	crates/clm/tests/affected.rs	a_marker_outside_a_test_still_selects	binary
+check.affected	crates/clm/tests/affected.rs	a_reader_of_a_doc_only_file_is_printed_alone	binary
+check.affected	crates/clm/tests/affected.rs	a_reader_on_one_side_meets_its_owner_on_the_other	binary
+check.affected	crates/clm/tests/affected.rs	a_side_that_selects_everything_leaves_the_others_output	binary
+check.affected	crates/clm/tests/affected.rs	an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected	binary
+check.affected	crates/clm/tests/affected.rs	an_invalid_graph_exits_1_with_the_error	binary
+check.affected	crates/clm/tests/affected.rs	an_unknown_base_exits_1_naming_it	binary
+check.affected	crates/clm/tests/affected.rs	an_untracked_reader_and_an_untracked_doc_count	binary
+check.affected	crates/clm/tests/affected.rs	compares_with_the_merge_base	binary
+check.affected	crates/clm/tests/affected.rs	doc_only_changes_beside_code_print_what_the_code_does	binary
+check.affected	crates/clm/tests/affected.rs	doc_only_changes_print_nothing	binary
+check.affected	crates/clm/tests/affected.rs	independent_changes_overlap_in_nothing	binary
+check.affected	crates/clm/tests/affected.rs	no_reader_matches	binary
+check.affected	crates/clm/tests/affected.rs	nothing_changed_prints_nothing	binary
+check.affected	crates/clm/tests/affected.rs	overlap_has_no_file_line_for_a_deleted_file	binary
+check.affected	crates/clm/tests/affected.rs	overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base	binary
+check.affected	crates/clm/tests/affected.rs	overlap_reads_the_graph_whole_from_the_commits	binary
+check.affected	crates/clm/tests/affected.rs	overlap_refuses_flags_that_dont_combine	binary
+check.affected	crates/clm/tests/affected.rs	overlap_takes_no_working_tree_or_untracked_file	binary
+check.affected	crates/clm/tests/affected.rs	overlap_with_shared_components_but_no_shared_file_prints_nothing	binary
+check.affected	crates/clm/tests/affected.rs	prints_the_changed_nodes_dependants_and_files	binary
+check.affected	crates/clm/tests/affected.rs	readers_alone_print_no_node_or_all_line	binary
+check.affected	crates/clm/tests/affected.rs	readers_alone_with_owned_code_changed_and_a_reader_in_an_affected_component	binary
+check.affected	crates/clm/tests/affected.rs	readers_join_the_lines_of_a_code_change	binary
+check.affected	crates/clm/tests/affected.rs	selects_through_the_markers_of_the_files_the_scan_reads	binary
+check.affected	crates/clm/tests/affected.rs	settings_that_cant_load_exit_1	binary
+check.affected	crates/clm/tests/affected.rs	the_base_defaults_to_origin_main	binary
+check.affected	crates/clm/tests/affected.rs	the_settings_glob_prints_all	binary
+check.affected	crates/clm/tests/affected.rs	uncommitted_untracked_and_deleted	binary
+check.affected	crates/clm/tests/affected.rs	why_follows_the_settings_glob_and_the_errors_of_the_selection	binary
+check.affected	crates/clm/tests/affected.rs	why_prints_the_chain_through_a_dependency	binary
+check.affected	crates/clm/tests/affected.rs	why_reads_the_scan_for_readers_and_citations	binary
+check.affected	crates/clm/tests/affected.rs	why_says_not_selected_and_all	binary
+check.affected	crates/clm/tests/affected.rs	why_with_readers_exits_1_naming_both_flags	binary
+check.coverage	crates/clm/tests/cli.rs	coverage_command_prints_report	binary
+check.coverage	crates/clm/tests/pending.rs	every_node_without_an_argument	binary
+check.coverage	crates/clm/tests/pending.rs	scenario_blocked	binary
+check.coverage	crates/clm/tests/pending.rs	scenario_blocked_by_a_need	binary
+check.coverage	crates/clm/tests/pending.rs	scenario_need_satisfied	binary
+check.coverage	crates/clm/tests/pending.rs	scenario_nothing_pending	binary
+check.coverage	crates/clm/tests/pending.rs	scenario_removed_node_from_the_cli	binary
+check.coverage	crates/clm/tests/pending.rs	scenario_states	binary
+check.coverage	crates/clm/tests/pending.rs	violations_and_unknown_nodes_exit_1	binary
+check.coverage	crates/clm/tests/status.rs	invalid_graph_prints_violations	binary
+check.coverage	crates/clm/tests/status.rs	scenario_changes_grouped	binary
+check.coverage	crates/clm/tests/status.rs	scenario_complete_change	binary
+check.coverage	crates/clm/tests/status.rs	scenario_groups_in_order	binary
+check.coverage	crates/clm/tests/status.rs	scenario_nothing_in_flight	binary
+check.health	crates/clm/tests/health.rs	a_missing_root_spec_exits_1_naming_it	binary
+check.health	crates/clm/tests/health.rs	scenario_a_clean_repository	binary
+check.health	crates/clm/tests/health.rs	scenario_findings_dont_fail_it	binary
+check.health	crates/clm/tests/health.rs	scenario_settings_cant_be_loaded	binary
+check.health	crates/clm/tests/health.rs	second_flag_exits_0	binary
+check.health	crates/clm/tests/health.rs	settled_flags_not_counted	binary
+check.health	crates/clm/tests/health.rs	settled_slug_never_reused	binary
+check.health	crates/clm/tests/health.rs	third_flag_exits_3	binary
+check.health	crates/clm/tests/health.rs	workaround_flag_from_settings	binary
+check.health	crates/clm/tests/health.rs	workaround_writes_the_flag_from_stdin_and_commits_nothing	binary
+check.health	crates/clm/tests/health.rs	workarounds_not_counted_when_settings_fail	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	one_name_for_a_crate_and_a_package_skips_both	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	package_findings_are_worded_for_packages	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	root_option_names_the_repository	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_allowed_item_and_crate	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_allowed_package_and_item	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_broken_manifest	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_clean_or_no_rust	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_entry_given_as_an_argument	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_findings	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_from_a_subdirectory_of_a_project_without_clm	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_named_as_a_detector	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_stale_entries	binary
+check.unreferenced	crates/clm/tests/unreferenced.rs	scenario_stale_entry	binary
+ci	crates/clm/tests/ci_check.rs	a_block_of_playwright_specs_is_not_judged	no binary
+ci	crates/clm/tests/ci_check.rs	a_deleted_eval_file_only_validates_the_plugin	no binary
+ci	crates/clm/tests/ci_check.rs	a_failing_coverage_suite_fails_the_script	no binary
+ci	crates/clm/tests/ci_check.rs	a_failing_phase_prints_only_where_it_failed	no binary
+ci	crates/clm/tests/ci_check.rs	a_failing_selected_test_fails	no binary
+ci	crates/clm/tests/ci_check.rs	a_full_run_marks_each_phase_and_names_no_file	no binary
+ci	crates/clm/tests/ci_check.rs	a_full_run_times_every_phase_it_runs	no binary
+ci	crates/clm/tests/ci_check.rs	a_lands_place_holds_its_cargo_output	no binary
+ci	crates/clm/tests/ci_check.rs	a_passing_run_prints_its_phase_times	no binary
+ci	crates/clm/tests/ci_check.rs	a_plan_with_nothing_to_mutate_is_not_judged	no binary
+ci	crates/clm/tests/ci_check.rs	a_refused_module_fails_the_check	no binary
+ci	crates/clm/tests/ci_check.rs	a_refused_plugin_fails_the_check	no binary
+ci	crates/clm/tests/ci_check.rs	a_rust_requirement_whose_test_notices_is_killed	no binary
+ci	crates/clm/tests/ci_check.rs	a_site_change_marks_the_site_and_the_phases_it_turned_on	no binary
+ci	crates/clm/tests/ci_check.rs	a_tool_that_fails_leaves_no_verdict	no binary
+ci	crates/clm/tests/ci_check.rs	a_tool_that_judges_its_fixture_wrongly_judges_nothing	no binary
+ci	crates/clm/tests/ci_check.rs	a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests	no binary
+ci	crates/clm/tests/ci_check.rs	a_valid_module_passes	no binary
+ci	crates/clm/tests/ci_check.rs	a_valid_plugin_passes	no binary
+ci	crates/clm/tests/ci_check.rs	a_web_change_leaves_the_site_out_and_a_site_change_runs_it	no binary
+ci	crates/clm/tests/ci_check.rs	a_web_change_marks_the_phases_it_selected	no binary
+ci	crates/clm/tests/ci_check.rs	broken_wasm_build_fails	no binary
+ci	crates/clm/tests/ci_check.rs	capability_package_file	no binary
+ci	crates/clm/tests/ci_check.rs	capability_package_installs_the_browser	no binary
+ci	crates/clm/tests/ci_check.rs	check_script_installs_the_tools	no binary
+ci	crates/clm/tests/ci_check.rs	clm_detector_needs_no_install_line	no binary
+ci	crates/clm/tests/ci_check.rs	coverage_reads_the_same_from_a_checkout_reached_through_a_link	no binary
+ci	crates/clm/tests/ci_check.rs	coverage_tools_are_pinned	no binary
+ci	crates/clm/tests/ci_check.rs	coverage_writes_one_tracefile_from_three_suites	no binary
+ci	crates/clm/tests/ci_check.rs	detector_tools_installs_cargo_machete_pinned	no binary
+ci	crates/clm/tests/ci_check.rs	empty_selection	no binary
+ci	crates/clm/tests/ci_check.rs	every_check	no binary
+ci	crates/clm/tests/ci_check.rs	every_detector_has_its_tool_installed	no binary
+ci	crates/clm/tests/ci_check.rs	every_selected_phase_names_the_files_that_made_it_run	no binary
+ci	crates/clm/tests/ci_check.rs	every_wasm_build_stands_alone	no binary
+ci	crates/clm/tests/ci_check.rs	everything	no binary
+ci	crates/clm/tests/ci_check.rs	failing_browser_install_fails	no binary
+ci	crates/clm/tests/ci_check.rs	failing_capability_package_fails	no binary
+ci	crates/clm/tests/ci_check.rs	failing_on_both_attempts_fails	no binary
+ci	crates/clm/tests/ci_check.rs	failing_panel_test_fails	no binary
+ci	crates/clm/tests/ci_check.rs	helper_and_source_files	no binary
+ci	crates/clm/tests/ci_check.rs	in_ci_installs_the_browser_with_deps	no binary
+ci	crates/clm/tests/ci_check.rs	nextest_replaces_cargo_test_but_for_doctests	no binary
+ci	crates/clm/tests/ci_check.rs	no_claude_on_path_skips	no binary
+ci	crates/clm/tests/ci_check.rs	no_claude_skips_the_plugin_validation	no binary
+ci	crates/clm/tests/ci_check.rs	nothing_else_runs_coverage	no binary
+ci	crates/clm/tests/ci_check.rs	one_cargo_test_per_package_in_package_order	no binary
+ci	crates/clm/tests/ci_check.rs	one_integration_test	no binary
+ci	crates/clm/tests/ci_check.rs	only_detector_tools_installs_tools	no binary
+ci	crates/clm/tests/ci_check.rs	only_file_lines_select	no binary
+ci	crates/clm/tests/ci_check.rs	outside_ci_installs_the_browser_without_deps	no binary
+ci	crates/clm/tests/ci_check.rs	packages_not_built_yet_run_nothing	no binary
+ci	crates/clm/tests/ci_check.rs	panel_not_selected_runs_no_claude	no binary
+ci	crates/clm/tests/ci_check.rs	plugin_not_selected_runs_no_plugin_validation	no binary
+ci	crates/clm/tests/ci_check.rs	sh_detector_on_a_repository_file_needs_no_install_line	no binary
+ci	crates/clm/tests/ci_check.rs	stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block	no binary
+ci	crates/clm/tests/ci_check.rs	stryker_that_runs_no_test_leaves_no_verdict	no binary
+ci	crates/clm/tests/ci_check.rs	test_tools_installs_only_nextest_pinned	no binary
+ci	crates/clm/tests/ci_check.rs	test_tools_run_between_the_detector_tools_and_cargo	no binary
+ci	crates/clm/tests/ci_check.rs	tests_that_notice_nothing_survive_with_the_count_of_both_runs	no binary
+ci	crates/clm/tests/ci_check.rs	the_fixture_is_judged_first_outside_the_repository	no binary
+ci	crates/clm/tests/ci_check.rs	the_mutation_script_is_in_no_land_check_or_workflow	no binary
+ci	crates/clm/tests/ci_check.rs	the_mutation_tools_are_pinned_and_installed_when_absent	no binary
+ci	crates/clm/tests/ci_check.rs	the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it	no binary
+ci	crates/clm/tests/ci_check.rs	the_pin_changing_runs_its_crate_s_tests	no binary
+ci	crates/clm/tests/ci_check.rs	the_release_builds_no_nextest	no binary
+ci	crates/clm/tests/ci_check.rs	the_site_marks_only_its_own_files	no binary
+ci	crates/clm/tests/ci_check.rs	the_web_package_retries_and_no_other_suite_does	no binary
+ci	crates/clm/tests/ci_check.rs	vitest_tests_that_notice_nothing_survive	no binary
+ci	crates/clm/tests/ci_check.rs	web_file	no binary
+ci	crates/clm/tests/ci_check.rs	web_not_selected_installs_no_browser	no binary
+ci	crates/clm/tests/ci_check.rs	without_a_land_place_the_cargo_variables_stay	no binary
+ci	crates/clm/tests/community_files.rs	code_of_conduct_is_the_covenant_with_our_contact	no binary
+ci	crates/clm/tests/community_files.rs	early_access_form_asks_one_question_and_no_email	no binary
+ci	crates/clm/tests/community_files.rs	issue_forms_parse_and_say_what_is_asked	no binary
+ci	crates/clm/tests/community_files.rs	pull_request_template_lists_the_spec_paths	no binary
+ci	crates/clm/tests/community_files.rs	security_policy_says_where_to_report	no binary
+ci	crates/clm/tests/release_workflow.rs	a_failing_corpus_entry_fails_prepare_and_pushes_nothing	no binary
+ci	crates/clm/tests/release_workflow.rs	a_failing_lock_fails_prepare_and_pushes_nothing	no binary
+ci	crates/clm/tests/release_workflow.rs	a_release_with_a_migration_of_inits_commits_its_lock	no binary
+ci	crates/clm/tests/release_workflow.rs	a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line	no binary
+ci	crates/clm/tests/release_workflow.rs	a_version_edit_that_changes_nothing_fails	no binary
+ci	crates/clm/tests/release_workflow.rs	builds_the_four_targets_from_the_prepared_commit	no binary
+ci	crates/clm/tests/release_workflow.rs	bump_replaces_an_earlier_failed_runs_branch	no binary
+ci	crates/clm/tests/release_workflow.rs	deploys_web_after_publishing	no binary
+ci	crates/clm/tests/release_workflow.rs	every_cargo_job_installs_the_pinned_toolchain	no binary
+ci	crates/clm/tests/release_workflow.rs	existing_release_fails_and_pushes_nothing	no binary
+ci	crates/clm/tests/release_workflow.rs	existing_tag_fails_and_pushes_nothing	no binary
+ci	crates/clm/tests/release_workflow.rs	failing_gh_fails_closed	no binary
+ci	crates/clm/tests/release_workflow.rs	failing_tests_push_no_bump	no binary
+ci	crates/clm/tests/release_workflow.rs	higher_version_pushes_one_bump_commit_to_a_release_branch	no binary
+ci	crates/clm/tests/release_workflow.rs	linux_binaries_must_be_statically_linked	no binary
+ci	crates/clm/tests/release_workflow.rs	lower_version_fails_and_pushes_nothing	no binary
+ci	crates/clm/tests/release_workflow.rs	may_write_contents_and_never_runs_twice_at_once	no binary
+ci	crates/clm/tests/release_workflow.rs	merge_into_main_fast_forwards_to_the_bump	no binary
+ci	crates/clm/tests/release_workflow.rs	merge_into_main_is_titled_release_when_main_moved	no binary
+ci	crates/clm/tests/release_workflow.rs	merge_retries_then_prints_the_commands_for_a_human	no binary
+ci	crates/clm/tests/release_workflow.rs	no_run_step_interpolates_the_version_input	no binary
+ci	crates/clm/tests/release_workflow.rs	node20_action_fails_naming_it	no binary
+ci	crates/clm/tests/release_workflow.rs	only_main_can_release	no binary
+ci	crates/clm/tests/release_workflow.rs	only_the_merge_into_main_step_of_release_yml_is_exempt	no binary
+ci	crates/clm/tests/release_workflow.rs	only_the_release_merge_pushes_main	no binary
+ci	crates/clm/tests/release_workflow.rs	packs_and_passes_on_both_assets_per_target	no binary
+ci	crates/clm/tests/release_workflow.rs	prepare_installs_detector_tools_before_the_tests	no binary
+ci	crates/clm/tests/release_workflow.rs	prepare_runs_the_script_that_bumps_both_versions	no binary
+ci	crates/clm/tests/release_workflow.rs	publishes_the_release_before_pushing_main	no binary
+ci	crates/clm/tests/release_workflow.rs	release_and_site_are_the_only_workflows	no binary
+ci	crates/clm/tests/release_workflow.rs	same_version_releases_the_dispatched_commit	no binary
+ci	crates/clm/tests/release_workflow.rs	same_version_without_a_corpus_entry_fails_naming_it	no binary
+ci	crates/clm/tests/release_workflow.rs	shim_matching_the_matrix_passes_whatever_its_order	no binary
+ci	crates/clm/tests/release_workflow.rs	shim_naming_an_unbuilt_asset_fails_naming_it	no binary
+ci	crates/clm/tests/release_workflow.rs	shim_with_no_targets_fails	no binary
+ci	crates/clm/tests/release_workflow.rs	site_workflow_builds_with_the_website_id_and_token_and_reads_only	no binary
+ci	crates/clm/tests/release_workflow.rs	site_workflow_is_dispatched_only_and_deploys_with_wrangler	no binary
+ci	crates/clm/tests/release_workflow.rs	triggers_only_on_dispatch_with_a_required_version	no binary
+ci	crates/clm/tests/release_workflow.rs	uses_only_node24_actions	no binary
+ci	crates/clm/tests/release_workflow.rs	version_must_be_major_minor_patch	no binary
+ci	crates/clm/tests/release_workflow.rs	versions_compare_as_numbers	no binary
+ci	crates/clm/tests/release_workflow.rs	web_deploy_leaves_the_site_to_its_own_workflow	no binary
+ci	crates/clm/tests/release_workflow.rs	web_deploy_reads_only_the_cloudflare_secrets	no binary
+ci	crates/clm/tests/release_workflow.rs	workflow_pushing_main_fails_naming_file_and_line	no binary
+config	crates/clm/tests/cli.rs	check_fails_on_a_retired_term_in_a_spec	binary
+config	crates/clm/tests/cli.rs	config_get_affected	binary
+config	crates/clm/tests/cli.rs	config_get_approval_defaults_to_any	binary
+config	crates/clm/tests/cli.rs	config_get_approval_from_the_repository	binary
+config	crates/clm/tests/cli.rs	config_get_build_prints_the_setup_and_the_file	binary
+config	crates/clm/tests/cli.rs	config_get_component_size_defaults	binary
+config	crates/clm/tests/cli.rs	config_get_component_size_from_the_repository	binary
+config	crates/clm/tests/cli.rs	config_get_default_outside_a_repository	binary
+config	crates/clm/tests/cli.rs	config_get_detectors_prints_their_names	binary
+config	crates/clm/tests/cli.rs	config_get_env_prints_a_line_per_variable	binary
+config	crates/clm/tests/cli.rs	config_get_exits_1_when_settings_cannot_load	binary
+config	crates/clm/tests/cli.rs	config_get_from_the_repository	binary
+config	crates/clm/tests/cli.rs	config_get_health_defaults	binary
+config	crates/clm/tests/cli.rs	config_get_health_from_the_repository	binary
+config	crates/clm/tests/cli.rs	config_get_host_azure	binary
+config	crates/clm/tests/cli.rs	config_get_host_defaults_to_github	binary
+config	crates/clm/tests/cli.rs	config_get_host_from_the_repository	binary
+config	crates/clm/tests/cli.rs	config_get_in_a_linked_worktree_reads_the_main_worktrees_local_file	binary
+config	crates/clm/tests/cli.rs	config_get_land_check	binary
+config	crates/clm/tests/cli.rs	config_get_land_check_target	binary
+config	crates/clm/tests/cli.rs	config_get_land_defaults_to_nothing	binary
+config	crates/clm/tests/cli.rs	config_get_max_builds	binary
+config	crates/clm/tests/cli.rs	config_get_prints_each_upgrade_key_with_its_file	binary
+config	crates/clm/tests/cli.rs	config_get_rejects_a_variable_that_is_not_utf8	binary
+config	crates/clm/tests/cli.rs	config_get_unknown_key_exits_1	binary
+config	crates/clm/tests/cli.rs	config_get_verify_prints_the_table_and_the_file	binary
+config	crates/clm/tests/cli.rs	config_get_writer_from_the_variable	binary
+config	crates/clm/tests/cli.rs	config_get_writer_unset	binary
+config	crates/clm/tests/cli.rs	config_list_of_an_invalid_edit_prints_nothing_and_fails	binary
+config	crates/clm/tests/cli.rs	config_list_prints_a_line_per_env_variable	binary
+config	crates/clm/tests/cli.rs	config_list_prints_every_key_with_its_layer	binary
+config	crates/clm/tests/cli.rs	every_key_config_list_prints_is_one_config_get_accepts	binary
+config	crates/clm/tests/cli.rs	this_repository_is_clean	binary
+config	crates/clm/tests/cli.rs	this_repository_names_the_retired_terms_detector	binary
+config	crates/clm/tests/cli.rs	this_repositorys_clm_toml	binary
+config	crates/clm/tests/cli.rs	unreferenced_allow_list_gives_every_entry_a_reason	no binary
+config	crates/clm/tests/cli.rs	unreferenced_detector_is_named_here	no binary
+config	crates/clm/tests/cli.rs	unreferenced_is_clean_with_the_allow_list	binary
+context	crates/clm/tests/context.rs	assets_listed_not_included	binary
+context	crates/clm/tests/context.rs	bundle_from_equals_checkout	binary
+context	crates/clm/tests/context.rs	bundle_from_equals_checkout_with_capabilities	binary
+context	crates/clm/tests/context.rs	dependency_contract_only	binary
+context	crates/clm/tests/context.rs	hash_follows_the_bundle_only	binary
+context	crates/clm/tests/context.rs	identical_runs_and_sorted_dependencies	binary
+context	crates/clm/tests/context.rs	invalid_graph_prints_violations_not_a_bundle	binary
+context	crates/clm/tests/context.rs	nested_node_sees_its_spine_in_order	binary
+context	crates/clm/tests/context.rs	spine_assets_stay_out	binary
+context	crates/clm/tests/context.rs	unknown_node_exits_2	binary
+effort	crates/clm/tests/effort.rs	architecture_cli_lists_and_pages	binary
+effort	crates/clm/tests/effort.rs	architecture_decide_appends_decided	binary
+effort	crates/clm/tests/effort.rs	architecture_decide_ledger_failure_exits_2	binary
+effort	crates/clm/tests/effort.rs	architecture_decide_unknown_slug_and_refusals	binary
+effort	crates/clm/tests/effort.rs	architecture_help_says_architectural_constraint	binary
+effort	crates/clm/tests/effort.rs	architecture_json_parses	binary
+effort	crates/clm/tests/effort.rs	architecture_page_unknown_slug_as_text	binary
+effort	crates/clm/tests/effort.rs	capabilities_cli_lists	binary
+effort	crates/clm/tests/effort.rs	capabilities_cli_page	binary
+effort	crates/clm/tests/effort.rs	capabilities_cli_says_components	binary
+effort	crates/clm/tests/effort.rs	capabilities_json_parses	binary
+effort	crates/clm/tests/effort.rs	capabilities_refused_outside_a_clm_repository	binary
+effort	crates/clm/tests/effort.rs	capabilities_unknown_slug_exits_1	binary
+effort	crates/clm/tests/effort.rs	decide_after_parent_options	binary
+effort	crates/clm/tests/effort.rs	decide_appends_decided	binary
+effort	crates/clm/tests/effort.rs	decide_ledger_failure_exits_2	binary
+effort	crates/clm/tests/effort.rs	decide_refused_outside_a_clm_repository	binary
+effort	crates/clm/tests/effort.rs	decide_settles_open_flags	binary
+effort	crates/clm/tests/effort.rs	decide_unknown_slug	binary
+effort	crates/clm/tests/effort.rs	effort_record_cli	binary
+gate	crates/clm/tests/gate.rs	first_line	binary
+gate	crates/clm/tests/gate.rs	gate_prints_kind_and_blocks_mixed_pr	binary
+gate	crates/clm/tests/gate.rs	only_gate_rs_cites_the_gate	no binary
+host	crates/clm/tests/host.rs	a_failing_gh_pr_view_exits_2_and_opens_nothing	binary
+host	crates/clm/tests/host.rs	branch_delete_names_a_lease_that_is_not_the_pushed_tip	binary
+host	crates/clm/tests/host.rs	branch_delete_of_a_branch_already_gone_has_nothing_to_do	binary
+host	crates/clm/tests/host.rs	branch_delete_refuses_a_lease_that_names_no_pushed_tip	binary
+host	crates/clm/tests/host.rs	branch_delete_refuses_a_ledger_branch	binary
+host	crates/clm/tests/host.rs	branch_delete_takes_an_abbreviated_lease_of_the_pushed_tip	binary
+host	crates/clm/tests/host.rs	branch_delete_without_origin_has_nothing_to_do	binary
+host	crates/clm/tests/host.rs	branch_moved_keeps_its_message	binary
+host	crates/clm/tests/host.rs	page_body_without_a_host_does_nothing	binary
+host	crates/clm/tests/host.rs	page_body_without_an_open_page_exits_1	binary
+host	crates/clm/tests/host.rs	page_open_after_a_merged_page_opens_another	binary
+host	crates/clm/tests/host.rs	page_open_exits_2_when_gh_fails	binary
+host	crates/clm/tests/host.rs	pr_open_blank_intent_falls_back_to_commits	binary
+host	crates/clm/tests/host.rs	pr_open_describes_the_branch_it_is_given	binary
+host	crates/clm/tests/host.rs	pr_open_each_argument_overrides_alone	binary
+host	crates/clm/tests/host.rs	pr_open_spec_branch_without_a_change_uses_commits	binary
+host	crates/clm/tests/host.rs	pr_open_title_is_the_first_sentence_of_the_first_paragraph	binary
+host	crates/clm/tests/host.rs	push_prints_the_remotes_lines_and_succeeds_when_origin_has_the_commit	binary
+host	crates/clm/tests/host.rs	push_without_origin_exits_1	binary
+host	crates/clm/tests/host.rs	scenario_azure_issue_through_the_setting	binary
+host	crates/clm/tests/host.rs	scenario_azure_not_signed_in	binary
+host	crates/clm/tests/host.rs	scenario_azure_pull_request_through_the_setting	binary
+host	crates/clm/tests/host.rs	scenario_branch_another_sessions	binary
+host	crates/clm/tests/host.rs	scenario_branch_deleted	binary
+host	crates/clm/tests/host.rs	scenario_branch_main_refused	binary
+host	crates/clm/tests/host.rs	scenario_branch_moved	binary
+host	crates/clm/tests/host.rs	scenario_branch_never_fetched	binary
+host	crates/clm/tests/host.rs	scenario_issue_filed	binary
+host	crates/clm/tests/host.rs	scenario_issue_nowhere_to_file	binary
+host	crates/clm/tests/host.rs	scenario_page_already_open	binary
+host	crates/clm/tests/host.rs	scenario_page_body_blank_file	binary
+host	crates/clm/tests/host.rs	scenario_page_body_updated	binary
+host	crates/clm/tests/host.rs	scenario_page_open_github	binary
+host	crates/clm/tests/host.rs	scenario_page_open_no_host	binary
+host	crates/clm/tests/host.rs	scenario_pr_open_a_branch_without_a_change	binary
+host	crates/clm/tests/host.rs	scenario_pr_open_a_spec_branchs_change	binary
+host	crates/clm/tests/host.rs	scenario_pr_open_defaults_no_host	binary
+host	crates/clm/tests/host.rs	scenario_pr_open_detached_head	binary
+host	crates/clm/tests/host.rs	scenario_pr_open_given_arguments_override	binary
+host	crates/clm/tests/host.rs	scenario_pr_open_nothing_to_describe	binary
+host	crates/clm/tests/host.rs	scenario_push_fetched_but_never_held	binary
+host	crates/clm/tests/host.rs	scenario_push_main_refused	binary
+host	crates/clm/tests/host.rs	scenario_push_moved_since_last_fetch	binary
+host	crates/clm/tests/host.rs	scenario_push_new_branch	binary
+host	crates/clm/tests/host.rs	scenario_push_new_branch_refused_when_origin_has_it	binary
+host	crates/clm/tests/host.rs	scenario_push_rebased_branch	binary
+init	crates/clm/tests/guide.rs	constraints_page	binary
+init	crates/clm/tests/guide.rs	index	binary
+init	crates/clm/tests/guide.rs	index_in_the_guide_order	binary
+init	crates/clm/tests/guide.rs	one_page	binary
+init	crates/clm/tests/guide.rs	the_spec_format	binary
+init	crates/clm/tests/guide.rs	unknown_page	binary
+init	crates/clm/tests/init.rs	a_rerun_leaves_the_settings_alone	binary
+init	crates/clm/tests/init.rs	a_rerun_with_the_rules_names_nothing	binary
+init	crates/clm/tests/init.rs	an_old_clm_toml_gets_no_upgrade_step	binary
+init	crates/clm/tests/init.rs	architecture_template_proof	binary
+init	crates/clm/tests/init.rs	azure_next_steps	binary
+init	crates/clm/tests/init.rs	azure_remote	binary
+init	crates/clm/tests/init.rs	check_permissions_all_allowed	binary
+init	crates/clm/tests/init.rs	check_permissions_outside_a_repository_and_with_other_options	binary
+init	crates/clm/tests/init.rs	check_permissions_reads_both_files	binary
+init	crates/clm/tests/init.rs	check_permissions_wants_the_exact_rule	binary
+init	crates/clm/tests/init.rs	check_permissions_without_settings	binary
+init	crates/clm/tests/init.rs	clm_repository_in_a_subdirectory	binary
+init	crates/clm/tests/init.rs	dependencies_not_installed	binary
+init	crates/clm/tests/init.rs	empty_ignore_file	binary
+init	crates/clm/tests/init.rs	empty_repository	binary
+init	crates/clm/tests/init.rs	empty_repository_every_language	binary
+init	crates/clm/tests/init.rs	existing_codebase	binary
+init	crates/clm/tests/init.rs	host_from_origin	binary
+init	crates/clm/tests/init.rs	host_given	binary
+init	crates/clm/tests/init.rs	idempotent	binary
+init	crates/clm/tests/init.rs	ignore_check_failure_leaves_the_file	binary
+init	crates/clm/tests/init.rs	ignore_file_in_a_parent_counts	binary
+init	crates/clm/tests/init.rs	ignore_file_in_a_subdirectory_clm_repository	binary
+init	crates/clm/tests/init.rs	ignore_file_written_in_a_new_repository	binary
+init	crates/clm/tests/init.rs	ignore_lines_already_listed	binary
+init	crates/clm/tests/init.rs	ignore_lines_appended	binary
+init	crates/clm/tests/init.rs	init_keeps_the_settings_it_finds	binary
+init	crates/clm/tests/init.rs	init_leaves_settings_that_arent_json	binary
+init	crates/clm/tests/init.rs	init_seeds_the_allow_rules	binary
+init	crates/clm/tests/init.rs	init_writes_capabilities	binary
+init	crates/clm/tests/init.rs	init_writes_whitespace_settings_new_and_keeps_complete_ones	binary
+init	crates/clm/tests/init.rs	manifest_added_later	binary
+init	crates/clm/tests/init.rs	next_steps_name_the_push_and_clm_land	binary
+init	crates/clm/tests/init.rs	next_steps_skip_what_is_done	binary
+init	crates/clm/tests/init.rs	no_clm_repository	binary
+init	crates/clm/tests/init.rs	no_remote	binary
+init	crates/clm/tests/init.rs	not_a_repository	binary
+init	crates/clm/tests/init.rs	other_projects_have_no_build_table	binary
+init	crates/clm/tests/init.rs	project_files_kept	binary
+init	crates/clm/tests/init.rs	repeated_and_unknown_languages	binary
+init	crates/clm/tests/init.rs	rerun_from_a_subdirectory	binary
+init	crates/clm/tests/init.rs	root_outside_counts_the_untracked_files_the_bootstrap_commits	binary
+init	crates/clm/tests/init.rs	root_outside_in_an_empty_repository	binary
+init	crates/clm/tests/init.rs	root_outside_skips_clm_files_and_escapes	binary
+init	crates/clm/tests/init.rs	root_owns_what_init_writes_and_leaves_the_code_outside	binary
+init	crates/clm/tests/init.rs	rust_and_python_manifests	binary
+init	crates/clm/tests/init.rs	search_stops_at_the_git_repository	binary
+init	crates/clm/tests/init.rs	search_stops_at_the_top_without_a_git_entry	binary
+init	crates/clm/tests/init.rs	setup_installs_when_package_json_exists	binary
+init	crates/clm/tests/init.rs	survey_counts_agents_md_as_a_spec_file	binary
+init	crates/clm/tests/init.rs	template_says_architectural_constraint	binary
+init	crates/clm/tests/init.rs	template_says_pull_request	binary
+init	crates/clm/tests/init.rs	templates_say_new_words	binary
+init	crates/clm/tests/init.rs	tracked_local_settings_kept	binary
+init	crates/clm/tests/init.rs	two_languages	binary
+init	crates/clm/tests/init.rs	typescript_project_sets_build_setup	binary
+init	crates/clm/tests/init.rs	typescript_without_detectors_still_sets_build_setup	binary
+init	crates/clm/tests/init.rs	upgrade	binary
+init	crates/clm/tests/init.rs	upgrade_adds_capabilities	binary
+init	crates/clm/tests/init.rs	upgrade_adds_the_ignore_lines	binary
+init	crates/clm/tests/survey.rs	a_depends_on_cycle_is_reported	binary
+init	crates/clm/tests/survey.rs	a_duplicate_component_exits_1	binary
+init	crates/clm/tests/survey.rs	a_file_two_components_cover_overlaps	binary
+init	crates/clm/tests/survey.rs	a_map_that_sets_test_depends_on_is_refused	binary
+init	crates/clm/tests/survey.rs	a_star_does_not_cross_a_slash	binary
+init	crates/clm/tests/survey.rs	an_exempt_edge_is_not_reported	binary
+init	crates/clm/tests/survey.rs	an_exemption_covers_only_its_rule_and_files	binary
+init	crates/clm/tests/survey.rs	an_exemption_the_model_would_refuse_is_refused	binary
+init	crates/clm/tests/survey.rs	an_outside_glob_over_a_covered_file_exempts_nothing	binary
+init	crates/clm/tests/survey.rs	another_components_exemption_exempts_nothing	binary
+init	crates/clm/tests/survey.rs	binary_files_count_and_spec_files_do_not	binary
+init	crates/clm/tests/survey.rs	components_key	binary
+init	crates/clm/tests/survey.rs	entries_the_model_refuses_are_refused_in_its_words	binary
+init	crates/clm/tests/survey.rs	exemptions_that_are_not_a_list_are_refused	binary
+init	crates/clm/tests/survey.rs	from_a_subdirectory	binary
+init	crates/clm/tests/survey.rs	good_map	binary
+init	crates/clm/tests/survey.rs	outside_glob_that_exempts_nothing	binary
+init	crates/clm/tests/survey.rs	outside_that_is_not_a_list_of_globs_is_refused	binary
+init	crates/clm/tests/survey.rs	part_left_for_later	binary
+init	crates/clm/tests/survey.rs	python_import	binary
+init	crates/clm/tests/survey.rs	python_project_layouts	binary
+init	crates/clm/tests/survey.rs	rust_crate_roots_and_targets	binary
+init	crates/clm/tests/survey.rs	skipped_and_counted	binary
+init	crates/clm/tests/survey.rs	stable	binary
+init	crates/clm/tests/survey.rs	survey_reads_the_index_alone	binary
+init	crates/clm/tests/survey.rs	tests_carved_out_of_a_suite	binary
+init	crates/clm/tests/survey.rs	the_code_files_check_reads	binary
+init	crates/clm/tests/survey.rs	the_old_key	binary
+init	crates/clm/tests/survey.rs	the_report_lines_name_what_they_found	binary
+init	crates/clm/tests/survey.rs	two_components_tests_overlap	binary
+init	crates/clm/tests/survey.rs	two_crates	binary
+init	crates/clm/tests/survey.rs	typescript_import	binary
+init	crates/clm/tests/survey.rs	uncovered_file	binary
+init	crates/clm/tests/survey.rs	undeclared_edge	binary
+land	crates/clm/tests/land.rs	a_callers_target_takes_the_lock_too	binary
+land	crates/clm/tests/land.rs	check_deletes_the_binary	binary
+land	crates/clm/tests/land.rs	check_log_cant_be_created	binary
+land	crates/clm/tests/land.rs	check_only_checks_the_working_tree	binary
+land	crates/clm/tests/land.rs	check_output_reaches_stderr_in_order	binary
+land	crates/clm/tests/land.rs	checked_code_takes_no_lock	binary
+land	crates/clm/tests/land.rs	copy_removed	binary
+land	crates/clm/tests/land.rs	fetch_keeps_failing_with_origin_reachable	binary
+land	crates/clm/tests/land.rs	fetch_loses_a_ref_race	binary
+land	crates/clm/tests/land.rs	held_through_the_gate_on_the_merge	binary
+land	crates/clm/tests/land.rs	overlapping_lands	binary
+land	crates/clm/tests/land.rs	pushed_though_git_failed	binary
+land	crates/clm/tests/land.rs	readers_selection_fails_says_why	binary
+land	crates/clm/tests/land.rs	refetch_fails	binary
+land	crates/clm/tests/land.rs	selection_fails_says_why	binary
+ledger	crates/clm/tests/ledger.rs	by_hand_trailer_needs_closed_frontmatter	binary
+ledger	crates/clm/tests/ledger.rs	by_hand_trailer_needs_the_decision	binary
+ledger	crates/clm/tests/ledger.rs	by_hand_trailer_shut_in_a_signed_repository	binary
+ledger	crates/clm/tests/ledger.rs	by_hand_trailer_skips_commit	binary
+ledger	crates/clm/tests/ledger.rs	check_runs_verify_on_main	binary
+ledger	crates/clm/tests/ledger.rs	compact_drops_reviewed_lines	binary
+ledger	crates/clm/tests/ledger.rs	compact_drops_superseded_effort	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_a_lands_check	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_a_signed_lands_approval	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_an_older_lands_check	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_an_open_approval	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_answers	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_chains_of_bases	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_every_check_when_a_lands_key_is_unknown	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_lands_and_newer_checks	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_proposal_records	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_subscription_records	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_the_basis_of_a_composed_check	binary
+ledger	crates/clm/tests/ledger.rs	compact_keeps_the_basis_of_a_composed_check_newer_than_every_land	binary
+ledger	crates/clm/tests/ledger.rs	compact_prunes_a_landed_approval_and_older_checks	binary
+ledger	crates/clm/tests/ledger.rs	compact_prunes_feedback_at_a_signed_lands_fingerprint	binary
+ledger	crates/clm/tests/ledger.rs	compact_prunes_landed_feedback	binary
+ledger	crates/clm/tests/ledger.rs	compact_settles_an_effort_tie	binary
+ledger	crates/clm/tests/ledger.rs	compact_still_prunes_a_check_no_land_or_basis_names	binary
+ledger	crates/clm/tests/ledger.rs	compact_warns_when_origin_refuses_the_push	binary
+ledger	crates/clm/tests/ledger.rs	review_before_the_switch	binary
+ledger	crates/clm/tests/ledger.rs	review_highest_signed_record_is_the_recorded_one	binary
+ledger	crates/clm/tests/ledger.rs	review_honest_and_over_stated_lands	binary
+ledger	crates/clm/tests/ledger.rs	review_not_recomputed_without_the_flag	binary
+ledger	crates/clm/tests/ledger.rs	review_ranks_code_with_spec	binary
+ledger	crates/clm/tests/ledger.rs	review_recorded_as_none	binary
+ledger	crates/clm/tests/ledger.rs	review_spec_recorded_as_code	binary
+ledger	crates/clm/tests/ledger.rs	review_unrated_land	binary
+ledger	crates/clm/tests/ledger.rs	review_unrated_land_judged_by_its_record	binary
+ledger	crates/clm/tests/ledger.rs	review_unrated_land_without_the_flag	binary
+ledger	crates/clm/tests/ledger.rs	review_unsigned_land_is_not_recomputed	binary
+ledger	crates/clm/tests/ledger.rs	show_effort_and_decided	binary
+ledger	crates/clm/tests/ledger.rs	show_lists_the_fold_in_time_order	binary
+ledger	crates/clm/tests/ledger.rs	show_prints_a_subscription_without_its_keys	binary
+ledger	crates/clm/tests/ledger.rs	show_prints_answers	binary
+ledger	crates/clm/tests/ledger.rs	show_prints_feedback_on_one_line	binary
+ledger	crates/clm/tests/ledger.rs	show_prints_proposals	binary
+ledger	crates/clm/tests/ledger.rs	show_prints_whether_a_land_needed_review	binary
+ledger	crates/clm/tests/ledger.rs	show_sorts_across_ledgers	binary
+ledger	crates/clm/tests/ledger.rs	verify_an_authors_approval_counts_only_under_any	binary
+ledger	crates/clm/tests/ledger.rs	verify_approval_for_another_diff	binary
+ledger	crates/clm/tests/ledger.rs	verify_approval_in_anothers_name	binary
+ledger	crates/clm/tests/ledger.rs	verify_author_name_changed	binary
+ledger	crates/clm/tests/ledger.rs	verify_before_the_switch	binary
+ledger	crates/clm/tests/ledger.rs	verify_clean_history	binary
+ledger	crates/clm/tests/ledger.rs	verify_counts_a_composed_check	binary
+ledger	crates/clm/tests/ledger.rs	verify_exempts_releases	binary
+ledger	crates/clm/tests/ledger.rs	verify_judges_a_land_by_any_signed_record	binary
+ledger	crates/clm/tests/ledger.rs	verify_reads_the_legacy_key_of_a_land_recorded_without_one	binary
+ledger	crates/clm/tests/ledger.rs	verify_reads_the_recorded_key	binary
+ledger	crates/clm/tests/ledger.rs	verify_rejects_a_composed_check_whose_basis_is_missing	binary
+ledger	crates/clm/tests/ledger.rs	verify_rejects_a_composed_check_whose_basis_ran_another_command	binary
+ledger	crates/clm/tests/ledger.rs	verify_reports_a_direct_push	binary
+ledger	crates/clm/tests/ledger.rs	verify_reports_a_land_no_check_names	binary
+ledger	crates/clm/tests/ledger.rs	verify_reports_a_push_behind_clms_back	binary
+ledger	crates/clm/tests/ledger.rs	verify_signed_and_approved_by_another	binary
+ledger	crates/clm/tests/ledger.rs	verify_starts_from_the_first_land	binary
+ledger	crates/clm/tests/ledger.rs	verify_takes_a_whole_check_beside_a_broken_composed_one	binary
+ledger	crates/clm/tests/ledger.rs	verify_unsigned_land	binary
+orchestrator	crates/clm/tests/cli.rs	orchestrator_commands_exit_2_when_git_fails	binary
+orchestrator	crates/clm/tests/proposals.rs	claim_fix_prints_the_branch_then_is_refused	binary
+orchestrator	crates/clm/tests/proposals.rs	next_is_capped_by_the_max_builds_setting	binary
+orchestrator	crates/clm/tests/proposals.rs	scenario_claim_prints_the_branch_then_is_refused	binary
+orchestrator	crates/clm/tests/proposals.rs	scenario_proposals_lines_filter_and_warning	binary
+orchestrator	crates/clm/tests/run.rs	scenario_node_that_writes_a_protected_path	binary
+orchestrator	crates/clm/tests/status.rs	backlog_claims_are_counted_with_node_claims	binary
+orchestrator	crates/clm/tests/status.rs	scenario_claims_counted	binary
+orchestrator	crates/clm/tests/status.rs	scenario_nothing_in_flight	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_branch_deleted_on_origin_is_not_open	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_branch_gone_while_origin_took_the_push_counts_as_done	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_branch_moved_while_origin_took_the_push_is_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_hosts_refusal_of_a_branch_it_no_longer_has_counts_as_done	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_hosts_refusal_while_it_holds_the_tip_is_gits_failure	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_place_the_sweep_cant_delete_is_kept_and_reported	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_stale_refusal_while_origin_holds_the_tip_is_gits_failure	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	a_sweep_that_fails_exits_2	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	another_writers_local_ledger_isnt_the_clones	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	archived_change_releases_its_autosync	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	build_worktree_merged_without_a_record_is_removed	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	checkpoint_reports_no_review	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	dirty_landed_build_worktree_is_kept_and_reported_elsewhere	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	dirty_main_checkout_on_a_builds_branch_is_left	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	dirty_main_checkout_on_a_landed_branch_is_left	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	git_failure_exits_2	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	land_off_main_is_ignored	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	landed_at_an_older_tip_is_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	landed_without_a_record_on_origin_is_removed	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	landed_worktree_outside_the_shelf_is_left_alone	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	main_checkout_on_a_builds_branch_switches_to_main	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	main_checkout_on_a_landed_branch_switches_to_main	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	mark_that_isnt_a_commit_recomputes_the_whole_chain	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	only_impl_worktrees_in_claude_worktrees_agent_dirs_are_builds	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	origins_refusal_while_it_holds_the_tip_is_gits_failure	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	own_checkout_and_its_branch_are_the_sessions_own	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	pushed_ledger_is_safe	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	recreated_branch_with_an_old_land_is_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	runs_from_inside_a_worktree	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_a_claim_deleted_since_the_fetch	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_a_claim_retaken_since_the_fetch	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_a_delete_git_fails	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_a_wrap_up_whose_fetch_keeps_failing	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_a_wrap_up_whose_fetch_loses_a_ref_race	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_abandoned_autosync_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_another_sessions_work	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_branches_from_main_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_builds_abandoned_branch	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_builds_worktree_git_cant_remove	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_builds_worktree_is_elsewhere	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_clean_lands_marked	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_complete_change	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_damaged_place_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_done_backlog_claims_removed	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_finding_holds_the_mark	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_humans_files_on_main	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_humans_worktree_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_landed_work_cleaned_up	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_lands_before_the_mark_not_recomputed	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_live_claim_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_merged_without_a_record	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_no_lands_yet	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_open_branch_only	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_outside_glob_under_a_hidden_directory	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_record_arriving_late	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_rewritten_main	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_stale_places_freed	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_unpushed_ledger	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_unpushed_work	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_unrated_land	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_unrecorded_land	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	scenario_violation_on_main	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	the_callers_own_landed_worktree_is_kept	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	unapproved_land_alone_doesnt_hold_the_mark	binary
+orchestrator.checkpoint	crates/clm/tests/checkpoint.rs	violations_on_main_are_reported	binary
+orchestrator.run	crates/clm/tests/run.rs	a_refused_resume_keeps_its_reused_place	binary
+orchestrator.run	crates/clm/tests/run.rs	a_refused_run_leaves_an_earlier_prompt_file_alone	binary
+orchestrator.run	crates/clm/tests/run.rs	a_run_that_fails_after_claiming_frees_its_new_place	binary
+orchestrator.run	crates/clm/tests/run.rs	an_earlier_prompt_file_is_replaced	binary
+orchestrator.run	crates/clm/tests/run.rs	an_empty_commit_off_main_is_not_an_unpushed_claim	binary
+orchestrator.run	crates/clm/tests/run.rs	an_unpushed_claim_a_worktree_has_checked_out_is_refused	binary
+orchestrator.run	crates/clm/tests/run.rs	claim_failing_in_git_exits_2	binary
+orchestrator.run	crates/clm/tests/run.rs	claim_released_when_the_branch_cant_be_made	binary
+orchestrator.run	crates/clm/tests/run.rs	dirty_worktree_on_resume_is_refused	binary
+orchestrator.run	crates/clm/tests/run.rs	dirty_worktree_takes_no_place	binary
+orchestrator.run	crates/clm/tests/run.rs	finish_fails_in_git_with_exit_2	binary
+orchestrator.run	crates/clm/tests/run.rs	finish_from_a_linked_worktree_looks_under_the_main_one	binary
+orchestrator.run	crates/clm/tests/run.rs	finish_keeps_a_branch_landed_only_locally	binary
+orchestrator.run	crates/clm/tests/run.rs	finish_never_removes_the_worktree_it_runs_in	binary
+orchestrator.run	crates/clm/tests/run.rs	finish_prints_landed_with_no_worktree	binary
+orchestrator.run	crates/clm/tests/run.rs	landed_leftover_worktree_gone_before_the_place	binary
+orchestrator.run	crates/clm/tests/run.rs	main_checkout_on_the_branch_is_refused	binary
+orchestrator.run	crates/clm/tests/run.rs	missing_skill_refuses_before_claiming	binary
+orchestrator.run	crates/clm/tests/run.rs	pending_requirements_are_listed_most_urgent_first	binary
+orchestrator.run	crates/clm/tests/run.rs	pinned_superpowers_comes_from_the_cache	binary
+orchestrator.run	crates/clm/tests/run.rs	prompt_file_that_cant_be_written_exits_1_naming_it	binary
+orchestrator.run	crates/clm/tests/run.rs	prompts_directory_that_cant_be_made_refuses_before_claiming	binary
+orchestrator.run	crates/clm/tests/run.rs	refusals_say_component	binary
+orchestrator.run	crates/clm/tests/run.rs	resume_of_a_bare_claim	binary
+orchestrator.run	crates/clm/tests/run.rs	resume_refuses_once_the_claim_is_lost	binary
+orchestrator.run	crates/clm/tests/run.rs	root_builds_the_capability_tests_without_a_capability_node	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_a_build_prompt_says_component	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_a_finish_whose_fetch_loses_a_ref_race	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_a_run_whose_fetch_keeps_failing	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_a_run_whose_fetch_loses_a_ref_race	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_another_clone_claimed_meanwhile	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_behind_and_obsolete	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_blocked_requirement_left_out	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_cap_reached	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_capability_nodes_prompt	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_check_command_named	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_checkout_outside_the_worktrees_directory	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_claim_rebased_before_any_work	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_claimed_elsewhere	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_dirty_leftover	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_dirty_worktree_kept	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_interrupted_after_the_push	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_interrupted_before_the_push	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_landed_build_tidied	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_landed_leftover_branch	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_landed_leftover_gone_before_the_place	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_landed_leftover_worktree	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_needing_requirement_left_out	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_no_check_command	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_no_review_model	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_no_target_directory	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_node_prepared	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_node_that_writes_a_protected_path	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_nothing_to_finish	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_place_taken	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_prompt_names_setup_only_when_declared	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_prompt_pr_body	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_prompt_slot	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_refused_claim_frees_the_place	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_resume_keeps_its_place	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_resume_with_unlanded_commits	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_resumed_branch_behind_main	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_resumed_branch_that_conflicts_with_main	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_review_model_given	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_stopped_after_a_rebase	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_stopped_build_kept	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_unpushed_leftover_branch	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_unreadable_settings	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_unwritable_directory_removed	binary
+orchestrator.run	crates/clm/tests/run.rs	scenario_worktree_git_cant_remove	binary
+orchestrator.run	crates/clm/tests/setup.rs	a_setup_killed_by_a_signal_says_so	binary
+orchestrator.run	crates/clm/tests/setup.rs	scenario_nothing_declared	binary
+orchestrator.run	crates/clm/tests/setup.rs	scenario_setup_fails	binary
+orchestrator.run	crates/clm/tests/setup.rs	scenario_setup_gets_the_projects_variables	binary
+orchestrator.run	crates/clm/tests/setup.rs	scenario_setup_runs_in_the_root	binary
+orchestrator.run	crates/clm/tests/setup.rs	scenario_unreadable_settings	binary
+orchestrator.run	crates/clm/tests/setup.rs	setup_passes_output_through_and_closes_stdin	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	a_clone_the_environment_names_is_left_alone	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	bad_name_is_refused_before_fetching	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	empty_override_counts_as_unset	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	fetch_fails	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	no_reserved_words	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	override_dir	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	pinned_copy	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	relative_override_prints_an_absolute_path	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	skill_dir_without_skill_md	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	symlinked_cache_prints_the_path_run_loads	binary
+orchestrator.run	crates/clm/tests/superpowers.rs	unknown_skill	binary
+orchestrator.triage	crates/clm/tests/draft.rs	a_kept_worktree_keeps_its_branch	binary
+orchestrator.triage	crates/clm/tests/draft.rs	a_landed_fold_branch_on_origin_is_deleted_only_when_in_main	binary
+orchestrator.triage	crates/clm/tests/draft.rs	a_local_branch_with_unpushed_commits_is_kept	binary
+orchestrator.triage	crates/clm/tests/draft.rs	a_p5_draft_sets_no_priority	binary
+orchestrator.triage	crates/clm/tests/draft.rs	a_prompt_that_cant_be_written_frees_the_place	binary
+orchestrator.triage	crates/clm/tests/draft.rs	a_slug_given_twice_is_claimed_once	binary
+orchestrator.triage	crates/clm/tests/draft.rs	an_archived_draft_has_landed_and_a_dirty_worktree_stays	binary
+orchestrator.triage	crates/clm/tests/draft.rs	an_unknown_item_is_left	binary
+orchestrator.triage	crates/clm/tests/draft.rs	clm_draft_answers_conflict_with_finish_and_fold	binary
+orchestrator.triage	crates/clm/tests/draft.rs	clm_draft_passes_the_declared_setup_into_the_prompt	binary
+orchestrator.triage	crates/clm/tests/draft.rs	clm_draft_reads_answers_from_a_subdirectory_it_runs_in	binary
+orchestrator.triage	crates/clm/tests/draft.rs	clm_draft_reads_relative_answers_from_where_it_runs	binary
+orchestrator.triage	crates/clm/tests/draft.rs	clm_triage_prints_the_lines_and_exits_0	binary
+orchestrator.triage	crates/clm/tests/draft.rs	finishing_a_draft_with_no_place_exits_0	binary
+orchestrator.triage	crates/clm/tests/draft.rs	resume_reuses_the_drafts_own_place_when_the_cap_is_full	binary
+orchestrator.triage	crates/clm/tests/draft.rs	resume_takes_the_newer_of_the_two_spec_branches	binary
+orchestrator.triage	crates/clm/tests/draft.rs	resume_with_no_free_place_takes_nothing	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_a_draft_that_pushed	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_another_sessions_later_claim_kept	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_cap_reached	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_draft_waiting_for_review	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_earlier_prompt_replaced	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_fold_not_landed	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_folded_drafts_branches_deleted	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_items_claimed_and_prompt_written	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_landed_draft_tidied	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_landed_drafts_claims_released	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_landed_fold_tidied	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_landed_fold_with_uncommitted_work	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_launcher	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_moved_items_claim_kept_while_the_change_waits	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_no_place_no_release	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_no_prompts_directory	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_nothing_claimed	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_nothing_claimed_frees_the_place	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_nothing_pushed	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_one_item_refused	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_staged_work_not_in_history_kept	binary
+orchestrator.triage	crates/clm/tests/draft.rs	scenario_worktree_left_behind_by_its_moved_branch	binary
+orchestrator.triage	crates/clm/tests/fold.rs	an_earlier_fold_prompt_is_replaced_and_clm_is_excluded	binary
+orchestrator.triage	crates/clm/tests/fold.rs	changes_fold_in_the_order_given	binary
+orchestrator.triage	crates/clm/tests/fold.rs	scenario_fold_branch_name_taken	binary
+orchestrator.triage	crates/clm/tests/fold.rs	scenario_missing_or_unapplied_change_left	binary
+orchestrator.triage	crates/clm/tests/fold.rs	scenario_nothing_to_fold	binary
+orchestrator.triage	crates/clm/tests/fold.rs	scenario_one_change	binary
+orchestrator.triage	crates/clm/tests/fold.rs	scenario_several_changes_folded	binary
+orchestrator.triage	crates/clm/tests/fold.rs	the_launcher_names_the_file_by_its_absolute_path	binary
+plugin	crates/clm/tests/plugin.rs	codex_hooks_wired	no binary
+plugin	crates/clm/tests/plugin.rs	codex_package	no binary
+plugin	crates/clm/tests/plugin.rs	hooks_wired	no binary
+plugin	crates/clm/tests/plugin.rs	launch_models	no binary
+plugin	crates/clm/tests/plugin.rs	manifest_owner	no binary
+plugin	crates/clm/tests/plugin.rs	package	no binary
+plugin	crates/clm/tests/plugin.rs	shim_bad_checksum_caches_nothing	no binary
+plugin	crates/clm/tests/plugin.rs	shim_downloads_the_target_for_each_platform	no binary
+plugin	crates/clm/tests/plugin.rs	shim_first_use_downloads_once	no binary
+plugin	crates/clm/tests/plugin.rs	shim_maps_each_target_in_one_assignment	no binary
+plugin	crates/clm/tests/plugin.rs	shim_names_no_windows_target	no binary
+plugin	crates/clm/tests/plugin.rs	shim_on_an_unsupported_platform_fails	no binary
+plugin	crates/clm/tests/plugin.rs	shim_prefers_clm_bin	no binary
+plugin	crates/clm/tests/plugin.rs	shim_session_start_without_a_binary_says_the_guard_is_off	no binary
+plugin	crates/clm/tests/plugin.rs	shim_without_a_release_says_how_to_install	no binary
+plugin	crates/clm/tests/plugin.rs	shim_without_a_version_fails	no binary
+plugin	crates/clm/tests/plugin.rs	skills	no binary
+plugin	crates/clm/tests/plugin.rs	skills_point_at_the_guide	no binary
+plugin.agents	crates/clm/tests/plugin_agents.rs	architecture_auditor	no binary
+plugin.agents	crates/clm/tests/plugin_agents.rs	issue_verifier	no binary
+plugin.agents	crates/clm/tests/plugin_agents.rs	spec_auditor	no binary
+plugin.agents	crates/clm/tests/plugin_agents.rs	spec_slimmer	no binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_item_body_and_origin	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_long_title	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_node_a_live_change_creates	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_on_a_spec_branch	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_on_an_implementation_branch	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_outside_a_clm_repository	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_taken_slug	binary
+plugin.hooks	crates/clm/tests/defect.rs	backlog_unknown_node	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_filed	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_filed_from_a_project_on_another_host	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_kept_from_a_linked_worktree	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_not_filed_is_kept_without_gh	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_not_kept_outside_git	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_unfiled_when_gh_fails_silently_or_is_missing	binary
+plugin.hooks	crates/clm/tests/defect.rs	issue_without_access	binary
+plugin.hooks	crates/clm/tests/defect.rs	reporting_off	binary
+plugin.hooks	crates/clm/tests/defect.rs	settings_that_cannot_load	binary
+plugin.hooks	crates/clm/tests/hooks.rs	autosync_hook_pushes_spec_work_silently	binary
+plugin.hooks	crates/clm/tests/hooks.rs	autosync_hook_stays_silent_when_it_cannot_push	binary
+plugin.hooks	crates/clm/tests/hooks.rs	autosync_hook_turned_off	binary
+plugin.hooks	crates/clm/tests/hooks.rs	autosync_hook_turned_off_in_the_repository	binary
+plugin.hooks	crates/clm/tests/hooks.rs	session_start_command	binary
+plugin.hooks	crates/clm/tests/hooks.rs	session_start_reminds_to_upgrade	binary
+plugin.hooks	crates/clm/tests/hooks.rs	session_start_states_the_defect_rule	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_asks_before_filing_a_defect	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_block_wins_over_a_defect_ask	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_blocks_a_rerun_whose_repository_cant_be_resolved	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_blocks_rerunning_a_release_run	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_command_asks_with_the_reason	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_command_blocks_dispatching_a_release	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_command_blocks_pushing_to_main	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_ignores_a_defect_report_body	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_looks_a_rerun_up_where_it_runs	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_quotes_the_defect_report_it_asks_about	binary
+plugin.hooks.guard	crates/clm/tests/guard.rs	guard_refuses_a_defect_report_it_cannot_show	binary
+plugin.panel	crates/clm/tests/plugin.rs	panel_package	no binary
+rename	crates/clm/tests/rename.rs	the_command_prints_what_it_did_and_exits_zero	binary
+sync	crates/clm/tests/sync.rs	a_refused_sync_keeps_its_output	binary
+sync	crates/clm/tests/sync.rs	autosync_exits_0_off_a_spec_branch	binary
+sync	crates/clm/tests/sync.rs	sync_fails_on_settings_main_brought_in_that_cant_be_loaded	binary
+sync	crates/clm/tests/sync.rs	sync_files_a_reconsider_item_at_the_repository_threshold	binary
+sync	crates/clm/tests/sync.rs	sync_ignores_an_uncommitted_settings_edit	binary
+sync	crates/clm/tests/sync.rs	sync_leaves_no_temporary_worktree	binary
+sync	crates/clm/tests/sync.rs	sync_prints_what_is_left_and_exits_1_then_0	binary
+sync	crates/clm/tests/sync.rs	sync_refusing_exits_1_and_git_failing_exits_2	binary
+sync	crates/clm/tests/sync.rs	sync_with_settings_that_cant_be_loaded	binary
+upgrade	crates/clm/tests/upgrade.rs	lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project	binary
+view	crates/clm/tests/status.rs	a_change_awaiting_approval_waits_on_you_and_a_node_writing_a_protected_path_is_ready	binary
+view	crates/clm/tests/status.rs	backlog_claims_are_counted_with_node_claims	binary
+view	crates/clm/tests/status.rs	invalid_graph_prints_violations	binary
+view	crates/clm/tests/status.rs	merged_claims_are_counted_and_released	binary
+view	crates/clm/tests/status.rs	no_repository_names_no_commit	binary
+view	crates/clm/tests/status.rs	scenario_aligned_columns	binary
+view	crates/clm/tests/status.rs	scenario_budget_accepted	binary
+view	crates/clm/tests/status.rs	scenario_changes_grouped	binary
+view	crates/clm/tests/status.rs	scenario_checkout_behind	binary
+view	crates/clm/tests/status.rs	scenario_checkout_named	binary
+view	crates/clm/tests/status.rs	scenario_claims_counted	binary
+view	crates/clm/tests/status.rs	scenario_complete_change	binary
+view	crates/clm/tests/status.rs	scenario_no_origin	binary
+view	crates/clm/tests/status.rs	scenario_nothing_in_flight	binary
+view	crates/clm/tests/status.rs	scenario_oversized_node	binary
+view	crates/clm/tests/status.rs	scenario_pending_states	binary
+view	crates/clm/tests/status.rs	scenario_summary	binary
+view	crates/clm/tests/status.rs	scenario_waiting_on_you	binary
+view	crates/clm/tests/status.rs	sizes_that_cant_be_checked_mark_nothing	binary
+view	crates/clm/tests/status.rs	status_and_view_never_fetch	binary
+view	crates/clm/tests/status.rs	status_has_no_review_section	binary
+view	crates/clm/tests/status.rs	summary_counts_unbuilt_nodes	binary
+view	crates/clm/tests/status.rs	summary_orders_statuses_states_and_kinds	binary
+view	crates/clm/tests/status.rs	the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to	binary
+view	crates/clm/tests/view.rs	scenario_a_removed_nodes_markers	binary
+view	crates/clm/tests/view.rs	scenario_chain_weight	binary
+view	crates/clm/tests/view.rs	scenario_change_progress	binary
+view	crates/clm/tests/view.rs	scenario_checkout_behind_on_the_chart	binary
+view	crates/clm/tests/view.rs	scenario_checkout_current	binary
+view	crates/clm/tests/view.rs	scenario_claimed_node_and_command_matches_library	binary
+view	crates/clm/tests/view.rs	scenario_coloured_chart	binary
+view	crates/clm/tests/view.rs	scenario_dependency_holds_nothing	binary
+view	crates/clm/tests/view.rs	scenario_human_first	binary
+view	crates/clm/tests/view.rs	scenario_need_reaches_the_needed_requirements_item	binary
+view	crates/clm/tests/view.rs	scenario_nested_nodes	binary
+view	crates/clm/tests/view.rs	scenario_node_detail_from_the_command	binary
+view	crates/clm/tests/view.rs	scenario_nothing_blocked	binary
+view	crates/clm/tests/view.rs	scenario_offline	binary
+view	crates/clm/tests/view.rs	scenario_order	binary
+view	crates/clm/tests/view.rs	scenario_oversized_on_the_chart	binary
+view	crates/clm/tests/view.rs	scenario_plain_chart	binary
+view	crates/clm/tests/view.rs	scenario_removed_requirement_still_cited	binary
+view	crates/clm/tests/view.rs	scenario_requirement_removed_later	binary
+view	crates/clm/tests/view.rs	scenario_svg	binary
+view	crates/clm/tests/view.rs	scenario_unknown_view	binary
+view	crates/clm/tests/view.rs	scenario_width	binary
+view	crates/clm/tests/view.rs	sizes_that_cant_be_checked_mark_nothing	binary
+view	crates/clm/tests/view.rs	spec_chart_shows_the_queue_state_from_the_claim_refs	binary
+view	crates/clm/tests/view.rs	violations_exit_1	binary
+view.repo	crates/clm/tests/view_at.rs	at_a_commit_below_the_repositorys_top	binary
+view.repo	crates/clm/tests/view_at.rs	at_a_commit_sizes_by_its_own_settings	binary
+view.repo	crates/clm/tests/view_at.rs	pending_behind_origin_main	binary
+view.repo	crates/clm/tests/view_at.rs	pending_names_its_commit_beside_violations_and_narrows_alike	binary
+view.repo	crates/clm/tests/view_at.rs	pending_no_such_commit	binary
+view.repo	crates/clm/tests/view_at.rs	pending_up_to_date	binary
+view.repo	crates/clm/tests/view_at.rs	scenario_ahead_of_the_checkout	binary
+view.repo	crates/clm/tests/view_at.rs	scenario_detached_never_fetched	binary
+view.repo	crates/clm/tests/view_at.rs	scenario_fetched_from_another_worktree	binary
+view.repo	crates/clm/tests/view_at.rs	scenario_header	binary
+view.repo	crates/clm/tests/view_at.rs	scenario_no_such_commit	binary
+view.repo	crates/clm/tests/view_queue.rs	at_changes_only_the_checkout_line_of_a_stored_plan	binary
+view.repo	crates/clm/tests/view_queue.rs	no_loop_yet	binary
+view.repo	crates/clm/tests/view_queue.rs	no_loop_yet_at_a_commit_reads_that_commit	binary
+view.repo	crates/clm/tests/view_queue.rs	the_loops_plan	binary
+view.repo	crates/clm/tests/view_queue.rs	the_queue_has_no_svg_form_and_a_missing_commit_is_named	binary

@@ -16,6 +16,8 @@ serves: [capability/land-safely, capability/approve-intent, architecture/humans-
 
 `clm-gate` also offers `foreign_files(repo, base, head, component)`: the code files `head` changes against `base` that aren't `component`'s build's to change, each with its owner, none when the root at the merge base sets no `wiring` (`own-files`). The gate itself reads no branch name, so `clm gate` doesn't report them: `clm land`, which knows the branch, applies the rule (`land/build-holds-own-files`), as it applies `files-outside-spec-paths` to a spec branch.
 
+`clm-gate` offers `clm gate` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 Changes come from `git diff --name-status --no-renames <merge-base>...HEAD`. Spec paths are `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and `AGENTS.md`. File contents at the merge base and at `HEAD` are compared with `git diff <rev>:<path> <rev>:<path>`. Uses the `git` CLI, not a git library.
 
@@ -733,3 +735,16 @@ each with the component that owns it, sorted by path. It SHALL return nothing wh
 
 #### Needs
 - model/wiring-globs
+
+### Requirement: commands-in-crate
+`clm-gate` SHALL offer `clm gate` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `gate`'s requirements SHALL call `clm-gate` itself, this call where the requirement states what a command prints or how it exits, and SHALL sit in `gate`'s own files: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `gate`'s own files
+- WHEN it calls `clm-gate`'s call with the arguments of `clm gate` and two buffers
+- THEN the buffers hold what `clm gate` prints to standard output and to standard error there, and the call returns the status `clm gate` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm gate` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on

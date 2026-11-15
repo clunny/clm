@@ -21,6 +21,8 @@ An `applied` or `implementing` change is *complete* when every requirement its d
 
 `queue_from_refs` and `taken_from_refs` return the queue and what holds backlog items from refs already loaded, without git or a checkout. `queue_from_refs` takes the graph, the markers, the `impl/*` branches with their tip commit times, the current time and the expiry. `taken_from_refs` takes `main`'s graph, the `spec/*` and `autosync/spec/*` refs, each with its tip's `changes/<id>/change.md` text, or, when the tip has none, its `changes/archive/<id>/change.md` text (or none), and the names under that change's `deltas/` (`archived-spec-work`): the caller chooses the file, so `SpecRef` keeps its fields and `taken_from_refs` reads the text the same whichever path it came from, the `propose/*` refs with their tip commit times, the current time and the expiry. `land_priority(root, branch, base, head)` gives `land` the priority a land of `branch` carries, which orders the clone's land queue (`land-priority`, `land/lock-queue`). With its default features disabled, the crate builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
 
+`clm-orchestrator` offers each of `clm next`, `clm claim` and `clm proposals` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 The queue holds every component of the graph. For each component:
 - Its **requirement states** come from `check`'s coverage with versions (`check.coverage/pending-report`): `current`, `behind`, `unbuilt` or `obsolete`. Its *pending* requirements are those that aren't current, the obsolete ones included, since an obsolete marker names the component in its ID; one whose ID names a component that doesn't exist counts on the component `check` gives it (`check.coverage/pending-report`).
@@ -793,3 +795,16 @@ Every fetch of `origin` that `clm-orchestrator` makes, in `clm next`, `clm claim
 
 #### Serves
 - capability/work-concurrently
+
+### Requirement: commands-in-crate
+`clm-orchestrator` SHALL offer each of `clm next`, `clm claim` and `clm proposals` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `orchestrator`'s requirements SHALL call `clm-orchestrator` itself, this call where the requirement states what a command prints or how it exits, and SHALL sit in `orchestrator`'s own files: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `orchestrator`'s own files
+- WHEN it calls `clm-orchestrator`'s call with the arguments of `clm next` and two buffers
+- THEN the buffers hold what `clm next` prints to standard output and to standard error there, and the call returns the status `clm next` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm next` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on

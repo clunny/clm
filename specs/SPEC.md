@@ -21,6 +21,10 @@ The root `.gitattributes` marks every lockfile the repository tracks, each `Carg
 
 The root's `paths` name `crates/clm`'s manifest, build script, sources and top-level test files, not the whole crate, so that `crates/clm/tests/capability/`, the capability tests' target, belongs to `capability` alone (`check/paths-disjoint`).
 
+**Commands live in their crates** (`commands-live-in-their-crates`). A command's arguments, what it prints and its exit status belong to the component whose requirements state them. That component's crate defines the command's arguments and offers the command as a call that takes them as the command line gives them, the root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status (each component's `commands-in-crate`). `crates/clm` parses the command line with those definitions, applies what holds for every command (`upgrade-blocks-commands`, `none-remote-before-commands`, `root-from-cwd`, `closed-stdout`), loads the settings a crate is passed, and calls the crate with the process's own streams and environment, exiting with what the call returns (`routes-only`). A crate that the web app compiles to WebAssembly offers its call in its native build only. The commands whose behaviour the root's own requirements state stay as they are: `clm contribution`, `clm upgrade`, `clm verify`, `clm machine`, `clm agent-harness`, `clm build` and `clm fingerprint`.
+
+Until `routes-only` is built, the top-level test files under `crates/clm/tests/` still hold tests of other components, which run the binary because Cargo gives it only to this package's tests. `changes/20261115-commands-in-their-crates/moved-tests.txt` (under `changes/archive/` once the change is complete) lists each one: the component it proves, its file, its name and whether it runs the binary. A component's build of `commands-in-crate` moves every test on its lines into its own crate under the same name, with the arguments it passes and everything it asserts unchanged, replacing only the helper that ran the binary by a call of the crate; it deletes the test from the root's file, with any helper nothing there uses any longer and the file itself when nothing is left in it, and deletes no test it hasn't moved. Its pull request says how many it moved against how many the list holds for it. A test that can't be moved as it stands, because what it observes exists only in a process (a signal, a closed stream, the binary's own path), stays where it is, and the build files a `question` item naming it. In the same build it points its arm of `crates/clm/src/main.rs` at the call and deletes the code there that the call replaces.
+
 `crates/clm/src/main.rs` is dispatch only, and the build of whichever component gains or changes a command edits it, with `crates/clm/src/upgrade_gate.rs`, the list of commands that run in a project behind on a required migration, and `crates/clm/Cargo.toml`, `Cargo.toml` and `Cargo.lock` when the component adds a crate: the root's own builds cover only the root's requirements. Those five files are the root's `wiring` (`model/wiring-globs`), and naming them turns the land's ownership rule on here (`land/build-holds-own-files`, `own-files-at-the-gate`). They are the files in which each component registers itself with the product; the root's other source files are its own behaviour and stay out (`own-files-at-the-gate` holds the measurement behind the list). `clm.toml` stays out too: it is `config`'s, and each setting this repository makes is a requirement of `config`. `upgrade`'s migrations stay out, and need no entry: a migration written today is `init`'s, beside the file it carries a change of (`migrations-live-with-init`). Two builds in one wave may both touch those files; `clm rebase`'s rebase reports the conflict and the session resolves it.
 
 **Running CLM's own repository on its own build** (`dogfood-from-main`, `dev-install-script`). `scripts/dev-install.sh` is a POSIX `sh` script for clones of CLM's own repository, not something CLM ships or `clm init` writes: it makes a clone's sessions, and only those, run `main`'s `clm` and the checkout's plugin, where they would otherwise run the release; every other project on the machine keeps the release (`dev-install-scoped`). A human runs it once per clone; builds never run it. It works on the clone's *main worktree*, the first worktree `git worktree list --porcelain` lists (as `config` finds it for `clm.local.toml`), whichever worktree it runs from, because Claude Code reads `.claude/settings.local.json` only there and the hook lives in the git directory every worktree shares. It merges JSON with `jq` (`reuse-first`); everything else is `git`, `cargo`, `claude` and `sh`. It installs the binary in `<common>/clm-dev`, in the git directory every worktree shares, at `bin/clm`, which becomes `CLM_BIN`. Its Claude Code marketplace, named `clm-dev`, is the main worktree itself (`dev-marketplace-in-place`): the tracked `.claude-plugin/marketplace.json` with its `name` changed, written to `.clm/dev-marketplace.json` there, which git ignores, and added as a manifest file. Claude Code resolves a manifest file's `./` sources against the folder above the file's own, so the plugins load in place from the main worktree, inside the marketplace's root, and a skill edit applies at the next session. A plugin folder symlinked out of a marketplace doesn't do: Claude Code refuses a plugin hook module whose real path lies outside the marketplace, as the panel's does. The resolution was measured, not documented, so the setup reads `claude plugin list --json` and stops when a `clm-dev` plugin fails to load. `settings.local.json` enables those plugins and turns off their `@clm` namesakes, which the tracked settings enable, and a linked worktree reads that file from the main worktree, so one file covers the clone and its worktrees, while the `clm` marketplace record every project shares stays on GitHub. A plain `clm` outside a session finds nothing: only a session's `PATH` holds the shim. The rebuild installs where the settings' `CLM_BIN` points, so a clone set up before `dev-install-scoped` keeps being rebuilt until its human runs the script again, and `CLAUDE.md` tells a session to ask for that. **The rebuild follows `origin/main`** (`rebuild-on-origin-main`). `main` moves through `clm land`, which pushes it from whichever worktree lands, so the main worktree rarely merges and a `post-merge` hook there misses most of what lands. Every way `main` moves on this clone moves `refs/remotes/origin/main` (a land's push updates it, as does any fetch or pull, a rebasing one included), and a ref update in any worktree runs the `reference-transaction` hook in the git directory they share. So the hook is a `reference-transaction` hook of a few lines: on the `committed` state, when a line of its input names `refs/remotes/origin/main`, it runs the tracked script with `--rebuild`; on anything else it exits at once, since git runs it for every ref update. A change to the rebuild reaches every clone with the next pull, without reinstalling the hook. The hook marks itself with the line `# clm dev-install`, which is how the script tells its own hook from someone else's. The rebuild builds `origin/main`'s commit, not the main worktree's: it keeps its own source, `clm-install-src` in the common git directory, a `git clone --shared --no-checkout` of the clone that borrows its objects, checked out detached at the commit to build, so it never touches a worktree a human or a session works in, and is no worktree of the clone, so nothing that lists worktrees sees it; `build.rs` reads the commit there, so `clm --version` names `origin/main`'s commit. It skips the build when the installed binary's `--version` names `origin/main`'s commit, or a commit from which nothing under `crates/`, `Cargo.toml` or `Cargo.lock` changed. One rebuild runs at a time, holding the lock directory `clm-install.lock` (with its process ID) in the common git directory; a rebuild that finds the lock held by a running process leaves it to that one, which reads `origin/main` again once it has installed and builds again when it moved, so a burst of lands ends with the binary at the last of them. `cargo install` replaces the binary by renaming, so a `clm` already running keeps its own file, and `clm land` runs from a copy of itself (`land/land-binary-copy`). Every setup run deletes a `post-merge` hook holding `# clm dev-install`, which earlier runs wrote.
@@ -1086,3 +1090,45 @@ The workspace SHALL hold no crate `clm-runner`, and `clm` SHALL have no `runner`
 #### Serves
 - architecture/no-dead-code
 - capability/no-dead-weight
+
+### Requirement: routes-only
+For every command a component offers as a call (`commands-in-crate`), `crates/clm` SHALL only parse the command line with the crate's own argument definitions, apply what holds for every command (`upgrade-blocks-commands`, `none-remote-before-commands`, `root-from-cwd`, `closed-stdout`), load the settings the crate is passed, and call the crate with the process's standard output, standard error and environment: it SHALL print nothing of its own for such a command and SHALL exit with the status the call returns. The top-level test files under `crates/clm/tests/` SHALL hold tests of the root's own requirements only, and the helpers no test there uses are removed with the tests that moved (`commands-live-in-their-crates`).
+
+#### Scenario: a routed command
+- GIVEN a fixture repository
+- WHEN `clm hashes <component>` runs as a process there, and a test calls `clm-apply`'s call with the same arguments and two buffers
+- THEN the process's standard output and standard error equal the buffers, and its exit status is what the call returned
+
+#### Scenario: a status the call returns
+- GIVEN a fixture repository whose check fails
+- WHEN `clm check` runs as a process
+- THEN it exits with the status `clm-check`'s call returns for that repository, and prints nothing the call didn't write
+
+#### Scenario: every command routes
+- GIVEN the commands `clm --help` lists
+- WHEN each runs as a process with `--help`
+- THEN each exits 0 and prints its own usage
+
+#### Needs
+- apply/commands-in-crate
+- check/commands-in-crate
+- check.affected/commands-in-crate
+- check.health/commands-in-crate
+- check.unreferenced/commands-in-crate
+- config/commands-in-crate
+- context/commands-in-crate
+- effort/commands-in-crate
+- gate/commands-in-crate
+- host/commands-in-crate
+- init/commands-in-crate
+- land/commands-in-crate
+- ledger/commands-in-crate
+- orchestrator/commands-in-crate
+- orchestrator.checkpoint/commands-in-crate
+- orchestrator.run/commands-in-crate
+- orchestrator.triage/commands-in-crate
+- plugin.hooks/commands-in-crate
+- plugin.hooks.guard/commands-in-crate
+- rename/commands-in-crate
+- sync/commands-in-crate
+- view.repo/commands-in-crate

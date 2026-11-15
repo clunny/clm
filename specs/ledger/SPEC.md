@@ -29,6 +29,8 @@ Record kinds:
 
 Every record also has `id` (random 128-bit hex, except an `effort` record's, which is `effort_id(session, branch)`), `kind` (one of the fourteen above), `writer` (`<person>/<clone>`) and `at` (the time it was written, in UTC, always as `YYYY-MM-DDTHH:MM:SS.mmmZ`, as `clm` and `web.worker` write it, so two records' times order as strings: the fold sorts by `at` so, and `cleared` compares a request's and an approval's so for `land` and `web.worker` alike). A signed record also has `sig`: an `approved` record signed under the namespace `clm-approve`, or a `landed` record under `clm-land`; the other kinds never have it, and a record without it is unsigned. A record is one flat JSON object, so no record field shares a name with these five: the land's kind is `land_kind`, not `kind`.
 
+`clm-ledger` offers `clm ledger` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 **Writers.** The person part falls back to `git config user.name` slugged (`person-slug`) when no layer sets `writer`; an empty result is an error telling the human to set `writer`. The clone part is written to `.git/clm/writer` in the common git directory, so a clone's worktrees share it. Many sessions in one clone commit to one local branch, and git's ref lock orders them; two clones of one person never share a branch, so nothing ever rebases a ledger.
 
@@ -789,3 +791,16 @@ The fold, `fold` and `fold_records` alike, SHALL parse `mutated` records and hol
 #### Serves
 - architecture/proven-by-tests
 - architecture/git-is-truth
+
+### Requirement: commands-in-crate
+`clm-ledger` SHALL offer `clm ledger` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `ledger`'s requirements SHALL call `clm-ledger` itself, this call where the requirement states what a command prints or how it exits, and SHALL sit in `ledger`'s own files: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `ledger`'s own files
+- WHEN it calls `clm-ledger`'s call with the arguments of `clm ledger` and two buffers
+- THEN the buffers hold what `clm ledger` prints to standard output and to standard error there, and the call returns the status `clm ledger` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm ledger` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on

@@ -14,6 +14,8 @@ serves: [capability/propose-intent, architecture/hash-based-staleness]
 - `clm apply <change-id>` applies a change's deltas to `specs/` and copies or removes its assets, deletes the `question` items its `resolves` names (`answered-questions`) and the item its `from` names (`promoted-item`), all-or-nothing, and marks the change `applied`. It exits 1 and writes nothing on any violation of the change, or of the loaded graph that the change doesn't fix (`loaded-graph`).
 - `clm hashes <node-id>` prints one `<element> <hash>` line per element of the component: `frontmatter`, `contract`, `design`, then `requirement:<slug>` for each requirement, then `asset:<path>` for each asset. `clm hashes architecture` and `clm hashes capability` print one line per entry of that human layer, in file order, `requirement:<slug> <hash>` or `capability:<slug> <hash>`, the word its heading uses (`model/human-layers`). When the repository has the capability layer's component (`model/reserved-ids`), `clm hashes capability` prints that component's element lines first, then the entries' lines: the component holds no requirement, so no line name is printed twice. It isn't called `hash`, which Claude Code's worktree isolation refuses (`worktree-safe-commands`).
 
+`clm-apply` offers each of `clm apply`, `clm archive` and `clm hashes` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 Apply computes each new SPEC.md text in memory, starting from the current text, and writes files only after every delta has validated. Frontmatter keys are replaced line by line. Sections and requirement blocks are replaced by their heading spans (outside code fences), so the rest of the file is untouched.
 
@@ -430,3 +432,16 @@ The messages of `clm apply` SHALL say component and components, never the old wo
 
 #### Serves
 - capability/keep-a-backlog
+
+### Requirement: commands-in-crate
+`clm-apply` SHALL offer each of `clm apply`, `clm archive` and `clm hashes` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `apply`'s requirements SHALL call `clm-apply` itself, this call where the requirement states what a command prints or how it exits, and SHALL sit in `apply`'s own files: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `apply`'s own files
+- WHEN it calls `clm-apply`'s call with the arguments of `clm apply` and two buffers
+- THEN the buffers hold what `clm apply` prints to standard output and to standard error there, and the call returns the status `clm apply` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm apply` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
