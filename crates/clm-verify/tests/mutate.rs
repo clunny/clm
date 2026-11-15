@@ -278,6 +278,26 @@ fn the_first_pass_fails_and_the_next_loses_nothing() {
 }
 
 #[test]
+fn an_empty_setting_ends_the_run() {
+    // req:verify/mutation-pass@cf9b872b
+    let (f, version) = unswitched();
+    f.write("mutate-result", "a/thing killed\n");
+    let set = format!("mutate = \"{}\"", f.path("bin/mutate").display());
+    let empty = switched_on(&f).replace(&set, "mutate = \"\"");
+    let end = f.land(&[("clm.toml", &empty)], "an empty setting");
+    f.land(&[("clm.toml", &switched_on(&f))], "switch the pass on");
+    f.land(
+        &[("crates/a/tests/x.rs", &test_file(&version, "let _ = 1;"))],
+        "a test",
+    );
+    f.due();
+    let Body::Mutated { since, .. } = mutated(&f).pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!(since, Some(end));
+}
+
+#[test]
 fn the_pass_switched_on_from_the_first_commit() {
     // req:verify/mutation-pass@cf9b872b
     let (f, version) = unswitched();
