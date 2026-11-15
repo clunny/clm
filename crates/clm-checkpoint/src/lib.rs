@@ -471,14 +471,20 @@ fn delete_on_origin<'a>(
         Err(clm_git::Error::Failed { stderr, .. }) => stderr,
         Err(e) => return Err(e.into()),
     };
-    // What git reports for each branch of the push: ` ! [rejected]  (delete) -> <b> (stale
-    // info)` for a lease that no longer holds. Any other line it flags is a failure.
+    // What git reports for each branch of the push it didn't delete: ` ! [rejected]  (delete)
+    // -> <b> (stale info)` for a lease that no longer holds, and ` ! [remote rejected] <b>
+    // (<reason>)`, with or without `(delete) -> `, when `origin` itself refuses, as it does a
+    // branch that went or moved after it told the push what it held. Any other line git
+    // flags is a failure.
     let mut stale = BTreeSet::new();
     for line in stderr.lines().filter(|l| l.trim_start().starts_with('!')) {
-        let branch = line
-            .strip_suffix(" (stale info)")
-            .and_then(|l| l.split_once("(delete) -> "))
-            .map(|(_, b)| b.trim());
+        let rest = line.trim_start().trim_start_matches('!').trim_start();
+        let branch = ["[rejected]", "[remote rejected]"]
+            .iter()
+            .find_map(|status| rest.strip_prefix(status))
+            .map(|l| l.trim_start())
+            .map(|l| l.strip_prefix("(delete) -> ").unwrap_or(l))
+            .and_then(|l| l.split_whitespace().next());
         match branch {
             Some(b) if gone.iter().any(|(g, _)| g.as_str() == b) => {
                 stale.insert(b.to_string());

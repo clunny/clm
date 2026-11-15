@@ -907,11 +907,12 @@ fn scenario_a_wrap_up_whose_fetch_keeps_failing() {
 
 /// A directory holding a `git` that, before it runs the first `push` naming `origin`, runs
 /// `before` (shell, with `$real` the real git and `$origin` the bare repository), and for
-/// `fail` instead fails every such `push` with that stderr and exit status.
+/// `fail` runs `before` and then fails every such `push` with that stderr and exit status,
+/// never running the real one.
 fn pushing_git(origin: &Path, before: &str, fail: Option<(&str, i32)>) -> TempDir {
     let bin = TempDir::new().unwrap();
     let on_push = if let Some((stderr, status)) = fail {
-        format!("echo '{stderr}' >&2\nexit {status}\n")
+        format!("{before}\necho '{stderr}' >&2\nexit {status}\n")
     } else {
         format!("[ -e \"$flag\" ] || {{ : > \"$flag\"\n{before}\n}}\n")
     };
@@ -1006,6 +1007,102 @@ fn a_stale_refusal_while_origin_holds_the_tip_is_gits_failure() {
     claim_and_landed_branch(&r);
     let refused = (" ! [rejected]        (delete) -> propose/q (stale info)", 1);
     let bin = pushing_git(&r.origin, "", Some(refused));
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(!out.contains("wrap-up ok"), "{out}");
+    assert_eq!(code, Some(2), "{out}");
+    assert!(exists(&r.origin, "refs/heads/propose/q"));
+}
+
+/// Has `origin` run `during` (shell, with `$real` git and `$origin` the bare repository) once
+/// it has told a push what its branches hold and before it updates them, so the push's lease
+/// holds and `origin` itself refuses the delete. Returns the flag file the hook leaves.
+fn origin_changes_mid_push(origin: &Path, during: &str) -> PathBuf {
+    let flag = origin.join("hook-ran");
+    write_exec(
+        &origin.join("hooks/pre-receive"),
+        &format!(
+            "#!/bin/sh\nreal=git\norigin={origin}\n\
+             export GIT_AUTHOR_NAME=x GIT_AUTHOR_EMAIL=x@x GIT_COMMITTER_NAME=x GIT_COMMITTER_EMAIL=x@x\n\
+             [ -e {flag} ] && exit 0\n: > {flag}\n{during}\n",
+            origin = origin.display(),
+            flag = flag.display(),
+        ),
+    );
+    flag
+}
+
+#[test]
+fn a_branch_gone_while_origin_took_the_push_counts_as_done() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let flag = origin_changes_mid_push(&r.origin, DELETE_Q);
+    let (code, out) = checkpoint(&r.work);
+    assert!(flag.exists(), "origin's hook never ran");
+    assert!(out.lines().any(|l| l == "removed origin/spec/y"), "{out}");
+    assert!(!out.lines().any(|l| l.contains("removed origin/propose/q")));
+    assert!(out.ends_with("wrap-up ok\n"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+    for rf in ["propose/q", "spec/y"] {
+        assert!(!exists(&r.origin, &format!("refs/heads/{rf}")), "{rf}");
+    }
+}
+
+#[test]
+fn a_branch_moved_while_origin_took_the_push_is_kept() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let before = git(&r.origin, &["rev-parse", "refs/heads/propose/q"]);
+    let flag = origin_changes_mid_push(&r.origin, MOVE_Q);
+    let (code, out) = checkpoint(&r.work);
+    assert!(flag.exists(), "origin's hook never ran");
+    assert!(out.lines().any(|l| l == "removed origin/spec/y"), "{out}");
+    assert!(!out.lines().any(|l| l.contains("removed origin/propose/q")));
+    assert!(out.ends_with("wrap-up ok\n"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+    let after = git(&r.origin, &["rev-parse", "refs/heads/propose/q"]);
+    assert_ne!(before, after, "propose/q stayed at the commit it was at");
+    assert!(!exists(&r.origin, "refs/heads/spec/y"));
+}
+
+#[test]
+fn origins_refusal_while_it_holds_the_tip_is_gits_failure() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let refused = (" ! [remote rejected] propose/q (failed to update ref)", 1);
+    let bin = pushing_git(&r.origin, "", Some(refused));
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(!out.contains("wrap-up ok"), "{out}");
+    assert_eq!(code, Some(2), "{out}");
+    assert!(exists(&r.origin, "refs/heads/propose/q"));
+}
+
+/// The line a hosted `origin` was seen to answer with, which names the delete and gives its
+/// own reason, where a local `origin` prints the branch alone.
+const REFUSED_BY_A_HOST: &str = " ! [remote rejected] (delete) -> propose/q (cannot lock ref \
+     \"refs/heads/propose/q\": unable to resolve reference \"refs/heads/propose/q\")";
+
+#[test]
+fn a_hosts_refusal_of_a_branch_it_no_longer_has_counts_as_done() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let bin = pushing_git(&r.origin, DELETE_Q, Some((REFUSED_BY_A_HOST, 1)));
+    let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
+    assert!(!out.lines().any(|l| l.contains("removed origin/propose/q")));
+    assert!(!out.contains("cannot lock ref"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+    assert!(!exists(&r.origin, "refs/heads/propose/q"));
+}
+
+#[test]
+fn a_hosts_refusal_while_it_holds_the_tip_is_gits_failure() {
+    // req:orchestrator.checkpoint/wrap-up-delete-loses-race@6344915b
+    let r = repo();
+    claim_and_landed_branch(&r);
+    let bin = pushing_git(&r.origin, "", Some((REFUSED_BY_A_HOST, 1)));
     let (code, out) = checkpoint_with(&r.work, Some(bin.path()));
     assert!(!out.contains("wrap-up ok"), "{out}");
     assert_eq!(code, Some(2), "{out}");
