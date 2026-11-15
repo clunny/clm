@@ -40,7 +40,7 @@ A branch squash-merged or fast-forwarded into `main` isn't landed by this test: 
 - THEN the worktree's directory is gone from disk and `git worktree list` doesn't name it, both local and remote branches and `autosync/spec/y` are gone, it printed `removed` with the worktree's path and `removed impl/a`, prints `wrap-up ok` and exits 0
 
 #### Scenario: build's worktree git can't remove
-- GIVEN the landed `impl/a` of "landed work cleaned up", whose worktree `git worktree remove` refuses or can't delete
+- GIVEN the landed `impl/a` of "landed work cleaned up", and a `git` whose `worktree remove` refuses the worktree, leaving it listed and on disk
 - WHEN `clm wrap-up` runs
 - THEN it printed a line starting `left ` with the worktree's path and `git worktree prune` and no `removed`, `dirty` or `elsewhere dirty` line with that path, the local branch `impl/a` still exists, and it prints `wrap-up ok` and exits 0
 
