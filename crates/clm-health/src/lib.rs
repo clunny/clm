@@ -15,8 +15,8 @@ use std::fmt;
 use std::path::Path;
 
 pub use churn::{Churn, churn};
-pub use command::{HealthArgs, WorkaroundArgs, health_command, workaround_command};
 pub use clm_git::Failure;
+pub use command::{HealthArgs, WorkaroundArgs, health_command, workaround_command};
 pub use flag::{crowded, workaround};
 pub use requirements::{Reconsider, RequirementSignals, reconsider, signals};
 

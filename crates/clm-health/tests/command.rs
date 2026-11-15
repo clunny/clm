@@ -142,11 +142,7 @@ fn scenario_a_command_called_in_a_test() {
 fn scenario_arguments_it_cant_parse() {
     // req:check.health/commands-in-crate@9f679611
     let dir = repo();
-    let out = call_health(
-        dir.path(),
-        &["--bogus"],
-        Ok(common::settings(12000, 40000)),
-    );
+    let out = call_health(dir.path(), &["--bogus"], Ok(common::settings(12000, 40000)));
     assert_eq!(out.status, 2, "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
     let stderr = String::from_utf8_lossy(&out.stderr);

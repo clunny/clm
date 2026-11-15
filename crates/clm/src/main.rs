@@ -532,26 +532,10 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// Print one advisory report of the repository's health; exits 0 whatever it finds.
-    Health {
-        /// Hours after which an unmerged claim has lapsed.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Health(clm_health::HealthArgs),
     /// Flag that a requirement was hard to build: write `backlog/workaround-<component>-<slug>-<n>.md`
     /// with the situation from stdin and print its path. Commits nothing.
-    Workaround {
-        /// The requirement, `<component>/<slug>`.
-        requirement: String,
-        /// The flag's title, naming what made it hard.
-        #[arg(long)]
-        title: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Workaround(clm_health::WorkaroundArgs),
     /// List the public items of the workspace's Rust libraries and TypeScript and Python
     /// packages that nothing outside their own library or package uses; exit 1 when it lists any.
     Unreferenced {
@@ -1674,12 +1658,35 @@ fn dispatch() -> ExitCode {
             expiry,
             root,
         } => machine(&repo_root(root), format, width, expiry),
-        Command::Health { expiry, root } => health(&repo_root(root), expiry),
-        Command::Workaround {
-            requirement,
-            title,
-            root,
-        } => flag_workaround(&repo_root(root), &requirement, &title),
+        Command::Health(args) => {
+            let root = repo_root(args.root);
+            let settings = clm_config::load(Some(&root), &clm_config::process_env)
+                .map(health_settings)
+                .map_err(|e| settings_violation(e, "check.health/health-report"));
+            ExitCode::from(clm_health::health_command(
+                std::env::args_os().skip(2),
+                &root,
+                settings,
+                &clm_config::process_env,
+                &mut Stdout(std::io::stdout().lock()),
+                &mut std::io::stderr(),
+            ))
+        }
+        Command::Workaround(args) => {
+            let root = repo_root(args.root);
+            let workaround_flag = clm_config::load(Some(&root), &clm_config::process_env)
+                .map(|s| s.effort.value.workaround_flag)
+                .map_err(|e| e.to_string());
+            ExitCode::from(clm_health::workaround_command(
+                std::env::args_os().skip(2),
+                &root,
+                workaround_flag,
+                &mut std::io::stdin(),
+                &clm_config::process_env,
+                &mut Stdout(std::io::stdout().lock()),
+                &mut std::io::stderr(),
+            ))
+        }
         Command::Unreferenced { allow, entry, root } => {
             match clm_unreferenced::scan(&survey_root(root), &allow, &entry) {
                 Ok(lines) if lines.is_empty() => ExitCode::SUCCESS,
@@ -2373,29 +2380,6 @@ fn machine(root: &Path, format: MachineFormat, width: usize, expiry: u64) -> Exi
     }
 }
 
-/// `clm health`: the report on stdout, with `config`'s `health` and `node_size`; exit 1
-/// when the settings or the graph can't be loaded, 2 when git fails.
-fn health(root: &Path, expiry: u64) -> ExitCode {
-    let settings = match clm_config::load(Some(root), &clm_config::process_env) {
-        Ok(s) => s,
-        Err(e) => {
-            let v = settings_violation(e, "check.health/health-report");
-            eprintln!("clm health: {}", clm_check::format(&v));
-            return ExitCode::FAILURE;
-        }
-    };
-    match clm_health::report(root, &health_settings(settings), expiry) {
-        Ok(report) => {
-            print!("{report}");
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
-            eprintln!("clm health: {e}");
-            ExitCode::from(e.exit_code())
-        }
-    }
-}
-
 /// Standard output for a crate's call: a write that fails panics as `println!` does, so a
 /// reader that has gone ends the command as for any print (`closed-stdout`).
 struct Stdout(std::io::StdoutLock<'static>);
@@ -2479,53 +2463,6 @@ fn capabilities(root: &Path, slug: Option<String>, format: CapabilitiesFormat) -
     };
     println!("{out}");
     ExitCode::SUCCESS
-}
-
-/// `clm workaround`: the body from stdin, the flag written, its path printed (`workaround-command`).
-fn flag_workaround(root: &Path, requirement: &str, title: &str) -> ExitCode {
-    let mut body = String::new();
-    if let Err(e) = std::io::stdin().read_to_string(&mut body) {
-        eprintln!("clm workaround: reading the body: {e}");
-        return ExitCode::FAILURE;
-    }
-    match clm_health::workaround(root, requirement, title, &body) {
-        Ok(path) => {
-            println!("{}", path.display());
-            workarounds(root, requirement)
-        }
-        Err(e) => {
-            eprintln!("clm workaround: {e}");
-            ExitCode::from(e.exit_code())
-        }
-    }
-}
-
-/// After `clm workaround` wrote its flag: exit 3, warning, for each capability the requirement
-/// serves that now has `[effort] workaround_flag` unsettled flags (`workaround-command`,
-/// `redesign-before-workaround`); 0, warning, when they can't be counted.
-fn workarounds(root: &Path, requirement: &str) -> ExitCode {
-    let counted = clm_config::load(Some(root), &clm_config::process_env)
-        .map_err(|e| e.to_string())
-        .and_then(|s| {
-            clm_health::crowded(root, requirement, s.effort.value.workaround_flag)
-                .map_err(|e| e.to_string())
-        });
-    match counted {
-        Ok(crowded) if crowded.is_empty() => ExitCode::SUCCESS,
-        Ok(crowded) => {
-            for (capability, n) in crowded {
-                eprintln!(
-                    "clm workaround: warning: {n} unsettled workarounds on {capability}: stop and \
-                     ask whether to redesign it (redesign-before-workaround)"
-                );
-            }
-            ExitCode::from(3)
-        }
-        Err(e) => {
-            eprintln!("clm workaround: warning: the workarounds weren't counted: {e}");
-            ExitCode::SUCCESS
-        }
-    }
 }
 
 /// `clm capabilities decide`: append a `decided` record (`effort/decide-command`).

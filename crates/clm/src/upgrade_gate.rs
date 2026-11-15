@@ -59,8 +59,8 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Verify { root, .. }
         | C::Approve { root, .. }
         | C::Reconnect { root }
-        | C::Health { root, .. }
-        | C::Workaround { root, .. }
+        | C::Health(clm_health::HealthArgs { root, .. })
+        | C::Workaround(clm_health::WorkaroundArgs { root, .. })
         | C::Unreferenced { root, .. }
         | C::Survey { root, .. }
         | C::Fingerprint { root, .. } => given(root),
