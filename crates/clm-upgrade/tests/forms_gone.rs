@@ -100,7 +100,7 @@ fn a_left_form_is_found_by_name_and_a_form_with_a_list_is_not() {
     fs::write(
         src.join("lib.rs"),
         format!(
-            "pub fn pending(r: &Path) {{}}\npub use x::{{apply, list_in}};\n// {}\n",
+            "pub fn pending(r: &Path) {{}}\npub fn require_current(r: &Path) {{}}\npub use x::{{apply, decline_in}};\npub use y::{{list,\n    list_in}};\n// {}\n",
             marker()
         ),
     )
@@ -115,12 +115,14 @@ fn a_left_form_is_found_by_name_and_a_form_with_a_list_is_not() {
         "exports `pending`",
         "exports `apply`",
         "uses `note`",
+        "exports `require_current`",
+        "exports `list`",
         "uses `latest`",
         "marker is left",
     ] {
         assert!(found.contains(expected), "{expected}: {found}");
     }
-    for unexpected in ["exports `list`", "uses `list`", "uses `decline`"] {
+    for unexpected in ["exports `decline`", "uses `list`", "uses `decline`"] {
         assert!(!found.contains(unexpected), "{unexpected}: {found}");
     }
 }
