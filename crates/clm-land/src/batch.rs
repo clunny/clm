@@ -638,12 +638,13 @@ impl Batch<'_, '_, '_> {
         let entries = loop {
             repo.fetch()?;
             let now = repo.rev(repo.base())?;
+            // Every pass counts, so a push that keeps being refused ends too.
+            rounds += 1;
+            if rounds > crate::land::ATTEMPTS {
+                self.moved = true;
+                return Ok(());
+            }
             if now.as_deref() != Some(kept.chain.base.as_str()) {
-                rounds += 1;
-                if rounds > crate::land::ATTEMPTS {
-                    self.moved = true;
-                    return Ok(());
-                }
                 match self.keep(kept, now)? {
                     Next::Round(next) => kept = *next,
                     Next::GiveWay => {
@@ -872,6 +873,12 @@ impl Batch<'_, '_, '_> {
                 }),
             })?;
         }
+        // An earlier round that ran tests still stands when this one selected none.
+        let (recheck, files) = if recheck == Recheck::None && kept.recheck == Recheck::Overlap {
+            (kept.recheck, kept.files)
+        } else {
+            (recheck, files)
+        };
         Ok(Next::Round(Box::new(Kept {
             chain,
             finals,

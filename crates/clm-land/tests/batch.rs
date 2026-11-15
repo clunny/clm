@@ -568,6 +568,12 @@ fn a_batch_keeps_its_check_when_main_moves_on_an_unrelated_component() {
     let outs = main_moves_during_the_batch_check(&f, || land_unrelated(&f, &env));
     let outs: Vec<_> = outs.into_iter().map(|o| o.unwrap()).collect();
     assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
+    // `clm check`, with its detectors, ran on the batch's tree and again on the new one.
+    let checks = f.lines("clm-check.log");
+    assert!(
+        checks.len() >= 2 && checks.iter().all(|l| !l.contains("--no-detectors")),
+        "{checks:?}"
+    );
     assert_eq!(
         on_main(&f)[..3],
         ["impl/b", "impl/a", "impl/d"],
