@@ -23,7 +23,7 @@ fn state_survives_the_session() {
 
     // A new session adopts the loop once the lease lapsed.
     let actions = start(&fx.options(), "opus", false).unwrap();
-    let launch = line(&actions, &common::launch_on_build_model("build:a", "build"));
+    let launch = line(&actions, "launch build:a build sonnet ");
     assert!(launch.ends_with("build-a.md"), "{launch}");
 
     // The file still lists the run, as relaunched, and holds the session's model.
