@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 human_burdens:
   - Every build, fold and archive under Claude Code runs on opus, which costs more than sonnet, for as long as the value stands
 ---
