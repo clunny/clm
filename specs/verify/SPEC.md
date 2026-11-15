@@ -42,7 +42,7 @@ As a library call it offers `kept_log(root, commit)`: the path of the log a fail
 ## Requirements
 
 ### Requirement: verify-due
-`clm verify --due` SHALL compute the unverified lands of `origin/main` after fetching it and the ledgers, and SHALL find a run due when there is at least one and either the last `verified` record on `origin/main`'s first-parent chain is red, or one of `[verify] triggers` or `[verify] every` holds: `change-done` when an unverified land adds a file `changes/archive/<id>/change.md`, `queue-drained` when no requirement in `origin/main`'s tree is ready to build, which is when every requirement `check.coverage/pending-report` lists there as pending is blocked, by a backlog item or by a requirement it waits on, and so also when none is pending, whatever claims are live, `work-done` when `--event work-done` was passed and the mode is `local`, `every.lands` when the unverified lands number at least that many, and `every.days` when the oldest of them was committed at least that many days ago, the settings being those `settings-from-main` reads. When none holds it SHALL print `verify not-due <why>` and exit 0, appending nothing and running no check. With `--dry-run` it SHALL run and append nothing, print `verify due <trigger>` and exit 0 when a run is due, and print `verify not-due <why>` and exit 3 when not. With no `[verify]` set there, every `clm verify` SHALL print `verify off: no [verify] in origin/main:clm.toml` and exit 0.
+`clm verify --due` SHALL compute the unverified lands of `origin/main` after fetching it and the ledgers, and SHALL find a run due when there is at least one and either the last `verified` record on `origin/main`'s first-parent chain is red, or one of `[verify] triggers` or `[verify] every` holds: `change-done` when an unverified land adds a file `changes/archive/<id>/change.md`, `queue-drained` when no requirement in `origin/main`'s tree is ready to build, which is when every requirement `check.coverage/pending-report` lists there as pending is blocked, by a backlog item or by a requirement it waits on, and so also when none is pending, whatever claims are live, and never when that tree's spec graph has violations, since what is pending is then unknown, `work-done` when `--event work-done` was passed and the mode is `local`, `every.lands` when the unverified lands number at least that many, and `every.days` when the oldest of them was committed at least that many days ago, the settings being those `settings-from-main` reads. When none holds it SHALL print `verify not-due <why>` and exit 0, appending nothing and running no check. With `--dry-run` it SHALL run and append nothing, print `verify due <trigger>` and exit 0 when a run is due, and print `verify not-due <why>` and exit 3 when not. With no `[verify]` set there, every `clm verify` SHALL print `verify off: no [verify] in origin/main:clm.toml` and exit 0.
 
 #### Scenario: a finished change is due
 - GIVEN `[verify]` with `mode = "local"`, `triggers = ["change-done"]`, a `verified` passing record for `origin/main~2`, and two lands since, the second adding `changes/archive/x/change.md`
@@ -68,6 +68,11 @@ As a library call it offers `kept_log(root, commit)`: the path of the log a fail
 - GIVEN `triggers = ["queue-drained"]`, a passing `verified` record, one land since, and an `origin/main` with no pending requirement
 - WHEN `clm verify --due --dry-run` runs
 - THEN it prints `verify due queue-drained`
+
+#### Scenario: a spec graph with violations
+- GIVEN `triggers = ["queue-drained"]`, a passing `verified` record, one land since, and an `origin/main` with no pending requirement whose component `a` names in `depends_on` a component the graph doesn't hold
+- WHEN `clm verify --due --dry-run` runs
+- THEN it prints a line starting `verify not-due` and exits 3
 
 #### Scenario: work done only when asked
 - GIVEN `mode = "local"`, `triggers = ["work-done"]` and one land since the last record
