@@ -704,7 +704,8 @@ if [ "$1" = build ]; then
   cat > "$CARGO_TARGET_DIR/release/clm" <<'CLM'
 #!/bin/sh
 [ "$1 $2" = "upgrade --lock" ] || exit 2
-echo "$3 b" >> crates/clm-upgrade/migrations.lock
+echo "$3 b" >> crates/clm-upgrade/migrations.lock || exit 1
+if [ -d crates/clm-init ]; then echo "$3 c" >> crates/clm-init/migrations.lock; fi
 CLM
   chmod +x "$CARGO_TARGET_DIR/release/clm"
   exit 0
@@ -1182,7 +1183,7 @@ fn higher_version_pushes_one_bump_commit_to_a_release_branch() {
 
 #[test]
 fn a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line() {
-    // req:ci/release-records-upgrade-corpus@211e6d4c
+    // req:ci/release-records-upgrade-corpus@6f6d255e
     let f = Fixture::new("0.2.0");
     let r = f.run("0.3.0");
     assert!(r.ok, "{}", r.stderr);
@@ -1192,8 +1193,21 @@ fn a_release_with_a_new_migration_commits_its_corpus_entry_and_lock_line() {
 }
 
 #[test]
+fn a_release_with_a_migration_of_inits_commits_its_lock() {
+    // req:ci/release-records-upgrade-corpus@6f6d255e
+    let f = Fixture::new("0.2.0");
+    fs::create_dir_all(f.work().join("crates/clm-init")).unwrap();
+    fs::write(f.work().join("crates/clm-init/.keep"), "").unwrap();
+    f.commit("init crate");
+    let r = f.run("0.3.0");
+    assert!(r.ok, "{}", r.stderr);
+    let show = |path: &str| f.git(&f.bare(), &["show", &format!("release/v0.3.0:{path}")]);
+    assert_eq!(show("crates/clm-init/migrations.lock"), "0.3.0 c\n");
+}
+
+#[test]
 fn a_failing_corpus_entry_fails_prepare_and_pushes_nothing() {
-    // req:ci/release-records-upgrade-corpus@211e6d4c
+    // req:ci/release-records-upgrade-corpus@6f6d255e
     let f = Fixture::new("0.2.0");
     executable(
         &f.work().join("crates/clm-upgrade/corpus/make.sh"),
@@ -1211,7 +1225,7 @@ fn a_failing_corpus_entry_fails_prepare_and_pushes_nothing() {
 
 #[test]
 fn a_failing_lock_fails_prepare_and_pushes_nothing() {
-    // req:ci/release-records-upgrade-corpus@211e6d4c
+    // req:ci/release-records-upgrade-corpus@6f6d255e
     let f = Fixture::new("0.2.0");
     let lock = f.work().join("crates/clm-upgrade/migrations.lock");
     fs::remove_file(&lock).unwrap();

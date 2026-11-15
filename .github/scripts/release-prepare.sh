@@ -96,6 +96,9 @@ clm_bin=$(realpath "${CARGO_TARGET_DIR:-target}")/release/clm
 
 git add "$cargo_toml" Cargo.lock "$plugin_json" "$codex_json" "$panel_json" "$corpus_dir/v$version.tar.gz" \
   crates/clm-upgrade/migrations.lock
+# The lock step leaves init's own lock only when init ships a migration.
+init_lock=crates/clm-init/migrations.lock
+[ ! -f "$init_lock" ] || git add "$init_lock"
 cargo test --all
 
 git -c user.name='github-actions[bot]' \
