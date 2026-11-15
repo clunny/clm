@@ -240,6 +240,7 @@ fn the_first_pass_fails_and_the_next_loses_nothing() {
     let out = f.due();
     assert!(out.line.starts_with("verify passed "), "{out:?}");
     assert!(mutated(&f).is_empty());
+    assert!(f.path("mutate-ran").exists(), "the command never ran");
     // A requirement and a test of it arrive, and the command now works.
     let spec = format!(
         "---\ntitle: A\nstatus: active\nowners: []\npaths: [\"crates/a/**\"]\n---\n\n\

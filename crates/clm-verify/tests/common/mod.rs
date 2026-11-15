@@ -177,7 +177,8 @@ impl Fixture {
     }
 
     /// Starts `main` over: one parentless commit of `files` added to the tree as it stands,
-    /// pushed over `origin`'s `main`. Returns its full ID.
+    /// pushed over `origin`'s `main`. Call it before any verification: records of the old
+    /// history would name commits no longer on the chain. Returns its full ID.
     pub fn restart(&self, files: &[(&str, &str)], message: &str) -> String {
         let work = self.work();
         self.git(&work, &["checkout", "-q", "--orphan", "fresh"]);
