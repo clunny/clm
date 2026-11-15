@@ -2,7 +2,7 @@
 title: Sync
 status: active
 owners: ["@clunny"]
-depends_on: [model, apply, check, check.health, context, ledger, vcs, sync.regenerate, rename]
+depends_on: [model, apply, check, check.coverage, check.health, context, ledger, vcs, sync.regenerate, rename]
 paths: ["crates/clm-sync/**"]
 successor: ""
 serves: [capability/work-concurrently, architecture/hash-based-staleness]

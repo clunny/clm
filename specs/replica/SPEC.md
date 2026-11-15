@@ -2,7 +2,7 @@
 title: Replica
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, config, orchestrator, view, ledger, effort]
+depends_on: [model, check, check.coverage, config, orchestrator, view, ledger, effort]
 paths: ["crates/clm-replica/**"]
 successor: ""
 serves: [capability/see-project-state, capability/follow-from-browser, capability/review-capability-cost]

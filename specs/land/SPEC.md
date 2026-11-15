@@ -2,7 +2,7 @@
 title: Land
 status: active
 owners: ["@clunny"]
-depends_on: [ledger, host, gate, check, check.affected, config, vcs, model, apply, effort, land.approval, sync.regenerate, orchestrator]
+depends_on: [ledger, host, gate, check, check.coverage, check.affected, config, vcs, model, apply, effort, land.approval, sync.regenerate, orchestrator]
 paths: ["crates/clm-land/**"]
 successor: ""
 serves: [capability/land-safely, architecture/land-locally]
