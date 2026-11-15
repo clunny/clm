@@ -40,7 +40,7 @@ fn initialised() -> TempDir {
     dir
 }
 
-// req:clm/upgrade-command@86c8b58e
+// req:clm/upgrade-command@0552ef64
 #[test]
 fn upgrade_in_a_subdirectory_of_a_fresh_project_is_up_to_date() {
     let dir = initialised();
@@ -50,7 +50,7 @@ fn upgrade_in_a_subdirectory_of_a_fresh_project_is_up_to_date() {
     assert_eq!(String::from_utf8_lossy(&out.stdout), "up to date\n");
 }
 
-// req:clm/upgrade-command@86c8b58e
+// req:clm/upgrade-command@0552ef64
 #[test]
 fn the_flags_are_dispatched_and_exclusive() {
     let dir = initialised();
@@ -87,7 +87,7 @@ fn stamp_too_new(root: &Path) {
     fs::write(&toml, lines.join("\n") + "\n").unwrap();
 }
 
-// req:clm/upgrade-command@86c8b58e
+// req:clm/upgrade-command@0552ef64
 // req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
@@ -148,7 +148,7 @@ fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
     assert!(String::from_utf8_lossy(&too_new.stderr).contains("newer `clm`"));
 }
 
-// req:clm/upgrade-command@86c8b58e
+// req:clm/upgrade-command@0552ef64
 #[test]
 fn upgrade_from_a_subdirectory_reads_the_project_root() {
     let dir = initialised();
@@ -290,7 +290,7 @@ fn entries() -> Vec<PathBuf> {
     entries
 }
 
-// req:clm/upgrade-corpus@8a37317b
+// req:clm/upgrade-corpus@0a9c67d4
 #[test]
 fn every_corpus_entry_upgrades_to_what_init_writes() {
     let expected = init_files();
@@ -307,7 +307,7 @@ fn every_corpus_entry_upgrades_to_what_init_writes() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
-// req:clm/upgrade-corpus@8a37317b
+// req:clm/upgrade-corpus@0a9c67d4
 #[test]
 fn an_entry_set_up_with_the_allow_rules_is_not_declined() {
     let parent = TempDir::new().unwrap();
@@ -341,7 +341,7 @@ fn an_entry_set_up_with_the_allow_rules_is_not_declined() {
     check_entry(&entry, &init_files()).unwrap();
 }
 
-// req:clm/upgrade-corpus@8a37317b
+// req:clm/upgrade-corpus@0a9c67d4
 #[test]
 fn a_template_changed_without_a_migration_fails_naming_file_and_entry() {
     let mut expected = init_files();

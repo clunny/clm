@@ -133,16 +133,17 @@ fn migration_pending_refuses_check_but_not_status_or_defect() {
     assert_ne!(defect.status.code(), Some(4), "{}", printed(&defect));
 }
 
-/// The ID `clm init` stamps: the last migration this `clm` holds, named by its directory.
+/// The ID `clm init` stamps: what a fresh `clm init` writes as `upgraded`.
 fn latest_migration() -> String {
-    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../clm-upgrade/src/migrations");
-    let mut ids: Vec<String> = fs::read_dir(dir)
-        .unwrap()
-        .map(|e| e.unwrap().file_name().into_string().unwrap())
-        .filter(|n| n.starts_with(|c: char| c.is_ascii_digit()))
-        .collect();
-    ids.sort();
-    ids.pop().expect("a migration")
+    let repo = Repo::empty();
+    let init = repo.clm(&["init", "--lang", "rust", "--no-detectors", "--host", "none"]);
+    assert!(init.status.success(), "{}", printed(&init));
+    let toml = fs::read_to_string(repo.root.join("clm.toml")).unwrap();
+    let line = toml
+        .lines()
+        .find(|l| l.starts_with("upgraded"))
+        .expect("init stamps `upgraded`");
+    line.split('"').nth(1).expect("a quoted ID").to_string()
 }
 
 #[test]

@@ -113,7 +113,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
 }
 
 /// The error that stops `command`, or `None` when it may run. `require` is
-/// `clm_upgrade::require_current`; `cwd` is where `clm` was started. Outside any CLM
+/// `clm_upgrade::require_current_in` over `clm-init`'s migrations; `cwd` is where `clm` was started. Outside any CLM
 /// repository, with no `--root`, `require` isn't called.
 pub(crate) fn blocked(
     command: &Command,
@@ -155,7 +155,7 @@ mod tests {
         (asked.into_inner(), result)
     }
 
-    // req:clm/upgrade-blocks-commands@8787b1c6
+    // req:clm/upgrade-blocks-commands@7672f217
     #[test]
     fn a_blocked_command_with_a_root_is_judged_for_that_root() {
         let cwd = TempDir::new().unwrap();
@@ -196,7 +196,7 @@ mod tests {
         }
     }
 
-    // req:clm/upgrade-blocks-commands@8787b1c6
+    // req:clm/upgrade-blocks-commands@7672f217
     #[test]
     fn the_listed_commands_run_whatever_is_pending() {
         let dir = TempDir::new().unwrap();
@@ -219,7 +219,7 @@ mod tests {
         }
     }
 
-    // req:clm/upgrade-blocks-commands@8787b1c6
+    // req:clm/upgrade-blocks-commands@7672f217
     #[test]
     fn without_a_root_the_repository_holding_the_current_directory_is_judged() {
         let dir = TempDir::new().unwrap();
@@ -232,7 +232,7 @@ mod tests {
         assert_eq!(result.as_deref(), Some("pending"));
     }
 
-    // req:clm/upgrade-blocks-commands@8787b1c6
+    // req:clm/upgrade-blocks-commands@7672f217
     #[test]
     fn outside_any_clm_repository_nothing_is_judged() {
         let dir = TempDir::new().unwrap();
@@ -242,7 +242,7 @@ mod tests {
         assert!(asked.is_empty() && result.is_none());
     }
 
-    // req:clm/upgrade-blocks-commands@8787b1c6
+    // req:clm/upgrade-blocks-commands@7672f217
     #[test]
     fn a_passing_judgement_lets_the_command_run() {
         let cwd = TempDir::new().unwrap();
