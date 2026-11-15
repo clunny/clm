@@ -594,7 +594,7 @@ mod tests {
 
     #[test]
     fn agent_dirs_directly_in_claude_worktrees_are_builds() {
-        // req:orchestrator.checkpoint/checkpoint@9bbd3578
+        // req:orchestrator.checkpoint/checkpoint@3d2718a5
         assert!(is_build_worktree(Path::new("/r/.claude/worktrees/agent-1")));
         assert!(!is_build_worktree(Path::new("/r/.claude/worktrees/p3")));
         assert!(!is_build_worktree(Path::new("/r/worktrees/agent-1")));
