@@ -724,17 +724,68 @@ impl<'a> Extraction<'a> {
 /// fine). A build can leave a directory without its owner's write permission, which git
 /// can't delete, so the owner is given access to `path` and every directory under it
 /// before `git worktree remove` runs, without `--force`: a worktree git refuses stays.
+/// What git leaves of a worktree it no longer lists is removed here, for up to 5 seconds.
 pub fn remove_worktree(root: &Path, path: &Path) -> Result<(), Error> {
+    remove_worktree_within(root, path, Duration::from_secs(5))
+}
+
+fn remove_worktree_within(root: &Path, path: &Path, limit: Duration) -> Result<(), Error> {
     let arg = path.to_string_lossy();
+    let resolved = resolve(path);
+    let listed_before = lists_worktree(root, &resolved) == Some(true);
     let _ = git(root, &["worktree", "unlock", &arg]);
     make_writable(path);
-    git(root, &["worktree", "remove", &arg])?;
-    if path.exists() {
+    let removal = git(root, &["worktree", "remove", &arg]);
+    if exists(path) && listed_before && lists_worktree(root, &resolved) == Some(false) {
+        let started = Instant::now();
+        loop {
+            make_writable(path);
+            let _ = std::fs::remove_dir_all(path);
+            if !exists(path) || started.elapsed() >= limit {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if !exists(path) {
+            return Ok(());
+        }
+    }
+    removal?;
+    if exists(path) {
         return Err(Error::StillOnDisk {
             path: arg.into_owned(),
         });
     }
     Ok(())
+}
+
+fn exists(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
+/// `path` with the symbolic links in it resolved, its last part included only when it
+/// exists.
+fn resolve(path: &Path) -> PathBuf {
+    if let Ok(real) = path.canonicalize() {
+        return real;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => parent
+            .canonicalize()
+            .map_or_else(|_| path.to_path_buf(), |p| p.join(name)),
+        _ => path.to_path_buf(),
+    }
+}
+
+/// Whether git lists a worktree at `resolved`, comparing with symbolic links resolved.
+fn lists_worktree(root: &Path, resolved: &Path) -> Option<bool> {
+    git(root, &["worktree", "list", "--porcelain"])
+        .ok()
+        .map(|out| {
+            out.lines()
+                .filter_map(|l| l.strip_prefix("worktree "))
+                .any(|listed| resolve(Path::new(listed)) == resolved)
+        })
 }
 
 /// Gives the owner read, write and execute permission on `dir` and every directory under
@@ -775,6 +826,43 @@ fn make_writable(dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_worktree_that_never_goes_is_given_up_on_after_the_limit() {
+        // req:vcs/remove-worktree@ca5e9717
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("r");
+        std::fs::create_dir(&root).unwrap();
+        git(&root, &["init", "-q", "-b", "main"]).unwrap();
+        git(&root, &["config", "user.email", "t@example.com"]).unwrap();
+        git(&root, &["config", "user.name", "t"]).unwrap();
+        git(&root, &["commit", "-q", "--allow-empty", "-m", "first"]).unwrap();
+        let w = dir.path().join("w");
+        let arg = w.to_str().unwrap();
+        git(&root, &["worktree", "add", "-q", "-b", "wb", arg]).unwrap();
+        let lock = |mode| {
+            std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(mode)).unwrap()
+        };
+        lock(0o500);
+        let started = Instant::now();
+        let result = remove_worktree_within(&root, &w, Duration::from_millis(200));
+        let took = started.elapsed();
+        lock(0o700);
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("git worktree remove"), "{err}");
+        assert!(
+            took >= Duration::from_millis(200) && took < Duration::from_secs(3),
+            "{took:?}"
+        );
+        assert!(w.exists());
+        assert!(
+            !git(&root, &["worktree", "list", "--porcelain"])
+                .unwrap()
+                .contains("/w\n")
+        );
+    }
 
     #[test]
     fn a_failing_fetch_waits_1_then_2_seconds() {
