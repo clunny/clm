@@ -316,6 +316,9 @@ fn held_through_the_gate_on_the_merge() {
     let a = f.linked("a", "impl/a");
     let b = f.linked("b", "impl/b");
     let first = spawn_land(&f, &a, "a.err");
+    // Two lands started at once may be taken together on one check (`land/batched-lands`),
+    // so the second starts once the first's check runs, and queues while that check sleeps.
+    wait_for(&f.path("check-order.log"), "start");
     let second = spawn_land(&f, &b, "b.err");
     both_landed(&f, first, second);
     // Each land's two gates fall around its own check, never inside the other land's.
