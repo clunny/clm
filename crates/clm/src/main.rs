@@ -2138,9 +2138,8 @@ impl std::io::Write for Printed {
     }
 }
 
-/// `config`'s detectors for `clm check` on `root`, without those whose `requires` names
-/// nothing there, each such one named on stderr (`detector-requires-skip`); why the settings
-/// can't be loaded when they can't.
+/// `config`'s detectors for `clm check` on `root`, which skips those whose `requires` names
+/// nothing there (`detector-requires-skip`); why the settings can't be loaded when they can't.
 fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violation> {
     let settings = clm_config::load(Some(root), &clm_config::process_env)
         .map_err(|e| settings_violation(e, "check/detectors"))?;
@@ -2148,18 +2147,12 @@ fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violati
         .detectors
         .value
         .into_iter()
-        .filter(|d| match &d.requires {
-            Some(path) if !root.join(path).exists() => {
-                eprintln!("{} skipped: no {path}", d.name);
-                false
-            }
-            _ => true,
-        })
         .map(|d| clm_check::Detector {
             name: d.name,
             command: d.command,
             hint: d.hint,
             timeout: d.timeout,
+            requires: d.requires,
         })
         .collect())
 }

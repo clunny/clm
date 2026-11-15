@@ -10,6 +10,7 @@ fn detector(name: &str, command: &[&str], hint: Option<&str>) -> Detector {
         command: command.iter().map(|s| s.to_string()).collect(),
         hint: hint.map(Into::into),
         timeout: 600,
+        requires: None,
     }
 }
 

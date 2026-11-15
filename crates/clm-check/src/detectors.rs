@@ -17,6 +17,8 @@ pub struct Detector {
     pub hint: Option<String>,
     /// Seconds it may run before it is stopped (`detector-timeouts`).
     pub timeout: u64,
+    /// A path relative to the root; `clm check` skips the detector while nothing exists there.
+    pub requires: Option<String>,
 }
 
 /// Runs each detector in order from `root`, without a shell, copying its output to `err` as

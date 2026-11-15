@@ -103,7 +103,20 @@ where
     }
     if !args.no_detectors {
         match (inputs.detectors)(root) {
-            Ok(list) => violations.extend(crate::detectors(root, &list, err)),
+            Ok(list) => {
+                // A detector whose `requires` names nothing here is skipped, and named.
+                let list: Vec<_> = list
+                    .into_iter()
+                    .filter(|d| match &d.requires {
+                        Some(path) if !root.join(path).exists() => {
+                            let _ = writeln!(err, "{} skipped: no {path}", d.name);
+                            false
+                        }
+                        _ => true,
+                    })
+                    .collect();
+                violations.extend(crate::detectors(root, &list, err));
+            }
             Err(v) => violations.push(v),
         }
     }

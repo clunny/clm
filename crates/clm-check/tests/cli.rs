@@ -61,6 +61,7 @@ fn repository_detectors(root: &Path) -> Result<Vec<Detector>, Violation> {
                 .get("timeout")
                 .and_then(|t| t.as_integer())
                 .map_or(600, |t| t as u64),
+            requires: d.get("requires").and_then(|r| r.as_str()).map(Into::into),
         })
         .collect())
 }
@@ -170,6 +171,40 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
             .contains("Usage: clm backlog")
     );
     assert!(stdout.is_empty());
+    // And for `clm size`, given two components where it takes one.
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let budgets = |_: &Path| -> Result<clm_check::Budgets, Violation> { unreachable!() };
+    let code = clm_check::size_command(
+        ["a", "b"],
+        dir.path(),
+        &no_env,
+        &mut stdout,
+        &mut stderr,
+        &budgets,
+    );
+    assert_eq!(code, 2);
+    assert!(
+        String::from_utf8(stderr)
+            .unwrap()
+            .contains("Usage: clm size")
+    );
+    assert!(stdout.is_empty());
+}
+
+#[test]
+fn a_skipped_detector_is_named_on_the_error_stream() {
+    // req:check/commands-in-crate@ed866c99
+    let dir = detector_repo(Some(
+        "[[detectors]]\nname = \"knip\"\ncommand = [\"sh\", \"-c\", \"touch ran; exit 3\"]\nrequires = \"package.json\"\n",
+    ));
+    let out = clm_check(dir.path());
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "knip skipped: no package.json\n"
+    );
+    assert!(!dir.path().join("ran").exists());
 }
 
 #[test]
