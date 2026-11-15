@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-build-loop-waits-without-end-on-a-run-that-has-landed-when]
 ---
 
