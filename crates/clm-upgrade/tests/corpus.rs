@@ -129,7 +129,7 @@ fn the_script_fails_and_writes_nothing_when_the_check_fails() {
     assert!(!dir.path().join("v9.9.9.tar.gz").exists());
 }
 
-// req:upgrade/migration-list@067d119c
+// req:upgrade/migration-list@b7ed6123
 #[test]
 fn a_fresh_project_has_every_migration_done() {
     let clm = built_clm();

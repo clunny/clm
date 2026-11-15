@@ -6,8 +6,9 @@ use std::process::Command;
 
 use tempfile::TempDir;
 
-use crate::commands::{apply_in, decline_in, list_in, note_in, set_top_level};
+use crate::commands::set_top_level;
 use crate::{Kind, Level, Migration, Note};
+use crate::{apply_in, decline_in, list_in, note_in};
 
 fn make_m(root: &Path) -> Result<(), String> {
     fs::write(root.join("m"), "made").map_err(|e| e.to_string())
@@ -84,7 +85,7 @@ fn lists_pending_migrations_in_order_and_writes_nothing() {
     let list = [required_r(), note_a()];
     let dir = project("");
     assert_eq!(
-        list_in(&list, dir.path()).unwrap(),
+        list_in(&list, &[], dir.path()).unwrap(),
         "r required apply\na advised note CLAUDE.md names /clm:help\n"
     );
     assert_eq!(read(&dir, "clm.toml"), "");
@@ -95,11 +96,20 @@ fn lists_pending_migrations_in_order_and_writes_nothing() {
 #[test]
 fn lists_up_to_date_and_refuses_too_new() {
     let dir = project("");
-    assert_eq!(list_in(&[note_a()], dir.path()).unwrap().lines().count(), 1);
+    assert_eq!(
+        list_in(&[note_a()], &[], dir.path())
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
     fs::write(dir.path().join("a"), "").unwrap();
-    assert_eq!(list_in(&[note_a()], dir.path()).unwrap(), "up to date\n");
+    assert_eq!(
+        list_in(&[note_a()], &[], dir.path()).unwrap(),
+        "up to date\n"
+    );
     let stamped = project("upgraded = \"z\"\n");
-    let err = list_in(&[note_a()], stamped.path()).unwrap_err();
+    let err = list_in(&[note_a()], &[], stamped.path()).unwrap_err();
     assert!(err.contains("`z`") && err.contains("newer"), "{err}");
 }
 
@@ -115,25 +125,31 @@ fn marks_a_skipped_required_migration() {
     assert!(init.success());
     fs::write(main.path().join("clm.toml"), "").unwrap();
     let list = [required_r()];
-    assert_eq!(list_in(&list, main.path()).unwrap(), "r required apply\n");
+    assert_eq!(
+        list_in(&list, &[], main.path()).unwrap(),
+        "r required apply\n"
+    );
     fs::write(
         main.path().join("clm.local.toml"),
         "skip_migrations = [\"r\"]\n",
     )
     .unwrap();
     assert_eq!(
-        list_in(&list, main.path()).unwrap(),
+        list_in(&list, &[], main.path()).unwrap(),
         "r required apply skipped\n"
     );
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn applies_stamps_and_leaves_an_edited_file() {
     let list = [apply_m(), note_n()];
     let dir = project("# top\nlanguage = \"rust\"\n\n[land]\ncheck = \"true\"\n");
     fs::write(dir.path().join("NOTE.md"), "edited").unwrap();
-    assert_eq!(apply_in(&list, dir.path()).unwrap(), "applied m\nnote n\n");
+    assert_eq!(
+        apply_in(&list, &[], dir.path()).unwrap(),
+        "applied m\nnote n\n"
+    );
     assert_eq!(read(&dir, "m"), "made");
     assert_eq!(read(&dir, "NOTE.md"), "edited");
     assert_eq!(
@@ -141,31 +157,31 @@ fn applies_stamps_and_leaves_an_edited_file() {
         "# top\nlanguage = \"rust\"\nupgraded = \"n\"\n\n[land]\ncheck = \"true\"\n"
     );
     let after = read(&dir, "clm.toml");
-    assert_eq!(apply_in(&list, dir.path()).unwrap(), "note n\n");
+    assert_eq!(apply_in(&list, &[], dir.path()).unwrap(), "note n\n");
     assert_eq!(read(&dir, "clm.toml"), after);
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn rewrites_an_unedited_note_file() {
     let list = [note_n()];
     for old in ["old", "older"] {
         let dir = project("");
         fs::write(dir.path().join("NOTE.md"), old).unwrap();
-        assert_eq!(apply_in(&list, dir.path()).unwrap(), "applied n\n");
+        assert_eq!(apply_in(&list, &[], dir.path()).unwrap(), "applied n\n");
         assert_eq!(read(&dir, "NOTE.md"), "new");
-        assert_eq!(list_in(&list, dir.path()).unwrap(), "up to date\n");
+        assert_eq!(list_in(&list, &[], dir.path()).unwrap(), "up to date\n");
     }
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     let list = [apply_m(), note_n()];
     let dir = project("upgraded = \"m\"\nhost = \"none\"\n");
     fs::write(dir.path().join("m"), "").unwrap();
     fs::write(dir.path().join("NOTE.md"), "new").unwrap();
-    assert_eq!(apply_in(&list, dir.path()).unwrap(), "");
+    assert_eq!(apply_in(&list, &[], dir.path()).unwrap(), "");
     assert_eq!(
         read(&dir, "clm.toml"),
         "upgraded = \"n\"\nhost = \"none\"\n"
@@ -173,21 +189,21 @@ fn replaces_an_existing_stamp_and_writes_nothing_when_current() {
     let settled = project("upgraded = \"n\"\n");
     fs::write(settled.path().join("NOTE.md"), "new").unwrap();
     fs::write(settled.path().join("m"), "").unwrap();
-    assert_eq!(apply_in(&list, settled.path()).unwrap(), "");
+    assert_eq!(apply_in(&list, &[], settled.path()).unwrap(), "");
     assert_eq!(read(&settled, "clm.toml"), "upgraded = \"n\"\n");
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn apply_refuses_too_new_and_writes_nothing() {
     let dir = project("upgraded = \"z\"\n");
-    let err = apply_in(&[apply_m()], dir.path()).unwrap_err();
+    let err = apply_in(&[apply_m()], &[], dir.path()).unwrap_err();
     assert!(err.contains("`z`"), "{err}");
     assert!(!dir.path().join("m").exists());
     assert_eq!(read(&dir, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn the_stamp_goes_in_as_a_top_level_key() {
     assert_eq!(set_top_level("", "k", "1"), "k = 1\n");
@@ -212,7 +228,7 @@ fn the_stamp_goes_in_as_a_top_level_key() {
 fn prints_a_migrations_note() {
     let dir = project("");
     assert_eq!(
-        note_in(&[note_n()], dir.path(), "n").unwrap(),
+        note_in(&[note_n()], &[], dir.path(), "n").unwrap(),
         "first line\nmore\n"
     );
 }
@@ -222,12 +238,12 @@ fn prints_a_migrations_note() {
 fn note_refuses_unknown_ids_and_too_new() {
     let dir = project("");
     assert!(
-        note_in(&[note_n()], dir.path(), "nope")
+        note_in(&[note_n()], &[], dir.path(), "nope")
             .unwrap_err()
             .contains("nope")
     );
     let stamped = project("upgraded = \"z\"\n");
-    assert!(note_in(&[note_n()], stamped.path(), "n").is_err());
+    assert!(note_in(&[note_n()], &[], stamped.path(), "n").is_err());
 }
 
 // req:upgrade/upgrade-note-and-decline@727f6913
@@ -235,16 +251,16 @@ fn note_refuses_unknown_ids_and_too_new() {
 fn declining_a_pending_note_hides_it() {
     let list = [note_a(), note_n()];
     let dir = project("language = \"rust\"\n\n[land]\ncheck = \"true\"\n");
-    decline_in(&list, dir.path(), "a").unwrap();
+    decline_in(&list, &[], dir.path(), "a").unwrap();
     assert_eq!(
         read(&dir, "clm.toml"),
         "language = \"rust\"\ndeclined_migrations = [\"a\"]\n\n[land]\ncheck = \"true\"\n"
     );
     assert_eq!(
-        list_in(&list, dir.path()).unwrap(),
+        list_in(&list, &[], dir.path()).unwrap(),
         "n advised note first line\n"
     );
-    decline_in(&list, dir.path(), "n").unwrap();
+    decline_in(&list, &[], dir.path(), "n").unwrap();
     assert!(read(&dir, "clm.toml").contains("declined_migrations = [\"a\", \"n\"]\n"));
 }
 
@@ -253,18 +269,18 @@ fn declining_a_pending_note_hides_it() {
 fn decline_refuses_what_it_may_not_decline() {
     let list = [required_r(), note_a()];
     let dir = project("x = 1\n");
-    let err = decline_in(&list, dir.path(), "r").unwrap_err();
+    let err = decline_in(&list, &[], dir.path(), "r").unwrap_err();
     assert!(err.contains("`r`"), "{err}");
-    assert!(decline_in(&list, dir.path(), "nope").is_err());
+    assert!(decline_in(&list, &[], dir.path(), "nope").is_err());
     fs::write(dir.path().join("a"), "").unwrap();
-    assert!(decline_in(&list, dir.path(), "a").is_err());
+    assert!(decline_in(&list, &[], dir.path(), "a").is_err());
     assert_eq!(read(&dir, "clm.toml"), "x = 1\n");
     let stamped = project("upgraded = \"z\"\n");
-    assert!(decline_in(&list, stamped.path(), "a").is_err());
+    assert!(decline_in(&list, &[], stamped.path(), "a").is_err());
     assert_eq!(read(&stamped, "clm.toml"), "upgraded = \"z\"\n");
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn a_failing_migration_does_not_stop_the_others_or_stamp() {
     let bad = Migration {
@@ -275,7 +291,7 @@ fn a_failing_migration_does_not_stop_the_others_or_stamp() {
     };
     let list = [bad, apply_m()];
     let dir = project("");
-    let err = apply_in(&list, dir.path()).unwrap_err();
+    let err = apply_in(&list, &[], dir.path()).unwrap_err();
     assert!(
         err.contains("applied m") && err.contains("`bad` failed: boom"),
         "{err}"
@@ -288,7 +304,7 @@ fn done_by_stamp(root: &Path) -> bool {
     fs::read_to_string(root.join("clm.toml")).is_ok_and(|t| t.contains("upgraded = \"s\""))
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
     let a = Migration {
@@ -310,10 +326,10 @@ fn a_note_the_stamp_takes_is_shown_on_the_run_that_takes_it() {
     };
     let list = [a, s];
     let dir = project("upgraded = \"a\"\n");
-    assert_eq!(apply_in(&list, dir.path()).unwrap(), "note s\n");
+    assert_eq!(apply_in(&list, &[], dir.path()).unwrap(), "note s\n");
     assert_eq!(read(&dir, "clm.toml"), "upgraded = \"s\"\n");
-    assert_eq!(apply_in(&list, dir.path()).unwrap(), "");
-    assert_eq!(list_in(&list, dir.path()).unwrap(), "up to date\n");
+    assert_eq!(apply_in(&list, &[], dir.path()).unwrap(), "");
+    assert_eq!(list_in(&list, &[], dir.path()).unwrap(), "up to date\n");
 }
 
 // req:upgrade/upgrade-list@97f2a710
@@ -332,7 +348,7 @@ fn an_advised_migration_is_never_marked_skipped() {
     )
     .unwrap();
     assert_eq!(
-        list_in(&[note_a()], main.path()).unwrap(),
+        list_in(&[note_a()], &[], main.path()).unwrap(),
         "a advised note CLAUDE.md names /clm:help\n"
     );
 }
@@ -341,18 +357,18 @@ fn an_advised_migration_is_never_marked_skipped() {
 #[test]
 fn decline_refuses_a_clm_toml_it_cannot_read() {
     let dir = project("declined_migrations = [\"x\"\n");
-    assert!(decline_in(&[note_a()], dir.path(), "a").is_err());
+    assert!(decline_in(&[note_a()], &[], dir.path(), "a").is_err());
     assert_eq!(read(&dir, "clm.toml"), "declined_migrations = [\"x\"\n");
     fs::remove_file(dir.path().join("clm.toml")).unwrap();
-    assert!(decline_in(&[note_a()], dir.path(), "a").is_err());
+    assert!(decline_in(&[note_a()], &[], dir.path(), "a").is_err());
 }
 
-// req:upgrade/upgrade-apply@cfe8e2bf
+// req:upgrade/upgrade-apply@e3cdf9ee
 #[test]
 fn the_stamp_goes_above_a_commented_header() {
     let list = [apply_m()];
     let dir = project("host = \"github\"\n\n# Run before clm check.\n[land]\ncheck = \"true\"\n");
-    apply_in(&list, dir.path()).unwrap();
+    apply_in(&list, &[], dir.path()).unwrap();
     assert_eq!(
         read(&dir, "clm.toml"),
         "host = \"github\"\nupgraded = \"m\"\n\n# Run before clm check.\n[land]\ncheck = \"true\"\n"
@@ -374,7 +390,7 @@ fn the_stamp_goes_above_a_commented_header() {
 #[test]
 fn declining_goes_above_a_commented_header() {
     let dir = project("# Run before clm check.\n[land]\ncheck = \"true\"\n");
-    decline_in(&[note_a()], dir.path(), "a").unwrap();
+    decline_in(&[note_a()], &[], dir.path(), "a").unwrap();
     assert_eq!(
         read(&dir, "clm.toml"),
         "declined_migrations = [\"a\"]\n\n# Run before clm check.\n[land]\ncheck = \"true\"\n"

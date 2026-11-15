@@ -20,14 +20,14 @@ fn crate_with(ids: &[&str]) -> TempDir {
     dir
 }
 
-// req:upgrade/shipped-migrations-frozen@b7c05840
+// req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn the_shipped_migrations_match_the_lock() {
     let ids: Vec<&str> = migrations().iter().map(|m| m.id).collect();
     crate::lock::check_lock(Path::new(env!("CARGO_MANIFEST_DIR")), &ids).unwrap();
 }
 
-// req:upgrade/shipped-migrations-frozen@b7c05840
+// req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn the_directory_hash_covers_names_bytes_and_order() {
     let dir = TempDir::new().unwrap();
@@ -49,7 +49,7 @@ fn the_directory_hash_covers_names_bytes_and_order() {
     assert_ne!(crate::lock::dir_hash(dir.path()).unwrap(), want);
 }
 
-// req:upgrade/shipped-migrations-frozen@b7c05840
+// req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version() {
     let dir = crate_with(&["m"]);
@@ -60,7 +60,7 @@ fn an_edited_shipped_migration_fails_the_lock_naming_it_and_its_version() {
     assert!(err.contains("`m`") && err.contains("0.2.0"), "{err}");
 }
 
-// req:upgrade/shipped-migrations-frozen@b7c05840
+// req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn a_locked_migration_the_binary_lacks_fails_the_lock() {
     let dir = crate_with(&["m"]);
@@ -69,7 +69,7 @@ fn a_locked_migration_the_binary_lacks_fails_the_lock() {
     assert!(err.contains("`m`") && err.contains("0.2.0"), "{err}");
 }
 
-// req:upgrade/shipped-migrations-frozen@b7c05840
+// req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn locking_a_release_adds_only_the_unlisted_migrations() {
     let dir = crate_with(&["a", "b"]);

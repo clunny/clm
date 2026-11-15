@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::{Kind, Level, Migration, migrations};
+use crate::{Kind, Level, Migration, migrations, supersedes};
 
 /// The project's `clm.toml` names a migration this binary doesn't hold, so a newer `clm`
 /// upgraded it.
@@ -24,17 +24,33 @@ pub(crate) fn strings(table: &toml::Table, key: &str) -> Vec<String> {
     }
 }
 
-/// Whether a migration of `list` that supersedes `id` is done at `root`, so a note whose edit is to
-/// a text that migration moved is no longer needed.
-pub(crate) fn superseded(list: &[Migration], id: &str, root: &Path) -> bool {
-    migrations::SUPERSEDES
+/// Whether a migration of `list` that `supersedes` says supersedes `id` is done at `root`, so a
+/// note whose edit is to a text that migration moved is no longer needed.
+pub(crate) fn superseded(
+    list: &[Migration],
+    supersedes: &[(&str, &str)],
+    id: &str,
+    root: &Path,
+) -> bool {
+    supersedes
         .iter()
         .any(|(by, old)| *old == id && list.iter().any(|m| m.id == *by && (m.done)(root)))
 }
 
-/// The migrations of `list` the project at `root` still needs, in list order.
-pub(crate) fn pending_in<'a>(
+/// The crate's own notes that ask a project only to read them. Their `done` looks for the stamp in
+/// the crate's own list, so a stamp that names a later migration of another list is judged here.
+const STAMP_NOTES: [&str; 4] = [
+    "20261107-projects-upgrading-past-the",
+    "20261108-toolchain-neutral-land-builds",
+    "20261109-a-build-s-tests",
+    "20261114-proof-is-real",
+];
+
+/// The migrations of `list` the project at `root` still needs, in list order, or the migration
+/// `clm.toml`'s `upgraded` names that `list` lacks. It reads no list but the one it is given.
+pub fn pending_in<'a>(
     list: &'a [Migration],
+    supersedes: &[(&str, &str)],
     root: &Path,
 ) -> Result<Vec<&'a Migration>, TooNew> {
     let config = table(&root.join("clm.toml")).unwrap_or_default();
@@ -54,20 +70,23 @@ pub(crate) fn pending_in<'a>(
         .enumerate()
         .filter(|(i, m)| {
             !(m.done)(root)
-                && !superseded(list, m.id, root)
+                && !superseded(list, supersedes, m.id, root)
                 && match m.kind {
                     Kind::Apply(..) => *i >= stamped.unwrap_or(0),
-                    Kind::Note(_) => !declined.iter().any(|d| d == m.id),
+                    Kind::Note(_) => {
+                        !declined.iter().any(|d| d == m.id)
+                            && !(STAMP_NOTES.contains(&m.id) && stamped.is_some_and(|n| n > *i))
+                    }
                 }
         })
         .map(|(_, m)| m)
         .collect())
 }
 
-/// The migrations the project at `root` still needs, in list order, or the migration it names
-/// that this binary lacks.
+/// The crate's own migrations the project at `root` still needs.
+// clm:remove-by 20261114-migrations-with-templates
 pub fn pending(root: &Path) -> Result<Vec<&'static Migration>, TooNew> {
-    pending_in(migrations(), root)
+    pending_in(migrations(), supersedes(), root)
 }
 
 impl TooNew {
@@ -87,8 +106,15 @@ pub(crate) fn skipped(root: &Path) -> Vec<String> {
         .unwrap_or_default()
 }
 
-pub(crate) fn require_current_in(list: &[Migration], root: &Path) -> Result<(), String> {
-    let pending = match pending_in(list, root) {
+/// `Ok` when no required migration of `list` is pending outside the clone's `skip_migrations`;
+/// otherwise an error naming each such migration and saying to run `/clm:upgrade` or
+/// `clm upgrade`.
+pub fn require_current_in(
+    list: &[Migration],
+    supersedes: &[(&str, &str)],
+    root: &Path,
+) -> Result<(), String> {
+    let pending = match pending_in(list, supersedes, root) {
         Ok(pending) => pending,
         Err(too_new) => return Err(too_new.message()),
     };
@@ -112,8 +138,8 @@ pub(crate) fn require_current_in(list: &[Migration], root: &Path) -> Result<(), 
     ))
 }
 
-/// `Ok` when no required migration is pending outside the clone's `skip_migrations`; otherwise an
-/// error naming each such migration and saying to run `/clm:upgrade` or `clm upgrade`.
+/// `require_current_in` over the crate's own migrations.
+// clm:remove-by 20261114-migrations-with-templates
 pub fn require_current(root: &Path) -> Result<(), String> {
-    require_current_in(migrations(), root)
+    require_current_in(migrations(), supersedes(), root)
 }

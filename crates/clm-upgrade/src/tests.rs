@@ -5,8 +5,8 @@ use std::path::Path;
 
 use tempfile::TempDir;
 
-use crate::pending::{TooNew, pending_in, require_current_in};
-use crate::{Kind, Level, Migration, Note, latest, migrations};
+use crate::{Kind, Level, Migration, Note, latest_in, migrations};
+use crate::{TooNew, pending_in, require_current_in};
 
 fn marker_done(name: &'static str) -> impl Fn(&Path) -> bool {
     move |root| root.join(name).exists()
@@ -74,14 +74,15 @@ fn malformed(list: &[Migration]) -> Option<String> {
     None
 }
 
-// req:upgrade/migration-list@067d119c
+// req:upgrade/migration-list@b7ed6123
 #[test]
 fn the_binarys_migrations_are_well_formed() {
     assert_eq!(malformed(migrations()), None);
-    assert_eq!(latest(), migrations().last().map(|m| m.id));
+    assert_eq!(latest_in(migrations()), migrations().last().map(|m| m.id));
+    assert_eq!(latest_in(&[]), None);
 }
 
-// req:upgrade/migration-list@067d119c
+// req:upgrade/migration-list@b7ed6123
 #[test]
 fn a_repeated_id_or_a_required_note_is_malformed() {
     let twice = [
@@ -98,7 +99,7 @@ fn a_repeated_id_or_a_required_note_is_malformed() {
     );
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn stamped_projects_get_the_apply_migrations_after_the_stamp() {
     let list = [
@@ -107,10 +108,13 @@ fn stamped_projects_get_the_apply_migrations_after_the_stamp() {
         apply("c", Level::Required, done_c),
     ];
     let dir = project(Some("upgraded = \"a\"\n"));
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), ["b", "c"]);
+    assert_eq!(
+        ids(&pending_in(&list, &[], dir.path()).unwrap()),
+        ["b", "c"]
+    );
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn a_migration_whose_files_are_right_is_not_pending() {
     let list = [
@@ -120,10 +124,10 @@ fn a_migration_whose_files_are_right_is_not_pending() {
     ];
     let dir = project(Some("upgraded = \"a\"\n"));
     fs::write(dir.path().join("c"), "").unwrap();
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), ["b"]);
+    assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["b"]);
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn an_unstamped_project_is_judged_by_done_alone() {
     let list = [
@@ -134,47 +138,47 @@ fn an_unstamped_project_is_judged_by_done_alone() {
     let dir = project(Some("defects = \"ask\"\n"));
     fs::write(dir.path().join("a"), "").unwrap();
     fs::write(dir.path().join("c"), "").unwrap();
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), ["b"]);
+    assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["b"]);
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn a_clm_toml_that_does_not_parse_counts_as_unstamped() {
     let list = [apply("a", Level::Required, done_a)];
     let dir = project(Some("upgraded = [unclosed\n"));
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), ["a"]);
+    assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["a"]);
     let none = project(None);
-    assert_eq!(ids(&pending_in(&list, none.path()).unwrap()), ["a"]);
+    assert_eq!(ids(&pending_in(&list, &[], none.path()).unwrap()), ["a"]);
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn a_declined_note_is_not_pending() {
     let list = [note("n", done_a), note("m", done_b)];
     let dir = project(Some("declined_migrations = [\"n\"]\n"));
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), ["m"]);
+    assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["m"]);
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn a_note_before_the_stamp_is_still_pending() {
     let list = [note("n", done_a), apply("b", Level::Required, done_b)];
     let dir = project(Some("upgraded = \"b\"\n"));
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), ["n"]);
+    assert_eq!(ids(&pending_in(&list, &[], dir.path()).unwrap()), ["n"]);
 }
 
-// req:upgrade/pending-migrations@dbcfa176
+// req:upgrade/pending-migrations@de5ff412
 #[test]
 fn a_stamp_the_list_lacks_is_too_new() {
     let list = [apply("a", Level::Required, done_a)];
     let dir = project(Some("upgraded = \"z\"\n"));
     assert_eq!(
-        pending_in(&list, dir.path()).unwrap_err(),
+        pending_in(&list, &[], dir.path()).unwrap_err(),
         TooNew("z".into())
     );
 }
 
-// req:upgrade/require-current@d9893e22
+// req:upgrade/require-current@d0593968
 #[test]
 fn a_pending_required_migration_blocks_and_an_advised_one_is_not_named() {
     let list = [
@@ -182,13 +186,13 @@ fn a_pending_required_migration_blocks_and_an_advised_one_is_not_named() {
         apply("adv", Level::Advised, done_b),
     ];
     let dir = project(None);
-    let err = require_current_in(&list, dir.path()).unwrap_err();
+    let err = require_current_in(&list, &[], dir.path()).unwrap_err();
     assert!(err.contains("`r`") && err.contains("clm upgrade"), "{err}");
     assert!(err.contains("/clm:upgrade"), "{err}");
     assert!(!err.contains("adv"), "{err}");
 }
 
-// req:upgrade/require-current@d9893e22
+// req:upgrade/require-current@d0593968
 #[test]
 fn every_blocking_migration_is_named() {
     let list = [
@@ -196,24 +200,24 @@ fn every_blocking_migration_is_named() {
         apply("second", Level::Required, done_b),
     ];
     let dir = project(None);
-    let err = require_current_in(&list, dir.path()).unwrap_err();
+    let err = require_current_in(&list, &[], dir.path()).unwrap_err();
     assert!(err.contains("`first`") && err.contains("`second`"), "{err}");
 }
 
-// req:upgrade/require-current@d9893e22
+// req:upgrade/require-current@d0593968
 #[test]
 fn advised_migrations_alone_do_not_block() {
     let list = [apply("adv", Level::Advised, done_a), note("n", done_b)];
     let dir = project(None);
-    assert_eq!(require_current_in(&list, dir.path()), Ok(()));
+    assert_eq!(require_current_in(&list, &[], dir.path()), Ok(()));
 }
 
-// req:upgrade/require-current@d9893e22
+// req:upgrade/require-current@d0593968
 #[test]
 fn a_project_upgraded_by_a_newer_clm_says_so() {
     let list = [apply("a", Level::Required, done_a)];
     let dir = project(Some("upgraded = \"z\"\n"));
-    let err = require_current_in(&list, dir.path()).unwrap_err();
+    let err = require_current_in(&list, &[], dir.path()).unwrap_err();
     assert!(err.contains("newer `clm`") && err.contains("`z`"), "{err}");
 }
 
@@ -232,7 +236,7 @@ fn git(dir: &Path, args: &[&str]) {
     );
 }
 
-// req:upgrade/require-current@d9893e22
+// req:upgrade/require-current@d0593968
 #[test]
 fn a_skip_in_the_main_worktrees_local_settings_reaches_a_linked_worktree() {
     let list = [apply("r", Level::Required, done_a)];
@@ -257,15 +261,15 @@ fn a_skip_in_the_main_worktrees_local_settings_reaches_a_linked_worktree() {
     );
     let linked = base.join("linked");
     git(&main, &["worktree", "add", "-q", linked.to_str().unwrap()]);
-    assert!(require_current_in(&list, &linked).is_err());
+    assert!(require_current_in(&list, &[], &linked).is_err());
     fs::write(main.join("clm.local.toml"), "skip_migrations = [\"r\"]\n").unwrap();
-    assert_eq!(require_current_in(&list, &linked), Ok(()));
+    assert_eq!(require_current_in(&list, &[], &linked), Ok(()));
     // A skip names one migration only.
     let other = [
         apply("r", Level::Required, done_a),
         apply("s", Level::Required, done_b),
     ];
-    let err = require_current_in(&other, &linked).unwrap_err();
+    let err = require_current_in(&other, &[], &linked).unwrap_err();
     assert!(err.contains("`s`") && !err.contains("`r`"), "{err}");
 }
 
@@ -273,9 +277,9 @@ fn done_x(root: &Path) -> bool {
     marker_done("x")(root)
 }
 
-/// A note, and the later migration `SUPERSEDES` says supersedes it.
+/// A note, and the later migration `supersedes()` says supersedes it.
 fn superseded_pair() -> ([Migration; 2], &'static str, &'static str) {
-    let (new, old) = crate::migrations::SUPERSEDES[0];
+    let (new, old) = crate::supersedes()[0];
     (
         [note(old, done_a), apply(new, Level::Advised, done_x)],
         old,
@@ -283,19 +287,26 @@ fn superseded_pair() -> ([Migration; 2], &'static str, &'static str) {
     )
 }
 
-// req:upgrade/superseded-notes@4161b9ae
+// req:upgrade/superseded-notes@e41a6e66
 #[test]
 fn a_note_a_done_migration_supersedes_is_not_pending() {
     let (list, _, _) = superseded_pair();
     let dir = project(None);
     fs::write(dir.path().join("x"), "").unwrap();
-    assert!(pending_in(&list, dir.path()).unwrap().is_empty());
+    assert!(
+        pending_in(&list, crate::supersedes(), dir.path())
+            .unwrap()
+            .is_empty()
+    );
 }
 
-// req:upgrade/superseded-notes@4161b9ae
+// req:upgrade/superseded-notes@e41a6e66
 #[test]
 fn a_note_is_pending_until_its_superseder_is_done() {
     let (list, old, new) = superseded_pair();
     let dir = project(None);
-    assert_eq!(ids(&pending_in(&list, dir.path()).unwrap()), vec![old, new]);
+    assert_eq!(
+        ids(&pending_in(&list, crate::supersedes(), dir.path()).unwrap()),
+        vec![old, new]
+    );
 }
