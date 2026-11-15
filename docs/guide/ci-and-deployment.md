@@ -99,6 +99,24 @@ This rests on your tests, which is what the carried constraint `land-checks-stay
 
 A test that is slow, gives different results on the same tree, or needs a resource no other run may share belongs in `[verify]`, after the land (see "Slow tests"). A test that reads a file the graph doesn't connect it to can pass at a land that ran nothing and fail later; `[verify]`, or in a project without it the next build's full check, shows it.
 
+### Lands that wait share one check
+
+Lands on one clone run their checks one at a time. When a land takes its turn and others are waiting behind it, it lands them with its own branch on one run of the check: each still gets its own merge commit `Merge <branch> into main`, its own `landed` record and its own `landed <sha> <kind>` line, and they reach `main` in one push. The check runs once, on the last of those commits, over every test any of them would have run alone and every test two of them can both break. So only the last commit of a push is a tree the check ran on.
+
+A land is left to wait for its own turn when it conflicts with `main` or with a land taken before it, when the gate would refuse it once the lands before it are merged, or when its check environment differs. A land from an older `clm` is left to wait too. Nothing is shared between clones: a push from another machine costs a land the overlap re-check above.
+
+When `main` moves while the shared check runs, the lands keep the check, as one land does: they are merged again onto the new `main`, only what they and `main`'s new commits can both affect runs again, and they push together.
+
+When the shared check fails, nothing is pushed, and no branch is told it failed by another's run:
+
+- the lands the failure can't be traced to are taken together again at once. A land is a suspect when the step that failed ran a test from its own part of the selection, which needs a check that marks its steps (see "When a land runs over its target"); with no steps marked, every land is a suspect;
+- four suspects or fewer each land alone, on their own turn, with the output, log and exit code they would have had landing alone;
+- more than four are taken together in halves.
+
+So a branch learns its check failed only from its own `clm land`, on a tree holding `main` and that branch alone. With two or three lands waiting, a failed shared check costs one extra run and then what landing alone costs.
+
+A land killed between its push and its ledger records is finished by the next `clm land` of a branch that push held: it appends the missing records and merges nothing.
+
 ### Where a land builds
 
 A land that runs `[land] check` in the clone's land tree, holding the clone's lock on `.clm/land.lock`, sets `CLM_LAND_DIR` to the `.clm/land` directory of the main worktree, a place that lasts from land to land. If your check builds, point your toolchain's output there in your check script, so each land reuses the last one's build. A `clm land --check-only` run alone runs the check with `CLM_LAND_DIR` unset, so the check builds where it usually does. For cargo, set `CARGO_TARGET_DIR` from it and `CARGO_INCREMENTAL=0`, since incremental data in a directory every land shares only grows:
