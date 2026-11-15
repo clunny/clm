@@ -1,5 +1,7 @@
 ---
 status: applied
+human_burdens:
+  - Every build, fold and archive under Claude Code runs on opus, which costs more than sonnet, for as long as the value stands
 ---
 
 ## Intent
@@ -20,11 +22,23 @@ The model a build launches on is one fixed value, `build_model` in `agent-harnes
 
 - `clm agent-harness` under Claude Code prints `build-model opus`, and the build loop launches builds, folds and archives on `opus`.
 - A build's final review and every draft still run on the session's model, as before.
-- Nothing else changes: the tests of `orchestrator.loop` and the root that named `sonnet` read the value from the adapter since `4ce05672`, and the capability test for `right-model-per-task` asserts that a build model is named, not which.
+- The capability test for `right-model-per-task` asserts that a build model is named, not which, so it needs no change.
 
 ## What stays on `sonnet`
 
-The prompts `clm run`, `clm draft` and `clm draft --fold` write name `sonnet` as a literal for the subagents a build or a draft launches in turn, the builder check among them, and the plugin's three auditor agents name it in their frontmatter. Those are source text no requirement states (`prompt-text-is-source`); the backlog item lists them, so the work that makes the model a choice takes them too.
+- The prompts `clm run`, `clm draft` and `clm draft --fold` write name `sonnet` as a literal for the subagents a build or a draft launches in turn, the builder check among them. No requirement states that literal (`prompt-text-is-source`).
+- The plugin's three agents, `spec-auditor`, `architecture-auditor` and `spec-slimmer`, set `model: sonnet` in their frontmatter, which `plugin/launch-models` states. This change leaves that requirement alone.
+
+So the builder check still runs on `sonnet` while the builder now runs on `opus`, and its reason in `model-per-launch`, "the model the builder will run on", no longer holds. The backlog item lists all of these, so the work that makes the model a choice takes them too.
+
+## Scenarios that named the value
+
+Four scenarios of other components stated `sonnet` as what the system prints for the build model: `clm/agent-harness-command`, and `orchestrator.loop`'s `step-actions`, `plan-fold` and `plan-archive`. Their requirements say "the build model", and their tests read it from the adapter since `4ce05672`. The scenarios now say `<model>`, the build model `agent-harness/abilities` gives, so they stay true whatever the value. Each requirement's build re-cites its tests and changes no code. `orchestrator.loop/loop-start`'s scenario keeps `sonnet`: there it is the model the loop file holds for a run.
+
+## Decisions
+
+- **`model-per-launch`** (amended): builds, folds and archives launch on `opus`; why, that no measurement backs it, and what still names `sonnet`.
+- **`spec-architecture-audit`** (amended): its two sentences that called `sonnet` the build's model.
 
 ## Constraints
 
