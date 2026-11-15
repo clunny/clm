@@ -5,35 +5,47 @@ use std::fs;
 use std::path::Path;
 
 use crate::pending::{pending_in, skipped, strings, superseded, table};
-use crate::{Kind, Level, Migration, migrations};
+use crate::{Kind, Level, Migration, latest_in, migrations, supersedes};
 
-/// `clm upgrade` with no flag: one line per pending migration, or `up to date`.
+/// `clm upgrade` with no flag over the crate's own migrations.
+// clm:remove-by 20261114-migrations-with-templates
 pub fn list(root: &Path) -> Result<String, String> {
-    list_in(migrations(), root)
+    list_in(migrations(), supersedes(), root)
 }
 
-/// `clm upgrade --apply`: run the pending apply migrations, rewrite unedited note files, stamp
-/// `upgraded`.
+/// `clm upgrade --apply` over the crate's own migrations.
+// clm:remove-by 20261114-migrations-with-templates
 pub fn apply(root: &Path) -> Result<String, String> {
-    apply_in(migrations(), root)
+    apply_in(migrations(), supersedes(), root)
 }
 
-/// `clm upgrade --note <id>`: the migration's note.
+/// `clm upgrade --note <id>` over the crate's own migrations.
+// clm:remove-by 20261114-migrations-with-templates
 pub fn note(root: &Path, id: &str) -> Result<String, String> {
-    note_in(migrations(), root, id)
+    note_in(migrations(), supersedes(), root, id)
 }
 
-/// `clm upgrade --decline <id>`: add a pending note migration to `declined_migrations`.
+/// `clm upgrade --decline <id>` over the crate's own migrations.
+// clm:remove-by 20261114-migrations-with-templates
 pub fn decline(root: &Path, id: &str) -> Result<String, String> {
-    decline_in(migrations(), root, id)
+    decline_in(migrations(), supersedes(), root, id)
 }
 
-fn pending_or_refuse<'a>(list: &'a [Migration], root: &Path) -> Result<Vec<&'a Migration>, String> {
-    pending_in(list, root).map_err(|too_new| too_new.message())
+fn pending_or_refuse<'a>(
+    list: &'a [Migration],
+    supersedes: &[(&str, &str)],
+    root: &Path,
+) -> Result<Vec<&'a Migration>, String> {
+    pending_in(list, supersedes, root).map_err(|too_new| too_new.message())
 }
 
-pub(crate) fn list_in(list: &[Migration], root: &Path) -> Result<String, String> {
-    let pending = pending_or_refuse(list, root)?;
+/// `clm upgrade` with no flag: one line per pending migration of `list`, or `up to date`.
+pub fn list_in(
+    list: &[Migration],
+    supersedes: &[(&str, &str)],
+    root: &Path,
+) -> Result<String, String> {
+    let pending = pending_or_refuse(list, supersedes, root)?;
     if pending.is_empty() {
         return Ok("up to date\n".to_string());
     }
@@ -68,8 +80,14 @@ pub(crate) fn list_in(list: &[Migration], root: &Path) -> Result<String, String>
     Ok(out)
 }
 
-pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String> {
-    let pending = pending_or_refuse(list, root)?;
+/// `clm upgrade --apply`: run the pending apply migrations of `list`, rewrite unedited note files,
+/// stamp `upgraded` with the last of `list`.
+pub fn apply_in(
+    list: &[Migration],
+    supersedes: &[(&str, &str)],
+    root: &Path,
+) -> Result<String, String> {
+    let pending = pending_or_refuse(list, supersedes, root)?;
     let mut out = String::new();
     let mut failures = String::new();
     for m in &pending {
@@ -95,18 +113,27 @@ pub(crate) fn apply_in(list: &[Migration], root: &Path) -> Result<String, String
     // Judged before the stamp is written, so a note the stamp takes is shown on the run that
     // takes it.
     for m in pending {
-        if matches!(m.kind, Kind::Note(_)) && !(m.done)(root) && !superseded(list, m.id, root) {
+        if matches!(m.kind, Kind::Note(_))
+            && !(m.done)(root)
+            && !superseded(list, supersedes, m.id, root)
+        {
             out.push_str(&format!("note {}\n", m.id));
         }
     }
-    if let Some(latest) = list.last() {
-        set_key(root, "upgraded", &quote(latest.id))?;
+    if let Some(latest) = latest_in(list) {
+        set_key(root, "upgraded", &quote(latest))?;
     }
     Ok(out)
 }
 
-pub(crate) fn note_in(list: &[Migration], root: &Path, id: &str) -> Result<String, String> {
-    pending_or_refuse(list, root)?;
+/// `clm upgrade --note <id>`: the migration's note.
+pub fn note_in(
+    list: &[Migration],
+    supersedes: &[(&str, &str)],
+    root: &Path,
+    id: &str,
+) -> Result<String, String> {
+    pending_or_refuse(list, supersedes, root)?;
     match list.iter().find(|m| m.id == id).map(|m| &m.kind) {
         None => Err(format!("`{id}` is not a migration")),
         Some(Kind::Apply(..)) => Err(format!("`{id}` is an apply migration and has no note")),
@@ -114,8 +141,14 @@ pub(crate) fn note_in(list: &[Migration], root: &Path, id: &str) -> Result<Strin
     }
 }
 
-pub(crate) fn decline_in(list: &[Migration], root: &Path, id: &str) -> Result<String, String> {
-    let pending = pending_or_refuse(list, root)?;
+/// `clm upgrade --decline <id>`: add a pending note migration to `declined_migrations`.
+pub fn decline_in(
+    list: &[Migration],
+    supersedes: &[(&str, &str)],
+    root: &Path,
+    id: &str,
+) -> Result<String, String> {
+    let pending = pending_or_refuse(list, supersedes, root)?;
     if !list.iter().any(|m| m.id == id) {
         return Err(format!("`{id}` is not a migration"));
     }

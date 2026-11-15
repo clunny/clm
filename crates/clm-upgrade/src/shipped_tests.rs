@@ -8,9 +8,9 @@ use tempfile::TempDir;
 use crate::{apply, latest, list};
 
 const OLD_ARCHITECTURE: &str = include_str!("migrations/20261105-clm-upgrade/old.md");
-const NEW_ARCHITECTURE: &str = include_str!("../../clm-init/templates/architecture.md");
+pub(crate) const NEW_ARCHITECTURE: &str = include_str!("../../clm-init/templates/architecture.md");
 const OLD_CLAUDE: &str = include_str!("migrations/20261105-clm-upgrade-2/old.md");
-const NEW_CLAUDE: &str = include_str!("../../clm-init/templates/claude.md");
+pub(crate) const NEW_CLAUDE: &str = include_str!("../../clm-init/templates/claude.md");
 
 const CONSTRAINTS_ID: &str = "20261105-clm-upgrade";
 const HELP_ID: &str = "20261105-clm-upgrade-2";
@@ -20,7 +20,7 @@ fn stamped(text: &str) -> String {
     format!("upgraded = \"{}\"\n{text}", latest().unwrap())
 }
 
-fn project(architecture: &str, claude: &str) -> TempDir {
+pub(crate) fn project(architecture: &str, claude: &str) -> TempDir {
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("clm.toml"), stamped("defects = \"ask\"\n")).unwrap();
     fs::write(dir.path().join("ARCHITECTURE.md"), architecture).unwrap();
@@ -962,7 +962,7 @@ const PROOF_ID: &str = "20261114-proof-is-real";
 const PROOF_TITLE: &str =
     "A marker now counts only inside a test: see what stops counting before the next build";
 
-// req:upgrade/migration-markers-in-tests@ea97d66c
+// req:upgrade/migration-markers-in-tests@b7a52f4d
 #[test]
 fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -981,7 +981,7 @@ fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-markers-in-tests@ea97d66c
+// req:upgrade/migration-markers-in-tests@b7a52f4d
 #[test]
 fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -999,7 +999,7 @@ fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwi
     assert!(!list(dir.path()).unwrap().contains(PROOF_ID));
 }
 
-// req:upgrade/migration-markers-in-tests@ea97d66c
+// req:upgrade/migration-markers-in-tests@b7a52f4d
 #[test]
 fn the_proof_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
