@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - the-build-loop-leaves-a-landed-run-s-worktree-for-the-human-to
 ---
