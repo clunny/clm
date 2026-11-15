@@ -31,7 +31,7 @@ fn two_drafts_for_review(fx: &Fixture) {
 
 #[test]
 fn fold_while_builds_run() {
-    // req:orchestrator.loop/plan-fold@b2d7f17c
+    // req:orchestrator.loop/plan-fold@b4640dbb
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     let actions = step(&fx.options()).unwrap();
@@ -54,7 +54,7 @@ fn fold_while_builds_run() {
 
 #[test]
 fn no_fold_while_a_draft_runs_but_one_while_draining() {
-    // req:orchestrator.loop/plan-fold@b2d7f17c
+    // req:orchestrator.loop/plan-fold@b4640dbb
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     fx.add_run(run(
@@ -74,7 +74,7 @@ fn no_fold_while_a_draft_runs_but_one_while_draining() {
 
 #[test]
 fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
-    // req:orchestrator.loop/plan-fold@b2d7f17c
+    // req:orchestrator.loop/plan-fold@b4640dbb
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     step(&fx.options()).unwrap();
@@ -120,7 +120,7 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
 
 #[test]
 fn a_fold_that_proposes_nothing_is_told_to_the_session() {
-    // req:orchestrator.loop/plan-fold@b2d7f17c
+    // req:orchestrator.loop/plan-fold@b4640dbb
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     step(&fx.options()).unwrap();
