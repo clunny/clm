@@ -15,7 +15,10 @@ fn a_build_names_its_model() {
     assert!(harness.status.success(), "{}", printed(&harness));
     let report = String::from_utf8_lossy(&harness.stdout);
     assert!(
-        report.lines().any(|l| l.trim() == "build-model sonnet"),
+        report.lines().any(|l| l
+            .trim()
+            .strip_prefix("build-model ")
+            .is_some_and(|model| !model.is_empty())),
         "{report}"
     );
 

@@ -40,10 +40,17 @@ fn under_claude_code() {
     // req:clm/agent-harness-command@8dc1a8d6
     let (code, out) = run(&[("CLAUDECODE", "1")]);
     assert_eq!(code, 0);
+    // The model is the one the adapter names, whatever it is (`agent-harness/abilities`).
+    let model = clm_agent_harness::abilities(clm_agent_harness::AgentHarness::ClaudeCode)
+        .build_model
+        .expect("Claude Code names a build model");
     assert_eq!(
         out,
-        "agent harness claude-code\nconfirm yes\nguard yes\nsession-hooks yes\nsubagents yes\n\
-         isolated-worktrees yes\nnamed-agents yes\nmodel-choice yes\nbuild-model sonnet\n"
+        format!(
+            "agent harness claude-code\nconfirm yes\nguard yes\nsession-hooks yes\n\
+             subagents yes\nisolated-worktrees yes\nnamed-agents yes\nmodel-choice yes\n\
+             build-model {model}\n"
+        )
     );
 }
 

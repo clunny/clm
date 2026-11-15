@@ -35,7 +35,7 @@ fn fold_while_builds_run() {
     let fx = Fixture::new();
     two_drafts_for_review(&fx);
     let actions = step(&fx.options()).unwrap();
-    let launch = line(&actions, "launch fold:x fold sonnet ");
+    let launch = line(&actions, &common::launch_on_build_model("fold:x", "fold"));
     let prompt = fs::read_to_string(launch.rsplit(' ').next().unwrap()).unwrap();
     assert!(prompt.starts_with("loop run fold:x\n"), "{prompt}");
     assert!(
