@@ -83,7 +83,9 @@ fn a_trigger_the_project_did_not_choose_does_not_fire() {
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
-    f.land(&[("a.txt", "2\n")], "two");
+    // The queue is drained, which this project did not ask to be told of.
+    let cited = cites_thing(&f);
+    f.land(&[("crates/a/src/lib.rs", &cited)], "built");
     let out = f.dry(true);
     assert!(out.line.starts_with("verify not-due"), "{}", out.line);
 }
@@ -203,7 +205,11 @@ fn queue_drained_when_only_blocked_requirements_remain() {
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
     land_all(&f, &blocked_specs(), "block everything");
-    assert_eq!(f.dry(false).line, "verify due queue-drained");
+    let out = f.dry(false);
+    assert_eq!(
+        (out.line.as_str(), out.code),
+        ("verify due queue-drained", 0)
+    );
 }
 
 #[test]
