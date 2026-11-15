@@ -14,7 +14,7 @@ The crate `clm-rename` exposes `rename(root, change_id)`, the command on a check
 ## ADDED Requirements
 
 ### Requirement: commands-in-crate
-`clm-rename` SHALL offer `clm rename` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `rename`'s requirements SHALL call `clm-rename` itself, this call where the requirement states what a command prints or how it exits, and SHALL sit in `rename`'s own files: none runs the `clm` binary (`commands-live-in-their-crates`).
+`clm-rename` SHALL offer `clm rename` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `rename`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `rename`'s own files and call `clm-rename` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`).
 
 #### Scenario: a command called in a test
 - GIVEN a fixture repository, and a test in `rename`'s own files
@@ -25,3 +25,7 @@ The crate `clm-rename` exposes `rename(root, change_id)`, the command on a check
 - GIVEN the same call
 - WHEN a test passes it an option `clm rename` doesn't have
 - THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests

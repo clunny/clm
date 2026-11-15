@@ -22,11 +22,11 @@ All of it rests on the clause "a file that cites the component" (`own-files-at-t
 
 - **A directory per component in the root package, named in its `paths`.** Taken for the four components with no crate: they depend on no binary, the capability suite is the precedent, and a new test file there is its component's the moment it is written.
 - **A test-only crate per component.** Not taken: four more crates and workspace entries for tests that need only a package to run in.
-- **A requirement per component for the move.** Not taken: moving a test states no behaviour, and the only test that could prove it is a scan of source text (`dependency-work-is-a-requirement`). A `deferred` item per group records the work, and `20261115-builds-change-only-their-own-files` makes those items block the clause's removal.
+- **A requirement per component for the move alone.** Not taken: these components gain no behaviour, and the only test that could prove a move is a scan of source text (`dependency-work-is-a-requirement`). `commands-in-crate` states where its component's tests sit because the call it adds is what they move onto. A `deferred` item per group records the work here; the two that empty the root's files block `clm/routes-only`, and `20261115-builds-change-only-their-own-files` makes all three block the clause's removal.
 
 ## Outcome
 
-- `ci`'s `paths` gain `crates/clm/tests/ci/**`, `plugin`'s `crates/clm/tests/plugin/**`, `plugin.agents`'s `crates/clm/tests/plugin_agents/**` and `plugin.panel`'s `crates/clm/tests/plugin_panel/**`. The root's Design names them.
+- `ci`'s `paths` gain `crates/clm/tests/ci_suite/**`, `plugin`'s `crates/clm/tests/plugin_suite/**`, `plugin.agents`'s `crates/clm/tests/plugin_agents_suite/**` and `plugin.panel`'s `crates/clm/tests/plugin_panel_suite/**`. The root's Design names them, in `20261115-commands-in-their-crates`'s delta. No directory shares a name with a top-level test file, which Cargo refuses.
 - `backlog/tests-of-components-with-no-crate-sit-in-the-root-s-test-files`: the move of those 144 tests. Due now.
 - `backlog/some-tests-prove-a-component-from-another-component-s-files`: `view`, `check.coverage`, `upgrade`, `land.approval` and four single markers. Due now.
 - `backlog/web-tests-prove-one-web-component-from-another-s-files`: the web family's 40 markers, which need a design first.
