@@ -25,7 +25,7 @@ fn run(set: &[(&str, &str)]) -> (i32, String) {
 
 #[test]
 fn under_codex() {
-    // req:clm/agent-harness-command@8dc1a8d6
+    // req:clm/agent-harness-command@f993566d
     let (code, out) = run(&[(clm_agent_harness::CODEX_MARKER, "t1")]);
     assert_eq!(code, 0);
     assert_eq!(
@@ -37,7 +37,7 @@ fn under_codex() {
 
 #[test]
 fn under_claude_code() {
-    // req:clm/agent-harness-command@8dc1a8d6
+    // req:clm/agent-harness-command@f993566d
     let (code, out) = run(&[("CLAUDECODE", "1")]);
     assert_eq!(code, 0);
     // The model is the one the adapter names, whatever it is (`agent-harness/abilities`).
@@ -56,7 +56,7 @@ fn under_claude_code() {
 
 #[test]
 fn under_no_agent_and_listed_in_help() {
-    // req:clm/agent-harness-command@8dc1a8d6
+    // req:clm/agent-harness-command@f993566d
     let (code, out) = run(&[]);
     assert_eq!(code, 0);
     assert!(out.starts_with("agent harness none\nconfirm no\n"), "{out}");
