@@ -5,7 +5,7 @@ resolves: [the-build-loop-waits-without-end-on-a-run-that-has-landed-when]
 
 ## Intent
 
-A build loop must not wait for ever on a run that is over. `clm build` finishes a running build itself once the build's claim has left `origin`, whether or not the subagent's report ever reaches the session, and it finishes a run a previous loop left when that run can't be relaunched, instead of keeping it as work in progress. Both rules are code in the loop; the session is told nothing new.
+A build loop must not wait for ever on a run that is over. `clm build` finishes a running build itself once the build's claim has left `origin`, whether or not the subagent's report ever reaches the session, and it finishes a run a previous loop left when that run can't be relaunched, instead of keeping it as work in progress. Both rules are code in the loop; the session is told nothing new. The fix is outside the plan's freeze, so a question item holds its build back until the human says whether to make the exception.
 
 ## Problem
 
@@ -37,9 +37,11 @@ The item also expects a loop with nothing running and nothing ready to print `en
 
 - `orchestrator.loop/claim-gone-ends-a-build` (new): every `clm build` command that prints actions first finishes each running build whose claim has left `origin`, before the housekeeping removes the local branch that tells a landed build from a deleted one.
 - `orchestrator.loop/build-wait`: `clm build wait` also wakes when a running build's claim has left `origin`, so the step that finishes it runs within seconds of the land.
-- `orchestrator.loop/return-rules`: a `landed <sha>` report for a build whose claim is on `origin` and unmerged changes nothing. It is the late report of a run the loop already finished, arriving after the plan launched the component again under the same name.
+- `orchestrator.loop/return-rules`: a build's `landed <sha>` report whose commit was made before the run started changes nothing. It is the late report of a run the loop already finished, arriving after the plan launched the component again under the same name.
 - `orchestrator.loop/loop-start`: an orphan whose relaunch is refused is finished and recorded as returned, with one `say` naming the reason unless it landed.
-- The Design says why, with the approaches not taken.
+- The Design says why, with the approaches not taken, and that a test's running build holds a claim on `origin`.
+- `backlog/the-build-loop-s-lost-return-fix-is-outside-the-plan-s-freeze` (`kind: question`) blocks the four requirements until the human answers.
+- `backlog/the-guide-says-every-orphan-is-relaunched` (`kind: deferred`): once `loop-start` is built, the glossary's Orphan entry says a refused orphan is ended and reported (`method-in-the-plugin`). Until then the entry is true of the code as it is.
 - No capability test sees a difference: `capability/build-from-spec` drains its queue with every return reported.
 
 ## Constraints
@@ -49,14 +51,17 @@ The item also expects a loop with nothing running and nothing ready to print `en
 
 ## Edge cases
 
-- **The report arrives after the loop finished the run.** A report for a run that is `returned` already changes nothing (`return-rules`' code path for a repeated report). When the plan has launched the component again meanwhile, the new rule of `return-rules` ignores the late `landed` line by the new run's unmerged claim.
+- **The report arrives after the loop finished the run.** A report for a run that is `returned` already changes nothing (`return-rules`' code path for a repeated report). When the plan has launched the component again meanwhile, the new rule of `return-rules` ignores the late `landed` line, since its commit is older than the new run. A build that landed never reports anything but `landed`, so no other late line needs the rule.
 - **The claim is gone and no local branch is left**, as when another session's `clm wrap-up` in the clone removed it first. The finish can't tell whether the build landed, so the run is returned without being counted as landed. It is then missing from the end summary's list of what landed, and the verify run after a land waits for the loop to be idle. Accepted: both are reports, and nothing is built or lost by it.
 - **A claim deleted by hand while the subagent is alive.** The loop finishes the run and frees its place; if the subagent pushes again, the branch is a claim no run of the loop holds, as after any hand deletion. `clm build release` is the stated way to give a build up.
 - **A rebuild whose relaunch is refused.** A rebuild is relaunched as an orphan, so a refusal (usually the stopped build's uncommitted changes) now ends the run with a `say` instead of skipping it at every step. Its stop counts go with it, so a later build of the component starts at round 1.
-- **Tests of the loop** start runs with a fake `clm run` that pushes no claim. Under the new rule such a run has no claim on `origin` and is finished at the next step, so the fixtures of the existing scenarios that need a live run give it a claim branch. That is test plumbing of the component's own suite.
+- **A claim deleted on `origin` from another clone without landing** stays in this clone's remote-tracking refs, since the loop's fetch doesn't prune, so the run isn't judged over. A hand deletion elsewhere is rare, and `clm build release` covers it.
+- **Tests of the loop** start runs with a fake `clm run` that pushes no claim. Under the new rule such a run has no claim on `origin` and is finished at the next step, so the fixtures give every build a scenario calls running a claim branch, also for scenarios of requirements this change doesn't modify (`stop-causes`, `repeated-stops-escalate`, `take-over-holds-moving-orphans` and others). The Design's Tests paragraph states that convention. It is test plumbing of the component's own suite.
+- **`clm build wait` runs the housekeeping too**, at its start and each interval, so it judges the claims first and exits before a wrap-up of its own could remove a landed build's local branch.
 
 ## Open questions
 
-- **This change departs from the freeze's default answer.** The plan in force (`backlog/a-passing-check-proves-less-than-the-spec-claims`, Settled) makes "accept" the default answer to a defect found during the freeze. This one is fixed instead because the plan's own builds depend on it, the reason `20261113-a-draft-is-launched` gave for the same departure: every phase is built through this loop, which here waited 50 minutes on a build that had landed and then could not end a drain. The change needs no review, so it lands on checks. If the freeze should have held, the two steps by hand it replaces are to report `landed <sha>` yourself for a build whose branch has merged, and to run `clm build release <component>` for a run of an earlier loop that every step skips.
+- **Whether to build this during the freeze** is the human's, asked in `backlog/the-build-loop-s-lost-return-fix-is-outside-the-plan-s-freeze`. The plan in force makes "accept" the default answer to a defect and says an exception is the human's to make, never a session's. The fault stalls the loop that builds the plan's own phases, which argues for the exception, so the design lands and the build waits for the answer. The architecture audit asked for this.
+- **The loop reads `origin/impl/<component>` itself**, which `unclosed-build-reads-finish` rejected for the skill, in prose, as a second reading of landed. Left as it is: here it is code, it decides only that the build is over, and `clm run --finish` still says whether it landed. The decision file is unchanged.
 - **A refused relaunch is said once, not kept in the human's queue.** After the `say`, a component that `clm run` keeps refusing is skipped at every step with a line on stderr, as a refused build that was never an orphan is today. Putting refusals in the queue is a wider change than this bug needs.
 - **A run that neither lands nor returns** (a subagent that died without a report, or a draft whose report is lost) still waits for the session's report. None has been seen, and no fact in git says such a run is over.
