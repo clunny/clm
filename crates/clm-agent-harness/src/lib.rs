@@ -77,7 +77,7 @@ pub fn abilities(agent_harness: AgentHarness) -> Abilities {
             isolated_worktrees: true,
             named_agents: true,
             model_choice: true,
-            build_model: Some("sonnet"),
+            build_model: Some("opus"),
         },
         AgentHarness::Codex => Abilities {
             guard: true,
