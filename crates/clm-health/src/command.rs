@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Args, FromArgMatches};
 
-use crate::Settings;
+use crate::{Settings, flag};
 
 /// The arguments of `clm health`.
 #[derive(Args, Debug, Clone)]
@@ -142,7 +142,7 @@ where
         return 1;
     }
     let counted = workaround_flag.and_then(|threshold| {
-        crate::crowded(root, &args.requirement, threshold).map_err(|e| e.to_string())
+        flag::crowded(root, &args.requirement, threshold).map_err(|e| e.to_string())
     });
     match counted {
         Ok(crowded) if crowded.is_empty() => 0,
