@@ -112,7 +112,8 @@ fn finishes_a_change(ctx: &Ctx, lands: &[String]) -> Result<bool, Error> {
     Ok(false)
 }
 
-/// Whether no requirement in `head`'s tree is pending.
+/// Whether no requirement in `head`'s tree is ready to build: every pending one is blocked by
+/// a backlog item or by a requirement it waits on, claims read for none.
 fn queue_drained(ctx: &Ctx, head: &str) -> Result<bool, Error> {
     let tree = tree::Tree::at(ctx, head)?;
     let (graph, violations) = clm_model::load(&tree.dir);
@@ -121,5 +122,7 @@ fn queue_drained(ctx: &Ctx, head: &str) -> Result<bool, Error> {
         return Ok(false);
     }
     let markers = clm_coverage::scan(&tree.dir).req;
-    Ok(clm_coverage::pending(&graph, &markers).is_empty())
+    Ok(clm_coverage::pending(&graph, &markers)
+        .iter()
+        .all(|p| !p.blocked_by.is_empty() || !p.waits_on.is_empty()))
 }

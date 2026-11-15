@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::Fixture;
+use common::{Fixture, UNBUILT};
 
 const CHANGE: &str = "---\nstatus: applied\n---\nintent\n";
 
@@ -14,7 +14,7 @@ fn local(triggers: &str, every: &str) -> Fixture {
 
 #[test]
 fn a_finished_change_is_due() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"change-done\"", "");
     f.land(&[("a.txt", "1\n")], "one");
     let green = f.land(&[("a.txt", "2\n")], "two");
@@ -30,7 +30,7 @@ fn a_finished_change_is_due() {
 
 #[test]
 fn nothing_finished() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -53,7 +53,7 @@ fn nothing_finished() {
 
 #[test]
 fn a_dry_run_that_finds_nothing_due_exits_3() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -65,7 +65,7 @@ fn a_dry_run_that_finds_nothing_due_exits_3() {
 
 #[test]
 fn work_done_only_when_asked() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"work-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -79,7 +79,7 @@ fn work_done_only_when_asked() {
 
 #[test]
 fn a_trigger_the_project_did_not_choose_does_not_fire() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"change-done\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -90,7 +90,7 @@ fn a_trigger_the_project_did_not_choose_does_not_fire() {
 
 #[test]
 fn backstop_by_lands() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("", "every = { lands = 3 }");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -103,7 +103,7 @@ fn backstop_by_lands() {
 
 #[test]
 fn backstop_by_days() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("", "every = { days = 2 }");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -131,7 +131,7 @@ fn backstop_by_days() {
 
 #[test]
 fn red_stays_due() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("", "");
     let red = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&red, false);
@@ -141,7 +141,7 @@ fn red_stays_due() {
 
 #[test]
 fn queue_drained_waits_for_the_last_pending_requirement() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"queue-drained\"", "");
     let green = f.land(&[("a.txt", "1\n")], "one");
     f.verified(&green, true);
@@ -155,6 +155,114 @@ fn queue_drained_waits_for_the_last_pending_requirement() {
     );
     f.land(&[("crates/a/src/lib.rs", &cited)], "built");
     assert_eq!(f.dry(false).line, "verify due queue-drained");
+}
+
+const NEEDS_X: &str = "\n### Requirement: y\nIt SHALL do y.\n\n\
+    #### Scenario: doing\n- GIVEN a\n- WHEN b\n- THEN c\n\n#### Needs\n- a/x\n";
+
+fn spec(title: &str, paths: &str, extra: &str, requirements: &str) -> String {
+    format!(
+        "---\ntitle: {title}\nstatus: active\nowners: []\npaths: [\"{paths}\"]\n{extra}---\n\n\
+         ## Contract\nc\n\n## Design\nd\n\n## Requirements\n{requirements}"
+    )
+}
+
+/// `a/x` (unbuilt, blocked by a backlog item) and `b/y` (unbuilt, needing `a/x`) in place of
+/// `a/thing`.
+fn blocked_specs() -> Vec<(&'static str, String)> {
+    let x = UNBUILT.replace("thing", "x");
+    vec![
+        ("specs/a/SPEC.md", spec("A", "crates/a/**", "", &x)),
+        ("specs/b/SPEC.md", spec("B", "crates/b/**", "", NEEDS_X)),
+        (
+            "backlog/wait-for-x.md",
+            "---\ntitle: \"Wait\"\nkind: question\ncomponents: [a]\nblocks: [a/x]\n---\n\nWaiting.\n"
+                .to_string(),
+        ),
+    ]
+}
+
+fn land_all(f: &Fixture, files: &[(&str, String)], message: &str) -> String {
+    let refs: Vec<(&str, &str)> = files.iter().map(|(n, t)| (*n, t.as_str())).collect();
+    f.land(&refs, message)
+}
+
+/// A test citing `a/thing` at its current version.
+fn cites_thing(f: &Fixture) -> String {
+    format!(
+        "// {}{}\n#[test]\nfn t() {{}}\n",
+        concat!("req", ":a/thing@"),
+        hash_of_thing(f)
+    )
+}
+
+#[test]
+fn queue_drained_when_only_blocked_requirements_remain() {
+    // req:verify/verify-due@462c3f79
+    let f = local("\"queue-drained\"", "");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    land_all(&f, &blocked_specs(), "block everything");
+    assert_eq!(f.dry(false).line, "verify due queue-drained");
+}
+
+#[test]
+fn queue_not_drained_while_a_requirement_is_ready() {
+    // req:verify/verify-due@462c3f79
+    let f = local("\"queue-drained\"", "");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let mut files = blocked_specs();
+    let c = UNBUILT.replace("thing", "z");
+    files.push(("specs/c/SPEC.md", spec("C", "crates/c/**", "", &c)));
+    land_all(&f, &files, "block some");
+    // A branch of the ready component, however fresh, holds nothing back.
+    f.git(
+        &f.work(),
+        &["push", "-q", "origin", "main:refs/heads/impl/c"],
+    );
+    let out = f.dry(false);
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.code, 3);
+    let (graph, _) = clm_model::load(&f.work());
+    let version = graph.nodes["c"].requirements[0].version().to_string();
+    let cited = format!(
+        "// {}{version}\n#[test]\nfn t() {{}}\n",
+        concat!("req", ":c/z@")
+    );
+    f.land(&[("crates/c/src/lib.rs", &cited)], "build z");
+    assert_eq!(f.dry(false).line, "verify due queue-drained");
+}
+
+#[test]
+fn queue_drained_when_nothing_is_pending() {
+    // req:verify/verify-due@462c3f79
+    let f = local("\"queue-drained\"", "");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let cited = cites_thing(&f);
+    f.land(&[("crates/a/src/lib.rs", &cited)], "built");
+    assert_eq!(f.dry(false).line, "verify due queue-drained");
+}
+
+#[test]
+fn queue_not_drained_when_the_spec_graph_has_violations() {
+    // req:verify/verify-due@462c3f79
+    let f = local("\"queue-drained\"", "");
+    let green = f.land(&[("a.txt", "1\n")], "one");
+    f.verified(&green, true);
+    let cited = cites_thing(&f);
+    let broken = spec("A", "crates/a/**", "depends_on: [ghost]\n", UNBUILT);
+    f.land(
+        &[
+            ("crates/a/src/lib.rs", &cited),
+            ("specs/a/SPEC.md", &broken),
+        ],
+        "broken graph",
+    );
+    let out = f.dry(false);
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.code, 3);
 }
 
 /// The current version of `a/thing`, as `clm hashes` gives it.
@@ -171,7 +279,7 @@ fn hash_of_thing(f: &Fixture) -> String {
 
 #[test]
 fn nothing_landed() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = local("\"work-done\"", "");
     let head = f.back(0);
     f.verified(&head, true);
@@ -189,7 +297,7 @@ fn nothing_landed() {
 
 #[test]
 fn off() {
-    // req:verify/verify-due@9a5327cd
+    // req:verify/verify-due@462c3f79
     let f = Fixture::new(None);
     let requests = [
         clm_verify::Request::Due {
