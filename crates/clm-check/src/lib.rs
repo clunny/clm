@@ -65,7 +65,6 @@ pub use commands::{
 #[cfg(feature = "detectors")]
 pub use detectors::{Detector, detectors};
 pub use imports::undeclared_imports;
-#[cfg(feature = "checkout")]
 #[cfg(feature = "detectors")]
 pub use size::size;
 pub use size::{Budgets, Count, Length, Size, TestPart, size_of};
