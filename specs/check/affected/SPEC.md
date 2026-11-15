@@ -20,6 +20,8 @@ serves: [capability/land-safely]
 
 It exits 0 with its output, 1 with the reason when `--readers` and `--why` are both given, when `<ref>` doesn't resolve to a commit, when it has no merge base with `HEAD`, or when the graph or the settings can't be loaded, and 2 when git fails otherwise.
 
+`clm-affected` offers `clm affected` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 Crate `clm-affected`. `select(graph, changed, markers, all) -> Selection` is pure: it takes the graph (`model`), the changed paths with whether each still exists, the markers of every scanned file (`check`'s `scan`, each with its path) and the `[affected] all` globs, and returns `All(path)` or `Selection::Nodes`, holding the affected components' IDs and the selected files. Owners and globs are matched with `check`'s `owner` and `path_matches`, so a file belongs to the same component as in `clm pending`; paths are disjoint across components, and `owner`'s deepest-first rule settles any overlap. A `clm:remove-by` marker isn't a `req:` marker: a file holding only those belongs to its owner, and neither is a `clm:reads` marker. Dependants are found by walking `depends_on` backwards from the changed components until no component is added. A file an exemption names for `undeclared-imports` is selected whenever any component is affected, since what it imports is outside the graph's view (`temporary-exemptions`). Doc-only paths come from `ledger`'s `doc_only`, the one list `code_key` uses, so a change whose code key is unchanged selects only readers.
 
@@ -240,3 +242,20 @@ The library SHALL offer the pure `overlap(a, b) -> Selection` that applies these
 - GIVEN any repository
 - WHEN `clm affected --overlap x y --readers` runs
 - THEN it exits 1 naming `--overlap` and `--readers`
+
+### Requirement: commands-in-crate
+`clm-affected` SHALL offer `clm affected` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `check.affected`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `check.affected`'s own files and call `clm-affected` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `check.affected`'s own files
+- WHEN it calls `clm-affected`'s call with the arguments of `clm affected` and two buffers
+- THEN the buffers hold what `clm affected` prints to standard output and to standard error there, and the call returns the status `clm affected` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm affected` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests

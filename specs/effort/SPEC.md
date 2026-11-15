@@ -31,6 +31,8 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 
 `clm architecture [<slug>] [--format text|json] [--root <dir>]` prints the architecture list (`architecture-list`) or one entry's page (`architecture-page`), or as JSON the list of `Constraint`s or one `Constraint` (`architecture-json`), exiting as `clm capabilities` does, with `no architectural constraint <slug>` for an unknown slug. `clm architecture decide <slug> --value high|medium|low --decision keep|cut|redesign|accept [--root <dir>]` appends a decision on one (`architecture-decide-command`).
 
+`clm-effort` offers each of `clm effort`, `clm capabilities` and `clm architecture` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the directory it runs in, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 **An `effort` record's `id`** is `ledger`'s `effort_id(session, branch)`, the first 32 hex digits of SHA-256 over `<session>\n<branch>`. The fold keeps, for each `id`, the record with the latest `at`, whatever the writer (`ledger/effort-records`). A record holds the larger of what a run read and what the fold holds (`record-command`), so a run from another clone with more of the session's transcript supersedes the earlier count, and a run that sees less of it (a worktree since removed, a `--cwd` not given again) never shrinks it.
 
@@ -330,3 +332,20 @@ The text `clm capabilities` and `clm architecture` print SHALL say component and
 #### Serves
 - capability/follow-from-browser
 - capability/review-capability-cost
+
+### Requirement: commands-in-crate
+`clm-effort` SHALL offer each of `clm effort`, `clm capabilities` and `clm architecture` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the directory it runs in, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `effort`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `effort`'s own files and call `clm-effort` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `effort`'s own files
+- WHEN it calls `clm-effort`'s call with the arguments of `clm effort` and two buffers
+- THEN the buffers hold what `clm effort` prints to standard output and to standard error there, and the call returns the status `clm effort` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm effort` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests

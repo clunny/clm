@@ -2,7 +2,7 @@
 title: CLM
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.loop, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, host, sync, effort, rename, upgrade, verify, agent-harness, machine]
+depends_on: [model, check, check.affected, check.unreferenced, check.health, gate, apply, context, vcs, orchestrator, orchestrator.run, orchestrator.checkpoint, orchestrator.triage, orchestrator.loop, config, init, view, view.repo, plugin.hooks, plugin.hooks.guard, ledger, land, land.approval, host, sync, effort, rename, upgrade, verify, agent-harness, machine]
 paths: ["Cargo.toml", "Cargo.lock", "crates/clm/Cargo.toml", "crates/clm/build.rs", "crates/clm/src/**", "crates/clm/tests/*.rs", "crates/clm-runner/**", "rust-toolchain.toml", ".claude/settings.json", ".gitattributes", "scripts/dev-install.sh", "scripts/retired-terms.sh", "scripts/retired-terms.txt", "README.md", "CONTRIBUTING.md", "LICENSE"]
 outside: []
 serves: [capability/install-and-release, architecture/platform]
@@ -19,7 +19,13 @@ The repo declares its build environment once. `rust-toolchain.toml` pins the Rus
 
 The root `.gitattributes` marks every lockfile the repository tracks, each `Cargo.lock` and each `package-lock.json`, `linguist-generated` (`lockfiles-generated`), so none counts toward its component's size (`check/node-size`): a session never reads a lockfile. The lines are written bare, by file name with no `/` (`Cargo.lock linguist-generated`, `package-lock.json linguist-generated`), so they mark a file of that name at any depth, a new npm package's included, and `git check-attr` reports each as `set`. `crates/clm` also dispatches `clm size` to `clm-check`, and `clm affected` to `clm-affected` with `config`'s `[affected] all` globs, and loads `config`'s `component_size` and passes it to `clm size` and to `clm rebase`'s split-item step, as it passes `detectors` to `clm check`, and loads `config`'s `health` and passes it to `clm health` and to `clm rebase`'s reconsider step the same way (`check.health`).
 
-The root's `paths` name `crates/clm`'s manifest, build script, sources and top-level test files, not the whole crate, so that `crates/clm/tests/capability/`, the capability tests' target, belongs to `capability` alone (`check/paths-disjoint`).
+The root's `paths` name `crates/clm`'s manifest, build script, sources and top-level test files, not the whole crate, so that `crates/clm/tests/capability/`, the capability tests' target, belongs to `capability` alone (`check/paths-disjoint`). The tests of the components that have no crate sit beside it the same way, each directory a test target of this package that its component's `paths` name: `crates/clm/tests/ci_suite/` is `ci`'s, `crates/clm/tests/plugin_suite/` is `plugin`'s, `crates/clm/tests/plugin_agents_suite/` is `plugin.agents`'s and `crates/clm/tests/plugin_panel_suite/` is `plugin.panel`'s. They read workflows, scripts and plugin files and run no binary, so they need this package only to run in (`commands-live-in-their-crates`).
+
+**Commands live in their crates** (`commands-live-in-their-crates`). A command's arguments, what it prints and its exit status belong to the component whose requirements state them. That component's crate defines the command's arguments, as a type the command-line parser reads, and offers the command as a call that parses them from the strings the command line gives, and takes the root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status (each component's `commands-in-crate`). `crates/clm` builds its one parser from those types, applies what holds for every command (`upgrade-blocks-commands`, `none-remote-before-commands`, `root-from-cwd`, `closed-stdout`), loads the settings a crate is passed, and calls the crate with the process's own streams and environment, exiting with what the call returns (`routes-only`). The streams it passes fail as `println!` does when the reader has gone, so `closed-stdout` holds as before. `clm hook` is one command over two crates: `crates/clm` keeps the name, reads standard input once and routes `guard` to `clm-guard` and the other hooks to `clm-hooks`. A crate prints a violation as `clm-model` gives its line (`model/violation-line`), whether or not it depends on `check`. A crate that the web app compiles to WebAssembly offers its call in its native build only. Where a command's text is stated by a component below the crate that offers its call, as `clm status` and `clm view` are by `view`, `clm pending` and the lines of `clm coverage` by `check.coverage`, the lower component's tests assert the text its own crate returns, and the offering crate's tests that the call writes that text unchanged, with its stream and exit status. The commands whose behaviour the root's own requirements state stay as they are: `clm contribution`, `clm upgrade`, `clm verify`, `clm machine`, `clm agent-harness`, `clm build` and `clm fingerprint`.
+
+Until `routes-only` is built, the top-level test files under `crates/clm/tests/` still hold tests of other components, which run the binary because Cargo gives it only to this package's tests. `changes/20261115-commands-in-their-crates/moved-tests.txt` (under `changes/archive/` once the change is complete) lists each one: the component it proves, its file, its name and whether it runs the binary. A component's build of `commands-in-crate` moves every test on its lines into its own crate under the same name, with the arguments it passes and everything it asserts unchanged, replacing only the helper that ran the binary by a call of the crate; it deletes the test from the root's file, with any helper nothing there uses any longer and the file itself when nothing is left in it, and deletes no test it hasn't moved. Its pull request says how many it moved against how many the list holds for it. In the same build it points its arm of `crates/clm/src/main.rs` at the call and deletes the code there that the call replaces.
+
+Three cases need more than the helper. **A test on two components' lines, or one that also cites a requirement of the root**, is never deleted by the first build to reach it: that build writes a test of its own requirement in its own crate and takes its own marker off the test, which stays until no marker of another component is left on it; a test that cites a requirement of the root stays the root's. **A test that set the binary's environment or directory** (a `PATH` holding a stand-in for `git`, `gh` or `claude`, `TMPDIR`, a `GIT_` variable, the directory it ran in) sets them on its own process for the length of the call: `git` and the tools a command starts inherit the process's environment, not the lookup, and the tests run one per process (`ci/nextest-runner`), so no other test sees them. Code of the crate that reads the process's environment, directory or executable path itself reads it through the call's arguments instead. **A test of something only a process has** (a signal, a closed stream, the binary's own file, two commands running at once) stays where it is, and the build files a `question` item naming it, which blocks `clm/routes-only`.
 
 `crates/clm/src/main.rs` is dispatch only, and the build of whichever component gains or changes a command edits it, with `crates/clm/src/upgrade_gate.rs`, the list of commands that run in a project behind on a required migration, and `crates/clm/Cargo.toml`, `Cargo.toml` and `Cargo.lock` when the component adds a crate: the root's own builds cover only the root's requirements. Those five files are the root's `wiring` (`model/wiring-globs`), and naming them turns the land's ownership rule on here (`land/build-holds-own-files`, `own-files-at-the-gate`). They are the files in which each component registers itself with the product; the root's other source files are its own behaviour and stay out (`own-files-at-the-gate` holds the measurement behind the list). `clm.toml` stays out too: it is `config`'s, and each setting this repository makes is a requirement of `config`. `upgrade`'s migrations stay out, and need no entry: a migration written today is `init`'s, beside the file it carries a change of (`migrations-live-with-init`). Two builds in one wave may both touch those files; `clm rebase`'s rebase reports the conflict and the session resolves it.
 
@@ -1086,3 +1092,50 @@ The workspace SHALL hold no crate `clm-runner`, and `clm` SHALL have no `runner`
 #### Serves
 - architecture/no-dead-code
 - capability/no-dead-weight
+
+### Requirement: routes-only
+For every command a component offers as a call (`commands-in-crate`), `crates/clm` SHALL only parse the command line with the crate's own argument definitions, apply what holds for every command (`upgrade-blocks-commands`, `none-remote-before-commands`, `root-from-cwd`, `closed-stdout`), load the settings the crate is passed, and call the crate with the process's standard output, standard error and environment: it SHALL print nothing of its own for such a command and SHALL exit with the status the call returns. The top-level test files under `crates/clm/tests/` SHALL hold tests of the root's own requirements only, and the helpers no test there uses are removed with the tests that moved (`commands-live-in-their-crates`).
+
+#### Scenario: a routed command
+- GIVEN a fixture repository
+- WHEN `clm hashes <component>` runs as a process there, and a test calls `clm-apply`'s call with the same arguments and two buffers
+- THEN the process's standard output and standard error equal the buffers, and its exit status is what the call returned
+
+#### Scenario: a status the call returns
+- GIVEN a fixture repository whose check fails
+- WHEN `clm check` runs as a process
+- THEN it exits with the status `clm-check`'s call returns for that repository, and prints nothing the call didn't write
+
+#### Scenario: every command routes
+- GIVEN the commands `clm --help` lists
+- WHEN each runs as a process with `--help`
+- THEN each exits 0 and prints its own usage
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests
+
+#### Needs
+- apply/commands-in-crate
+- check/commands-in-crate
+- check.affected/commands-in-crate
+- check.health/commands-in-crate
+- check.unreferenced/commands-in-crate
+- config/commands-in-crate
+- context/commands-in-crate
+- effort/commands-in-crate
+- gate/commands-in-crate
+- host/commands-in-crate
+- init/commands-in-crate
+- land/commands-in-crate
+- land.approval/commands-in-crate
+- ledger/commands-in-crate
+- orchestrator/commands-in-crate
+- orchestrator.checkpoint/commands-in-crate
+- orchestrator.run/commands-in-crate
+- orchestrator.triage/commands-in-crate
+- plugin.hooks/commands-in-crate
+- plugin.hooks.guard/commands-in-crate
+- rename/commands-in-crate
+- sync/commands-in-crate
+- view.repo/commands-in-crate

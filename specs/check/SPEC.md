@@ -17,6 +17,8 @@ The markers and the states are computed by the child component `check.coverage` 
 
 `clm size [<component>]` reports each component's size in tokens against its budget, marking the components over either (`node-size`, `node-size-budgets`). It is advisory: it exits 0 whatever the sizes (1 only for an unknown component or settings that can't be loaded), and no rule of `clm check` reads them.
 
+`clm-check` offers each of `clm check`, `clm size`, `clm coverage` and `clm backlog` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 `run` loads the graph (`model`), validates pending changes (`apply`), then runs the coverage, marker and text rules on the markers `check.coverage`'s `scan` finds in the files `git ls-files --cached --others --exclude-standard` lists. A marker without a version cites no version: it counts for `dangling-markers`, and the requirement it names is `behind` while it stays, so a bare marker never makes a requirement current, alone or beside a versioned one. The same scan finds removal markers: text matching the regex `clm:remove-by (\d{8}-[a-z0-9-]+)`. Text that doesn't match, such as `clm:remove-by <change-id>` in help output, isn't a marker. To mention a marker in code without claiming coverage or a removal, such as a test fixture, build the string so the literal never appears whole (e.g. `concat!("req", ":a/x")`); a fixture that holds a skipped test is built the same way.
 
@@ -872,3 +874,25 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 #### Needs
 - check.coverage/test-lists
 - check.coverage/markers-in-tests
+
+### Requirement: commands-in-crate
+`clm-check` SHALL offer each of `clm check`, `clm size`, `clm coverage` and `clm backlog` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `check`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `check`'s own files and call `clm-check` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary. What `clm coverage` prints of each requirement's state is stated by `check.coverage`'s requirements, whose crate lies below this one and can't call it: the call SHALL write the lines `clm-coverage` returns for the repository unchanged, so that its tests, which assert those lines from its own crate, and this component's, which assert the stream and the exit status, prove the command between them (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `check`'s own files
+- WHEN it calls `clm-check`'s call with the arguments of `clm check` and two buffers
+- THEN the buffers hold what `clm check` prints to standard output and to standard error there, and the call returns the status `clm check` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm check` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
+
+#### Scenario: lines from the crate below
+- GIVEN a fixture repository
+- WHEN a test calls the call with the arguments of `clm coverage`
+- THEN the output buffer holds exactly the lines `clm-coverage`'s report gives for that repository, and the call returns 0
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests

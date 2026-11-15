@@ -12,6 +12,8 @@ serves: [architecture/plain-terms]
 
 The crate `clm-rename` exposes `rename(root, change_id)`, the command on a checkout, and `replays(repo, base, head)`, whether `head`'s tree is exactly what `rename` produces from `base`'s with the change `head` adds (`replay`). `gate` calls `replays` to classify a branch, and `sync` calls both to regenerate a rename branch instead of rebasing it (`regenerate-dont-merge`).
 
+`clm-rename` offers `clm rename` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
 ## Design
 **Why one record** (`rename-by-replay`). A rename is mechanical, but its edits reach code paths (test markers) and the human layers, which a spec branch can't edit without being `mixed` or needing review. The pairs in `change.md` are the whole intent: everything else on the branch follows from them and from the base, so a program can reproduce it, and the gate trusts the branch exactly when it reproduces. `clm apply` and the delta format are unchanged: `rename` writes ordinary deltas, and the removal and move machinery (`node-removal`, `progress-follows-moves`) reads them as it reads any.
 
@@ -254,3 +256,20 @@ Each delta `clm rename` generates SHALL name its component with the frontmatter 
 - GIVEN a branch cut from `base`, which holds change `y` as in the first scenario, on which `clm rename r` ran and its result was committed
 - WHEN `replays(repo, base, HEAD)` runs
 - THEN it is true
+
+### Requirement: commands-in-crate
+`clm-rename` SHALL offer `clm rename` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `rename`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `rename`'s own files and call `clm-rename` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: a command called in a test
+- GIVEN a fixture repository, and a test in `rename`'s own files
+- WHEN it calls `clm-rename`'s call with the arguments of `clm rename` and two buffers
+- THEN the buffers hold what `clm rename` prints to standard output and to standard error there, and the call returns the status `clm rename` exits with
+
+#### Scenario: arguments it can't parse
+- GIVEN the same call
+- WHEN a test passes it an option `clm rename` doesn't have
+- THEN it returns 2 with the usage error in the error buffer, and the test's process goes on
+
+#### Serves
+- architecture/path-ownership
+- capability/prove-by-tests

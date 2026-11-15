@@ -3,7 +3,7 @@ title: CI
 status: active
 owners: ["@clunny"]
 depends_on: [check, check.affected, vcs, land, host]
-paths: [".github/**"]
+paths: [".github/**", "crates/clm/tests/ci_suite/**"]
 successor: ""
 serves: [capability/land-safely, architecture/land-locally]
 ---

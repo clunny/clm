@@ -16,7 +16,7 @@ Serves `capability/right-model-per-task` and applies the re-founding's "the righ
 | any other subagent a build launches | the build | `sonnet` |
 | a draft | `triage`, `build` | the session's own model (design) |
 | the fold | `triage`, `build` | the build model |
-| a builder check | `propose`, a draft, the fold | `sonnet`, which was the model the builder ran on until 2026-11-15 |
+| a builder check | `propose`, a draft, the fold | the build model, `opus` under Claude Code: it reads a change as the session that will build it |
 | `architecture-auditor`, a design review (`spec-architecture-audit`) | `propose`, `contribution`, a draft, the fold | the session's own model (`sonnet` in the fold) |
 | `spec-slimmer` | `health` | `sonnet` |
 | per-node spec drafting from code | `init` | `sonnet` |
@@ -33,3 +33,5 @@ Serves `capability/right-model-per-task` and applies the re-founding's "the righ
 **Rejected.** A `[models]` setting in `clm.toml` (YAGNI: no adopter asked to choose, and the main session's model can't be configured ahead); naming `opus` for reviews (a fixed top tier the principle rules out); having `implement` run the final review itself after the build returns (the build lands before it returns, and moving the review out would redesign the build flow).
 
 **Changed on 2026-11-15** (`20261115-builds-run-on-opus`). The human found builds on `sonnet` made too many mistakes and set the build model to `opus`, which the loop also launches folds and archives on. No measurement backs it: nobody has read from the loop file or the ledger how often `sonnet` builds were rebuilt, escalated or refused at the land, which was the condition this decision first named for changing. The human also expected a model chosen for each task, not one for the class; that, and a setting, are `backlog/every-build-runs-on-one-fixed-model-whatever-the-task`. Left as they were: the subagents a build launches, the builder check and the plugin's agents still name `sonnet`, so the builder check no longer runs on the builder's model.
+
+**The builder check follows the build model (2026-11-15, by the human, with `20261115-commands-in-their-crates`).** The check asks whether a change can be built, as the person who will build it, and builds run on `opus` since that day; the check was still launched on `sonnet`, the model builds had run on. It now runs on the build model wherever it is launched: by `propose`, by a draft and by the fold. No measurement backs it either. The code is `backlog/the-builder-check-still-runs-on-sonnet`. The subagents a build launches and the plugin's agents still name `sonnet`.

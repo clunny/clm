@@ -3,7 +3,7 @@ title: Panel
 status: active
 owners: ["@clunny"]
 depends_on: [view, effort, machine]
-paths: ["plugin-panel/**"]
+paths: ["plugin-panel/**", "crates/clm/tests/plugin_panel_suite/**"]
 successor: ""
 serves: [capability/watch-beside-chat, capability/see-project-state]
 ---
