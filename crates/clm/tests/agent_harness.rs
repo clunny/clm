@@ -59,8 +59,11 @@ fn under_no_agent_and_listed_in_help() {
     // req:clm/agent-harness-command@f993566d
     let (code, out) = run(&[]);
     assert_eq!(code, 0);
-    assert!(out.starts_with("agent harness none\nconfirm no\n"), "{out}");
-    assert!(!out.contains("build-model"));
+    assert_eq!(
+        out,
+        "agent harness none\nconfirm no\nguard no\nsession-hooks no\nsubagents no\n\
+         isolated-worktrees no\nnamed-agents no\nmodel-choice no\n"
+    );
     let help = Command::new(env!("CARGO_BIN_EXE_clm"))
         .arg("--help")
         .output()
