@@ -5,9 +5,8 @@ use std::fs;
 use std::path::Path;
 
 use clm_upgrade::{
-    TooNew, apply, apply_in, check_lock, decline, decline_in, latest, latest_in, list, list_in,
-    migrations, note, note_in, pending, pending_in, require_current, require_current_in,
-    supersedes,
+    TooNew, apply_in, check_lock, decline_in, latest_in, list_in, migrations, note_in, pending_in,
+    require_current_in, supersedes,
 };
 use tempfile::TempDir;
 
@@ -25,37 +24,34 @@ fn stamped_project() -> TempDir {
 
 // req:upgrade/migration-list@b7ed6123
 #[test]
-fn every_form_that_takes_a_list_answers_as_its_form_without_one() {
+fn every_form_that_takes_a_list_answers_over_the_list_it_is_given() {
     let (a, b) = (stamped_project(), stamped_project());
     let (own, pairs) = (migrations(), supersedes());
-    assert_eq!(latest_in(own), latest());
+    assert_eq!(latest_in(own), Some(own.last().unwrap().id));
     assert_eq!(latest_in(&[]), None);
     let ids = |found: Vec<&clm_upgrade::Migration>| found.iter().map(|m| m.id).collect::<Vec<_>>();
     let from_list = ids(pending_in(own, pairs, a.path()).unwrap());
-    assert_eq!(from_list, ids(pending(a.path()).unwrap()));
     assert!(
         !from_list.is_empty(),
         "the fixture leaves something pending"
     );
-    assert_eq!(
-        require_current_in(own, pairs, a.path()),
-        require_current(a.path())
+    // Over no migrations nothing is pending, whatever the project holds.
+    assert!(
+        pending_in(&[], pairs, b.path()).is_err()
+            || ids(pending_in(&[], pairs, b.path()).unwrap()).is_empty()
     );
-    assert_eq!(list_in(own, pairs, a.path()), list(a.path()));
+    assert_eq!(require_current_in(own, pairs, a.path()), Ok(()));
+    let listed = list_in(own, pairs, a.path()).unwrap();
+    assert_eq!(listed.lines().count(), from_list.len(), "{listed}");
+    assert!(listed.starts_with(from_list[0]), "{listed}");
     let first = from_list[0];
-    assert_eq!(
-        note_in(own, pairs, a.path(), first),
-        note(a.path(), first),
-        "{first}"
-    );
-    assert_eq!(
-        decline_in(own, pairs, a.path(), "nope"),
-        decline(a.path(), "nope")
-    );
-    assert_eq!(apply_in(own, pairs, a.path()), apply(b.path()));
-    assert_eq!(
-        fs::read_to_string(a.path().join("clm.toml")).unwrap(),
-        fs::read_to_string(b.path().join("clm.toml")).unwrap()
+    assert!(note_in(own, pairs, a.path(), first).is_ok(), "{first}");
+    assert!(decline_in(own, pairs, a.path(), "nope").is_err());
+    assert!(apply_in(own, pairs, a.path()).is_ok());
+    assert!(
+        fs::read_to_string(a.path().join("clm.toml"))
+            .unwrap()
+            .contains(&format!("upgraded = \"{}\"", latest_in(own).unwrap()))
     );
 }
 

@@ -151,7 +151,9 @@ fn a_fresh_project_has_every_migration_done() {
     assert!(status.success());
     // A note a later done migration supersedes is left out of `pending`, though its own
     // `done` stays false.
-    let pending = clm_upgrade::pending(&root).unwrap();
+    let pending =
+        clm_upgrade::pending_in(clm_upgrade::migrations(), clm_upgrade::supersedes(), &root)
+            .unwrap();
     for m in clm_upgrade::migrations() {
         assert!(
             (m.done)(&root) || !pending.iter().any(|p| p.id == m.id),

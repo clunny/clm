@@ -5,7 +5,24 @@ use std::fs;
 
 use tempfile::TempDir;
 
-use crate::{apply, latest, list};
+use crate::{apply_in, latest_in, list_in, migrations, note_in, supersedes};
+
+/// The crate's own list, the one these tests judge.
+fn latest() -> Option<&'static str> {
+    latest_in(migrations())
+}
+
+fn list(root: &std::path::Path) -> Result<String, String> {
+    list_in(migrations(), supersedes(), root)
+}
+
+fn apply(root: &std::path::Path) -> Result<String, String> {
+    apply_in(migrations(), supersedes(), root)
+}
+
+fn note(root: &std::path::Path, id: &str) -> Result<String, String> {
+    note_in(migrations(), supersedes(), root, id)
+}
 
 const OLD_ARCHITECTURE: &str = include_str!("migrations/20261105-clm-upgrade/old.md");
 pub(crate) const NEW_ARCHITECTURE: &str = include_str!("../../clm-init/templates/architecture.md");
@@ -190,7 +207,7 @@ fn the_check_script_migration_is_done_when_absent_or_run_from_the_root() {
 #[test]
 fn the_check_script_note_says_what_changed_for_every_language() {
     let dir = with_script(&format!("{OLD_SCRIPT}echo mine\n"));
-    let note = crate::note(dir.path(), SCRIPT_ID).unwrap();
+    let note = note(dir.path(), SCRIPT_ID).unwrap();
     assert!(note.contains("BASH_SOURCE"), "{note}");
     assert!(note.contains("manifest"), "{note}");
 }
@@ -304,7 +321,7 @@ fn a_declined_rules_migration_is_not_listed() {
 fn the_rules_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::remove_dir_all(dir.path().join(".claude")).unwrap();
-    let note = crate::note(dir.path(), RULES_ID).unwrap();
+    let note = note(dir.path(), RULES_ID).unwrap();
     // The note of the frozen migration lists the eleven rules it shipped with; `clm setup`'s and
     // `clm build`'s are offered by their own migrations.
     for rule in all_rules()
@@ -394,7 +411,7 @@ fn a_declined_setup_rules_migration_is_not_listed() {
 fn the_setup_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     write_settings(dir.path(), "settings.json", &rules_without_setup());
-    let note = crate::note(dir.path(), SETUP_ID).unwrap();
+    let note = note(dir.path(), SETUP_ID).unwrap();
     assert!(note.contains("`Bash(clm setup)`"), "{note}");
     assert!(note.contains("`Bash(clm setup *)`"), "{note}");
     assert!(note.contains("tests-run-in-their-own-tree"), "{note}");
@@ -492,7 +509,7 @@ fn a_declined_build_rules_migration_is_not_listed() {
 fn the_build_note_lists_the_rules_and_the_ways_out() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     write_settings(dir.path(), "settings.json", &rules_without_build());
-    let note = crate::note(dir.path(), BUILD_ID).unwrap();
+    let note = note(dir.path(), BUILD_ID).unwrap();
     assert!(note.starts_with(BUILD_NOTE), "{note}");
     assert!(note.contains("`Bash(clm build)`"), "{note}");
     assert!(note.contains("`Bash(clm build *)`"), "{note}");
@@ -598,7 +615,7 @@ fn the_verify_migration_is_done_once_set_or_commented_or_without_a_clm_toml() {
     assert!(list(dir.path()).unwrap().contains(VERIFY_ID));
 }
 
-// req:upgrade/migration-tests-overlap@a2b3fa99
+// req:upgrade/migration-tests-overlap@69dca72c
 #[test]
 fn a_project_stamped_before_the_lift_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -626,7 +643,7 @@ fn a_project_stamped_before_the_lift_is_told_and_then_up_to_date() {
     assert_eq!(apply(dir.path()).unwrap(), "");
 }
 
-// req:upgrade/migration-tests-overlap@a2b3fa99
+// req:upgrade/migration-tests-overlap@69dca72c
 #[test]
 fn a_never_stamped_or_unparseable_project_is_told_but_a_missing_one_is_not() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -638,7 +655,7 @@ fn a_never_stamped_or_unparseable_project_is_told_but_a_missing_one_is_not() {
     assert!(!list(dir.path()).unwrap().contains(OVERLAP_ID));
 }
 
-// req:upgrade/migration-tests-overlap@a2b3fa99
+// req:upgrade/migration-tests-overlap@69dca72c
 #[test]
 fn a_project_stamped_with_the_migration_itself_is_done() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -650,12 +667,12 @@ fn a_project_stamped_with_the_migration_itself_is_done() {
     assert!(!list(dir.path()).unwrap().contains(OVERLAP_ID));
 }
 
-// req:upgrade/migration-tests-overlap@a2b3fa99
+// req:upgrade/migration-tests-overlap@69dca72c
 #[test]
 fn the_overlap_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::write(dir.path().join("clm.toml"), "").unwrap();
-    let note = crate::note(dir.path(), OVERLAP_ID).unwrap();
+    let note = note(dir.path(), OVERLAP_ID).unwrap();
     for needle in [
         "CLM_SLOT",
         "tests-run-concurrently",
@@ -676,7 +693,7 @@ const LAND_DIR_ID: &str = "20261108-toolchain-neutral-land-builds";
 const LAND_DIR_LINE: &str =
     "advised note Lands hand your check CLM_LAND_DIR and re-check only the overlap";
 
-// req:upgrade/migration-land-dir@7f47023b
+// req:upgrade/migration-land-dir@3295cbd6
 #[test]
 fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -706,7 +723,7 @@ fn a_project_stamped_before_the_land_dir_note_is_told_and_then_up_to_date() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-land-dir@7f47023b
+// req:upgrade/migration-land-dir@3295cbd6
 #[test]
 fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -727,12 +744,12 @@ fn the_land_dir_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_othe
     assert!(!list(dir.path()).unwrap().contains(LAND_DIR_ID));
 }
 
-// req:upgrade/migration-land-dir@7f47023b
+// req:upgrade/migration-land-dir@3295cbd6
 #[test]
 fn the_land_dir_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::write(dir.path().join("clm.toml"), "").unwrap();
-    let note = crate::note(dir.path(), LAND_DIR_ID).unwrap();
+    let note = note(dir.path(), LAND_DIR_ID).unwrap();
     for needle in [
         "CLM_LAND_DIR",
         "CARGO_TARGET_DIR",
@@ -801,7 +818,7 @@ fn the_starter_migration_is_done_without_a_script_a_land_dir_or_cargo() {
 #[test]
 fn the_starter_note_names_what_a_project_needs_to_know() {
     let dir = with_script(&format!("{OLD_RUST_SCRIPT}echo mine\n"));
-    let note = crate::note(dir.path(), STARTER_ID).unwrap();
+    let note = note(dir.path(), STARTER_ID).unwrap();
     assert!(
         note.starts_with(
             "Lands no longer set CARGO_TARGET_DIR: point cargo at CLM_LAND_DIR in your check\n"
@@ -822,7 +839,7 @@ const BUILD_SETUP_ID: &str = "20261109-a-build-s-tests";
 const BUILD_SETUP_LINE: &str =
     "advised note Builds run your tests in a fresh worktree: declare [build] setup";
 
-// req:upgrade/migration-build-setup@92303a2e
+// req:upgrade/migration-build-setup@4fdbe90b
 #[test]
 fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -841,7 +858,7 @@ fn a_project_stamped_before_the_build_setup_note_is_told_and_then_up_to_date() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-build-setup@92303a2e
+// req:upgrade/migration-build-setup@4fdbe90b
 #[test]
 fn the_build_setup_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -862,12 +879,12 @@ fn the_build_setup_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_o
     assert!(!list(dir.path()).unwrap().contains(BUILD_SETUP_ID));
 }
 
-// req:upgrade/migration-build-setup@92303a2e
+// req:upgrade/migration-build-setup@4fdbe90b
 #[test]
 fn the_build_setup_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::write(dir.path().join("clm.toml"), "").unwrap();
-    let note = crate::note(dir.path(), BUILD_SETUP_ID).unwrap();
+    let note = note(dir.path(), BUILD_SETUP_ID).unwrap();
     assert!(
         note.starts_with("Builds run your tests in a fresh worktree: declare [build] setup\n"),
         "{note}"
@@ -1004,7 +1021,7 @@ fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwi
 fn the_proof_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::write(dir.path().join("clm.toml"), "").unwrap();
-    let note = crate::note(dir.path(), PROOF_ID).unwrap();
+    let note = note(dir.path(), PROOF_ID).unwrap();
     assert!(note.starts_with(&format!("{PROOF_TITLE}\n")), "{note}");
     for needle in ["clm coverage", "uncounted", "wiring", "[verify] mutate"] {
         assert!(note.contains(needle), "{needle}: {note}");
