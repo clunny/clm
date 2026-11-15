@@ -157,6 +157,15 @@ pub fn run(name: &str, kind: Kind, model: &str, state: RunState, task: Option<&s
 }
 
 /// The first line of `lines` that starts with `prefix`.
+/// The start of the `launch` line of a run on the build model Claude Code's adapter names,
+/// whatever it is: `launch <name> <kind> <model> `.
+pub fn launch_on_build_model(name: &str, kind: &str) -> String {
+    let model = clm_agent_harness::abilities(AgentHarness::ClaudeCode)
+        .build_model
+        .expect("Claude Code names a build model");
+    format!("launch {name} {kind} {model} ")
+}
+
 pub fn line<'a>(lines: &'a [String], prefix: &str) -> &'a str {
     lines
         .iter()

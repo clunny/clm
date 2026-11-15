@@ -13,7 +13,10 @@ fn a_complete_change() {
     let fx = Fixture::new();
     fx.set("wrap-up", "complete c\ncomplete d\n");
     let actions = start(&fx.options(), "opus", false).unwrap();
-    let launch = line(&actions, "launch archive:c archive sonnet ");
+    let launch = line(
+        &actions,
+        &common::launch_on_build_model("archive:c", "archive"),
+    );
     assert_eq!(
         actions.iter().filter(|a| a.starts_with("launch ")).count(),
         1,

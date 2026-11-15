@@ -65,7 +65,7 @@ fn adopting_a_lapsed_loop() {
     let actions = start(&fx.options(), "opus", false).unwrap();
 
     // A build resumes its branch through `clm run`; a draft continues its spec branch.
-    let build = line(&actions, "launch build:a build sonnet ");
+    let build = line(&actions, &common::launch_on_build_model("build:a", "build"));
     let draft = line(&actions, "launch draft:d draft opus ");
     let prompt = |launch: &str| fs::read_to_string(launch.rsplit(' ').next().unwrap()).unwrap();
     assert_eq!(prompt(build), "loop run build:a\nlauncher for a\n");

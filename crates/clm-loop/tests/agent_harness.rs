@@ -75,7 +75,10 @@ fn claude_code_needs_neither() {
     assert_eq!(launches(&actions).len(), 2);
     assert!(!fx.work.join(".claude/worktrees").exists());
     let a = line(&actions, "launch build:a ");
-    assert!(a.starts_with("launch build:a build sonnet "), "{a}");
+    assert!(
+        a.starts_with(&common::launch_on_build_model("build:a", "build")),
+        "{a}"
+    );
 }
 
 #[test]

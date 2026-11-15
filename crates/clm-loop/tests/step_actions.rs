@@ -14,7 +14,7 @@ fn an_unreported_launch() {
     let fx = Fixture::new();
     fx.set("next", "a\n");
     let first = step(&fx.options()).unwrap();
-    let launch = line(&first, "launch build:a build sonnet ").to_string();
+    let launch = line(&first, &common::launch_on_build_model("build:a", "build")).to_string();
     // The next step prints the same line, and prepared nothing again.
     let second = step(&fx.options()).unwrap();
     assert_eq!(second, [launch]);
