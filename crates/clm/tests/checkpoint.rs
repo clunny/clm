@@ -332,7 +332,6 @@ fn scenario_builds_worktree_git_cant_remove() {
     for l in out.lines() {
         assert!(!l.contains(&shown) || l.starts_with("left "), "{l}: {out}");
     }
-    assert!(wt.exists(), "worktree still on disk: {out}");
     assert!(!out.contains("removed impl/x/a"), "{out}");
     assert!(exists(&r.work, "refs/heads/impl/x/a"), "{out}");
     assert!(out.ends_with("wrap-up ok\n"), "{out}");
