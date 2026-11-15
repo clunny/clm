@@ -7,9 +7,82 @@ mod rust;
 mod typescript;
 
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsString;
+use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 
+use clap::Parser;
 use tree_sitter::Node;
+
+/// The arguments of `clm unreferenced`, as the command-line parser reads them.
+#[derive(clap::Args, Debug)]
+pub struct Args {
+    /// Skip a library (`<crate>`) or an item (`<crate>::<name>`); an entry that skips
+    /// nothing is reported. Repeatable.
+    #[arg(long)]
+    pub allow: Vec<String>,
+    /// An attribute (its last path segment) that marks an item called from outside Rust;
+    /// one that marks no public item is reported. Repeatable.
+    #[arg(long)]
+    pub entry: Vec<String>,
+    /// Repository root (default: the CLM repository holding the current directory, else
+    /// the top of the git repository).
+    #[arg(long)]
+    pub root: Option<PathBuf>,
+}
+
+/// The command line `command` parses: the command's own arguments, without its name.
+#[derive(Parser)]
+#[command(name = "clm unreferenced", no_binary_name = true)]
+struct Line {
+    #[command(flatten)]
+    args: Args,
+}
+
+/// `clm unreferenced`: parses `args`, the strings after the command's name, scans `root`, or
+/// the `--root` they give, and writes what the command prints to `out` and `err`. Returns the
+/// exit status: 0 with nothing to report, 1 with findings, 2 for an error or arguments it
+/// can't parse. The environment lookup `_env` is taken as every command's call takes it;
+/// this command reads none of it.
+pub fn command<I, T>(
+    args: I,
+    root: &Path,
+    _env: &dyn Fn(&str) -> Option<String>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> u8
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let written = match Line::try_parse_from(args) {
+        Err(e) if e.use_stderr() => write!(err, "{}", e.render()).map(|()| 2),
+        Err(e) => write!(out, "{}", e.render()).map(|()| 0),
+        Ok(Line { args }) => {
+            let root = args.root.as_deref().unwrap_or(root);
+            report(scan(root, &args.allow, &args.entry), out, err)
+        }
+    };
+    written.unwrap_or(2)
+}
+
+/// Writes `scan`'s result as the command prints it and gives its exit status.
+fn report(
+    result: Result<Vec<String>, String>,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> io::Result<u8> {
+    match result {
+        Ok(lines) if lines.is_empty() => Ok(0),
+        Ok(lines) => {
+            for line in lines {
+                writeln!(out, "{line}")?;
+            }
+            Ok(1)
+        }
+        Err(e) => writeln!(err, "clm unreferenced: {e}").map(|()| 2),
+    }
+}
 
 /// A public item nothing outside its library or package uses, before the allow-list.
 pub(crate) struct Finding {
