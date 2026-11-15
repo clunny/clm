@@ -280,6 +280,7 @@ fn one_name_for_a_crate_and_a_package_skips_both() {
 #[test]
 fn root_option_names_the_repository() {
     // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/commands-in-crate@215013cd
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
