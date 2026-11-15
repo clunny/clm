@@ -12,7 +12,7 @@ fn a_complete_change() {
     // req:orchestrator.loop/plan-archive@02bd79ba
     let fx = Fixture::new();
     fx.set("wrap-up", "complete c\ncomplete d\n");
-    let actions = start(&fx.options(), "opus", false).unwrap();
+    let actions = start(&fx.options(), "haiku", false).unwrap();
     let launch = line(
         &actions,
         &common::launch_on_build_model("archive:c", "archive"),
