@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-land-s-clean-up-runs-git-from-a-directory-it-already-removed]
 ---
 
