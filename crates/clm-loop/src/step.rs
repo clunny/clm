@@ -282,6 +282,8 @@ enum Prepared {
     Nothing,
     /// The clone has no free place: launch nothing more this step.
     NoPlace,
+    /// An orphan whose relaunch the command refused, with what it printed on stderr.
+    Refused(String, String),
 }
 
 fn planned(name: &str, kind: Option<Kind>, model: &str, prompt: Option<String>) -> Run {
@@ -310,7 +312,12 @@ fn planned(name: &str, kind: Option<Kind>, model: &str, prompt: Option<String>) 
 }
 
 /// Runs `clm run` or `clm draft` for a run and writes its prompt file.
-fn launch_run(options: &Options, mut run: Run, args: &[&str]) -> Result<Prepared, Failure> {
+fn launch_run(
+    options: &Options,
+    mut run: Run,
+    args: &[&str],
+    relaunch: bool,
+) -> Result<Prepared, Failure> {
     let ran = clm(options, args)?;
     match ran.code {
         0 => {
@@ -330,6 +337,8 @@ fn launch_run(options: &Options, mut run: Run, args: &[&str]) -> Result<Prepared
             Ok(Prepared::Run(Box::new(run)))
         }
         3 => Ok(Prepared::NoPlace),
+        // An orphan the command refuses has no subagent and no way to get one (`loop-start`).
+        1 if relaunch => Ok(Prepared::Refused(run.name, ran.reason())),
         1 => {
             eprintln!("clm build: skipped {}: {}", run.name, ran.reason());
             Ok(Prepared::Nothing)
@@ -355,6 +364,7 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
                 options,
                 run,
                 &["run", component, "--review-model", &file.session_model],
+                false,
             )
         }
         Launch::Draft { items, model, .. } => {
@@ -362,7 +372,7 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
             run.items = items.clone();
             let mut args = vec!["draft"];
             args.extend(items.iter().map(String::as_str));
-            launch_run(options, run, &args)
+            launch_run(options, run, &args, false)
         }
         Launch::Archive { id, model } => {
             let name = format!("archive:{id}");
@@ -380,7 +390,7 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
             run.items = ids.clone();
             let mut args = vec!["draft", "--fold"];
             args.extend(ids.iter().map(String::as_str));
-            launch_run(options, run, &args)
+            launch_run(options, run, &args, false)
         }
         Launch::Land { batch } => {
             let mut run = planned(&format!("land:{batch}"), None, "", None);
@@ -411,17 +421,53 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
                         options,
                         run,
                         &["run", component, "--review-model", &file.session_model],
+                        true,
                     )
                 }
                 (Some(Kind::Draft), _) => {
                     let id = name.strip_prefix("draft:").unwrap_or(name);
-                    launch_run(options, run, &["draft", "--resume", id])
+                    launch_run(options, run, &["draft", "--resume", id], true)
                 }
                 (Some(Kind::Fold | Kind::Archive), _) => Ok(Prepared::Drop(name.clone())),
                 (None, _) => Ok(Prepared::Run(Box::new(run))),
             }
         }
     }
+}
+
+/// Whether a build's claim has left `origin`, read on the remote-tracking refs as they stand: no
+/// `origin/impl/<component>`, or one whose tip is on `origin/main` (`claim-gone-ends-a-build`).
+fn claim_gone(options: &Options, component: &str) -> bool {
+    let branch = format!("refs/remotes/origin/impl/{component}");
+    if clm_git::git(&options.root, &["rev-parse", "--verify", "-q", &branch]).is_err() {
+        return true;
+    }
+    clm_git::is_ancestor(&options.root, &branch, "refs/remotes/origin/main").unwrap_or(false)
+}
+
+/// The running builds of the loop file whose claim has left `origin`, as run names.
+pub(crate) fn gone_builds(options: &Options, file: &LoopFile) -> Vec<String> {
+    file.runs
+        .iter()
+        .filter(|r| r.kind == Some(Kind::Build) && r.state == RunState::Running)
+        .filter_map(|r| {
+            let component = r.name.strip_prefix("build:")?;
+            claim_gone(options, component).then(|| r.name.clone())
+        })
+        .collect()
+}
+
+/// Finishes each running build whose claim has left `origin`, as a run that returned with no
+/// closing line; the `say` actions its finishes leave (`claim-gone-ends-a-build`).
+fn finish_gone_builds(options: &Options) -> Result<Vec<String>, Failure> {
+    let Some(file) = state::read(&options.root) else {
+        return Ok(Vec::new());
+    };
+    let mut says = Vec::new();
+    for name in gone_builds(options, &file) {
+        says.extend(crate::returned::finish_unclosed(options, &name)?.1);
+    }
+    Ok(says)
 }
 
 /// Runs the housekeeping and reads the snapshot, after a fetch the caller made.
@@ -608,6 +654,8 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         clm_git::fetch(&options.root)?;
     }
     refresh_holds(options)?;
+    // Before the housekeeping, which removes a landed build's local branch.
+    let mut say_lines = finish_gone_builds(options)?;
     let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
     // Each `left` line of the wrap-up is said once.
@@ -617,7 +665,6 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
             said.push(left.clone());
         }
     }
-    let mut say_lines = Vec::new();
     for left in &said {
         say_lines.push(say(options, left)?);
     }
@@ -627,6 +674,17 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
         match prepare(options, &stored_file, launch)? {
             Prepared::NoPlace => break,
             Prepared::Nothing => {}
+            Prepared::Refused(name, reason) => {
+                let (landed, says) = crate::returned::finish_unclosed(options, &name)?;
+                say_lines.extend(says);
+                if !landed {
+                    say_lines.push(say(
+                        options,
+                        &format!("{name} wasn't relaunched: {reason}"),
+                    )?);
+                }
+                stored_file.runs.retain(|r| r.name != name);
+            }
             Prepared::Run(run) => {
                 // Later launches of this step see the runs this one made.
                 stored_file.runs.retain(|r| r.name != run.name);
@@ -657,7 +715,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
                     }
                 }
                 Prepared::Drop(name) => f.runs.retain(|r| r.name != name),
-                Prepared::Nothing | Prepared::NoPlace => {}
+                Prepared::Nothing | Prepared::NoPlace | Prepared::Refused(..) => {}
             }
         }
         f.said.extend(said);
