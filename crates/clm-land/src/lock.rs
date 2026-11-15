@@ -64,9 +64,32 @@ pub(crate) struct Held {
 impl Drop for Held {
     fn drop(&mut self) {
         if let Some(ticket) = &self.ticket {
+            let _ = std::fs::remove_file(alone_mark(ticket));
             let _ = std::fs::remove_file(ticket);
         }
     }
+}
+
+impl Held {
+    /// The file name of this run's ticket, none for a run that took the lock with no ticket.
+    pub(crate) fn ticket_name(&self) -> Option<String> {
+        let ticket = self.ticket.as_ref()?;
+        Some(ticket.file_name()?.to_string_lossy().into_owned())
+    }
+
+    /// Whether this run's ticket is marked to land alone (`land/failed-batch`).
+    pub(crate) fn alone(&self) -> bool {
+        self.ticket
+            .as_ref()
+            .is_some_and(|ticket| alone_mark(ticket).exists())
+    }
+}
+
+/// The file beside a ticket that marks its land to land alone (`land/failed-batch`).
+fn alone_mark(ticket: &Path) -> PathBuf {
+    let mut name = ticket.as_os_str().to_owned();
+    name.push(".alone");
+    PathBuf::from(name)
 }
 
 /// A live ticket: its file name, `<20 digits>-<lane>-p<n>`.
@@ -218,6 +241,7 @@ impl Queue {
                 Err(_) => false,
             };
             if dead {
+                let _ = std::fs::remove_file(alone_mark(&entry.path()));
                 let _ = std::fs::remove_file(entry.path());
             } else {
                 live.push(ticket);
@@ -236,6 +260,18 @@ pub(crate) fn take(
     path: &Path,
     rank: Rank,
     prefix: &str,
+    say: impl FnMut(&str),
+) -> Result<Held, Error> {
+    take_named(path, rank, prefix, "", say)
+}
+
+/// As `take`, the ticket holding `content` as the file's text, written before the ticket is
+/// locked and before the waiting line is said (`land/batched-lands`).
+pub(crate) fn take_named(
+    path: &Path,
+    rank: Rank,
+    prefix: &str,
+    content: &str,
     mut say: impl FnMut(&str),
 ) -> Result<Held, Error> {
     if let Some(parent) = path.parent() {
@@ -280,10 +316,11 @@ pub(crate) fn take(
             if taken {
                 continue;
             }
-            let file = File::options()
+            let mut file = File::options()
                 .create_new(true)
                 .write(true)
                 .open(&ticket_path)?;
+            file.write_all(content.as_bytes())?;
             break (name, ticket_path, file);
         };
         queue.write("next", &counter.to_string())?;
@@ -349,12 +386,65 @@ pub(crate) fn tell(line: &str) {
     let _ = writeln!(std::io::stderr(), "{line}");
 }
 
-/// Locks `<target>.lock`, the land lock.
-pub(crate) fn land(target: &Path, rank: Rank) -> Result<Held, Error> {
+/// `<target>.lock`, the land lock.
+fn land_lock(target: &Path) -> PathBuf {
     let mut path = target.as_os_str().to_owned();
     path.push(".lock");
+    PathBuf::from(path)
+}
+
+/// Locks `<target>.lock`, the land lock, its ticket naming `branch` (`land/batched-lands`).
+pub(crate) fn land(target: &Path, rank: Rank, branch: &str) -> Result<Held, Error> {
     let prefix = format!("waiting for another land's check on {}", target.display());
-    take(Path::new(&path), rank, &prefix, tell)
+    take_named(&land_lock(target), rank, &prefix, branch, tell)
+}
+
+/// A land waiting for the land lock whose ticket names its branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Waiting {
+    pub(crate) ticket: String,
+    pub(crate) branch: String,
+}
+
+/// The lands waiting for the land lock besides the holder's, whose tickets name a branch, in
+/// the order their turns would have come; a ticket that names none is left out, and so is one
+/// marked to land alone (`land/batched-lands`, `land/failed-batch`).
+pub(crate) fn waiting_lands(target: &Path, held: &Held) -> Result<Vec<Waiting>, Error> {
+    let queue = Queue::at(&land_lock(target))?;
+    let _guard = queue.guard()?;
+    let own = held.ticket_name();
+    let live: Vec<Ticket> = queue
+        .live()?
+        .into_iter()
+        .filter(|t| Some(&t.name) != own.as_ref())
+        .collect();
+    let mut out = Vec::new();
+    for ticket in turn_order(&live, queue.streak()) {
+        if alone_mark(&queue.dir.join(&ticket.name)).exists() {
+            continue;
+        }
+        let branch = queue.read(&ticket.name).trim().to_string();
+        if !branch.is_empty() {
+            out.push(Waiting {
+                ticket: ticket.name,
+                branch,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Marks the land waiting with `ticket` to land alone: the file goes with the ticket
+/// (`land/failed-batch`).
+pub(crate) fn mark_alone(target: &Path, ticket: &str) -> Result<(), Error> {
+    let queue = Queue::at(&land_lock(target))?;
+    let _guard = queue.guard()?;
+    let ticket = queue.dir.join(ticket);
+    // A ticket that ended meanwhile leaves no mark behind.
+    if ticket.exists() {
+        std::fs::write(alone_mark(&ticket), "")?;
+    }
+    Ok(())
 }
 
 /// Locks `push.lock` in `places`, the push turn (`land/push-turn`): ordinary tickets, so the

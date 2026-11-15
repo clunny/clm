@@ -19,7 +19,7 @@ use clm_model::Priority;
 const ATTEMPTS: usize = 10;
 
 /// How a land's failing check is reported.
-const ON_MERGE: &str = "fails on the merge with main";
+pub(crate) const ON_MERGE: &str = "fails on the merge with main";
 
 /// Lands `branch` (default: the current one) on `main`: see the node's Design, steps 1–9.
 pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
@@ -34,13 +34,6 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     // Where `[land] check` keeps its build output, the clone's shared `.clm/land`
     // (`land/shared-land-target`).
     let target = check.as_ref().map(|_| places.join("land"));
-    let checked_with = |fold: &clm_ledger::Fold, key: &str, command: &str| {
-        fold.checks.get(key).is_some_and(|records| {
-            records
-                .iter()
-                .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if c == command))
-        })
-    };
     // The effort the branch's sessions spent here, read once, so neither the reading nor a
     // ledger push of its own lengthens the time `main` has moved with no `landed` record
     // (`land/records-effort`). Unreadable, it only warns.
@@ -57,9 +50,19 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     };
     // 1. Fetch, pick the head, fold, and merge the trees: before the worktree it checks in
     // exists, a land knows whether its check will run.
-    let prepare = |chain: Option<&str>| -> Result<Prepared, Error> {
+    let prepare = |chain: Option<&str>, woke: bool| -> Result<Prepared, Bail> {
         repo.fetch()?;
         let (head, on_origin) = repo.approval.head(&branch, true)?;
+        let fold = clm_ledger::fold(&repo.root)?;
+        // A land that waited for the lock may have been landed by the holder, with the lands
+        // taken together on one check (`land/batched-lands`).
+        if woke && let Some(found) = crate::batch::landed_record(&repo, &fold, &branch, &head)? {
+            return Err(Bail::Found {
+                found,
+                head,
+                on_origin,
+            });
+        }
         let base = repo
             .rev(repo.base())?
             .ok_or_else(|| Error::Refused(format!("no `{}` to land on", repo.base())))?;
@@ -74,7 +77,6 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         }
         // The policy committed at the base, read afresh each attempt.
         let policy = repo.approval.policy(&base)?;
-        let fold = clm_ledger::fold(&repo.root)?;
         // A spec branch holds spec paths only, whatever its gate says
         // (`land/spec-branch-holds-spec-paths`).
         if branch.starts_with("spec/") {
@@ -84,7 +86,8 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 return Err(Error::Refused(format!(
                     "a spec branch holds only spec paths; {branch} changes {}",
                     files.join(", ")
-                )));
+                ))
+                .into());
             }
         }
         // A component whose slow tests broke after a land waits for its fix; the components
@@ -94,7 +97,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // lock, the merge and the checks (`land/changes-requested-holds`).
         let fingerprint = repo.approval.fingerprint(&base, &head)?;
         if let Some(why) = clm_approval::held(&fold, &branch, &fingerprint) {
-            return Err(Error::Refused(why));
+            return Err(Error::Refused(why).into());
         }
         // A head behind in `specs/` lands on the merge git writes without regard to its
         // `specs/` conflicts, its `specs/` regenerated (`land/regenerates-behind-specs`).
@@ -208,8 +211,28 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     // The head and base whose selection printed nothing, asked once across a restart.
     let mut selection_nothing: Option<(String, String)> = None;
     let mut claim_tips: BTreeMap<String, String> = BTreeMap::new();
+    // Whether the lock was waited for, so the next preparing looks for a land taken together
+    // with the holder's (`land/batched-lands`).
+    let mut woke = false;
+    // Prepares an attempt, and ends the land when the holder landed this branch.
+    macro_rules! prepared {
+        ($woke:expr) => {
+            match prepare(chain.as_deref(), $woke) {
+                Ok(p) => p,
+                Err(Bail::Err(e)) => return Err(e),
+                Err(Bail::Found {
+                    found,
+                    head,
+                    on_origin,
+                }) => {
+                    let mut done = std::mem::take(&mut out);
+                    return Ok(finish_found(&repo, &branch, &head, on_origin, &found, &mut done));
+                }
+            }
+        };
+    }
     for attempt in 1..=ATTEMPTS {
-        let mut p = prepare(chain.as_deref())?;
+        let mut p = prepared!(std::mem::take(&mut woke));
         // The priority this land's tickets carry, worked out once, before its first wait
         // of the attempt (`land/lock-queue`).
         let mut priority: Option<Priority> = None;
@@ -226,13 +249,39 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 lane: Lane::Ordinary,
                 priority: land_priority(&repo, &branch, &p, &mut priority, &mut out),
             };
-            let held = lock::land(target, rank)?;
+            let held = lock::land(target, rank, &branch)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
             if held.waited {
-                p = prepare(chain.as_deref())?;
+                p = prepared!(true);
             }
             if check_runs(&p) {
                 lock = Some(held);
+                // The lands waiting for the lock land with this one (`land/batched-lands`).
+                if let (Some(held), Some(check)) = (&lock, &check) {
+                    let ctx = crate::batch::Ctx {
+                        repo: &repo,
+                        exe,
+                        places: &places,
+                        target,
+                        check,
+                        branch: &branch,
+                        held,
+                        effort: &effort,
+                        rank,
+                    };
+                    match crate::batch::run(&ctx)? {
+                        crate::batch::Outcome::Landed(mut done) => {
+                            out.warnings.append(&mut done.warnings);
+                            done.warnings = std::mem::take(&mut out.warnings);
+                            return Ok(done);
+                        }
+                        crate::batch::Outcome::Proceed => {}
+                        crate::batch::Outcome::Restart(mut said) => {
+                            out.warnings.append(&mut said);
+                            continue;
+                        }
+                    }
+                }
             }
         }
         let Prepared {
@@ -451,13 +500,14 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 // A readers' selection that ran takes the priority lane; one that failed, so
                 // that every test runs, the ordinary (`land/lock-queue`).
                 turn = None;
-                let held = lock::land(target, check_rank)?;
+                let held = lock::land(target, check_rank, &branch)?;
                 let waited = held.waited;
                 lock = Some(held);
                 drop(temp.take());
                 // The land it waited for moved `main` meanwhile: merge with that one
                 // (`land/land-target-lock`).
                 if waited {
+                    woke = true;
                     continue;
                 }
                 land_tree_for_readers = Scratch::land_tree(&repo, &places, &merge)?;
@@ -636,9 +686,76 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
     )))
 }
 
+/// Why preparing an attempt stopped: a failure, or the holder of the lock having landed this
+/// branch with its own (`land/batched-lands`).
+enum Bail {
+    Err(Error),
+    Found {
+        found: crate::batch::Found,
+        head: String,
+        on_origin: bool,
+    },
+}
+
+impl From<Error> for Bail {
+    fn from(e: Error) -> Self {
+        Bail::Err(e)
+    }
+}
+
+impl From<clm_approval::Error> for Bail {
+    fn from(e: clm_approval::Error) -> Self {
+        Bail::Err(e.into())
+    }
+}
+
+impl From<clm_ledger::Error> for Bail {
+    fn from(e: clm_ledger::Error) -> Self {
+        Bail::Err(e.into())
+    }
+}
+
+/// What a land does once the holder has landed it: the branch's deletion, the claims a spec
+/// land releases and a build's disk, and its `landed` line (`land/batched-lands`).
+fn finish_found(
+    repo: &Repo,
+    branch: &str,
+    head: &str,
+    on_origin: bool,
+    found: &crate::batch::Found,
+    out: &mut Output,
+) -> Output {
+    cleanup(repo, branch, head, on_origin, &mut out.warnings);
+    if branch.starts_with("spec/")
+        && let Ok(base) = repo.git(&["rev-parse", &format!("{}^1", found.commit)])
+    {
+        let tips = propose_tips(repo);
+        let added = changes_added(repo, &base, head, &found.changes);
+        release_claims(repo, &found.commit, &added, &tips, &mut out.warnings);
+    }
+    out.lines.push(format!(
+        "landed {} {}",
+        found.commit,
+        crate::batch::kind_words(found.kind, found.review)
+    ));
+    if branch.starts_with("impl/") {
+        free_build_target(repo, branch, out);
+    }
+    std::mem::take(out)
+}
+
+/// Whether a `checked` record names `key` with `command`.
+pub(crate) fn checked_with(fold: &clm_ledger::Fold, key: &str, command: &str) -> bool {
+    fold.checks.get(key).is_some_and(|records| {
+        records
+            .iter()
+            .any(|r| matches!(&r.body, Body::Checked { command: c, .. } if c == command))
+    })
+}
+
 /// What a land refused by `gate/approval` tells the caller: the policy when it is `other`
 /// and where it came from, why each approval of the diff doesn't count, and who to ask.
-fn approval_hint(approvals: &Approvals, branch: &str, policy: &Policy) -> String {
+pub(crate) fn approval_hint(approvals: &Approvals, branch: &str, policy: &Policy) -> String {
     let mut hint = String::new();
     if policy.other {
         hint.push_str(&format!(
@@ -669,7 +786,7 @@ fn approval_hint(approvals: &Approvals, branch: &str, policy: &Policy) -> String
 /// Frees a landed build's disk (`land/land-frees-build-target`): deletes `target/` at the
 /// top of the worktree `clm land` runs in when that is a linked worktree with the landed
 /// branch checked out, and says so; a failure only warns, since the land is done.
-fn free_build_target(repo: &Repo, branch: &str, out: &mut Output) {
+pub(crate) fn free_build_target(repo: &Repo, branch: &str, out: &mut Output) {
     let linked_on_branch = || -> Result<Option<std::path::PathBuf>, Error> {
         let top = std::path::PathBuf::from(repo.git(&["rev-parse", "--show-toplevel"])?);
         let main = repo.main_worktree()?;
@@ -696,7 +813,7 @@ fn free_build_target(repo: &Repo, branch: &str, out: &mut Output) {
 }
 
 /// The tree `git merge-tree` writes for `head` merged into `base`, or none when it conflicts.
-fn unconflicted_tree(repo: &Repo, base: &str, head: &str) -> Result<Option<String>, Error> {
+pub(crate) fn unconflicted_tree(repo: &Repo, base: &str, head: &str) -> Result<Option<String>, Error> {
     match clm_git::git(&repo.root, &["merge-tree", "--write-tree", base, head]) {
         Ok(out) => Ok(out.lines().next().map(str::to_string)),
         // Exit 1: conflicts.
@@ -759,7 +876,7 @@ fn specs_agreed_tree(repo: &Repo, base: &str, head: &str) -> Result<Option<Strin
 
 /// Whether a file of `specs/` changed both between the merge base and `base` and between it
 /// and `head`.
-fn specs_changed_on_both(
+pub(crate) fn specs_changed_on_both(
     repo: &Repo,
     merge_base: &str,
     base: &str,
@@ -875,7 +992,7 @@ fn merged_tree(
 
 /// What a push of the merge commit to `main` came to.
 #[derive(Debug, PartialEq, Eq)]
-enum Pushed {
+pub(crate) enum Pushed {
     /// `main` on `origin` is the merge commit.
     Done,
     /// `main` moved on from the base: the next attempt starts again.
@@ -891,7 +1008,7 @@ pub(crate) const PUSH_RETRY_WAITS: [u64; 2] = [1, 2];
 /// moving, and the base is a refusal for another reason, pushed again after each wait. A
 /// `main` still at the base after the last push is a git failure a rerun can safely retry;
 /// a fetch that fails is one it can't, since the push may have gone through.
-fn push_main(repo: &Repo, merge: &str, base: &str, branch: &str) -> Result<Pushed, Error> {
+pub(crate) fn push_main(repo: &Repo, merge: &str, base: &str, branch: &str) -> Result<Pushed, Error> {
     let lease = format!("--force-with-lease=refs/heads/main:{base}");
     let spec = format!("{merge}:refs/heads/main");
     let mut waits = PUSH_RETRY_WAITS.into_iter();
@@ -938,7 +1055,7 @@ fn push_main(repo: &Repo, merge: &str, base: &str, branch: &str) -> Result<Pushe
 
 /// Deletes a landed claim branch from `origin`, leased on `head`, and the local branch when
 /// it is checked out nowhere and holds nothing the land didn't; a failure warns.
-fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mut Vec<String>) {
+pub(crate) fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mut Vec<String>) {
     if !is_claim(branch) {
         return;
     }
@@ -970,7 +1087,7 @@ fn cleanup(repo: &Repo, branch: &str, head: &str, on_origin: bool, warnings: &mu
 }
 
 /// The tip of each `origin/propose/<slug>` on the refs as fetched, by slug.
-fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
+pub(crate) fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
     let prefix = format!("refs/remotes/{}/propose/", clm_git::REMOTE);
     let listed = repo
         .git(&["for-each-ref", "--format=%(objectname) %(refname)", &prefix])
@@ -986,7 +1103,7 @@ fn propose_tips(repo: &Repo) -> BTreeMap<String, String> {
 
 /// The ones of `changes` the head adds: neither `changes/<id>/change.md` nor
 /// `changes/archive/<id>/change.md` at the merge base of `base` and `head`.
-fn changes_added(repo: &Repo, base: &str, head: &str, changes: &[String]) -> Vec<String> {
+pub(crate) fn changes_added(repo: &Repo, base: &str, head: &str, changes: &[String]) -> Vec<String> {
     let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
         return Vec::new();
     };
@@ -1007,7 +1124,7 @@ fn changes_added(repo: &Repo, base: &str, head: &str, changes: &[String]) -> Vec
 /// Deletes on `origin` the `propose/<slug>` claim of each item the changes `added` name in
 /// `from` or `resolves`, leased on the tip in `tips`, and says `released propose/<slug>`; a
 /// failure warns (`land/landed-change-releases-claims`).
-fn release_claims(
+pub(crate) fn release_claims(
     repo: &Repo,
     merge: &str,
     added: &[String],
