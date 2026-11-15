@@ -25,7 +25,7 @@ mod disjoint;
 #[cfg(feature = "checkout")]
 mod entries;
 mod imports;
-#[cfg(feature = "checkout")]
+#[cfg(feature = "commands")]
 mod lists;
 mod ownership;
 #[cfg(feature = "checkout")]
@@ -66,7 +66,6 @@ pub use commands::{
 pub use detectors::{Detector, detectors};
 pub use imports::undeclared_imports;
 #[cfg(feature = "checkout")]
-pub use lists::{coverage_lines, deleted_tests_lines, obsolete_tests_lines};
 #[cfg(feature = "detectors")]
 pub use size::size;
 pub use size::{Budgets, Count, Length, Size, TestPart, size_of};

@@ -28,15 +28,15 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         C::Guide { .. } | C::Hook { .. } | C::AgentHarness => None,
         // The commands that run whatever is pending.
         C::Status { root, .. }
-        | C::Backlog { root, .. }
+        | C::Backlog(clm_check::BacklogArgs { root })
         | C::View { root, .. }
         | C::Machine { root, .. }
         | C::Setup { root } => at(root.as_deref(), false),
         C::Defect { .. } | C::Config { .. } | C::Init { .. } | C::Upgrade { .. } => at(None, false),
-        C::Check { root, .. }
-        | C::Coverage { root, .. }
+        C::Check(clm_check::CheckArgs { root, .. })
+        | C::Coverage(clm_check::CoverageArgs { root, .. })
         | C::Pending { root, .. }
-        | C::Size { root, .. }
+        | C::Size(clm_check::SizeArgs { root, .. })
         | C::Apply { root, .. }
         | C::Rename { root, .. }
         | C::Archive { root, .. }

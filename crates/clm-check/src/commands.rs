@@ -11,7 +11,7 @@ use clap::{Args, FromArgMatches};
 
 use crate::{Budgets, Detector, Violation};
 
-/// The arguments of `clm check`.
+/// Run every deterministic check; exit 1 on any violation.
 #[derive(Args, Debug)]
 pub struct CheckArgs {
     /// Run no dead-code or unused-dependency detector, for a caller that knows no code
@@ -23,7 +23,8 @@ pub struct CheckArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The arguments of `clm coverage`.
+/// List every requirement as current, behind or unbuilt (with citing markers), then the
+/// obsolete ones.
 #[derive(Args, Debug)]
 pub struct CoverageArgs {
     /// Print, in place of the coverage, the tests a removed requirement leaves with
@@ -39,7 +40,7 @@ pub struct CoverageArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The arguments of `clm size`.
+/// Report each component's spec and code size in tokens against its budget (advisory).
 #[derive(Args, Debug)]
 pub struct SizeArgs {
     /// Component ID; every component when omitted.
@@ -50,7 +51,7 @@ pub struct SizeArgs {
     pub root: Option<PathBuf>,
 }
 
-/// The arguments of `clm backlog`.
+/// List backlog items: ideas, deferred work, questions and bugs.
 #[derive(Args, Debug)]
 pub struct BacklogArgs {
     /// Repository root (default: the CLM repository holding the current directory).
@@ -130,9 +131,9 @@ where
     };
     let root = args.root.as_deref().unwrap_or(root);
     let result = match (&args.deleted_tests, args.obsolete_tests) {
-        (Some(base), _) => crate::deleted_tests_lines(root, base),
-        (None, true) => crate::obsolete_tests_lines(root),
-        (None, false) => crate::coverage_lines(root),
+        (Some(base), _) => crate::lists::deleted_tests_lines(root, base),
+        (None, true) => crate::lists::obsolete_tests_lines(root),
+        (None, false) => crate::lists::coverage_lines(root),
     };
     lines(result, out)
 }
