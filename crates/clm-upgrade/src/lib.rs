@@ -20,9 +20,9 @@ mod tests;
 
 use std::path::Path;
 
-pub use commands::{apply, apply_in, decline, decline_in, list, list_in, note, note_in};
+pub use commands::{apply_in, decline_in, list_in, note_in};
 pub use lock::{append_lock, check_lock};
-pub use pending::{TooNew, pending, pending_in, require_current, require_current_in};
+pub use pending::{TooNew, pending_in, require_current_in};
 
 /// Whether a migration blocks commands while it is pending.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,10 +79,4 @@ pub fn supersedes() -> &'static [(&'static str, &'static str)] {
 /// empty list.
 pub fn latest_in(list: &[Migration]) -> Option<&str> {
     list.last().map(|m| m.id)
-}
-
-/// The last of the crate's own migrations.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn latest() -> Option<&'static str> {
-    latest_in(migrations())
 }

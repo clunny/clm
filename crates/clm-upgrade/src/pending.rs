@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use crate::{Kind, Level, Migration, migrations, supersedes};
+use crate::{Kind, Level, Migration};
 
 /// The project's `clm.toml` names a migration this binary doesn't hold, so a newer `clm`
 /// upgraded it.
@@ -83,12 +83,6 @@ pub fn pending_in<'a>(
         .collect())
 }
 
-/// The crate's own migrations the project at `root` still needs.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn pending(root: &Path) -> Result<Vec<&'static Migration>, TooNew> {
-    pending_in(migrations(), supersedes(), root)
-}
-
 impl TooNew {
     pub(crate) fn message(&self) -> String {
         format!(
@@ -136,10 +130,4 @@ pub fn require_current_in(
             .collect::<Vec<_>>()
             .join(", ")
     ))
-}
-
-/// `require_current_in` over the crate's own migrations.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn require_current(root: &Path) -> Result<(), String> {
-    require_current_in(migrations(), supersedes(), root)
 }

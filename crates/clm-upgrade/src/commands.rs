@@ -5,31 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::pending::{pending_in, skipped, strings, superseded, table};
-use crate::{Kind, Level, Migration, latest_in, migrations, supersedes};
-
-/// `clm upgrade` with no flag over the crate's own migrations.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn list(root: &Path) -> Result<String, String> {
-    list_in(migrations(), supersedes(), root)
-}
-
-/// `clm upgrade --apply` over the crate's own migrations.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn apply(root: &Path) -> Result<String, String> {
-    apply_in(migrations(), supersedes(), root)
-}
-
-/// `clm upgrade --note <id>` over the crate's own migrations.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn note(root: &Path, id: &str) -> Result<String, String> {
-    note_in(migrations(), supersedes(), root, id)
-}
-
-/// `clm upgrade --decline <id>` over the crate's own migrations.
-// clm:remove-by 20261114-migrations-with-templates
-pub fn decline(root: &Path, id: &str) -> Result<String, String> {
-    decline_in(migrations(), supersedes(), root, id)
-}
+use crate::{Kind, Level, Migration, latest_in};
 
 fn pending_or_refuse<'a>(
     list: &'a [Migration],
