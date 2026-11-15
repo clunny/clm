@@ -570,10 +570,11 @@ fn a_batch_keeps_its_check_when_main_moves_on_an_unrelated_component() {
     assert_eq!(starts(&f), 1, "{:?}", f.lines("check-order.log"));
     // `clm check`, with its detectors, ran on the batch's tree and again on the new one.
     let checks = f.lines("clm-check.log");
-    assert!(
-        checks.len() >= 2 && checks.iter().all(|l| !l.contains("--no-detectors")),
-        "{checks:?}"
-    );
+    let full = checks
+        .iter()
+        .filter(|l| !l.contains("--no-detectors"))
+        .count();
+    assert_eq!(full, 2, "{checks:?}");
     assert_eq!(
         on_main(&f)[..3],
         ["impl/b", "impl/a", "impl/d"],
