@@ -48,16 +48,16 @@ pub(crate) fn pass(ctx: &Ctx, state: &State, end: usize) -> Vec<String> {
 fn run_pass(ctx: &Ctx, state: &State, end: usize, command: &str) -> Result<Vec<String>, Error> {
     let commit = state.chain[end].clone();
     let tree = tree::Tree::at(ctx, &commit)?;
-    let since = state.mutation_base(end);
+    let since = state.mutation_base(ctx, end)?;
     let (graph, _) = clm_model::load(&tree.dir);
     let cites = cites(&tree.dir, &graph)?;
     let due = match &since {
         Some(since) => due(&tree.dir, since, &cites)?,
-        None => BTreeSet::new(),
+        None => cites.iter().map(|c| c.id.clone()).collect(),
     };
     let mut notes = Vec::new();
     let mut verdicts = BTreeMap::new();
-    if let (Some(since), false) = (&since, due.is_empty()) {
+    if !due.is_empty() {
         let scratch = scratch(ctx)?;
         let plan = scratch.path().join("plan");
         let result = scratch.path().join("result");
@@ -66,7 +66,7 @@ fn run_pass(ctx: &Ctx, state: &State, end: usize, command: &str) -> Result<Vec<S
             write_plan(
                 &tree.dir,
                 &graph,
-                since,
+                since.as_deref(),
                 &commit,
                 &due,
                 &cites,
@@ -235,7 +235,7 @@ pub(crate) fn scratch(ctx: &Ctx) -> Result<tempfile::TempDir, Error> {
 fn write_plan(
     dir: &Path,
     graph: &clm_model::Graph,
-    since: &str,
+    since: Option<&str>,
     commit: &str,
     due: &BTreeSet<String>,
     cites: &[Cite],
@@ -254,7 +254,7 @@ fn write_plan(
         for path in &code {
             plan.push_str(&format!("code {path}\n"));
         }
-        if !code.is_empty() {
+        if let (Some(since), false) = (since, code.is_empty()) {
             let mut args = vec!["diff", since, commit, "--"];
             args.extend(code.iter().map(String::as_str));
             let diff = clm_git::git(dir, &args)?;

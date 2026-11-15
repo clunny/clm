@@ -698,6 +698,7 @@ dependencies = [
  "clm-ledger",
  "clm-model",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
