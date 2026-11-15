@@ -531,6 +531,7 @@ CLM can't see before the fact whether a test is deterministic or reads only what
 #### Enforced by
 - clm/upgrade-corpus
 - upgrade/shipped-migrations-frozen
+- init/own-migrations-frozen
 
 #### Untested
 A change in what an existing file means, with no change in what `clm init` writes or `clm check` accepts, shows in no corpus project; the builder check asks about it.

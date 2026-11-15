@@ -27,6 +27,8 @@ Files `clm init` writes, each only when missing, and the ones it adds to:
 | `.gitignore`: the lines `clm.local.toml`, `.clm/` and `.claude/worktrees/`, each added when missing | project |
 | `.claude/settings.json`: the allow rules for unattended `clm` commands, each added when missing, on the first run only | project |
 
+`clm-init` also holds the migrations written since `20261114-migrations-with-templates` and offers the whole list (`all-migrations`): `migrations()`, `upgrade`'s own followed by its own in the order they landed, and `supersedes()`, the pairs saying which migration supersedes which note. Every caller of `upgrade`'s engine passes these two: the root for `clm upgrade` and the check before each command, `plugin.hooks` for the session-start reminder, and `clm init` itself for the `upgraded` it stamps.
+
 ## Design
 Crate `clm-init`. Templates are compiled into the binary (`include_str!`), so a given `clm` version always writes the same bytes for the same inputs, and tests compare output to fixtures.
 
@@ -69,6 +71,8 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 *Next steps.* On a rerun, when the check would report a rule missing, the next steps name `.claude/settings.json` and each missing rule, as the last upgrade step, right before the push step (`init-next-steps`). On a first run they name them only when the file couldn't be edited.
 
 *Ignored settings* (`init-names-ignored-settings`). The rules reach other machines, and the unattended sessions run there, only once `.claude/settings.json` is committed, and a project's `.gitignore` often ignores all of `.claude/`. So on every run, first or rerun, after its `.gitignore` edits, `clm init` asks git whether it would leave the file out of a commit: `git check-ignore -q .claude/settings.json`, through `clm-git` in the CLM repository's root, as for the `.gitignore` probes but without `--no-index`, since a file the index already tracks is committed whatever the patterns say and isn't reported. Exit 0 means ignored, exit 1 not, and any other failure fails `clm init`, as the `.gitignore` probes do. When it is ignored, the next steps say that git ignores `.claude/settings.json`, so its allow rules stay on this machine, and name the fix: in place of a pattern that ignores the whole directory, such as `.claude/`, ignore `.claude/*` and add `!.claude/settings.json` after it (git can't re-include a file whose directory it excludes), or commit the file with `git add -f`. The step comes before the missing-rules step, which stays the last step before the push step (`init-seeds-permissions`), and right before the push step when that one isn't printed. `clm init` edits no pattern of the project's own: which of `.claude/`'s other files the project keeps out is its choice, and the line it would rewrite may sit in another ignore file. The answer is git's, so this clone's own excludes count too: a file only `.git/info/exclude` ignores is reported, which is right, since this clone's commits would leave it out.
+
+**Migrations** (`all-migrations`, `own-migrations-frozen`, `migrations-live-with-init`). What a project set up earlier holds is `init`'s business twice over: `clm init` writes it today, and a migration brings an older project to it. So every migration written since `20261114-migrations-with-templates` lives here, whatever it carries: a changed text of a file `clm init` writes, a settings key, a format `clm` reads. Each is a directory `crates/clm-init/src/migrations/<id>/` of the shape `upgrade`'s Design gives, pulled in from `crates/clm-init/src/migrations.rs`, which lists them in the order they landed and holds this crate's supersedes pairs. A migration of a file `clm init` writes takes its `new` text from the template itself, with `include_str!` of the same file `clm init` writes from, until a later migration moves that text on; then it keeps a copy of the text as it was, in its own directory, since a shipped migration never changes. So the build of a requirement that changes such a file writes the template, the migration and the migration's tests in this component's files, in one branch, and the upgrade corpus test (`clm/upgrade-corpus`) passes on that land. `migrations()` copies `upgrade`'s thirteen and appends this crate's, so the order a project's `upgraded` rests on never changes: nothing is ever added before the last of `upgrade`'s. `crates/clm-init/migrations.lock` is this crate's lock, checked and appended to by `upgrade`'s `check_lock` and `append_lock`; it doesn't exist until a release ships a migration of this crate. A test of one migration gives `upgrade`'s engine a list holding that migration alone, or the list up to it, never the whole list, so adding a migration fails no earlier test.
 
 ## Requirements
 
@@ -625,7 +629,7 @@ The guide's entry pages SHALL stay written for a newcomer (`guide-entry-pages-fo
 - architecture/method-in-the-plugin
 
 ### Requirement: init-stamps-upgraded
-The `clm.toml` `clm init` writes SHALL set `upgraded` to `upgrade`'s `latest()`, so a new repository has no migration pending. A kept `clm.toml` SHALL NOT be stamped.
+The `clm.toml` `clm init` writes SHALL set `upgraded` to the ID of the last migration of `clm-init`'s `migrations()` (`all-migrations`), read with `upgrade`'s `latest_in`, so a new repository has no migration pending. A kept `clm.toml` SHALL NOT be stamped.
 
 #### Scenario: new repository
 - GIVEN an empty directory under version control
@@ -845,3 +849,49 @@ On every run, after its `.gitignore` edits, `clm init` SHALL ask git, by `git ch
 
 #### Serves
 - capability/work-from-any-agent-harness
+
+### Requirement: all-migrations
+`clm-init` SHALL offer `migrations()`, every migration the binary holds: `upgrade`'s own (`upgrade/own-list-closed`) in their order, followed by this crate's own in the order they landed, each a directory `crates/clm-init/src/migrations/<id>/`; and `supersedes()`, `upgrade`'s pairs followed by this crate's. No two migrations SHALL share an ID, and none of this crate's SHALL be `required` with a `note`. Every migration written after `20261114-proof-is-real` SHALL be this crate's, whatever it carries: a requirement that changes a file `clm init` writes that projects already hold states its migration in the same component, and its build writes both.
+
+#### Scenario: the list today
+- GIVEN the crate with no migration of its own
+- WHEN `migrations()` and `supersedes()` are read
+- THEN they are `upgrade`'s thirteen in their order and `upgrade`'s pairs
+
+#### Scenario: a migration of its own
+- GIVEN `upgrade`'s list followed by one migration `z`, built as `migrations()` builds its list
+- WHEN it is read, and `upgrade`'s `pending_in` runs over it for a project whose `upgraded` names the last of `upgrade`'s and for which `z` is not done
+- THEN `z` is last, and it is pending
+
+#### Scenario: a duplicate ID
+- GIVEN the same with `z` given the ID of one of `upgrade`'s
+- WHEN the test's check of the list runs
+- THEN it fails, naming the ID
+
+#### Serves
+- capability/upgrade-clm
+- architecture/upgrades-carry-migrations
+
+#### Needs
+- upgrade/migration-list
+- upgrade/pending-migrations
+- upgrade/own-list-closed
+
+### Requirement: own-migrations-frozen
+For each line `<id> <version> <hash>` of `crates/clm-init/migrations.lock`, a missing file reading as none, this crate's own migrations SHALL hold `<id>`, and the hash of `crates/clm-init/src/migrations/<id>/` SHALL be `<hash>`, judged by `upgrade`'s `check_lock` (`upgrade/shipped-migrations-frozen`).
+
+#### Scenario: no lock yet
+- GIVEN the crate with no `migrations.lock`
+- WHEN the test runs
+- THEN it passes
+
+#### Scenario: a shipped migration edited
+- GIVEN a copy of a crate directory holding a migration `z` and a lock line for it, with one byte of a file under `src/migrations/z/` changed
+- WHEN the check runs on the copy
+- THEN it reports `z`
+
+#### Serves
+- architecture/upgrades-carry-migrations
+
+#### Needs
+- upgrade/shipped-migrations-frozen
