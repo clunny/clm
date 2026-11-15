@@ -95,6 +95,14 @@ fn a_land_with_the_callers_target() {
     let eb = f.env(&[("CARGO_TARGET_DIR", tb.to_str().unwrap())]);
     std::thread::scope(|s| {
         let one = s.spawn(|| clm_land::land(&a, None, &ea));
+        // The second starts once the first's check runs: a land that finds another waiting
+        // as it takes the land lock lands both on one check (land/batched-lands), and one
+        // check says nothing of the check lock.
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while f.lines("overlap.log").is_empty() {
+            assert!(Instant::now() < deadline, "the first check never started");
+            std::thread::sleep(Duration::from_millis(10));
+        }
         let two = s.spawn(|| clm_land::land(&b, None, &eb));
         for out in [one.join().unwrap().unwrap(), two.join().unwrap().unwrap()] {
             assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
