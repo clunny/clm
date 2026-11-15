@@ -418,6 +418,32 @@ fn the_failed_step_names_a_path_of_no_land() {
 }
 
 #[test]
+fn what_two_lands_can_both_break_blames_both() {
+    // req:land/failed-batch@b38c0772
+    let f = Fixture::new("");
+    check_with(
+        &f,
+        "if [ -e a_file.txt ] && [ -e b_file.txt ] && git log -1 --format=%B | grep -q '^Checked:'; then echo '::group::x'; echo '::clm-selected::crates/x/tests/t.rs'; exit 1; fi",
+    );
+    branches(&f, &["a", "b", "c"]);
+    // Only `a` and `b` together can break `crates/x/tests/t.rs`.
+    let affected = f.path("bin/affected-pair");
+    common::write_exec(
+        &affected,
+        "#!/bin/sh\n\
+         case \" $* \" in *--overlap*) a=$(git rev-parse origin/impl/a); b=$(git rev-parse origin/impl/b);\n\
+         case \" $* \" in *\"$a\"*\"$b\"*|*\"$b\"*\"$a\"*) echo 'file crates/x/tests/t.rs';; esac;; esac\n",
+    );
+    let affected = affected.display().to_string();
+    let env = f.env(&[("CLM_AFFECTED", &affected)]);
+    let outs = land_all_env(&f, &["a", "b", "c"], &env);
+    assert!(outs.iter().all(|o| o.is_ok()), "{outs:?}");
+    // `c` alone from the retried batch, then `a` and `b` each alone.
+    assert_eq!(on_main(&f)[..3], ["impl/b", "impl/a", "impl/c"]);
+    assert_eq!(starts(&f), 4, "{:?}", f.lines("check-order.log"));
+}
+
+#[test]
 fn more_than_four_suspects_are_halved() {
     // req:land/failed-batch@b38c0772
     let f = Fixture::new("");
