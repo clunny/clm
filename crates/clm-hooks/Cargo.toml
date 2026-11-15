@@ -10,6 +10,7 @@ clm-agent-harness.workspace = true
 clm-config.workspace = true
 clm-git.workspace = true
 clm-host.workspace = true
+clm-init.workspace = true
 clm-model.workspace = true
 clm-sync.workspace = true
 clm-upgrade.workspace = true

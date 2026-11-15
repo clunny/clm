@@ -114,7 +114,7 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
 
 #[test]
 fn session_start_reminds_to_upgrade() {
-    // req:plugin.hooks/session-upgrade-reminder@5a5a1830
+    // req:plugin.hooks/session-upgrade-reminder@c217417c
     let start = |repo: &TempDir| {
         let event = serde_json::json!({ "cwd": repo.path() }).to_string();
         let out = hook("session-start", &event);
