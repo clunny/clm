@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [a-stalled-npm-install-hangs-verify-with-no-end]
 ---
 

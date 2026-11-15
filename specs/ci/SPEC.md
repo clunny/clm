@@ -65,6 +65,8 @@ The code key lives in `ledger`, landing in `land` and approval pinning in the le
 
 **Mutation** (`mutate-script`, `mutation-after-land`). `.github/scripts/mutate.sh` is this repository's `[verify] mutate` command. Its tests put fakes of `cargo` and `npx` on `PATH`, so they prove its plumbing and say nothing of whether the real tools accept what it gives them; three things cover that (`mutation-after-land` records the run that showed the need). The filter names a test target as nextest's `binary_id(=<package>::<target>)`. A tool that fails for any reason but its mutants' outcomes fails the script, so `clm verify` records nothing and the requirements stay due, since a `not-judged` on record is never looked at again while the test is unchanged. And before the plan the script judges a fixture of its own with each tool the plan needs: a function with one test that notices a change to it and one that doesn't, written to a temporary directory for `cargo-mutants`, and for StrykerJS inside the npm directory it is about to judge, so the fixture meets that directory's own vitest and TypeScript. A wrong verdict on the fixture fails the script before it judges anything. The fixture is written by the script and tracked nowhere, so it adds no `package.json` or `Cargo.toml` to the repository. Nothing in the land check runs the real tools (`land-checks-stay-fast`): the fakes prove the script's plumbing at the land, and the fixture proves the tools at each pass. StrykerJS 10.1.1 calls `ts.parseConfigFileTextToJson`, which TypeScript 7 doesn't have, when it finds a `tsconfig.json`; the build finds the configuration under which it judges the fixture, by a StrykerJS option or by moving the script's pinned StrykerJS version, never by changing the TypeScript or vitest an npm directory installs, which are `web`'s and `plugin.panel`'s, and leaves the requirement unbuilt with a question item if there is none. Each tool keeps its own default timeout for a mutant's tests, which counts a mutant that hangs as caught; the script sets no other bound, and the pass holds no land (`mutation-after-land`).
 
+**Bounded npm installs** (`npm-installs-bounded`). On 2026-11-15 an `npm ci` in the verify tree's coverage pass sat for over 11 minutes on a connection to the registry that had stalled silently, until a person killed it; nothing else would have ended it, and the build loop waited on that verify. The same stall in `ci-check.sh` would hold the clone's check lock and every land behind it. So the three scripts run every `npm ci` and `npm install` through `.github/scripts/npm-install.sh`, which each finds beside itself: it runs `npm` with the arguments it was given in the directory it was called in, ends it at a limit (300 seconds, or the whole seconds `NPM_INSTALL_TIMEOUT` names, which the tests set to prove the limit quickly) with `SIGTERM` and, 10 seconds later, `SIGKILL`, says so on stderr, and runs it once more. A stall is the network's fault and both commands are safe to run again (`npm ci` replaces `node_modules/`, `npm install --no-save` adds to it), so one retry makes the stall a passing run a few minutes late; a second run ended at the limit fails with status 124, the status coreutils `timeout` gives, and a run that fails by itself is never retried, since a broken lockfile fails the same way twice. With `--ignore-scripts` an install runs no package script, so ending the `npm` process ends the install. Not taken: npm's `fetch-timeout` and `fetch-retries`, whose defaults were in force during the stall and which time one request, not the install, so no test with a fake `npm` could prove a bound; coreutils `timeout`, which macOS lacks, while `ci-check.sh` runs on its bash 3.2, so the script ends the install with the shell's own job handling; and a limit on the whole check or mutation command, which must be loose enough for a loaded machine and can't retry the one step that stalled (`backlog/a-hung-land-check-holds-every-land-of-the-clone`). `npm test` and `npx` are not installs and run as before. The `npm ci` of `clm.toml`'s `[build] setup` (`config/build-setup-here`) and of the two workflows stay as they are: the first holds one build, whose session runs `clm setup` under its own tool's time limit, and GitHub ends a job at its own limit. The script's tests live with the other scripts' in `crates/clm/tests/ci_check.rs` and `crates/clm/tests/mutate.rs`, with a fake `npm` that sleeps far past the limit they set.
+
 ## Requirements
 
 ### Requirement: release
@@ -609,3 +611,46 @@ When `CLM_LAND_DIR` is set and non-empty, `.github/scripts/ci-check.sh` SHALL ex
 
 #### Needs
 - verify/mutation-pass
+
+### Requirement: npm-installs-bounded
+`.github/scripts/npm-install.sh <argument>...` SHALL run `npm <argument>...` in its working directory and exit with that run's status, unless the run is still going after the limit: 300 seconds, or the whole number of seconds `NPM_INSTALL_TIMEOUT` names. It SHALL then end that `npm` process, print a line to stderr naming the arguments and the limit, and run the same command once more; when that second run is still going after the limit it SHALL end it too and exit 124. It SHALL NOT run again a command that ended by itself, whatever its status. `.github/scripts/ci-check.sh`, `.github/scripts/coverage.sh` and `.github/scripts/mutate.sh` SHALL run every `npm ci` and `npm install` they run through it, so a stalled install delays a check, a coverage pass or a mutation pass by the limit at most twice for each install, and never without end.
+
+#### Scenario: a stalled install is ended and run again
+- GIVEN a fake `npm` on `PATH` that records its arguments, sleeps for 60 seconds the first time it runs and exits 0 at once after that, and `NPM_INSTALL_TIMEOUT=1`
+- WHEN `.github/scripts/npm-install.sh ci --ignore-scripts` runs
+- THEN it exits 0 within 30 seconds, the fake recorded `ci --ignore-scripts` twice, and stderr holds a line naming `ci --ignore-scripts` and `1`
+
+#### Scenario: an install that stalls twice fails
+- GIVEN a fake `npm` that records its arguments and sleeps for 60 seconds every time it runs, and `NPM_INSTALL_TIMEOUT=1`
+- WHEN `.github/scripts/npm-install.sh ci --ignore-scripts` runs
+- THEN it exits 124 within 30 seconds and the fake recorded `ci --ignore-scripts` twice, not three times
+
+#### Scenario: a failing install is not run again
+- GIVEN a fake `npm` that records its arguments and exits 7 at once
+- WHEN `.github/scripts/npm-install.sh install --no-save --ignore-scripts x@1.0.0` runs
+- THEN it exits 7 and the fake recorded its arguments once
+
+#### Scenario: the coverage pass gets past a stalled install
+- GIVEN `coverage.sh` with its fakes on `PATH`, the `npm` fake sleeping for 60 seconds on its first run alone, and `NPM_INSTALL_TIMEOUT=1`
+- WHEN it runs
+- THEN it exits 0 within 30 seconds and writes `target/lcov.info`, and the `npm` fake recorded `ci --ignore-scripts` three times: twice in `web/` and once in `plugin-panel/`
+
+#### Scenario: the coverage pass fails on an install that never answers
+- GIVEN the same, but the `npm` fake sleeps for 60 seconds on every run of `install`
+- WHEN it runs
+- THEN it exits non-zero within 30 seconds and writes no `target/lcov.info`
+
+#### Scenario: the check gets past a stalled install
+- GIVEN `ci-check.sh` with fakes on `PATH` for `cargo`, `npm` and `npx`, the `npm` fake sleeping for 60 seconds on its first run of `ci` alone, an empty selection file and `NPM_INSTALL_TIMEOUT=1`
+- WHEN it runs
+- THEN it exits 0 within 30 seconds and stderr holds `ci-check: phases`
+
+#### Scenario: the check fails on an install that never answers
+- GIVEN the same, but the `npm` fake sleeps for 60 seconds on every run of `ci`
+- WHEN it runs
+- THEN it exits non-zero within 30 seconds and stderr's last line starts `ci-check: failed in `
+
+#### Scenario: the mutation pass gets past a stalled install
+- GIVEN `mutate.sh` with its fakes on `PATH`, a plan with one block whose `code` line names a file under `web/src/`, the `npm` fake sleeping for 60 seconds on its first run alone, and `NPM_INSTALL_TIMEOUT=1`
+- WHEN it runs
+- THEN it exits 0 within 60 seconds and writes that block's verdict to the result file
