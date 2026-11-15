@@ -117,7 +117,7 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 The build of this requirement updates the capability test `capability/build-from-spec` (`crates/clm/tests/capability/build_from_spec.rs`) to drain its queue through `clm build start`, `step`, `launched` and `returned` rather than `clm next` and `clm run`, keeping its citation; the test of the new scenario *resume in a new session* is `capability`'s own build's (`capability-tests-follow-rules`).
 
 #### Scenario: an unreported launch
-- GIVEN a step that printed `launch build:a build sonnet <file>`, and no `launched` for it
+- GIVEN a step that printed `launch build:a build <model> <file>`, and no `launched` for it
 - WHEN `clm build step` runs again
 - THEN it prints the same line, and `clm run a` ran once
 
@@ -234,7 +234,7 @@ Once the fold list isn't empty and no draft of the loop is running, the plan SHA
 #### Scenario: fold while builds run
 - GIVEN drafts `x` and `y` returned `proposed x review <url>` and `proposed y review <url>`, no draft running, and `build:a` running
 - WHEN `clm build step` runs
-- THEN it prints a `launch fold:x fold sonnet <prompt-file>` for `x` then `y`
+- THEN it prints a `launch fold:x fold <model> <prompt-file>` for `x` then `y`, `<model>` the build model `agent-harness/abilities` gives
 
 #### Scenario: approved batch
 - GIVEN a fold batch `b` in the human's queue
@@ -250,7 +250,7 @@ When `clm wrap-up` names complete changes, no `impl/archive/*` branch is on `ori
 #### Scenario: complete change
 - GIVEN `clm wrap-up` printing `complete c`, and no `impl/archive/*` on `origin`
 - WHEN `clm build step` runs
-- THEN it prints `launch archive:c archive sonnet <prompt-file>`, whose prompt names `git switch -c impl/archive/c origin/main`
+- THEN it prints `launch archive:c archive <model> <prompt-file>`, `<model>` the build model `agent-harness/abilities` gives,, whose prompt names `git switch -c impl/archive/c origin/main`
 
 #### Needs
 - view/queue-view
