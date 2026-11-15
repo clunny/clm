@@ -1310,28 +1310,23 @@ fn scenario_worktree_git_cant_remove() {
     let (r, f) = (repo(), fake());
     let wt = landed_build(&r, &f);
     // A `git` whose `worktree remove` refuses, leaving the worktree listed and on disk.
-    let real = String::from_utf8(
-        Command::new("sh")
-            .args(["-c", "command -v git"])
-            .output()
-            .unwrap()
-            .stdout,
-    )
-    .unwrap();
+    // Pinned to the argv `git::remove_worktree` runs: `git worktree remove ...`.
     write_exec(
         &f.bin.join("git"),
-        &format!(
-            "#!/bin/sh\nif [ \"$1\" = worktree ] && [ \"$2\" = remove ]; then echo refused >&2; exit 1; fi\nexec {} \"$@\"\n",
-            real.trim()
-        ),
+        "#!/bin/sh\n\
+         real=$(PATH=\"$FAKE_REAL_PATH\" command -v git)\n\
+         if [ \"$1\" = worktree ] && [ \"$2\" = remove ]; then echo refused >&2; exit 1; fi\n\
+         exec \"$real\" \"$@\"\n",
     );
-    let path = format!("{}:{}", f.bin.display(), std::env::var("PATH").unwrap());
+    let real = std::env::var("PATH").unwrap();
+    let path = format!("{}:{real}", f.bin.display());
     let ran = output(
         Command::new(env!("CARGO_BIN_EXE_clm"))
             .args(["run", "--finish", "b", "--root"])
             .arg(&r.work)
             .current_dir(&r.work)
             .env("PATH", path)
+            .env("FAKE_REAL_PATH", &real)
             .env("XDG_CONFIG_HOME", r.work.join(".no-config")),
     );
     assert_eq!(ran.status.code(), Some(0));
