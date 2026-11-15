@@ -60,7 +60,8 @@ fn session_text(cwd: &Path) -> String {
         .ok()
         .and_then(|s| s.skip_migrations.value.clone())
         .unwrap_or_default();
-    let reminder = upgrade::upgrade_line(clm_upgrade::pending(root), &skipped);
+    let (list, pairs) = (clm_init::migrations(), clm_init::supersedes());
+    let reminder = upgrade::upgrade_line(clm_upgrade::pending_in(&list, &pairs, root), &skipped);
     let Ok(status) = clm_view_repo::status(root, budgets) else {
         // The reminder stands even when the status can't be read.
         return reminder.map(|line| line + "\n").unwrap_or_default();
