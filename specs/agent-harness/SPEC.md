@@ -27,7 +27,7 @@ Crate `clm-agent-harness`, at `crates/clm-agent-harness/`, depending on `serde_j
 
 | | `confirm` | `guard` | `session_hooks` | `subagents` | `isolated_worktrees` | `named_agents` | `model_choice` |
 |---|---|---|---|---|---|---|---|
-| `claude-code` | yes | yes | yes | yes | yes | yes | yes, `build_model` `sonnet` |
+| `claude-code` | yes | yes | yes | yes | yes | yes | yes, `build_model` `opus` |
 | `codex` | no, until Codex's pre-tool hook is shown to make the human confirm | yes | yes | yes | no | no, until Codex is shown to load a plugin's agents | no |
 | `none` | no | no | no | no | no | no | no |
 
@@ -60,17 +60,17 @@ Crate `clm-agent-harness`, at `crates/clm-agent-harness/`, depending on `serde_j
 - THEN it returns `None`
 
 ### Requirement: abilities
-`clm-agent-harness`'s `abilities(agent_harness)` SHALL return, for each agent harness, the abilities this component's Design tabulates: for `ClaudeCode` every ability true and `build_model` `sonnet`; for `Codex` `guard`, `session_hooks` and `subagents` true and `confirm`, `isolated_worktrees`, `named_agents` and `model_choice` false; for `None` every ability false. No agent harness's `confirm` SHALL be true unless its Design row says so.
+`clm-agent-harness`'s `abilities(agent_harness)` SHALL return, for each agent harness, the abilities this component's Design tabulates: for `ClaudeCode` every ability true and `build_model` `opus`; for `Codex` `guard`, `session_hooks` and `subagents` true and `confirm`, `isolated_worktrees`, `named_agents` and `model_choice` false; for `None` every ability false. No agent harness's `confirm` SHALL be true unless its Design row says so.
 
 #### Scenario: Codex can't confirm
 - GIVEN `Codex`
 - WHEN `abilities` runs
 - THEN `confirm` is false and `guard` is true
 
-#### Scenario: Claude Code builds on sonnet
+#### Scenario: Claude Code builds on opus
 - GIVEN `ClaudeCode`
 - WHEN `abilities` runs
-- THEN `confirm` and `model_choice` are true and `build_model` is `sonnet`
+- THEN `confirm` and `model_choice` are true and `build_model` is `opus`
 
 ### Requirement: hook-events
 `clm-agent-harness`'s `parse_event(agent_harness, json)` SHALL read each supported agent harness's hook event into a `HookEvent` holding its kind, its tool's name, a shell tool's command and its `cwd`, each `None` when the event lacks it, and SHALL return an error for text that isn't JSON. `render(agent_harness, decision)` SHALL give each agent harness's stdout and exit code for `Allow`, `Ask(reason)` and `Block(reason)` as the Design says, and for an agent harness whose `confirm` is false SHALL render `Ask(reason)` as a block whose reason is the given reason followed by a line saying the agent harness can't ask the human and naming the human's own terminal.
