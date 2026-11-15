@@ -115,7 +115,7 @@ fn said(out: &clm_verify::Outcome, start: &str) -> bool {
 
 #[test]
 fn a_new_test_that_notices() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     land_new_test(&p);
@@ -156,7 +156,7 @@ fn a_new_test_that_notices() {
 
 #[test]
 fn a_test_that_notices_nothing() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing survived 12\n");
     land_new_test(&p);
@@ -176,7 +176,7 @@ fn a_test_that_notices_nothing() {
 
 #[test]
 fn survived_zero_is_not_judged() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing survived 0\n");
     land_new_test(&p);
@@ -194,9 +194,139 @@ fn survived_zero_is_not_judged() {
     assert!(said(&out, "mutation: 0 killed, 0 unproven, 1 not judged"));
 }
 
+/// A clone with no `mutated` record whose `[verify]` has no `mutate` yet, with the fake
+/// command written, and the version of `a/thing`.
+fn unswitched() -> (Fixture, String) {
+    let f = Fixture::new(Some(
+        "mode = \"local\"\ntriggers = []\nevery = { lands = 1 }",
+    ));
+    let version = clm_model::load(&f.work())
+        .0
+        .requirement("a/thing")
+        .unwrap()
+        .version()
+        .to_string();
+    let script = f.path("bin/mutate");
+    write_exec(
+        &script,
+        &format!(
+            "#!/bin/sh\nDIR='{}'\n{MUTATE}",
+            f.path("").display().to_string().trim_end_matches('/')
+        ),
+    );
+    (f, version)
+}
+
+/// A `clm.toml` that sets `mutate`.
+fn switched_on(f: &Fixture) -> String {
+    format!(
+        "[verify]\ncheck = \"{}\"\nmode = \"local\"\ntriggers = []\nevery = {{ lands = 1 }}\nmutate = \"{}\"\n",
+        f.path("bin/check").display(),
+        f.path("bin/mutate").display()
+    )
+}
+
+#[test]
+fn the_first_pass_fails_and_the_next_loses_nothing() {
+    // req:verify/mutation-pass@cf9b872b
+    let (f, version) = unswitched();
+    let before = f.back(0);
+    f.land(&[("clm.toml", &switched_on(&f))], "switch the pass on");
+    f.land(
+        &[("crates/a/tests/x.rs", &test_file(&version, "let _ = 1;"))],
+        "a test",
+    );
+    f.write("mutate-exit", "3");
+    let out = f.due();
+    assert!(out.line.starts_with("verify passed "), "{out:?}");
+    assert!(mutated(&f).is_empty());
+    assert!(f.path("mutate-ran").exists(), "the command never ran");
+    // A requirement and a test of it arrive, and the command now works.
+    let spec = format!(
+        "---\ntitle: A\nstatus: active\nowners: []\npaths: [\"crates/a/**\"]\n---\n\n\
+         ## Contract\nc\n\n## Design\nd\n\n## Requirements\n{}\n\
+         ### Requirement: other\nIt SHALL do the other thing.\n\n\
+         #### Scenario: doing\n- GIVEN a\n- WHEN b\n- THEN c\n",
+        common::UNBUILT
+    );
+    f.land(&[("specs/a/SPEC.md", &spec)], "another requirement");
+    let other = clm_model::load(&f.work())
+        .0
+        .requirement("a/other")
+        .unwrap()
+        .version()
+        .to_string();
+    let test = test_file(&other, "let _ = 2;")
+        .replace("a/thing", "a/other")
+        .replace("proves_x", "proves_y");
+    f.land(&[("crates/a/tests/y.rs", &test)], "another test");
+    f.write("mutate-exit", "0");
+    f.write("mutate-result", "a/thing killed\na/other killed\n");
+    f.due();
+    let plan = f.lines("plan");
+    assert!(
+        plan.contains(&"requirement a/thing".to_string()),
+        "{plan:?}"
+    );
+    assert!(
+        plan.contains(&"requirement a/other".to_string()),
+        "{plan:?}"
+    );
+    let Body::Mutated { since, .. } = mutated(&f).pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!(since, Some(before));
+}
+
+#[test]
+fn an_empty_setting_ends_the_run() {
+    // req:verify/mutation-pass@cf9b872b
+    let (f, version) = unswitched();
+    f.write("mutate-result", "a/thing killed\n");
+    let set = format!("mutate = \"{}\"", f.path("bin/mutate").display());
+    let empty = switched_on(&f).replace(&set, "mutate = \"\"");
+    let end = f.land(&[("clm.toml", &empty)], "an empty setting");
+    f.land(&[("clm.toml", &switched_on(&f))], "switch the pass on");
+    f.land(
+        &[("crates/a/tests/x.rs", &test_file(&version, "let _ = 1;"))],
+        "a test",
+    );
+    f.due();
+    let Body::Mutated { since, .. } = mutated(&f).pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!(since, Some(end));
+}
+
+#[test]
+fn the_pass_switched_on_from_the_first_commit() {
+    // req:verify/mutation-pass@cf9b872b
+    let (f, version) = unswitched();
+    f.write("mutate-result", "a/thing killed\n");
+    f.restart(
+        &[
+            ("clm.toml", &switched_on(&f)),
+            ("crates/a/tests/x.rs", &test_file(&version, "let _ = 1;")),
+        ],
+        "the first commit",
+    );
+    let out = f.due();
+    assert!(out.line.starts_with("verify passed "), "{out:?}");
+    let plan = f.lines("plan");
+    assert!(
+        plan.contains(&"requirement a/thing".to_string()),
+        "{plan:?}"
+    );
+    assert!(!plan.iter().any(|l| l.starts_with("diff ")), "{plan:?}");
+    let Body::Mutated { since, killed, .. } = mutated(&f).pop().unwrap() else {
+        panic!()
+    };
+    assert_eq!((since, killed), (None, vec!["a/thing".to_string()]));
+}
+
 #[test]
 fn a_test_only_re_cited_is_not_judged() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, true);
     p.f.land(
         &[("crates/a/tests/x.rs", &test_file(&p.version, "let _ = 1;"))],
@@ -221,7 +351,7 @@ fn a_test_only_re_cited_is_not_judged() {
 
 #[test]
 fn a_test_changed_in_more_than_its_marker_is_due() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, true);
     p.f.write("mutate-result", "a/thing killed\n");
     p.f.land(
@@ -241,7 +371,7 @@ fn a_test_changed_in_more_than_its_marker_is_due() {
 
 #[test]
 fn an_item_resolved_with_its_test_unchanged_is_not_judged_again() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, true);
     p.f.land(
         &[("crates/a/tests/x.rs", &test_file(&p.version, "let _ = 1;"))],
@@ -264,7 +394,7 @@ fn an_item_resolved_with_its_test_unchanged_is_not_judged_again() {
 
 #[test]
 fn every_citing_test_is_in_the_plan_and_a_stale_citation_is_none() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     let two = format!(
@@ -298,7 +428,7 @@ fn every_citing_test_is_in_the_plan_and_a_stale_citation_is_none() {
 
 #[test]
 fn a_stale_citation_alone_makes_nothing_due() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.land(
         &[(
@@ -313,7 +443,7 @@ fn a_stale_citation_alone_makes_nothing_due() {
 
 #[test]
 fn the_pass_starts_from_the_newest_mutated_record() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     let middle = p.f.land(&[("crates/a/src/lib.rs", "9\n")], "middle");
@@ -336,7 +466,7 @@ fn the_pass_starts_from_the_newest_mutated_record() {
 
 #[test]
 fn the_pass_has_a_slot_of_its_own() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     std::fs::write(p.f.work().join("clm.local.toml"), "max_builds = 4\n").unwrap();
@@ -347,7 +477,7 @@ fn the_pass_has_a_slot_of_its_own() {
 
 #[test]
 fn a_failing_command_records_nothing() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("mutate-exit", "3");
     land_new_test(&p);
@@ -366,7 +496,7 @@ fn a_failing_command_records_nothing() {
 
 #[test]
 fn unset_runs_no_pass() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(false, false);
     land_new_test(&p);
     let out = p.f.due();
@@ -378,7 +508,7 @@ fn unset_runs_no_pass() {
 
 #[test]
 fn a_red_check_runs_no_pass() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("check-fails", "");
     land_new_test(&p);
@@ -390,7 +520,7 @@ fn a_red_check_runs_no_pass() {
 
 #[test]
 fn lands_do_not_wait_for_the_pass() {
-    // req:verify/mutation-pass@e561e63f
+    // req:verify/mutation-pass@cf9b872b
     let p = pass(true, false);
     p.f.write("hold", "");
     land_new_test(&p);

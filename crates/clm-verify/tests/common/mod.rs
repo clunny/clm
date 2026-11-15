@@ -176,6 +176,18 @@ impl Fixture {
         sha
     }
 
+    /// Starts `main` over: one parentless commit of `files` added to the tree as it stands,
+    /// pushed over `origin`'s `main`. Call it before any verification: records of the old
+    /// history would name commits no longer on the chain. Returns its full ID.
+    pub fn restart(&self, files: &[(&str, &str)], message: &str) -> String {
+        let work = self.work();
+        self.git(&work, &["checkout", "-q", "--orphan", "fresh"]);
+        let sha = self.commit(files, message);
+        self.git(&work, &["branch", "-q", "-M", "main"]);
+        self.git(&work, &["push", "-q", "-f", "origin", "main"]);
+        sha
+    }
+
     /// The commit `n` lands before the head of `main`.
     pub fn back(&self, n: usize) -> String {
         self.git(&self.work(), &["rev-parse", &format!("main~{n}")])

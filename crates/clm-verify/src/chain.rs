@@ -71,14 +71,22 @@ impl State {
     }
 
     /// The commit a mutation pass on position `end` starts from: the newest commit before it
-    /// that a `mutated` record names, else the last verified commit (`mutation-pass`).
-    pub(crate) fn mutation_base(&self, end: usize) -> Option<String> {
+    /// that a `mutated` record names, else the commit before the unbroken run of commits
+    /// ending at `end` whose `clm.toml` sets `[verify] mutate`, or none when the chain's
+    /// first commit already does (`mutation-pass`).
+    pub(crate) fn mutation_base(&self, ctx: &Ctx, end: usize) -> Result<Option<String>, Error> {
         let mutated = self.chain[..end]
             .iter()
             .rposition(|c| self.fold.mutations.contains_key(c));
-        mutated
-            .or_else(|| self.last_verified(end))
-            .map(|i| self.chain[i].clone())
+        if let Some(i) = mutated {
+            return Ok(Some(self.chain[i].clone()));
+        }
+        for i in (0..=end).rev() {
+            if !sets_mutate(ctx, &self.chain[i]) {
+                return Ok(Some(self.chain[i].clone()));
+            }
+        }
+        Ok(None)
     }
 
     /// The lands after the last verified commit before position `end`, up to `end`
@@ -94,4 +102,19 @@ impl State {
         let since = self.last_verified(self.chain.len());
         (since, &self.chain[since.map_or(0, |s| s + 1)..])
     }
+}
+
+/// Whether the `clm.toml` committed at `commit` parses as TOML and holds a non-empty string
+/// at `[verify] mutate`.
+fn sets_mutate(ctx: &Ctx, commit: &str) -> bool {
+    let Ok(text) = ctx.git(&["show", &format!("{commit}:{}clm.toml", ctx.prefix)]) else {
+        return false;
+    };
+    text.parse::<toml::Table>().is_ok_and(|table| {
+        table
+            .get("verify")
+            .and_then(|v| v.get("mutate"))
+            .and_then(toml::Value::as_str)
+            .is_some_and(|s| !s.is_empty())
+    })
 }
