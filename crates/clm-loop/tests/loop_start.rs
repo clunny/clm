@@ -10,7 +10,7 @@ use common::{Fixture, line, run};
 
 #[test]
 fn a_live_loop() {
-    // req:orchestrator.loop/loop-start@4e2a3d8c
+    // req:orchestrator.loop/loop-start@4c2c558d
     let fx = Fixture::new();
     fx.set_lease(2);
     let before = fs::read(fx.loop_dir().join("loop")).unwrap();
@@ -24,7 +24,7 @@ fn a_live_loop() {
 
 #[test]
 fn taking_over_a_live_loop() {
-    // req:orchestrator.loop/loop-start@4e2a3d8c
+    // req:orchestrator.loop/loop-start@4c2c558d
     let fx = Fixture::new();
     fx.set_lease(2);
     start(&fx.options(), "opus", true).unwrap();
@@ -33,7 +33,7 @@ fn taking_over_a_live_loop() {
 
 #[test]
 fn adopting_a_lapsed_loop() {
-    // req:orchestrator.loop/loop-start@4e2a3d8c
+    // req:orchestrator.loop/loop-start@4c2c558d
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -82,4 +82,97 @@ fn adopting_a_lapsed_loop() {
         assert!(!run.orphan);
         assert_eq!(run.state, RunState::Planned);
     }
+}
+
+fn said(action: &str) -> String {
+    fs::read_to_string(action.strip_prefix("say ").unwrap()).unwrap()
+}
+
+fn orphan(fx: &Fixture, name: &str, kind: Kind) {
+    fx.add_run(run(name, kind, "sonnet", RunState::Running, Some("t-1")));
+    fx.set_lease(20);
+}
+
+#[test]
+fn a_refused_relaunch() {
+    // req:orchestrator.loop/loop-start@4c2c558d
+    let fx = Fixture::new();
+    orphan(&fx, "build:a", Kind::Build);
+    fx.set("run-exit-a", "1");
+    fx.set(
+        "run-reason-a",
+        "a has uncommitted changes in its worktree\n",
+    );
+
+    let actions = start(&fx.options(), "opus", false).unwrap();
+
+    assert_eq!(fx.ran("run --finish a"), 1);
+    assert!(!actions.iter().any(|a| a.starts_with("launch build:a")));
+    let text = said(line(&actions, "say "));
+    assert!(text.contains("build:a wasn't relaunched"), "{text}");
+    assert!(
+        text.contains("a has uncommitted changes in its worktree"),
+        "{text}"
+    );
+    let run = fx.file().run("build:a").unwrap().clone();
+    assert_eq!(run.state, RunState::Returned);
+    assert!(!run.landed);
+    assert!(run.stops.is_empty());
+
+    clm_loop::stop(&fx.options(), clm_loop::StopMode::Drain).unwrap();
+    let last = clm_loop::step(&fx.options()).unwrap();
+    assert_eq!(last.len(), 2, "{last:?}");
+    assert!(last[0].starts_with("say "));
+    assert_eq!(last[1], "end");
+}
+
+#[test]
+fn a_refused_relaunch_of_a_build_that_landed_says_nothing() {
+    // req:orchestrator.loop/loop-start@4c2c558d
+    let fx = Fixture::new();
+    orphan(&fx, "build:a", Kind::Build);
+    fx.set("run-exit-a", "1");
+    fx.set("run-reason-a", "a is landed\n");
+    fx.set("finish-a", "landed impl/a\n");
+
+    let actions = start(&fx.options(), "opus", false).unwrap();
+
+    assert!(
+        !actions.iter().any(|a| a.starts_with("say ")),
+        "{actions:?}"
+    );
+    assert!(fx.file().run("build:a").unwrap().landed);
+}
+
+#[test]
+fn a_draft_with_nothing_to_resume() {
+    // req:orchestrator.loop/loop-start@4c2c558d
+    let fx = Fixture::new();
+    orphan(&fx, "draft:d", Kind::Draft);
+    fx.set("resume-exit-d", "1");
+    fx.set("resume-reason-d", "the draft left nothing to resume\n");
+
+    let actions = start(&fx.options(), "opus", false).unwrap();
+
+    assert_eq!(fx.ran("draft --finish d"), 1);
+    assert!(!actions.iter().any(|a| a.starts_with("launch draft:d")));
+    let text = said(line(&actions, "say "));
+    assert!(text.contains("draft:d wasn't relaunched"), "{text}");
+    assert!(text.contains("the draft left nothing to resume"), "{text}");
+    let run = fx.file().run("draft:d").unwrap().clone();
+    assert_eq!(run.state, RunState::Returned);
+    assert!(run.stops.is_empty());
+}
+
+#[test]
+fn a_relaunch_for_want_of_a_place_stays_an_orphan() {
+    // req:orchestrator.loop/loop-start@4c2c558d
+    let fx = Fixture::new();
+    orphan(&fx, "build:a", Kind::Build);
+    fx.set("run-exit-a", "3");
+
+    start(&fx.options(), "opus", false).unwrap();
+
+    assert_eq!(fx.ran("run --finish a"), 0);
+    assert!(fx.file().run("build:a").unwrap().orphan);
 }

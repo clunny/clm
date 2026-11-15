@@ -8,7 +8,7 @@ use clm_git::{Failure, now};
 use crate::Options;
 use crate::plan::{Snapshot, plan_of};
 use crate::state::{self, LoopFile, RunState, StopMode};
-use crate::step::{fresh_snapshot, held_places};
+use crate::step::{fresh_snapshot, gone_builds, held_places};
 
 /// How often the loop file and the places are read, which needs no network.
 const POLL: Duration = Duration::from_secs(5);
@@ -42,6 +42,10 @@ fn reason(
             StopMode::Now => "now",
         };
         return Ok(Some(format!("stop requested: {word}")));
+    }
+    // The next step finishes it, and finds its local branch only if no housekeeping ran first.
+    if let Some(name) = gone_builds(options, &file).first() {
+        return Ok(Some(format!("{name}'s claim has left origin")));
     }
     if first.conditions.disk && !file.conditions.disk {
         return Ok(Some("the disk is cleared".to_string()));
@@ -88,6 +92,14 @@ fn reason(
     }))
 }
 
+/// Why the wait ends before a run of the housekeeping, which would remove the local branch the
+/// step that finishes a landed build looks for (`build-wait`).
+fn claim_left(options: &Options) -> Option<String> {
+    let file = state::read(&options.root)?;
+    let name = gone_builds(options, &file).into_iter().next()?;
+    Some(format!("{name}'s claim has left origin"))
+}
+
 /// `clm build wait [--interval <minutes>]`: renews the lease every interval and returns the line
 /// naming why it woke, as soon as a step would act.
 pub fn wait(options: &Options, interval_minutes: f64) -> Result<String, Failure> {
@@ -105,6 +117,9 @@ pub fn wait(options: &Options, interval_minutes: f64) -> Result<String, Failure>
     };
     let first = renew()?;
     let first_places = held_places(options)?;
+    if let Some(why) = claim_left(options) {
+        return Ok(why);
+    }
     let mut snapshot = fresh_snapshot(options)?;
     let mut fetched = Instant::now();
     loop {
@@ -116,6 +131,9 @@ pub fn wait(options: &Options, interval_minutes: f64) -> Result<String, Failure>
             renew()?;
             if let Err(e) = clm_git::fetch(&options.root) {
                 eprintln!("clm build wait: fetch failed: {e}");
+            }
+            if let Some(why) = claim_left(options) {
+                return Ok(why);
             }
             snapshot = fresh_snapshot(options)?;
             fetched = Instant::now();

@@ -20,11 +20,6 @@ fn said(action: &str) -> String {
 fn stop_now() {
     // req:orchestrator.loop/build-stop@0b42fa2a
     let fx = Fixture::new();
-    clm_git::git(
-        &fx.work,
-        &["push", "-q", "origin", "HEAD:refs/heads/impl/a"],
-    )
-    .unwrap();
     running(&fx, "build:a", Kind::Build, "t-1");
     running(&fx, "draft:c", Kind::Draft, "t-2");
     // Neither stop fetches: the remote is gone, and they still record.

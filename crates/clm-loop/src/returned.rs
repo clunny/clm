@@ -77,6 +77,56 @@ fn finish(options: &Options, run: &Run, line: &str) -> Result<Finished, Failure>
     Ok(Finished { landed, says })
 }
 
+/// Finishes a build or draft as a run that returned with no closing line and no cause, and
+/// records it `returned`, with no stop counted: whether it landed, and the `say` actions its
+/// finish leaves (`return-rules`).
+pub(crate) fn finish_unclosed(
+    options: &Options,
+    name: &str,
+) -> Result<(bool, Vec<String>), Failure> {
+    let Some(run) = state::read(&options.root).and_then(|f| f.run(name).cloned()) else {
+        return Ok((false, Vec::new()));
+    };
+    let finished = finish(options, &run, "")?;
+    state::update(&options.root, |f| {
+        if finished.landed {
+            f.landed_since_verify = true;
+        }
+        if let Some(r) = f.run_mut(name) {
+            r.state = RunState::Returned;
+            r.landed = finished.landed;
+            r.orphan = false;
+        }
+        Ok(())
+    })?;
+    Ok((finished.landed, finished.says))
+}
+
+/// Whether `line` is a `landed <sha>` report of an earlier run of a build than `run`: its commit
+/// is one the clone holds, committed before `run` started, and no run lands a commit made before
+/// it started (`return-rules`, `claim-gone-ends-a-build`).
+fn late_report(options: &Options, run: &Run, line: &str) -> bool {
+    if run.kind != Some(Kind::Build) {
+        return false;
+    }
+    let Some(sha) = line
+        .strip_prefix("landed ")
+        .and_then(|rest| rest.split_whitespace().next())
+    else {
+        return false;
+    };
+    if !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return false;
+    }
+    clm_git::git(
+        &options.root,
+        &["show", "-s", "--format=%ct", &format!("{sha}^{{commit}}")],
+    )
+    .ok()
+    .and_then(|t| t.trim().parse::<u64>().ok())
+    .is_some_and(|committed| committed < run.started)
+}
+
 /// Whether a build's branch has landed, as the place judges it: at least one of
 /// `origin/impl/<component>` and the local branch exists, and each that exists is on
 /// `origin/main`. It reads git alone, so a run that is to keep its place can be asked.
@@ -149,6 +199,16 @@ pub fn returned(
             })?),
         };
     clm_git::fetch(&options.root)?;
+    // The late report of an earlier run of that name changes nothing but the lease.
+    let known = state::update(&options.root, |f| {
+        f.lease = Some(now());
+        Ok(f.run(name).cloned())
+    })?;
+    if let Some(known) = &known
+        && late_report(options, known, result.trim())
+    {
+        return crate::step::next_actions(options);
+    }
     let (run, outstanding) = state::update(&options.root, |f| {
         f.lease = Some(now());
         let run = f

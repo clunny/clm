@@ -26,9 +26,14 @@ view) if [ -f "$F/flight.json" ]; then cat "$F/flight.json"; else echo '{"nodes"
 wrap-up) pwd > "$F/wrap-up-cwd"; cat "$F/wrap-up" 2>/dev/null; echo "wrap-up ok"; exit 0 ;;
 run)
   if [ "$2" = "--finish" ]; then cat "$F/finish-$3" 2>/dev/null; exit 0; fi
-  if [ -f "$F/run-exit-$2" ]; then exit "$(cat "$F/run-exit-$2")"; fi
+  if [ -f "$F/run-exit-$2" ]; then cat "$F/run-reason-$2" >&2 2>/dev/null; exit "$(cat "$F/run-exit-$2")"; fi
   if [ -f "$F/lock" ]; then
     if flock -n "$(cat "$F/lock")" true; then echo free > "$F/lock-result"; else echo held > "$F/lock-result"; fi
+  fi
+  git fetch -q origin 2>/dev/null
+  if ! git rev-parse -q --verify "refs/remotes/origin/impl/$2" >/dev/null; then
+    c=$(git commit-tree -p origin/main -m "claim $2" "origin/main^{tree}")
+    git push -q origin "$c:refs/heads/impl/$2" 2>/dev/null
   fi
   echo "launcher for $2" ;;
 pending) cat "$F/pending-$2" 2>/dev/null; exit 0 ;;
@@ -44,6 +49,7 @@ verify)
   exit 3 ;;
 draft)
   if [ "$2" = "--finish" ]; then cat "$F/finish-$3" 2>/dev/null; exit 0; fi
+  if [ "$2" = "--resume" ] && [ -f "$F/resume-exit-$3" ]; then cat "$F/resume-reason-$3" >&2 2>/dev/null; exit "$(cat "$F/resume-exit-$3")"; fi
   if [ "$2" = "--resume" ]; then echo "resume launcher for $3"; echo "draft $3" >&2; exit 0; fi
   n=$(cat "$F/draft-n" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$F/draft-n"
   echo "draft launcher for $*"; echo "draft d$n" >&2 ;;
@@ -109,8 +115,58 @@ impl Fixture {
         self.work.join(".git/clm")
     }
 
-    /// Adds a run to the loop file, with the lease renewed `renewed_minutes_ago`.
+    /// Gives `component` a claim on `origin` that `origin/main` lacks, as `clm run` leaves one.
+    pub fn claim(&self, component: &str) {
+        let git = |args: &[&str]| clm_git::git(&self.work, args).unwrap();
+        git(&["fetch", "-q", "origin"]);
+        if clm_git::git(
+            &self.work,
+            &[
+                "rev-parse",
+                "-q",
+                "--verify",
+                &format!("refs/remotes/origin/impl/{component}"),
+            ],
+        )
+        .is_ok()
+        {
+            return;
+        }
+        let commit = git(&[
+            "commit-tree",
+            "-p",
+            "origin/main",
+            "-m",
+            "claim",
+            "origin/main^{tree}",
+        ]);
+        git(&[
+            "push",
+            "-q",
+            "origin",
+            &format!("{commit}:refs/heads/impl/{component}"),
+        ]);
+    }
+
+    /// Takes `component`'s claim off `origin`, as a deletion by hand does.
+    pub fn drop_claim(&self, component: &str) {
+        let git = |args: &[&str]| clm_git::git(&self.work, args).unwrap();
+        git(&[
+            "push",
+            "-q",
+            "origin",
+            "--delete",
+            &format!("impl/{component}"),
+        ]);
+        git(&["fetch", "-q", "--prune", "origin"]);
+    }
+
+    /// Adds a run to the loop file, with the lease renewed `renewed_minutes_ago`. A build that
+    /// hasn't returned holds a claim on `origin`.
     pub fn add_run(&self, run: Run) {
+        if run.kind == Some(Kind::Build) && run.state != RunState::Returned {
+            self.claim(run.name.strip_prefix("build:").unwrap());
+        }
         clm_loop::update(&self.work, |f| {
             f.runs.push(run);
             Ok(())

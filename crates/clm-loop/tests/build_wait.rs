@@ -22,7 +22,7 @@ fn waiting(fx: &Fixture, minutes: f64) -> mpsc::Receiver<Result<String, Failure>
 
 #[test]
 fn a_place_frees() {
-    // req:orchestrator.loop/build-wait@838b1759
+    // req:orchestrator.loop/build-wait@e3016092
     let fx = Fixture::new();
     let mut options = fx.options();
     options.max_builds = 1;
@@ -54,7 +54,7 @@ fn a_place_frees() {
 
 #[test]
 fn a_stop_request() {
-    // req:orchestrator.loop/build-wait@838b1759
+    // req:orchestrator.loop/build-wait@e3016092
     let fx = Fixture::new();
     let rx = waiting(&fx, 5.0);
     thread::sleep(Duration::from_millis(700));
@@ -66,7 +66,7 @@ fn a_stop_request() {
 
 #[test]
 fn work_already_ready_wakes_at_once() {
-    // req:orchestrator.loop/build-wait@838b1759
+    // req:orchestrator.loop/build-wait@e3016092
     let fx = Fixture::new();
     fx.set("next", "a\n");
     let why = wait(&fx.options(), 5.0).unwrap();
@@ -75,7 +75,7 @@ fn work_already_ready_wakes_at_once() {
 
 #[test]
 fn an_interval_that_isnt_allowed() {
-    // req:orchestrator.loop/build-wait@838b1759
+    // req:orchestrator.loop/build-wait@e3016092
     let fx = Fixture::new();
     let started = Instant::now();
     for bad in [10.0, 0.0, -1.0, f64::NAN, 7.1] {
@@ -93,7 +93,7 @@ fn an_interval_that_isnt_allowed() {
 
 #[test]
 fn a_failed_fetch_is_reported_and_waiting_goes_on() {
-    // req:orchestrator.loop/build-wait@838b1759
+    // req:orchestrator.loop/build-wait@e3016092
     let fx = Fixture::new();
     // A 0.05-minute interval fetches at the first poll; the remote is gone.
     clm_git::git(&fx.work, &["remote", "set-url", "origin", "/nonexistent"]).unwrap();
@@ -106,9 +106,53 @@ fn a_failed_fetch_is_reported_and_waiting_goes_on() {
 
 #[test]
 fn a_stop_asked_for_earlier_wakes_once_nothing_runs() {
-    // req:orchestrator.loop/build-wait@838b1759
+    // req:orchestrator.loop/build-wait@e3016092
     let fx = Fixture::new();
     stop(&fx.options(), StopMode::Drain).unwrap();
     let why = wait(&fx.options(), 5.0).unwrap();
     assert!(why.contains("drain"), "{why}");
+}
+
+fn running_build_a(fx: &Fixture) {
+    fx.add_run(common::run(
+        "build:a",
+        clm_loop::Kind::Build,
+        "sonnet",
+        clm_loop::RunState::Running,
+        Some("t-1"),
+    ));
+}
+
+#[test]
+fn a_build_lands() {
+    // req:orchestrator.loop/build-wait@e3016092
+    let fx = Fixture::new();
+    running_build_a(&fx);
+    let rx = waiting(&fx, 5.0);
+    thread::sleep(Duration::from_millis(700));
+    assert!(rx.try_recv().is_err(), "the claim is live, so it sleeps");
+
+    // As `clm land impl/a` run in the clone leaves `origin/main` and `origin/impl/a`.
+    let landed = std::process::Command::new(fx.fake.join("clm"))
+        .args(["land", "impl/a"])
+        .current_dir(&fx.work)
+        .status()
+        .unwrap();
+    assert!(landed.success());
+
+    let why = rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
+    assert!(why.contains("build:a"), "{why}");
+}
+
+#[test]
+fn a_claim_already_gone_wakes_before_any_housekeeping() {
+    // req:orchestrator.loop/build-wait@e3016092
+    let fx = Fixture::new();
+    running_build_a(&fx);
+    fx.drop_claim("a");
+
+    let why = wait(&fx.options(), 5.0).unwrap();
+
+    assert!(why.contains("build:a"), "{why}");
+    assert_eq!(fx.ran("wrap-up"), 0, "the wrap-up would remove the branch");
 }
