@@ -52,6 +52,13 @@ impl Status {
 fn clm(dir: &Path, args: &[&str]) -> Out {
     let (name, rest) = args.split_first().unwrap();
     assert_eq!(*name, "unreferenced");
+    // The binary ran with git's own config isolated; the call's `git` inherits this process's
+    // environment, so the test sets it here. Safe: the tests run one per process
+    // (`ci/nextest-runner`), and every call sets the same values.
+    unsafe {
+        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
+        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
+    }
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let status = clm_unreferenced::command(
         rest.iter().copied(),
