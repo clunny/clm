@@ -23,7 +23,11 @@ pub struct Args {
 
 /// The parser of `clm context` alone.
 #[derive(Parser)]
-#[command(name = "clm context", no_binary_name = true)]
+#[command(
+    name = "clm context",
+    no_binary_name = true,
+    about = "Print the context bundle an agent needs for a component, its ancestors' specs among it."
+)]
 struct Line {
     #[command(flatten)]
     args: Args,

@@ -1027,11 +1027,11 @@ fn dispatch() -> ExitCode {
             print_view(result, &mut std::io::stdout(), &mut std::io::stderr())
         }
         Command::Context(args) => ExitCode::from(clm_context::command(
-            std::env::args_os().skip(2),
-            &repo_root(args.root),
+            command_args(),
+            &found_root(&args.root),
             &clm_config::process_env,
-            &mut Stdout(std::io::stdout().lock()),
-            &mut std::io::stderr(),
+            &mut Printed::Out,
+            &mut Printed::Err,
         )),
         Command::Upgrade {
             apply,
