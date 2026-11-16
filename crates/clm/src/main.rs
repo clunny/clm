@@ -91,13 +91,7 @@ enum Command {
     Apply(clm_apply::ApplyArgs),
     /// Carry out the renames a proposed change records: its deltas, applied, with every
     /// reference re-pointed, and the change archived as done.
-    Rename {
-        /// Change ID (directory name under changes/).
-        change: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Rename(clm_rename::RenameArgs),
     /// Move a done or abandoned change to changes/archive/.
     Archive(clm_apply::ArchiveArgs),
     Backlog(clm_check::BacklogArgs),
@@ -545,16 +539,13 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Rename { change, root } => match clm_rename::rename(&repo_root(root), &change) {
-            Ok(lines) => {
-                lines.iter().for_each(|line| println!("{line}"));
-                ExitCode::SUCCESS
-            }
-            Err(failure) => {
-                eprintln!("{failure}");
-                ExitCode::from(failure.exit_code())
-            }
-        },
+        Command::Rename(args) => ExitCode::from(clm_rename::rename_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Archive(args) => ExitCode::from(clm_apply::archive_command(
             command_args(),
             &found_root(&args.root),
