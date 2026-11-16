@@ -6,7 +6,12 @@ use std::path::{Path, PathBuf};
 
 pub use clm_model::Violation;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod command;
 mod policy;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use command::{Args, command};
 
 pub use clm_fingerprint::{
     Entry, added_changes, adds_change, fingerprint, fingerprint_of, parse_ls_tree,

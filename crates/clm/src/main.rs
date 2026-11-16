@@ -147,18 +147,7 @@ enum Command {
     /// Print a component's element hashes, for recording as delta bases.
     Hashes(clm_apply::HashesArgs),
     /// Decide whether HEAD may merge into a base ref; exit 1 to block.
-    Gate {
-        /// Base ref the PR merges into.
-        #[arg(long)]
-        base: String,
-        /// The ledger holds an approval of this diff that the policy accepts. `clm land` sets it
-        /// from the ledger; passing it by hand only skips `gate/approval`.
-        #[arg(long)]
-        approved: bool,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Gate(clm_gate::Args),
     /// List the components ready to build from origin/main, most urgent first.
     Next(clm_orchestrator::NextArgs),
     /// Claim a component by pushing its impl/<component> branch, or a backlog item by pushing
@@ -759,31 +748,13 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Gate {
-            base,
-            approved,
-            root,
-        } => match clm_gate::evaluate_at(&repo_root(root), &base, "HEAD", approved) {
-            Ok(outcome) => {
-                if outcome.review {
-                    println!("{} review", outcome.kind);
-                } else {
-                    println!("{}", outcome.kind);
-                }
-                for v in &outcome.violations {
-                    println!("{}", clm_check::format(v));
-                }
-                if outcome.violations.is_empty() {
-                    ExitCode::SUCCESS
-                } else {
-                    ExitCode::FAILURE
-                }
-            }
-            Err(e) => {
-                eprintln!("clm gate: {e}");
-                ExitCode::from(2)
-            }
-        },
+        Command::Gate(args) => ExitCode::from(clm_gate::command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Next(args) => {
             let root = repo_root(args.root.clone());
             let max_builds = clm_config::load(Some(&root), &clm_config::process_env)
