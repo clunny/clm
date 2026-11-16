@@ -21,3 +21,7 @@ choices:
 **Six guide tests** (`crates/clm/tests/guide.rs`, `init/guide-command`, `init/guide-table-from-files`, `init/guide-constraints-page`) would move with no other change: `clm-init`'s call proves them (`crates/clm-init/tests/command.rs` runs `clm guide`'s call). But the root's `crates/clm/tests/doc_readers.rs` (`the_guides_readers`, `the_spec_formats_readers`) asserts that `crates/clm/tests/guide.rs` holds the `clm:reads` markers of `docs/guide/**` and `docs/spec-format.md`, and an `impl/init` build may not change that file (`land/build-holds-own-files`). Once the root's test names `crates/clm-init/tests/guide.rs` instead, or either path, `init`'s next build moves them.
 
 What is needed: for the eleven, a spec change saying where each scenario is proven once `clm/routes-only` holds, as `backlog/two-config-tests-run-other-components-commands.md` was answered (a scenario only a `clm` process can show is the root's); for the six, the root's edit to `doc_readers.rs`.
+
+## The human's answer (2026-11-15)
+
+The first choice. The eleven tests of another component's command on what `clm init` wrote are the root's: the batched spec change that follows the build run moves their scenarios into requirements of the root, or names the capability test that already shows one (`commands-live-in-their-crates`). For the six guide tests, a small code branch makes the root's `doc_readers.rs` name `crates/clm-init/tests/guide.rs`; `init`'s next build then moves them.
