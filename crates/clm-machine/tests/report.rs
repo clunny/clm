@@ -142,6 +142,11 @@ fn scenario_room_against_the_builds() {
     assert_eq!(room(20), Some(2));
     assert_eq!(room(2), Some(0));
     assert_eq!(room(100), Some(12));
+    // The JSON output carries it.
+    let mut r = readings();
+    r.disk = space(100 * GIB, 20 * GIB);
+    let json = clm_machine::json(&judged(&r, &rec, &["a", "b"], 3));
+    assert_eq!(json["disk"]["room"], 2);
     // A peak of 0 gives no room, as no peak does.
     let mut r = readings();
     r.disk = space(100 * GIB, 50 * GIB);
