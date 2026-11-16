@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
-use crate::{Error, Lookup, RunError};
+use crate::{Env, Error, RunError};
 
 /// `clm run`'s arguments, which `crates/clm`'s parser reads too.
 #[derive(clap::Args, Debug)]
@@ -87,7 +87,7 @@ pub fn run_command<I, T>(
     args: I,
     root: &Path,
     cwd: &Path,
-    env: Lookup,
+    env: Env,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8
@@ -121,7 +121,7 @@ pub fn setup_command<I, T>(
     args: I,
     root: &Path,
     cwd: &Path,
-    env: Lookup,
+    env: Env,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8
@@ -143,7 +143,7 @@ pub fn superpowers_command<I, T>(
     args: I,
     _root: &Path,
     cwd: &Path,
-    env: Lookup,
+    env: Env,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> u8

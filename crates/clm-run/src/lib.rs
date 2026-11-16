@@ -25,7 +25,7 @@ pub use command::{
 };
 
 /// The environment a call reads, as a lookup of one variable's value.
-pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
+pub type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// The branch a node's claim and build live on is `impl/<node>`.
 const BRANCH_PREFIX: &str = "impl/";
@@ -675,7 +675,7 @@ fn listing_owned(items: &[String], conjunction: &str, quote: bool) -> String {
 
 /// The path of `skill`'s `SKILL.md` in the pinned superpowers copy builds follow, with the
 /// environment `env` names and a relative `$CLM_SUPERPOWERS_DIR` read from `cwd`.
-fn superpowers_skill(skill: &str, cwd: &Path, env: Lookup) -> Result<String, Error> {
+fn superpowers_skill(skill: &str, cwd: &Path, env: Env) -> Result<String, Error> {
     // One plain name, so it can't escape `skills/`; checked before anything is fetched.
     let mut parts = Path::new(skill).components();
     if !matches!(
@@ -709,7 +709,7 @@ fn superpowers_skill(skill: &str, cwd: &Path, env: Lookup) -> Result<String, Err
 /// command prints is passed through to `out` and `err` as it comes.
 pub fn setup(
     root: &Path,
-    env: Lookup,
+    env: Env,
     out: &mut dyn Write,
     err: &mut dyn Write,
 ) -> Result<String, Error> {
@@ -731,24 +731,46 @@ pub fn setup(
         .map_err(cant_run)?;
     let (tx, rx) = std::sync::mpsc::channel();
     if let Some(pipe) = child.stdout.take() {
-        pump(pipe, false, tx.clone());
+        pump(pipe, 0, tx.clone());
     }
     if let Some(pipe) = child.stderr.take() {
-        pump(pipe, true, tx);
+        pump(pipe, 1, tx.clone());
     }
-    // Ends once both pipes have closed. A stream that fails is written to no more, and the
-    // pipes are still drained, so the command never blocks on a full one.
+    std::thread::spawn(move || {
+        let _ = tx.send(Piped::Ended(child.wait()));
+    });
+    // Until `sh` ends, and then until both pipes close, or for a moment more when a process
+    // the command left running in the background still holds one, so it never holds up
+    // `clm setup`. A stream that fails is written to no more, and the pipes are still
+    // drained, so the command never blocks on a full one.
     let mut streams: [(&mut dyn Write, bool); 2] = [(out, true), (err, true)];
-    for (to_err, bytes) in rx {
-        let (stream, ok) = &mut streams[usize::from(to_err)];
-        if *ok {
-            *ok = stream
-                .write_all(&bytes)
-                .and_then(|()| stream.flush())
-                .is_ok();
+    let (mut ended, mut closed) = (None, 0);
+    while ended.is_none() || closed < 2 {
+        let next = match ended {
+            None => rx.recv().ok(),
+            Some(_) => rx.recv_timeout(std::time::Duration::from_millis(200)).ok(),
+        };
+        match next {
+            Some(Piped::Bytes(i, bytes)) => {
+                let (stream, ok) = &mut streams[i];
+                if *ok {
+                    *ok = stream
+                        .write_all(&bytes)
+                        .and_then(|()| stream.flush())
+                        .is_ok();
+                }
+            }
+            Some(Piped::Closed) => closed += 1,
+            Some(Piped::Ended(status)) => ended = Some(status),
+            None => break,
         }
     }
-    let status = child.wait().map_err(cant_run)?;
+    let status = match ended {
+        Some(status) => status,
+        // Every sender is gone without the end: only the waiter's panic does that.
+        None => Err(std::io::Error::other("lost the command's exit status")),
+    }
+    .map_err(cant_run)?;
     if status.success() {
         return Ok(String::new());
     }
@@ -763,20 +785,35 @@ pub fn setup(
     )))
 }
 
-/// Sends what `pipe` yields to `tx`, tagged with whether it is standard error, until it
-/// closes.
+/// What `setup` hears from its command: output on stream `0` (stdout) or `1` (stderr), a
+/// pipe that closed, or how `sh` ended.
+enum Piped {
+    Bytes(usize, Vec<u8>),
+    Closed,
+    Ended(std::io::Result<std::process::ExitStatus>),
+}
+
+/// Sends what `pipe` yields to `tx` as stream `i`'s, then that it closed.
 fn pump(
     mut pipe: impl std::io::Read + Send + 'static,
-    to_err: bool,
-    tx: std::sync::mpsc::Sender<(bool, Vec<u8>)>,
+    i: usize,
+    tx: std::sync::mpsc::Sender<Piped>,
 ) {
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
-        while let Ok(n @ 1..) = pipe.read(&mut buf) {
-            if tx.send((to_err, buf[..n].to_vec())).is_err() {
-                break;
+        loop {
+            match pipe.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if tx.send(Piped::Bytes(i, buf[..n].to_vec())).is_err() {
+                        return;
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => break,
             }
         }
+        let _ = tx.send(Piped::Closed);
     });
 }
 
@@ -801,7 +838,7 @@ fn signal(_: &std::process::ExitStatus) -> Option<i32> {
 pub fn run(
     root: &Path,
     cwd: &Path,
-    env: Lookup,
+    env: Env,
     node: &str,
     expiry_hours: u64,
     review_model: Option<&str>,
@@ -1345,15 +1382,15 @@ fn diff_text(old: &str, new: &str) -> Result<String, Error> {
         .collect())
 }
 
-/// Superpowers at the pin, from `$CLM_SUPERPOWERS_DIR`, read from `cwd` when relative, or
-/// the cache, fetching it once.
-fn superpowers_dir(cwd: &Path, env: Lookup) -> Result<PathBuf, Error> {
+/// Superpowers at the pin, from `$CLM_SUPERPOWERS_DIR` or the cache, fetching it once; a
+/// relative directory the environment names is read from `cwd`.
+fn superpowers_dir(cwd: &Path, env: Env) -> Result<PathBuf, Error> {
     if let Some(dir) = env("CLM_SUPERPOWERS_DIR").filter(|d| !d.is_empty()) {
         return Ok(cwd.join(dir));
     }
     let cache = match (env("XDG_CACHE_HOME"), env("HOME")) {
-        (Some(xdg), _) if !xdg.is_empty() => PathBuf::from(xdg),
-        (_, Some(home)) => Path::new(&home).join(".cache"),
+        (Some(xdg), _) if !xdg.is_empty() => cwd.join(xdg),
+        (_, Some(home)) => cwd.join(home).join(".cache"),
         _ => {
             return Err(Error::Refused(
                 "neither XDG_CACHE_HOME nor HOME is set".into(),

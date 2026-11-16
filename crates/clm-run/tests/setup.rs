@@ -134,3 +134,21 @@ fn scenario_unreadable_settings() {
     );
     assert!(text(&out.stdout).is_empty());
 }
+
+#[test]
+fn a_process_left_in_the_background_holds_up_nothing() {
+    // req:orchestrator.run/setup-command@fdb7c407
+    // The background `sleep` keeps the command's standard output and error open long after
+    // `sh` has ended.
+    let r = repo("[build]\nsetup = \"sleep 30 & echo started\"\n");
+    let began = std::time::Instant::now();
+    let out = clm_setup(r.path());
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    assert!(
+        text(&out.stdout).contains("started"),
+        "{}",
+        text(&out.stdout)
+    );
+    let took = began.elapsed();
+    assert!(took < std::time::Duration::from_secs(10), "{took:?}");
+}
