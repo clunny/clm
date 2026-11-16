@@ -16,3 +16,7 @@ choices:
 - `scenario_from_a_subdirectory_of_a_project_without_clm` (scenario "from a subdirectory of a project without CLM" of `check.unreferenced/report`) runs `clm unreferenced` from `crates/a/src`. The root it scans is the one `crates/clm` finds from the current directory (`survey_root`, the root's `init-finds-its-repository`), and the call takes that root as given, so the crate's call can't observe it. The root's Design lists "the directory it ran in" among what a moved test sets on its own process, but here the directory decides only the root `crates/clm` finds, not anything the crate reads: a moved test would pass the subdirectory as the root and assert paths the crate never gives from it.
 
 What is needed: say where each of these two scenarios is proven once `clm/routes-only` holds, and whether `check.unreferenced/report` keeps them or they move to the root's or `check`'s requirements, a spec change.
+
+## The human's answer (2026-11-15)
+
+The first choice: the two scenarios become the root's. A scenario that only a `clm` process can show is the root's to prove, since the root keeps the binary (`commands-live-in-their-crates`). One spec change, made when the build run has drained, moves every such scenario word for word into requirements of the root, these two with those of the other items of this kind; it then deletes this item, and the root's next build re-cites the tests where they stand. Until then the tests stay as they are.

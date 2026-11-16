@@ -16,3 +16,7 @@ choices:
 - `unreferenced_is_clean_with_the_allow_list` (scenario "clean with the list" of `config/unreferenced-detector`) runs `clm unreferenced` with this repository's allow-list; the scenario names "the `clm` binary under test".
 
 Both requirements also say their tests "SHALL live in `crates/clm/tests/cli.rs`", which the root's Design overrides for `commands-in-crate`. What is needed: a spec change saying where each scenario is proven once `clm/routes-only` holds, such as keeping them as the root's tests of this repository's detectors, or rewording the scenarios so `config`'s crate can observe them.
+
+## The human's answer (2026-11-15)
+
+The first choice: the two scenarios become the root's. A scenario that only a `clm` process can show is the root's to prove, since the root keeps the binary (`commands-live-in-their-crates`). One spec change, made when the build run has drained, moves every such scenario word for word into requirements of the root, these two with those of the other items of this kind; it then deletes this item, and the root's next build re-cites the tests where they stand. Until then the tests stay as they are.
