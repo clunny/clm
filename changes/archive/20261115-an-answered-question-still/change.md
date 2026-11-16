@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [an-answered-question-still-shows-as-waiting-on-the-human]
 ---
 
