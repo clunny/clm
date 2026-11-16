@@ -106,6 +106,85 @@ fn node_a(clm_toml: &str) -> (TempDir, std::path::PathBuf) {
     (dir, work)
 }
 
+/// `clm rebase` run as a process in `dir` with no user `config.toml` to load: `HOME` and
+/// `XDG_CONFIG_HOME` name an empty directory, and `TMPDIR` another, whose path stdout is
+/// returned beside.
+fn rebase_without_user_settings(dir: &Path) -> (Output, String) {
+    let home = TempDir::new().unwrap();
+    let tmp = TempDir::new().unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
+        .arg("rebase")
+        .current_dir(dir)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", home.path())
+        .env("XDG_CONFIG_HOME", home.path())
+        .env("TMPDIR", tmp.path())
+        .output()
+        .unwrap();
+    (out, tmp.path().to_string_lossy().into_owned())
+}
+
+#[test]
+fn scenario_settings_that_cant_be_loaded() {
+    // req:clm/rebase-settings@01f11df1
+    let (_dir, work) = node_a("[component_size]\nspec_tokens = 0\n");
+    git(&work, &["checkout", "-q", "-b", "spec/x"]);
+    assert!(!work.join("clm.local.toml").exists());
+    let (out, tmp) = rebase_without_user_settings(&work);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let first = stdout.lines().next().unwrap_or_default();
+    let (source, rest) = first
+        .split_once(": check.health/health-report: ")
+        .unwrap_or_else(|| panic!("{out:?}"));
+    // The source is the path of `clm.toml` in the repository, relative to its root.
+    assert!(Path::new(source).is_relative(), "{out:?}");
+    assert_eq!(
+        work.join(source).canonicalize().unwrap(),
+        work.join("clm.toml").canonicalize().unwrap(),
+        "{out:?}"
+    );
+    assert!(rest.contains("component_size"), "{out:?}");
+    assert!(!first.contains(&tmp), "{out:?}");
+}
+
+#[test]
+fn scenario_the_repositorys_reconsider_threshold() {
+    // req:clm/rebase-settings@01f11df1
+    let (_dir, work) = node_a("[health]\nreconsider = 2\n");
+    write(
+        &work,
+        "specs/a/SPEC.md",
+        "---\ntitle: A\nstatus: active\nowners: []\npaths: [\"src/a/**\"]\n---\n\n\
+         ## Contract\nc\n\n## Requirements\n\n### Requirement: x\nIt SHALL x.\n\n\
+         #### Scenario: s\n- ok\n",
+    );
+    let graph = clm_model::load(&work).0;
+    let version = graph.requirement("a/x").unwrap().version().to_string();
+    for n in 1..=2 {
+        write(
+            &work,
+            &format!("backlog/workaround-a-x-{n}.md"),
+            &format!(
+                "---\ntitle: \"Hard {n}\"\nkind: workaround\ncomponents: [a]\n\
+                 requirement: a/x@{version}\n---\n\nHard.\n"
+            ),
+        );
+    }
+    commit(&work, "two flags");
+    assert!(!work.join("clm.local.toml").exists());
+
+    // Two flags reach the repository's threshold of 2, under the default of 3.
+    let (out, _) = rebase_without_user_settings(&work);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout
+            .lines()
+            .any(|l| l == "filed backlog/reconsider-a-x.md"),
+        "{out:?}"
+    );
+}
+
 #[test]
 fn scenario_a_skipped_proposals_warning_names_the_command_as_run() {
     // req:clm/rebase-warnings-prefixed@8240fcd8
