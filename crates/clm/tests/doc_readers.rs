@@ -96,17 +96,29 @@ fn the_readers_of_clm_toml() {
     }
 }
 
+/// The tests of `clm guide` read the guide's pages and the spec format. They sit in the root's
+/// `guide.rs` until `init`'s build moves them into its own crate (`commands-live-in-their-crates`),
+/// so either file counts, and one of them must be selected.
+fn the_guide_tests_are(selected: &[String]) -> bool {
+    [
+        "crates/clm/tests/guide.rs",
+        "crates/clm-init/tests/guide.rs",
+    ]
+    .iter()
+    .any(|file| selected.contains(&file.to_string()))
+}
+
 #[test]
 fn the_guides_readers() {
     // req:clm/doc-readers-marked@3125f2de
     let selected = readers(&differing(&["docs/guide/glossary.md"]), &markers());
     for file in [
         "crates/clm/tests/glossary.rs",
-        "crates/clm/tests/guide.rs",
         "crates/clm/tests/retired_terms.rs",
     ] {
         assert!(selected.contains(&file.to_string()), "{selected:?}");
     }
+    assert!(the_guide_tests_are(&selected), "{selected:?}");
 }
 
 #[test]
@@ -114,12 +126,12 @@ fn the_spec_formats_readers() {
     // req:clm/doc-readers-marked@3125f2de
     let selected = readers(&differing(&["docs/spec-format.md"]), &markers());
     for file in [
-        "crates/clm/tests/guide.rs",
         "crates/clm/tests/retired_terms.rs",
         "crates/clm-init/src/guide.rs",
     ] {
         assert!(selected.contains(&file.to_string()), "{selected:?}");
     }
+    assert!(the_guide_tests_are(&selected), "{selected:?}");
 }
 
 #[test]
