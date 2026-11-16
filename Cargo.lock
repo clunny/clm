@@ -745,13 +745,16 @@ dependencies = [
 name = "clm-view-repo"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-check",
  "clm-git",
  "clm-loop",
  "clm-model",
  "clm-orchestrator",
  "clm-view",
+ "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]

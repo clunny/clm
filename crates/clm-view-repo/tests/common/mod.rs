@@ -15,7 +15,8 @@ pub fn specd(deps: &str, reqs: &[&str]) -> String {
     s
 }
 
-/// `s` with its ANSI escapes removed.
+/// `s` with its ANSI escapes removed; not every test file that shares these uses it.
+#[allow(dead_code)]
 pub fn strip_ansi(s: &str) -> String {
     let mut out = String::new();
     let mut chars = s.chars();

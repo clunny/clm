@@ -41,9 +41,24 @@ fn the_command_compares_the_checkout_with_the_remotes_main() {
     git(root, &["update-ref", &main, &ahead]);
     git(root, &["reset", "-q", "--hard", &head]);
 
-    let out = clm_view_repo::view(root, Name::Spec, Format::Ansi, 100, Source::Tree(None)).unwrap();
-    let text =
-        clm_view_repo::view(root, Name::Spec, Format::Text, 100, Source::Tree(None)).unwrap();
+    let out = clm_view_repo::view(
+        root,
+        Name::Spec,
+        Format::Ansi,
+        100,
+        Source::Tree(None),
+        &mut Vec::new(),
+    )
+    .unwrap();
+    let text = clm_view_repo::view(
+        root,
+        Name::Spec,
+        Format::Text,
+        100,
+        Source::Tree(None),
+        &mut Vec::new(),
+    )
+    .unwrap();
     let out = common::strip_ansi(&out);
     assert_eq!(out, text);
     let lines: Vec<&str> = out.lines().collect();
@@ -65,7 +80,8 @@ fn the_command_compares_the_checkout_with_the_remotes_main() {
         rev: &rev,
         budgets: None,
     };
-    let at = clm_view_repo::view(root, Name::Spec, Format::Ansi, 100, source).unwrap();
+    let at =
+        clm_view_repo::view(root, Name::Spec, Format::Ansi, 100, source, &mut Vec::new()).unwrap();
     let at = common::strip_ansi(&at);
     let at_lines: Vec<&str> = at.lines().collect();
     assert!(
