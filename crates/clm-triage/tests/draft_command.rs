@@ -1,13 +1,16 @@
-//! `clm draft` with a fake `claude` on PATH: it claims backlog items and prints the prompt
-//! for an unattended proposing session, and starts no session.
+//! `clm draft` and `clm triage` as `clm-triage`'s calls
+//! (`orchestrator.triage/commands-in-crate`), with a fake `claude` on PATH: `clm draft` claims
+//! backlog items and prints the prompt for an unattended proposing session, and starts no
+//! session. These tests ran the `clm` binary until they moved here to call the crate.
 
 #[path = "../../clm-orchestrator/tests/common/mod.rs"]
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use clm_triage::DraftSettings;
 use common::*;
 use tempfile::TempDir;
 
@@ -42,30 +45,78 @@ fn clm_draft(r: &Repo, f: &Fake, slugs: &[&str]) -> Ran {
     clm_draft_env(r, f, slugs, &[])
 }
 
-/// `clm draft <args>...` with `env` set, the user's settings out of reach.
+/// `clm draft <args>... --root <work>` as `clm-triage`'s call, with `env` set. `PATH` and
+/// `FAKE_OUT` are set on this process for the length of the call, since `git` and the programs
+/// the call starts inherit the process's environment, not the lookup.
 fn clm_draft_env(r: &Repo, f: &Fake, args: &[&str], env: &[(&str, &str)]) -> Ran {
     let path = format!(
         "{}:{}",
         f.bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let out = output(
-        Command::new(env!("CARGO_BIN_EXE_clm"))
-            .arg("draft")
-            .args(args)
-            .arg("--root")
-            .arg(&r.work)
-            .current_dir(&r.work)
-            .env("PATH", path)
-            .env("FAKE_OUT", &f.out)
-            .env("XDG_CONFIG_HOME", r.work.join(".no-config"))
-            .envs(env.iter().copied()),
-    );
+    let root = r.work.display().to_string();
+    let args: Vec<&str> = args.iter().copied().chain(["--root", &root]).collect();
+    let out = f.out.display().to_string();
+    with_var("PATH", &path, || {
+        with_var("FAKE_OUT", &out, || {
+            draft_call(&args, &r.work, &r.work, env)
+        })
+    })
+}
+
+/// `clm-triage`'s `clm draft` call with `args`, `root` as `crates/clm` finds it, run in `cwd`,
+/// with `env` ahead of the process's environment and the settings `crates/clm` would load
+/// there: `max_builds` from `CLM_MAX_BUILDS` (default 3) and `[build] setup` from the root's
+/// `clm.toml`.
+fn draft_call(args: &[&str], root: &Path, cwd: &Path, env: &[(&str, &str)]) -> Ran {
+    let lookup = |name: &str| {
+        env.iter()
+            .find(|(k, _)| *k == name)
+            .map(|(_, v)| v.to_string())
+            .or_else(|| std::env::var(name).ok())
+    };
+    let max_builds = env
+        .iter()
+        .find(|(k, _)| *k == "CLM_MAX_BUILDS")
+        .map_or(3, |(_, v)| v.parse().unwrap());
+    let setup = fs::read_to_string(root.join("clm.toml"))
+        .ok()
+        .and_then(|t| {
+            t.lines().find_map(|l| {
+                l.strip_prefix("setup = ")
+                    .map(|v| v.trim_matches('"').to_string())
+            })
+        });
+    let settings = Ok(DraftSettings { setup, max_builds });
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::draft_command(args, root, cwd, &lookup, settings, &mut out, &mut err);
     Ran {
-        code: out.status.code(),
-        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        code: Some(code.into()),
+        stdout: String::from_utf8(out).unwrap(),
+        stderr: String::from_utf8(err).unwrap(),
     }
+}
+
+/// Sets `name` to `value` on this process for the length of `run`: `git` and the commands
+/// the call starts inherit the process's environment, not the lookup. The tests run one per
+/// process (`ci/nextest-runner`), so no other test sees it. The old value comes back when
+/// `run` returns or panics.
+fn with_var<R>(name: &str, value: &str, run: impl FnOnce() -> R) -> R {
+    struct Restore<'a>(&'a str, Option<std::ffi::OsString>);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            match self.1.take() {
+                // SAFETY: one test per process; nothing else reads the environment meanwhile.
+                Some(old) => unsafe { std::env::set_var(self.0, old) },
+                // SAFETY: as above.
+                None => unsafe { std::env::remove_var(self.0) },
+            }
+        }
+    }
+    let _restore = Restore(name, std::env::var_os(name));
+    // SAFETY: as above.
+    unsafe { std::env::set_var(name, value) };
+    run()
 }
 
 /// The repo with component `check` (requirement `x`), bug `a` (`components: [check]`, `P3`,
@@ -855,23 +906,29 @@ fn scenario_no_place_no_release() {
 fn clm_triage_prints_the_lines_and_exits_0() {
     // req:orchestrator.triage/triage@756e5c04
     let triage = |root: &std::path::Path| {
-        output(
-            Command::new(env!("CARGO_BIN_EXE_clm"))
-                .args(["triage", "--expiry", "4", "--root"])
-                .arg(root),
-        )
+        let root = root.display().to_string();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = clm_triage::triage_command(
+            ["--expiry", "4", "--root", &root],
+            Path::new("."),
+            Path::new("."),
+            &|_| None,
+            &mut out,
+            &mut err,
+        );
+        (Some(i32::from(code)), String::from_utf8(out).unwrap())
     };
     let r = with_items();
-    let out = triage(&r.work);
-    assert_eq!(out.status.code(), Some(0));
+    let (code, stdout) = triage(&r.work);
+    assert_eq!(code, Some(0));
     assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
+        stdout,
         "group bug:check [check] P3 1 a\ngroup bug: [] P5 0 b\n"
     );
     let empty = repo();
-    let out = triage(&empty.work);
-    assert_eq!(out.status.code(), Some(0));
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "");
+    let (code, stdout) = triage(&empty.work);
+    assert_eq!(code, Some(0));
+    assert_eq!(stdout, "");
 }
 
 #[test]
@@ -896,22 +953,18 @@ fn clm_draft_reads_relative_answers_from_where_it_runs() {
 #[test]
 fn clm_draft_reads_answers_from_a_subdirectory_it_runs_in() {
     // req:orchestrator.triage/draft-answers@3e3fc364
-    // With no `--root`, `clm` finds the repository above the subdirectory; a relative
-    // path is still read against the subdirectory.
+    // With no `--root`, `clm` finds the repository above the subdirectory, and passes it as
+    // the root with the subdirectory as the directory the call runs in; a relative path is
+    // still read against the subdirectory.
     let r = with_items();
     write(&r.work, "sub/answers.md", "b: from the subdirectory\n");
     write(&r.work, "answers.md", "b: from the root\n");
-    let out = output(
-        Command::new(env!("CARGO_BIN_EXE_clm"))
-            .args(["draft", "--answers", "answers.md", "b"])
-            .current_dir(r.work.join("sub"))
-            .env("XDG_CONFIG_HOME", r.work.join(".no-config")),
+    let ran = draft_call(
+        &["--answers", "answers.md", "b"],
+        &r.work,
+        &r.work.join("sub"),
+        &[],
     );
-    let ran = Ran {
-        code: out.status.code(),
-        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
-    };
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     let p = prompt_of(&r, &ran);
     assert!(p.contains("b: from the subdirectory"), "{p}");

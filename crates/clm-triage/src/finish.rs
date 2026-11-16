@@ -21,6 +21,18 @@ use crate::{Error, fetch_origin};
 /// locally and on `origin` with `autosync/spec/<change>`. Returns what it did, one line
 /// each.
 pub fn finish(root: &Path, change: &str, expiry_hours: u64) -> Result<String, Error> {
+    let here = env::current_dir().unwrap_or_default();
+    finish_in(root, change, expiry_hours, &here)
+}
+
+/// [`finish`] run in `here`, the directory the command runs in, whose worktree is the
+/// orchestrating session's own and never removed.
+pub(crate) fn finish_in(
+    root: &Path,
+    change: &str,
+    expiry_hours: u64,
+    here: &Path,
+) -> Result<String, Error> {
     let root = &root
         .canonicalize()
         .map_err(|e| Error::Refused(format!("{}: {e}", root.display())))?;
@@ -54,7 +66,7 @@ pub fn finish(root: &Path, change: &str, expiry_hours: u64) -> Result<String, Er
     };
     let ours = main.path.join(".claude/worktrees");
     // The worktree this runs in is the orchestrating session's own, never a draft's.
-    let here = env::current_dir().ok().and_then(|d| d.canonicalize().ok());
+    let here = here.canonicalize().ok();
     let own = |p: &Path| root.starts_with(p) || here.as_ref().is_some_and(|h| h.starts_with(p));
     let mut kept = false;
     for wt in &list[1..] {

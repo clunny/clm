@@ -162,55 +162,14 @@ enum Command {
     Proposals(clm_orchestrator::ProposalsArgs),
     /// Group the untaken backlog items into units of design work, beside the spec work on
     /// origin and the items waiting on the human, most urgent first.
-    Triage {
-        /// Hours without a commit after which a backlog claim lapses.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Triage(clm_triage::TriageArgs),
     /// Match the host's open issues and pull requests to the backlog: for each issue, whether
     /// an item takes it in, a landed change or fix resolved it, or it is new.
-    Intake {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Intake(clm_triage::IntakeArgs),
     /// Claim backlog items and write the prompt for a session that designs one change from
     /// them unattended, printing a launcher that names it, holding one of the clone's build
     /// places.
-    Draft {
-        /// The items' slugs, as a `clm triage` group line lists them; with `--fold`, the
-        /// change IDs to fold.
-        #[arg(
-            required_unless_present_any = ["finish", "resume"],
-            conflicts_with_all = ["finish", "resume"]
-        )]
-        slugs: Vec<String>,
-        /// Write the prompt for a session that continues the draft of this change, whose
-        /// session ended before it returned, from the spec branch it pushed.
-        #[arg(long, value_name = "CHANGE", conflicts_with_all = ["finish", "fold", "answers"])]
-        resume: Option<String>,
-        /// Finish the draft of this change, whose subagent has returned, instead of starting
-        /// one.
-        #[arg(long, value_name = "CHANGE")]
-        finish: Option<String>,
-        /// Write the prompt for one session that folds the changes needing review named as arguments
-        /// into one spec branch with one pull request, instead of drafting.
-        #[arg(long, conflicts_with = "finish")]
-        fold: bool,
-        /// A file of what the human said in the triage session, put into the draft's
-        /// prompt; a relative path is read against the current directory.
-        #[arg(long, value_name = "FILE", conflicts_with_all = ["finish", "fold"])]
-        answers: Option<PathBuf>,
-        /// Hours without a commit after which a backlog claim lapses.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Draft(clm_triage::DraftArgs),
     /// Run the clone's build loop: decide every step of draining the queue and print the
     /// actions the session carries out with the agent harness's subagents.
     Build {
@@ -737,140 +696,46 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Triage { expiry, root } => orchestrated(
-            "triage",
-            clm_triage::triage(&repo_root(root), expiry).map(|t| {
-                for warning in &t.warnings {
-                    eprintln!("clm triage: warning: {warning}");
-                }
-                t.lines.join("\n")
-            }),
-        ),
-        Command::Intake { root } => {
-            let root = repo_root(root);
-            match clm_config::load(Some(&root), &clm_config::process_env) {
-                Ok(settings) => orchestrated(
-                    "intake",
-                    clm_triage::intake(&root, &*clm_host::adapter(settings.host.value))
-                        .map(|lines| lines.join("\n")),
-                ),
-                Err(e) => {
-                    eprintln!("clm intake: {e}");
-                    ExitCode::from(2)
-                }
-            }
-        }
-        Command::Draft {
-            finish: Some(change),
-            expiry,
-            root,
-            ..
-        } => orchestrated(
-            "draft",
-            clm_triage::finish(&repo_root(root), &change, expiry),
-        ),
-        Command::Draft {
-            slugs: ids,
-            fold: true,
-            root,
-            ..
-        } => match clm_triage::fold(&repo_root(root), &ids) {
-            Ok(fold) => {
-                for (id, why) in &fold.left {
-                    eprintln!("left {id}: {why}");
-                }
-                match fold.launcher {
-                    Some(launcher) => orchestrated("draft", Ok(launcher)),
-                    None => ExitCode::FAILURE,
-                }
-            }
-            Err(e) => orchestrated("draft", Err(e)),
-        },
-        Command::Draft {
-            resume: Some(change),
-            expiry,
-            root,
-            ..
-        } => {
-            let root = repo_root(root);
-            let settings = match clm_config::load(Some(&root), &clm_config::process_env) {
-                Ok(s) => s,
-                Err(e) => {
-                    let e = clm_orchestrator::Error::Refused(format!("settings: {e}"));
-                    return orchestrated("draft", Err(e));
-                }
-            };
-            match clm_triage::resume(
+        Command::Triage(args) => ExitCode::from(clm_triage::triage_command(
+            command_args(),
+            &found_root(&args.root),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
+        Command::Intake(args) => {
+            let root = repo_root(args.root.clone());
+            let host = clm_config::load(Some(&root), &clm_config::process_env)
+                .map(|s| clm_host::adapter(s.host.value))
+                .map_err(|e| e.to_string());
+            ExitCode::from(clm_triage::intake_command(
+                command_args(),
                 &root,
-                &change,
-                settings.build.value.as_ref().map(|b| b.setup.as_str()),
-                settings.max_builds.value,
-                expiry,
-            ) {
-                Ok(d) => {
-                    let code = orchestrated("draft", Ok(d.launcher));
-                    eprintln!("draft {}", d.id);
-                    code
-                }
-                Err(clm_triage::DraftError::NoPlace(why)) => {
-                    eprintln!("clm draft: {why}");
-                    ExitCode::from(3)
-                }
-                Err(clm_triage::DraftError::Failed(e)) => orchestrated("draft", Err(e)),
-            }
+                &cwd,
+                &clm_config::process_env,
+                host,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
-        Command::Draft {
-            slugs,
-            finish: None,
-            answers,
-            expiry,
-            root,
-            ..
-        } => {
-            // Against the directory it runs in, before `repo_root` may move to the root.
-            let answers = answers.map(|a| std::path::absolute(&a).unwrap_or(a));
-            let root = repo_root(root);
-            let settings = match clm_config::load(Some(&root), &clm_config::process_env) {
-                Ok(s) => s,
-                Err(e) => {
-                    let e = clm_orchestrator::Error::Refused(format!("settings: {e}"));
-                    return orchestrated("draft", Err(e));
-                }
-            };
-            let clock = clm_triage::Clock {
-                now: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map_or(0, |d| d.as_secs()),
-                tz: std::env::var_os("TZ"),
-            };
-            match clm_triage::draft(
+        Command::Draft(args) => {
+            let root = repo_root(args.root.clone());
+            let settings = clm_config::load(Some(&root), &clm_config::process_env)
+                .map(|s| clm_triage::DraftSettings {
+                    setup: s.build.value.map(|b| b.setup),
+                    max_builds: s.max_builds.value,
+                })
+                .map_err(|e| e.to_string());
+            ExitCode::from(clm_triage::draft_command(
+                command_args(),
                 &root,
-                &slugs,
-                answers.as_deref(),
-                settings.build.value.as_ref().map(|b| b.setup.as_str()),
-                settings.max_builds.value,
-                expiry,
-                &clock,
-            ) {
-                Ok(draft) => {
-                    for (slug, why) in &draft.left {
-                        eprintln!("left {slug}: {why}");
-                    }
-                    match draft.drafted {
-                        Some(d) => {
-                            let code = orchestrated("draft", Ok(d.launcher));
-                            eprintln!("draft {}", d.id);
-                            code
-                        }
-                        None => ExitCode::FAILURE,
-                    }
-                }
-                Err(clm_triage::DraftError::NoPlace(why)) => {
-                    eprintln!("clm draft: {why}");
-                    ExitCode::from(3)
-                }
-                Err(clm_triage::DraftError::Failed(e)) => orchestrated("draft", Err(e)),
-            }
+                &cwd,
+                &clm_config::process_env,
+                settings,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
         Command::Build { action, root } => build(repo_root(root), cwd, action),
         Command::WrapUp(args) => ExitCode::from(clm_checkpoint::wrap_up_command(
@@ -1448,28 +1313,6 @@ fn survey_root(given: Option<PathBuf>) -> PathBuf {
         .ok()
         .filter(|top| !top.is_empty())
         .map_or_else(|| PathBuf::from("."), PathBuf::from)
-}
-
-/// Prints an orchestrator result: 0 on success, 1 when refused, 2 when git fails.
-fn orchestrated(cmd: &str, result: Result<String, clm_orchestrator::Error>) -> ExitCode {
-    use clm_orchestrator::Error;
-    match result {
-        Ok(text) => {
-            if !text.is_empty() {
-                println!("{text}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(Error::Refused(why)) => {
-            eprintln!("clm {cmd}: {why}");
-            ExitCode::FAILURE
-        }
-        Err(Error::Spec(violations)) => report(&violations),
-        Err(Error::Git(e)) => {
-            eprintln!("clm {cmd}: {e}");
-            ExitCode::from(2)
-        }
-    }
 }
 
 /// `clm <cmd>: <message>` on stderr, and the `Failure`'s exit code: 1 when `clm <cmd>`
