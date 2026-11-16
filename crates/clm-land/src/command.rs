@@ -100,7 +100,10 @@ where
         Err(code) => return code,
     };
     let root = args.root.as_deref().unwrap_or(root);
-    report("reconnect", crate::reconnect(root, env), out, err).unwrap_or(2)
+    let (done, err) = streamed(err, |stderr| {
+        crate::reconnect::reconnect_to(root, env, stderr)
+    });
+    report("reconnect", done, out, err).unwrap_or(2)
 }
 
 /// The parsed command line, or the exit status once the usage error (2, on `err`) or the help

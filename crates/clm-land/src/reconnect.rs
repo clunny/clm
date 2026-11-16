@@ -14,8 +14,12 @@ use crate::{Env, Error, Output, Repo};
 /// every local ledger branch. When `origin/main` moved, pushes only the ledgers and refuses,
 /// naming each local land's branch to land again.
 pub fn reconnect(root: &Path, env: &Env) -> Result<Output, Error> {
-    // It runs nothing that prints on stderr.
-    let repo = Repo::open(root, env, Stderr::PROCESS)?;
+    reconnect_to(root, env, Stderr::PROCESS)
+}
+
+/// As `reconnect`, writing what it prints on stderr while it runs to `err`.
+pub(crate) fn reconnect_to(root: &Path, env: &Env, err: Stderr) -> Result<Output, Error> {
+    let repo = Repo::open(root, env, err)?;
     if !repo.git(&["remote"])?.lines().any(|r| r == REMOTE) {
         return Err(Error::Refused(
             "no `origin`: add the remote, then reconnect".into(),

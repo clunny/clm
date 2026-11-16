@@ -73,6 +73,45 @@ fn a_command_called_in_a_test() {
 }
 
 #[test]
+fn what_the_gate_and_clm_check_print_reaches_the_error_stream() {
+    // req:land/commands-in-crate@6ed92c77
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    // The fixture's gate and `clm check`, saying something first.
+    let noisy = |name: &str, real: &str, say: &str| {
+        let path = f.path(name);
+        let script = format!(
+            "#!/bin/sh\n{say}\nexec '{}' \"$@\"\n",
+            f.path(real).display()
+        );
+        common::write_exec(&path, &script);
+        path.display().to_string()
+    };
+    let gate = noisy("noisy-gate", "bin/gate", "echo gate-said >&2");
+    let check = noisy(
+        "noisy-check",
+        "bin/clm-check",
+        "echo check-out; echo check-err >&2",
+    );
+    let out = land(
+        &f,
+        &f.work(),
+        &["impl/a"],
+        &[("CLM_GATE", &gate), ("CLM_CHECK", &check)],
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    assert_eq!(out.stdout, format!("landed {} code\n", f.remote("main")));
+    let lines: Vec<&str> = out.stderr.lines().collect();
+    assert!(lines.contains(&"gate-said"), "{}", out.stderr);
+    // Its stdout and its stderr both, in the order it wrote them.
+    let at = lines
+        .iter()
+        .position(|l| *l == "check-out")
+        .expect(&out.stderr);
+    assert_eq!(lines.get(at + 1), Some(&"check-err"), "{}", out.stderr);
+}
+
+#[test]
 fn the_root_option_overrides_the_root() {
     // req:land/commands-in-crate@6ed92c77
     let f = Fixture::new("");

@@ -190,13 +190,14 @@ mod tests {
         assert!(start.elapsed() >= Duration::from_millis(400));
         releaser.join().unwrap();
         let written = String::from_utf8(written.take()).unwrap();
-        // The waiting lines, then the check's own output.
-        let said: Vec<&str> = written.lines().filter(|l| *l != "ok").collect();
-        assert_eq!(said.len(), 1, "{said:?}");
+        // The one waiting line, then the check's own output.
+        let said: Vec<&str> = written.lines().collect();
+        assert_eq!(said.len(), 2, "{said:?}");
         assert!(
             said[0].starts_with("waiting for another check on ") && said[0].ends_with(": 1 ahead"),
             "{said:?}"
         );
+        assert_eq!(said[1], "ok", "{said:?}");
         assert!(run.passed);
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "ok\n");
     }

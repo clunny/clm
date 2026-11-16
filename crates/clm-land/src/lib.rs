@@ -185,10 +185,10 @@ impl<'a> Repo<'a> {
         if approved {
             args.push("--approved");
         }
-        let out = self.command(exe, "CLM_GATE", "gate", &args, dir).output()?;
-        self.err.bytes(&out.stderr);
-        let stdout = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
-        if !out.status.success() {
+        let command = self.command(exe, "CLM_GATE", "gate", &args, dir);
+        let (status, stdout) = stderr::run(command, self.err, false)?;
+        let stdout = String::from_utf8_lossy(&stdout).trim_end().to_string();
+        if !status.success() {
             let mut why = format!("the gate blocks the land:\n{stdout}");
             if stdout.contains("gate/approval") {
                 why.push('\n');
@@ -211,13 +211,10 @@ impl<'a> Repo<'a> {
     /// names it; refused as `` `clm check` <fails> `` when it fails.
     fn clm_check(&self, exe: &Path, dir: &Path, detectors: bool, fails: &str) -> Result<(), Error> {
         let args: &[&str] = if detectors { &[] } else { &["--no-detectors"] };
-        // What it prints goes to the land's stderr: its stdout first, then its stderr.
-        let out = self
-            .command(exe, "CLM_CHECK", "check", args, dir)
-            .output()?;
-        self.err.bytes(&out.stdout);
-        self.err.bytes(&out.stderr);
-        if !out.status.success() {
+        // All it prints goes to the land's stderr as it comes.
+        let command = self.command(exe, "CLM_CHECK", "check", args, dir);
+        let (status, _) = stderr::run(command, self.err, true)?;
+        if !status.success() {
             return Err(Error::Refused(format!("`clm check` {fails}")));
         }
         Ok(())
@@ -416,7 +413,6 @@ impl<'a> Repo<'a> {
     ) -> Result<Selected, String> {
         let out = self
             .command(exe, "CLM_AFFECTED", "affected", args, dir)
-            .stderr(Stdio::piped())
             .output()
             .map_err(|e| e.to_string())?;
         if !out.status.success() {
@@ -449,7 +445,6 @@ impl<'a> Repo<'a> {
                 &["--why", path, "--base", base],
                 dir,
             )
-            .stderr(Stdio::piped())
             .output()
             .map_err(|e| e.to_string())?;
         if !out.status.success() {
@@ -464,7 +459,7 @@ impl<'a> Repo<'a> {
     }
 
     /// The command `var` names, split on whitespace, else `exe`'s `sub`; with `args`, run in
-    /// `dir`, its stderr kept for the caller to pass on.
+    /// `dir`, its stderr piped: its caller reads it, or passes it on through `stderr::run`.
     fn command(&self, exe: &Path, var: &str, sub: &str, args: &[&str], dir: &Path) -> Command {
         let mut words: Vec<String> = match (self.env)(var).filter(|c| !c.trim().is_empty()) {
             Some(c) => c.split_whitespace().map(str::to_string).collect(),
