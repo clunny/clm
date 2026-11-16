@@ -1028,10 +1028,26 @@ fn the_proof_note_names_what_a_project_needs_to_know() {
         "uncounted",
         "wiring",
         "`clm land` refuses",
+        "`impl/<component>`",
+        "no review lets it through",
         "`tests` glob",
         "[verify] mutate",
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }
-    assert!(!note.contains("needs review"), "{note}");
+    let glob = note.find("`tests` glob").unwrap();
+    let names = note.find("then names `wiring`").expect(&note);
+    assert!(
+        glob < names,
+        "the `tests` globs come before `wiring`: {note}"
+    );
+    let lower = note.to_lowercase();
+    for claim in [
+        "needs review",
+        "need review",
+        "needs a review",
+        "requires review",
+    ] {
+        assert!(!lower.contains(claim), "{claim}: {note}");
+    }
 }
