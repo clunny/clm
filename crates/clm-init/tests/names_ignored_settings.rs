@@ -48,7 +48,7 @@ fn repo() -> TempDir {
 }
 
 fn run(dir: &Path) -> String {
-    init(dir, &Options::default()).unwrap()
+    init(dir, &Options::default(), &clm_config::process_env).unwrap()
 }
 
 /// The next steps, one string per step.
@@ -194,6 +194,6 @@ fn another_git_failure_fails_init() {
     let dir = repo();
     let target = TempDir::new().unwrap();
     std::os::unix::fs::symlink(target.path(), dir.path().join(".claude")).unwrap();
-    let err = init(dir.path(), &Options::default()).unwrap_err();
+    let err = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap_err();
     assert!(err.contains("check-ignore"), "{err}");
 }

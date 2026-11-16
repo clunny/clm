@@ -427,22 +427,7 @@ enum Command {
     },
     /// Set up CLM's tooling in the CLM repository found from the current directory, or at the
     /// top of the git repository when there is none, and print the steps only a human can do.
-    Init {
-        /// A language the repository uses, for its dead-code detector and build script;
-        /// repeatable. Known: rust, typescript, python.
-        #[arg(long = "lang")]
-        langs: Vec<String>,
-        /// Write no detectors, for an existing codebase whose dead code isn't cleaned up yet.
-        #[arg(long)]
-        no_detectors: bool,
-        /// Where the remote lives (default: from `origin`'s URL, or `none` without one).
-        #[arg(long, value_parser = ["none", "git", "github", "azure"])]
-        host: Option<String>,
-        /// Write nothing: print the allow rules unattended sessions need that the project's
-        /// Claude Code settings lack, and exit 1 when one is missing.
-        #[arg(long, conflicts_with_all = ["langs", "no_detectors", "host"])]
-        check_permissions: bool,
-    },
+    Init(clm_init::InitArgs),
     /// Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>`
     /// when every test must run.
     Affected(clm_affected::Args),
@@ -471,22 +456,11 @@ enum Command {
     /// packages that nothing outside their own library or package uses; exit 1 when it lists any.
     Unreferenced(clm_unreferenced::Args),
     /// Print a compact map of the repository's code, for drafting its spec graph.
-    Survey {
-        /// Check this component map (YAML: `components:` a list of `{ id, paths, depends_on }`, and
-        /// optional `outside` globs) against the code instead; exit 1 with what's wrong.
-        #[arg(long = "components", value_name = "FILE")]
-        nodes: Option<PathBuf>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Survey(clm_init::SurveyArgs),
     /// Print the agent harness this command runs under and what it can do.
     AgentHarness,
     /// Print CLM's guide: with no page, the index of its pages; with one, that page.
-    Guide {
-        /// The page to print, by name (`index` for the guide's start).
-        page: Option<String>,
-    },
+    Guide(clm_init::GuideArgs),
     /// Print a fingerprint of HEAD's changes relative to a base ref.
     Fingerprint {
         /// Base ref the PR merges into.
@@ -1276,67 +1250,26 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Init {
-            langs,
-            no_detectors,
-            host,
-            check_permissions,
-        } => {
-            if check_permissions {
-                return match std::env::current_dir()
-                    .map_err(|e| format!("current directory: {e}"))
-                    .and_then(|cwd| clm_init::check_permissions(&cwd))
-                {
-                    Ok(text) if text.is_empty() => ExitCode::SUCCESS,
-                    Ok(text) => {
-                        print!("{text}");
-                        ExitCode::FAILURE
-                    }
-                    Err(e) => {
-                        eprintln!("clm init: {e}");
-                        ExitCode::FAILURE
-                    }
-                };
-            }
-            let opts = clm_init::Options {
-                langs,
-                detectors: !no_detectors,
-                host: host.map(|h| match h.as_str() {
-                    "none" => clm_config::Host::None,
-                    "git" => clm_config::Host::Git,
-                    "github" => clm_config::Host::Github,
-                    "azure" => clm_config::Host::Azure,
-                    other => unreachable!("clap allows no host `{other}`"),
-                }),
-            };
-            let done = std::env::current_dir()
-                .map_err(|e| format!("current directory: {e}"))
-                .and_then(|cwd| clm_init::init(&cwd, &opts));
-            match done {
-                Ok(text) => {
-                    print!("{text}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("clm init: {e}");
-                    ExitCode::FAILURE
-                }
-            }
-        }
+        Command::Init(_) => ExitCode::from(clm_init::init_command(
+            command_args(),
+            clm_hooks::clm_root(&cwd),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::AgentHarness => {
             print!("{}", agent_harness_report(&clm_config::process_env));
             ExitCode::SUCCESS
         }
-        Command::Guide { page } => match clm_init::guide(page.as_deref()) {
-            Ok(text) => {
-                print!("{text}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprint!("{e}");
-                ExitCode::FAILURE
-            }
-        },
+        Command::Guide(_) => ExitCode::from(clm_init::guide_command(
+            command_args(),
+            clm_hooks::clm_root(&cwd),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         // `Cli` has no options of its own, so the command's arguments follow `clm affected`.
         Command::Affected(args) => ExitCode::from(clm_affected::command(
             std::env::args_os().skip(2),
@@ -1394,33 +1327,14 @@ fn dispatch() -> ExitCode {
             &mut Stdout(std::io::stdout().lock()),
             &mut std::io::stderr(),
         )),
-        Command::Survey { nodes: None, root } => match clm_init::survey(&survey_root(root)) {
-            Ok(text) => {
-                print!("{text}");
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("clm survey: {e}");
-                ExitCode::from(2)
-            }
-        },
-        Command::Survey {
-            nodes: Some(file),
-            root,
-        } => {
-            // Read before `repo_root`, which may move to the repository's top.
-            let checked = std::fs::read_to_string(&file)
-                .map_err(|e| format!("{}: {e}", file.display()))
-                .and_then(|yaml| clm_init::check_nodes(&survey_root(root), &file, &yaml));
-            match checked {
-                Ok(violations) if violations.is_empty() => ExitCode::SUCCESS,
-                Ok(violations) => report(&violations),
-                Err(e) => {
-                    eprintln!("clm survey: {e}");
-                    ExitCode::from(2)
-                }
-            }
-        }
+        Command::Survey(_) => ExitCode::from(clm_init::survey_command(
+            command_args(),
+            clm_hooks::clm_root(&cwd),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Fingerprint { base, root } => match clm_gate::fingerprint(&repo_root(root), &base)
         {
             Ok(id) => {
@@ -1706,8 +1620,8 @@ fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
     }
 }
 
-/// `repo_root`, except that with no CLM repository found, as before `clm init`, it's the
-/// top of the git repository, so the survey maps all of it from any directory.
+/// `repo_root`, except that with no CLM repository found it's the top of the git repository,
+/// so `clm unreferenced` checks the whole workspace of a project without CLM's specs.
 fn survey_root(given: Option<PathBuf>) -> PathBuf {
     let found = std::env::current_dir()
         .ok()

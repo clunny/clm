@@ -22,7 +22,7 @@ fn written() -> (TempDir, String) {
         detectors: true,
         ..Options::default()
     };
-    init(dir.path(), &options).unwrap();
+    init(dir.path(), &options, &clm_config::process_env).unwrap();
     let text = fs::read_to_string(dir.path().join("clm.toml")).unwrap();
     (dir, text)
 }

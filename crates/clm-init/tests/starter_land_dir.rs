@@ -28,7 +28,7 @@ fn rust_repo() -> TempDir {
         langs: vec!["rust".into()],
         ..Options::default()
     };
-    init(dir.path(), &opts).unwrap();
+    init(dir.path(), &opts, &clm_config::process_env).unwrap();
     fs::write(dir.path().join("Cargo.toml"), "").unwrap();
     dir
 }

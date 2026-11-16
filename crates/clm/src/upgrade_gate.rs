@@ -25,14 +25,14 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         at(root.as_deref(), true)
     }
     match command {
-        C::Guide { .. } | C::Hook { .. } | C::AgentHarness => None,
+        C::Guide(_) | C::Hook { .. } | C::AgentHarness => None,
         // The commands that run whatever is pending.
         C::Status { root, .. }
         | C::Backlog(clm_check::BacklogArgs { root })
         | C::View { root, .. }
         | C::Machine { root, .. }
         | C::Setup { root } => at(root.as_deref(), false),
-        C::Defect { .. } | C::Config(_) | C::Init { .. } | C::Upgrade { .. } => at(None, false),
+        C::Defect { .. } | C::Config(_) | C::Init(_) | C::Upgrade { .. } => at(None, false),
         C::Check(clm_check::CheckArgs { root, .. })
         | C::Coverage(clm_check::CoverageArgs { root, .. })
         | C::Pending { root, .. }
@@ -61,7 +61,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Health(clm_health::HealthArgs { root, .. })
         | C::Workaround(clm_health::WorkaroundArgs { root, .. })
         | C::Unreferenced(clm_unreferenced::Args { root, .. })
-        | C::Survey { root, .. }
+        | C::Survey(clm_init::SurveyArgs { root, .. })
         | C::Fingerprint { root, .. } => given(root),
         C::Affected(args) => given(&args.root),
         C::Effort(args) => at(args.root(), true),

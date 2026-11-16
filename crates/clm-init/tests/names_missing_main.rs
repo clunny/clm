@@ -62,7 +62,7 @@ fn a_repository_on_master() {
     // req:init/init-names-missing-main@ae42df80
     let dir = repo("master");
     commit(dir.path());
-    let out = init(dir.path(), &Options::default()).unwrap();
+    let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let step = first_step(&out).unwrap();
     assert!(step.contains(RENAME) && step.contains("`main`"), "{step}");
     assert!(!step.contains("CI triggers"), "{step}");
@@ -79,7 +79,7 @@ fn a_repository_on_master() {
 fn an_empty_repository_whose_unborn_branch_is_master() {
     // req:init/init-names-missing-main@ae42df80
     let dir = repo("master");
-    let out = init(dir.path(), &Options::default()).unwrap();
+    let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert!(first_step(&out).unwrap().contains(RENAME));
 }
 
@@ -89,7 +89,7 @@ fn a_remote_on_master() {
     let remote = repo("master");
     commit(remote.path());
     let dir = clone_of("master", remote.path());
-    let out = init(dir.path(), &git_host()).unwrap();
+    let out = init(dir.path(), &git_host(), &clm_config::process_env).unwrap();
     let step = first_step(&out).unwrap();
     assert!(step.contains(RENAME), "{step}");
     for words in ["default branch", "CI triggers", "branch protection"] {
@@ -104,7 +104,7 @@ fn a_remote_branch_ending_in_main_is_not_main() {
     commit(remote.path());
     git(remote.path(), &["branch", "feature/main"]);
     let dir = clone_of("master", remote.path());
-    let out = init(dir.path(), &git_host()).unwrap();
+    let out = init(dir.path(), &git_host(), &clm_config::process_env).unwrap();
     assert!(first_step(&out).unwrap().contains(RENAME), "{out}");
 }
 
@@ -114,18 +114,18 @@ fn main_already_there() {
     let dir = repo("main");
     commit(dir.path());
     git(dir.path(), &["switch", "-q", "-c", "feature"]);
-    let out = init(dir.path(), &Options::default()).unwrap();
+    let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert!(!out.contains("git branch -m"), "{out}");
 
     // An empty repository on an unborn `main`, likewise.
     let unborn = repo("main");
-    let out = init(unborn.path(), &Options::default()).unwrap();
+    let out = init(unborn.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert!(!out.contains("git branch -m"), "{out}");
 
     // With `main` only on the remote, likewise.
     let remote = repo("main");
     commit(remote.path());
     let other = clone_of("master", remote.path());
-    let out = init(other.path(), &git_host()).unwrap();
+    let out = init(other.path(), &git_host(), &clm_config::process_env).unwrap();
     assert!(!out.contains("git branch -m"), "{out}");
 }
