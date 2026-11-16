@@ -26,4 +26,6 @@ While `git worktree add` writes a new entry under `.git/worktrees/<name>/` (its 
 
 - The tests fake `git` on `PATH`, as `fetch-tries-again`'s do, so the race is reproduced exactly and no test depends on timing another process.
 - An entry left half written for good (a `git worktree add` killed between its writes) still fails the listing after the retries: git itself fails every command on it then, and the error names the entry.
-- Other git commands that walk every worktree (`git switch`, `git branch -d`, `git worktree add`) can still meet the race; nothing here changes them.
+- Other git commands that walk every worktree (`git switch`, `git branch -d`, `git worktree add`) can still meet the race, and callers that need only the main worktree still list them all; nothing here changes them. The architecture audit asked that this stay on record once the item is deleted, so the change adds the `idea` item `backlog/git-commands-other-than-a-listing-can-fail-while-another-run-adds-a-worktree` (`fold-small-defer-large`).
+- The private loop keeps its waits injectable, as `fetch_waiting` does, takes the waits it is given, and returns the successful run's stdout, which `fetch` drops and `worktrees` parses.
+- `clm-verify`'s `the_places_ignore_a_worktree_still_being_added` asserts that `worktrees` fails on an entry left half written for good; it still passes, about 0.6 s slower.
