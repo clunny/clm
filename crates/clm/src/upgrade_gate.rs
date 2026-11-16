@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Branch, Command, Contribution, Ledger, Page};
+use crate::{Command, Contribution, Ledger};
 
 /// Where a command works and whether a pending required migration stops it.
 pub(crate) struct Located<'a> {
@@ -54,7 +54,6 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::WrapUp { root }
         | C::Rebase { root }
         | C::Autosync { root }
-        | C::Issue { root, .. }
         | C::Land { root, .. }
         | C::Verify { root, .. }
         | C::Approve { root, .. }
@@ -68,9 +67,9 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         C::Effort(args) => at(args.root(), true),
         C::Capabilities(args) => at(args.root(), true),
         C::Architecture(args) => at(args.root(), true),
-        C::Pr {
-            page: Page::Open { root, .. } | Page::Body { root, .. },
-        } => given(root),
+        C::Pr(args) => at(args.root(), true),
+        C::Issue(args) => at(args.root(), true),
+        C::Branch(args) => at(args.root(), true),
         C::Contribution { contribution } => match contribution {
             Contribution::Parent { root, .. }
             | Contribution::Sync { root, .. }
@@ -80,9 +79,6 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
             | Contribution::Comment { root, .. }
             | Contribution::Label { root, .. } => given(root),
         },
-        C::Branch {
-            branch: Branch::Delete { root, .. } | Branch::Push { root, .. },
-        } => given(root),
         C::Ledger { ledger } => match ledger {
             Ledger::Compact { root, .. }
             | Ledger::Verify { root, .. }

@@ -2,6 +2,7 @@
 //! process runs through `clm-git`.
 
 mod azure;
+mod command;
 mod github;
 mod keep;
 mod open;
@@ -11,6 +12,7 @@ use std::path::Path;
 
 pub use azure::Azure;
 use clm_git::{REMOTE, current_branch, git};
+pub use command::{BranchArgs, IssueArgs, PrArgs, branch_command, issue_command, pr_command};
 use github::GitHub;
 pub use keep::keep_remote;
 pub use open::pr_open;
@@ -272,7 +274,7 @@ fn has_remote(root: &Path) -> Result<bool, Error> {
 /// `clm branch delete` (`branch-delete`): deletes [`REMOTE`]'s `branch` through `host` when
 /// its tip is `lease` (default: the tip last fetched), and only a tip this clone pushed.
 /// Nothing to do, and success, without that remote or when it has no such branch.
-pub fn delete_pushed_branch(
+pub(crate) fn delete_pushed_branch(
     host: &dyn Host,
     root: &Path,
     branch: &str,
@@ -328,7 +330,7 @@ pub fn delete_pushed_branch(
 
 /// `clm branch push` (`branch-push`): pushes the checked-out branch to [`REMOTE`] as a
 /// compare-and-swap on what this clone last saw, and returns `pushed <branch> <sha>`.
-pub fn push_branch(root: &Path) -> Result<String, Error> {
+pub(crate) fn push_branch(root: &Path) -> Result<String, Error> {
     let branch = current_branch(root)?
         .ok_or_else(|| Error::Refused("`HEAD` is detached; check out a branch".into()))?;
     refuse_protected(&branch)?;

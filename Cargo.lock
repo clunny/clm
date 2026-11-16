@@ -466,6 +466,7 @@ dependencies = [
 name = "clm-host"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-config",
  "clm-git",
  "serde_json",

@@ -347,26 +347,10 @@ enum Command {
     /// Read CLM's settings for the CLM repository found from the current directory.
     Config(clm_config::Args),
     /// A branch's pull request on the host the `host` setting names.
-    Pr {
-        #[command(subcommand)]
-        page: Page,
-    },
+    Pr(clm_host::PrArgs),
     /// File an issue where the host the `host` setting names keeps them and print its URL;
     /// without a host, print the report and exit 1.
-    Issue {
-        /// The issue's title.
-        #[arg(long)]
-        title: String,
-        /// The file holding the issue's body.
-        #[arg(long)]
-        body_file: PathBuf,
-        /// The repository to file it in, such as `clunny/clm`.
-        #[arg(long)]
-        repo: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Issue(clm_host::IssueArgs),
     /// Contributions from people without write access, through the host adapter the `host`
     /// setting names: a fork's pull requests and issues.
     Contribution {
@@ -374,10 +358,7 @@ enum Command {
         contribution: Contribution,
     },
     /// Remote branches, through the host adapter the `host` setting names.
-    Branch {
-        #[command(subcommand)]
-        branch: Branch,
-    },
+    Branch(clm_host::BranchArgs),
     /// The ledger of approvals, checks and lands: print it, audit `main` against it,
     /// or prune your own superseded records.
     Ledger {
@@ -600,33 +581,6 @@ struct HarnessFlag {
 }
 
 #[derive(Subcommand)]
-enum Page {
-    /// Open the branch's pull request against `main` on the host, or find the open one, and
-    /// print its URL, or `none` without a host.
-    Open {
-        /// The branch, such as `spec/x` (default: the checked-out one).
-        branch: Option<String>,
-        /// The pull request's title (default: drawn from the branch).
-        #[arg(long)]
-        title: Option<String>,
-        /// The file holding the pull request's body (default: drawn from the branch).
-        #[arg(long)]
-        body_file: Option<PathBuf>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-    /// Set the body of the current branch's open pull request to a file's contents.
-    Body {
-        /// The file holding the body.
-        file: PathBuf,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-}
-
-#[derive(Subcommand)]
 enum Contribution {
     /// Print this repository's parent as `<owner>/<name>`, or `none` when it is not a fork.
     Parent {
@@ -693,28 +647,6 @@ enum Contribution {
         number: u64,
         /// The label.
         label: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-}
-
-#[derive(Subcommand)]
-enum Branch {
-    /// Delete `origin`'s branch when its tip is still `--lease` (default: the tip last
-    /// fetched) and this clone pushed it, on every host.
-    Delete {
-        /// The branch, such as `impl/a`.
-        branch: String,
-        /// The commit `origin`'s branch must still be at.
-        #[arg(long)]
-        lease: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-    /// Push the checked-out branch to `origin`, overwriting only what this clone last saw.
-    Push {
         /// Repository root (default: the CLM repository holding the current directory).
         #[arg(long)]
         root: Option<PathBuf>,
@@ -1322,31 +1254,28 @@ fn dispatch() -> ExitCode {
                 &mut Printed::Err,
             ))
         }
-        Command::Pr { page } => pr(page),
-        Command::Issue {
-            title,
-            body_file,
-            repo,
-            root,
-        } => hosted("issue", root, |host, root| {
-            host.issue(root, &title, &body_file, &repo).map(Some)
-        }),
+        Command::Pr(args) => ExitCode::from(clm_host::pr_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
+        Command::Issue(args) => ExitCode::from(clm_host::issue_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Contribution { contribution } => contribution_command(contribution),
-        Command::Branch {
-            branch:
-                Branch::Delete {
-                    branch,
-                    lease,
-                    root,
-                },
-        } => hosted("branch delete", root, |host, root| {
-            clm_host::delete_pushed_branch(host, root, &branch, lease.as_deref()).map(|()| None)
-        }),
-        Command::Branch {
-            branch: Branch::Push { root },
-        } => hosted("branch push", root, |_, root| {
-            clm_host::push_branch(root).map(Some)
-        }),
+        Command::Branch(args) => ExitCode::from(clm_host::branch_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Init {
             langs,
             no_detectors,
@@ -1506,30 +1435,6 @@ fn dispatch() -> ExitCode {
     }
 }
 
-/// `clm pr`.
-fn pr(page: Page) -> ExitCode {
-    match page {
-        Page::Open {
-            branch,
-            title,
-            body_file,
-            root,
-        } => hosted_setting("pr open", root, |setting, root| {
-            let url = clm_host::pr_open(
-                setting,
-                root,
-                branch.as_deref(),
-                title.as_deref(),
-                body_file.as_deref(),
-            )?;
-            Ok(Some(url.unwrap_or_else(|| "none".into())))
-        }),
-        Page::Body { file, root } => {
-            hosted("pr body", root, |host, root| host.page_body(root, &file))
-        }
-    }
-}
-
 /// `clm contribution`: `host`'s contribution operations (`clm/contribution-command`).
 fn contribution_command(contribution: Contribution) -> ExitCode {
     match contribution {
@@ -1685,17 +1590,6 @@ fn hosted(
     root: Option<PathBuf>,
     op: impl FnOnce(&dyn clm_host::Host, &Path) -> Result<Option<String>, clm_host::Error>,
 ) -> ExitCode {
-    hosted_setting(command, root, |setting, root| {
-        op(&*clm_host::adapter(setting), root)
-    })
-}
-
-/// [`hosted`] for an operation that takes the `host` setting itself.
-fn hosted_setting(
-    command: &str,
-    root: Option<PathBuf>,
-    op: impl FnOnce(clm_config::Host, &Path) -> Result<Option<String>, clm_host::Error>,
-) -> ExitCode {
     let root = repo_root(root);
     let host = match clm_config::load(Some(&root), &clm_config::process_env) {
         Ok(settings) => settings.host.value,
@@ -1704,7 +1598,7 @@ fn hosted_setting(
             return ExitCode::from(2);
         }
     };
-    match op(host, &root) {
+    match op(&*clm_host::adapter(host), &root) {
         Ok(line) => {
             if let Some(line) = line {
                 println!("{line}");
