@@ -2,7 +2,7 @@
 //! (`commands-in-crate`).
 
 use std::ffi::OsString;
-use std::io::{self, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
@@ -65,25 +65,15 @@ where
         .root
         .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
     let written = match approve(&root, args.branch.as_deref(), env) {
-        Ok(done) => print(&done.warnings, &done.lines, out, err).map(|()| 0),
+        // `approve` warns of nothing: its `Output` holds the lines alone.
+        Ok(done) => done
+            .lines
+            .iter()
+            .try_for_each(|line| writeln!(out, "{line}"))
+            .map(|()| 0),
         Err(e) => writeln!(err, "clm approve: {e}").map(|()| exit_code(&e)),
     };
     written.unwrap_or(2)
-}
-
-fn print(
-    warnings: &[String],
-    lines: &[String],
-    out: &mut dyn Write,
-    err: &mut dyn Write,
-) -> io::Result<()> {
-    for warning in warnings {
-        writeln!(err, "clm approve: warning: {warning}")?;
-    }
-    for line in lines {
-        writeln!(out, "{line}")?;
-    }
-    Ok(())
 }
 
 fn exit_code(e: &Error) -> u8 {

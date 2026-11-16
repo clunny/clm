@@ -108,3 +108,13 @@ fn arguments_it_cant_parse() {
     assert!(out.stderr.contains("--frobnicate"), "{out:?}");
     assert!(f.records().is_empty());
 }
+
+#[test]
+fn help_goes_to_the_out_stream() {
+    // req:land.approval/commands-in-crate@1f31b577
+    let f = Fixture::new("");
+    let out = approve(&f, &f.work(), &f.work(), &["--help"]);
+    assert_eq!(out.code, 0, "{out:?}");
+    assert!(out.stdout.contains("Usage: clm approve"), "{out:?}");
+    assert_eq!(out.stderr, "");
+}
