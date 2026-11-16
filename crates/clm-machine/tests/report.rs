@@ -128,3 +128,33 @@ fn scenario_text() {
     let text = clm_machine::text(&judged(&r, &rec, &["a"], 3));
     assert!(text.contains("disk 20G free of 100G, 19G needed by 1 builds  ok"));
 }
+
+#[test]
+fn scenario_room_against_the_builds() {
+    // req:machine/disk-room@d301cb0f
+    let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
+    let room = |free_gib: u64| {
+        let mut r = readings();
+        r.disk = space(100 * GIB, free_gib * GIB);
+        judged(&r, &rec, &["a", "b"], 3).disk.room
+    };
+    assert_eq!(room(10), Some(0));
+    assert_eq!(room(20), Some(2));
+    assert_eq!(room(2), Some(0));
+    assert_eq!(room(100), Some(12));
+    // A peak of 0 gives no room, as no peak does.
+    let mut r = readings();
+    r.disk = space(100 * GIB, 50 * GIB);
+    assert_eq!(judged(&r, &record(0, &[]), &[], 3).disk.room, None);
+    assert_eq!(judged(&r, &Record::default(), &[], 3).disk.room, None);
+}
+
+#[test]
+fn scenario_no_room_before_any_measurement() {
+    // req:machine/disk-room@d301cb0f
+    let dir = repo();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
+    let json = clm_machine::json(&snapshot.report);
+    assert!(json["disk"].as_object().unwrap().contains_key("room"));
+    assert!(json["disk"]["room"].is_null());
+}

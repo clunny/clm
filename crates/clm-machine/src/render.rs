@@ -101,6 +101,7 @@ pub fn json(report: &Report) -> Value {
                 .collect::<Vec<_>>(),
             "free_places": disk.free_places,
             "need": disk.need,
+            "room": disk.room,
             "state": disk.state.word(),
         },
     })
