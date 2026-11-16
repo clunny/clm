@@ -169,15 +169,16 @@ fn repo_value(value: &str) -> Repo {
 }
 
 /// Whether any of `reruns` re-runs a release run or one that can't be looked up, within
-/// `budget` (`hook-budgets`), stopping at the first.
-pub(crate) fn reruns_release(reruns: &[Rerun], budget: Duration) -> bool {
+/// `budget` (`hook-budgets`), stopping at the first. The lookups find `gh` on `path`, the
+/// guard's own `PATH`, when it is given.
+pub(crate) fn reruns_release(reruns: &[Rerun], budget: Duration, path: Option<&OsStr>) -> bool {
     let deadline = Instant::now() + budget;
-    reruns.iter().any(|rerun| rerun.releases(deadline))
+    reruns.iter().any(|rerun| rerun.releases(deadline, path))
 }
 
 impl Rerun {
     /// Whether a run this re-runs is a release run or can't be looked up by `deadline`.
-    fn releases(&self, deadline: Instant) -> bool {
+    fn releases(&self, deadline: Instant, path: Option<&OsStr>) -> bool {
         // Resolved once, and only when a lookup needs it.
         let repo = std::cell::OnceCell::new();
         let lookup = |kind: &str, id: &str| {
@@ -185,14 +186,16 @@ impl Rerun {
             if !id.bytes().all(|b| b.is_ascii_digit()) {
                 return None;
             }
-            let (host, path) = repo.get_or_init(|| self.repository(deadline)).as_ref()?;
+            let (host, repo_path) = repo
+                .get_or_init(|| self.repository(deadline, path))
+                .as_ref()?;
             let mut args = vec!["api".to_string()];
             args.extend(
                 host.iter()
                     .flat_map(|h| ["--hostname".to_string(), h.clone()]),
             );
-            args.push(format!("repos/{path}/actions/{kind}/{id}"));
-            serde_json::from_slice::<Value>(&self.gh(args, deadline)?).ok()
+            args.push(format!("repos/{repo_path}/actions/{kind}/{id}"));
+            serde_json::from_slice::<Value>(&self.gh(args, deadline, path)?).ok()
         };
         let run_releases = |id: &str| lookup("runs", id).is_none_or(|run| release_run(&run));
         self.run.as_deref().is_some_and(run_releases)
@@ -207,13 +210,17 @@ impl Rerun {
     /// The repository the lookups ask, as `([<host>], <owner>/<repo>)`: `-R`'s, or the one
     /// `gh repo view --json url` reports, which resolves it as `gh run rerun` does; `None`
     /// when it can't be read.
-    fn repository(&self, deadline: Instant) -> Option<(Option<String>, String)> {
+    fn repository(
+        &self,
+        deadline: Instant,
+        path: Option<&OsStr>,
+    ) -> Option<(Option<String>, String)> {
         match &self.repo {
             Repo::Named { host, path } => Some((host.clone(), path.clone())),
             Repo::Unreadable => None,
             Repo::Checkout => {
                 let args = ["repo", "view", "--json", "url"].map(String::from).to_vec();
-                let view: Value = serde_json::from_slice(&self.gh(args, deadline)?).ok()?;
+                let view: Value = serde_json::from_slice(&self.gh(args, deadline, path)?).ok()?;
                 let (host, path) = repo_from_url(view["url"].as_str()?)?;
                 Some((Some(host), path))
             }
@@ -222,10 +229,16 @@ impl Rerun {
 
     /// One `gh` call's stdout, run in the re-run's checkout with its environment; `None`
     /// when it fails or outlasts `deadline` (`bounded-runs`). A call still running then is
-    /// killed, and once `deadline` has passed no call is started.
-    fn gh(&self, args: Vec<String>, deadline: Instant) -> Option<Vec<u8>> {
+    /// killed, and once `deadline` has passed no call is started. `gh` is found on `path`
+    /// when it is given.
+    fn gh(&self, args: Vec<String>, deadline: Instant, path: Option<&OsStr>) -> Option<Vec<u8>> {
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let env: Vec<(&str, &OsStr)> = self.env.iter().map(|(n, v)| (*n, OsStr::new(v))).collect();
+        let env: Vec<(&str, &OsStr)> = self
+            .env
+            .iter()
+            .map(|(n, v)| (*n, OsStr::new(v)))
+            .chain(path.map(|p| ("PATH", p)))
+            .collect();
         let options = clm_git::Options {
             stdin: None,
             env: &env,
