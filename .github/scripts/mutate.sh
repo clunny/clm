@@ -49,6 +49,8 @@ lines_in() { if [ -f "$1" ]; then wc -l <"$1" | tr -d ' '; else echo 0; fi; }
 # --- Rust: cargo-mutants, tests chosen as ci-check.sh maps a file to a package and a target ---
 
 rust_ready=false
+# The tree `cargo mutants` runs in for every block, made once before the first (`make_tree`).
+tree=$work/tree
 rust_tools() {
   if $rust_ready; then return; fi
   # Each mutant's tests run under nextest, which only test-tools.sh installs (ci/test-tools).
@@ -62,20 +64,44 @@ rust_tools() {
       die "cargo mutants could not be installed (requirement $id)" ;;
   esac
   rust_fixture
+  make_tree "$root" "$tree" || die "cargo mutants' tree could not be made from the checkout (requirement $id)"
   rust_ready=true
+}
+
+# Makes `$2`, the tree `cargo mutants` runs in and copies with `--copy-vcs true`, from the
+# checkout `$1`: a git repository whose `.git` is a directory of its own, borrowing `$1`'s object
+# store by an absolute path and holding none of it (`git clone --shared`), checked out at `$1`'s
+# `HEAD`, with `$1`'s branches and remote-tracking branches under the same names, and every
+# tracked file marked unchanged in its index. So a test that asks git about the repository
+# passes in each copy as it does in the checkout, git there reports no tracked file changed
+# from `HEAD` whatever mutant the tool writes, and no copy reads or writes `$1`'s index, refs
+# or git directory. Uncommitted edits in `$1` are not in the tree.
+make_tree() {
+  local src=$1 dest=$2 head
+  head=$(git -C "$src" rev-parse --verify HEAD) || return 1
+  git clone -q --shared --no-checkout "$src" "$dest" || return 1
+  # The clone's own `origin` and its branches named for `$1`'s would shadow `$1`'s own refs.
+  git -C "$dest" remote remove origin || return 1
+  git -C "$dest" -c advice.detachedHead=false checkout -q --detach "$head" || return 1
+  git -C "$dest" fetch -q --no-tags "$src" '+refs/heads/*:refs/heads/*' '+refs/remotes/*:refs/remotes/*' ||
+    return 1
+  git -C "$dest" ls-files -z | git -C "$dest" update-index -z --assume-unchanged --stdin
 }
 
 # Judges a fixture with cargo-mutants before it judges anything: a function with a test that
 # fails when it is changed and one that passes whatever it returns. The tool goes on only when it
 # reports the first's mutants caught and the second's missed, so a tool that accepts nothing, or
-# everything, can't be taken for a verdict. The crate lives in the temporary directory, as a git
-# repository of its own whose tests pass only inside one, so a tool that leaves `.git` out of the
-# copy it tests fails the fixture, as it would fail this repository's tests that ask git about it.
+# everything, can't be taken for a verdict. The crate is committed to a git repository in the
+# temporary directory, and the tool runs in a tree made from it as `make_tree` makes the
+# checkout's. Its tests pass only inside a git repository whose top is the crate, and the blind
+# one only while git reports no tracked file changed from `HEAD`: a tool that leaves `.git` out of
+# the copy it tests, or a copy in which git sees the mutant, fails the fixture, as it would fail
+# or falsely kill this repository's tests that ask git about it.
 rust_fixture() {
-  local fix=$work/fixture-rust kind out status
-  mkdir -p "$fix/src"
-  printf '[package]\nname = "clm-mutate-fixture"\nversion = "0.0.0"\nedition = "2021"\n' >"$fix/Cargo.toml"
-  cat >"$fix/src/lib.rs" <<'EOF'
+  local src=$work/fixture-src fix=$work/fixture-rust kind out status
+  mkdir -p "$src/src"
+  printf '[package]\nname = "clm-mutate-fixture"\nversion = "0.0.0"\nedition = "2021"\n' >"$src/Cargo.toml"
+  cat >"$src/src/lib.rs" <<'EOF'
 pub fn double(x: i32) -> i32 {
     x * 2
 }
@@ -97,6 +123,16 @@ mod tests {
         assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here);
     }
 
+    // Git sees no tracked file changed from `HEAD`, though the tool changed `src/lib.rs`.
+    fn tracked_files_unchanged() {
+        let status = std::process::Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=no"])
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "git status failed");
+        assert_eq!(String::from_utf8(status.stdout).unwrap(), "");
+    }
+
     #[test]
     fn fixture_notices() {
         in_git_repository();
@@ -106,11 +142,16 @@ mod tests {
     #[test]
     fn fixture_blind() {
         in_git_repository();
+        tracked_files_unchanged();
         let _ = double(3);
     }
 }
 EOF
-  git -C "$fix" init -q || die "cargo mutants' fixture could not be made a git repository"
+  { git -C "$src" init -q &&
+    git -C "$src" add Cargo.toml src/lib.rs &&
+    git -C "$src" -c user.name=clm -c user.email=clm@localhost -c commit.gpgsign=false \
+      commit -q --no-verify -m fixture &&
+    make_tree "$src" "$fix"; } || die "cargo mutants' fixture could not be made a git repository"
   for kind in notices blind; do
     out=$work/fixture-$kind
     rm -rf "$out"
@@ -172,10 +213,11 @@ run_mutants() {
   mkdir -p "$out"
   # `--no-tests=pass`: cargo-mutants runs its unmutated baseline in the mutated files' package,
   # where the filterset matches nothing when the citing tests are another package's.
-  # `--copy-vcs true`: the copy it tests holds the checkout's `.git`, so a test that asks git
-  # about this repository passes there as it does here.
-  cargo mutants --test-tool nextest --copy-vcs true --output "$out" "${mutants_args[@]}" "$@" \
-    -- --no-tests=pass -E "$filterset" || status=$?
+  # Run in the tree `make_tree` made, with `--copy-vcs true`: each copy it tests holds that
+  # tree's own `.git`, so a test that asks git about this repository passes there as it does
+  # here, and nothing a copy runs touches the checkout's git directory.
+  (cd "$tree" && cargo mutants --test-tool nextest --copy-vcs true --output "$out" "${mutants_args[@]}" "$@" \
+    -- --no-tests=pass -E "$filterset") || status=$?
   # 0 all caught, 2 some missed, 3 some timed out; anything else judged nothing: the tests fail
   # in the unmutated tree, or a filterset doesn't parse.
   case $status in
@@ -216,13 +258,15 @@ judge_rust() {
   missed=0
   n=$((n + 1))
   if [ -n "$diff" ]; then
+    # The tool runs in the tree, so a path relative to the checkout is made absolute.
+    case $diff in /*) ;; *) diff=$root/$diff ;; esac
     run_mutants "$work/m$n" --in-diff "$diff"
   fi
   if [ "$caught" -eq 0 ]; then
     # The further mutants: the first `limit` of the files' own, chosen by name.
     n=$((n + 1))
     mkdir -p "$work/m$n"
-    cargo mutants --list "${mutants_args[@]}" >"$work/list" 2>/dev/null ||
+    (cd "$tree" && cargo mutants --list "${mutants_args[@]}") >"$work/list" 2>/dev/null ||
       die "cargo mutants failed to list mutants for requirement $id"
     list=$(head -n "$limit" "$work/list")
     re_args=()
