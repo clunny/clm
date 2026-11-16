@@ -20,7 +20,7 @@ Plan work under the freeze (`backlog/a-passing-check-proves-less-than-the-spec-c
 
 ## Outcome
 
-`ci/mutate-script` states that `cargo mutants` copies the checkout's `.git` into the tree it tests, with a scenario. `ci`'s build adds the argument to `.github/scripts/mutate.sh`. The report named `check.health`; the fix lies in `ci`.
+`ci/mutate-script` states that `cargo mutants` copies the checkout's `.git` into the tree it tests, with a scenario. The fixture the script judges before the plan becomes a git repository whose tests pass only inside one, so every pass proves with the real tool that the copy is a repository: a tool or a version that stops copying `.git` fails the fixture and the pass, loudly, where it would otherwise judge nothing again (`mutation-after-land`). `ci`'s build adds the argument to `.github/scripts/mutate.sh`. The report named `check.health`; the fix lies in `ci`.
 
 ## What it removes
 
@@ -34,4 +34,5 @@ Nothing.
 ## Open questions
 
 - In the measurement, the two mutants that built were both missed by `scenario_a_clean_repository`: the function `finding` returned an empty string and the test passed. Five mutants judge nothing, but the first real pass over `check.health` may file an `unproven` item.
+- From the architecture audit, left: nothing but today's tests keeps a test in the copy from writing to this repository through git, which `tests-run-concurrently` would not allow. No program can see that, and a copy with a git directory of its own would no longer be this repository, which is what these tests read.
 - The copy's `.git` is the worktree's link to the clone's git directory, so a test in the copy reads the verify tree's index. A test that wrote to this repository through git would write there; none does today.
