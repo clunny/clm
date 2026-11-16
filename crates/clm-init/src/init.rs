@@ -117,9 +117,9 @@ const LANGS: [Lang; 3] = [
 ];
 
 /// Sets up CLM's tooling in the CLM repository found from `cwd`, or at the top of the git
-/// repository holding it when there is none (`init-root`). Returns the report to print, or
-/// why nothing was written. Calls no host: every file is the project's once written.
-pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
+/// repository holding it when there is none (`init-root`), reading settings through `env`.
+/// Returns the report to print, or why nothing was written. Calls no host: every file is the project's once written.
+pub fn init(cwd: &Path, opts: &Options, env: crate::Env) -> Result<String, String> {
     let langs = langs(&opts.langs)?;
     let top = top_level(cwd)?;
     // `git` prints the top with symlinks resolved; so are the directories searched.
@@ -168,7 +168,7 @@ pub fn init(cwd: &Path, opts: &Options) -> Result<String, String> {
     }
 
     let mut out = files.out;
-    let host = configured_host(&root, host);
+    let host = configured_host(&root, host, env);
     // After the `.gitignore` edits, which can't add a pattern that ignores the file.
     let settings_ignored = ignored(&root, SETTINGS, false)?;
     let steps = next_steps(
@@ -424,8 +424,8 @@ fn host_of(root: &Path) -> Host {
 }
 
 /// The repository's `host`: what a `clm.toml` it kept sets, else `written`, the one it wrote.
-fn configured_host(root: &Path, written: Host) -> Host {
-    match clm_config::load(Some(root), &clm_config::process_env) {
+fn configured_host(root: &Path, written: Host, env: crate::Env) -> Host {
+    match clm_config::load(Some(root), env) {
         Ok(settings) if matches!(settings.host.layer, clm_config::Layer::File(_)) => {
             settings.host.value
         }

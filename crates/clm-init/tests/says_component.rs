@@ -256,7 +256,7 @@ fn init_text_says_component() {
 fn a_new_repository_says_component() {
     // req:init/says-component@c8e61ff0
     let dir = repo();
-    init(dir.path(), &Options::default()).unwrap();
+    init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let claude = fs::read_to_string(dir.path().join("AGENTS.md")).unwrap();
     assert!(claude.contains("<component-id>/<slug>"), "{claude}");
     let spec = fs::read_to_string(dir.path().join("specs/SPEC.md")).unwrap();

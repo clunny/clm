@@ -37,7 +37,7 @@ fn bare_path(dir: &Path) -> PathBuf {
 fn empty_repository_with_no_remote() {
     // req:init/init-keeps-a-remote@c228f421
     let dir = repo();
-    let out = init(dir.path(), &Options::default()).unwrap();
+    let out = init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let toml = std::fs::read_to_string(dir.path().join("clm.toml")).unwrap();
     assert!(toml.contains("host = \"none\""), "{toml}");
     let bare = bare_path(dir.path());
@@ -52,7 +52,7 @@ fn a_kept_clm_toml_decides_the_host() {
     // req:init/init-keeps-a-remote@c228f421
     let dir = repo();
     std::fs::write(dir.path().join("clm.toml"), "host = \"git\"\n").unwrap();
-    init(dir.path(), &Options::default()).unwrap();
+    init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert!(git(dir.path(), &["remote"]).is_empty());
     assert!(!bare_path(dir.path()).exists());
 }
@@ -65,7 +65,7 @@ fn a_remote_already_there() {
         dir.path(),
         &["remote", "add", "origin", "https://github.com/o/r.git"],
     );
-    init(dir.path(), &Options::default()).unwrap();
+    init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert_eq!(
         git(dir.path(), &["remote", "get-url", "origin"]),
         "https://github.com/o/r.git"
@@ -77,7 +77,7 @@ fn a_remote_already_there() {
         host: Some(Host::Git),
         ..Options::default()
     };
-    init(other.path(), &opts).unwrap();
+    init(other.path(), &opts, &clm_config::process_env).unwrap();
     assert!(git(other.path(), &["remote"]).is_empty());
     assert!(!bare_path(other.path()).exists());
 }

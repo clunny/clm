@@ -11,6 +11,7 @@ clm-git.workspace = true
 clm-host.workspace = true
 clm-model.workspace = true
 clm-upgrade.workspace = true
+clap.workspace = true
 serde.workspace = true
 serde_json = { workspace = true, features = ["preserve_order"] }
 serde_yaml.workspace = true

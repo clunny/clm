@@ -33,7 +33,7 @@ fn upgraded(dir: &Path) -> Option<String> {
 fn new_repository_is_stamped_with_the_newest_migration() {
     // req:init/init-stamps-upgraded@e2f11c8e
     let dir = repo();
-    init(dir.path(), &Options::default()).unwrap();
+    init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     let list = clm_init::migrations();
     assert_eq!(
         upgraded(dir.path()).as_deref(),
@@ -47,7 +47,7 @@ fn kept_clm_toml_is_not_stamped() {
     // req:init/init-stamps-upgraded@e2f11c8e
     let dir = repo();
     fs::write(dir.path().join("clm.toml"), "approval = \"any\"\n").unwrap();
-    init(dir.path(), &Options::default()).unwrap();
+    init(dir.path(), &Options::default(), &clm_config::process_env).unwrap();
     assert_eq!(
         fs::read_to_string(dir.path().join("clm.toml")).unwrap(),
         "approval = \"any\"\n"
