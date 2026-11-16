@@ -38,3 +38,7 @@ During an unattended build of `check.health`, `clm land --check-only` failed twi
 - What a land check writes outside the worktree (the shared `target/land`, a browser suite's artifacts) isn't measured, so the room isn't padded for it; a land that still runs out stops its run with cause `disk`, which then holds every new launch.
 - Before any build has been measured there is no room, and the loop falls back on `machine`'s `critical` state (below 5% of the filesystem).
 - `clm machine` measures worktrees at most every 10 minutes, so a build that grew since its last measure is counted at its older size; the growth still owed sets aside up to `peak` for it.
+
+## Open questions
+
+- The capability test `crates/clm/tests/capability/build_from_spec.rs` (`capability/build-from-spec`) drives the real `clm build step` with the real `clm machine`. Its temporary repository has no measured `peak`, so it is held back only when the filesystem is below 5% free (`critical`); on a nearly full machine its `launch` lines then go. Left as is: the test would fail then for the reason the loop is right to hold, and a run on a disk that full fails other suites too.
