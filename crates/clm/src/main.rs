@@ -841,9 +841,8 @@ fn dispatch() -> ExitCode {
             }
         },
         Command::Next(args) => {
-            let root = found_root(&args.root);
-            let settings_root = args.root.clone().unwrap_or_else(|| root.clone());
-            let max_builds = clm_config::load(Some(&settings_root), &clm_config::process_env)
+            let root = repo_root(args.root.clone());
+            let max_builds = clm_config::load(Some(&root), &clm_config::process_env)
                 .map(|s| s.max_builds.value)
                 .map_err(|e| e.to_string());
             ExitCode::from(clm_orchestrator::next_command(

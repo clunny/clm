@@ -166,6 +166,23 @@ fn orchestrator_commands_exit_2_when_git_fails() {
     assert_eq!(clm(dir.path(), &["proposals"]).0, Some(2));
 }
 
+#[test]
+fn git_failures_and_help_on_their_streams() {
+    // req:orchestrator/commands-in-crate@29a80e82
+    let dir = TempDir::new().unwrap();
+    for (command, (code, out, err)) in [
+        ("next", next(dir.path(), &[], DEFAULT_CAP)),
+        ("claim", claim(dir.path(), &["a"])),
+        ("proposals", proposals(dir.path(), &[])),
+    ] {
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{command}: {err}");
+        assert!(err.starts_with(&format!("clm {command}: ")), "{err}");
+    }
+    let (code, out, err) = claim(dir.path(), &["--help"]);
+    assert_eq!((code, err.as_str()), (Some(0), ""));
+    assert!(out.contains("Usage: clm claim"), "{out}");
+}
+
 /// `clm <command> <args>` run in `dir`: the call given `dir` as the root `crates/clm` finds
 /// from it.
 fn clm_in(dir: &Path, args: &[&str]) -> Output {
