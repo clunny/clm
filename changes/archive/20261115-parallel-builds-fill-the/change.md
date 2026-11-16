@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - parallel-builds-fill-the-disk-and-fail-each-other-s-land-checks
 ---

@@ -44,6 +44,9 @@ land)
 branch)
   if [ -f "$F/branch-exit" ]; then cat "$F/branch-reason" >&2; exit "$(cat "$F/branch-exit")"; fi
   git push -q origin --delete "$3" 2>/dev/null; exit 0 ;;
+machine)
+  if [ -f "$F/machine-exit" ]; then echo "machine failed" >&2; exit "$(cat "$F/machine-exit")"; fi
+  cat "$F/machine.json" 2>/dev/null; exit 0 ;;
 verify)
   if [ -f "$F/verify-due" ]; then cat "$F/verify-due"; exit 0; fi
   exit 3 ;;
@@ -94,6 +97,16 @@ impl Fixture {
     /// `finish-<name>` or `run-exit-<component>`.
     pub fn set(&self, name: &str, text: &str) {
         fs::write(self.fake.join(name), text).unwrap();
+    }
+
+    /// Has the fake `clm machine --format json` give the disk's `room` (`null` when none) and
+    /// `state`.
+    pub fn disk(&self, room: Option<u64>, state: &str) {
+        let room = room.map_or("null".to_string(), |r| r.to_string());
+        self.set(
+            "machine.json",
+            &format!(r#"{{"disk":{{"room":{room},"state":"{state}"}}}}"#),
+        );
     }
 
     /// The commands the fake `clm` ran, one line each.

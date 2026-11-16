@@ -26,8 +26,9 @@ fn unsafe_action(line: &str) -> &'static str {
     }
 }
 
-/// The queue for a snapshot, oldest first.
-pub(crate) fn queue(s: &Snapshot) -> Vec<StoredHuman> {
+/// The queue for a snapshot, oldest first. `disk_holds` says the disk holds back work while no
+/// run of the loop is planned or running, so no land will free space.
+pub(crate) fn queue(s: &Snapshot, disk_holds: bool) -> Vec<StoredHuman> {
     let file = &s.file;
     let mut out = Vec::new();
     for batch in file.batches.iter().filter(|b| !b.approved) {
@@ -103,6 +104,15 @@ pub(crate) fn queue(s: &Snapshot) -> Vec<StoredHuman> {
             "the disk is full".to_string(),
             s.now,
             "free disk, then say so".to_string(),
+        ));
+    } else if disk_holds {
+        // A `disk` condition already asks for disk, and only `clm build cleared` lifts it.
+        out.push(entry(
+            "disk",
+            "disk",
+            "the disk has no room for another build".to_string(),
+            s.now,
+            "free disk; the loop goes on once a build fits".to_string(),
         ));
     }
     out.sort_by_key(|e| e.since);

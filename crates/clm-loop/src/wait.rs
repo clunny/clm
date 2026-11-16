@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use clm_git::{Failure, now};
 
 use crate::Options;
-use crate::plan::{Snapshot, plan_of};
+use crate::plan::{LAUNCHES_NOW, Snapshot, WAITS_FOR_DISK, plan_of};
 use crate::state::{self, LoopFile, RunState, StopMode};
 use crate::step::{fresh_snapshot, gone_builds, held_places};
 
@@ -16,12 +16,14 @@ const POLL: Duration = Duration::from_secs(5);
 /// The longest interval, in minutes, which stays inside the lease's 15 minutes.
 const LONGEST: f64 = 7.0;
 
-/// Why a step would act now, or none.
+/// Why a step would act now, or none. `disk_held` collects the entries the disk held back at a
+/// read of this wait, so the line that wakes it once one of them can launch names the disk.
 fn reason(
     options: &Options,
     snapshot: &mut Snapshot,
     first: &LoopFile,
     first_places: &[String],
+    disk_held: &mut Vec<String>,
 ) -> Result<Option<String>, Failure> {
     let file = state::read(&options.root).unwrap_or_default();
     let places = held_places(options)?;
@@ -65,20 +67,31 @@ fn reason(
     }
     let plan = plan_of(snapshot);
     if plan.launches.is_empty() {
+        disk_held.extend(
+            plan.next
+                .iter()
+                .filter(|n| n.reason == WAITS_FOR_DISK && !disk_held.contains(&n.name))
+                .map(|n| n.name.clone())
+                .collect::<Vec<_>>(),
+        );
         return Ok(None);
     }
     let freed: Vec<&String> = first_places
         .iter()
         .filter(|p| !places.contains(p))
         .collect();
-    let names = plan
+    let launching: Vec<String> = plan
         .next
         .iter()
-        .filter(|n| n.reason == "launches now")
+        .filter(|n| n.reason == LAUNCHES_NOW)
         .map(|n| n.name.clone())
-        .collect::<Vec<_>>()
-        .join(", ");
-    Ok(Some(if freed.is_empty() {
+        .collect();
+    let names = launching.join(", ");
+    // The disk is named only when an entry it held back now launches.
+    let disk_freed = launching.iter().any(|n| disk_held.contains(n));
+    Ok(Some(if freed.is_empty() && disk_freed {
+        format!("the disk has room, and work is ready: {names}")
+    } else if freed.is_empty() {
         format!("work is ready: {names}")
     } else {
         format!(
@@ -122,8 +135,15 @@ pub fn wait(options: &Options, interval_minutes: f64) -> Result<String, Failure>
     }
     let mut snapshot = fresh_snapshot(options)?;
     let mut fetched = Instant::now();
+    let mut disk_held = Vec::new();
     loop {
-        if let Some(why) = reason(options, &mut snapshot, &first, &first_places)? {
+        if let Some(why) = reason(
+            options,
+            &mut snapshot,
+            &first,
+            &first_places,
+            &mut disk_held,
+        )? {
             return Ok(why);
         }
         sleep(POLL);
