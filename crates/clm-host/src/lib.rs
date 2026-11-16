@@ -282,13 +282,16 @@ pub(crate) fn delete_pushed_branch(
 ) -> Result<(), Error> {
     let record = pushed_record(branch);
     // Once `origin` has no such branch, this clone's record of pushing it goes too.
-    let drop_record = || git(root, &["update-ref", "-d", &record]).map(drop);
+    // Losing it only falls back to the reflog, so a failure to drop it fails nothing.
+    let drop_record = || drop(git(root, &["update-ref", "-d", &record]));
     if !has_remote(root)? {
+        drop_record();
         return Ok(());
     }
     let refname = format!("refs/heads/{branch}");
-    if git(root, &["ls-remote", REMOTE, &refname])?.is_empty() {
-        return Ok(drop_record()?);
+    if remote_tip(root, &refname)?.is_none() {
+        drop_record();
+        return Ok(());
     }
     refuse_protected(branch)?;
     let tracking = format!("refs/remotes/{REMOTE}/{branch}");
@@ -332,7 +335,19 @@ pub(crate) fn delete_pushed_branch(
         )));
     }
     host.branch_delete(root, branch, &lease)?;
-    Ok(drop_record()?)
+    drop_record();
+    Ok(())
+}
+
+/// The tip of `origin`'s `refname`, read with `ls-remote`, whose pattern also matches refs
+/// that merely end in it, so only the line naming `refname` itself counts.
+fn remote_tip(root: &Path, refname: &str) -> Result<Option<String>, Error> {
+    Ok(git(root, &["ls-remote", REMOTE, refname])?
+        .lines()
+        .find_map(|line| match line.split_once('\t') {
+            Some((sha, name)) if name == refname => Some(sha.to_string()),
+            _ => None,
+        }))
 }
 
 /// `clm branch push` (`branch-push`): pushes the checked-out branch to [`REMOTE`] as a
@@ -358,11 +373,9 @@ pub(crate) fn push_branch(root: &Path) -> Result<String, Error> {
     }
     let sha = git(root, &["rev-parse", "HEAD"])?;
     // A push to the commit `origin` already holds moves nothing, and that tip may be another
-    // clone's this branch was made from, so it isn't recorded as this clone's.
-    let held = git(root, &["ls-remote", REMOTE, &refname])?
-        .split_whitespace()
-        .next()
-        == Some(sha.as_str());
+    // clone's this branch was made from, so it isn't recorded as this clone's. When `origin`
+    // can't be asked, nothing is recorded either: the push itself reports why it failed.
+    let held = remote_tip(root, &refname).map_or(true, |tip| tip.as_deref() == Some(&sha));
     let target = format!("HEAD:{refname}");
     args.extend([REMOTE, &target]);
     match git(root, &args) {
@@ -371,7 +384,8 @@ pub(crate) fn push_branch(root: &Path) -> Result<String, Error> {
         Err(e) => return Err(e.into()),
     }
     if !held {
-        git(root, &["update-ref", &pushed_record(&branch), &sha])?;
+        // `origin` has moved: a record that fails to write only falls back to the reflog.
+        let _ = git(root, &["update-ref", &pushed_record(&branch), &sha]);
     }
     Ok(format!("pushed {branch} {sha}"))
 }

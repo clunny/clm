@@ -591,6 +591,7 @@ fn branch_moved_keeps_its_message() {
 fn branch_delete_without_origin_has_nothing_to_do() {
     // req:host/branch-delete@d5fd13ae
     let (r, gh) = (checkout("none"), fake_gh());
+    git(&r.work, &["update-ref", "refs/clm/pushed/impl/a", "HEAD"]);
     git(&r.work, &["remote", "remove", "origin"]);
     let (code, _, err) = clm(
         &r.work,
@@ -599,6 +600,7 @@ fn branch_delete_without_origin_has_nothing_to_do() {
         &[],
     );
     assert_eq!(code, Some(0), "{err}");
+    assert_eq!(pushed_record(&r, "impl/a"), "");
 }
 
 #[test]
