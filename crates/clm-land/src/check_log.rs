@@ -12,6 +12,7 @@ use std::time::Instant;
 use clm_ledger::TimedStep;
 
 use crate::Error;
+use crate::stderr::Stderr;
 
 /// How many of the check's last lines a failing land repeats.
 pub(crate) const TAIL: usize = 40;
@@ -40,13 +41,13 @@ pub(crate) struct Logged {
     pub(crate) steps: Vec<TimedStep>,
 }
 
-/// Runs `command` with its stdout and stderr on one pipe, copying what arrives to stderr and
+/// Runs `command` with its stdout and stderr on one pipe, copying what arrives to `err` and
 /// to `log`, created with its directories and truncated first. When the log can't be
-/// created, or a write to it fails, warns naming it and copies to stderr alone. Reads until
+/// created, or a write to it fails, warns naming it and copies to `err` alone. Reads until
 /// the pipe closes, so a check must end what it starts.
-pub(crate) fn run(mut command: Command, log: Option<&Path>) -> Result<Logged, Error> {
+pub(crate) fn run(mut command: Command, log: Option<&Path>, err: Stderr) -> Result<Logged, Error> {
     let warn = |log: &Path, e: std::io::Error| {
-        crate::lock::tell(&format!(
+        err.line(&format!(
             "clm land: warning: can't write the check's log at {}: {e}; its output goes to \
              stderr alone",
             log.display()
@@ -67,7 +68,6 @@ pub(crate) fn run(mut command: Command, log: Option<&Path>) -> Result<Logged, Er
     drop(command);
     let mut scan = Scan::default();
     let mut buf = [0u8; 8192];
-    let mut stderr = std::io::stderr();
     loop {
         let n = match reader.read(&mut buf) {
             Ok(0) => break,
@@ -80,7 +80,7 @@ pub(crate) fn run(mut command: Command, log: Option<&Path>) -> Result<Logged, Er
                 return Err(e.into());
             }
         };
-        let _ = stderr.write_all(&buf[..n]);
+        err.bytes(&buf[..n]);
         if let (Some(f), Some(log)) = (&mut file, log)
             && let Err(e) = f.write_all(&buf[..n])
         {

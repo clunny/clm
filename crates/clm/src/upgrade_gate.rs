@@ -54,10 +54,10 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::WrapUp { root }
         | C::Rebase { root }
         | C::Autosync { root }
-        | C::Land { root, .. }
+        | C::Land(clm_land::LandArgs { root, .. })
         | C::Verify { root, .. }
         | C::Approve { root, .. }
-        | C::Reconnect { root }
+        | C::Reconnect(clm_land::ReconnectArgs { root })
         | C::Health(clm_health::HealthArgs { root, .. })
         | C::Workaround(clm_health::WorkaroundArgs { root, .. })
         | C::Unreferenced(clm_unreferenced::Args { root, .. })

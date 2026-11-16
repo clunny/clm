@@ -11,6 +11,7 @@ use crate::exe::Exe;
 use crate::lock;
 use crate::lock::{Lane, Rank};
 use crate::scratch::Scratch;
+use crate::stderr::Stderr;
 use crate::{CheckHow, Selected};
 use crate::{Env, Error, Output, Repo, Verdict, is_claim};
 use clm_approval::{Approvals, Policy};
@@ -23,7 +24,17 @@ pub(crate) const ON_MERGE: &str = "fails on the merge with main";
 
 /// Lands `branch` (default: the current one) on `main`: see the node's Design, steps 1–9.
 pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
-    let repo = Repo::open(root, env)?;
+    land_to(root, branch, env, Stderr::PROCESS)
+}
+
+/// As `land`, writing what it prints on stderr while it runs to `err`.
+pub(crate) fn land_to(
+    root: &Path,
+    branch: Option<&str>,
+    env: &Env,
+    err: Stderr,
+) -> Result<Output, Error> {
+    let repo = Repo::open(root, env, err)?;
     let branch = repo.approval.branch_name(branch, "landed")?;
     let check = repo.settings.land.value.as_ref().map(|l| l.check.clone());
     // Before any subcommand runs, so none runs from a binary the check can take away.
@@ -277,7 +288,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 lane: Lane::Ordinary,
                 priority: land_priority(&repo, &branch, &p, &mut priority, &mut out),
             };
-            let held = lock::land(target, rank, &branch)?;
+            let held = lock::land(target, rank, &branch, repo.err)?;
             // The land it waited for may have moved `main` or checked this code meanwhile.
             if held.waited {
                 p = prepared!(true);
@@ -504,7 +515,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // A land that runs no check takes the push turn and no other lock, before the fetch
         // its push relies on, so it starts again under the turn (`land/push-turn`).
         if !runs && lock.is_none() && turn.is_none() {
-            turn = Some(lock::push(&places)?);
+            turn = Some(lock::push(&places, repo.err)?);
             continue;
         }
         // Readers to run on checked code, or a selection on code whose overlap was ruled out:
@@ -532,7 +543,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
                 // A readers' selection that ran takes the priority lane; one that failed, so
                 // that every test runs, the ordinary (`land/lock-queue`).
                 turn = None;
-                let held = lock::land(target, check_rank, &branch)?;
+                let held = lock::land(target, check_rank, &branch, repo.err)?;
                 let waited = held.waited;
                 lock = Some(held);
                 lock_rank = Some(check_rank);
@@ -617,7 +628,7 @@ pub fn land(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Erro
         // its new commits can both break is checked again (`land/push-turn`,
         // `land/overlap-recheck`).
         if turn.is_none() {
-            turn = Some(lock::push(&places)?);
+            turn = Some(lock::push(&places, repo.err)?);
             repo.fetch()?;
             if repo.rev(repo.base())?.as_deref() != Some(base.as_str()) {
                 chain = Some(merge.clone());

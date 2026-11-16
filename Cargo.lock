@@ -500,6 +500,7 @@ dependencies = [
 name = "clm-land"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-apply",
  "clm-approval",
  "clm-check",
