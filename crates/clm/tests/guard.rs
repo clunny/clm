@@ -29,7 +29,7 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
     dir
 }
 
-fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
+fn hook_args(args: &[&str], event: &str) -> Output {
     // The developer's own settings must not leak in either.
     let config = TempDir::new().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_clm"))
@@ -41,7 +41,6 @@ fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
         // The developer's own git config (signing, hooks, helpers) must not leak in.
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -72,7 +71,6 @@ fn hook_flag_names_the_agent_harness() {
     let out = hook_args(
         &["guard", "--agent-harness", "codex"],
         &push(Some(repo.path())),
-        &[],
     );
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(String::from_utf8_lossy(&out.stderr).contains("guard-blocks-push-to-main"));
@@ -83,30 +81,30 @@ fn hook_flag_names_the_agent_harness() {
         "tool_input": { "command": "clm approve spec/x" },
     })
     .to_string();
-    let out = hook_args(&["guard"], &approve, &[]);
+    let out = hook_args(&["guard"], &approve);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let answer: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(answer["hookSpecificOutput"]["permissionDecision"], "ask");
 
     // Codex can't confirm, so the same ask is a block there.
-    let out = hook_args(&["guard", "--agent-harness", "codex"], &approve, &[]);
+    let out = hook_args(&["guard", "--agent-harness", "codex"], &approve);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(out.stdout.is_empty());
 
     // Codex's session start carries its text as `additionalContext`.
     let start = serde_json::json!({ "cwd": repo.path() }).to_string();
-    let out = hook_args(&["session-start", "--agent-harness", "codex"], &start, &[]);
+    let out = hook_args(&["session-start", "--agent-harness", "codex"], &start);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     let answer: Value = serde_json::from_slice(&out.stdout).unwrap();
     assert!(answer["hookSpecificOutput"]["additionalContext"].is_string());
 
     // An unknown name: exit 1 (no block for either agent harness), naming it.
-    let out = hook_args(&["guard", "--agent-harness", "nope"], &push(None), &[]);
+    let out = hook_args(&["guard", "--agent-harness", "nope"], &push(None));
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert!(out.stdout.is_empty());
     assert!(String::from_utf8_lossy(&out.stderr).contains("nope"));
     for name in ["session-start", "autosync"] {
-        let out = hook_args(&[name, "--agent-harness", "nope"], &start, &[]);
+        let out = hook_args(&[name, "--agent-harness", "nope"], &start);
         assert_eq!(out.status.code(), Some(0), "{name}: {out:?}");
         assert!(out.stdout.is_empty(), "{name}: {out:?}");
     }

@@ -25,6 +25,15 @@ fn executable(path: &Path, script: &str) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 
+/// `clm_guard::guard_hook`, sharing the spawn lock, since the guard may ask git.
+fn guard_hook(
+    agent_harness: clm_agent_harness::AgentHarness,
+    event: &str,
+) -> clm_agent_harness::Rendered {
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+    clm_guard::guard_hook(agent_harness, event)
+}
+
 /// `clm_guard::guard`, sharing the spawn lock, since the guard may ask git.
 fn guard(event: &str) -> Decision {
     let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
@@ -1208,7 +1217,7 @@ fn a_push_to_main_under_codex_is_blocked() {
     // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
     let dir = TempDir::new().unwrap();
     checkout_on(dir.path(), "impl/x/b");
-    let out = clm_guard::guard_hook(
+    let out = guard_hook(
         clm_agent_harness::AgentHarness::Codex,
         &bash_in("git push origin main", dir.path()),
     );
@@ -1219,7 +1228,7 @@ fn a_push_to_main_under_codex_is_blocked() {
 #[test]
 fn an_approve_under_codex_says_to_use_the_humans_terminal() {
     // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
-    let out = clm_guard::guard_hook(
+    let out = guard_hook(
         clm_agent_harness::AgentHarness::Codex,
         &bash("clm approve spec/x"),
     );
@@ -1231,7 +1240,7 @@ fn an_approve_under_codex_says_to_use_the_humans_terminal() {
 fn claude_code_is_unchanged_and_other_events_pass() {
     // req:plugin.hooks.guard/guard-per-agent-harness@b6263bcf
     use clm_agent_harness::AgentHarness::ClaudeCode;
-    let out = clm_guard::guard_hook(ClaudeCode, &bash("clm approve spec/x"));
+    let out = guard_hook(ClaudeCode, &bash("clm approve spec/x"));
     assert_eq!(out.exit_code, 0);
     let why = asks_cmd("clm approve spec/x");
     assert_eq!(out.stdout, clm_guard::ask_json(&why));
@@ -1243,7 +1252,7 @@ fn claude_code_is_unchanged_and_other_events_pass() {
     })
     .to_string();
     for event in [other.as_str(), "not json"] {
-        let out = clm_guard::guard_hook(ClaudeCode, event);
+        let out = guard_hook(ClaudeCode, event);
         assert_eq!((out.exit_code, out.stdout.as_str()), (0, ""), "{event}");
     }
 }
@@ -1262,6 +1271,35 @@ fn clm_repo(settings: Option<&str>) -> TempDir {
         fs::write(dir.path().join("clm.toml"), settings).unwrap();
     }
     dir
+}
+
+/// Variables set on this process, put back as they were when it drops, a panic included.
+/// Set only under the exclusive spawn lock, so this file's other tests spawn nothing
+/// meanwhile, and under `nextest` no other test shares the process.
+struct ProcessEnv(Vec<(String, Option<std::ffi::OsString>)>);
+
+impl ProcessEnv {
+    fn set<'a>(vars: impl Iterator<Item = &'a (&'a str, &'a str)>) -> ProcessEnv {
+        let mut saved = Vec::new();
+        for (name, value) in vars {
+            saved.push((name.to_string(), std::env::var_os(name)));
+            // SAFETY: see the type's comment.
+            unsafe { std::env::set_var(name, value) };
+        }
+        ProcessEnv(saved)
+    }
+}
+
+impl Drop for ProcessEnv {
+    fn drop(&mut self) {
+        for (name, value) in self.0.drain(..).rev() {
+            match value {
+                // SAFETY: see the type's comment.
+                Some(value) => unsafe { std::env::set_var(&name, value) },
+                None => unsafe { std::env::remove_var(&name) },
+            }
+        }
+    }
 }
 
 /// What `clm hook guard` printed and exited with, as the call gives them.
@@ -1311,29 +1349,14 @@ fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
         }
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let mut call =
-        || clm_guard::guard_command(&args[1..], event, &lookup, &mut stdout, &mut stderr);
-    let code = if env.is_empty() {
-        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
-        call()
-    } else {
-        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
-        let saved: Vec<_> = env.iter().map(|(n, _)| (*n, std::env::var_os(n))).collect();
-        for (name, value) in env {
-            // SAFETY: the exclusive lock keeps this file's other tests from spawning, and
-            // under `nextest` no other test shares the process.
-            unsafe { std::env::set_var(name, value) };
-        }
-        let code = call();
-        for (name, value) in saved.into_iter().rev() {
-            match value {
-                // SAFETY: as above.
-                Some(value) => unsafe { std::env::set_var(name, value) },
-                None => unsafe { std::env::remove_var(name) },
-            }
-        }
-        code
-    };
+    let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+    // The developer's own git config (signing, hooks, helpers) must not leak in.
+    let isolated = [
+        ("GIT_CONFIG_GLOBAL", "/dev/null"),
+        ("GIT_CONFIG_NOSYSTEM", "1"),
+    ];
+    let _set = ProcessEnv::set(isolated.iter().chain(env));
+    let code = clm_guard::guard_command(&args[1..], event, &lookup, &mut stdout, &mut stderr);
     Output {
         status: Status(code),
         stdout,
@@ -1348,7 +1371,7 @@ fn the_call_prints_and_exits_as_the_hook_does() {
     // A block: the reason on the error stream, a line of its own, and exit 2.
     let push = bash_in("git push origin main", repo.path());
     let out = hook_args(&["guard", "--agent-harness", "codex"], &push, &[]);
-    let rendered = clm_guard::guard_hook(clm_agent_harness::AgentHarness::Codex, &push);
+    let rendered = guard_hook(clm_agent_harness::AgentHarness::Codex, &push);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
     assert_eq!(
@@ -1405,6 +1428,7 @@ fn the_call_reads_the_settings_from_its_environment() {
             _ => std::env::var(name).ok(),
         };
         let (mut out, mut err) = (Vec::new(), Vec::new());
+        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
         let code =
             clm_guard::guard_command(Vec::<String>::new(), &event, &lookup, &mut out, &mut err);
         (code, String::from_utf8(err).unwrap())

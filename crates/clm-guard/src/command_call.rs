@@ -33,8 +33,9 @@ struct Line {
 /// name, judging `event`, the text on standard input, with `env` as the environment. Writes
 /// what the command prints to `out` and `err` and returns its exit status: the agent
 /// harness's rendering of the decision (`guard-per-agent-harness`), 1 for an agent harness
-/// it doesn't know (`guard-fails-open`), and 2 for arguments it can't parse. The guard places
-/// each command by its event's `cwd`, so it takes no repository root.
+/// it doesn't know or when a stream fails (`guard-fails-open`), and 2 for arguments it can't
+/// parse. The guard places each command by its event's `cwd`, so it takes no repository
+/// root.
 pub fn guard_command<I, T>(
     args: I,
     event: &str,
@@ -51,7 +52,9 @@ where
         Err(e) => write!(out, "{}", e.render()).map(|()| 0),
         Ok(Line { args }) => run(&args, event, env, out, err),
     };
-    written.unwrap_or(2)
+    // A stream that fails leaves the hook's answer unread, so it blocks nothing
+    // (`guard-fails-open`).
+    written.unwrap_or(1)
 }
 
 /// Judges `event` for the agent harness `args` names and writes what the hook prints.
