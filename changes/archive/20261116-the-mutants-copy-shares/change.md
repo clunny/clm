@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-mutants-copy-shares-the-verify-worktree-s-git-index]
 ---
 

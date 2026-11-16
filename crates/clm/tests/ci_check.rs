@@ -1903,8 +1903,12 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// `bin/mutants-exit` for a run on the repository's files. A run of the script's fixture, which
 /// names one of its two tests, catches the mutants of the first and misses those of the second,
 /// unless `bin/fixture-catches-all` or `bin/fixture-catches-none` exists. The directory of each
-/// `cargo mutants` run goes to `$CI_LOG.cwd`, and again to `$CI_LOG.git` when it holds a `.git`;
-/// a run of the fixture copies its `src/lib.rs` to `$CI_LOG.fixture-src`.
+/// `cargo mutants` run goes to `$CI_LOG.cwd`, and again to `$CI_LOG.git` when it holds a `.git`
+/// directory. A run of the fixture copies its `src/lib.rs` to `$CI_LOG.fixture-src`, its
+/// `.git/objects/info/alternates` to `$CI_LOG.fixture-alternates`, and, as the tool would, copies
+/// its directory, changes `src/lib.rs` in the copy and writes what `git status` says there of
+/// tracked files to `$CI_LOG.fixture-status`. The first run on the repository's files copies
+/// the directory it runs in to `$CI_LOG.tree`, since the script removes it when it ends.
 const CARGO_MUTANTS: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
 [ "$1" = mutants ] || exit 0
@@ -1915,7 +1919,17 @@ esac
 echo "$PWD" >> "$CI_LOG.cwd"
 [ ! -d .git ] || echo "$PWD" >> "$CI_LOG.git"
 case " $* " in
-  *"test(~fixture_"*) cp src/lib.rs "$CI_LOG.fixture-src" ;;
+  *"test(~fixture_"*)
+    cp src/lib.rs "$CI_LOG.fixture-src"
+    cp .git/objects/info/alternates "$CI_LOG.fixture-alternates" 2>/dev/null || true
+    copy=$(mktemp -d)
+    cp -R . "$copy/c"
+    echo '// a mutant' >> "$copy/c/src/lib.rs"
+    git -C "$copy/c" status --porcelain --untracked-files=no > "$CI_LOG.fixture-status" 2>&1 ||
+      echo "git status failed" >> "$CI_LOG.fixture-status"
+    rm -rf "$copy"
+    ;;
+  *) [ -e "$CI_LOG.tree" ] || cp -R . "$CI_LOG.tree" ;;
 esac
 case " $* " in
   *" --list "*) cat "$bin/list" 2>/dev/null; exit 0 ;;
@@ -1995,7 +2009,44 @@ fn mutate_tree(plan_text: &str) -> Tree {
     tree.fake("cargo", CARGO_MUTANTS);
     tree.fake("npx", NPX_STRYKER);
     fs::write(tree.dir.path().join("plan"), plan_text).unwrap();
+    // A checkout at a commit, as the verify tree always is.
+    git(&tree.work(), &["init", "-q", "-b", "main"]);
+    git(&tree.work(), &["add", "-A"]);
+    git(&tree.work(), &["commit", "-q", "-m", "tree"]);
     tree
+}
+
+/// Runs `git` in `dir` with an identity of its own and none of the caller's git variables;
+/// returns its trimmed stdout and panics when it fails.
+fn git(dir: &Path, args: &[&str]) -> String {
+    let mut c = Command::new("git");
+    c.current_dir(dir).args(args);
+    without_git_env(&mut c);
+    let out = c
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@example.com")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@example.com")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+/// Removes the caller's git variables from `c` and keeps the machine's and the user's git
+/// configuration from it, so a signing, hook or remote-name setting there changes nothing.
+fn without_git_env(c: &mut Command) {
+    for (k, _) in std::env::vars_os() {
+        if k.to_string_lossy().starts_with("GIT_") {
+            c.env_remove(k);
+        }
+    }
+    c.env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null");
 }
 
 impl Tree {
@@ -2010,9 +2061,18 @@ impl Tree {
         let log = self.dir.path().join("log");
         let result = self.dir.path().join("result");
         let _ = fs::remove_file(&log);
-        for kept in ["cwd", "git", "fixture-src", "stryker", "vitest"] {
+        for kept in [
+            "cwd",
+            "git",
+            "fixture-src",
+            "fixture-alternates",
+            "fixture-status",
+            "stryker",
+            "vitest",
+        ] {
             let _ = fs::remove_file(self.dir.path().join(format!("log.{kept}")));
         }
+        let _ = fs::remove_dir_all(self.dir.path().join("log.tree"));
         let mut c = Command::new(".github/scripts/mutate.sh");
         c.current_dir(self.work())
             .env("PATH", self.path())
@@ -2020,6 +2080,7 @@ impl Tree {
             .env("CLM_MUTATE", self.dir.path().join("plan"))
             .env("CLM_MUTATE_RESULT", &result)
             .env_remove("CLM_LAND_DIR");
+        without_git_env(&mut c);
         for (k, v) in extra {
             c.env(k, v);
         }
@@ -2044,7 +2105,7 @@ const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndif
 
 #[test]
 fn a_rust_requirement_whose_test_notices_is_killed() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2076,7 +2137,7 @@ fn a_rust_requirement_whose_test_notices_is_killed() {
 
 #[test]
 fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-missed", "3");
     tree.report("further-missed", "2");
@@ -2096,11 +2157,26 @@ fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
         further.contains("replace f with \\(\\)") && further.contains("test(~proves_x)"),
         "{further}"
     );
+    // The diff's run, the listing and the further run are all in the one tree, made once,
+    // outside the checkout.
+    let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
+    let block: Vec<&str> = dirs.lines().skip(2).collect();
+    assert_eq!(block.len(), 3, "{dirs}");
+    assert!(block.iter().all(|d| *d == block[0]), "{dirs}");
+    let work = fs::canonicalize(tree.work()).unwrap();
+    assert!(!Path::new(block[0]).starts_with(&work), "{dirs}");
+    assert_eq!(
+        log.iter()
+            .filter(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
+            .count(),
+        2,
+        "{log:?}"
+    );
 }
 
 #[test]
 fn a_block_of_playwright_specs_is_not_judged() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(
         "requirement w/y\ncode web/src/app.ts\ntest web/e2e/app.spec.ts\tpaints\nlimit 20\n",
     );
@@ -2116,7 +2192,7 @@ fn a_block_of_playwright_specs_is_not_judged() {
 
 #[test]
 fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree("");
     let diff = tree.dir.path().join("the.diff");
     fs::write(
@@ -2189,7 +2265,7 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
 
 #[test]
 fn a_plan_with_nothing_to_mutate_is_not_judged() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree("requirement d/z\ncode docs/readme.md\ntest docs/t.rs\tt\nlimit 20\n");
     let (ok, log, result, _) = tree.mutate(&[]);
     assert!(ok, "{log:?}");
@@ -2198,7 +2274,7 @@ fn a_plan_with_nothing_to_mutate_is_not_judged() {
 
 #[test]
 fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let land = tree.dir.path().join("land");
@@ -2216,7 +2292,7 @@ fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
 
 #[test]
 fn the_mutation_tools_are_pinned_and_installed_when_absent() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let (_, log, _, _) = tree.mutate(&[]);
@@ -2254,7 +2330,7 @@ fn the_mutation_tools_are_pinned_and_installed_when_absent() {
 
 #[test]
 fn the_mutation_script_is_in_no_land_check_or_workflow() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     // clm:reads clm.toml
     // clm:reads .github/**
     let toml = fs::read_to_string(repo().join("clm.toml")).unwrap();
@@ -2291,7 +2367,7 @@ fn the_mutation_script_is_in_no_land_check_or_workflow() {
 
 #[test]
 fn vitest_tests_that_notice_nothing_survive() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(
         "requirement p/q\ncode plugin-panel/src/a.ts\ntest plugin-panel/test/a.test.ts\tt\nlimit 20\n",
     );
@@ -2313,7 +2389,7 @@ fn vitest_tests_that_notice_nothing_survive() {
 
 #[test]
 fn a_tool_that_fails_leaves_no_verdict() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("mutants-exit", "4");
@@ -2337,7 +2413,7 @@ const WEB_BLOCK: &str =
 
 #[test]
 fn stryker_that_runs_no_test_leaves_no_verdict() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-exit", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2351,7 +2427,7 @@ fn stryker_that_runs_no_test_leaves_no_verdict() {
 
 #[test]
 fn the_fixture_is_judged_first_outside_the_repository() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let before = snapshot(&tree.work());
@@ -2369,11 +2445,23 @@ fn the_fixture_is_judged_first_outside_the_repository() {
     // Two fixture runs, the test that notices and the one that doesn't, before the block's.
     assert_eq!(first_block, 2, "{runs:?}");
     assert!(runs[0].contains("fixture_notices") && runs[1].contains("fixture_blind"));
-    // The fixture is a git repository whose tests ask git for its top, and the tool copies its
-    // `.git`: a tool that left `.git` out of its copy would fail the fixture.
+    // The fixture is made as the tree is: a repository whose `.git` is a directory of its own,
+    // borrowing another repository's objects, in which git sees no change to a tracked file
+    // that a mutant changed. The tool copies that `.git`, and the fixture's tests ask git for
+    // its top and its status: a tool that left `.git` out of its copy, or a copy in which git
+    // sees the mutant, would fail the fixture.
     for run in &runs[..2] {
         assert!(run.contains("--copy-vcs true"), "{run}");
     }
+    let alternates =
+        fs::read_to_string(tree.dir.path().join("log.fixture-alternates")).unwrap_or_default();
+    let store = alternates.trim();
+    assert!(
+        Path::new(store).is_absolute() && store.ends_with("/objects"),
+        "alternates: {alternates:?}"
+    );
+    let status = fs::read_to_string(tree.dir.path().join("log.fixture-status")).unwrap();
+    assert_eq!(status, "", "git saw the fixture's mutant");
     let src = fs::read_to_string(tree.dir.path().join("log.fixture-src")).unwrap();
     assert!(
         src.contains("rev-parse")
@@ -2381,29 +2469,151 @@ fn the_fixture_is_judged_first_outside_the_repository() {
             && src.contains("status.success()")
             && src.contains("CARGO_MANIFEST_DIR")
             && src.contains("assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here)")
-            && src.matches("in_git_repository();").count() == 2,
+            && src.matches("in_git_repository();").count() == 2
+            && src.contains("\"--porcelain\", \"--untracked-files=no\"")
+            && src.contains("assert_eq!(String::from_utf8(status.stdout).unwrap(), \"\")")
+            && src.matches("tracked_files_unchanged();").count() == 1,
         "{src}"
     );
+    // The blind test, not the one that notices, fails when git sees the mutant.
+    let blind = src.split("fn fixture_blind()").nth(1).unwrap_or_default();
+    let blind = &blind[..blind.find("\n    }").unwrap_or(blind.len())];
+    assert!(blind.contains("tracked_files_unchanged();"), "{src}");
     let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
     let with_git = fs::read_to_string(tree.dir.path().join("log.git")).unwrap_or_default();
     for dir in dirs.lines().take(2) {
         assert!(with_git.lines().any(|d| d == dir), "no .git in {dir}");
+        assert!(
+            !store.starts_with(&format!("{dir}/")),
+            "{dir} holds the store it borrows"
+        );
     }
+    // Every run, the fixture's and the block's, is outside the checkout, and the block's are in
+    // one tree.
     let work = fs::canonicalize(tree.work()).unwrap();
-    for dir in dirs.lines().take(2) {
+    for dir in dirs.lines() {
         let dir = fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir));
         assert!(!dir.starts_with(&work), "{dir:?} is in the repository");
     }
+    let block: Vec<&str> = dirs.lines().skip(2).collect();
     assert!(
-        dirs.lines().skip(2).all(|d| Path::new(d) == tree.work()),
+        !block.is_empty() && block.iter().all(|d| *d == block[0]),
         "{dirs}"
     );
     assert_eq!(snapshot(&tree.work()), before);
 }
 
 #[test]
+fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
+    // req:ci/mutate-script@d66cd3c1
+    let tree = mutate_tree(&format!("{RUST_BLOCK}{}", RUST_BLOCK.replace("a/x", "a/y")));
+    tree.report("diff-caught", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed", "a/y killed"]);
+    let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
+    let block: Vec<&str> = dirs.lines().skip(2).collect();
+    assert_eq!(block.len(), 2, "{dirs}");
+    assert_eq!(block[0], block[1], "{dirs}");
+    assert_eq!(
+        log.iter()
+            .filter(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
+            .count(),
+        2,
+        "{log:?}"
+    );
+}
+
+#[test]
+fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
+    // req:ci/mutate-script@d66cd3c1
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report("diff-caught", "1");
+    // The checkout is a linked worktree of a repository with a branch and a remote-tracking
+    // branch, as the verify tree is.
+    let main = tree.dir.path().join("main");
+    fs::rename(tree.work(), &main).unwrap();
+    let first = git(&main, &["rev-parse", "HEAD"]);
+    fs::write(main.join("second.txt"), "2\n").unwrap();
+    git(&main, &["add", "second.txt"]);
+    git(&main, &["commit", "-q", "-m", "second"]);
+    let second = git(&main, &["rev-parse", "HEAD"]);
+    git(&main, &["branch", "side", &first]);
+    git(&main, &["update-ref", "refs/remotes/origin/main", &first]);
+    git(&main, &["gc", "-q"]);
+    let work = tree.work();
+    git(
+        &main,
+        &["worktree", "add", "-q", "--detach", work.to_str().unwrap()],
+    );
+    // Its `HEAD` is a commit of its own, which no branch names.
+    fs::write(work.join("third.txt"), "3\n").unwrap();
+    git(&work, &["add", "third.txt"]);
+    git(&work, &["commit", "-q", "-m", "third"]);
+    let third = git(&work, &["rev-parse", "HEAD"]);
+    let index = git(&work, &["rev-parse", "--git-path", "index"]);
+    let index = work.join(index);
+    let index_before = fs::read(&index).unwrap();
+    // A caller's git directory and index, and a user's default remote name, change nothing.
+    let config = tree.dir.path().join("gitconfig");
+    fs::write(&config, "[clone]\n\tdefaultRemoteName = upstream\n").unwrap();
+    let main_git = main.join(".git");
+    let (ok, log, result, stderr) = tree.mutate(&[
+        ("GIT_DIR", main_git.to_str().unwrap()),
+        ("GIT_INDEX_FILE", index.to_str().unwrap()),
+        ("GIT_CONFIG_GLOBAL", config.to_str().unwrap()),
+    ]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
+    // The directory the tool ran in for the block, kept by the fake.
+    let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
+    let ran = Path::new(dirs.lines().nth(2).unwrap_or_else(|| panic!("{dirs}")));
+    let real = fs::canonicalize(&work).unwrap();
+    assert!(
+        !fs::canonicalize(ran)
+            .unwrap_or_else(|_| ran.to_path_buf())
+            .starts_with(&real),
+        "{ran:?} is in the checkout"
+    );
+    let copy = tree.dir.path().join("log.tree");
+    assert!(copy.join(".git").is_dir(), "no .git directory in {ran:?}");
+    let packs: Vec<_> = fs::read_dir(copy.join(".git/objects/pack"))
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.path().extension().is_some_and(|x| x == "pack"))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default();
+    assert!(packs.is_empty(), "{packs:?}");
+    // Nor any loose object: the commits it names are all in the checkout's store.
+    let loose: Vec<_> = fs::read_dir(copy.join(".git/objects"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().len() == 2 && e.path().is_dir())
+        .filter(|e| fs::read_dir(e.path()).unwrap().next().is_some())
+        .map(|e| e.path())
+        .collect();
+    assert!(loose.is_empty(), "{loose:?}");
+    assert_eq!(git(&copy, &["rev-parse", "HEAD"]), third);
+    assert_eq!(git(&copy, &["rev-parse", "refs/heads/side"]), first);
+    assert_eq!(
+        git(&copy, &["rev-parse", "refs/remotes/origin/main"]),
+        first
+    );
+    assert_eq!(git(&copy, &["rev-parse", "refs/heads/main"]), second);
+    // A mutant written into a tracked file leaves git there reporting no change.
+    fs::write(copy.join("third.txt"), "a mutant\n").unwrap();
+    assert_eq!(
+        git(&copy, &["status", "--porcelain", "--untracked-files=no"]),
+        ""
+    );
+    assert_eq!(fs::read(&index).unwrap(), index_before);
+}
+
+#[test]
 fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("fixture-catches-all", "");
@@ -2430,7 +2640,7 @@ fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
 
 #[test]
 fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
-    // req:ci/mutate-script@ec920232
+    // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
