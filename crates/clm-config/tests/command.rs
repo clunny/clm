@@ -42,8 +42,8 @@ fn found_root(cwd: &Path) -> Option<PathBuf> {
     None
 }
 
-/// `clm <args>` run in `cwd` as `crates/clm` routes it, with `vars` the only CLM variables set
-/// and a user config dir that holds no `clm/config.toml`, so the developer's own settings never
+/// `clm <args>` run in `cwd` as `crates/clm` routes it, with `vars` and a user config dir that
+/// holds no `clm/config.toml` the only variables set, so the developer's own settings never
 /// leak in. A variable reads as `clm_config::process_env` reads the process's.
 fn clm_in(cwd: &Path, args: &[&str], vars: &[(&str, OsString)]) -> Output {
     let (name, rest) = args.split_first().unwrap();
@@ -53,11 +53,7 @@ fn clm_in(cwd: &Path, args: &[&str], vars: &[(&str, OsString)]) -> Output {
         if let Some((_, value)) = vars.iter().find(|(k, _)| *k == key) {
             return Some(value.to_string_lossy().into_owned());
         }
-        match key {
-            "XDG_CONFIG_HOME" => Some(empty.display().to_string()),
-            "CLM_AUTOSYNC" | "CLM_DEFECTS" | "CLM_MAX_BUILDS" | "CLM_WRITER" => None,
-            _ => clm_config::process_env(key),
-        }
+        (key == "XDG_CONFIG_HOME").then(|| empty.display().to_string())
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let status = clm_config::command(

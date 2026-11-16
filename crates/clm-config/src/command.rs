@@ -38,9 +38,9 @@ struct Line {
 /// `root`, the CLM repository `crates/clm` found from the directory it runs in (none outside
 /// one), with `env` as the environment, and writes what the command prints to `out` and `err`.
 /// Returns the exit status: 0 when it printed the lines, 1 with the error when the key is
-/// unknown or the settings can't be loaded, 2 for arguments it can't parse. `_cwd`, the
-/// directory it runs in, is taken as every command's call takes it; the root is all of it this
-/// command reads.
+/// unknown or the settings can't be loaded, 2 for arguments it can't parse or a stream it can't
+/// write. `_cwd`, the directory it runs in, is taken as `config`'s Contract states the call;
+/// this command reads only the root found from it.
 pub fn command<I, T>(
     args: I,
     root: Option<&Path>,
