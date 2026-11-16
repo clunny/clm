@@ -1,5 +1,5 @@
-//! `clm page`, `clm branch delete` and `clm issue` (specs/host/SPEC.md), with a fake `gh`
-//! first on `PATH`.
+//! The root's tests of the binary's host commands, with a fake `gh` first on `PATH`. Host's
+//! own tests call `clm-host` in `crates/clm-host/tests/command.rs`.
 
 #[path = "../../clm-orchestrator/tests/common/mod.rs"]
 mod common;

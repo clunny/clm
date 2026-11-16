@@ -87,6 +87,27 @@ type Call = fn(
     &mut dyn std::io::Write,
 ) -> u8;
 
+/// Puts back the directory and the variables a call changed, also when it panics.
+struct Restore {
+    cwd: PathBuf,
+    vars: Vec<(String, Option<std::ffi::OsString>)>,
+}
+
+impl Drop for Restore {
+    fn drop(&mut self) {
+        let _ = std::env::set_current_dir(&self.cwd);
+        // SAFETY: as where `clm` sets them.
+        unsafe {
+            for (k, v) in &self.vars {
+                match v {
+                    Some(v) => std::env::set_var(k, v),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+    }
+}
+
 /// The call's environment is this process's: one call at a time sets it.
 static CALL: Mutex<()> = Mutex::new(());
 
@@ -97,7 +118,6 @@ static CALL: Mutex<()> = Mutex::new(());
 fn clm(dir: &Path, gh: &Gh, args: &[&str], env: &[(&str, &str)]) -> (Option<i32>, String, String) {
     let _one = CALL.lock().unwrap_or_else(|e| e.into_inner());
     let path = std::env::var("PATH").unwrap_or_default();
-    let cwd = std::env::current_dir().unwrap();
     let mut vars = vec![
         (
             "PATH",
@@ -107,7 +127,15 @@ fn clm(dir: &Path, gh: &Gh, args: &[&str], env: &[(&str, &str)]) -> (Option<i32>
         ("FAKE_OUT", gh.dir.path().display().to_string()),
     ];
     vars.extend(env.iter().map(|(k, v)| (*k, v.to_string())));
-    // SAFETY: every call holds CALL, and nothing else in these tests reads the environment.
+    let _restore = Restore {
+        cwd: std::env::current_dir().unwrap(),
+        vars: vars
+            .iter()
+            .map(|(k, _)| (k.to_string(), std::env::var_os(k)))
+            .collect(),
+    };
+    // SAFETY: the tests run one per process (`ci/nextest-runner`), and under `cargo test`
+    // every call that changes the environment holds CALL.
     unsafe {
         for (k, v) in &vars {
             std::env::set_var(k, v);
@@ -129,14 +157,6 @@ fn clm(dir: &Path, gh: &Gh, args: &[&str], env: &[(&str, &str)]) -> (Option<i32>
         &mut stdout,
         &mut stderr,
     );
-    std::env::set_current_dir(cwd).unwrap();
-    // SAFETY: as above.
-    unsafe {
-        for (k, _) in &vars {
-            std::env::remove_var(k);
-        }
-        std::env::set_var("PATH", path);
-    }
     (
         Some(i32::from(code)),
         String::from_utf8(stdout).unwrap(),
