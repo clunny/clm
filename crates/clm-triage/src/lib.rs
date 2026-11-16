@@ -8,6 +8,7 @@
 //! are `orchestrator`'s; this crate owns the grouping rule, the draft budget, the change ID
 //! and the prompts' text.
 
+mod command;
 mod draft;
 mod finish;
 mod fold;
@@ -24,6 +25,10 @@ use clm_model::{
 pub use clm_orchestrator::Error;
 use clm_orchestrator::{Holding, REMOTE, taken_items};
 
+pub use command::{
+    DraftArgs, DraftSettings, Env, IntakeArgs, TriageArgs, draft_command, intake_command,
+    triage_command,
+};
 pub use draft::{Clock, Draft, DraftError, Drafted, draft, resume};
 pub use finish::finish;
 pub use fold::{Fold, fold};

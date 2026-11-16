@@ -1,13 +1,15 @@
-//! `clm draft --fold <id>...` with a fake `claude` on PATH: it writes the prompt for one
-//! session that folds drafts needing review into one spec branch, and changes nothing itself.
+//! `clm draft --fold <id>...` as `clm-triage`'s call (`orchestrator.triage/commands-in-crate`),
+//! with a fake `claude` on PATH: it writes the prompt for one session that folds drafts
+//! needing review into one spec branch, and changes nothing itself. These tests ran the `clm`
+//! binary until they moved here to call the crate.
 
 #[path = "../../clm-orchestrator/tests/common/mod.rs"]
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 
+use clm_triage::DraftSettings;
 use common::*;
 use tempfile::TempDir;
 
@@ -19,7 +21,8 @@ struct Ran {
     claude_ran: bool,
 }
 
-/// `clm draft --fold <ids>...` in the clone, with a fake `claude` first on PATH.
+/// `clm draft --fold <ids>... --root <work>` as `clm-triage`'s call, with a fake `claude`
+/// first on PATH, set on this process for the length of the call.
 fn fold(r: &Repo, ids: &[&str]) -> Ran {
     let dir = TempDir::new().unwrap();
     let bin = dir.path().join("bin");
@@ -34,22 +37,72 @@ fn fold(r: &Repo, ids: &[&str]) -> Ran {
         bin.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let out = output(
-        Command::new(env!("CARGO_BIN_EXE_clm"))
-            .args(["draft", "--fold"])
-            .args(ids)
-            .arg("--root")
-            .arg(&r.work)
-            .current_dir(&r.work)
-            .env("PATH", path)
-            .env("XDG_CONFIG_HOME", r.work.join(".no-config")),
-    );
+    let root = r.work.display().to_string();
+    let args: Vec<&str> = ["--fold"]
+        .into_iter()
+        .chain(ids.iter().copied())
+        .chain(["--root", &root])
+        .collect();
+    let (code, stdout, stderr) = with_var("PATH", &path, || call(&args, &r.work));
     Ran {
-        code: out.status.code(),
-        stdout: String::from_utf8_lossy(&out.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&out.stderr).into_owned(),
+        code: Some(code.into()),
+        stdout,
+        stderr,
         claude_ran: ran.exists(),
     }
+}
+
+/// `clm-triage`'s `clm draft` call with `args`, `root` as `crates/clm` finds it and run there,
+/// with the settings `crates/clm` loads by default: its exit status, then what it wrote to
+/// standard output and to standard error.
+fn call(args: &[&str], root: &Path) -> (u8, String, String) {
+    let settings = Ok(DraftSettings {
+        setup: None,
+        max_builds: 3,
+    });
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_triage::draft_command(args, root, root, &|_| None, settings, &mut out, &mut err);
+    (
+        code,
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
+    )
+}
+
+/// Sets `name` to `value` on this process for the length of `run`: `git` and the commands
+/// the call starts inherit the process's environment, not the lookup. The tests run one per
+/// process (`ci/nextest-runner`), so no other test sees it. The old value comes back when
+/// `run` returns or panics.
+fn with_var<R>(name: &str, value: &str, run: impl FnOnce() -> R) -> R {
+    struct Restore<'a>(&'a str, Option<std::ffi::OsString>);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            match self.1.take() {
+                // SAFETY: one test per process; nothing else reads the environment meanwhile.
+                Some(old) => unsafe { std::env::set_var(self.0, old) },
+                // SAFETY: as above.
+                None => unsafe { std::env::remove_var(self.0) },
+            }
+        }
+    }
+    let _restore = Restore(name, std::env::var_os(name));
+    // SAFETY: as above.
+    unsafe { std::env::set_var(name, value) };
+    run()
+}
+
+/// Runs `run` in directory `dir`, as the binary ran in the directory it was given, and goes
+/// back to the directory it left when `run` returns or panics. The tests run one per process.
+fn in_dir<R>(dir: &Path, run: impl FnOnce() -> R) -> R {
+    struct Back(PathBuf);
+    impl Drop for Back {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.0);
+        }
+    }
+    let _back = Back(std::env::current_dir().unwrap());
+    std::env::set_current_dir(dir).unwrap();
+    run()
 }
 
 /// Pushes `origin/spec/<id>` holding `changes/<id>/change.md` with `status` and `extra`
@@ -312,15 +365,11 @@ fn the_launcher_names_the_file_by_its_absolute_path() {
     // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
-    let out = output(
-        Command::new(env!("CARGO_BIN_EXE_clm"))
-            .args(["draft", "--fold", "20261027-a", "--root", "."])
-            .current_dir(&r.work)
-            .env("XDG_CONFIG_HOME", r.work.join(".no-config")),
-    );
-    assert_eq!(out.status.code(), Some(0));
+    let (code, stdout, _) = in_dir(&r.work, || {
+        call(&["--fold", "20261027-a", "--root", "."], &r.work)
+    });
+    assert_eq!(code, 0);
     let file = prompt_file(&r, "20261027-a").canonicalize().unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains(&format!("`{}`", file.display())),
         "{stdout}"

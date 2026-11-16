@@ -47,9 +47,9 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Claim(clm_orchestrator::ClaimArgs { root, .. })
         | C::Run(clm_run::RunArgs { root, .. })
         | C::Proposals(clm_orchestrator::ProposalsArgs { root, .. })
-        | C::Triage { root, .. }
-        | C::Intake { root, .. }
-        | C::Draft { root, .. }
+        | C::Triage(clm_triage::TriageArgs { root, .. })
+        | C::Intake(clm_triage::IntakeArgs { root })
+        | C::Draft(clm_triage::DraftArgs { root, .. })
         | C::Build { root, .. }
         | C::WrapUp(clm_checkpoint::WrapUpArgs { root })
         | C::Rebase { root }
