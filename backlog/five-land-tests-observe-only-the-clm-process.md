@@ -17,3 +17,7 @@ choices:
 The first two follow from `crates/clm-land/src/exe.rs` reading `std::env::current_exe()` itself, which the root's Design says a crate's call reads through its arguments instead, while `land/commands-in-crate` names no such argument; the spec change could also say whether the call takes the `clm` binary to copy.
 
 What is needed: say where these scenarios are proven once `clm/routes-only` holds. The human's answer to the two earlier items of this kind (`docs/decisions/commands-live-in-their-crates.md`, 2026-11-15) makes such a scenario the root's, word for word, in the one spec change made once the build run has drained.
+
+## The human's answer (2026-11-15)
+
+The same as for the first items of this kind: a scenario only a `clm` process can show becomes the root's, word for word, in the one spec change that follows the build run (`commands-live-in-their-crates`). The five tests stay where they are until then, and `land`'s workaround flag for them is accepted and deleted.

@@ -22,6 +22,7 @@ Four builds each left tests in the root's files that only a `clm` process, or an
 
 - The root's Design: a test of another component's command on what this component made stays with a `question` item and no workaround flag; a scenario that names `clm <command>` is proven by the crate's call and not reworded.
 - `backlog/commands-in-crate-moves-leave-tests-in-the-root` is answered and deleted, which unblocks `init/commands-in-crate`.
+- `backlog/prove-by-tests-has-three-unsettled-commands-in-crate-workarounds`, the same question asked by `land`'s build, is answered and deleted with it, which unblocks `land/commands-in-crate`; `backlog/five-land-tests-observe-only-the-clm-process` carries the answer.
 - `backlog/seventeen-init-tests-can-t-move-into-its-crate` and `backlog/effort-scenarios-still-name-the-clm-binary` carry the answers.
 - The workaround flags of `config`, `check.unreferenced`, `init` and `land` on `commands-in-crate` are accepted by the human and deleted.
 
