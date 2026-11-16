@@ -202,6 +202,24 @@ fn a_command_called_in_a_test_writes_its_streams_and_returns_its_status() {
 }
 
 #[test]
+fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
+    // req:sync/commands-in-crate@77d09cc0 req:sync/judged-by-check@bfefb55e
+    let (dir, work) = node_a("");
+    // A `TMPDIR` that is a file: no worktree can be made under it, so the run fails as git
+    // does, whatever the process's own `TMPDIR` is.
+    let file = dir.path().join("a-file");
+    fs::write(&file, "").unwrap();
+    let env = |key: &str| (key == "TMPDIR").then(|| file.to_string_lossy().into_owned());
+    let out = clm_with(&work, &["rebase"], &env);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "rebase failed\n");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains(&*file.to_string_lossy()),
+        "{out:?}"
+    );
+}
+
+#[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
     // req:sync/commands-in-crate@77d09cc0
     let (_dir, work) = conflicting();
