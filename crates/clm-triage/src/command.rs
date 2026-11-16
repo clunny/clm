@@ -99,14 +99,15 @@ struct DraftLine {
 }
 
 /// `clm triage` with `args`, the strings the command line gives after the command's name, in
-/// `root` unless `--root` overrides it. Writes what the command prints to `out` and `err` and
-/// returns its exit status: 0 with the lines, 1 when it refused or the specs don't load, 2
-/// when git failed or for arguments it can't parse. `_cwd` and `_env` are taken as every
-/// command's call takes them; this command reads neither.
+/// `root` unless `--root` overrides it, a relative `--root` read against `cwd`, the directory
+/// it runs in. Writes what the command prints to `out` and `err` and returns its exit status:
+/// 0 with the lines, 1 when it refused or the specs don't load, 2 when git failed or for
+/// arguments it can't parse. `_env` is taken as every command's call takes it; this command
+/// reads none of it.
 pub fn triage_command<I, T>(
     args: I,
     root: &Path,
-    _cwd: &Path,
+    cwd: &Path,
     _env: Env,
     out: &mut dyn Write,
     err: &mut dyn Write,
@@ -119,7 +120,10 @@ where
         Ok(line) => line.args,
         Err(code) => return code,
     };
-    let root = args.root.as_deref().unwrap_or(root);
+    let root = &args
+        .root
+        .as_ref()
+        .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
     let written = match crate::triage(root, args.expiry) {
         Ok(t) => t
             .warnings
@@ -136,7 +140,7 @@ where
 pub fn intake_command<I, T>(
     args: I,
     root: &Path,
-    _cwd: &Path,
+    cwd: &Path,
     _env: Env,
     host: Result<Box<dyn Host>, String>,
     out: &mut dyn Write,
@@ -150,7 +154,10 @@ where
         Ok(line) => line.args,
         Err(code) => return code,
     };
-    let root = args.root.as_deref().unwrap_or(root);
+    let root = &args
+        .root
+        .as_ref()
+        .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
     let written = match host {
         Ok(host) => report(
             "intake",
@@ -186,7 +193,10 @@ where
         Ok(line) => line.args,
         Err(code) => return code,
     };
-    let root = args.root.as_deref().unwrap_or(root);
+    let root = &args
+        .root
+        .as_ref()
+        .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
     let settings = settings.map_err(|e| Error::Refused(format!("settings: {e}")));
     let written = if let Some(change) = &args.finish {
         report("draft", crate::finish(root, change, args.expiry), out, err)

@@ -91,20 +91,6 @@ fn with_var<R>(name: &str, value: &str, run: impl FnOnce() -> R) -> R {
     run()
 }
 
-/// Runs `run` in directory `dir`, as the binary ran in the directory it was given, and goes
-/// back to the directory it left when `run` returns or panics. The tests run one per process.
-fn in_dir<R>(dir: &Path, run: impl FnOnce() -> R) -> R {
-    struct Back(PathBuf);
-    impl Drop for Back {
-        fn drop(&mut self) {
-            let _ = std::env::set_current_dir(&self.0);
-        }
-    }
-    let _back = Back(std::env::current_dir().unwrap());
-    std::env::set_current_dir(dir).unwrap();
-    run()
-}
-
 /// Pushes `origin/spec/<id>` holding `changes/<id>/change.md` with `status` and `extra`
 /// frontmatter lines.
 fn spec_branch(r: &Repo, id: &str, status: &str, extra: &str) {
@@ -365,9 +351,8 @@ fn the_launcher_names_the_file_by_its_absolute_path() {
     // req:orchestrator.triage/fold@9b310060
     let r = repo();
     spec_branch(&r, "20261027-a", "applied", "");
-    let (code, stdout, _) = in_dir(&r.work, || {
-        call(&["--fold", "20261027-a", "--root", "."], &r.work)
-    });
+    // Run in the clone, so `--root .` is the clone.
+    let (code, stdout, _) = call(&["--fold", "20261027-a", "--root", "."], &r.work);
     assert_eq!(code, 0);
     let file = prompt_file(&r, "20261027-a").canonicalize().unwrap();
     assert!(

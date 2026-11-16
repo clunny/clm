@@ -953,8 +953,9 @@ fn clm_draft_reads_relative_answers_from_where_it_runs() {
 #[test]
 fn clm_draft_reads_answers_from_a_subdirectory_it_runs_in() {
     // req:orchestrator.triage/draft-answers@3e3fc364
-    // With no `--root`, `clm` finds the repository above the subdirectory; a relative
-    // path is still read against the subdirectory.
+    // With no `--root`, `clm` finds the repository above the subdirectory, and passes it as
+    // the root with the subdirectory as the directory the call runs in; a relative path is
+    // still read against the subdirectory.
     let r = with_items();
     write(&r.work, "sub/answers.md", "b: from the subdirectory\n");
     write(&r.work, "answers.md", "b: from the root\n");

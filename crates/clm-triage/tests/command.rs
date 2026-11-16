@@ -151,17 +151,18 @@ fn settings_that_dont_load_refuse_a_draft_but_not_a_finish() {
 fn intake_writes_its_lines_or_why_the_settings_failed() {
     // req:orchestrator.triage/commands-in-crate@6d42d28b
     let r = with_bug();
-    let c = called(|out, err| {
-        intake_command(
-            [] as [&str; 0],
-            &r.work,
-            &r.work,
-            &|_| None,
-            Ok(Box::new(Quiet)),
-            out,
-            err,
-        )
-    });
+    let intake = |args: &[&str], root: &Path, cwd: &Path| {
+        called(|out, err| intake_command(args, root, cwd, &|_| None, Ok(Box::new(Quiet)), out, err))
+    };
+    let c = intake(&[], &r.work, &r.work);
+    assert_eq!((c.code, c.out.as_str()), (0, ""), "{}", c.err);
+    // Where git can't run, the fetch fails with 2; `--root` overrides that root, and a
+    // relative one is read against the directory the call runs in.
+    let nowhere = Path::new("/nonexistent-dir");
+    let c = intake(&[], nowhere, nowhere);
+    assert_eq!(c.code, 2, "{}", c.err);
+    assert!(c.err.starts_with("clm intake: "), "{}", c.err);
+    let c = intake(&["--root", "work"], nowhere, r.work.parent().unwrap());
     assert_eq!((c.code, c.out.as_str()), (0, ""), "{}", c.err);
     let c = called(|out, err| {
         intake_command(
