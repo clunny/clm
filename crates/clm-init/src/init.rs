@@ -474,7 +474,7 @@ fn permission_step(root: &Path) -> Option<String> {
 /// `clm init --check-permissions`: writes nothing. Returns what to print, empty when every
 /// rule is allowed; a non-empty text is the heading and each missing rule, one a line
 /// (`init-check-permissions`).
-pub fn check_permissions(cwd: &Path) -> Result<String, String> {
+pub(crate) fn check_permissions(cwd: &Path) -> Result<String, String> {
     let top = top_level(cwd)?;
     let cwd = fs::canonicalize(cwd).map_err(|e| format!("{}: {e}", cwd.display()))?;
     let root = clm_root(&cwd, &top).unwrap_or(&top);
