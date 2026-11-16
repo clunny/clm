@@ -68,7 +68,9 @@ rust_tools() {
 # Judges a fixture with cargo-mutants before it judges anything: a function with a test that
 # fails when it is changed and one that passes whatever it returns. The tool goes on only when it
 # reports the first's mutants caught and the second's missed, so a tool that accepts nothing, or
-# everything, can't be taken for a verdict. The crate lives in the temporary directory.
+# everything, can't be taken for a verdict. The crate lives in the temporary directory, as a git
+# repository of its own whose tests pass only inside one, so a tool that leaves `.git` out of the
+# copy it tests fails the fixture, as it would fail this repository's tests that ask git about it.
 rust_fixture() {
   local fix=$work/fixture-rust kind out status
   mkdir -p "$fix/src"
@@ -82,23 +84,39 @@ pub fn double(x: i32) -> i32 {
 mod tests {
     use super::*;
 
+    // The crate's own directory must be the top of a git repository: one found further up, as
+    // when the copy sits under another checkout, doesn't count.
+    fn in_git_repository() {
+        let top = std::process::Command::new("git")
+            .args(["rev-parse", "--show-toplevel"])
+            .output()
+            .unwrap();
+        assert!(top.status.success(), "not in a git repository");
+        let top = String::from_utf8(top.stdout).unwrap();
+        let here = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+        assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here);
+    }
+
     #[test]
     fn fixture_notices() {
+        in_git_repository();
         assert_eq!(double(3), 6);
     }
 
     #[test]
     fn fixture_blind() {
+        in_git_repository();
         let _ = double(3);
     }
 }
 EOF
+  git -C "$fix" init -q || die "cargo mutants' fixture could not be made a git repository"
   for kind in notices blind; do
     out=$work/fixture-$kind
     rm -rf "$out"
     mkdir -p "$out"
     status=0
-    (cd "$fix" && cargo mutants --test-tool nextest --output "$out" -- -E "test(~fixture_$kind)") ||
+    (cd "$fix" && cargo mutants --test-tool nextest --copy-vcs true --output "$out" -- -E "test(~fixture_$kind)") ||
       status=$?
     case $status in 0 | 2 | 3) ;; *) die "cargo mutants failed on its fixture (status $status)" ;; esac
     caught=0
@@ -154,7 +172,9 @@ run_mutants() {
   mkdir -p "$out"
   # `--no-tests=pass`: cargo-mutants runs its unmutated baseline in the mutated files' package,
   # where the filterset matches nothing when the citing tests are another package's.
-  cargo mutants --test-tool nextest --output "$out" "${mutants_args[@]}" "$@" \
+  # `--copy-vcs true`: the copy it tests holds the checkout's `.git`, so a test that asks git
+  # about this repository passes there as it does here.
+  cargo mutants --test-tool nextest --copy-vcs true --output "$out" "${mutants_args[@]}" "$@" \
     -- --no-tests=pass -E "$filterset" || status=$?
   # 0 all caught, 2 some missed, 3 some timed out; anything else judged nothing: the tests fail
   # in the unmutated tree, or a filterset doesn't parse.
