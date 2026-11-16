@@ -128,7 +128,7 @@ fn rank(priority: &str) -> u8 {
         .unwrap_or(5)
 }
 
-const LAUNCHES_NOW: &str = "launches now";
+pub(crate) const LAUNCHES_NOW: &str = "launches now";
 const WAITS_FOR_A_PLACE: &str = "waits for a place";
 const WAITS_FOR_RESUMES: &str = "waits for stopped runs to resume";
 pub(crate) const WAITS_FOR_DISK: &str = "waits for disk";

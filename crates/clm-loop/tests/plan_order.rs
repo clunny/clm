@@ -293,6 +293,12 @@ fn an_unknown_disk_holds_nothing_back() {
     let mut s = snapshot(2, &[("a", "P2")], &[]);
     s.disk = disk(Some(0), "unknown");
     assert_eq!(names(&s), ["build:a"]);
+    // A `disk` condition holds launches back whatever the reading.
+    for reading in [None, disk(Some(2), "unknown")] {
+        s.disk = reading;
+        s.file.conditions.disk = true;
+        assert!(names(&s).is_empty());
+    }
 }
 
 #[test]

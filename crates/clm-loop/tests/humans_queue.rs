@@ -181,6 +181,21 @@ fn the_disk_holds_work_with_nothing_running() {
             .push(run("build:b", Kind::Build, "sonnet", state, Some("t")));
         assert!(plan(&busy).waiting_on_you.is_empty(), "{state:?}");
     }
+    // A run of any kind counts, and so does one this step relaunches.
+    let mut fold = s.clone();
+    fold.file.runs.push(run(
+        "fold:x",
+        Kind::Fold,
+        "opus",
+        RunState::Running,
+        Some("t"),
+    ));
+    assert!(plan(&fold).waiting_on_you.is_empty());
+    let mut orphan = s.clone();
+    let mut stopped = run("draft:d", Kind::Draft, "opus", RunState::Stopped, None);
+    stopped.orphan = true;
+    orphan.file.runs.push(stopped);
+    assert!(plan(&orphan).waiting_on_you.is_empty());
     // Nothing held back on the disk, nothing asked for.
     let mut room = s.clone();
     room.disk = Some(clm_loop::Disk {

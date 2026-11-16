@@ -76,6 +76,26 @@ fn the_disk_frees() {
 }
 
 #[test]
+fn other_work_waking_it_while_the_disk_holds_doesnt_name_the_disk() {
+    // req:orchestrator.loop/build-wait@af4348ef
+    let fx = Fixture::new();
+    fx.set("next", "a\n");
+    fx.disk(Some(0), "warn");
+    let rx = waiting(&fx, 5.0);
+    thread::sleep(Duration::from_millis(1500));
+    assert!(rx.try_recv().is_err(), "the disk holds build:a back");
+    // A fold falls due, which the disk doesn't hold back.
+    clm_loop::update(&fx.work, |f| {
+        f.review.push("x".to_string());
+        Ok(())
+    })
+    .unwrap();
+    let why = rx.recv_timeout(Duration::from_secs(10)).unwrap().unwrap();
+    assert!(why.contains("fold:x"), "{why}");
+    assert!(!why.contains("disk"), "{why}");
+}
+
+#[test]
 fn a_stop_request() {
     // req:orchestrator.loop/build-wait@af4348ef
     let fx = Fixture::new();
