@@ -78,6 +78,7 @@ fn the_command_prints_what_it_did_and_exits_zero() {
 }
 
 #[test]
+// req:rename/refusals@8232ad18
 fn a_refusal_exits_one_and_writes_nothing() {
     let dir = repo(
         "---\nstatus: proposed\nrenames:\n  - requirement: a/none\n    to: y\n---\n\n## Intent\nr\n",
@@ -132,4 +133,14 @@ fn arguments_it_cant_parse_return_two_with_the_usage_error() {
     assert!(stderr.contains("Usage: clm rename"), "{stderr}");
     // Nothing was renamed, and this process goes on.
     assert!(dir.path().join("changes/r/change.md").exists());
+
+    // `--help` is no error: the help goes to the output stream with status 0.
+    let out = call(dir.path(), &["rename", "--help"]);
+    assert_eq!(out.status, Some(0));
+    assert_eq!(String::from_utf8(out.stderr).unwrap(), "");
+    assert!(
+        String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("Usage: clm rename")
+    );
 }
