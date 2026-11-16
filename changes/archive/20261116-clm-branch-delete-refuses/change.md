@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-branch-delete-refuses-a-pushed-spec-branch-after-the-draft]
 ---
 

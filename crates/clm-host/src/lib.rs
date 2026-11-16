@@ -280,11 +280,17 @@ pub(crate) fn delete_pushed_branch(
     branch: &str,
     lease: Option<&str>,
 ) -> Result<(), Error> {
+    let record = pushed_record(branch);
+    // Once `origin` has no such branch, this clone's record of pushing it goes too.
+    // Losing it only falls back to the reflog, so a failure to drop it fails nothing.
+    let drop_record = || drop(git(root, &["update-ref", "-d", &record]));
     if !has_remote(root)? {
+        drop_record();
         return Ok(());
     }
     let refname = format!("refs/heads/{branch}");
-    if git(root, &["ls-remote", REMOTE, &refname])?.is_empty() {
+    if remote_tip(root, &refname)?.is_none() {
+        drop_record();
         return Ok(());
     }
     refuse_protected(branch)?;
@@ -310,22 +316,38 @@ pub(crate) fn delete_pushed_branch(
         }
         None => tip,
     };
-    // Git writes `update by push` when a push from this clone moves the branch, and another
-    // entry when a fetch brings someone else's tip; no reflog fails closed.
+    // `clm branch push`'s record holds whatever the fetches do. Without it, git writes
+    // `update by push` when a push from this clone moves the branch, and another entry when
+    // a fetch brings someone else's tip; no record and no reflog fails closed.
+    let recorded = git(root, &["rev-parse", "--verify", "-q", &record]).is_ok_and(|r| r == lease);
     let newest = git(
         root,
         &["reflog", "show", "-n", "1", "--format=%H %gs", &tracking],
     )
     .unwrap_or_default();
-    let pushed_here = newest
-        .split_once(' ')
-        .is_some_and(|(sha, why)| sha == lease && why.starts_with("update by push"));
+    let pushed_here = recorded
+        || newest
+            .split_once(' ')
+            .is_some_and(|(sha, why)| sha == lease && why.starts_with("update by push"));
     if !pushed_here {
         return Err(Error::Refused(format!(
             "this clone didn't push {REMOTE}/{branch} at {lease}; left it"
         )));
     }
-    host.branch_delete(root, branch, &lease)
+    host.branch_delete(root, branch, &lease)?;
+    drop_record();
+    Ok(())
+}
+
+/// The tip of `origin`'s `refname`, read with `ls-remote`, whose pattern also matches refs
+/// that merely end in it, so only the line naming `refname` itself counts.
+fn remote_tip(root: &Path, refname: &str) -> Result<Option<String>, Error> {
+    Ok(git(root, &["ls-remote", REMOTE, refname])?
+        .lines()
+        .find_map(|line| match line.split_once('\t') {
+            Some((sha, name)) if name == refname => Some(sha.to_string()),
+            _ => None,
+        }))
 }
 
 /// `clm branch push` (`branch-push`): pushes the checked-out branch to [`REMOTE`] as a
@@ -350,6 +372,10 @@ pub(crate) fn push_branch(root: &Path) -> Result<String, Error> {
         args.push("--force-if-includes");
     }
     let sha = git(root, &["rev-parse", "HEAD"])?;
+    // A push to the commit `origin` already holds moves nothing, and that tip may be another
+    // clone's this branch was made from, so it isn't recorded as this clone's. When `origin`
+    // can't be asked, nothing is recorded either: the push itself reports why it failed.
+    let held = remote_tip(root, &refname).map_or(true, |tip| tip.as_deref() == Some(&sha));
     let target = format!("HEAD:{refname}");
     args.extend([REMOTE, &target]);
     match git(root, &args) {
@@ -357,5 +383,15 @@ pub(crate) fn push_branch(root: &Path) -> Result<String, Error> {
         Err(clm_git::Error::Failed { stderr, .. }) => return Err(Error::Refused(stderr)),
         Err(e) => return Err(e.into()),
     }
+    if !held {
+        // `origin` has moved: a record that fails to write only falls back to the reflog.
+        let _ = git(root, &["update-ref", &pushed_record(&branch), &sha]);
+    }
     Ok(format!("pushed {branch} {sha}"))
+}
+
+/// The local ref recording the tip `clm branch push` last moved `origin`'s `branch` to: the
+/// clone's own, shared by its worktrees, never pushed and never written by a fetch.
+fn pushed_record(branch: &str) -> String {
+    format!("refs/clm/pushed/{branch}")
 }
