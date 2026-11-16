@@ -1904,7 +1904,7 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// names one of its two tests, catches the mutants of the first and misses those of the second,
 /// unless `bin/fixture-catches-all` or `bin/fixture-catches-none` exists. The directory of each
 /// `cargo mutants` run goes to `$CI_LOG.cwd`, and again to `$CI_LOG.git` when it holds a `.git`;
-/// a run in a directory holding `src/lib.rs` (the fixture's) copies it to `$CI_LOG.fixture-src`.
+/// a run of the fixture copies its `src/lib.rs` to `$CI_LOG.fixture-src`.
 const CARGO_MUTANTS: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
 [ "$1" = mutants ] || exit 0
@@ -1914,7 +1914,9 @@ case " $* " in
 esac
 echo "$PWD" >> "$CI_LOG.cwd"
 [ ! -d .git ] || echo "$PWD" >> "$CI_LOG.git"
-[ ! -f src/lib.rs ] || cp src/lib.rs "$CI_LOG.fixture-src"
+case " $* " in
+  *"test(~fixture_"*) cp src/lib.rs "$CI_LOG.fixture-src" ;;
+esac
 case " $* " in
   *" --list "*) cat "$bin/list" 2>/dev/null; exit 0 ;;
 esac
@@ -2374,7 +2376,11 @@ fn the_fixture_is_judged_first_outside_the_repository() {
     }
     let src = fs::read_to_string(tree.dir.path().join("log.fixture-src")).unwrap();
     assert!(
-        src.contains("rev-parse") && src.contains("--show-toplevel"),
+        src.contains("rev-parse")
+            && src.contains("--show-toplevel")
+            && src.contains("status.success()")
+            && src.contains("CARGO_MANIFEST_DIR")
+            && src.matches("in_git_repository();").count() == 2,
         "{src}"
     );
     let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();

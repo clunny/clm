@@ -84,12 +84,17 @@ pub fn double(x: i32) -> i32 {
 mod tests {
     use super::*;
 
+    // The crate's own directory must be the top of a git repository: one found further up, as
+    // when the copy sits under another checkout, doesn't count.
     fn in_git_repository() {
         let top = std::process::Command::new("git")
             .args(["rev-parse", "--show-toplevel"])
             .output()
             .unwrap();
         assert!(top.status.success(), "not in a git repository");
+        let top = String::from_utf8(top.stdout).unwrap();
+        let here = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+        assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here);
     }
 
     #[test]
