@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [no-test-proves-the-settings-clm-rebase-loads]
 ---
 
