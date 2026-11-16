@@ -2,6 +2,7 @@
 //! specs/check/health/SPEC.md). Nothing gates on it.
 
 mod churn;
+mod command;
 mod exemptions;
 mod flag;
 mod land_time;
@@ -15,7 +16,8 @@ use std::path::Path;
 
 pub use churn::{Churn, churn};
 pub use clm_git::Failure;
-pub use flag::{crowded, workaround};
+pub use command::{HealthArgs, WorkaroundArgs, health_command, workaround_command};
+pub use flag::workaround;
 pub use requirements::{Reconsider, RequirementSignals, reconsider, signals};
 
 /// What `clm health` flags, filled by the `clm` crate from `config`'s `health` and

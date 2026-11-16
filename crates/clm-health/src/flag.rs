@@ -78,7 +78,7 @@ pub fn workaround(
 /// Each capability `requirement` serves (and `CAPABILITIES.md` holds) whose unsettled workaround
 /// flags number `threshold` or more, with the count, in serves order (`workaround-command`).
 /// `Git` when the ledger can't be read.
-pub fn crowded(
+pub(crate) fn crowded(
     root: &Path,
     requirement: &str,
     threshold: u64,
