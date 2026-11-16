@@ -10,7 +10,7 @@ use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 
 use crate::Options;
 use crate::cmd::{clm, clm_in, clm_ok, say};
-use crate::plan::{BacklogRow, Group, Launch, Snapshot, plan_of};
+use crate::plan::{BacklogRow, Disk, Group, Launch, Snapshot, plan_of};
 use crate::state::{self, Kind, LoopFile, Run, RunState, StopMode};
 use crate::stops;
 
@@ -149,6 +149,7 @@ fn read_snapshot(options: &Options, file: LoopFile, wrap_up: &str) -> Result<Sna
             .filter_map(|l| Some(l.trim().strip_prefix("complete ")?.trim().to_string()))
             .collect(),
         archive_branches: archive_branches(options)?,
+        disk: read_disk(options),
         verify: None,
         left: wrap_up
             .lines()
@@ -239,6 +240,25 @@ fn read_upgrades(options: &Options) -> Result<Vec<String>, Failure> {
             matches!(words.next()?, "required" | "advised").then(|| id.to_string())
         })
         .collect())
+}
+
+/// The disk from `clm machine --format json`, or none when it fails or prints what doesn't parse,
+/// so a reading that fails holds nothing back (`plan-order`).
+fn read_disk(options: &Options) -> Option<Disk> {
+    let ran = clm(options, &["machine", "--format", "json"]).ok()?;
+    if ran.code != 0 {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_str(&ran.stdout).ok()?;
+    let disk = value.get("disk")?;
+    let room = match disk.get("room")? {
+        serde_json::Value::Null => None,
+        room => Some(room.as_u64()?),
+    };
+    Some(Disk {
+        room,
+        state: disk.get("state")?.as_str()?.to_string(),
+    })
 }
 
 /// The IDs of the `impl/archive/*` branches on `origin`.

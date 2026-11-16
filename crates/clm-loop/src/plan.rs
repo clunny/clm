@@ -29,6 +29,15 @@ pub struct BacklogRow {
     pub since: u64,
 }
 
+/// The disk as `clm machine --format json` reads it: how many more builds free space covers,
+/// `None` before any build was measured, and its state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Disk {
+    pub room: Option<u64>,
+    /// `ok`, `warn`, `critical` or `unknown`.
+    pub state: String,
+}
+
 /// What a step read after its fetch.
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
@@ -60,6 +69,8 @@ pub struct Snapshot {
     pub archive_branches: Vec<String>,
     /// The `left <path>: ...` lines of `clm wrap-up`.
     pub left: Vec<String>,
+    /// The disk, or none when `clm machine` failed or printed what doesn't parse.
+    pub disk: Option<Disk>,
     /// A `clm verify --due --dry-run` that found a run due, and whether it was asked with
     /// `--event work-done`.
     pub verify: Option<bool>,
@@ -120,6 +131,21 @@ fn rank(priority: &str) -> u8 {
 const LAUNCHES_NOW: &str = "launches now";
 const WAITS_FOR_A_PLACE: &str = "waits for a place";
 const WAITS_FOR_RESUMES: &str = "waits for stopped runs to resume";
+pub(crate) const WAITS_FOR_DISK: &str = "waits for disk";
+
+/// How many new builds and drafts the disk lets a step launch, or none when it holds nothing
+/// back: none at all while a `disk` condition holds, its `room` when that is a number, and none
+/// while there is no `room` and the disk reads `critical` (`plan-order`).
+fn disk_room(s: &Snapshot) -> Option<u64> {
+    if s.file.conditions.disk {
+        return Some(0);
+    }
+    let disk = s.disk.as_ref().filter(|d| d.state != "unknown")?;
+    match disk.room {
+        Some(room) => Some(room),
+        None => (disk.state == "critical").then_some(0),
+    }
+}
 
 /// The queue model for `file` at `now`, with `next` as its next-up section.
 pub(crate) fn view(
@@ -326,12 +352,19 @@ pub fn plan_of(s: &Snapshot) -> Plan {
         } else {
             s.free_places
         };
+        let room = disk_room(s);
+        let mut new = 0u64;
         for (i, (_, _, mut entry, launch)) in candidates.into_iter().enumerate() {
             if resuming {
                 entry.reason = WAITS_FOR_RESUMES.to_string();
             } else if (i as u64) < places {
-                entry.reason = LAUNCHES_NOW.to_string();
-                launches.push(launch);
+                if room.is_some_and(|room| new >= room) {
+                    entry.reason = WAITS_FOR_DISK.to_string();
+                } else {
+                    entry.reason = LAUNCHES_NOW.to_string();
+                    launches.push(launch);
+                    new += 1;
+                }
             } else {
                 entry.reason = WAITS_FOR_A_PLACE.to_string();
             }
