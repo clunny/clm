@@ -359,16 +359,12 @@ fn node_a(clm_toml: &str) -> (TempDir, PathBuf) {
     (dir, work)
 }
 
-/// `clm rebase` in `dir`, with no user settings and `TMPDIR` an empty directory of its own,
-/// which it asserts is empty again afterwards; its stdout.
+/// `clm rebase` in `dir`, with no user settings (`repository_settings` reads only the
+/// repository's) and `TMPDIR` an empty directory of its own, which it asserts is empty again
+/// afterwards; its stdout.
 fn rebase_without_user_settings(dir: &Path) -> (Option<i32>, String) {
     let tmp = TempDir::new().unwrap();
-    let config = Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config");
-    let env = |key: &str| match key {
-        "XDG_CONFIG_HOME" => Some(config.to_string_lossy().into_owned()),
-        "TMPDIR" => Some(tmp.path().to_string_lossy().into_owned()),
-        _ => None,
-    };
+    let env = |key: &str| (key == "TMPDIR").then(|| tmp.path().to_string_lossy().into_owned());
     let out = clm_with(dir, &["rebase"], &env);
     let stdout = String::from_utf8(out.stdout).unwrap();
     let left: Vec<_> = fs::read_dir(tmp.path()).unwrap().collect();
