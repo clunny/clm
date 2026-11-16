@@ -333,7 +333,6 @@ fn a_change_awaiting_approval_waits_on_you_and_a_node_writing_a_protected_path_i
 #[test]
 fn scenario_claims_counted() {
     // req:view/status-report@538240fb
-    // req:orchestrator/status-claims@726cb7c5
     let dir = base();
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node("specd", &["x"]));
@@ -355,7 +354,6 @@ fn scenario_claims_counted() {
 #[test]
 fn backlog_claims_are_counted_with_node_claims() {
     // req:view/status-report@538240fb
-    // req:orchestrator/status-claims@726cb7c5
     let dir = base();
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node("specd", &["x"]));
@@ -488,7 +486,6 @@ fn summary_orders_statuses_states_and_kinds() {
 fn scenario_nothing_in_flight() {
     // req:view/status-report@538240fb
     // req:check.coverage/status-report@ba0eb7f0
-    // req:orchestrator/status-claims@726cb7c5 (not a git repository)
     let dir = base();
     let d = dir.path();
     cite(d, "u", &["a/y"]);

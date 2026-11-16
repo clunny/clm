@@ -8,10 +8,14 @@ publish.workspace = true
 [features]
 default = ["git"]
 # The commands that work on a checkout, `origin` and `gh`; off for wasm builds.
-git = ["clm-check/checkout", "dep:clm-git", "dep:tempfile"]
+git = ["clm-check/checkout", "dep:clap", "dep:clm-git", "dep:tempfile"]
 
 [[test]]
 name = "claim_unique"
+required-features = ["git"]
+
+[[test]]
+name = "command"
 required-features = ["git"]
 
 [[test]]
@@ -31,6 +35,7 @@ name = "propose"
 required-features = ["git"]
 
 [dependencies]
+clap = { workspace = true, optional = true }
 clm-model.workspace = true
 clm-check = { workspace = true, default-features = false }
 clm-git = { workspace = true, optional = true }

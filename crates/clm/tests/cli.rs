@@ -416,21 +416,6 @@ fn backlog_and_archive_commands() {
 }
 
 #[test]
-fn orchestrator_commands_exit_2_when_git_fails() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/claim@026fab7a
-    // req:orchestrator/backlog-claim@50959cb7 req:orchestrator/proposals@ba5ce6a8
-    // req:orchestrator/claim-fix@5a3c119e
-    let dir = change_repo("---\ncomponent: clm\n---\n");
-    // Not a git repository, so there's no `origin` to fetch.
-    assert_eq!(clm(dir.path(), &["next"]).0, Some(2));
-    assert_eq!(clm(dir.path(), &["claim", "clm"]).0, Some(2));
-    let fix = clm(dir.path(), &["claim", "clm", "--fix", "backlog/q"]);
-    assert_eq!(fix.0, Some(2));
-    assert_eq!(clm(dir.path(), &["claim", "backlog/q"]).0, Some(2));
-    assert_eq!(clm(dir.path(), &["proposals"]).0, Some(2));
-}
-
-#[test]
 fn hashes_of_layers() {
     // req:apply/hash-command@971912c5
     let dir = change_repo("---\ncomponent: clm\n---\n");

@@ -1035,7 +1035,6 @@ fn scenario_dirty_leftover() {
 #[test]
 fn scenario_node_that_writes_a_protected_path() {
     // req:orchestrator.run/run@5c35d326
-    // req:orchestrator/next@fd7e1025
     let (r, f) = (repo(), fake());
     write(
         &r.work,

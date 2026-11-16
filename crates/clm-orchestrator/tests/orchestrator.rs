@@ -512,6 +512,26 @@ fn scenario_backlog_claims_after_node_claims() {
 }
 
 #[test]
+fn backlog_claims_live_and_lapsed_by_the_expiry_after_node_claims() {
+    // req:orchestrator/status-claims@726cb7c5
+    let r = repo();
+    push_claim(&r.work, "b", 1);
+    push_claim(&r.work, "c", 5);
+    push_propose(&r.work, "r", 5);
+    push_propose(&r.work, "q", 1);
+    git(&r.work, &["fetch", "-q", "origin"]);
+    assert_eq!(
+        status_claims(&r.work),
+        [
+            ["b", "live"],
+            ["c", "lapsed"],
+            ["backlog/q", "live"],
+            ["backlog/r", "lapsed"]
+        ]
+    );
+}
+
+#[test]
 fn scenario_no_claims() {
     // req:orchestrator/status-claims@726cb7c5
     let r = repo();
