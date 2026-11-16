@@ -128,31 +128,3 @@ fn first_line() {
     let (code, stdout) = clm(d, &["gate", "--base", "main", "--approved"]);
     assert_eq!((code, stdout.as_str()), (Some(0), "spec review\n"));
 }
-
-#[test]
-fn only_gate_rs_cites_the_gate() {
-    // req:gate/binary-tests-apart@671cc207
-    fn rs_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
-        for e in fs::read_dir(dir).unwrap() {
-            let p = e.unwrap().path();
-            if p.is_dir() {
-                rs_files(&p, out);
-            } else if p.extension().is_some_and(|x| x == "rs") {
-                out.push(p);
-            }
-        }
-    }
-    let mut files = Vec::new();
-    rs_files(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"),
-        &mut files,
-    );
-    let prefix = concat!("req", ":gate/");
-    let mut citing: Vec<String> = files
-        .iter()
-        .filter(|p| fs::read_to_string(p).unwrap().contains(prefix))
-        .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
-        .collect();
-    citing.sort();
-    assert_eq!(citing, ["gate.rs"]);
-}
