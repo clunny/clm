@@ -1,6 +1,7 @@
 //! `clm hook guard` (`guard-matches-writes`, `guard-reads-quotes-and-wrappers`): judges
 //! each segment of a `Bash` command, as the shell would split and run it, by every rule.
 
+mod command_call;
 mod gh;
 mod push;
 mod release;
@@ -11,7 +12,7 @@ use std::time::Duration;
 
 pub use clm_agent_harness::Decision;
 use clm_agent_harness::{AgentHarness, Rendered, parse_event, render};
-use clm_hooks::settings;
+pub use command_call::{GuardArgs, guard_command};
 use push::Reach;
 use shell::command;
 use shell::walk::{Judged, Stdin, walk};
@@ -26,11 +27,20 @@ pub fn ask_json(reason: &str) -> String {
 /// (`guard-per-agent-harness`): the same rules whatever the agent harness, rendered as that
 /// agent harness reads a decision, so an `ask` where it can't confirm blocks.
 pub fn guard_hook(agent_harness: AgentHarness, event: &str) -> Rendered {
+    guard_hook_in(agent_harness, event, &clm_config::process_env)
+}
+
+/// `guard_hook` with `env` as the environment the settings load with; the `git` and `gh`
+/// the guard asks inherit the process's.
+fn guard_hook_in(agent_harness: AgentHarness, event: &str, env: Env) -> Rendered {
     render(
         agent_harness,
-        &judge_event(agent_harness, event, &Budgets::HOOK),
+        &judge_event(agent_harness, event, &Budgets::HOOK, env),
     )
 }
+
+/// The environment the guard reads, as a lookup.
+type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// The time the guard's `git` queries and `gh` lookups may spend (`hook-budgets`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,11 +69,17 @@ pub fn guard(event: &str) -> Decision {
 /// has the human confirm one that runs `clm approve` (`approve-in-session`), or files a CLM
 /// defect as an issue. A block wins over an ask. Git queries and `gh` lookups spend `budgets`.
 pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
-    judge_event(AgentHarness::ClaudeCode, event, budgets)
+    judge_event(
+        AgentHarness::ClaudeCode,
+        event,
+        budgets,
+        &clm_config::process_env,
+    )
 }
 
-/// Reads `event` as `agent_harness` writes it and judges its shell command.
-fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets) -> Decision {
+/// Reads `event` as `agent_harness` writes it and judges its shell command, loading the
+/// settings under `env`.
+fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets, env: Env) -> Decision {
     let Ok(event) = parse_event(agent_harness, event) else {
         return Decision::Allow;
     };
@@ -73,11 +89,12 @@ fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets) -> D
     let Some(command) = event.command.as_deref() else {
         return Decision::Allow;
     };
-    judge_command(command, event.cwd.as_deref().map(Path::new), budgets)
+    judge_command(command, event.cwd.as_deref().map(Path::new), budgets, env)
 }
 
-/// The rules, whatever the agent harness: judges `command` run from `cwd`.
-fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets) -> Decision {
+/// The rules, whatever the agent harness: judges `command` run from `cwd`, loading the
+/// settings under `env`.
+fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env) -> Decision {
     let judged = walk(command, cwd);
     let mut reasons: Vec<String> = Vec::new();
     // Re-running a release run would publish, merge or deploy again, and one that can't be
@@ -133,14 +150,16 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets) -> Decisi
         ));
     }
     // `clm defect` reads `CLM_DEFECTS` from its own environment, which the segment can set.
-    // Loaded once, and only when a segment runs `clm defect` without its own value.
+    // Loaded once, and only when a segment runs `clm defect` without its own value, as
+    // `clm-hooks`' `settings` loads them, under `env`.
     let asks_by_settings = std::cell::OnceCell::new();
     let files_issue = |j: &&Judged| {
         runs_defect(&j.tokens)
             && match j.command().assigned("CLM_DEFECTS") {
                 Some(v) => !matches!(v, "backlog" | "off"),
                 None => *asks_by_settings.get_or_init(|| {
-                    settings(cwd).map_or(true, |s| s.defects.value == clm_config::Defects::Ask)
+                    clm_config::load(cwd.and_then(clm_hooks::clm_root), env)
+                        .map_or(true, |s| s.defects.value == clm_config::Defects::Ask)
                 }),
             }
     };
