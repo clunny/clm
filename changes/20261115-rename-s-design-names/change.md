@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [rename-s-design-names-a-removed-gate-requirement]
 ---
 

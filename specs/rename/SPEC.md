@@ -37,7 +37,7 @@ The crate `clm-rename` exposes `rename(root, change_id)`, the command on a check
 
 **Wasm.** `clm-gate` is in the `web` Worker's wasm build, so `clm-rename` and what it pulls in SHALL build for `wasm32-unknown-unknown`, as `clm-gate`'s other dependencies do; the Worker never calls it. The checks' wasm build of `clm-web` proves it.
 
-**Tests.** A test that runs the `clm` binary sits in the root's `crates/clm/tests/rename.rs`, as `gate`'s do (`binary-tests-apart`); the rest are the library's, under `crates/clm-rename/tests/`. They judge a tree after a rename by every violation `clm_model::load` reports, the archived change's included, with none filtered out.
+**Tests.** Every test of `rename`'s requirements is the library's, under `crates/clm-rename/tests/`, and calls `clm-rename` itself, its command call where a requirement states what `clm rename` prints or how it exits; none runs the `clm` binary (`commands-in-crate`, `commands-live-in-their-crates`). They judge a tree after a rename by every violation `clm_model::load` reports, the archived change's included, with none filtered out.
 
 ## Requirements
 
