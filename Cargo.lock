@@ -575,6 +575,7 @@ dependencies = [
 name = "clm-orchestrator"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-check",
  "clm-git",
  "clm-model",

@@ -179,32 +179,10 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// List the components ready to build from origin/main, most urgent first.
-    Next {
-        /// Hours without a commit after which a claim lapses.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Next(clm_orchestrator::NextArgs),
     /// Claim a component by pushing its impl/<component> branch, or a backlog item by pushing
     /// propose/<slug>.
-    Claim {
-        /// A component ID, as `clm next` prints it, or `backlog/<slug>`; with `--fix`, any
-        /// component ID.
-        #[arg(value_name = "COMPONENT")]
-        node: String,
-        /// Claim the component for a code-only fix of this bug or deferred item (`backlog/<slug>`), whatever
-        /// its state.
-        #[arg(long, value_name = "backlog/<slug>")]
-        fix: Option<String>,
-        /// Hours without a commit after which a claim lapses.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Claim(clm_orchestrator::ClaimArgs),
     /// Claim a component, or pick up its unfinished build, write the prompt for a session that
     /// builds and lands its pending requirements to `.clm/prompts/<component>.md`, and print a
     /// launcher naming that file. With `--finish`, free the component's build place instead and,
@@ -228,14 +206,7 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// List the changes that hold or propose backlog items, and the live backlog claims.
-    Proposals {
-        /// Print only lines whose components include this one (repeatable).
-        #[arg(long = "component", value_name = "COMPONENT")]
-        nodes: Vec<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Proposals(clm_orchestrator::ProposalsArgs),
     /// Group the untaken backlog items into units of design work, beside the spec work on
     /// origin and the items waiting on the human, most urgent first.
     Triage {
@@ -863,35 +834,27 @@ fn dispatch() -> ExitCode {
                 ExitCode::from(2)
             }
         },
-        Command::Next { expiry, root } => {
-            let root = repo_root(root);
-            orchestrated(
-                "next",
-                clm_config::load(Some(&root), &clm_config::process_env)
-                    .map_err(|e| clm_orchestrator::Error::Refused(format!("settings: {e}")))
-                    .and_then(|s| {
-                        clm_orchestrator::next_look(&root, expiry, s.max_builds.value).map(|look| {
-                            if let Some(line) = &look.no_place {
-                                eprintln!("{line}");
-                            }
-                            look.components
-                        })
-                    })
-                    .map(|n| n.join("\n")),
-            )
+        Command::Next(args) => {
+            let root = repo_root(args.root.clone());
+            let max_builds = clm_config::load(Some(&root), &clm_config::process_env)
+                .map(|s| s.max_builds.value)
+                .map_err(|e| e.to_string());
+            ExitCode::from(clm_orchestrator::next_command(
+                command_args(),
+                &root,
+                &clm_config::process_env,
+                max_builds,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
-        Command::Claim {
-            node,
-            fix,
-            expiry,
-            root,
-        } => orchestrated(
-            "claim",
-            match fix {
-                Some(item) => clm_orchestrator::claim_fix(&repo_root(root), &node, &item, expiry),
-                None => clm_orchestrator::claim(&repo_root(root), &node, expiry),
-            },
-        ),
+        Command::Claim(args) => ExitCode::from(clm_orchestrator::claim_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Run {
             node,
             finish,
@@ -912,15 +875,13 @@ fn dispatch() -> ExitCode {
                 }
             }
         }
-        Command::Proposals { nodes, root } => orchestrated(
-            "proposals",
-            clm_orchestrator::proposals(&repo_root(root), &nodes).map(|p| {
-                for warning in &p.warnings {
-                    eprintln!("clm proposals: warning: {warning}");
-                }
-                p.lines.join("\n")
-            }),
-        ),
+        Command::Proposals(args) => ExitCode::from(clm_orchestrator::proposals_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Triage { expiry, root } => orchestrated(
             "triage",
             clm_triage::triage(&repo_root(root), expiry).map(|t| {

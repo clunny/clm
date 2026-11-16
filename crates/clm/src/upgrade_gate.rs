@@ -43,10 +43,10 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Context(clm_context::Args { root, .. })
         | C::Hashes { root, .. }
         | C::Gate { root, .. }
-        | C::Next { root, .. }
-        | C::Claim { root, .. }
+        | C::Next(clm_orchestrator::NextArgs { root, .. })
+        | C::Claim(clm_orchestrator::ClaimArgs { root, .. })
         | C::Run { root, .. }
-        | C::Proposals { root, .. }
+        | C::Proposals(clm_orchestrator::ProposalsArgs { root, .. })
         | C::Triage { root, .. }
         | C::Intake { root, .. }
         | C::Draft { root, .. }
