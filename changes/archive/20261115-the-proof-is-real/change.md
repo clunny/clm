@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-proof-is-real-upgrade-note-says-a-foreign-change-needs-review]
 ---
 

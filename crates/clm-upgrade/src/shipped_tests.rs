@@ -979,7 +979,7 @@ const PROOF_ID: &str = "20261114-proof-is-real";
 const PROOF_TITLE: &str =
     "A marker now counts only inside a test: see what stops counting before the next build";
 
-// req:upgrade/migration-markers-in-tests@b7a52f4d
+// req:upgrade/migration-markers-in-tests@25966374
 #[test]
 fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -998,7 +998,7 @@ fn a_project_stamped_before_the_proof_note_is_told_and_then_up_to_date() {
     assert_eq!(list(dir.path()).unwrap(), "up to date\n");
 }
 
-// req:upgrade/migration-markers-in-tests@b7a52f4d
+// req:upgrade/migration-markers-in-tests@25966374
 #[test]
 fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwise() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
@@ -1016,14 +1016,39 @@ fn the_proof_note_is_done_once_stamped_or_without_a_clm_toml_and_pending_otherwi
     assert!(!list(dir.path()).unwrap().contains(PROOF_ID));
 }
 
-// req:upgrade/migration-markers-in-tests@b7a52f4d
+// req:upgrade/migration-markers-in-tests@25966374
 #[test]
 fn the_proof_note_names_what_a_project_needs_to_know() {
     let dir = project(NEW_ARCHITECTURE, NEW_CLAUDE);
     fs::write(dir.path().join("clm.toml"), "").unwrap();
     let note = note(dir.path(), PROOF_ID).unwrap();
     assert!(note.starts_with(&format!("{PROOF_TITLE}\n")), "{note}");
-    for needle in ["clm coverage", "uncounted", "wiring", "[verify] mutate"] {
+    for needle in [
+        "clm coverage",
+        "uncounted",
+        "wiring",
+        "`clm land` refuses",
+        "`impl/<component>`",
+        "no review lets it through",
+        "`tests` glob",
+        "[verify] mutate",
+        "off until the project sets them",
+    ] {
         assert!(note.contains(needle), "{needle}: {note}");
+    }
+    let glob = note.find("`tests` glob").unwrap();
+    let names = note.find("then names `wiring`").expect(&note);
+    assert!(
+        glob < names,
+        "the `tests` globs come before `wiring`: {note}"
+    );
+    let lower = note.to_lowercase();
+    for claim in [
+        "needs review",
+        "need review",
+        "needs a review",
+        "requires review",
+    ] {
+        assert!(!lower.contains(claim), "{claim}: {note}");
     }
 }
