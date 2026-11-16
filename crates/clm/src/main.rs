@@ -88,13 +88,7 @@ enum Command {
     },
     Size(clm_check::SizeArgs),
     /// Apply a change's deltas to specs/, all or nothing.
-    Apply {
-        /// Change ID (directory name under changes/).
-        change: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Apply(clm_apply::ApplyArgs),
     /// Carry out the renames a proposed change records: its deltas, applied, with every
     /// reference re-pointed, and the change archived as done.
     Rename {
@@ -105,13 +99,7 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// Move a done or abandoned change to changes/archive/.
-    Archive {
-        /// Change ID.
-        change: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Archive(clm_apply::ArchiveArgs),
     Backlog(clm_check::BacklogArgs),
     /// Print a summary of the repository, then its components, changes and claims; never fetches.
     Status {
@@ -157,14 +145,7 @@ enum Command {
         lock: Option<String>,
     },
     /// Print a component's element hashes, for recording as delta bases.
-    Hashes {
-        /// Component ID.
-        #[arg(value_name = "COMPONENT")]
-        node: String,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Hashes(clm_apply::HashesArgs),
     /// Decide whether HEAD may merge into a base ref; exit 1 to block.
     Gate {
         /// Base ref the PR merges into.
@@ -675,25 +656,13 @@ fn dispatch() -> ExitCode {
             &mut Printed::Err,
             &node_size,
         )),
-        Command::Apply { change, root } => match clm_apply::apply(&repo_root(root), &change) {
-            Ok(ops) => {
-                println!("applied {change}");
-                for op in ops {
-                    let verb = match op {
-                        clm_apply::FileOp::Write(..) => "wrote",
-                        clm_apply::FileOp::Remove(_) => "removed",
-                    };
-                    println!("  {verb} {}", op.path().display());
-                }
-                ExitCode::SUCCESS
-            }
-            Err(violations) => {
-                for v in &violations {
-                    println!("{}", clm_check::format(v));
-                }
-                ExitCode::FAILURE
-            }
-        },
+        Command::Apply(args) => ExitCode::from(clm_apply::apply_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Rename { change, root } => match clm_rename::rename(&repo_root(root), &change) {
             Ok(lines) => {
                 lines.iter().for_each(|line| println!("{line}"));
@@ -704,13 +673,13 @@ fn dispatch() -> ExitCode {
                 ExitCode::from(failure.exit_code())
             }
         },
-        Command::Archive { change, root } => match clm_apply::archive(&repo_root(root), &change) {
-            Ok(to) => {
-                println!("archived {change} -> {}", to.display());
-                ExitCode::SUCCESS
-            }
-            Err(violations) => report(&violations),
-        },
+        Command::Archive(args) => ExitCode::from(clm_apply::archive_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Backlog(args) => ExitCode::from(clm_check::backlog_command(
             command_args(),
             &found_root(&args.root),
@@ -788,27 +757,13 @@ fn dispatch() -> ExitCode {
                 }
             }
         }
-        Command::Hashes { node, root } => {
-            let (graph, _) = clm_model::load(&repo_root(root));
-            if let Some(layer) = clm_model::Layer::ALL.into_iter().find(|l| l.id() == node) {
-                for (element, hash) in clm_apply::layer_hashes(&graph, layer) {
-                    println!("{element} {hash}");
-                }
-                return ExitCode::SUCCESS;
-            }
-            match graph.nodes.get(&node) {
-                Some(n) => {
-                    for (element, hash) in clm_apply::hashes(n) {
-                        println!("{element} {hash}");
-                    }
-                    ExitCode::SUCCESS
-                }
-                None => {
-                    eprintln!("clm hashes: no valid component `{node}`");
-                    ExitCode::from(2)
-                }
-            }
-        }
+        Command::Hashes(args) => ExitCode::from(clm_apply::hashes_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Gate {
             base,
             approved,

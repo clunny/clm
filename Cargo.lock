@@ -298,6 +298,7 @@ dependencies = [
 name = "clm-apply"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-model",
  "tempfile",
 ]
