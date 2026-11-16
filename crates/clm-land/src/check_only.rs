@@ -8,6 +8,7 @@ use clm_ledger::Body;
 
 use crate::exe::Exe;
 use crate::lock::Rank;
+use crate::stderr::Stderr;
 use crate::{CheckHow, Env, Error, Output, Repo};
 
 /// How `--check-only` reports a failing check.
@@ -19,6 +20,16 @@ const FAILS: &str = "fails";
 /// thing it appends is the `checked` record of a clean committed `HEAD` that contains
 /// `origin/main`. `branch` is refused: it lands nothing, so it takes none.
 pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
+    check_only_to(root, branch, env, Stderr::PROCESS)
+}
+
+/// As `check_only`, writing what it prints on stderr while it runs to `err`.
+pub(crate) fn check_only_to(
+    root: &Path,
+    branch: Option<&str>,
+    env: &Env,
+    err: Stderr,
+) -> Result<Output, Error> {
     if let Some(branch) = branch {
         return Err(Error::Refused(format!(
             "`--check-only` and a branch (`{branch}`) don't go together: it checks the \
@@ -30,7 +41,7 @@ pub fn check_only(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output
     if let Ok(root) = std::fs::canonicalize(root) {
         clm_config::load(Some(&root), env).map_err(|e| Error::Refused(e.to_string()))?;
     }
-    let repo = Repo::open(root, env)?;
+    let repo = Repo::open(root, env, err)?;
     let exe = Exe::new(&repo)?;
     // The working tree's `[env]` (`land/check-env`).
     let env_vars = match &repo.settings.land.value {

@@ -7,6 +7,7 @@ mod batch;
 mod cap;
 mod check_log;
 mod check_only;
+mod command;
 mod derived;
 mod exe;
 mod finish;
@@ -16,6 +17,7 @@ mod own_files;
 mod reconnect;
 mod runner;
 mod scratch;
+mod stderr;
 mod time_report;
 mod verify_stop;
 
@@ -23,8 +25,11 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use stderr::Stderr;
+
 pub use cap::{Capped, cap_directory};
 pub use check_only::check_only;
+pub use command::{LandArgs, ReconnectArgs, land_command, reconnect_command};
 pub use land::land;
 pub use reconnect::reconnect;
 pub use runner::{CheckEnv, CheckRun, Step, run_check};
@@ -112,15 +117,18 @@ pub(crate) struct Repo<'a> {
     base: String,
     /// What `clm-approval` judges a branch's approval with, given the same root and settings.
     approval: clm_approval::Repo<'a>,
+    /// Where the command writes what it prints on stderr while it runs.
+    err: Stderr<'a>,
 }
 
 impl<'a> Repo<'a> {
-    fn open(root: &Path, env: &'a Env) -> Result<Self, Error> {
+    fn open(root: &Path, env: &'a Env, err: Stderr<'a>) -> Result<Self, Error> {
         let root = std::fs::canonicalize(root)?;
         let settings = clm_config::load(Some(&root), env)?;
         let base = format!("{}/main", clm_git::REMOTE);
         let approval = clm_approval::Repo::new(&root, env, &settings);
         Ok(Repo {
+            err,
             root,
             env,
             settings,
@@ -178,6 +186,7 @@ impl<'a> Repo<'a> {
             args.push("--approved");
         }
         let out = self.command(exe, "CLM_GATE", "gate", &args, dir).output()?;
+        self.err.bytes(&out.stderr);
         let stdout = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
         if !out.status.success() {
             let mut why = format!("the gate blocks the land:\n{stdout}");
@@ -202,11 +211,13 @@ impl<'a> Repo<'a> {
     /// names it; refused as `` `clm check` <fails> `` when it fails.
     fn clm_check(&self, exe: &Path, dir: &Path, detectors: bool, fails: &str) -> Result<(), Error> {
         let args: &[&str] = if detectors { &[] } else { &["--no-detectors"] };
-        let status = self
+        // What it prints goes to the land's stderr: its stdout first, then its stderr.
+        let out = self
             .command(exe, "CLM_CHECK", "check", args, dir)
-            .stdout(std::io::stderr())
-            .status()?;
-        if !status.success() {
+            .output()?;
+        self.err.bytes(&out.stdout);
+        self.err.bytes(&out.stderr);
+        if !out.status.success() {
             return Err(Error::Refused(format!("`clm check` {fails}")));
         }
         Ok(())
@@ -356,7 +367,7 @@ impl<'a> Repo<'a> {
             &env,
             log,
             rank,
-            crate::lock::tell,
+            self.err,
         )
     }
 
@@ -372,7 +383,7 @@ impl<'a> Repo<'a> {
         }
         self.affected(exe, dir, &args, readers)
             .unwrap_or_else(|why| {
-                crate::lock::tell(&format!(
+                self.err.line(&format!(
                     "clm affected failed: {why}; the check runs every test"
                 ));
                 Selected::Failed
@@ -386,7 +397,7 @@ impl<'a> Repo<'a> {
     fn overlap(&self, exe: &Path, dir: &Path, head: &str, base: &str) -> Selected {
         let args = ["--overlap", head, base];
         self.affected(exe, dir, &args, true).unwrap_or_else(|why| {
-            crate::lock::tell(&format!(
+            self.err.line(&format!(
                 "clm affected failed: {why}; the land checks its own selection"
             ));
             Selected::Failed
@@ -453,7 +464,7 @@ impl<'a> Repo<'a> {
     }
 
     /// The command `var` names, split on whitespace, else `exe`'s `sub`; with `args`, run in
-    /// `dir`.
+    /// `dir`, its stderr kept for the caller to pass on.
     fn command(&self, exe: &Path, var: &str, sub: &str, args: &[&str], dir: &Path) -> Command {
         let mut words: Vec<String> = match (self.env)(var).filter(|c| !c.trim().is_empty()) {
             Some(c) => c.split_whitespace().map(str::to_string).collect(),
@@ -465,7 +476,7 @@ impl<'a> Repo<'a> {
             .args(&words[1..])
             .current_dir(dir)
             .stdin(Stdio::null())
-            .stderr(Stdio::inherit());
+            .stderr(Stdio::piped());
         command
     }
 

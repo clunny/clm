@@ -10,6 +10,7 @@ use crate::Error;
 use crate::check_log;
 pub use crate::check_log::Step;
 use crate::lock::Rank;
+use crate::stderr::Stderr;
 
 /// The environment a check runs in, beyond the caller's own: what to set and what to remove.
 /// `CLM_SELECTION` is never inherited: it is set from the selection given, else removed.
@@ -59,7 +60,7 @@ pub fn run_check(
         env,
         log,
         Some(Rank::ORDINARY),
-        crate::lock::tell,
+        Stderr::PROCESS,
     )
 }
 
@@ -74,7 +75,7 @@ pub(crate) fn places_of(root: &Path) -> Result<PathBuf, Error> {
     Ok(main.join(prefix).join(".clm"))
 }
 
-/// `run_check` with the clone's `places` known and the waiting line passed to `say`, taking
+/// `run_check` with the clone's `places` known, the waiting line and the output said on `err`, taking
 /// the check lock, with a ticket of `rank`, unless it is `None`: a `--check-only` run in a
 /// build place takes none (`land/check-lock`).
 #[allow(clippy::too_many_arguments)]
@@ -86,14 +87,14 @@ pub(crate) fn run_in(
     env: &CheckEnv,
     log: Option<&Path>,
     rank: Option<Rank>,
-    say: impl FnMut(&str),
+    err: Stderr,
 ) -> Result<CheckRun, Error> {
     // One check at a time on the clone, whatever the target, held until the command ends
     // (`land/check-lock`).
     let _lock = rank
-        .map(|rank| crate::lock::check(places, rank, say))
+        .map(|rank| crate::lock::check(places, rank, |l| err.line(l)))
         .transpose()?;
-    let logged = check_log::run(shell(command, dir, selection, env), log)?;
+    let logged = check_log::run(shell(command, dir, selection, env), log, err)?;
     Ok(CheckRun {
         passed: logged.status.success(),
         code: logged.status.code(),
@@ -172,7 +173,8 @@ mod tests {
             drop(lock);
         });
         let log = dir.path().join("log");
-        let mut said = Vec::new();
+        let written = std::cell::RefCell::new(Vec::new());
+        let write = |b: &[u8]| written.borrow_mut().extend_from_slice(b);
         let start = Instant::now();
         let run = run_in(
             &places,
@@ -182,11 +184,14 @@ mod tests {
             &CheckEnv::default(),
             Some(&log),
             Some(Rank::ORDINARY),
-            |l| said.push(l.to_string()),
+            Stderr::to(&write),
         )
         .unwrap();
         assert!(start.elapsed() >= Duration::from_millis(400));
         releaser.join().unwrap();
+        let written = String::from_utf8(written.take()).unwrap();
+        // The waiting lines, then the check's own output.
+        let said: Vec<&str> = written.lines().filter(|l| *l != "ok").collect();
         assert_eq!(said.len(), 1, "{said:?}");
         assert!(
             said[0].starts_with("waiting for another check on ") && said[0].ends_with(": 1 ahead"),

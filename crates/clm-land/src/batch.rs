@@ -630,7 +630,7 @@ impl Batch<'_, '_, '_> {
                 }
             })
             .collect();
-        let turn = lock::push(ctx.places)?;
+        let turn = lock::push(ctx.places, ctx.repo.err)?;
         let mut kept = first;
         // Rounds of the check kept on a `main` that moved, before the push that goes through
         // (`land/batch-keeps-its-check`).

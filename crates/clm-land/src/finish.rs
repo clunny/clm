@@ -87,7 +87,7 @@ pub(crate) struct Ctx<'a, 'r> {
 pub(crate) fn finish(ctx: &Ctx) -> Result<Output, Error> {
     let repo = ctx.repo;
     // The land that pushed may still be appending its records: wait for it, and look again.
-    let _lock = lock::land(&ctx.places.join("land"), Rank::ORDINARY, "")?;
+    let _lock = lock::land(&ctx.places.join("land"), Rank::ORDINARY, "", repo.err)?;
     repo.fetch()?;
     let fold = clm_ledger::fold(&repo.root)?;
     let mut out = Output::default();

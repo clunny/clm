@@ -13,6 +13,7 @@ use std::time::Duration;
 use clm_model::Priority;
 
 use crate::Error;
+use crate::stderr::Stderr;
 
 /// How long a waiter leaves between two reads of the queue.
 const POLL: Duration = Duration::from_millis(250);
@@ -380,12 +381,6 @@ pub(crate) fn take_named(
     }
 }
 
-/// Says `line` on stderr. A stderr that fails is no reason to end a run, so the write's
-/// result is dropped (`land/shared-check-runner`).
-pub(crate) fn tell(line: &str) {
-    let _ = writeln!(std::io::stderr(), "{line}");
-}
-
 /// `<target>.lock`, the land lock.
 fn land_lock(target: &Path) -> PathBuf {
     let mut path = target.as_os_str().to_owned();
@@ -393,10 +388,11 @@ fn land_lock(target: &Path) -> PathBuf {
     PathBuf::from(path)
 }
 
-/// Locks `<target>.lock`, the land lock, its ticket naming `branch` (`land/batched-lands`).
-pub(crate) fn land(target: &Path, rank: Rank, branch: &str) -> Result<Held, Error> {
+/// Locks `<target>.lock`, the land lock, its ticket naming `branch` (`land/batched-lands`),
+/// saying each waiting line on `err`.
+pub(crate) fn land(target: &Path, rank: Rank, branch: &str, err: Stderr) -> Result<Held, Error> {
     let prefix = format!("waiting for another land's check on {}", target.display());
-    take_named(&land_lock(target), rank, &prefix, branch, tell)
+    take_named(&land_lock(target), rank, &prefix, branch, |l| err.line(l))
 }
 
 /// A land waiting for the land lock whose ticket names its branch.
@@ -448,14 +444,14 @@ pub(crate) fn mark_alone(target: &Path, ticket: &str) -> Result<(), Error> {
 }
 
 /// Locks `push.lock` in `places`, the push turn (`land/push-turn`): ordinary tickets, so the
-/// turns go in the order they were asked.
-pub(crate) fn push(places: &Path) -> Result<Held, Error> {
+/// turns go in the order they were asked; each waiting line said on `err`.
+pub(crate) fn push(places: &Path, err: Stderr) -> Result<Held, Error> {
     let path = places.join("push.lock");
     take(
         &path,
         Rank::ORDINARY,
         "waiting for another land's push",
-        tell,
+        |l| err.line(l),
     )
 }
 

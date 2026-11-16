@@ -371,18 +371,7 @@ enum Command {
     Architecture(clm_effort::ArchitectureArgs),
     /// Land a branch on `main`: gate it, merge it, check the merge, push it and record the
     /// land in the ledger; print `landed <sha> <kind>`.
-    Land {
-        /// The branch (default: the current one).
-        branch: Option<String>,
-        /// Run the land's check command and `clm check` on the working tree and land
-        /// nothing: print `checks pass` (after `recorded <sha> as checked` when a clean
-        /// committed head counts for a land) or name the command that failed.
-        #[arg(long)]
-        check_only: bool,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Land(clm_land::LandArgs),
     /// Run the project's slow tests after the land, at the moments `[verify]` names, and
     /// record the result in the ledger; print one line starting `verify `. Exits 0 when it
     /// passed, nothing was due or there was nothing to import; 1 when it failed or can't run;
@@ -420,11 +409,7 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// Push a `main` landed with no remote, and the local ledgers, to a newly added `origin`.
-    Reconnect {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Reconnect(clm_land::ReconnectArgs),
     /// Set up CLM's tooling in the CLM repository found from the current directory, or at the
     /// top of the git repository when there is none, and print the steps only a human can do.
     Init {
@@ -1198,16 +1183,13 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Land {
-            branch,
-            check_only: true,
-            root,
-        } => landed("land", |env| {
-            clm_land::check_only(&repo_root(root), branch.as_deref(), env)
-        }),
-        Command::Land { branch, root, .. } => landed("land", |env| {
-            clm_land::land(&repo_root(root), branch.as_deref(), env)
-        }),
+        Command::Land(args) => ExitCode::from(clm_land::land_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Verify {
             due,
             event,
@@ -1234,9 +1216,13 @@ fn dispatch() -> ExitCode {
         Command::Approve { branch, root } => landed("approve", |env| {
             clm_land::approve(&repo_root(root), branch.as_deref(), env)
         }),
-        Command::Reconnect { root } => landed("reconnect", |env| {
-            clm_land::reconnect(&repo_root(root), env)
-        }),
+        Command::Reconnect(args) => ExitCode::from(clm_land::reconnect_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Config(_) => {
             let cwd = match std::env::current_dir() {
                 Ok(cwd) => cwd,
@@ -1813,7 +1799,7 @@ fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violati
         .collect())
 }
 
-/// `clm land`, `clm approve` and `clm reconnect`: the lines on stdout, the
+/// `clm approve`: the lines on stdout, the
 /// warnings on stderr; exit 1 when it refused, 2 when git, the ledger or the settings failed.
 fn landed(
     command: &str,
