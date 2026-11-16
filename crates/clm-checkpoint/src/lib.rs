@@ -15,7 +15,6 @@ use clm_orchestrator::Error;
 use clm_orchestrator::{DEFAULT_EXPIRY_HOURS, REMOTE, SweepOutcome, Swept, queue_from_refs};
 
 /// What `clm wrap-up` prints, and whether the session can end.
-#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Report {
     lines: Vec<String>,
     ok: bool,

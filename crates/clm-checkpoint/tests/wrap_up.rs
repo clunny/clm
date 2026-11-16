@@ -42,9 +42,7 @@ fn checkpoint_with(root: &Path, first: Option<&Path>) -> (Option<i32>, String) {
     );
     let root = root.display().to_string();
     let (code, stdout, stderr) = with_var("PATH", &path, || {
-        call(&["--root", &root], Path::new("."), &|name| {
-            (name == "PATH").then(|| path.clone())
-        })
+        call(&["--root", &root], Path::new("."), &|_| None)
     });
     (Some(code.into()), stdout + &stderr)
 }
@@ -63,18 +61,24 @@ fn call(args: &[&str], root: &Path, env: &dyn Fn(&str) -> Option<String>) -> (u8
 
 /// Sets `name` to `value` on this process for the length of `run`: `git` and the commands
 /// the call starts inherit the process's environment, not the lookup. The tests run one per
-/// process (`ci/nextest-runner`), so no other test sees it.
+/// process (`ci/nextest-runner`), so no other test sees it. The old value comes back when
+/// `run` returns or panics.
 fn with_var<R>(name: &str, value: &str, run: impl FnOnce() -> R) -> R {
-    let old = std::env::var_os(name);
-    // SAFETY: one test per process; nothing else reads the environment meanwhile.
-    unsafe { std::env::set_var(name, value) };
-    let done = run();
-    match old {
-        // SAFETY: as above.
-        Some(old) => unsafe { std::env::set_var(name, old) },
-        None => unsafe { std::env::remove_var(name) },
+    struct Restore<'a>(&'a str, Option<std::ffi::OsString>);
+    impl Drop for Restore<'_> {
+        fn drop(&mut self) {
+            match self.1.take() {
+                // SAFETY: one test per process; nothing else reads the environment meanwhile.
+                Some(old) => unsafe { std::env::set_var(self.0, old) },
+                // SAFETY: as above.
+                None => unsafe { std::env::remove_var(self.0) },
+            }
+        }
     }
-    done
+    let _restore = Restore(name, std::env::var_os(name));
+    // SAFETY: as above.
+    unsafe { std::env::set_var(name, value) };
+    run()
 }
 
 #[test]
@@ -95,8 +99,7 @@ fn scenario_a_command_called_in_a_test() {
     assert!(err.is_empty(), "{err}");
     assert_eq!(code, 1);
     // A git failure is `clm wrap-up: <why>` on the error stream, and 2.
-    let dir = TempDir::new().unwrap();
-    let (code, out, err) = call(&[], dir.path(), &no_env);
+    let (code, out, err) = call(&[], Path::new("/nonexistent-dir"), &no_env);
     assert!(out.is_empty(), "{out}");
     assert!(err.starts_with("clm wrap-up: "), "{err}");
     assert_eq!(code, 2);
