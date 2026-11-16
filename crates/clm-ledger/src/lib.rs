@@ -19,6 +19,8 @@ mod branch;
 #[cfg(feature = "git")]
 mod code_key;
 #[cfg(feature = "git")]
+mod command;
+#[cfg(feature = "git")]
 mod compact;
 #[cfg(feature = "git")]
 mod read;
@@ -33,6 +35,8 @@ mod writer;
 pub use append::{Appended, Entry, append, append_all, effort_id};
 #[cfg(feature = "git")]
 pub use code_key::{code_key, code_key_with};
+#[cfg(feature = "git")]
+pub use command::{Ledger, LedgerArgs, ledger_command, on_main};
 #[cfg(feature = "git")]
 pub use compact::{Compacted, compact};
 #[cfg(feature = "git")]

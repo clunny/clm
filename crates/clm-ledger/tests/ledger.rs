@@ -1,6 +1,6 @@
-//! `clm ledger compact`, `verify` and `show`, and `clm check`'s call of `verify`.
+//! `clm ledger compact`, `verify` and `show`, called through `clm-ledger`'s call
+//! (`commands-in-crate`), and the audit `clm check` runs on `main`.
 
-#[path = "../../clm-ledger/tests/common/mod.rs"]
 mod common;
 
 use std::path::{Path, PathBuf};
@@ -9,22 +9,26 @@ use std::process::Command;
 use clm_ledger::{Body, LandKind};
 use common::{clone_with_origin, commit, env, repo, sh};
 
-/// `clm <args> --root <root>` with `HOME` at `home`: exit code, stdout, stderr.
+/// `clm ledger <args> --root <root>` through `clm-ledger`'s call, with `HOME` at `home` and no
+/// `XDG_CONFIG_HOME` or `CLM_WRITER`: exit code, stdout, stderr.
 fn clm(root: &Path, home: &Path, args: &[&str]) -> (Option<i32>, String, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .env("HOME", home)
-        .env_remove("XDG_CONFIG_HOME")
-        .env_remove("CLM_WRITER")
-        .output()
-        .unwrap();
+    let ["ledger", args @ ..] = args else {
+        panic!("not a `clm ledger` command: {args:?}");
+    };
+    let mut line: Vec<&str> = args.to_vec();
+    line.extend(["--root", root.to_str().unwrap()]);
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_ledger::ledger_command(line, root, &env(home, &[]), &mut out, &mut err);
     (
-        out.status.code(),
-        String::from_utf8(out.stdout).unwrap(),
-        String::from_utf8(out.stderr).unwrap(),
+        Some(i32::from(code)),
+        String::from_utf8(out).unwrap(),
+        String::from_utf8(err).unwrap(),
     )
+}
+
+/// `clm fingerprint --base <base>` in `dir`, as the gate computes it.
+fn fingerprint(dir: &Path, base: &str) -> String {
+    clm_gate::fingerprint(dir, base).unwrap()
 }
 
 fn approved(fingerprint: &str) -> Body {
@@ -484,17 +488,26 @@ fn verify_reports_a_land_no_check_names() {
     );
 }
 
+/// The violations `clm check` reports from the ledger's audit, one line each.
+fn checked_on_main(dir: &Path) -> String {
+    let lines: Vec<String> = clm_ledger::on_main(dir)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    lines.join("\n")
+}
+
 #[test]
 fn check_runs_verify_on_main() {
     // req:ledger/verify@ff314001
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
-    let (_, out, _) = clm(dir.path(), dir.path(), &["check", "--no-detectors"]);
+    let out = checked_on_main(dir.path());
     assert!(out.contains("ledger/unrecorded-land"), "{out}");
     // Off `main`, it doesn't.
     sh(dir.path(), &["switch", "-q", "-c", "other"]);
-    let (_, out, _) = clm(dir.path(), dir.path(), &["check", "--no-detectors"]);
+    let out = checked_on_main(dir.path());
     assert!(!out.contains("ledger/"), "{out}");
 }
 
@@ -626,8 +639,7 @@ fn merge_branch(dir: &Path, name: &str, author: &str) -> (String, String) {
     sh(dir, &["config", "user.name", author]);
     commit(dir, &[(&format!("specs/{name}.md"), "x\n")], "work");
     sh(dir, &["config", "user.name", "T"]);
-    let (code, out, err) = clm(dir, dir, &["fingerprint", "--base", "main"]);
-    assert_eq!(code, Some(0), "{err}");
+    let out = fingerprint(dir, "main");
     sh(dir, &["switch", "-q", "main"]);
     sh(
         dir,
@@ -1044,8 +1056,7 @@ fn signed_main_with_specs(dir: &Path, signers: bool) -> (tempfile::TempDir, Path
 fn merge_files(dir: &Path, name: &str, files: &[(&str, &str)]) -> (String, String) {
     sh(dir, &["switch", "-q", "-c", name]);
     commit(dir, files, "work");
-    let (code, out, err) = clm(dir, dir, &["fingerprint", "--base", "main"]);
-    assert_eq!(code, Some(0), "{err}");
+    let out = fingerprint(dir, "main");
     sh(dir, &["switch", "-q", "main"]);
     let message = format!("Merge {name}");
     sh(dir, &["merge", "-q", "--no-ff", "-m", &message, name]);
@@ -1264,8 +1275,7 @@ fn unreadable_change(dir: &Path) -> (String, String, &'static str) {
     let missing = format!("160000,{},{change}", "1".repeat(40));
     sh(dir, &["update-index", "--add", "--cacheinfo", &missing]);
     sh(dir, &["commit", "-qm", "work"]);
-    let (code, out, err) = clm(dir, dir, &["fingerprint", "--base", "main"]);
-    assert_eq!(code, Some(0), "{err}");
+    let out = fingerprint(dir, "main");
     sh(dir, &["switch", "-q", "main"]);
     sh(
         dir,

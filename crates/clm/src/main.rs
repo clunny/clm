@@ -297,10 +297,7 @@ enum Command {
     Branch(clm_host::BranchArgs),
     /// The ledger of approvals, checks and lands: print it, audit `main` against it,
     /// or prune your own superseded records.
-    Ledger {
-        #[command(subcommand)]
-        ledger: Ledger,
-    },
+    Ledger(clm_ledger::LedgerArgs),
     // Their help is `clm-effort`'s, which its own call prints too.
     Effort(clm_effort::EffortArgs),
     Capabilities(clm_effort::CapabilitiesArgs),
@@ -542,37 +539,6 @@ enum Contribution {
     },
 }
 
-#[derive(Subcommand)]
-enum Ledger {
-    /// Rewrite your own ledger without approvals of landed diffs and checks older than the
-    /// newest land, push it, and print how many records went.
-    Compact {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-    /// Report each commit on `main` no `landed` record names, merge or not, and each land no
-    /// `checked` record covers; exit 1 when there is one. Doesn't fetch.
-    Verify {
-        /// Audit only the commits after this one (default: from the first landed commit).
-        #[arg(long)]
-        since: Option<String>,
-        /// Also recompute each signed land's kind and whether it needed review with the gate,
-        /// and report a land whose record states less than the gate gives.
-        #[arg(long)]
-        review: bool,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-    /// Print every record, one per line in time order. Doesn't fetch.
-    Show {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-}
-
 fn main() -> ExitCode {
     closed_stdout::run(dispatch)
 }
@@ -594,7 +560,7 @@ fn dispatch() -> ExitCode {
         Command::Check(args) => {
             let inputs = clm_check::CheckInputs {
                 detectors: &detectors,
-                more: &ledger_on_main,
+                more: &clm_ledger::on_main,
             };
             ExitCode::from(clm_check::check_command(
                 command_args(),
@@ -1014,7 +980,13 @@ fn dispatch() -> ExitCode {
                 }
             }
         }
-        Command::Ledger { ledger } => ledger_command(ledger),
+        Command::Ledger(args) => ExitCode::from(clm_ledger::ledger_command(
+            command_args(),
+            &found_root(args.root()),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Effort(args) => ExitCode::from(clm_effort::effort_command(
             command_args(),
             &found_root(&args.root().map(PathBuf::from)),
@@ -1611,83 +1583,6 @@ fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
             eprintln!("clm verify: {e}");
             ExitCode::from(2)
         }
-    }
-}
-
-/// `clm ledger <command>`: exit 1 on a finding, 2 when git or the settings fail.
-fn ledger_command(ledger: Ledger) -> ExitCode {
-    let failed = |e: clm_ledger::Error| {
-        eprintln!("clm ledger: {e}");
-        ExitCode::from(2)
-    };
-    match ledger {
-        Ledger::Compact { root } => {
-            match clm_ledger::compact(&repo_root(root), &clm_config::process_env) {
-                Ok(done) => {
-                    for warning in &done.warnings {
-                        eprintln!("warning: {warning}");
-                    }
-                    println!("removed {}", done.removed);
-                    ExitCode::SUCCESS
-                }
-                Err(e) => failed(e),
-            }
-        }
-        Ledger::Verify {
-            since,
-            review,
-            root,
-        } => match clm_ledger::verify(&repo_root(root), "main", since.as_deref(), review) {
-            Ok(findings) if findings.is_empty() => ExitCode::SUCCESS,
-            Ok(findings) => report(&findings.into_iter().map(finding).collect::<Vec<_>>()),
-            Err(e) => failed(e),
-        },
-        Ledger::Show { root } => match clm_ledger::fold(&repo_root(root)) {
-            Ok(fold) => {
-                for warning in &fold.warnings {
-                    eprintln!("warning: {warning}");
-                }
-                for line in clm_ledger::show(&fold) {
-                    println!("{line}");
-                }
-                ExitCode::SUCCESS
-            }
-            Err(e) => failed(e),
-        },
-    }
-}
-
-/// A `clm ledger verify` finding in `check`'s format, against `main`.
-fn finding(f: clm_ledger::Finding) -> clm_check::Violation {
-    clm_check::Violation {
-        path: "main".into(),
-        rule: f.rule,
-        message: f.message,
-    }
-}
-
-/// `clm ledger verify`'s findings when the checked-out branch is `main` and the repository
-/// has a ledger branch, so a push to `main` that didn't go through `clm land` fails there
-/// (`no-silent-drift`).
-fn ledger_on_main(root: &Path) -> Vec<clm_check::Violation> {
-    let on_main = matches!(clm_git::current_branch(root), Ok(Some(b)) if b == "main");
-    if !on_main {
-        return Vec::new();
-    }
-    let audit = clm_ledger::has_ledger(root).and_then(|has| match has {
-        // Without `--review`: recomputing runs the gate once per signed land, on every check of
-        // `main`.
-        true => clm_ledger::verify(root, "main", None, false),
-        false => Ok(Vec::new()),
-    });
-    match audit {
-        Ok(findings) => findings.into_iter().map(finding).collect(),
-        // Not audited is not clean.
-        Err(e) => vec![clm_check::Violation {
-            path: "main".into(),
-            rule: "ledger/verify",
-            message: format!("can't audit main against the ledger: {e}"),
-        }],
     }
 }
 

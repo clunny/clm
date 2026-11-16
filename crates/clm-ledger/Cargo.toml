@@ -10,6 +10,7 @@ default = ["git"]
 # Reading, writing and pushing ledger branches; off for wasm builds, which keep only
 # `fold_records` (`ledger-builds-for-wasm`).
 git = [
+    "dep:clap",
     "dep:clm-git",
     "dep:clm-config",
     "dep:clm-gate",
@@ -32,6 +33,10 @@ name = "code_key_with"
 required-features = ["git"]
 
 [[test]]
+name = "ledger"
+required-features = ["git"]
+
+[[test]]
 name = "fold"
 required-features = ["git"]
 
@@ -48,6 +53,7 @@ name = "writer"
 required-features = ["git"]
 
 [dependencies]
+clap = { workspace = true, optional = true }
 clm-git = { workspace = true, optional = true }
 clm-config = { workspace = true, optional = true }
 clm-gate = { workspace = true, optional = true }
