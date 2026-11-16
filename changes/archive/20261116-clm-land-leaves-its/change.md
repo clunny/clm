@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-land-leaves-its-tmp-land-bin-copy-behind]
 ---
 
