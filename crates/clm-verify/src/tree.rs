@@ -13,12 +13,16 @@ pub(crate) fn places(ctx: &Ctx) -> Result<PathBuf, Error> {
     places_of(&ctx.root, &ctx.prefix)
 }
 
-/// `places` for the CLM root `root`, whose place in its git repository is `prefix`.
+/// `places` for the CLM root `root`, whose place in its git repository is `prefix`. The main
+/// worktree is found from the common git directory, as `git worktree list` finds it, without
+/// listing the worktrees: a run that waits for the verify lock would otherwise read the entry
+/// of a worktree another run is still adding, and fail on it.
 pub(crate) fn places_of(root: &Path, prefix: &str) -> Result<PathBuf, Error> {
-    let main = clm_git::worktrees(root)?
-        .into_iter()
-        .next()
-        .map_or_else(|| root.to_path_buf(), |w| w.path);
+    let common = clm_git::common_dir(root)?;
+    let main = match common.file_name() {
+        Some(name) if name == ".git" => common.parent().map_or(common.clone(), Path::to_path_buf),
+        _ => common,
+    };
     Ok(main.join(prefix).join(".clm"))
 }
 
@@ -104,4 +108,30 @@ fn switch(top: &Path, commit: &str) -> Result<(), clm_git::Error> {
     clm_git::git(top, &["checkout", "--quiet", "--force", "--detach", commit])?;
     clm_git::git(top, &["clean", "--quiet", "-fd"])?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_places_ignore_a_worktree_still_being_added() {
+        // req:verify/verify-run@ff539674
+        let dir = tempfile::tempdir().unwrap();
+        let main = dir.path().join("main");
+        std::fs::create_dir(&main).unwrap();
+        clm_git::git_isolated(&main, &["init", "--quiet"]).unwrap();
+        // The entry `git worktree add` has begun and not finished: `git worktree list`
+        // fails on it.
+        let half = main.join(".git/worktrees/half");
+        std::fs::create_dir_all(&half).unwrap();
+        let gitdir = dir.path().join("half/.git");
+        std::fs::write(half.join("gitdir"), gitdir.display().to_string()).unwrap();
+        std::fs::write(half.join("commondir"), "").unwrap();
+        assert!(clm_git::worktrees(&main).is_err());
+        let sub = main.join("sub");
+        std::fs::create_dir(&sub).unwrap();
+        let canon = std::fs::canonicalize(&main).unwrap();
+        assert_eq!(places_of(&sub, "sub/").unwrap(), canon.join("sub/.clm"));
+    }
 }
