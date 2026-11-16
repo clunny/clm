@@ -76,3 +76,42 @@ fn report(done: Result<Report, Error>, out: &mut dyn Write, err: &mut dyn Write)
         Err(Error::Git(why)) => writeln!(err, "clm wrap-up: {why}").map(|()| 2),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// What `report` wrote to its two streams, and the status it gave.
+    fn written(done: Result<Report, Error>) -> (String, String, u8) {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = report(done, &mut out, &mut err).unwrap();
+        (
+            String::from_utf8(out).unwrap(),
+            String::from_utf8(err).unwrap(),
+            code,
+        )
+    }
+
+    #[test]
+    fn a_refusal_is_on_the_error_stream_with_1() {
+        // req:orchestrator.checkpoint/commands-in-crate@4746da3a
+        let (out, err, code) = written(Err(Error::Refused("no".into())));
+        assert_eq!(
+            (out.as_str(), err.as_str(), code),
+            ("", "clm wrap-up: no\n", 1)
+        );
+    }
+
+    #[test]
+    fn violations_are_on_the_output_stream_with_1() {
+        // req:orchestrator.checkpoint/commands-in-crate@4746da3a
+        let v = clm_model::Violation {
+            path: "specs/SPEC.md".into(),
+            rule: "model/x",
+            message: "bad".into(),
+        };
+        let line = format!("{}\n", clm_check::format(&v));
+        let (out, err, code) = written(Err(Error::Spec(vec![v])));
+        assert_eq!((out.as_str(), err.as_str(), code), (line.as_str(), "", 1));
+    }
+}
