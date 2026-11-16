@@ -7,6 +7,11 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde::de::{self, DeserializeOwned, value::StrDeserializer};
 
+#[cfg(not(target_arch = "wasm32"))]
+mod command;
+#[cfg(not(target_arch = "wasm32"))]
+pub use command::{Args, Config, command};
+
 /// What `clm defect` does with a report.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]

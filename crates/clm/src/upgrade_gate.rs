@@ -32,7 +32,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::View { root, .. }
         | C::Machine { root, .. }
         | C::Setup { root } => at(root.as_deref(), false),
-        C::Defect { .. } | C::Config { .. } | C::Init { .. } | C::Upgrade { .. } => at(None, false),
+        C::Defect { .. } | C::Config(_) | C::Init { .. } | C::Upgrade { .. } => at(None, false),
         C::Check(clm_check::CheckArgs { root, .. })
         | C::Coverage(clm_check::CoverageArgs { root, .. })
         | C::Pending { root, .. }

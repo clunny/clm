@@ -351,10 +351,7 @@ enum Command {
         nodes: Vec<String>,
     },
     /// Read CLM's settings for the CLM repository found from the current directory.
-    Config {
-        #[command(subcommand)]
-        config: Config,
-    },
+    Config(clm_config::Args),
     /// A branch's pull request on the host the `host` setting names.
     Pr {
         #[command(subcommand)]
@@ -863,17 +860,6 @@ enum Ledger {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-}
-
-#[derive(Subcommand)]
-enum Config {
-    /// Print a key's value and the layer it came from, tab-separated.
-    Get {
-        /// The key, such as `defects`.
-        key: String,
-    },
-    /// Print every key with its value and the layer it came from, tab-separated.
-    List,
 }
 
 fn main() -> ExitCode {
@@ -1487,7 +1473,7 @@ fn dispatch() -> ExitCode {
         Command::Reconnect { root } => landed("reconnect", |env| {
             clm_land::reconnect(&repo_root(root), env)
         }),
-        Command::Config { config } => {
+        Command::Config(_) => {
             let cwd = match std::env::current_dir() {
                 Ok(cwd) => cwd,
                 Err(e) => {
@@ -1495,24 +1481,14 @@ fn dispatch() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
-            let root = clm_hooks::clm_root(&cwd);
-            let lines =
-                clm_config::load(root, &clm_config::process_env).and_then(|s| match config {
-                    Config::Get { key } => s.lines(&key),
-                    Config::List => s.list(),
-                });
-            match lines {
-                Ok(lines) => {
-                    for line in lines {
-                        println!("{line}");
-                    }
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("clm config: {e}");
-                    ExitCode::FAILURE
-                }
-            }
+            ExitCode::from(clm_config::command(
+                command_args(),
+                clm_hooks::clm_root(&cwd),
+                &cwd,
+                &clm_config::process_env,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
         Command::Pr { page } => pr(page),
         Command::Issue {
