@@ -79,12 +79,17 @@ fn a_call_writes_what_the_command_prints_and_returns_its_status() {
     );
     assert_eq!(out.stderr, "");
 
+    // `--root` overrides the root the call is given, for each command.
+    let out = call_with_root(dir.path(), &["hashes", "clm"]);
+    assert_eq!(out.status, Some(0), "{}", out.stderr);
+    assert!(out.stdout.starts_with("frontmatter "), "{}", out.stdout);
+
     let out = call(dir.path(), &["hashes", "nope"]);
     assert_eq!(out.status, Some(2));
     assert_eq!(out.stdout, "");
     assert_eq!(out.stderr, "clm hashes: no valid component `nope`\n");
 
-    let out = call(dir.path(), &["archive", "c"]);
+    let out = call_with_root(dir.path(), &["archive", "c"]);
     assert_eq!(out.status, Some(1));
     assert_eq!(out.stderr, "");
     assert_eq!(
