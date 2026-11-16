@@ -70,6 +70,26 @@ fn a_refusal_exits_1_on_the_error_stream() {
 }
 
 #[test]
+fn reads_the_environment_it_is_given() {
+    // req:land.approval/commands-in-crate@1f31b577
+    let f = Fixture::new("");
+    f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code = clm_approval::approve_command(
+        ["spec/x"],
+        &f.work(),
+        &f.work(),
+        &f.env(&[(clm_agent_harness::CODEX_MARKER, "t1")]),
+        &mut stdout,
+        &mut stderr,
+    );
+    let stderr = String::from_utf8(stderr).unwrap();
+    assert_eq!(code, 1, "{stderr}");
+    assert!(stderr.contains("codex"), "{stderr}");
+    assert!(f.records().is_empty());
+}
+
+#[test]
 fn a_failure_exits_2() {
     // req:land.approval/commands-in-crate@1f31b577
     let f = Fixture::new("");
