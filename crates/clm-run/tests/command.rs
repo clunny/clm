@@ -46,6 +46,22 @@ fn scenario_a_command_called_in_a_test() {
     );
     assert_eq!(ran.code, Some(0), "{}", ran.stderr);
     assert_eq!(ran.stdout, "freed b\n");
+    // A relative `--root` is read from the directory the call is given, not the process's.
+    let parent = r.work.parent().unwrap();
+    let ran = ran_with(
+        |env, out, err| {
+            let line = ["b", "--root", "work"];
+            clm_run::run_command(line, Path::new("/nonexistent"), parent, env, out, err)
+        },
+        &run_env(&f, &[]),
+    );
+    assert_eq!(ran.code, Some(0), "{}", ran.stderr);
+    let file = r.work.canonicalize().unwrap().join(".clm/prompts/b.md");
+    assert!(
+        ran.stdout.contains(&file.display().to_string()),
+        "{}",
+        ran.stdout
+    );
 }
 
 #[test]
