@@ -2501,6 +2501,11 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
         &main,
         &["worktree", "add", "-q", "--detach", work.to_str().unwrap()],
     );
+    // Its `HEAD` is a commit of its own, which no branch names.
+    fs::write(work.join("third.txt"), "3\n").unwrap();
+    git(&work, &["add", "third.txt"]);
+    git(&work, &["commit", "-q", "-m", "third"]);
+    let third = git(&work, &["rev-parse", "HEAD"]);
     let index = git(&work, &["rev-parse", "--git-path", "index"]);
     let index = work.join(index);
     let index_before = fs::read(&index).unwrap();
@@ -2528,7 +2533,7 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
         })
         .unwrap_or_default();
     assert!(packs.is_empty(), "{packs:?}");
-    assert_eq!(git(&copy, &["rev-parse", "HEAD"]), second);
+    assert_eq!(git(&copy, &["rev-parse", "HEAD"]), third);
     assert_eq!(git(&copy, &["rev-parse", "refs/heads/side"]), first);
     assert_eq!(
         git(&copy, &["rev-parse", "refs/remotes/origin/main"]),
@@ -2536,7 +2541,7 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
     );
     assert_eq!(git(&copy, &["rev-parse", "refs/heads/main"]), second);
     // A mutant written into a tracked file leaves git there reporting no change.
-    fs::write(copy.join("second.txt"), "a mutant\n").unwrap();
+    fs::write(copy.join("third.txt"), "a mutant\n").unwrap();
     assert_eq!(
         git(&copy, &["status", "--porcelain", "--untracked-files=no"]),
         ""
