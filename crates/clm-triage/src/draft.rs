@@ -440,7 +440,17 @@ fn prompt_for(
          `clm claim <component> --fix backlog/<slug>` and a `Resolves: backlog/<slug>` \
          trailer, leaving it with `left <slug>: <reason>` when the claim is refused, and end \
          with the spec change's `landed <sha>`. When the branch needs review it stops the \
-         draft as any does, and the bug is left to the next triage.\n\n"
+         draft as any does, and the bug is left to the next triage.\n\n\
+         A `question` item the answers settle whose work waits on a condition, such as other \
+         builds draining or another change landing first, is the other exception \
+         (`answered-question-waits-as-deferred`): take it out of `resolves` (the list you \
+         first wrote), since a change resolving it would release the requirements it blocks \
+         before the answer's work is done. On `spec/<id>` set its `kind` to `deferred`, \
+         remove its `choices`, keep its `blocks` and its slug, and rewrite its body quoting \
+         the answer, naming the condition and saying that the change carrying the answer out \
+         names the item in `from`, so `clm apply` deletes it when that change lands. Say in \
+         `## Intent` that the answer waits, and take the backlog-only route when nothing \
+         else is left to design.\n\n"
             .to_string()
     };
     // Only when the project declares a setup: otherwise the prompt names no `clm setup`.
