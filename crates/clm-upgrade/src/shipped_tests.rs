@@ -1032,6 +1032,7 @@ fn the_proof_note_names_what_a_project_needs_to_know() {
         "no review lets it through",
         "`tests` glob",
         "[verify] mutate",
+        "off until the project sets them",
     ] {
         assert!(note.contains(needle), "{needle}: {note}");
     }
