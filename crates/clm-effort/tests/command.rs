@@ -545,6 +545,38 @@ fn decide_refused_outside_a_clm_repository() {
 }
 
 #[test]
+fn failures_keep_their_prefix() {
+    // req:effort/commands-in-crate@c08e640f
+    // req:effort/decide-command@e1ca5b43
+    let dir = tempfile::tempdir().unwrap();
+    let root = architecture_repo(dir.path());
+    // A slug before `decide` is a usage error for `capabilities` as for `architecture`.
+    let out = capabilities(
+        &root,
+        &["p", "decide", "q", "--value", "high", "--decision", "keep"],
+    );
+    assert_eq!(out.code, 2, "{out:?}");
+    assert!(
+        out.stderr
+            .starts_with("clm capabilities: `decide` takes the slug after it"),
+        "{out:?}"
+    );
+    assert!(decided(&root).is_empty());
+    std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
+    let decide = ["decide", "e", "--value", "high", "--decision", "keep"];
+    for (out, prefix) in [
+        (capabilities(&root, &[]), "clm capabilities: "),
+        (architecture(&root, &[]), "clm architecture: "),
+        (capabilities(&root, &decide), "clm capabilities decide: "),
+        (architecture(&root, &decide), "clm architecture decide: "),
+    ] {
+        assert_eq!(out.code, 1, "{out:?}");
+        assert!(out.stderr.starts_with(prefix), "{prefix} {out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+    }
+}
+
+#[test]
 fn decide_ledger_failure_exits_2() {
     // req:effort/decide-command@e1ca5b43
     let dir = tempfile::tempdir().unwrap();
