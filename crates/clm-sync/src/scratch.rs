@@ -20,9 +20,9 @@ pub(crate) struct Scratch {
 
 impl Scratch {
     /// `HEAD` checked out detached into a new `sync-*` directory under `TMPDIR` (when set
-    /// and not empty, made absolute) or the system's temporary directory.
-    pub(crate) fn new(root: &Path) -> Result<Self, Error> {
-        let parent = std::env::var_os("TMPDIR")
+    /// in `env` and not empty, made absolute) or the system's temporary directory.
+    pub(crate) fn new(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Self, Error> {
+        let parent = env("TMPDIR")
             .filter(|t| !t.is_empty())
             .map_or_else(std::env::temp_dir, PathBuf::from);
         let parent = std::path::absolute(parent).map_err(|e| crate::io(Path::new("TMPDIR"), e))?;

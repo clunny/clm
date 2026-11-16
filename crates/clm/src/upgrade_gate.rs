@@ -52,8 +52,8 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Draft(clm_triage::DraftArgs { root, .. })
         | C::Build { root, .. }
         | C::WrapUp(clm_checkpoint::WrapUpArgs { root })
-        | C::Rebase { root }
-        | C::Autosync { root }
+        | C::Rebase(clm_sync::RebaseArgs { root })
+        | C::Autosync(clm_sync::AutosyncArgs { root })
         | C::Land(clm_land::LandArgs { root, .. })
         | C::Verify { root, .. }
         | C::Reconnect(clm_land::ReconnectArgs { root })

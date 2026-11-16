@@ -6,6 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+clap = { workspace = true, features = ["string"] }
 clm-model.workspace = true
 clm-apply.workspace = true
 clm-check.workspace = true

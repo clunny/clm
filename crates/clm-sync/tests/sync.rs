@@ -30,7 +30,7 @@ fn health() -> clm_health::Settings {
 
 /// `clm sync` with the default `health` settings.
 fn sync(root: &Path) -> Result<Report, Error> {
-    clm_sync::sync(root, |_: &Path| Ok(health()))
+    clm_sync::sync(root, &|_| None, |_: &Path| Ok(health()))
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
@@ -1304,7 +1304,7 @@ fn settings_are_loaded_on_every_branch() {
     let r = repo("spec/x");
     main_moves(&r, &[("src/other.rs", "other\n")]);
     let mut calls = 0;
-    let report = clm_sync::sync(&r.work, |_: &Path| {
+    let report = clm_sync::sync(&r.work, &|_| None, |_: &Path| {
         calls += 1;
         Err("clm.toml: unknown field `new`".into())
     })
@@ -1321,7 +1321,8 @@ fn settings_cant_be_loaded() {
     let r = repo("impl/a");
     let head = git(&r.work, &["rev-parse", "HEAD"]);
 
-    let report = clm_sync::sync(&r.work, |_: &Path| Err("clm.toml: bad".into())).unwrap();
+    let report =
+        clm_sync::sync(&r.work, &|_| None, |_: &Path| Err("clm.toml: bad".into())).unwrap();
     assert_eq!(report.lines, ["clm.toml: bad"]);
     assert!(!report.ok);
     assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
@@ -1339,7 +1340,8 @@ fn the_settings_error_comes_before_the_check() {
     commit(&r.work, "test a/p");
     main_moves(&r, &[("specs/a/SPEC.md", &node_a("specd", "c", &[]))]);
 
-    let report = clm_sync::sync(&r.work, |_: &Path| Err("settings: bad".into())).unwrap();
+    let report =
+        clm_sync::sync(&r.work, &|_| None, |_: &Path| Err("settings: bad".into())).unwrap();
     assert_eq!(report.lines[0], "settings: bad", "{:?}", report.lines);
     assert!(
         report.lines[1..]
@@ -1357,7 +1359,7 @@ fn the_settings_are_loaded_from_head_in_a_temporary_worktree() {
     main_moves(&r, &[("src/other.rs", "other\n")]);
     write(&r.work, "notes.txt", "untracked\n");
     let mut seen = None;
-    let report = clm_sync::sync(&r.work, |root: &Path| {
+    let report = clm_sync::sync(&r.work, &|_| None, |root: &Path| {
         seen = Some((
             root.to_path_buf(),
             root.join("specs/SPEC.md").exists(),
@@ -2629,7 +2631,8 @@ fn no_reconsider_item_when_the_settings_cant_be_loaded() {
     // req:sync/file-reconsider-item@1f67b16b
     let r = flagged("impl/a", "a/x", 3);
 
-    let report = clm_sync::sync(&r.work, |_: &Path| Err("clm.toml: bad".into())).unwrap();
+    let report =
+        clm_sync::sync(&r.work, &|_| None, |_: &Path| Err("clm.toml: bad".into())).unwrap();
     assert_eq!(report.lines, ["clm.toml: bad"]);
     assert!(!r.work.join("backlog/reconsider-a-x.md").exists());
 }

@@ -179,17 +179,9 @@ enum Command {
     WrapUp(clm_checkpoint::WrapUpArgs),
     /// Rebase the branch onto origin/main, regenerate applied specs and run `clm check`;
     /// exit 1 with what is left to resolve.
-    Rebase {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Rebase(clm_sync::RebaseArgs),
     /// Push a snapshot of the spec work on a `spec/*` branch to origin as `autosync/<branch>`.
-    Autosync {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Autosync(clm_sync::AutosyncArgs),
     /// Run the repository's `[build] setup`, which makes a fresh worktree ready to run its tests.
     Setup(clm_run::SetupArgs),
     /// Print the path of a skill's SKILL.md in the pinned superpowers copy builds follow.
@@ -712,11 +704,24 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Rebase { root } => rebase(root),
-        Command::Autosync { root } => match clm_sync::autosync(&repo_root(root)) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(e) => failed("autosync", &e),
-        },
+        // The settings are loaded from the CLM root of `HEAD` checked out in a temporary
+        // worktree.
+        Command::Rebase(args) => ExitCode::from(clm_sync::rebase_command(
+            command_args(),
+            "rebase",
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+            sync_settings,
+        )),
+        Command::Autosync(args) => ExitCode::from(clm_sync::autosync_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Setup(args) => {
             let root = found_root(&args.root);
             ExitCode::from(clm_run::setup_command(
@@ -1105,38 +1110,6 @@ fn shown_text(shown: &clm_host::Shown) -> String {
     lines.push("body:".into());
     lines.push(shown.body.clone());
     lines.join("\n")
-}
-
-/// `clm rebase`.
-fn rebase(root: Option<PathBuf>) -> ExitCode {
-    // `sync/outcome-line`: the last line of stdout states the outcome, whatever happened,
-    // for a caller that can't read the exit code.
-    let root = repo_root(root);
-    // Called with the CLM root of `HEAD` checked out in a temporary worktree.
-    let (code, outcome) = match clm_sync::sync(&root, sync_settings) {
-        Ok(report) => {
-            for warning in &report.warnings {
-                eprintln!("clm rebase: {warning}");
-            }
-            for line in &report.lines {
-                println!("{line}");
-            }
-            if report.ok {
-                (ExitCode::SUCCESS, "ok")
-            } else {
-                (ExitCode::FAILURE, "incomplete")
-            }
-        }
-        Err(e) => {
-            let outcome = match e.exit_code() {
-                1 => "incomplete",
-                _ => "failed",
-            };
-            (failed("rebase", &e), outcome)
-        }
-    };
-    println!("rebase {outcome}");
-    code
 }
 
 /// Runs `op` with the host adapter the repository's `host` setting names, printing the line
