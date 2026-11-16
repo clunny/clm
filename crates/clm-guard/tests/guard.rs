@@ -1392,6 +1392,30 @@ fn the_call_returns_2_on_arguments_it_cant_parse() {
 }
 
 #[test]
+fn the_call_reads_the_settings_from_its_environment() {
+    // req:plugin.hooks.guard/commands-in-crate@11cfbd2d
+    // A report the guard can't show is refused under `ask`, and let through under
+    // `backlog`, which only the lookup holds, not this process's environment.
+    let nowhere = TempDir::new().unwrap();
+    let event = bash_in("clm defect --title x < report.md", nowhere.path());
+    let call = |defects: Option<&str>| {
+        let lookup = |name: &str| match name {
+            "CLM_DEFECTS" => defects.map(String::from),
+            "XDG_CONFIG_HOME" => Some(nowhere.path().to_str().unwrap().to_string()),
+            _ => std::env::var(name).ok(),
+        };
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code =
+            clm_guard::guard_command(Vec::<String>::new(), &event, &lookup, &mut out, &mut err);
+        (code, String::from_utf8(err).unwrap())
+    };
+    let (code, err) = call(None);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("defect-ask-shows-report"), "{err}");
+    assert_eq!(call(Some("backlog")), (0, String::new()));
+}
+
+#[test]
 fn guard_command_asks_with_the_reason() {
     // req:plugin.hooks.guard/approve-guard@0d27c2be
     let event = |c: &str| {
