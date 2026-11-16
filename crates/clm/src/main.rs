@@ -785,6 +785,15 @@ fn dispatch() -> ExitCode {
                 eprintln!("clm defect: reading the report: {e}");
                 return ExitCode::FAILURE;
             }
+            // The directory it runs in, not `dispatch`'s fallback: a report can't be filed
+            // from a directory that is gone.
+            let cwd = match std::env::current_dir() {
+                Ok(cwd) => cwd,
+                Err(e) => {
+                    eprintln!("clm defect: current directory: {e}");
+                    return ExitCode::FAILURE;
+                }
+            };
             ExitCode::from(clm_hooks::defect_command(
                 command_args(),
                 clm_hooks::clm_root(&cwd),

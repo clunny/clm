@@ -124,14 +124,25 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let SessionStartLine { args } = match parse(args, out, err) {
-        Ok(line) => line,
-        Err(code) => return code,
-    };
+    match parse::<SessionStartLine, _, _>(args, out, err) {
+        Ok(SessionStartLine { args }) => run_hook(&args, stdin, env, out, crate::session_start_in),
+        Err(code) => code,
+    }
+}
+
+/// Runs `hook` for the agent harness `args` names, on the event `stdin`, and writes what it
+/// gives to `out`: nothing to do, and 0, for an agent harness CLM doesn't know.
+fn run_hook(
+    args: &HookArgs,
+    stdin: &str,
+    env: Env,
+    out: &mut dyn Write,
+    hook: fn(AgentHarness, &str, Env) -> (String, i32),
+) -> u8 {
     let Some(agent_harness) = AgentHarness::from_name(&args.agent_harness) else {
         return 0;
     };
-    let (text, code) = crate::session_start_in(agent_harness, stdin, env);
+    let (text, code) = hook(agent_harness, stdin, env);
     write!(out, "{text}").map_or(2, |()| u8::try_from(code).unwrap_or(2))
 }
 
@@ -153,13 +164,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let AutosyncLine { args } = match parse(args, out, err) {
-        Ok(line) => line,
-        Err(code) => return code,
-    };
-    let Some(agent_harness) = AgentHarness::from_name(&args.agent_harness) else {
-        return 0;
-    };
-    let (text, code) = crate::autosync_hook_in(agent_harness, stdin, env);
-    write!(out, "{text}").map_or(2, |()| u8::try_from(code).unwrap_or(2))
+    match parse::<AutosyncLine, _, _>(args, out, err) {
+        Ok(AutosyncLine { args }) => run_hook(&args, stdin, env, out, crate::autosync_hook_in),
+        Err(code) => code,
+    }
 }

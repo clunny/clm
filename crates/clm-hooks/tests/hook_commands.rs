@@ -47,27 +47,34 @@ fn hook_args(name: &str, args: &[&str], event: &str, env: &[(&str, &str)]) -> Ou
     };
     // The developer's own git config (signing, hooks, helpers) must not leak into the `git`
     // the hook runs, which inherits this process's environment.
-    // SAFETY: nextest runs each test in a process of its own (`ci/nextest-runner`), so no
-    // other thread reads the environment meanwhile.
-    unsafe {
-        std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
-        std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
-    }
-    let cwd = std::env::current_dir().unwrap();
+    // Set once, to the same values, before any call: nextest runs each test in a process of
+    // its own (`ci/nextest-runner`), and under `cargo test` no thread changes them after.
+    static GIT_ISOLATED: std::sync::Once = std::sync::Once::new();
+    GIT_ISOLATED.call_once(|| {
+        // SAFETY: as above.
+        unsafe {
+            std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
+            std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
+        }
+    });
+    // The hook finds its repository from the event's `cwd`: the call runs in a directory
+    // that is no CLM repository, so nothing but the event can lead it to one.
+    let elsewhere = TempDir::new().unwrap();
+    let cwd = elsewhere.path();
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let root = clm_hooks::clm_root(&cwd);
+    let root = clm_hooks::clm_root(cwd);
     let code = match name {
         "session-start" => clm_hooks::session_start_command(
             args,
             root,
-            &cwd,
+            cwd,
             event,
             &lookup,
             &mut stdout,
             &mut stderr,
         ),
         "autosync" => {
-            clm_hooks::autosync_command(args, root, &cwd, event, &lookup, &mut stdout, &mut stderr)
+            clm_hooks::autosync_command(args, root, cwd, event, &lookup, &mut stdout, &mut stderr)
         }
         _ => panic!("no hook {name}"),
     };

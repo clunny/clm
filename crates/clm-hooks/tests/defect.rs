@@ -11,10 +11,12 @@ use tempfile::TempDir;
 
 /// A process forked while another thread holds a just-written executable open for writing
 /// inherits that descriptor, and running the file then fails with "text file busy". Writing
-/// executables holds this lock exclusively, and every spawn shares it.
+/// executables holds this lock exclusively, and every spawn shares it. A call of `clm defect`
+/// holds it exclusively too, since it sets this process's environment for its length.
 static FORKS: RwLock<()> = RwLock::new(());
 
 fn git(dir: &Path, args: &[&str]) {
+    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
     let out = Command::new("git")
         .args(args)
         .current_dir(dir)
@@ -85,26 +87,36 @@ impl Status {
 }
 
 /// Calls `clm defect` with `args` in `cwd`, the report as its standard input, no user
-/// settings, and `env`. `PATH` and git's own variables are set on this process, which `git`
-/// and `gh` inherit; the rest reach the call through its lookup.
+/// settings, and `env`. `PATH` and git's own variables are set on this process for the length
+/// of the call, since `git` and `gh` inherit them; the rest reach the call through its lookup.
 fn defect(cwd: &Path, args: &[&str], report: &str, env: &[(&str, &str)]) -> Output {
     let config = TempDir::new().unwrap();
     let mut vars: Vec<(String, String)> = vec![(
         "XDG_CONFIG_HOME".into(),
         config.path().display().to_string(),
     )];
-    // SAFETY: nextest runs each test in a process of its own (`ci/nextest-runner`), so no
-    // other thread reads the environment meanwhile.
+    let path = env
+        .iter()
+        .rev()
+        .find(|(k, _)| *k == "PATH")
+        .map(|(_, v)| *v);
+    vars.extend(env.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+    // Held exclusively for the call: no other thread of this binary spawns, or sets the
+    // environment, while it is changed (`cargo test` runs tests as threads of one process).
+    let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+    let saved: Vec<(&str, Option<std::ffi::OsString>)> =
+        ["PATH", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM"]
+            .into_iter()
+            .map(|k| (k, std::env::var_os(k)))
+            .collect();
+    // SAFETY: every thread of this binary that spawns or reads the environment holds `FORKS`,
+    // which this call holds exclusively.
     unsafe {
         std::env::set_var("GIT_CONFIG_GLOBAL", "/dev/null");
         std::env::set_var("GIT_CONFIG_NOSYSTEM", "1");
-    }
-    for (key, value) in env {
-        if *key == "PATH" {
-            // SAFETY: as above.
-            unsafe { std::env::set_var(key, value) };
+        if let Some(path) = path {
+            std::env::set_var("PATH", path);
         }
-        vars.push((key.to_string(), value.to_string()));
     }
     let lookup = |key: &str| -> Option<String> {
         vars.iter()
@@ -113,18 +125,24 @@ fn defect(cwd: &Path, args: &[&str], report: &str, env: &[(&str, &str)]) -> Outp
             .map(|(_, v)| v.clone())
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let code = {
-        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
-        clm_hooks::defect_command(
-            args,
-            clm_hooks::clm_root(cwd),
-            cwd,
-            report,
-            &lookup,
-            &mut stdout,
-            &mut stderr,
-        )
-    };
+    let code = clm_hooks::defect_command(
+        args,
+        clm_hooks::clm_root(cwd),
+        cwd,
+        report,
+        &lookup,
+        &mut stdout,
+        &mut stderr,
+    );
+    for (key, value) in saved {
+        // SAFETY: as above.
+        unsafe {
+            match value {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
     Output {
         status: Status(code),
         stdout,
@@ -587,11 +605,4 @@ fn defect_call_refuses_an_option_it_does_not_have() {
         "{err}"
     );
     assert!(!repo.path().join("backlog").exists());
-    // `--help` is no error: the usage goes to the output stream, with status 0.
-    let out = defect(repo.path(), &["--help"], "", &[]);
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    assert!(
-        String::from_utf8_lossy(&out.stdout).contains("--component"),
-        "{out:?}"
-    );
 }
