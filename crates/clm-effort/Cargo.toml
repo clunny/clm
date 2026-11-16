@@ -10,7 +10,7 @@ default = ["git"]
 # Reading transcripts and the repository's history, and writing `effort` records to the
 # ledger; off for wasm builds, which keep the review page's pure part
 # (`effort-builds-for-wasm`).
-git = ["dep:clm-git", "dep:clm-check", "dep:serde_yaml", "clm-ledger/git"]
+git = ["dep:clap", "dep:clm-git", "dep:clm-check", "dep:serde_yaml", "clm-ledger/git"]
 
 [[test]]
 name = "record"
@@ -24,7 +24,12 @@ required-features = ["git"]
 name = "history"
 required-features = ["git"]
 
+[[test]]
+name = "command"
+required-features = ["git"]
+
 [dependencies]
+clap = { workspace = true, optional = true }
 clm-check = { workspace = true, optional = true }
 clm-git = { workspace = true, optional = true }
 clm-ledger = { workspace = true, default-features = false }

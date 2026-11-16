@@ -62,12 +62,6 @@ impl From<ViewFormat> for clm_view::Format {
 }
 
 #[derive(Clone, Copy, ValueEnum)]
-enum CapabilitiesFormat {
-    Text,
-    Json,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
 enum MachineFormat {
     Text,
     Json,
@@ -391,40 +385,13 @@ enum Command {
         ledger: Ledger,
     },
     /// The work Claude Code sessions spent, recorded in the ledger.
-    Effort {
-        #[command(subcommand)]
-        effort: Effort,
-    },
+    Effort(clm_effort::EffortArgs),
     /// What each capability costs, from the ledger's effort records and git: the list, or one
     /// capability's page.
-    #[command(subcommand_negates_reqs = true)]
-    Capabilities {
-        #[command(subcommand)]
-        command: Option<Capabilities>,
-        /// The capability's slug (default: list them all; `decide` is the subcommand).
-        slug: Option<String>,
-        /// Text, or the report (with a slug, the capability's cost) as JSON.
-        #[arg(long, value_enum, default_value = "text")]
-        format: CapabilitiesFormat,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Capabilities(clm_effort::CapabilitiesArgs),
     /// What each architectural constraint costs and whether its enforcing rules are built:
     /// the list, or one constraint's page.
-    #[command(subcommand_negates_reqs = true)]
-    Architecture {
-        #[command(subcommand)]
-        command: Option<Architecture>,
-        /// The constraint's slug (default: list them all; `decide` is the subcommand).
-        slug: Option<String>,
-        /// Text, or the list (with a slug, the constraint's entry) as JSON.
-        #[arg(long, value_enum, default_value = "text")]
-        format: CapabilitiesFormat,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Architecture(clm_effort::ArchitectureArgs),
     /// Land a branch on `main`: gate it, merge it, check the merge, push it and record the
     /// land in the ledger; print `landed <sha> <kind>`.
     Land {
@@ -756,79 +723,6 @@ enum Branch {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-}
-
-#[derive(Subcommand)]
-enum Effort {
-    /// Read this machine's transcripts and append an `effort` record for each session and
-    /// branch whose counts changed.
-    Record {
-        /// Only this branch's sessions.
-        #[arg(long)]
-        branch: Option<String>,
-        /// The transcripts directory (default: `$CLAUDE_CONFIG_DIR/projects`, else
-        /// `~/.claude/projects`).
-        #[arg(long)]
-        transcripts: Option<PathBuf>,
-        /// A directory whose sessions count, besides the repository's worktrees.
-        #[arg(long = "cwd")]
-        cwds: Vec<PathBuf>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-}
-
-#[derive(Subcommand)]
-enum Capabilities {
-    /// Record a review decision on a capability, settling the workaround flags open on it.
-    Decide {
-        /// The capability's slug.
-        slug: String,
-        /// What the capability is worth.
-        #[arg(long, value_enum)]
-        value: RatingArg,
-        /// What to do with it.
-        #[arg(long, value_enum)]
-        decision: DecisionArg,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-}
-
-#[derive(Subcommand)]
-enum Architecture {
-    /// Record a review decision on an architectural constraint, settling the workaround flags
-    /// open on it.
-    Decide {
-        /// The constraint's slug.
-        slug: String,
-        /// What the constraint is worth.
-        #[arg(long, value_enum)]
-        value: RatingArg,
-        /// What to do with it.
-        #[arg(long, value_enum)]
-        decision: DecisionArg,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum RatingArg {
-    High,
-    Medium,
-    Low,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum DecisionArg {
-    Keep,
-    Cut,
-    Redesign,
-    Accept,
 }
 
 #[derive(Subcommand)]
@@ -1352,88 +1246,9 @@ fn dispatch() -> ExitCode {
             }
         }
         Command::Ledger { ledger } => ledger_command(ledger),
-        Command::Effort {
-            effort:
-                Effort::Record {
-                    branch,
-                    transcripts,
-                    cwds,
-                    root,
-                },
-        } => {
-            // Relative paths are the shell's, before `--root` is found.
-            let absolute = |path: PathBuf| std::path::absolute(&path).unwrap_or(path);
-            let options = clm_effort::Options {
-                branch,
-                transcripts: transcripts.map(absolute),
-                cwds: cwds.into_iter().map(absolute).collect(),
-            };
-            match clm_effort::record(&repo_root(root), &options, &clm_config::process_env) {
-                Ok(done) => {
-                    for warning in &done.warnings {
-                        eprintln!("warning: {warning}");
-                    }
-                    for line in &done.lines {
-                        println!("{line}");
-                    }
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("clm effort: {e}");
-                    ExitCode::from(e.exit_code())
-                }
-            }
-        }
-        Command::Capabilities {
-            command:
-                Some(Capabilities::Decide {
-                    slug,
-                    value,
-                    decision,
-                    root,
-                }),
-            slug: parent_slug,
-            root: parent_root,
-            ..
-        } => match parent_slug {
-            // `clm capabilities <slug> decide ...` isn't a decision on `<slug>`.
-            Some(parent_slug) => {
-                eprintln!(
-                    "clm capabilities: `decide` takes the slug after it: clm capabilities \
-                     decide <slug> (not {parent_slug})"
-                );
-                ExitCode::from(2)
-            }
-            None => decide(&repo_root(root.or(parent_root)), &slug, value, decision),
-        },
-        Command::Capabilities {
-            slug, format, root, ..
-        } => capabilities(&repo_root(root), slug, format),
-        Command::Architecture {
-            command:
-                Some(Architecture::Decide {
-                    slug,
-                    value,
-                    decision,
-                    root,
-                }),
-            slug: parent_slug,
-            root: parent_root,
-            ..
-        } => match parent_slug {
-            // `clm architecture <slug> decide ...` isn't a decision on `<slug>`.
-            Some(parent_slug) => {
-                eprintln!(
-                    "clm architecture: `decide` takes the slug after it: clm architecture \
-                     decide <slug> (not {parent_slug})"
-                );
-                ExitCode::from(2)
-            }
-            None => decide_architecture(&repo_root(root.or(parent_root)), &slug, value, decision),
-        },
-        Command::Architecture {
-            slug, format, root, ..
-        } => architecture(&repo_root(root), slug, format),
+        Command::Effort(args) => effort_call(clm_effort::effort_command, args.root()),
+        Command::Capabilities(args) => effort_call(clm_effort::capabilities_command, args.root()),
+        Command::Architecture(args) => effort_call(clm_effort::architecture_command, args.root()),
         Command::Land {
             branch,
             check_only: true,
@@ -2367,139 +2182,30 @@ fn budgets_from(text: Option<&str>) -> Result<clm_check::Budgets, String> {
     })
 }
 
-/// `clm capabilities [<slug>]`: the list or one capability's page, as text or JSON.
-fn capabilities(root: &Path, slug: Option<String>, format: CapabilitiesFormat) -> ExitCode {
-    let report = match clm_effort::capabilities(root) {
-        Ok(report) => report,
-        Err(e) => {
-            eprintln!("clm capabilities: {e}");
-            return ExitCode::from(e.exit_code());
-        }
-    };
-    let out = match &slug {
-        None => match format {
-            CapabilitiesFormat::Text => clm_effort::list_text(&report).join("\n"),
-            CapabilitiesFormat::Json => serde_json::to_string_pretty(&report).unwrap_or_default(),
-        },
-        Some(slug) => {
-            let Some(cost) = report.capabilities.iter().find(|c| c.slug == *slug) else {
-                println!("no capability {slug}");
-                return ExitCode::FAILURE;
-            };
-            match format {
-                CapabilitiesFormat::Text => clm_effort::page_text(cost).join("\n"),
-                CapabilitiesFormat::Json => serde_json::to_string_pretty(cost).unwrap_or_default(),
-            }
-        }
-    };
-    println!("{out}");
-    ExitCode::SUCCESS
-}
-
-/// `clm capabilities decide`: append a `decided` record (`effort/decide-command`).
-fn decide(root: &Path, slug: &str, value: RatingArg, decision: DecisionArg) -> ExitCode {
-    decided(
-        "capabilities",
-        clm_effort::decide,
-        root,
-        slug,
-        value,
-        decision,
-    )
-}
-
-/// `clm architecture decide`: append a `decided` record
-/// (`effort/architecture-decide-command`).
-fn decide_architecture(
-    root: &Path,
-    slug: &str,
-    value: RatingArg,
-    decision: DecisionArg,
-) -> ExitCode {
-    decided(
-        "architecture",
-        clm_effort::decide_architecture,
-        root,
-        slug,
-        value,
-        decision,
-    )
-}
-
-type Decide = fn(
+/// The type of `clm-effort`'s command calls.
+type EffortCall = fn(
+    std::iter::Skip<std::env::ArgsOs>,
     &Path,
-    &str,
-    clm_ledger::Rating,
-    clm_ledger::Decision,
+    &Path,
     &dyn Fn(&str) -> Option<String>,
-) -> Result<clm_effort::Recorded, clm_effort::Error>;
+    &mut dyn std::io::Write,
+    &mut dyn std::io::Write,
+) -> u8;
 
-fn decided(
-    command: &str,
-    decide: Decide,
-    root: &Path,
-    slug: &str,
-    value: RatingArg,
-    decision: DecisionArg,
-) -> ExitCode {
-    let value = match value {
-        RatingArg::High => clm_ledger::Rating::High,
-        RatingArg::Medium => clm_ledger::Rating::Medium,
-        RatingArg::Low => clm_ledger::Rating::Low,
-    };
-    let decision = match decision {
-        DecisionArg::Keep => clm_ledger::Decision::Keep,
-        DecisionArg::Cut => clm_ledger::Decision::Cut,
-        DecisionArg::Redesign => clm_ledger::Decision::Redesign,
-        DecisionArg::Accept => clm_ledger::Decision::Accept,
-    };
-    match decide(root, slug, value, decision, &clm_config::process_env) {
-        Ok(done) => {
-            for line in &done.lines {
-                println!("{line}");
-            }
-            ExitCode::SUCCESS
-        }
-        // As the page for an unknown slug says it.
-        Err(e @ (clm_effort::Error::NoCapability(_) | clm_effort::Error::NoArchitecture(_))) => {
-            println!("{e}");
-            ExitCode::FAILURE
-        }
-        Err(e) => {
-            eprintln!("clm {command} decide: {e}");
-            ExitCode::from(e.exit_code())
-        }
-    }
-}
-
-/// `clm architecture [<slug>]`: the list or one entry's page, as text or JSON
-/// (`effort/architecture-list`, `effort/architecture-page`, `effort/architecture-json`).
-fn architecture(root: &Path, slug: Option<String>, format: CapabilitiesFormat) -> ExitCode {
-    let list = match clm_effort::architecture_review(root) {
-        Ok(list) => list,
-        Err(e) => {
-            eprintln!("clm architecture: {e}");
-            return ExitCode::from(e.exit_code());
-        }
-    };
-    let out = match &slug {
-        None => match format {
-            CapabilitiesFormat::Text => clm_effort::architecture_text(&list).join("\n"),
-            CapabilitiesFormat::Json => serde_json::to_string_pretty(&list).unwrap_or_default(),
-        },
-        Some(slug) => {
-            let Some(entry) = list.iter().find(|c| c.slug == *slug) else {
-                println!("no architectural constraint {slug}");
-                return ExitCode::FAILURE;
-            };
-            match format {
-                CapabilitiesFormat::Text => clm_effort::constraint_text(entry).join("\n"),
-                CapabilitiesFormat::Json => serde_json::to_string_pretty(entry).unwrap_or_default(),
-            }
-        }
-    };
-    println!("{out}");
-    ExitCode::SUCCESS
+/// `clm effort`, `clm capabilities` or `clm architecture` through `clm-effort`'s call
+/// (`effort/commands-in-crate`), with the directory `clm` runs in taken before the root is
+/// found, since finding it may change that directory.
+fn effort_call(call: EffortCall, root: Option<&Path>) -> ExitCode {
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let root = repo_root(root.map(Path::to_path_buf));
+    ExitCode::from(call(
+        std::env::args_os().skip(2),
+        &root,
+        &cwd,
+        &clm_config::process_env,
+        &mut Stdout(std::io::stdout().lock()),
+        &mut std::io::stderr(),
+    ))
 }
 
 /// One line per violation: a TOML error's first line (where) and last line (what), without
