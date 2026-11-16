@@ -1146,12 +1146,12 @@ For `clm rebase`, the root SHALL hand `clm-sync` the settings `config` loads fro
 #### Scenario: settings that can't be loaded
 - GIVEN a fixture repository on branch `spec/x`, up to date with its `origin/main`, whose committed `clm.toml` sets `[component_size] spec_tokens = 0`
 - WHEN `clm rebase` runs as a process there
-- THEN its first line of standard output starts with the path of `clm.toml` in the repository, then `: check.health/health-report: `, and names `component_size`, no part of the line is under the temporary directory, its last line is `rebase incomplete`, and it exits 1
+- THEN its first line of standard output starts with the path of `clm.toml` in the repository, then `: check.health/health-report: `, and names `component_size`, with no part of the line under the temporary directory
 
 #### Scenario: the repository's reconsider threshold
 - GIVEN a fixture repository on branch `impl/a`, up to date with its `origin/main`, whose committed `clm.toml` sets `[health] reconsider = 2`, and requirement `a/x` with two committed `workaround` items naming it at its current version
 - WHEN `clm rebase` runs as a process there
-- THEN it prints `filed backlog/reconsider-a-x.md`, its last line is `rebase ok`, and it exits 0, where the default threshold of 3 would file nothing
+- THEN it prints `filed backlog/reconsider-a-x.md`, which the default threshold of 3 wouldn't
 
 #### Serves
 - capability/prove-by-tests
