@@ -7,7 +7,6 @@
 //! `clm superpowers <skill>` resolves the pinned copy builds follow.
 
 use std::collections::HashMap;
-use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -19,6 +18,14 @@ pub use clm_orchestrator::Error;
 use clm_orchestrator::{
     PlaceKind, Placed, REMOTE, claim_local, free_place, place_slot, take_place,
 };
+
+mod command;
+pub use command::{
+    RunArgs, SetupArgs, SuperpowersArgs, run_command, setup_command, superpowers_command,
+};
+
+/// The environment a call reads, as a lookup of one variable's value.
+pub type Lookup<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// The branch a node's claim and build live on is `impl/<node>`.
 const BRANCH_PREFIX: &str = "impl/";
@@ -666,8 +673,9 @@ fn listing_owned(items: &[String], conjunction: &str, quote: bool) -> String {
     }
 }
 
-/// The path of `skill`'s `SKILL.md` in the pinned superpowers copy builds follow.
-pub fn superpowers_skill(skill: &str) -> Result<String, Error> {
+/// The path of `skill`'s `SKILL.md` in the pinned superpowers copy builds follow, with the
+/// environment `env` names and a relative `$CLM_SUPERPOWERS_DIR` read from `cwd`.
+pub fn superpowers_skill(skill: &str, cwd: &Path, env: Lookup) -> Result<String, Error> {
     // One plain name, so it can't escape `skills/`; checked before anything is fetched.
     let mut parts = Path::new(skill).components();
     if !matches!(
@@ -678,7 +686,7 @@ pub fn superpowers_skill(skill: &str) -> Result<String, Error> {
             "`{skill}` isn't a superpowers skill name"
         )));
     }
-    let path = superpowers_dir()?
+    let path = superpowers_dir(cwd, env)?
         .join("skills")
         .join(skill)
         .join("SKILL.md");
@@ -697,20 +705,50 @@ pub fn superpowers_skill(skill: &str) -> Result<String, Error> {
 /// `clm setup` (`setup-command`): runs the repository's `[build] setup` in its root, through
 /// `sh -c` with standard input closed, and returns what to print on success. A command that
 /// fails is a refusal naming the command and its status; none set prints that and runs nothing.
-/// The settings' `[env]` variables are set for the command, over the caller's own.
-pub fn setup(root: &Path) -> Result<String, Error> {
-    let settings = clm_config::load(Some(root), &clm_config::process_env)
-        .map_err(|e| Error::Refused(e.to_string()))?;
+/// The settings' `[env]` variables are set for the command, over the caller's own. What the
+/// command prints is passed through to `out` and `err` as it comes.
+pub fn setup(
+    root: &Path,
+    env: Lookup,
+    out: &mut dyn Write,
+    err: &mut dyn Write,
+) -> Result<String, Error> {
+    let settings = clm_config::load(Some(root), env).map_err(|e| Error::Refused(e.to_string()))?;
     let Some(build) = settings.build.value else {
         return Ok("no [build] setup".to_string());
     };
-    let status = std::process::Command::new("sh")
+    let cant_run = |e: std::io::Error| {
+        Error::Refused(format!("setup failed: can't run `{}`: {e}", build.setup))
+    };
+    let mut child = std::process::Command::new("sh")
         .args(["-c", &build.setup])
         .current_dir(root)
         .envs(settings.env.iter().map(|(n, s)| (n, &s.value)))
         .stdin(std::process::Stdio::null())
-        .status()
-        .map_err(|e| Error::Refused(format!("setup failed: can't run `{}`: {e}", build.setup)))?;
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(cant_run)?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    if let Some(pipe) = child.stdout.take() {
+        pump(pipe, false, tx.clone());
+    }
+    if let Some(pipe) = child.stderr.take() {
+        pump(pipe, true, tx);
+    }
+    // Ends once both pipes have closed. A stream that fails is written to no more, and the
+    // pipes are still drained, so the command never blocks on a full one.
+    let mut streams: [(&mut dyn Write, bool); 2] = [(out, true), (err, true)];
+    for (to_err, bytes) in rx {
+        let (stream, ok) = &mut streams[usize::from(to_err)];
+        if *ok {
+            *ok = stream
+                .write_all(&bytes)
+                .and_then(|()| stream.flush())
+                .is_ok();
+        }
+    }
+    let status = child.wait().map_err(cant_run)?;
     if status.success() {
         return Ok(String::new());
     }
@@ -723,6 +761,23 @@ pub fn setup(root: &Path) -> Result<String, Error> {
         "setup failed: `{}` ended with {how}",
         build.setup
     )))
+}
+
+/// Sends what `pipe` yields to `tx`, tagged with whether it is standard error, until it
+/// closes.
+fn pump(
+    mut pipe: impl std::io::Read + Send + 'static,
+    to_err: bool,
+    tx: std::sync::mpsc::Sender<(bool, Vec<u8>)>,
+) {
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        while let Ok(n @ 1..) = pipe.read(&mut buf) {
+            if tx.send((to_err, buf[..n].to_vec())).is_err() {
+                break;
+            }
+        }
+    });
 }
 
 #[cfg(unix)]
@@ -740,21 +795,26 @@ fn signal(_: &std::process::ExitStatus) -> Option<i32> {
 /// build are removed (`merged-claims-released`), then the local branch `impl/<node>` is
 /// resumed when it holds the claim, or the node is claimed and the branch made at the claim.
 /// The build holds the clone's place `<node>` from here on (`build-places`).
+///
+/// A relative `root` is read from `cwd`, the directory the command runs in, and `env` is the
+/// environment the settings and the superpowers copy are read with.
 pub fn run(
     root: &Path,
+    cwd: &Path,
+    env: Lookup,
     node: &str,
     expiry_hours: u64,
     review_model: Option<&str>,
 ) -> Result<String, RunError> {
-    let root = &root
+    let root = &cwd
+        .join(root)
         .canonicalize()
         .map_err(|e| Error::Refused(format!("{}: {e}", root.display())))?;
     if node.is_empty() || node.contains('/') {
         return Err(Error::Refused(format!("`{node}` isn't a component ID")).into());
     }
     // Before anything is claimed, so settings that can't be loaded leave nothing behind.
-    let settings = clm_config::load(Some(root), &clm_config::process_env)
-        .map_err(|e| Error::Refused(e.to_string()))?;
+    let settings = clm_config::load(Some(root), env).map_err(|e| Error::Refused(e.to_string()))?;
     let check = settings.land.value.map(|land| land.check);
     let setup = settings.build.value.map(|build| build.setup);
     // Before anything is claimed, so a missing skill leaves nothing behind.
@@ -763,7 +823,7 @@ pub fn run(
         .map(|s| {
             Ok((
                 s.to_string(),
-                superpowers_skill(s.trim_start_matches("superpowers:"))?,
+                superpowers_skill(s.trim_start_matches("superpowers:"), cwd, env)?,
             ))
         })
         .collect::<Result<Vec<_>, Error>>()?;
@@ -886,9 +946,11 @@ fn merged_tree(root: &Path, main: &str, branch: &str) -> Result<Option<String>, 
 /// `clm run --finish <node>`, once a build's subagent has returned (`build-places`): frees
 /// the place `<node>` and, when `impl/<node>` has landed, removes each clean worktree under
 /// the main worktree's `.claude/worktrees/` that has it checked out. Reads no queue state,
-/// so it works for any node. Returns what it did, one line each.
-pub fn finish(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
-    let root = &root
+/// so it works for any node. Returns what it did, one line each. A relative `root` is read
+/// from `cwd`, the directory it runs in, whose worktree is never removed.
+pub fn finish(root: &Path, cwd: &Path, node: &str, expiry_hours: u64) -> Result<String, Error> {
+    let root = &cwd
+        .join(root)
         .canonicalize()
         .map_err(|e| Error::Refused(format!("{}: {e}", root.display())))?;
     if node.is_empty() || node.contains('/') {
@@ -914,7 +976,7 @@ pub fn finish(root: &Path, node: &str, expiry_hours: u64) -> Result<String, Erro
             None => return Ok(done.join("\n")),
         };
         // The worktree this runs in is the orchestrating session's own, never a build's.
-        let here = env::current_dir().ok().and_then(|d| d.canonicalize().ok());
+        let here = cwd.canonicalize().ok();
         let own = |p: &Path| root.starts_with(p) || here.as_ref().is_some_and(|h| h.starts_with(p));
         for wt in &list[1..] {
             // One whose directory is gone has nothing to remove.
@@ -1283,12 +1345,13 @@ fn diff_text(old: &str, new: &str) -> Result<String, Error> {
         .collect())
 }
 
-/// Superpowers at the pin, from `$CLM_SUPERPOWERS_DIR` or the cache, fetching it once.
-fn superpowers_dir() -> Result<PathBuf, Error> {
-    if let Some(dir) = env::var_os("CLM_SUPERPOWERS_DIR").filter(|d| !d.is_empty()) {
-        return Ok(dir.into());
+/// Superpowers at the pin, from `$CLM_SUPERPOWERS_DIR`, read from `cwd` when relative, or
+/// the cache, fetching it once.
+fn superpowers_dir(cwd: &Path, env: Lookup) -> Result<PathBuf, Error> {
+    if let Some(dir) = env("CLM_SUPERPOWERS_DIR").filter(|d| !d.is_empty()) {
+        return Ok(cwd.join(dir));
     }
-    let cache = match (env::var_os("XDG_CACHE_HOME"), env::var_os("HOME")) {
+    let cache = match (env("XDG_CACHE_HOME"), env("HOME")) {
         (Some(xdg), _) if !xdg.is_empty() => PathBuf::from(xdg),
         (_, Some(home)) => Path::new(&home).join(".cache"),
         _ => {

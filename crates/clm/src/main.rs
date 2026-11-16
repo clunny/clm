@@ -157,24 +157,7 @@ enum Command {
     /// builds and lands its pending requirements to `.clm/prompts/<component>.md`, and print a
     /// launcher naming that file. With `--finish`, free the component's build place instead and,
     /// once its branch has landed, remove its clean worktrees under `.claude/worktrees/`.
-    Run {
-        /// A component ID, as `clm next` prints it.
-        #[arg(value_name = "COMPONENT")]
-        node: String,
-        /// Finish the component's build, whose subagent has returned, instead of starting one.
-        #[arg(long)]
-        finish: bool,
-        /// Hours without a commit after which a claim lapses.
-        #[arg(long, default_value_t = clm_orchestrator::DEFAULT_EXPIRY_HOURS)]
-        expiry: u64,
-        /// The alias of the model the build's final review runs on, passed into the prompt
-        /// unchecked (default: the build session's own model).
-        #[arg(long, value_name = "MODEL", conflicts_with = "finish")]
-        review_model: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Run(clm_run::RunArgs),
     /// List the changes that hold or propose backlog items, and the live backlog claims.
     Proposals(clm_orchestrator::ProposalsArgs),
     /// Group the untaken backlog items into units of design work, beside the spec work on
@@ -255,16 +238,9 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// Run the repository's `[build] setup`, which makes a fresh worktree ready to run its tests.
-    Setup {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Setup(clm_run::SetupArgs),
     /// Print the path of a skill's SKILL.md in the pinned superpowers copy builds follow.
-    Superpowers {
-        /// The skill's name, such as `brainstorming`.
-        skill: String,
-    },
+    Superpowers(clm_run::SuperpowersArgs),
     /// Run a Claude Code hook on the JSON event on stdin (used by the plugin).
     Hook {
         #[command(subcommand)]
@@ -742,25 +718,17 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Run {
-            node,
-            finish,
-            expiry,
-            review_model,
-            root,
-        } => {
-            if finish {
-                orchestrated("run", clm_run::finish(&repo_root(root), &node, expiry))
-            } else {
-                match clm_run::run(&repo_root(root), &node, expiry, review_model.as_deref()) {
-                    Err(clm_run::RunError::NoPlace(why)) => {
-                        eprintln!("clm run: {why}");
-                        ExitCode::from(3)
-                    }
-                    Err(clm_run::RunError::Failed(e)) => orchestrated("run", Err(e)),
-                    Ok(launcher) => orchestrated("run", Ok(launcher)),
-                }
-            }
+        Command::Run(args) => {
+            // Found first: finding the root may move the current directory there.
+            let root = found_root(&args.root);
+            ExitCode::from(clm_run::run_command(
+                command_args(),
+                &root,
+                &current_dir(),
+                &clm_config::process_env,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
         Command::Proposals(args) => ExitCode::from(clm_orchestrator::proposals_command(
             command_args(),
@@ -917,9 +885,28 @@ fn dispatch() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => failed("autosync", &e),
         },
-        Command::Setup { root } => orchestrated("setup", clm_run::setup(&repo_root(root))),
-        Command::Superpowers { skill } => {
-            orchestrated("superpowers", clm_run::superpowers_skill(&skill))
+        Command::Setup(args) => {
+            let root = found_root(&args.root);
+            ExitCode::from(clm_run::setup_command(
+                command_args(),
+                &root,
+                &current_dir(),
+                &clm_config::process_env,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
+        }
+        Command::Superpowers(_) => {
+            // It reads no repository, so the current directory is never moved.
+            let cwd = current_dir();
+            ExitCode::from(clm_run::superpowers_command(
+                command_args(),
+                &cwd,
+                &cwd,
+                &clm_config::process_env,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
         Command::Hook { hook } => {
             // A hook that can't read its event has nothing to do; it never breaks a session.
@@ -1502,6 +1489,11 @@ fn found_root(given: &Option<PathBuf>) -> PathBuf {
         Some(_) => PathBuf::from("."),
         None => repo_root(None),
     }
+}
+
+/// The directory the command runs in, for a call that takes it; `.` when it can't be read.
+fn current_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// The command's own arguments, after `clm` and its name, as a crate's call parses them.

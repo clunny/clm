@@ -31,7 +31,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Backlog(clm_check::BacklogArgs { root })
         | C::View { root, .. }
         | C::Machine { root, .. }
-        | C::Setup { root } => at(root.as_deref(), false),
+        | C::Setup(clm_run::SetupArgs { root }) => at(root.as_deref(), false),
         C::Defect { .. } | C::Config(_) | C::Init(_) | C::Upgrade { .. } => at(None, false),
         C::Check(clm_check::CheckArgs { root, .. })
         | C::Coverage(clm_check::CoverageArgs { root, .. })
@@ -45,7 +45,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Gate(clm_gate::Args { root, .. })
         | C::Next(clm_orchestrator::NextArgs { root, .. })
         | C::Claim(clm_orchestrator::ClaimArgs { root, .. })
-        | C::Run { root, .. }
+        | C::Run(clm_run::RunArgs { root, .. })
         | C::Proposals(clm_orchestrator::ProposalsArgs { root, .. })
         | C::Triage { root, .. }
         | C::Intake { root, .. }
