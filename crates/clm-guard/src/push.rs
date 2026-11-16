@@ -98,13 +98,11 @@ impl Budget {
 /// How a segment whose command is `command`, run from `checkout`, reaches `main` with
 /// `git push`, if it does, its queries spending `budget`; with the `cd` the guard couldn't
 /// follow that set `checkout` (`lost`), unless the push's own absolute `-C` sets it outright.
-/// The queries find `git` on `path`, the guard's own `PATH`, when it is given.
 pub fn reach<'a>(
     command: &Command,
     checkout: Option<&Path>,
     lost: Option<&'a str>,
     budget: &Budget,
-    path: Option<&OsStr>,
 ) -> Option<(Reach, Option<&'a str>)> {
     if !command.is("git") {
         return None;
@@ -161,7 +159,6 @@ pub fn reach<'a>(
     let env: Vec<(&str, &OsStr)> = ["GIT_DIR", "GIT_WORK_TREE"]
         .into_iter()
         .filter_map(|n| command.assigned(n).map(|v| (n, OsStr::new(v))))
-        .chain(path.map(|p| ("PATH", p)))
         .collect();
     let query = checkout.map(|checkout| {
         let mut checkout = checkout.to_path_buf();

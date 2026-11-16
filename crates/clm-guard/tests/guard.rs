@@ -1291,12 +1291,15 @@ fn hook_env(name: &str, event: &str, env: &[(&str, &str)]) -> Output {
 }
 
 /// `clm hook` with `args`, `guard` and its own arguments, called as `clm-guard`'s call on
-/// `event`, with `env` over this process's environment.
+/// `event`, with `env` over this process's environment. `gh` and `git` inherit the process's
+/// environment, not the lookup, so `env` is also set on this process for the length of the
+/// call (`ci/nextest-runner` runs each test in a process of its own), holding the spawn lock
+/// exclusively so that a plain `cargo test` runs no other spawn meanwhile.
 fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
     assert_eq!(args.first(), Some(&"guard"), "{args:?}");
     // The developer's own settings must not leak in either.
-    let config = TempDir::new().unwrap();
-    let config = config.path().to_str().unwrap().to_string();
+    let config_home = TempDir::new().unwrap();
+    let config = config_home.path().to_str().unwrap().to_string();
     let lookup = |name: &str| {
         if let Some((_, value)) = env.iter().rev().find(|(n, _)| *n == name) {
             return Some(value.to_string());
@@ -1308,8 +1311,29 @@ fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
         }
     };
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
-    let code = clm_guard::guard_command(&args[1..], event, &lookup, &mut stdout, &mut stderr);
+    let mut call =
+        || clm_guard::guard_command(&args[1..], event, &lookup, &mut stdout, &mut stderr);
+    let code = if env.is_empty() {
+        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        call()
+    } else {
+        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+        let saved: Vec<_> = env.iter().map(|(n, _)| (*n, std::env::var_os(n))).collect();
+        for (name, value) in env {
+            // SAFETY: the exclusive lock keeps this file's other tests from spawning, and
+            // under `nextest` no other test shares the process.
+            unsafe { std::env::set_var(name, value) };
+        }
+        let code = call();
+        for (name, value) in saved.into_iter().rev() {
+            match value {
+                // SAFETY: as above.
+                Some(value) => unsafe { std::env::set_var(name, value) },
+                None => unsafe { std::env::remove_var(name) },
+            }
+        }
+        code
+    };
     Output {
         status: Status(code),
         stdout,

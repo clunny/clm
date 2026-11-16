@@ -7,7 +7,6 @@ mod push;
 mod release;
 mod shell;
 
-use std::ffi::OsString;
 use std::path::Path;
 use std::time::Duration;
 
@@ -31,8 +30,8 @@ pub fn guard_hook(agent_harness: AgentHarness, event: &str) -> Rendered {
     guard_hook_in(agent_harness, event, &clm_config::process_env)
 }
 
-/// `guard_hook` with `env` as the environment: the settings load with it, and the `git` and
-/// `gh` the guard asks are found on its `PATH`.
+/// `guard_hook` with `env` as the environment the settings load with; the `git` and `gh`
+/// the guard asks inherit the process's.
 fn guard_hook_in(agent_harness: AgentHarness, event: &str, env: Env) -> Rendered {
     render(
         agent_harness,
@@ -78,7 +77,8 @@ pub fn guard_within(event: &str, budgets: &Budgets) -> Decision {
     )
 }
 
-/// Reads `event` as `agent_harness` writes it and judges its shell command under `env`.
+/// Reads `event` as `agent_harness` writes it and judges its shell command, loading the
+/// settings under `env`.
 fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets, env: Env) -> Decision {
     let Ok(event) = parse_event(agent_harness, event) else {
         return Decision::Allow;
@@ -92,11 +92,10 @@ fn judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets, env:
     judge_command(command, event.cwd.as_deref().map(Path::new), budgets, env)
 }
 
-/// The rules, whatever the agent harness: judges `command` run from `cwd` under `env`.
+/// The rules, whatever the agent harness: judges `command` run from `cwd`, loading the
+/// settings under `env`.
 fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env) -> Decision {
     let judged = walk(command, cwd);
-    let path = env("PATH").map(OsString::from);
-    let path = path.as_deref();
     let mut reasons: Vec<String> = Vec::new();
     // Re-running a release run would publish, merge or deploy again, and one that can't be
     // looked up might be one.
@@ -105,7 +104,7 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
         .filter_map(|j| release::rerun(&j.tokens, &j.command(), j.checkout.as_deref()))
         .collect();
     if judged.iter().any(|j| release::cuts_release(&j.tokens))
-        || release::reruns_release(&reruns, budgets.lookup, path)
+        || release::reruns_release(&reruns, budgets.lookup)
     {
         reasons.push(
             "clm: only a human cuts a release (`humans-cut-releases`). Ask the user to \
@@ -122,7 +121,6 @@ fn judge_command(command: &str, cwd: Option<&Path>, budgets: &Budgets, env: Env)
                 j.checkout.as_deref(),
                 j.lost.as_deref(),
                 &budget,
-                path,
             )
         })
         .collect();
