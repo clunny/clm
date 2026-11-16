@@ -37,11 +37,11 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Coverage(clm_check::CoverageArgs { root, .. })
         | C::Pending { root, .. }
         | C::Size(clm_check::SizeArgs { root, .. })
-        | C::Apply { root, .. }
+        | C::Apply(clm_apply::ApplyArgs { root, .. })
         | C::Rename { root, .. }
-        | C::Archive { root, .. }
+        | C::Archive(clm_apply::ArchiveArgs { root, .. })
         | C::Context(clm_context::Args { root, .. })
-        | C::Hashes { root, .. }
+        | C::Hashes(clm_apply::HashesArgs { root, .. })
         | C::Gate { root, .. }
         | C::Next(clm_orchestrator::NextArgs { root, .. })
         | C::Claim(clm_orchestrator::ClaimArgs { root, .. })

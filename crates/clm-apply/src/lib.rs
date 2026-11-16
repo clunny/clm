@@ -1,5 +1,8 @@
 //! Applies a change's deltas to `specs/` (see specs/apply/SPEC.md).
 
+#[cfg(not(target_arch = "wasm32"))]
+mod command;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +11,11 @@ use clm_model::outline::{requirement_spans, section_spans};
 use clm_model::{
     BacklogItem, BacklogKind, Change, Delta, DeltaRequirement, Graph, Layer, Node, ROOT_ID,
     Violation, check_node_frontmatter, split_frontmatter,
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use command::{
+    ApplyArgs, ArchiveArgs, HashesArgs, apply_command, archive_command, hashes_command,
 };
 
 /// `(element, hash)` for every element of `node`, in `clm hashes` order.
