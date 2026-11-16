@@ -41,6 +41,20 @@ pub struct Violation {
     pub message: String,
 }
 
+/// The line a violation prints as, `<path>: <rule>: <message>`, the same from every crate that
+/// prints violations (`violation-line`).
+impl std::fmt::Display for Violation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}: {}: {}",
+            self.path.display(),
+            self.rule,
+            self.message
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
