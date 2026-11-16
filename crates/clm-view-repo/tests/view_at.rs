@@ -1,91 +1,17 @@
 //! `clm view <name> --at <rev>`: a commit's views, read from the local objects (`view-at-rev`).
 
+mod common;
+
 use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use clm_check::{Budgets, Violation};
 use std::time::SystemTime;
 
+use common::{Output, clm};
 use tempfile::TempDir;
 
 const REQ: &str = concat!("req", ":");
-
-/// The exit status a call returned, read as a process's.
-#[derive(Debug)]
-struct Status(u8);
-
-impl Status {
-    fn code(&self) -> Option<i32> {
-        Some(self.0.into())
-    }
-}
-
-/// What a call wrote to its two streams, and what it returned.
-#[derive(Debug)]
-struct Output {
-    status: Status,
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
-}
-
-/// `[component_size]` of a `clm.toml` holding `text`, as `config` reads it: 12000 spec and
-/// 40000 code tokens where it sets none.
-fn budgets_in(text: Option<&str>) -> Result<Budgets, String> {
-    let table: toml::Table = text
-        .unwrap_or_default()
-        .parse()
-        .map_err(|e| format!("{e}"))?;
-    let size = table.get("component_size");
-    let budget = |key: &str, default: u64| {
-        size.and_then(|s| s.get(key))
-            .map_or(default, |v| v.as_integer().unwrap() as u64)
-    };
-    Ok(Budgets {
-        spec_tokens: budget("spec_tokens", 12000),
-        code_tokens: budget("code_tokens", 40000),
-    })
-}
-
-/// The working tree's settings for `root`, as `crates/clm` passes them: its `clm.toml`.
-fn repository_budgets(root: &Path) -> Result<Budgets, Violation> {
-    let text = fs::read_to_string(root.join("clm.toml")).ok();
-    budgets_in(text.as_deref()).map_err(|message| Violation {
-        path: root.join("clm.toml"),
-        rule: "check/node-size",
-        message,
-    })
-}
-
-/// `clm <args> --root <root>` through `clm-view-repo`'s call of the command `args` names.
-fn clm(root: &Path, args: &[&str]) -> Output {
-    let (name, rest) = args.split_first().unwrap();
-    let mut argv: Vec<std::ffi::OsString> = rest.iter().map(Into::into).collect();
-    argv.push("--root".into());
-    argv.push(root.into());
-    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-    let here = Path::new(".");
-    let code = match *name {
-        "view" => clm_view_repo::view_command(
-            &argv,
-            here,
-            &|_| None,
-            &mut stdout,
-            &mut stderr,
-            &repository_budgets,
-            &budgets_in,
-        ),
-        "pending" => {
-            clm_view_repo::pending_command(&argv, here, &|_| None, &mut stdout, &mut stderr)
-        }
-        other => panic!("no call for `clm {other}`"),
-    };
-    Output {
-        status: Status(code),
-        stdout,
-        stderr,
-    }
-}
 
 fn stdout(out: &Output) -> String {
     String::from_utf8(out.stdout.clone()).unwrap()
