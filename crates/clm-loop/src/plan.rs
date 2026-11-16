@@ -418,7 +418,14 @@ pub fn plan_of(s: &Snapshot) -> Plan {
             launches.push(Launch::Verify { work_done });
         }
     }
-    let humans = crate::humans::queue(s);
+    // Only a run of the loop that is going, or one this step launches, frees space by landing.
+    let going = !launches.is_empty()
+        || file
+            .runs
+            .iter()
+            .any(|r| matches!(r.state, RunState::Planned | RunState::Running));
+    let disk_holds = !going && next.iter().any(|n| n.reason == WAITS_FOR_DISK);
+    let humans = crate::humans::queue(s, disk_holds);
     Plan {
         view: view(file, s.now, &next, &humans),
         launches,

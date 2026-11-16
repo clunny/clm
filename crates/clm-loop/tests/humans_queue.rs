@@ -22,7 +22,7 @@ fn row(slug: &str, kind: &str, blocks: &[&str], since: u64) -> BacklogRow {
 
 #[test]
 fn an_escalated_build_in_the_queue() {
-    // req:orchestrator.loop/humans-queue@b7a7e8fa
+    // req:orchestrator.loop/humans-queue@0dc67763
     let fx = Fixture::new();
     fs::create_dir_all(fx.work.join("backlog")).unwrap();
     fs::write(
@@ -61,7 +61,7 @@ fn snapshot(file: clm_loop::LoopFile) -> Snapshot {
 
 #[test]
 fn every_kind_of_entry_oldest_first() {
-    // req:orchestrator.loop/humans-queue@b7a7e8fa
+    // req:orchestrator.loop/humans-queue@0dc67763
     let mut file = clm_loop::LoopFile::default();
     file.batches.push(Batch {
         id: "b".to_string(),
@@ -112,7 +112,7 @@ fn every_kind_of_entry_oldest_first() {
 
 #[test]
 fn a_red_verify_until_an_item_takes_it_in() {
-    // req:orchestrator.loop/humans-queue@b7a7e8fa
+    // req:orchestrator.loop/humans-queue@0dc67763
     let mut file = clm_loop::LoopFile::default();
     file.red_verifies
         .push("verify failed 1a2b3c4 culprit 9f8e7d6 components a".to_string());
@@ -130,7 +130,7 @@ fn a_red_verify_until_an_item_takes_it_in() {
 
 #[test]
 fn unsafe_work_from_wrap_up() {
-    // req:orchestrator.loop/humans-queue@b7a7e8fa
+    // req:orchestrator.loop/humans-queue@0dc67763
     let fx = Fixture::new();
     fx.set(
         "wrap-up",
@@ -152,6 +152,42 @@ fn unsafe_work_from_wrap_up() {
             "origin/main: ledger/unrecorded-land: abc"
         ]
     );
+}
+
+#[test]
+fn the_disk_holds_work_with_nothing_running() {
+    // req:orchestrator.loop/humans-queue@0dc67763
+    let mut s = snapshot(clm_loop::LoopFile::default());
+    s.free_places = 3;
+    s.ready = vec!["a".to_string()];
+    s.disk = Some(clm_loop::Disk {
+        room: Some(0),
+        state: "warn".to_string(),
+    });
+    let queue = plan(&s).waiting_on_you;
+    assert_eq!(queue.len(), 1, "{queue:?}");
+    assert_eq!(queue[0].name, "disk");
+    assert_eq!(
+        queue[0].action,
+        "free disk; the loop goes on once a build fits"
+    );
+    assert_eq!(queue[0].since_minutes, 0, "since the step's time");
+
+    // A run of the loop that is going will free space when it lands.
+    for state in [RunState::Running, RunState::Planned] {
+        let mut busy = s.clone();
+        busy.file
+            .runs
+            .push(run("build:b", Kind::Build, "sonnet", state, Some("t")));
+        assert!(plan(&busy).waiting_on_you.is_empty(), "{state:?}");
+    }
+    // Nothing held back on the disk, nothing asked for.
+    let mut room = s.clone();
+    room.disk = Some(clm_loop::Disk {
+        room: Some(1),
+        state: "warn".to_string(),
+    });
+    assert!(plan(&room).waiting_on_you.is_empty());
 }
 
 #[test]
