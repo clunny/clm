@@ -1,17 +1,50 @@
+//! `clm context` as `clm-context`'s call: what it writes to each stream and the status it
+//! returns (`commands-in-crate`).
+
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
 
 use tempfile::TempDir;
 
+/// What one call of `clm context` wrote to each stream, and the status it returned.
+struct Output {
+    status: Status,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+/// Calls `clm context` with `args` and `--root <root>`, the repository root it is given
+/// being a directory that holds no repository, so only `--root` can find one.
 fn clm_context(root: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .arg("context")
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .output()
-        .unwrap()
+    let mut line: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+    line.push("--root".as_ref());
+    line.push(root.as_os_str());
+    call(Path::new("/nonexistent-clm-root"), &line)
+}
+
+fn call(root: &Path, args: &[&std::ffi::OsStr]) -> Output {
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let status = clm_context::command(
+        args.iter().copied(),
+        root,
+        &|_| None,
+        &mut stdout,
+        &mut stderr,
+    );
+    Output {
+        status: Status(status),
+        stdout,
+        stderr,
+    }
+}
+
+/// The status a call returned, read as a process's exit status is.
+struct Status(u8);
+
+impl Status {
+    fn code(&self) -> Option<i32> {
+        Some(i32::from(self.0))
+    }
 }
 
 fn stdout(out: &Output) -> String {
@@ -275,4 +308,60 @@ fn invalid_graph_prints_violations_not_a_bundle() {
     assert_eq!(out.status.code(), Some(1), "{text}");
     assert!(text.contains("model/dependency-dag"), "{text}");
     assert!(!text.contains("A-CONTRACT"), "{text}");
+}
+
+#[test]
+fn the_call_writes_what_the_command_prints() {
+    // req:context/commands-in-crate@751a13b0
+    let dir = repo();
+    let (graph, _) = clm_model::load(dir.path());
+    let bundle = clm_context::bundle(&graph, dir.path(), "a").unwrap();
+    let run = |args: &[&str]| {
+        let args: Vec<&std::ffi::OsStr> = args.iter().map(std::ffi::OsStr::new).collect();
+        call(dir.path(), &args)
+    };
+
+    let out = run(&["a"]);
+    assert_eq!(out.status.0, 0);
+    assert_eq!(stdout(&out), bundle);
+    assert!(out.stderr.is_empty());
+
+    let out = run(&["a", "--hash"]);
+    assert_eq!(out.status.0, 0);
+    assert_eq!(stdout(&out), format!("{}\n", clm_context::hash(&bundle)));
+
+    let out = run(&["zz"]);
+    assert_eq!(out.status.0, 2);
+    assert!(out.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "clm context: no component `zz`\n"
+    );
+
+    node(dir.path(), "b", "B", "missing");
+    let (_, violations) = clm_model::load(dir.path());
+    let lines: String = violations
+        .iter()
+        .map(|v| format!("{}: {}: {}\n", v.path.display(), v.rule, v.message))
+        .collect();
+    let out = run(&["a"]);
+    assert_eq!(out.status.0, 1);
+    assert_eq!(stdout(&out), lines);
+    assert!(out.stderr.is_empty());
+}
+
+#[test]
+fn arguments_it_cant_parse_return_2() {
+    // req:context/commands-in-crate@751a13b0
+    let dir = repo();
+    let args: Vec<&std::ffi::OsStr> = ["a", "--no-such-option"]
+        .iter()
+        .map(std::ffi::OsStr::new)
+        .collect();
+    let out = call(dir.path(), &args);
+    assert_eq!(out.status.0, 2);
+    assert!(out.stdout.is_empty());
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("--no-such-option"), "{err}");
+    assert!(err.contains("Usage: clm context"), "{err}");
 }
