@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [verify-s-mutation-baseline-fails-a-clm-health-test-needs-a-git]
 ---
 
