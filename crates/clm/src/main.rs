@@ -538,20 +538,7 @@ enum Command {
     Workaround(clm_health::WorkaroundArgs),
     /// List the public items of the workspace's Rust libraries and TypeScript and Python
     /// packages that nothing outside their own library or package uses; exit 1 when it lists any.
-    Unreferenced {
-        /// Skip a library (`<crate>`) or an item (`<crate>::<name>`); an entry that skips
-        /// nothing is reported. Repeatable.
-        #[arg(long)]
-        allow: Vec<String>,
-        /// An attribute (its last path segment) that marks an item called from outside Rust;
-        /// one that marks no public item is reported. Repeatable.
-        #[arg(long)]
-        entry: Vec<String>,
-        /// Repository root (default: the CLM repository holding the current directory, else
-        /// the top of the git repository).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Unreferenced(clm_unreferenced::Args),
     /// Print a compact map of the repository's code, for drafting its spec graph.
     Survey {
         /// Check this component map (YAML: `components:` a list of `{ id, paths, depends_on }`, and
@@ -1687,21 +1674,13 @@ fn dispatch() -> ExitCode {
                 &mut std::io::stderr(),
             ))
         }
-        Command::Unreferenced { allow, entry, root } => {
-            match clm_unreferenced::scan(&survey_root(root), &allow, &entry) {
-                Ok(lines) if lines.is_empty() => ExitCode::SUCCESS,
-                Ok(lines) => {
-                    for line in lines {
-                        println!("{line}");
-                    }
-                    ExitCode::FAILURE
-                }
-                Err(e) => {
-                    eprintln!("clm unreferenced: {e}");
-                    ExitCode::from(2)
-                }
-            }
-        }
+        Command::Unreferenced(args) => ExitCode::from(clm_unreferenced::command(
+            std::env::args_os().skip(2),
+            &survey_root(args.root),
+            &clm_config::process_env,
+            &mut Stdout(std::io::stdout().lock()),
+            &mut std::io::stderr(),
+        )),
         Command::Survey { nodes: None, root } => match clm_init::survey(&survey_root(root)) {
             Ok(text) => {
                 print!("{text}");
