@@ -431,6 +431,8 @@ fn scenario_an_answer_whose_work_waits() {
         "set its `kind` to `deferred`",
         "remove its `choices`",
         "keep its `blocks`",
+        "keep its slug",
+        "`issues`",
         "quoting the answer",
         "naming the condition",
         "in `from`",
