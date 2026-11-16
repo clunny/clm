@@ -905,9 +905,12 @@ mod tests {
     #[test]
     fn a_failing_worktree_listing_waits_100_then_500_milliseconds() {
         // req:vcs/worktrees-tries-again@17533c62
+        // A directory that doesn't exist fails every run, wherever the temporary directory
+        // lies, even inside some repository's work tree.
         let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing");
         let mut waits = Vec::new();
-        let err = worktrees_waiting(dir.path(), |d| waits.push(d)).unwrap_err();
+        let err = worktrees_waiting(&missing, |d| waits.push(d)).unwrap_err();
         assert!(err.to_string().contains("worktree list"), "{err}");
         assert_eq!(
             waits,
