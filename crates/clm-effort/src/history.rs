@@ -254,7 +254,7 @@ pub fn capabilities(root: &Path) -> Result<Report, Error> {
 
 /// The architecture review for the working tree at `root`: its graph, its ledgers' fold and
 /// its friction items' text, with the requirements current in it as `clm coverage` gives them.
-pub fn architecture_review(root: &Path) -> Result<Vec<Constraint>, Error> {
+pub(crate) fn architecture_review(root: &Path) -> Result<Vec<Constraint>, Error> {
     let graph = graph(root)?;
     let fold = clm_ledger::fold(root)?;
     let flag_text = flag_text(&graph, &|path| {

@@ -23,7 +23,7 @@ pub fn decide(
 
 /// Appends a `decided` record for `architecture/<slug>`, settling the flags open and
 /// unsettled on it now. Refuses a slug `ARCHITECTURE.md` doesn't hold.
-pub fn decide_architecture(
+pub(crate) fn decide_architecture(
     root: &Path,
     slug: &str,
     value: Rating,

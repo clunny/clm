@@ -21,9 +21,9 @@ pub use command::{
     effort_command,
 };
 #[cfg(feature = "git")]
-pub use decide::{decide, decide_architecture};
+pub use decide::decide;
 #[cfg(feature = "git")]
-pub use history::{architecture_review, capabilities, history};
+pub use history::{capabilities, history};
 pub use prices::dollars;
 #[cfg(feature = "git")]
 pub use record::{Error, Options, Recorded, Unrecorded, record, unrecorded};

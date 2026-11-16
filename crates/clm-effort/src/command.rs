@@ -8,9 +8,11 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand, ValueEnum};
 use clm_ledger::{Decision, Rating};
 
+use crate::decide::decide_architecture;
+use crate::history::architecture_review;
 use crate::{
-    Error, Options, Recorded, architecture_review, architecture_text, capabilities,
-    constraint_text, decide, decide_architecture, list_text, page_text, record,
+    Error, Options, Recorded, architecture_text, capabilities, constraint_text, decide, list_text,
+    page_text, record,
 };
 
 /// The work Claude Code sessions spent, recorded in the ledger.
