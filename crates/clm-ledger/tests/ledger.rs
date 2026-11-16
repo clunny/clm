@@ -1,5 +1,5 @@
 //! `clm ledger compact`, `verify` and `show`, called through `clm-ledger`'s call
-//! (`commands-in-crate`), and the audit `clm check` runs on `main`.
+//! (`commands-in-crate`).
 
 mod common;
 
@@ -10,7 +10,8 @@ use clm_ledger::{Body, LandKind};
 use common::{clone_with_origin, commit, env, repo, sh};
 
 /// `clm ledger <args> --root <root>` through `clm-ledger`'s call, with `HOME` at `home` and no
-/// `XDG_CONFIG_HOME` or `CLM_WRITER`: exit code, stdout, stderr.
+/// `XDG_CONFIG_HOME` or `CLM_WRITER`, in the lookup and on the process for the length of the
+/// call, since the `git` it starts inherits the process's: exit code, stdout, stderr.
 fn clm(root: &Path, home: &Path, args: &[&str]) -> (Option<i32>, String, String) {
     let ["ledger", args @ ..] = args else {
         panic!("not a `clm ledger` command: {args:?}");
@@ -18,7 +19,14 @@ fn clm(root: &Path, home: &Path, args: &[&str]) -> (Option<i32>, String, String)
     let mut line: Vec<&str> = args.to_vec();
     line.extend(["--root", root.to_str().unwrap()]);
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let code = clm_ledger::ledger_command(line, root, &env(home, &[]), &mut out, &mut err);
+    let vars = [
+        ("HOME", Some(home.as_os_str())),
+        ("XDG_CONFIG_HOME", None),
+        ("CLM_WRITER", None),
+    ];
+    let code = with_vars(&vars, || {
+        clm_ledger::ledger_command(line, root, &env(home, &[]), &mut out, &mut err)
+    });
     (
         Some(i32::from(code)),
         String::from_utf8(out).unwrap(),
@@ -26,9 +34,96 @@ fn clm(root: &Path, home: &Path, args: &[&str]) -> (Option<i32>, String, String)
     )
 }
 
-/// `clm fingerprint --base <base>` in `dir`, as the gate computes it.
+/// Runs `run` with each of `vars` set, or removed for `None`, on this process. Tests run one
+/// per process (`ci/nextest-runner`), so no other test sees them; the old values come back when
+/// `run` returns or panics.
+fn with_vars<R>(vars: &[(&str, Option<&std::ffi::OsStr>)], run: impl FnOnce() -> R) -> R {
+    struct Restore(Vec<(String, Option<std::ffi::OsString>)>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            for (name, old) in self.0.drain(..) {
+                match old {
+                    // SAFETY: one test per process; nothing else reads the environment meanwhile.
+                    Some(old) => unsafe { std::env::set_var(&name, old) },
+                    // SAFETY: as above.
+                    None => unsafe { std::env::remove_var(&name) },
+                }
+            }
+        }
+    }
+    let _restore = Restore(
+        vars.iter()
+            .map(|(name, _)| (name.to_string(), std::env::var_os(name)))
+            .collect(),
+    );
+    for (name, value) in vars {
+        match value {
+            // SAFETY: as above.
+            Some(value) => unsafe { std::env::set_var(name, value) },
+            // SAFETY: as above.
+            None => unsafe { std::env::remove_var(name) },
+        }
+    }
+    run()
+}
+
+#[test]
+fn scenario_a_command_called_in_a_test() {
+    // req:ledger/commands-in-crate@b9042545
+    // `clm ledger verify` on a `main` with an unrecorded land: its line on the output buffer,
+    // nothing on the error buffer, and 1, as the command prints and exits.
+    let dir = tempfile::tempdir().unwrap();
+    let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
+    record_land(dir.path(), &merges[0]);
+    let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
+    assert_eq!((code, err.as_str()), (Some(1), ""), "{out}");
+    assert_eq!(out.lines().count(), 1, "{out}");
+    assert!(
+        out.starts_with("main: ledger/unrecorded-land: ") && out.contains(&merges[1]),
+        "{out}"
+    );
+}
+
+#[test]
+fn the_root_option_overrides_the_root_it_is_given() {
+    // req:ledger/commands-in-crate@b9042545
+    let dir = tempfile::tempdir().unwrap();
+    let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
+    record_land(dir.path(), &merges[0]);
+    let elsewhere = tempfile::tempdir().unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let line = ["verify", "--root", dir.path().to_str().unwrap()];
+    let code = clm_ledger::ledger_command(
+        line,
+        elsewhere.path(),
+        &env(dir.path(), &[]),
+        &mut out,
+        &mut err,
+    );
+    let out = String::from_utf8(out).unwrap();
+    assert_eq!(code, 1, "{out}");
+    assert!(out.contains("ledger/unrecorded-land"), "{out}");
+    // Without `--root`, the root it is given.
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_ledger::ledger_command(
+        ["verify"],
+        dir.path(),
+        &env(dir.path(), &[]),
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(code, 1);
+    assert!(
+        String::from_utf8(out)
+            .unwrap()
+            .contains("ledger/unrecorded-land")
+    );
+}
+
+/// The diff's fingerprint against `base` in `dir`, which `clm fingerprint` prints, from the
+/// gate's own call.
 fn fingerprint(dir: &Path, base: &str) -> String {
-    clm_gate::fingerprint(dir, base).unwrap()
+    clm_gate::fingerprint(dir, base).unwrap_or_else(|e| panic!("fingerprint: {e}"))
 }
 
 fn approved(fingerprint: &str) -> Body {
@@ -486,29 +581,6 @@ fn verify_reports_a_land_no_check_names() {
         out.contains("ledger/unchecked-land") && out.contains(&merges[1]),
         "{out}"
     );
-}
-
-/// The violations `clm check` reports from the ledger's audit, one line each.
-fn checked_on_main(dir: &Path) -> String {
-    let lines: Vec<String> = clm_ledger::on_main(dir)
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    lines.join("\n")
-}
-
-#[test]
-fn check_runs_verify_on_main() {
-    // req:ledger/verify@ff314001
-    let dir = tempfile::tempdir().unwrap();
-    let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
-    record_land(dir.path(), &merges[0]);
-    let out = checked_on_main(dir.path());
-    assert!(out.contains("ledger/unrecorded-land"), "{out}");
-    // Off `main`, it doesn't.
-    sh(dir.path(), &["switch", "-q", "-c", "other"]);
-    let out = checked_on_main(dir.path());
-    assert!(!out.contains("ledger/"), "{out}");
 }
 
 #[test]

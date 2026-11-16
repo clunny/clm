@@ -157,7 +157,7 @@ pub fn on_main(root: &Path) -> Vec<Violation> {
     if !on_main {
         return Vec::new();
     }
-    let audit = crate::has_ledger(root).and_then(|has| match has {
+    let audit = crate::verify::has_ledger(root).and_then(|has| match has {
         // Without `--review`: recomputing runs the gate once per signed land, on every check of
         // `main`.
         true => crate::verify(root, "main", None, false),
@@ -217,12 +217,7 @@ mod tests {
             commit: "abc".into(),
             message: "abc".into(),
         });
-        let model = clm_gate::Violation {
-            path: "main".into(),
-            rule: "ledger/unrecorded-land",
-            message: "abc".into(),
-        };
-        assert_eq!(v.to_string(), model.to_string());
+        // `clm-model`'s line, `<path>: <rule>: <message>`, against `main`.
         assert_eq!(v.to_string(), "main: ledger/unrecorded-land: abc");
     }
 

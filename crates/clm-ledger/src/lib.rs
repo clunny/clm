@@ -44,7 +44,7 @@ pub use read::fold;
 #[cfg(feature = "git")]
 pub use sign::{Signed, sign, signed, signed_by};
 #[cfg(feature = "git")]
-pub use verify::{Finding, has_ledger, verify};
+pub use verify::{Finding, verify};
 #[cfg(feature = "git")]
 pub use writer::writer;
 
