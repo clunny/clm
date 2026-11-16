@@ -220,6 +220,26 @@ fn the_temporary_worktree_goes_under_the_tmpdir_the_environment_names() {
 }
 
 #[test]
+fn a_failed_autosync_writes_why_and_returns_the_failures_status() {
+    // req:sync/commands-in-crate@77d09cc0
+    let (dir, work) = conflicting();
+    git(&work, &["checkout", "-q", "-b", "spec/x"]);
+    write(&work, "specs/SPEC.md", "edited\n");
+    let gone = dir.path().join("gone");
+    git(
+        &work,
+        &["remote", "set-url", "origin", gone.to_str().unwrap()],
+    );
+    let out = clm(&work, &["autosync"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).starts_with("clm autosync: "),
+        "{out:?}"
+    );
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
     // req:sync/commands-in-crate@77d09cc0
     let (_dir, work) = conflicting();
