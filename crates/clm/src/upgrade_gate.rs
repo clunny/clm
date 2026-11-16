@@ -42,7 +42,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Archive(clm_apply::ArchiveArgs { root, .. })
         | C::Context(clm_context::Args { root, .. })
         | C::Hashes(clm_apply::HashesArgs { root, .. })
-        | C::Gate { root, .. }
+        | C::Gate(clm_gate::Args { root, .. })
         | C::Next(clm_orchestrator::NextArgs { root, .. })
         | C::Claim(clm_orchestrator::ClaimArgs { root, .. })
         | C::Run { root, .. }
