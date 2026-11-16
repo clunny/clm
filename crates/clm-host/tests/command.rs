@@ -157,6 +157,11 @@ fn scenario_a_command_called_in_a_test() {
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
     assert_eq!((code, out.as_str()), (Some(2), ""), "{err}");
     assert!(err.starts_with("clm pr open: "), "{err}");
+    git(&r.work, &["checkout", "-q", "main"]);
+    let (code, out, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
+    assert_eq!((code, out.as_str()), (Some(1), ""), "{err}");
+    assert!(err.starts_with("clm branch push: "), "{err}");
+    git(&r.work, &["checkout", "-q", "spec/x"]);
     let (code, out, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
     let sha = git(&r.work, &["rev-parse", "HEAD"]);
     assert_eq!(
