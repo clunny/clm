@@ -56,7 +56,6 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Autosync { root }
         | C::Land(clm_land::LandArgs { root, .. })
         | C::Verify { root, .. }
-        | C::Approve { root, .. }
         | C::Reconnect(clm_land::ReconnectArgs { root })
         | C::Health(clm_health::HealthArgs { root, .. })
         | C::Workaround(clm_health::WorkaroundArgs { root, .. })
@@ -64,6 +63,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Survey(clm_init::SurveyArgs { root, .. })
         | C::Fingerprint { root, .. } => given(root),
         C::Affected(args) => given(&args.root),
+        C::Approve(args) => at(args.root(), true),
         C::Effort(args) => at(args.root(), true),
         C::Capabilities(args) => at(args.root(), true),
         C::Architecture(args) => at(args.root(), true),

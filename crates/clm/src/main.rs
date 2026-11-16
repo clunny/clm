@@ -400,14 +400,8 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-    /// Record your approval of a branch's current diff in the ledger.
-    Approve {
-        /// The branch (default: the current one).
-        branch: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    // Its help is `clm-approval`'s, which its own call prints too.
+    Approve(clm_approval::ApproveArgs),
     /// Push a `main` landed with no remote, and the local ledgers, to a newly added `origin`.
     Reconnect(clm_land::ReconnectArgs),
     /// Set up CLM's tooling in the CLM repository found from the current directory, or at the
@@ -1187,9 +1181,14 @@ fn dispatch() -> ExitCode {
             };
             verify(&repo_root(root), &request)
         }
-        Command::Approve { branch, root } => landed("approve", |env| {
-            clm_land::approve(&repo_root(root), branch.as_deref(), env)
-        }),
+        Command::Approve(args) => ExitCode::from(clm_approval::approve_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Reconnect(args) => ExitCode::from(clm_land::reconnect_command(
             command_args(),
             &found_root(&args.root),
@@ -1711,33 +1710,6 @@ fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violati
             requires: d.requires,
         })
         .collect())
-}
-
-/// `clm approve`: the lines on stdout, the
-/// warnings on stderr; exit 1 when it refused, 2 when git, the ledger or the settings failed.
-fn landed(
-    command: &str,
-    op: impl FnOnce(&clm_land::Env) -> Result<clm_land::Output, clm_land::Error>,
-) -> ExitCode {
-    match op(&clm_config::process_env) {
-        Ok(out) => {
-            for warning in out.warnings {
-                eprintln!("clm {command}: warning: {warning}");
-            }
-            for line in out.lines {
-                println!("{line}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(clm_land::Error::Refused(why)) => {
-            eprintln!("clm {command}: {why}");
-            ExitCode::FAILURE
-        }
-        Err(clm_land::Error::Git(e)) => {
-            eprintln!("clm {command}: {e}");
-            ExitCode::from(2)
-        }
-    }
 }
 
 /// `clm verify`: the one `verify ...` line on stdout, notes on stderr, and the outcome's exit
