@@ -40,7 +40,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Apply { root, .. }
         | C::Rename { root, .. }
         | C::Archive { root, .. }
-        | C::Context { root, .. }
+        | C::Context(clm_context::Args { root, .. })
         | C::Hashes { root, .. }
         | C::Gate { root, .. }
         | C::Next { root, .. }

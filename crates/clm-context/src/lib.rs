@@ -1,9 +1,15 @@
 //! The spine-scoped context bundle (`spine-scoped-context`).
 
+#[cfg(not(target_arch = "wasm32"))]
+mod command;
+
 use std::fs;
 use std::path::Path;
 
 use clm_model::{Graph, Layer, Node, Requirement, Tier};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use command::{Args, command};
 
 /// The first line of the carried section.
 const CARRIED_INTRO: &str = "These are the constraints CLM carries to every project, from the `clm` that runs; `clm guide constraints` explains their tiers. Names in backticks that this section doesn't list are CLM's own decisions and constraints, kept in CLM's repository.";

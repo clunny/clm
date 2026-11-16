@@ -144,17 +144,7 @@ enum Command {
         root: Option<PathBuf>,
     },
     /// Print the context bundle an agent needs for a component, its ancestors' specs among it.
-    Context {
-        /// Component ID.
-        #[arg(value_name = "COMPONENT")]
-        node: String,
-        /// Print the bundle's content hash instead of the bundle.
-        #[arg(long)]
-        hash: bool,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Context(clm_context::Args),
     /// List the migrations this project still needs, or take them: bring a project set up by
     /// an older `clm` up to date.
     Upgrade {
@@ -1036,27 +1026,13 @@ fn dispatch() -> ExitCode {
             };
             print_view(result, &mut std::io::stdout(), &mut std::io::stderr())
         }
-        Command::Context { node, hash, root } => {
-            let root = repo_root(root);
-            let (graph, violations) = clm_model::load(&root);
-            if !violations.is_empty() {
-                return report(&violations);
-            }
-            match clm_context::bundle(&graph, &root, &node) {
-                Some(bundle) if hash => {
-                    println!("{}", clm_context::hash(&bundle));
-                    ExitCode::SUCCESS
-                }
-                Some(bundle) => {
-                    print!("{bundle}");
-                    ExitCode::SUCCESS
-                }
-                None => {
-                    eprintln!("clm context: no component `{node}`");
-                    ExitCode::from(2)
-                }
-            }
-        }
+        Command::Context(args) => ExitCode::from(clm_context::command(
+            std::env::args_os().skip(2),
+            &repo_root(args.root),
+            &clm_config::process_env,
+            &mut Stdout(std::io::stdout().lock()),
+            &mut std::io::stderr(),
+        )),
         Command::Upgrade {
             apply,
             note,
