@@ -230,6 +230,21 @@ fn no_loop_yet_at_a_commit_reads_that_commit() {
 }
 
 #[test]
+fn the_plans_time_and_commit_go_to_the_error_buffer() {
+    // req:view.repo/commands-in-crate@975b834f
+    let dir = ready_a();
+    let d = dir.path();
+    write_loop(d);
+    let out = clm(d, &["view", "queue"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "plan computed 0m ago at abc\n"
+    );
+    assert!(!stdout(&out).contains("plan computed"));
+}
+
+#[test]
 fn the_loops_plan() {
     // req:view.repo/view-queue@7aa0fdff
     let dir = ready_a();

@@ -179,3 +179,24 @@ fn settings_that_dont_load_are_named_on_stderr() {
     );
     assert!(String::from_utf8(out).unwrap().starts_with("CLM status\n"));
 }
+
+#[test]
+fn the_root_it_is_given_without_root() {
+    // req:view.repo/commands-in-crate@975b834f
+    let dir = fixture();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let no_args: [&str; 0] = [];
+    let code = clm_view_repo::status_command(
+        no_args,
+        dir.path(),
+        &|_| None,
+        &mut out,
+        &mut err,
+        &defaults,
+    );
+    assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
+    assert_eq!(
+        String::from_utf8(out).unwrap(),
+        status(dir.path(), &[]).stdout
+    );
+}
