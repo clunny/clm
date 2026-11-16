@@ -147,6 +147,8 @@ fn scenario_room_against_the_builds() {
     r.disk = space(100 * GIB, 20 * GIB);
     let json = clm_machine::json(&judged(&r, &rec, &["a", "b"], 3));
     assert_eq!(json["disk"]["room"], 2);
+    // A build not yet measured owes the whole peak: growth 3 + 8 GiB leaves 9 GiB, one build.
+    assert_eq!(judged(&r, &rec, &["a", "new"], 3).disk.room, Some(1));
     // A peak of 0 gives no room, as no peak does.
     let mut r = readings();
     r.disk = space(100 * GIB, 50 * GIB);
