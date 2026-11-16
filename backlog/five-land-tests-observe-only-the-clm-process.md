@@ -1,12 +1,9 @@
 ---
 title: "Five of land's tests observe only the clm process and can't move into its crate"
-kind: question
+kind: deferred
 components: [land, clm]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
-choices:
-  - "All five become the root's"
-  - "Rewrite them for the crate's call"
 ---
 
 `land/commands-in-crate` moved 10 of the 15 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `land` into `crates/clm-land/tests/command.rs`, where they call `clm_land::land_command`. Five stay in `crates/clm/tests/land.rs`, because what they observe exists only in a `clm` process (the root's Design: "a test of something only a process has (… the binary's own file, two commands running at once) stays where it is"):
@@ -21,3 +18,5 @@ What is needed: say where these scenarios are proven once `clm/routes-only` hold
 ## The human's answer (2026-11-15)
 
 The same as for the first items of this kind: a scenario only a `clm` process can show becomes the root's, word for word, in the one spec change that follows the build run (`commands-live-in-their-crates`). The five tests stay where they are until then, and `land`'s workaround flag for them is accepted and deleted.
+
+Answered, so no longer a question: it waits only for the batched spec change, which is due when the phase 4 build run has drained.

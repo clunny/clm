@@ -1,13 +1,9 @@
 ---
 title: "Two of config's tests run other components' commands and can't move into its crate"
-kind: question
+kind: deferred
 components: [config, clm, check, check.unreferenced]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
-choices:
-  - "Both stay as root tests"
-  - "Move each to its command's component"
-  - "Reword both scenarios"
 ---
 
 `config/commands-in-crate` moved 35 of the 38 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `config` into `crates/clm-config/tests/` (`command.rs` and `this_repository.rs`). `this_repository_is_clean` also cites the root's `clm/clean-check-runs-own-clm`, so it stays the root's: config's build took its own marker off it and proves "with this repository as it stands, the detector SHALL exit 0" with `the_retired_terms_detector_passes_here`, which runs the detector's command itself. Two stay in `crates/clm/tests/cli.rs`, because what they observe is another component's command, which `clm-config` (`depends_on: []`) can neither call nor run as a binary, which Cargo gives only to `crates/clm`'s tests:
@@ -20,3 +16,5 @@ Both requirements also say their tests "SHALL live in `crates/clm/tests/cli.rs`"
 ## The human's answer (2026-11-15)
 
 The first choice: the two scenarios become the root's. A scenario that only a `clm` process can show is the root's to prove, since the root keeps the binary (`commands-live-in-their-crates`). One spec change, made when the build run has drained, moves every such scenario word for word into requirements of the root, these two with those of the other items of this kind; it then deletes this item, and the root's next build re-cites the tests where they stand. Until then the tests stay as they are.
+
+Answered, so no longer a question: it waits only for the batched spec change, which is due when the phase 4 build run has drained.
