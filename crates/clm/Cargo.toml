@@ -23,6 +23,7 @@ clm-view.workspace = true
 clm-view-repo.workspace = true
 clm-ledger.workspace = true
 clm-effort.workspace = true
+clm-approval.workspace = true
 clm-land.workspace = true
 clm-verify.workspace = true
 clm-triage.workspace = true

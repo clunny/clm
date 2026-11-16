@@ -237,6 +237,7 @@ dependencies = [
  "clm-affected",
  "clm-agent-harness",
  "clm-apply",
+ "clm-approval",
  "clm-check",
  "clm-checkpoint",
  "clm-config",
@@ -305,6 +306,7 @@ dependencies = [
 name = "clm-approval"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-agent-harness",
  "clm-config",
  "clm-gate",

@@ -5,6 +5,7 @@
 //! its own.
 
 mod approve;
+mod command;
 mod hold;
 mod policy;
 mod sign;
@@ -13,6 +14,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 pub use approve::approve;
+pub use command::{ApproveArgs, approve_command};
 pub use hold::held;
 pub use policy::Policy;
 pub use sign::{APPROVE, LAND};
