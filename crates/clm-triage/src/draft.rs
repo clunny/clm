@@ -428,7 +428,7 @@ fn prompt_for(
          item the answers settle while leaving only code to change, a requirement or \
          scenario as written already stating what that code must do \
          (`draft-code-fix-written-rule`) and no requirement the item blocks waiting to be \
-         built for it, is the exception to the settled items that stay in `resolves`: take \
+         built for it, is one exception to the settled items that stay in `resolves`: take \
          it out of `resolves` (the list you first wrote) and have it turned into a bug. On \
          `spec/<id>` set its `kind` to `bug`, remove its `blocks`, set its `components` to \
          the components whose `paths` hold the fix and rewrite its body to the code work \
@@ -440,7 +440,22 @@ fn prompt_for(
          `clm claim <component> --fix backlog/<slug>` and a `Resolves: backlog/<slug>` \
          trailer, leaving it with `left <slug>: <reason>` when the claim is refused, and end \
          with the spec change's `landed <sha>`. When the branch needs review it stops the \
-         draft as any does, and the bug is left to the next triage.\n\n"
+         draft as any does, and the bug is left to the next triage.\n\n\
+         A `question` item the answers settle whose work can't be designed yet, because it \
+         waits on a condition the item or the answer names, such as other builds or another \
+         change landing first, is the other exception (`answered-question-waits-as-deferred`); \
+         an answer you can design now goes into the change, and a question whose remaining \
+         work is building the requirements it blocks stays in `resolves`. Take the waiting \
+         item out of `resolves` (the list you first wrote), since a change resolving it would \
+         release the requirements it blocks before the answer's work is done. On \
+         `spec/<id>` set its `kind` to `deferred`, remove its `choices`, keep its `blocks`, \
+         keep its slug and its other fields, such as `priority`, `components` and `issues`, \
+         and rewrite its body quoting the answer, naming the condition and saying that the \
+         change carrying the answer out names the item in `from`, so `clm apply` deletes it \
+         when that change lands; a change carrying out the answers of several such items \
+         names one in `from` and deletes the others on its own spec branch, listing them in \
+         `resolves`. Say in `## Intent` that the answer waits, and take the backlog-only \
+         route when nothing else is left to design.\n\n"
             .to_string()
     };
     // Only when the project declares a setup: otherwise the prompt names no `clm setup`.
@@ -502,7 +517,8 @@ fn prompt_for(
          nothing for it. When the \
          change has no delta to write (each item already fixed, accepted, fixed on a code \
          branch, or left) and the branch edits `backlog/` (an item deleted as already fixed \
-         or accepted, a bug's `components` corrected, or a CLM defect reported), there is nothing to build, so skip the design and the builder check \
+         or accepted, a bug's `components` corrected, an item the answers turned into a bug or a \
+         deferred item, or a CLM defect reported), there is nothing to build, so skip the design and the builder check \
          below: write `## Intent`, with one line saying what the change does to the backlog; \
          run `clm check` until it passes and `clm apply <id>`; commit; \
          {rebase}; run `clm gate --base origin/main`; and go to the pull request and the land as for a \

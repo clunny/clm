@@ -330,7 +330,7 @@ fn answered_prompt(r: &Repo, slugs: &[&str], answers: &str) -> String {
 
 #[test]
 fn scenario_answers_in_the_prompt() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
+    // req:orchestrator.triage/draft-answers@3d132360
     let r = with_items(&[("q", "kind: question\n", "Which default?")]);
     let p = answered_prompt(&r, &["q"], "q: use the default\n");
     let at = |s: &str| p.find(s).unwrap_or_else(|| panic!("{s} missing from {p}"));
@@ -354,7 +354,7 @@ fn scenario_answers_in_the_prompt() {
 
 #[test]
 fn answers_go_in_verbatim_and_trimmed() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
+    // req:orchestrator.triage/draft-answers@3d132360
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n\n  Use `x` <y> & {z}.\n\nAll: P1.  \n\n");
     assert!(
@@ -365,7 +365,7 @@ fn answers_go_in_verbatim_and_trimmed() {
 
 #[test]
 fn scenario_unreadable_answers() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
+    // req:orchestrator.triage/draft-answers@3d132360
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let dir = r.work.join("a-directory.md");
     fs::create_dir_all(&dir).unwrap();
@@ -390,7 +390,7 @@ fn scenario_unreadable_answers() {
 
 #[test]
 fn answers_are_read_before_fetching() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
+    // req:orchestrator.triage/draft-answers@3d132360
     // With `origin` gone, a fetch would fail in git; the unreadable file refuses first.
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     fs::remove_dir_all(&r.origin).unwrap();
@@ -412,19 +412,51 @@ fn answers_are_read_before_fetching() {
 }
 
 #[test]
+fn scenario_an_answer_whose_work_waits() {
+    // req:orchestrator.triage/draft-answers@3d132360
+    let r = with_items(&[(
+        "q",
+        "kind: question\nblocks: [check/x]\n",
+        "Should it wait?",
+    )]);
+    let p = answered_prompt(&r, &["q"], "q: yes, once the builds have drained\n");
+    let steps = &p[p.find("## Steps").expect("steps")..];
+    let at = steps
+        .find("`answered-question-waits-as-deferred`")
+        .unwrap_or_else(|| panic!("route missing from {steps}"));
+    let route = &steps[at..];
+    let route = &route[..route.find("\n\n").unwrap_or(route.len())];
+    for needle in [
+        "out of `resolves`",
+        "set its `kind` to `deferred`",
+        "remove its `choices`",
+        "keep its `blocks`",
+        "keep its slug",
+        "`issues`",
+        "quoting the answer",
+        "naming the condition",
+        "in `from`",
+    ] {
+        assert!(route.contains(needle), "{needle} missing from {route}");
+    }
+}
+
+#[test]
 fn scenario_no_answers() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
+    // req:orchestrator.triage/draft-answers@3d132360
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let (_, p) = drafted_prompt(&r, &["a"]);
     assert!(!p.contains("The human's answers"), "{p}");
+    assert!(!p.contains("answered-question-waits-as-deferred"), "{p}");
 }
 
 #[test]
 fn scenario_whitespace_only_answers() {
-    // req:orchestrator.triage/draft-answers@3e3fc364
+    // req:orchestrator.triage/draft-answers@3d132360
     let r = with_items(&[("a", "kind: bug\n", "Body.")]);
     let p = answered_prompt(&r, &["a"], "\n  \n\t\n");
     assert!(!p.contains("The human's answers"), "{p}");
+    assert!(!p.contains("answered-question-waits-as-deferred"), "{p}");
 }
 
 #[test]
