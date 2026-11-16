@@ -9,6 +9,10 @@ use std::path::Path;
 use support::setup_repo as repo;
 use support::{Output, clm_setup_with, text};
 
+/// Names the repository for `setup_passes_output_through_and_closes_stdin` run again as a
+/// process of its own.
+const HELD_STDIN_ROOT: &str = "CLM_RUN_TEST_HELD_STDIN_ROOT";
+
 /// `clm setup` run in `cwd`, with an `XDG_CONFIG_HOME` that keeps the user's settings out.
 fn clm_setup(cwd: &Path) -> Output {
     clm_setup_with(cwd, &[("XDG_CONFIG_HOME", cwd.as_os_str())])
@@ -64,12 +68,43 @@ fn a_setup_killed_by_a_signal_says_so() {
 #[test]
 fn setup_passes_output_through_and_closes_stdin() {
     // req:orchestrator.run/setup-command@fdb7c407
+    // The call, made by this test run again as a process whose standard input the outer run
+    // holds open, writes what it got to the repository the outer run made.
+    if let Some(root) = std::env::var_os(HELD_STDIN_ROOT) {
+        let out = clm_setup(Path::new(&root));
+        let root = Path::new(&root);
+        let status = out.status.code().unwrap().to_string();
+        fs::write(root.join("call-status"), status).unwrap();
+        fs::write(root.join("call-stdout"), &out.stdout).unwrap();
+        fs::write(root.join("call-stderr"), &out.stderr).unwrap();
+        return;
+    }
     let r = repo(
         "[build]\nsetup = \"echo installed; echo warned >&2; timeout 10 cat > got; echo $? > ended\"\n",
     );
-    // The test process's standard input, which the call never closes, may stay open, so
-    // only the command's own closed one ends `cat` at once.
-    let out = clm_setup(r.path());
+    // The caller's standard input stays open, so only a closed one ends `cat` at once.
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "setup_passes_output_through_and_closes_stdin",
+            "--test-threads=1",
+        ])
+        .env(HELD_STDIN_ROOT, r.path())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let held = child.stdin.take();
+    let run = child.wait_with_output().unwrap();
+    drop(held);
+    assert!(run.status.success(), "{}", text(&run.stdout));
+    let read = |name: &str| fs::read(r.path().join(name)).unwrap();
+    let out = support::Output {
+        status: support::Status::from(text(&read("call-status")).parse::<u8>().unwrap()),
+        stdout: read("call-stdout"),
+        stderr: read("call-stderr"),
+    };
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
     assert!(text(&out.stdout).contains("installed"));
     assert!(text(&out.stderr).contains("warned"));

@@ -69,6 +69,12 @@ pub struct Output {
 /// A call's status, read as a process's exit status is.
 pub struct Status(u8);
 
+impl From<u8> for Status {
+    fn from(status: u8) -> Self {
+        Status(status)
+    }
+}
+
 impl Status {
     pub fn code(&self) -> Option<i32> {
         Some(i32::from(self.0))
