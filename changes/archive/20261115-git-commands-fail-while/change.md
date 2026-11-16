@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [git-commands-fail-while-another-run-adds-a-worktree]
 ---
 

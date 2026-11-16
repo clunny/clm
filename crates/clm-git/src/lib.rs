@@ -524,8 +524,14 @@ impl From<Error> for Failure {
 /// `git fetch` from [`REMOTE`], run again after a failure as [`fetch_retrying`] runs it; the
 /// last run's error when all fail, with no `git ls-remote`.
 pub fn fetch(root: &Path) -> Result<(), Error> {
-    run_again(root, &["fetch", REMOTE], std::thread::sleep)
+    run_again(root, &["fetch", REMOTE], &FETCH_WAITS, std::thread::sleep).map(drop)
 }
+
+/// The waits between a fetch's three runs.
+const FETCH_WAITS: [Duration; 2] = [Duration::from_secs(1), Duration::from_secs(2)];
+
+/// The waits between a worktree listing's three runs (`worktrees-tries-again`).
+const WORKTREE_WAITS: [Duration; 2] = [Duration::from_millis(100), Duration::from_millis(500)];
 
 /// Why [`fetch_retrying`] gave up.
 #[derive(Debug)]
@@ -557,7 +563,7 @@ pub fn fetch_retrying(root: &Path, args: &[&str]) -> Result<(), FetchError> {
 /// [`fetch_retrying`] with its waits made through `wait`, so a test sees them without the
 /// clock.
 fn fetch_waiting(root: &Path, args: &[&str], wait: impl FnMut(Duration)) -> Result<(), FetchError> {
-    let Err(last) = run_again(root, args, wait) else {
+    let Err(last) = run_again(root, args, &FETCH_WAITS, wait) else {
         return Ok(());
     };
     match git(root, &["ls-remote", "--quiet", REMOTE, "refs/heads/main"]) {
@@ -566,18 +572,21 @@ fn fetch_waiting(root: &Path, args: &[&str], wait: impl FnMut(Duration)) -> Resu
     }
 }
 
-/// `git <args>` in `root`, up to three runs with `wait` of 1 then 2 seconds between them;
-/// the last run's error when all fail.
-fn run_again(root: &Path, args: &[&str], mut wait: impl FnMut(Duration)) -> Result<(), Error> {
-    let mut result = Ok(());
-    for secs in [0, 1, 2] {
-        if secs > 0 {
-            wait(Duration::from_secs(secs));
-        }
-        result = git(root, args).map(drop);
+/// `git <args>` in `root`, run again after a failure once per entry of `waits`, after
+/// `wait`ing that long; the first successful run's output, or the last run's error.
+fn run_again(
+    root: &Path,
+    args: &[&str],
+    waits: &[Duration],
+    mut wait: impl FnMut(Duration),
+) -> Result<String, Error> {
+    let mut result = git(root, args);
+    for &pause in waits {
         if result.is_ok() {
             break;
         }
+        wait(pause);
+        result = git(root, args);
     }
     result
 }
@@ -600,9 +609,21 @@ pub fn current_branch(root: &Path) -> Result<Option<String>, Error> {
     }
 }
 
-/// Every worktree of the repository, from `git worktree list --porcelain -z`.
+/// Every worktree of the repository, from `git worktree list --porcelain -z`, run again
+/// after a failure, since git fails to list while another process adds or removes a
+/// worktree (`worktrees-tries-again`).
 pub fn worktrees(root: &Path) -> Result<Vec<Worktree>, Error> {
-    let list = git(root, &["worktree", "list", "--porcelain", "-z"])?;
+    worktrees_waiting(root, std::thread::sleep)
+}
+
+/// [`worktrees`] with its waits made through `wait`, so a test sees them without the clock.
+fn worktrees_waiting(root: &Path, wait: impl FnMut(Duration)) -> Result<Vec<Worktree>, Error> {
+    let list = run_again(
+        root,
+        &["worktree", "list", "--porcelain", "-z"],
+        &WORKTREE_WAITS,
+        wait,
+    )?;
     let mut out = Vec::new();
     for field in list.split('\0') {
         if let Some(path) = field.strip_prefix("worktree ") {
@@ -879,5 +900,21 @@ mod tests {
         let err = fetch_waiting(dir.path(), &["fetch", REMOTE], |d| waits.push(d)).unwrap_err();
         assert!(matches!(err, FetchError::Offline), "{err}");
         assert_eq!(waits, [Duration::from_secs(1), Duration::from_secs(2)]);
+    }
+
+    #[test]
+    fn a_failing_worktree_listing_waits_100_then_500_milliseconds() {
+        // req:vcs/worktrees-tries-again@17533c62
+        // A directory that doesn't exist fails every run, wherever the temporary directory
+        // lies, even inside some repository's work tree.
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing");
+        let mut waits = Vec::new();
+        let err = worktrees_waiting(&missing, |d| waits.push(d)).unwrap_err();
+        assert!(err.to_string().contains("worktree list"), "{err}");
+        assert_eq!(
+            waits,
+            [Duration::from_millis(100), Duration::from_millis(500)]
+        );
     }
 }

@@ -7,7 +7,6 @@ mod exec;
 use clm_git::{FetchError, REMOTE, fetch_retrying};
 use common::sh;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 use std::time::{Duration, Instant};
 
 const FAKE: &str = r#"#!/bin/sh
@@ -29,25 +28,9 @@ esac
 exec "$real" "$@"
 "#;
 
-fn install_fake() {
-    static ONCE: Once = Once::new();
-    ONCE.call_once(|| {
-        let bin = Box::leak(Box::new(tempfile::tempdir().unwrap()));
-        exec::write_exec(&bin.path().join("git"), FAKE);
-        let real = std::env::var("PATH").unwrap();
-        let path = format!("{}:{real}", bin.path().display());
-        // SAFETY: every test here calls this first, and `Once` blocks the others until the
-        // variables are set, before any of them starts a command.
-        unsafe {
-            std::env::set_var("FAKE_REAL_PATH", real);
-            std::env::set_var("PATH", path);
-        }
-    });
-}
-
 /// A clone of a bare `origin`, with the fake's mode set.
 fn clone_with(mode: &str) -> (tempfile::TempDir, PathBuf) {
-    install_fake();
+    common::install_fake_git(FAKE, exec::write_exec);
     let dir = tempfile::tempdir().unwrap();
     let origin = dir.path().join("origin.git");
     let seed = dir.path().join("seed");
@@ -78,11 +61,7 @@ fn clone_with(mode: &str) -> (tempfile::TempDir, PathBuf) {
 }
 
 fn calls(clone: &Path, what: &str) -> usize {
-    std::fs::read_to_string(clone.join(".git/fake-calls"))
-        .unwrap_or_default()
-        .lines()
-        .filter(|l| *l == what)
-        .count()
+    common::count_calls(&clone.join(".git/fake-calls"), what)
 }
 
 #[test]
