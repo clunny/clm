@@ -47,42 +47,66 @@ fn effort(root: &Path, cwd: &Path, home: &Path, args: &[&str]) -> Out {
     call(clm_effort::effort_command, root, cwd, home, args)
 }
 
-#[test]
-fn effort_record_cli() {
-    // req:effort/record-command@2365b153
-    // req:effort/commands-in-crate@c08e640f
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("repo");
+/// Claude Code's name for the project directory of the sessions run in `path`.
+fn encoded(path: &Path) -> String {
+    path.to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
+/// A CLM repository at `<dir>/repo` and, under `<dir>/projects`, a session `s1` run there on
+/// `impl/a` and `impl/b`, and on `impl/a` in `<dir>/elsewhere`.
+fn record_repo(dir: &Path) -> PathBuf {
+    let root = dir.join("repo");
     std::fs::create_dir_all(root.join("specs")).unwrap();
     common::repo(&root, "Ann");
     std::fs::write(root.join("specs/SPEC.md"), "---\ntitle: T\n---\n").unwrap();
     std::fs::write(root.join("clm.toml"), "host = \"none\"\n").unwrap();
-    let transcripts = dir.path().join("projects");
-    let encoded = |path: &Path| -> String {
-        path.to_string_lossy()
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-            .collect()
-    };
-    std::fs::create_dir_all(transcripts.join(encoded(&root))).unwrap();
-    let line = |branch: &str, id: &str| {
+    let transcripts = dir.join("projects");
+    let line = |cwd: &Path, branch: &str, id: &str| {
         serde_json::json!({
             "sessionId": "s1",
             "gitBranch": branch,
-            "cwd": root,
+            "cwd": cwd,
             "timestamp": "2026-10-30T00:00:00.000Z",
             "message": {"id": id, "model": "claude-opus-5-5", "usage": {"input_tokens": 3, "output_tokens": 4}},
         })
         .to_string()
     };
-    std::fs::write(
-        transcripts.join(encoded(&root)).join("s1.jsonl"),
-        format!("{}\n{}\n", line("impl/a", "m1"), line("impl/b", "m2")),
-    )
-    .unwrap();
-    let transcripts_arg = transcripts.to_string_lossy().into_owned();
+    let elsewhere = dir.join("elsewhere");
+    let sessions = [
+        (
+            &root,
+            format!(
+                "{}\n{}\n",
+                line(&root, "impl/a", "m1"),
+                line(&root, "impl/b", "m2")
+            ),
+        ),
+        (
+            &elsewhere,
+            format!("{}\n", line(&elsewhere, "impl/a", "m3")),
+        ),
+    ];
+    for (cwd, lines) in sessions {
+        std::fs::create_dir_all(transcripts.join(encoded(cwd))).unwrap();
+        std::fs::write(transcripts.join(encoded(cwd)).join("s1.jsonl"), lines).unwrap();
+    }
+    root
+}
+
+#[test]
+fn effort_record_cli() {
+    // req:effort/record-command@2365b153
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let root = record_repo(dir.path());
+    let root_arg = root.to_string_lossy().into_owned();
+    let transcripts_arg = dir.path().join("projects").to_string_lossy().into_owned();
+    let nowhere = dir.path().join("nowhere");
     let out = effort(
-        &root,
+        &nowhere,
         &root,
         dir.path(),
         &[
@@ -91,6 +115,8 @@ fn effort_record_cli() {
             "impl/a",
             "--transcripts",
             &transcripts_arg,
+            "--root",
+            &root_arg,
         ],
     );
     assert_eq!(out.code, 0, "{out:?}");
@@ -98,17 +124,46 @@ fn effort_record_cli() {
         out.stdout,
         "effort impl/a s1 7 tokens 0s\nrecorded 1 sessions on 1 branches\n"
     );
-    // A relative `--cwd`, `.` components and all, is taken from the directory the command runs in, and `--root`,
-    // relative to it too, overrides the root the call is given.
-    let elsewhere = dir.path().join("elsewhere");
-    std::fs::create_dir_all(transcripts.join(encoded(&elsewhere))).unwrap();
-    let there =
-        line("impl/a", "m3").replace(&*root.to_string_lossy(), &elsewhere.to_string_lossy());
-    std::fs::write(
-        transcripts.join(encoded(&elsewhere)).join("s1.jsonl"),
-        there + "\n",
-    )
-    .unwrap();
+    // A relative `--cwd` is taken from the directory `clm` runs in.
+    let out = effort(
+        &nowhere,
+        dir.path(),
+        dir.path(),
+        &[
+            "record",
+            "--branch",
+            "impl/a",
+            "--cwd",
+            "elsewhere",
+            "--transcripts",
+            &transcripts_arg,
+            "--root",
+            &root_arg,
+        ],
+    );
+    assert_eq!(
+        out.stdout, "effort impl/a s1 14 tokens 0s\nrecorded 1 sessions on 1 branches\n",
+        "{}",
+        out.stderr
+    );
+    // Outside a CLM repository it refuses.
+    std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
+    let out = effort(
+        &nowhere,
+        &root,
+        dir.path(),
+        &["record", "--root", &root_arg],
+    );
+    assert_eq!(out.code, 1);
+}
+
+#[test]
+fn effort_record_paths_and_streams() {
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let root = record_repo(dir.path());
+    // `--cwd`, `.` components and all, `--transcripts` and `--root` are taken from the
+    // directory the command runs in, and `--root` overrides the root the call is given.
     let out = effort(
         &dir.path().join("nowhere"),
         dir.path(),
@@ -120,7 +175,7 @@ fn effort_record_cli() {
             "--cwd",
             "./elsewhere",
             "--transcripts",
-            &transcripts_arg,
+            "./projects",
             "--root",
             "repo",
         ],
@@ -130,8 +185,7 @@ fn effort_record_cli() {
         "{out:?}"
     );
     assert_eq!(out.code, 0, "{out:?}");
-    // A relative `--transcripts` is taken from that directory too, and a warning goes to the
-    // error stream with its prefix.
+    // A warning goes to the error stream with its prefix.
     let out = effort(
         &root,
         dir.path(),
@@ -148,7 +202,7 @@ fn effort_record_cli() {
         "{out:?}"
     );
     assert!(!out.stdout.contains("warning"), "{out:?}");
-    // Outside a CLM repository it refuses.
+    // A failure goes to the error stream after the command's name.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = effort(&root, &root, dir.path(), &["record"]);
     assert_eq!(out.code, 1, "{out:?}");
@@ -170,6 +224,11 @@ fn arguments_it_cant_parse() {
         assert_eq!(out.code, 2, "{out:?}");
         assert!(out.stderr.contains("--nope"), "{out:?}");
         assert!(out.stdout.is_empty(), "{out:?}");
+        // Help isn't an error: it goes to standard output with the status `clm` exits with.
+        let out = call(f, dir.path(), dir.path(), dir.path(), &["--help"]);
+        assert_eq!(out.code, 0, "{out:?}");
+        assert!(out.stdout.contains("Usage"), "{out:?}");
+        assert!(out.stderr.is_empty(), "{out:?}");
     }
     // Reaching here is the scenario's last clause: the test's process goes on.
 }
@@ -434,8 +493,21 @@ fn decide_after_parent_options() {
         "{}",
         out.stderr
     );
+    // `decide` is never a slug, wherever it stands.
+    for args in [&["--format", "json", "decide"][..], &["decide"]] {
+        let out = capabilities(&root, args);
+        assert_ne!(out.code, 0, "{args:?}");
+        assert!(out.stdout.is_empty(), "{args:?}");
+    }
+}
+
+#[test]
+fn decide_own_root_overrides() {
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let root = decide_repo(dir.path());
     // `decide`'s own `--root`, relative to the directory the command runs in, overrides the
-    // root the call is given too.
+    // root the call is given.
     let out = call(
         clm_effort::capabilities_command,
         &dir.path().join("nowhere"),
@@ -456,12 +528,6 @@ fn decide_after_parent_options() {
         out.stdout, "decided capability/q cut (value low), settles 0 flags\n",
         "{out:?}"
     );
-    // `decide` is never a slug, wherever it stands.
-    for args in [&["--format", "json", "decide"][..], &["decide"]] {
-        let out = capabilities(&root, args);
-        assert_ne!(out.code, 0, "{args:?}");
-        assert!(out.stdout.is_empty(), "{args:?}");
-    }
 }
 
 #[test]
@@ -639,7 +705,6 @@ fn architecture_help_says_architectural_constraint() {
     for args in [&["--help"][..], &["decide", "--help"][..]] {
         let dir = tempfile::tempdir().unwrap();
         let out = architecture(dir.path(), args);
-        assert_eq!(out.code, 0, "{out:?}");
         let help = out.stdout.to_lowercase();
         // Words only, so a line wrap or a backtick changes nothing.
         let words: Vec<&str> = help
