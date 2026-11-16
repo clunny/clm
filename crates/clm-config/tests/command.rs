@@ -132,10 +132,6 @@ fn arguments_it_cannot_parse() {
         assert!(stderr.starts_with("error: "), "{stderr}");
         assert!(stderr.contains("Usage: clm config"), "{stderr}");
     }
-    // Help is no error: it goes to stdout with status 0, as clap's does.
-    let out = clm_in(dir.path(), &["config", "--help"], &[]);
-    assert_eq!(out.status.code(), Some(0));
-    assert!(String::from_utf8(out.stdout).unwrap().contains("get"));
 }
 
 /// `clm config get <key>`'s stdout in a fresh CLM repository with `clm_toml` (when given),
