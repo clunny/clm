@@ -98,7 +98,7 @@ fn effort_record_cli() {
         out.stdout,
         "effort impl/a s1 7 tokens 0s\nrecorded 1 sessions on 1 branches\n"
     );
-    // A relative `--cwd` is taken from the directory the command runs in, and `--root`,
+    // A relative `--cwd`, `.` components and all, is taken from the directory the command runs in, and `--root`,
     // relative to it too, overrides the root the call is given.
     let elsewhere = dir.path().join("elsewhere");
     std::fs::create_dir_all(transcripts.join(encoded(&elsewhere))).unwrap();
@@ -118,7 +118,7 @@ fn effort_record_cli() {
             "--branch",
             "impl/a",
             "--cwd",
-            "elsewhere",
+            "./elsewhere",
             "--transcripts",
             &transcripts_arg,
             "--root",
@@ -130,6 +130,24 @@ fn effort_record_cli() {
         "{out:?}"
     );
     assert_eq!(out.code, 0, "{out:?}");
+    // A relative `--transcripts` is taken from that directory too, and a warning goes to the
+    // error stream with its prefix.
+    let out = effort(
+        &root,
+        dir.path(),
+        dir.path(),
+        &["record", "--transcripts", "./missing"],
+    );
+    assert_eq!(out.code, 0, "{out:?}");
+    assert_eq!(
+        out.stderr,
+        format!(
+            "warning: no transcripts at {}\n",
+            dir.path().join("missing").display()
+        ),
+        "{out:?}"
+    );
+    assert!(!out.stdout.contains("warning"), "{out:?}");
     // Outside a CLM repository it refuses.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = effort(&root, &root, dir.path(), &["record"]);
@@ -391,6 +409,7 @@ fn decide_unknown_slug() {
 #[test]
 fn decide_after_parent_options() {
     // req:effort/decide-command@e1ca5b43
+    // req:effort/commands-in-crate@c08e640f
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
     let given = root.to_string_lossy().into_owned();

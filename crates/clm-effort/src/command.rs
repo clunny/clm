@@ -13,7 +13,7 @@ use crate::{
     constraint_text, decide, decide_architecture, list_text, page_text, record,
 };
 
-/// `clm effort`'s arguments, which `crates/clm`'s parser reads too.
+/// The work Claude Code sessions spent, recorded in the ledger.
 #[derive(clap::Args, Debug)]
 pub struct EffortArgs {
     #[command(subcommand)]
@@ -49,7 +49,8 @@ enum EffortCommand {
     },
 }
 
-/// `clm capabilities`' arguments, which `crates/clm`'s parser reads too.
+/// What each capability costs, from the ledger's effort records and git: the list, or one
+/// capability's page.
 #[derive(clap::Args, Debug)]
 #[command(subcommand_negates_reqs = true)]
 pub struct CapabilitiesArgs {
@@ -95,7 +96,8 @@ enum CapabilitiesCommand {
     },
 }
 
-/// `clm architecture`'s arguments, which `crates/clm`'s parser reads too.
+/// What each architectural constraint costs and whether its enforcing rules are built: the
+/// list, or one constraint's page.
 #[derive(clap::Args, Debug)]
 #[command(subcommand_negates_reqs = true)]
 pub struct ArchitectureArgs {
@@ -165,38 +167,31 @@ enum DecisionArg {
 
 /// The parsers of each command alone: its own arguments, without its name.
 #[derive(Parser)]
-#[command(
-    name = "clm effort",
-    no_binary_name = true,
-    about = "The work Claude Code sessions spent, recorded in the ledger."
-)]
+#[command(name = "clm effort", no_binary_name = true)]
 struct EffortLine {
     #[command(flatten)]
     args: EffortArgs,
 }
 
 #[derive(Parser)]
-#[command(
-    name = "clm capabilities",
-    no_binary_name = true,
-    about = "What each capability costs, from the ledger's effort records and git: the list, or \
-             one capability's page."
-)]
+#[command(name = "clm capabilities", no_binary_name = true)]
 struct CapabilitiesLine {
     #[command(flatten)]
     args: CapabilitiesArgs,
 }
 
 #[derive(Parser)]
-#[command(
-    name = "clm architecture",
-    no_binary_name = true,
-    about = "What each architectural constraint costs and whether its enforcing rules are \
-             built: the list, or one constraint's page."
-)]
+#[command(name = "clm architecture", no_binary_name = true)]
 struct ArchitectureLine {
     #[command(flatten)]
     args: ArchitectureArgs,
+}
+
+/// `path` as given on the command line run in `cwd`: absolute, its `.` components gone, as
+/// `std::path::absolute` leaves it.
+fn from(cwd: &Path, path: &Path) -> PathBuf {
+    let joined = cwd.join(path);
+    std::path::absolute(&joined).unwrap_or(joined)
 }
 
 /// The environment lookup every call takes.
@@ -246,10 +241,10 @@ where
     } = args.command;
     let options = Options {
         branch,
-        transcripts: transcripts.map(|p| cwd.join(p)),
-        cwds: cwds.into_iter().map(|p| cwd.join(p)).collect(),
+        transcripts: transcripts.map(|p| from(cwd, &p)),
+        cwds: cwds.into_iter().map(|p| from(cwd, &p)).collect(),
     };
-    let root = given.map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
+    let root = given.map_or_else(|| root.to_path_buf(), |r| from(cwd, &r));
     let written = match record(&root, &options, env) {
         Ok(done) => print_recorded(&done, out, err).map(|()| 0),
         Err(e) => failed("clm effort", &e, err),
@@ -276,7 +271,7 @@ where
     };
     let root = args
         .root()
-        .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
+        .map_or_else(|| root.to_path_buf(), |r| from(cwd, r));
     let written = match args.command {
         Some(CapabilitiesCommand::Decide {
             slug,
@@ -337,7 +332,7 @@ where
     };
     let root = args
         .root()
-        .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
+        .map_or_else(|| root.to_path_buf(), |r| from(cwd, r));
     let written = match args.command {
         Some(ArchitectureCommand::Decide {
             slug,

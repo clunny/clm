@@ -384,13 +384,9 @@ enum Command {
         #[command(subcommand)]
         ledger: Ledger,
     },
-    /// The work Claude Code sessions spent, recorded in the ledger.
+    // Their help is `clm-effort`'s, which its own call prints too.
     Effort(clm_effort::EffortArgs),
-    /// What each capability costs, from the ledger's effort records and git: the list, or one
-    /// capability's page.
     Capabilities(clm_effort::CapabilitiesArgs),
-    /// What each architectural constraint costs and whether its enforcing rules are built:
-    /// the list, or one constraint's page.
     Architecture(clm_effort::ArchitectureArgs),
     /// Land a branch on `main`: gate it, merge it, check the merge, push it and record the
     /// land in the ledger; print `landed <sha> <kind>`.
@@ -1246,9 +1242,30 @@ fn dispatch() -> ExitCode {
             }
         }
         Command::Ledger { ledger } => ledger_command(ledger),
-        Command::Effort(args) => effort_call(clm_effort::effort_command, args.root()),
-        Command::Capabilities(args) => effort_call(clm_effort::capabilities_command, args.root()),
-        Command::Architecture(args) => effort_call(clm_effort::architecture_command, args.root()),
+        Command::Effort(args) => ExitCode::from(clm_effort::effort_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
+        Command::Capabilities(args) => ExitCode::from(clm_effort::capabilities_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
+        Command::Architecture(args) => ExitCode::from(clm_effort::architecture_command(
+            command_args(),
+            &found_root(&args.root().map(PathBuf::from)),
+            &cwd,
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Land {
             branch,
             check_only: true,
@@ -2180,32 +2197,6 @@ fn budgets_from(text: Option<&str>) -> Result<clm_check::Budgets, String> {
         spec_tokens: n.spec_tokens,
         code_tokens: n.code_tokens,
     })
-}
-
-/// The type of `clm-effort`'s command calls.
-type EffortCall = fn(
-    std::iter::Skip<std::env::ArgsOs>,
-    &Path,
-    &Path,
-    &dyn Fn(&str) -> Option<String>,
-    &mut dyn std::io::Write,
-    &mut dyn std::io::Write,
-) -> u8;
-
-/// `clm effort`, `clm capabilities` or `clm architecture` through `clm-effort`'s call
-/// (`effort/commands-in-crate`), with the directory `clm` runs in taken before the root is
-/// found, since finding it may change that directory.
-fn effort_call(call: EffortCall, root: Option<&Path>) -> ExitCode {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let root = repo_root(root.map(Path::to_path_buf));
-    ExitCode::from(call(
-        std::env::args_os().skip(2),
-        &root,
-        &cwd,
-        &clm_config::process_env,
-        &mut Stdout(std::io::stdout().lock()),
-        &mut std::io::stderr(),
-    ))
 }
 
 /// One line per violation: a TOML error's first line (where) and last line (what), without
