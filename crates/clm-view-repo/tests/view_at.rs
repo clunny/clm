@@ -1,27 +1,17 @@
 //! `clm view <name> --at <rev>`: a commit's views, read from the local objects (`view-at-rev`).
 
+mod common;
+
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
+
 use std::time::SystemTime;
 
+use common::{Output, clm};
 use tempfile::TempDir;
 
 const REQ: &str = concat!("req", ":");
-
-/// `clm <args> --root <root>`, with no user settings.
-fn clm(root: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .env(
-            "XDG_CONFIG_HOME",
-            Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config"),
-        )
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .output()
-        .unwrap()
-}
 
 fn stdout(out: &Output) -> String {
     String::from_utf8(out.stdout.clone()).unwrap()

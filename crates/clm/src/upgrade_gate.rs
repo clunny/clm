@@ -27,15 +27,15 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
     match command {
         C::Guide(_) | C::Hook { .. } | C::AgentHarness => None,
         // The commands that run whatever is pending.
-        C::Status { root, .. }
+        C::Status(clm_view_repo::StatusArgs { root })
         | C::Backlog(clm_check::BacklogArgs { root })
-        | C::View { root, .. }
+        | C::View(clm_view_repo::ViewArgs { root, .. })
         | C::Machine { root, .. }
         | C::Setup(clm_run::SetupArgs { root }) => at(root.as_deref(), false),
         C::Defect { .. } | C::Config(_) | C::Init(_) | C::Upgrade { .. } => at(None, false),
         C::Check(clm_check::CheckArgs { root, .. })
         | C::Coverage(clm_check::CoverageArgs { root, .. })
-        | C::Pending { root, .. }
+        | C::Pending(clm_view_repo::PendingArgs { root, .. })
         | C::Size(clm_check::SizeArgs { root, .. })
         | C::Apply(clm_apply::ApplyArgs { root, .. })
         | C::Rename(clm_rename::RenameArgs { root, .. })

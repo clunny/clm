@@ -1,24 +1,13 @@
 //! `clm view queue`: the build loop's plan, read from the clone (`view-queue`).
 
+mod common;
+
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Command;
 
+use common::{Output, clm};
 use tempfile::TempDir;
-
-/// `clm <args> --root <root>`, with no user settings.
-fn clm(root: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .env(
-            "XDG_CONFIG_HOME",
-            Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config"),
-        )
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .output()
-        .unwrap()
-}
 
 fn stdout(out: &Output) -> String {
     String::from_utf8(out.stdout.clone()).unwrap()
@@ -163,6 +152,21 @@ fn no_loop_yet_at_a_commit_reads_that_commit() {
     let at = stdout(&clm(d, &["view", "queue", "--at", "origin/main"]));
     assert!(at.starts_with("origin/main "), "{at}");
     assert!(!at.contains("build:a"), "{at}");
+}
+
+#[test]
+fn the_plans_time_and_commit_go_to_the_error_buffer() {
+    // req:view.repo/commands-in-crate@975b834f
+    let dir = ready_a();
+    let d = dir.path();
+    write_loop(d);
+    let out = clm(d, &["view", "queue"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "plan computed 0m ago at abc\n"
+    );
+    assert!(!stdout(&out).contains("plan computed"));
 }
 
 #[test]

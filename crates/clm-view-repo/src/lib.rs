@@ -4,8 +4,10 @@
 //! Neither command fetches.
 
 mod at;
+mod commands;
 
 use std::collections::BTreeSet;
+use std::io::Write;
 use std::path::Path;
 
 pub use clm_check::Budgets;
@@ -15,6 +17,9 @@ use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 use clm_view::{
     Checkout, Format, Head, Name, View, blockers_view, flight_view, queue_states, render,
     spec_view, status_text,
+};
+pub use commands::{
+    Env, NodeSize, PendingArgs, StatusArgs, ViewArgs, pending_command, status_command, view_command,
 };
 
 fn load(root: &Path) -> Result<(Graph, Vec<Marker>), Vec<Violation>> {
@@ -30,8 +35,8 @@ fn load(root: &Path) -> Result<(Graph, Vec<Marker>), Vec<Violation>> {
 /// the local refs alone (`views-name-their-commit`). `None` when `HEAD` can't be read: no
 /// repository, or no commit yet. `behind` is `None` without `refs/remotes/origin/main`;
 /// when that ref exists but can't be compared, also `None`, with `checkout not compared:
-/// <error>` on stderr, so a missing warning is never silent.
-fn checkout(root: &Path) -> Option<Checkout> {
+/// <error>` on `err`, so a missing warning is never silent.
+fn checkout(root: &Path, err: &mut dyn Write) -> Option<Checkout> {
     let main = format!("refs/remotes/{}/main", clm_git::REMOTE);
     let head = clm_git::git(root, &["rev-parse", "--verify", "HEAD"]).ok()?;
     // Cut to 7 rather than `--short`, which lengthens a hash to keep it unique.
@@ -41,7 +46,7 @@ fn checkout(root: &Path) -> Option<Checkout> {
         Err(e) => {
             // The usual failure is that there is no `origin/main`: nothing to say then.
             if clm_git::git(root, &["rev-parse", "--verify", "-q", &main]).is_ok() {
-                eprintln!("checkout not compared: {e}");
+                let _ = writeln!(err, "checkout not compared: {e}");
             }
             None
         }
@@ -52,12 +57,13 @@ fn checkout(root: &Path) -> Option<Checkout> {
 /// The size report `clm status` and `clm view spec` mark: the IDs of the nodes over their
 /// budgets as `clm size` measures them, with `defaults` for a node that sets no
 /// `size_budget` (`oversized-is-a-state`). When the files can't be measured, `None`, with
-/// `size not checked: <error>` on stderr.
+/// `size not checked: <error>` on `err`.
 fn oversized(
     root: &Path,
     graph: &Graph,
     markers: &[Marker],
     defaults: Budgets,
+    err: &mut dyn Write,
 ) -> Option<BTreeSet<String>> {
     match clm_check::size(root, graph, markers, defaults) {
         Ok(sizes) => Some(
@@ -68,17 +74,27 @@ fn oversized(
                 .collect(),
         ),
         Err(e) => {
-            eprintln!("size not checked: {e}");
+            let _ = writeln!(err, "size not checked: {e}");
             None
         }
     }
 }
 
 /// `clm status`, or the spec graph's violations. With `budgets`, the defaults of a node
-/// that sets no `size_budget`, it marks the oversized nodes; without, it marks none.
+/// that sets no `size_budget`, it marks the oversized nodes; without, it marks none. What it
+/// has to say beside the summary goes to the process's stderr.
 pub fn status(root: &Path, budgets: Option<Budgets>) -> Result<String, Vec<Violation>> {
+    status_to(root, budgets, &mut std::io::stderr())
+}
+
+/// [`status`], saying what it has to say beside the summary on `err`.
+fn status_to(
+    root: &Path,
+    budgets: Option<Budgets>,
+    err: &mut dyn Write,
+) -> Result<String, Vec<Violation>> {
     let (graph, markers) = load(root)?;
-    let oversized = budgets.and_then(|b| oversized(root, &graph, &markers, b));
+    let oversized = budgets.and_then(|b| oversized(root, &graph, &markers, b, err));
     let refs = clm_orchestrator::claim_refs(root);
     let backlog = clm_orchestrator::propose_refs(root);
     Ok(status_text(
@@ -88,7 +104,7 @@ pub fn status(root: &Path, budgets: Option<Budgets>) -> Result<String, Vec<Viola
         &backlog,
         clm_git::now(),
         oversized.as_ref(),
-        checkout(root).as_ref(),
+        checkout(root, err).as_ref(),
     ))
 }
 
@@ -122,15 +138,20 @@ pub enum Source<'a> {
 /// begins with, from the working tree or from a commit.
 type Read = (Graph, Vec<Marker>, Option<BTreeSet<String>>, Option<Head>);
 
-fn read_source(root: &Path, source: Source) -> Result<Read, Error> {
+fn read_source(root: &Path, source: Source, err: &mut dyn Write) -> Result<Read, Error> {
     Ok(match source {
         Source::Tree(budgets) => {
             let (graph, markers) = load(root).map_err(Error::Violations)?;
-            let sized = budgets.and_then(|b| oversized(root, &graph, &markers, b));
-            (graph, markers, sized, checkout(root).map(Head::Checkout))
+            let sized = budgets.and_then(|b| oversized(root, &graph, &markers, b, err));
+            (
+                graph,
+                markers,
+                sized,
+                checkout(root, err).map(Head::Checkout),
+            )
         }
         Source::At { rev, budgets } => {
-            let at = at::read(root, rev, budgets)?;
+            let at = at::read(root, rev, budgets, err)?;
             if !at.violations.is_empty() {
                 return Err(Error::Violations(at.violations));
             }
@@ -140,16 +161,17 @@ fn read_source(root: &Path, source: Source) -> Result<Read, Error> {
 }
 
 /// `clm view <name> --format <format> --width <width> [--at <rev>]`, or the spec graph's
-/// violations, or a revision that couldn't be read.
-/// `width` cuts the charts only.
+/// violations, or a revision that couldn't be read; what it has to say beside the view goes
+/// to `err`. `width` cuts the charts only.
 pub fn view(
     root: &Path,
     name: Name,
     format: Format,
     width: usize,
     source: Source,
+    err: &mut dyn Write,
 ) -> Result<String, Error> {
-    let (graph, markers, oversized, head) = read_source(root, source)?;
+    let (graph, markers, oversized, head) = read_source(root, source, err)?;
     let (refs, now) = (clm_orchestrator::claim_refs(root), clm_git::now());
     let flight = || flight_view(&graph, &markers, &refs, now, DEFAULT_EXPIRY_HOURS);
     let view = match name {
@@ -175,14 +197,20 @@ pub fn view(
 /// fetching and writing no file; the checkout line is the only thing `source` changes. With
 /// no plan, a loop that isn't held, whose next section is the queue's ready components in
 /// priority order, read from `source`. A stored plan's time and `origin/main` commit go on
-/// stderr, which the plan's model has no place for.
-pub fn queue(root: &Path, format: Format, width: usize, source: Source) -> Result<String, Error> {
-    let (graph, markers, _, head) = read_source(root, source)?;
+/// `err`, which the plan's model has no place for.
+pub fn queue(
+    root: &Path,
+    format: Format,
+    width: usize,
+    source: Source,
+    err: &mut dyn Write,
+) -> Result<String, Error> {
+    let (graph, markers, _, head) = read_source(root, source, err)?;
     let (now, file) = (clm_git::now(), clm_loop::read(root));
     let view = if let Some(plan) = clm_loop::stored_plan(root) {
         if let Some(stored) = file.as_ref().and_then(|f| f.plan.as_ref()) {
             let minutes = now.saturating_sub(stored.at) / 60;
-            eprintln!("plan computed {minutes}m ago at {}", stored.main);
+            let _ = writeln!(err, "plan computed {minutes}m ago at {}", stored.main);
         }
         plan
     } else {
@@ -247,15 +275,21 @@ type PendingReport = (Option<String>, Result<Vec<clm_check::Pending>, Error>);
 /// the commit it describes, in plain text (none when `HEAD` can't be read, or when `rev`
 /// names no commit), and the pending lines of the working tree or of `rev`'s tree, or the
 /// spec graph's violations, or why `rev` couldn't be read.
-pub fn pending(root: &Path, component: Option<&str>, at: Option<&str>) -> PendingReport {
+/// Anything else it has to say goes to `err`.
+pub fn pending(
+    root: &Path,
+    component: Option<&str>,
+    at: Option<&str>,
+    err: &mut dyn Write,
+) -> PendingReport {
     let Some(rev) = at else {
-        let line = checkout(root).map(|c| head_text(Head::Checkout(c)));
+        let line = checkout(root, err).map(|c| head_text(Head::Checkout(c)));
         return (
             line,
             clm_check::pending_in(root, component).map_err(Error::Violations),
         );
     };
-    match at::read(root, rev, None) {
+    match at::read(root, rev, None, err) {
         Err(e) => (None, Err(e)),
         Ok(commit) => {
             let line = head_text(Head::At(commit.head));

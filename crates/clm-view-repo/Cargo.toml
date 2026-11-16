@@ -12,6 +12,9 @@ clm-check = { workspace = true, features = ["checkout", "detectors"] }
 clm-orchestrator = { workspace = true, features = ["git"] }
 clm-view.workspace = true
 clm-loop.workspace = true
+clap.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+serde_json.workspace = true
+toml.workspace = true

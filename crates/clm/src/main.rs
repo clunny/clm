@@ -21,47 +21,6 @@ struct Cli {
 }
 
 #[derive(Clone, Copy, ValueEnum)]
-enum ViewName {
-    Spec,
-    Flight,
-    Blockers,
-    Queue,
-}
-
-impl ViewName {
-    /// The view `clm-view` names; `None` for `queue`, which `clm-view-repo` reads from the
-    /// loop's file.
-    fn named(self) -> Option<clm_view::Name> {
-        match self {
-            ViewName::Spec => Some(clm_view::Name::Spec),
-            ViewName::Flight => Some(clm_view::Name::Flight),
-            ViewName::Blockers => Some(clm_view::Name::Blockers),
-            ViewName::Queue => None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-enum ViewFormat {
-    Text,
-    Ansi,
-    Svg,
-    Json,
-}
-
-impl From<ViewFormat> for clm_view::Format {
-    fn from(f: ViewFormat) -> Self {
-        use clm_view::Format;
-        match f {
-            ViewFormat::Text => Format::Text,
-            ViewFormat::Ansi => Format::Ansi,
-            ViewFormat::Svg => Format::Svg,
-            ViewFormat::Json => Format::Json,
-        }
-    }
-}
-
-#[derive(Clone, Copy, ValueEnum)]
 enum MachineFormat {
     Text,
     Json,
@@ -72,20 +31,7 @@ enum MachineFormat {
 enum Command {
     Check(clm_check::CheckArgs),
     Coverage(clm_check::CoverageArgs),
-    /// List the requirements whose code hasn't caught up with their spec: behind, unbuilt or
-    /// obsolete, with what blocks them.
-    Pending {
-        /// Component ID; every component when omitted.
-        #[arg(value_name = "COMPONENT")]
-        node: Option<String>,
-        /// List this commit's pending requirements, read from git's objects, instead of the
-        /// working tree's.
-        #[arg(long)]
-        at: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Pending(clm_view_repo::PendingArgs),
     Size(clm_check::SizeArgs),
     /// Apply a change's deltas to specs/, all or nothing.
     Apply(clm_apply::ApplyArgs),
@@ -95,30 +41,8 @@ enum Command {
     /// Move a done or abandoned change to changes/archive/.
     Archive(clm_apply::ArchiveArgs),
     Backlog(clm_check::BacklogArgs),
-    /// Print a summary of the repository, then its components, changes and claims; never fetches.
-    Status {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-    /// Print a view of the repository: the architecture, the work in flight or what holds
-    /// it up, or what the build loop runs next; never fetches.
-    View {
-        /// The view.
-        name: ViewName,
-        /// The form: a chart, the chart with ANSI colour, an SVG document or the model.
-        #[arg(long, value_enum, default_value_t = ViewFormat::Text)]
-        format: ViewFormat,
-        /// Columns the chart fits in, at least 1.
-        #[arg(long, default_value_t = clm_view::DEFAULT_WIDTH as u16, value_parser = clap::value_parser!(u16).range(1..))]
-        width: u16,
-        /// Describe this commit, read from git's objects, instead of the working tree.
-        #[arg(long)]
-        at: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Status(clm_view_repo::StatusArgs),
+    View(clm_view_repo::ViewArgs),
     /// Print the context bundle an agent needs for a component, its ancestors' specs among it.
     Context(clm_context::Args),
     /// List the migrations this project still needs, or take them: bring a project set up by
@@ -475,26 +399,13 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Pending { node, at, root } => {
-            let (head, result) =
-                clm_view_repo::pending(&repo_root(root), node.as_deref(), at.as_deref());
-            if let Some(head) = head {
-                eprintln!("{head}");
-            }
-            match result {
-                Ok(list) => {
-                    for line in list {
-                        println!("{line}");
-                    }
-                    ExitCode::SUCCESS
-                }
-                Err(clm_view_repo::Error::Violations(violations)) => report(&violations),
-                Err(clm_view_repo::Error::At(why)) => {
-                    eprintln!("{why}");
-                    ExitCode::FAILURE
-                }
-            }
-        }
+        Command::Pending(args) => ExitCode::from(clm_view_repo::pending_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Size(args) => ExitCode::from(clm_check::size_command(
             command_args(),
             &found_root(&args.root),
@@ -531,46 +442,23 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        Command::Status { root } => {
-            let root = repo_root(root);
-            match clm_view_repo::status(&root, budgets(&root)) {
-                Ok(text) => {
-                    print!("{text}");
-                    ExitCode::SUCCESS
-                }
-                Err(violations) => report(&violations),
-            }
-        }
-        Command::View {
-            name,
-            format,
-            width,
-            at,
-            root,
-        } => {
-            let root = repo_root(root);
-            // Only the `spec` view marks oversized nodes; settings load only for it.
-            let spec = matches!(name, ViewName::Spec);
-            let source = match at.as_deref() {
-                None => clm_view_repo::Source::Tree(spec.then(|| budgets(&root)).flatten()),
-                Some(rev) => clm_view_repo::Source::At {
-                    rev,
-                    budgets: spec.then_some(&budgets_from as clm_view_repo::BudgetsFrom),
-                },
-            };
-            let result = match name.named() {
-                Some(named) => {
-                    clm_view_repo::view(&root, named, format.into(), usize::from(width), source)
-                }
-                // The queue is the loop's plan, which has no layout for a diagram.
-                None if matches!(format, ViewFormat::Svg) => {
-                    eprintln!("clm view: the queue has no svg form");
-                    return ExitCode::from(2);
-                }
-                None => clm_view_repo::queue(&root, format.into(), usize::from(width), source),
-            };
-            print_view(result, &mut std::io::stdout(), &mut std::io::stderr())
-        }
+        Command::Status(args) => ExitCode::from(clm_view_repo::status_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+            &node_size,
+        )),
+        Command::View(args) => ExitCode::from(clm_view_repo::view_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+            &node_size,
+            &budgets_from,
+        )),
         Command::Context(args) => ExitCode::from(clm_context::command(
             command_args(),
             &found_root(&args.root),
@@ -1478,15 +1366,6 @@ fn node_size(root: &Path) -> Result<clm_check::Budgets, clm_check::Violation> {
     })
 }
 
-/// `config`'s `node_size`, for `clm status` and `clm view spec` to mark the oversized
-/// nodes (`oversized-is-a-state`); `None`, with `size not checked: <error>` on stderr, when
-/// the settings can't be loaded.
-fn budgets(root: &Path) -> Option<clm_check::Budgets> {
-    node_size(root)
-        .inspect_err(|v| eprintln!("size not checked: {}", v.message))
-        .ok()
-}
-
 /// The budgets a commit's `clm.toml` holding `text` gives, for `clm view spec --at`: that
 /// file alone, since the view describes the commit, not this clone (`view-at-rev`).
 fn budgets_from(text: Option<&str>) -> Result<clm_check::Budgets, String> {
@@ -1510,53 +1389,6 @@ fn one_line(message: &str) -> String {
     match lines.next_back() {
         Some(last) => format!("{first}: {last}"),
         None => first.to_string(),
-    }
-}
-
-/// `clm view`'s result: the view on `out` and exit 0, or exit 1 with the spec graph's
-/// violations on `out` as [`report`] prints them, or with a revision that couldn't be read
-/// as one line on `err` and nothing on `out`.
-fn print_view(
-    result: Result<String, clm_view_repo::Error>,
-    out: &mut dyn std::io::Write,
-    err: &mut dyn std::io::Write,
-) -> ExitCode {
-    match result {
-        Ok(text) => match out.write_all(text.as_bytes()) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(_) => ExitCode::FAILURE,
-        },
-        Err(clm_view_repo::Error::Violations(violations)) => report_to(&violations, out),
-        Err(clm_view_repo::Error::At(why)) => {
-            let _ = writeln!(err, "{why}");
-            ExitCode::FAILURE
-        }
-    }
-}
-
-fn report(violations: &[clm_check::Violation]) -> ExitCode {
-    report_to(violations, &mut std::io::stdout())
-}
-
-/// One line per violation on `out`, exiting 1.
-fn report_to(violations: &[clm_check::Violation], out: &mut dyn std::io::Write) -> ExitCode {
-    for v in violations {
-        let _ = writeln!(out, "{}", clm_check::format(v));
-    }
-    ExitCode::FAILURE
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_view_prints_on_stdout_and_exits_0() {
-        let (mut out, mut err) = (Vec::new(), Vec::new());
-        let code = print_view(Ok("a view\n".into()), &mut out, &mut err);
-        assert_eq!(code, ExitCode::SUCCESS);
-        assert_eq!(out, b"a view\n");
-        assert!(err.is_empty());
     }
 }
 

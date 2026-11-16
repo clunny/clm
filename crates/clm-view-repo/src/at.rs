@@ -2,6 +2,7 @@
 //! commit's tree, read from git's objects in memory, writing no file.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clm_check::{Length, Marker, Size};
@@ -45,8 +46,14 @@ fn text(bytes: &[u8]) -> Option<&str> {
 }
 
 /// The commit `rev` names, read from the local objects without fetching: its graph and
-/// markers, and with `budgets`, its size report by its own `clm.toml`.
-pub(crate) fn read(root: &Path, rev: &str, budgets: Option<BudgetsFrom>) -> Result<Commit, Error> {
+/// markers, and with `budgets`, its size report by its own `clm.toml`, or `size not checked:
+/// <error>` on `err` when that can't be read.
+pub(crate) fn read(
+    root: &Path,
+    rev: &str,
+    budgets: Option<BudgetsFrom>,
+    err: &mut dyn Write,
+) -> Result<Commit, Error> {
     let failed = |e: String| Error::At(format!("`{rev}`: {e}"));
     let hash = clm_git::git(
         root,
@@ -94,7 +101,9 @@ pub(crate) fn read(root: &Path, rev: &str, budgets: Option<BudgetsFrom>) -> Resu
             .get(Path::new("clm.toml"))
             .map(|b| String::from_utf8_lossy(b));
         let defaults = budgets(toml.as_deref())
-            .inspect_err(|e| eprintln!("size not checked: {e}"))
+            .inspect_err(|e| {
+                let _ = writeln!(err, "size not checked: {e}");
+            })
             .ok()?;
         let mut lengths: BTreeMap<PathBuf, Length> = files
             .iter()
