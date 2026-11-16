@@ -92,6 +92,8 @@ pub struct Disk {
     pub builds: Vec<Build>,
     pub free_places: u64,
     pub need: Option<u64>,
+    /// How many more builds free space covers beside the growth (`disk-room`).
+    pub room: Option<u64>,
     pub state: State,
 }
 
@@ -151,7 +153,7 @@ pub fn judge(readings: &Readings, record: &Record, counting: &[String], max_buil
         })
         .collect();
     let free_places = max_builds.saturating_sub(counting.len() as u64);
-    let (need, disk_state) = judge_disk(readings.disk, record.peak, &builds, free_places);
+    let verdict = judge_disk(readings.disk, record.peak, &builds, free_places);
     Report {
         cpu: Cpu {
             cores: readings.cores,
@@ -170,10 +172,18 @@ pub fn judge(readings: &Readings, record: &Record, counting: &[String], max_buil
             measured: record.measured,
             builds,
             free_places,
-            need,
-            state: disk_state,
+            need: verdict.need,
+            room: verdict.room,
+            state: verdict.state,
         },
     }
+}
+
+/// The disk's need, room and state, named so the two counts can't be swapped.
+struct DiskVerdict {
+    need: Option<u64>,
+    room: Option<u64>,
+    state: State,
 }
 
 fn judge_disk(
@@ -181,9 +191,13 @@ fn judge_disk(
     peak: Option<u64>,
     builds: &[Build],
     free_places: u64,
-) -> (Option<u64>, State) {
+) -> DiskVerdict {
     let Some(space) = space else {
-        return (None, State::Unknown);
+        return DiskVerdict {
+            need: None,
+            room: None,
+            state: State::Unknown,
+        };
     };
     let Some(peak) = peak else {
         let share = space.available as f64 / space.total.max(1) as f64;
@@ -194,7 +208,11 @@ fn judge_disk(
         } else {
             State::Ok
         };
-        return (None, state);
+        return DiskVerdict {
+            need: None,
+            room: None,
+            state,
+        };
     };
     let growth: u64 = builds
         .iter()
@@ -208,7 +226,12 @@ fn judge_disk(
     } else {
         State::Ok
     };
-    (Some(need), state)
+    let room = (peak > 0).then(|| space.available.saturating_sub(growth) / peak);
+    DiskVerdict {
+        need: Some(need),
+        room,
+        state,
+    }
 }
 
 /// Takes the readings, measures the builds when the record is due, keeps the sample and returns
