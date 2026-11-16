@@ -153,7 +153,16 @@ fn the_call_writes_what_clm_gate_prints() {
     // The root the call is given is the repository, with no `--root`.
     let out = call(d, &["--base", "main"].map(OsStr::new));
     assert_eq!(out.status.code(), Some(1));
-    assert_eq!(String::from_utf8(out.stdout).unwrap(), expected);
+    let printed = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(printed, expected);
+    // Each violation as `clm-model` gives its line, `<path>: <rule>: <message>`.
+    assert!(
+        printed
+            .lines()
+            .nth(1)
+            .is_some_and(|l| l.starts_with("main..HEAD: gate/classify: ")),
+        "{printed}"
+    );
     assert!(out.stderr.is_empty());
 
     // A clean branch: the kind alone, and 0.
