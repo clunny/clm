@@ -207,14 +207,7 @@ enum Command {
     },
     /// Report a defect in CLM itself, the report on stdin, as the `defects` setting says:
     /// a backlog item, an issue on clunny/clm, or nothing.
-    Defect {
-        /// The report's title.
-        #[arg(long)]
-        title: String,
-        /// A CLM component the defect concerns; repeat for several.
-        #[arg(long = "component", value_name = "COMPONENT")]
-        nodes: Vec<String>,
-    },
+    Defect(clm_hooks::DefectArgs),
     /// Read CLM's settings for the CLM repository found from the current directory.
     Config(clm_config::Args),
     /// A branch's pull request on the host the `host` setting names.
@@ -378,24 +371,10 @@ enum Hook {
     Guard(clm_guard::GuardArgs),
     /// SessionStart: print `clm status` and the rule for reporting CLM defects when the
     /// session's cwd is a CLM repository.
-    SessionStart {
-        #[command(flatten)]
-        flag: HarnessFlag,
-    },
+    SessionStart(clm_hooks::HookArgs),
     /// Stop: push a snapshot of the spec work on a `spec/*` branch; silent, never fails.
     /// The `autosync` setting (`clm config get autosync`) turns it off.
-    Autosync {
-        #[command(flatten)]
-        flag: HarnessFlag,
-    },
-}
-
-/// The agent harness whose event a hook reads (`hook-agent-harness-flag`).
-#[derive(clap::Args)]
-struct HarnessFlag {
-    /// The agent harness running the hook: `claude-code` (the default), `codex` or `none`.
-    #[arg(long = "agent-harness", default_value = "claude-code")]
-    agent_harness: String,
+    Autosync(clm_hooks::HookArgs),
 }
 
 #[derive(Subcommand)]
@@ -774,49 +753,47 @@ fn dispatch() -> ExitCode {
             // A hook that can't read its event has nothing to do; it never breaks a session.
             let mut event = String::new();
             let _ = std::io::stdin().read_to_string(&mut event);
-            type Run = fn(clm_agent_harness::AgentHarness, &str) -> (String, i32);
-            let (flag, run): (&HarnessFlag, Run) = match &hook {
-                // The guard's arguments follow `clm hook guard`.
-                Hook::Guard(_) => {
-                    return ExitCode::from(clm_guard::guard_command(
-                        std::env::args_os().skip(3),
-                        &event,
-                        &clm_config::process_env,
-                        &mut Printed::Out,
-                        &mut Printed::Err,
-                    ));
-                }
-                Hook::SessionStart { flag } => (flag, clm_hooks::session_start_hook),
-                Hook::Autosync { flag } => (flag, clm_hooks::autosync_hook),
-            };
-            let Some(agent_harness) =
-                clm_agent_harness::AgentHarness::from_name(&flag.agent_harness)
-            else {
-                return ExitCode::SUCCESS;
-            };
-            let (stdout, code) = run(agent_harness, &event);
-            print!("{stdout}");
-            ExitCode::from(u8::try_from(code).unwrap_or(2))
+            // The hook's own arguments, after `clm hook <name>`.
+            let hook_args = std::env::args_os().skip(3);
+            let env = &clm_config::process_env;
+            let (out, err) = (&mut Printed::Out, &mut Printed::Err);
+            ExitCode::from(match hook {
+                Hook::Guard(_) => clm_guard::guard_command(hook_args, &event, env, out, err),
+                Hook::SessionStart(_) => clm_hooks::session_start_command(
+                    hook_args,
+                    clm_hooks::clm_root(&cwd),
+                    &cwd,
+                    &event,
+                    env,
+                    out,
+                    err,
+                ),
+                Hook::Autosync(_) => clm_hooks::autosync_command(
+                    hook_args,
+                    clm_hooks::clm_root(&cwd),
+                    &cwd,
+                    &event,
+                    env,
+                    out,
+                    err,
+                ),
+            })
         }
-        Command::Defect { title, nodes } => {
+        Command::Defect(_) => {
             let mut report = String::new();
-            let filed = std::io::stdin()
-                .read_to_string(&mut report)
-                .map_err(|e| format!("reading the report: {e}"))
-                .and_then(|_| {
-                    std::env::current_dir().map_err(|e| format!("current directory: {e}"))
-                })
-                .and_then(|cwd| clm_hooks::defect(&cwd, &title, &nodes, &report));
-            match filed {
-                Ok(out) => {
-                    println!("{out}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("clm defect: {e}");
-                    ExitCode::FAILURE
-                }
+            if let Err(e) = std::io::stdin().read_to_string(&mut report) {
+                eprintln!("clm defect: reading the report: {e}");
+                return ExitCode::FAILURE;
             }
+            ExitCode::from(clm_hooks::defect_command(
+                command_args(),
+                clm_hooks::clm_root(&cwd),
+                &cwd,
+                &report,
+                &clm_config::process_env,
+                &mut Printed::Out,
+                &mut Printed::Err,
+            ))
         }
         Command::Ledger(args) => ExitCode::from(clm_ledger::ledger_command(
             command_args(),
