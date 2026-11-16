@@ -2380,6 +2380,7 @@ fn the_fixture_is_judged_first_outside_the_repository() {
             && src.contains("--show-toplevel")
             && src.contains("status.success()")
             && src.contains("CARGO_MANIFEST_DIR")
+            && src.contains("assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here)")
             && src.matches("in_git_repository();").count() == 2,
         "{src}"
     );
