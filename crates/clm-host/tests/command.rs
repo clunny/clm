@@ -243,6 +243,22 @@ fn the_given_root_overrides_the_found_one() {
         err.starts_with("clm issue: ") && err.contains("clm.toml"),
         "{err}"
     );
+    // The settings are read through the lookup, not the process's environment: a user file
+    // that sets `host`, which only the repository may set, is found only through it.
+    let user = TempDir::new().unwrap();
+    write(user.path(), "clm/config.toml", "host = \"git\"\n");
+    let xdg = user.path().display().to_string();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_host::pr_command(
+        ["open", "--root", &root],
+        elsewhere.path(),
+        &|key| (key == "XDG_CONFIG_HOME").then(|| xdg.clone()),
+        &mut out,
+        &mut err,
+    );
+    let err = String::from_utf8(err).unwrap();
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("config.toml"), "{err}");
     drop(gh);
 }
 
