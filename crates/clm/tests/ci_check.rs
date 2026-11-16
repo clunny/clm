@@ -1902,8 +1902,9 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// It exits 2 when a mutant was missed, as `cargo mutants` does, and with the status in
 /// `bin/mutants-exit` for a run on the repository's files. A run of the script's fixture, which
 /// names one of its two tests, catches the mutants of the first and misses those of the second,
-/// unless `bin/fixture-catches-all` or `bin/fixture-catches-none` exists. The directory of each `cargo mutants` run goes to
-/// `$CI_LOG.cwd`.
+/// unless `bin/fixture-catches-all` or `bin/fixture-catches-none` exists. The directory of each
+/// `cargo mutants` run goes to `$CI_LOG.cwd`, and again to `$CI_LOG.git` when it holds a `.git`;
+/// a run in a directory holding `src/lib.rs` (the fixture's) copies it to `$CI_LOG.fixture-src`.
 const CARGO_MUTANTS: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
 [ "$1" = mutants ] || exit 0
@@ -1912,6 +1913,8 @@ case " $* " in
   *" --version "*) exit 0 ;;
 esac
 echo "$PWD" >> "$CI_LOG.cwd"
+[ ! -d .git ] || echo "$PWD" >> "$CI_LOG.git"
+[ ! -f src/lib.rs ] || cp src/lib.rs "$CI_LOG.fixture-src"
 case " $* " in
   *" --list "*) cat "$bin/list" 2>/dev/null; exit 0 ;;
 esac
@@ -2005,7 +2008,7 @@ impl Tree {
         let log = self.dir.path().join("log");
         let result = self.dir.path().join("result");
         let _ = fs::remove_file(&log);
-        for kept in ["cwd", "stryker", "vitest"] {
+        for kept in ["cwd", "git", "fixture-src", "stryker", "vitest"] {
             let _ = fs::remove_file(self.dir.path().join(format!("log.{kept}")));
         }
         let mut c = Command::new(".github/scripts/mutate.sh");
@@ -2039,7 +2042,7 @@ const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndif
 
 #[test]
 fn a_rust_requirement_whose_test_notices_is_killed() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2056,6 +2059,8 @@ fn a_rust_requirement_whose_test_notices_is_killed() {
         "package(=clm-check)",
         "binary_id(=clm-check::it)",
         "test(~proves_x)",
+        // A test that asks git about the repository passes in cargo-mutants' copy of the tree.
+        "--copy-vcs true",
         // A test in another package than the code: the baseline matches no test and still passes.
         "-- --no-tests=pass -E",
     ] {
@@ -2069,7 +2074,7 @@ fn a_rust_requirement_whose_test_notices_is_killed() {
 
 #[test]
 fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-missed", "3");
     tree.report("further-missed", "2");
@@ -2093,7 +2098,7 @@ fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
 
 #[test]
 fn a_block_of_playwright_specs_is_not_judged() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(
         "requirement w/y\ncode web/src/app.ts\ntest web/e2e/app.spec.ts\tpaints\nlimit 20\n",
     );
@@ -2109,7 +2114,7 @@ fn a_block_of_playwright_specs_is_not_judged() {
 
 #[test]
 fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree("");
     let diff = tree.dir.path().join("the.diff");
     fs::write(
@@ -2182,7 +2187,7 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
 
 #[test]
 fn a_plan_with_nothing_to_mutate_is_not_judged() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree("requirement d/z\ncode docs/readme.md\ntest docs/t.rs\tt\nlimit 20\n");
     let (ok, log, result, _) = tree.mutate(&[]);
     assert!(ok, "{log:?}");
@@ -2191,7 +2196,7 @@ fn a_plan_with_nothing_to_mutate_is_not_judged() {
 
 #[test]
 fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let land = tree.dir.path().join("land");
@@ -2209,7 +2214,7 @@ fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
 
 #[test]
 fn the_mutation_tools_are_pinned_and_installed_when_absent() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let (_, log, _, _) = tree.mutate(&[]);
@@ -2247,7 +2252,7 @@ fn the_mutation_tools_are_pinned_and_installed_when_absent() {
 
 #[test]
 fn the_mutation_script_is_in_no_land_check_or_workflow() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     // clm:reads clm.toml
     // clm:reads .github/**
     let toml = fs::read_to_string(repo().join("clm.toml")).unwrap();
@@ -2284,7 +2289,7 @@ fn the_mutation_script_is_in_no_land_check_or_workflow() {
 
 #[test]
 fn vitest_tests_that_notice_nothing_survive() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(
         "requirement p/q\ncode plugin-panel/src/a.ts\ntest plugin-panel/test/a.test.ts\tt\nlimit 20\n",
     );
@@ -2306,7 +2311,7 @@ fn vitest_tests_that_notice_nothing_survive() {
 
 #[test]
 fn a_tool_that_fails_leaves_no_verdict() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("mutants-exit", "4");
@@ -2330,7 +2335,7 @@ const WEB_BLOCK: &str =
 
 #[test]
 fn stryker_that_runs_no_test_leaves_no_verdict() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-exit", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2344,7 +2349,7 @@ fn stryker_that_runs_no_test_leaves_no_verdict() {
 
 #[test]
 fn the_fixture_is_judged_first_outside_the_repository() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let before = snapshot(&tree.work());
@@ -2362,7 +2367,21 @@ fn the_fixture_is_judged_first_outside_the_repository() {
     // Two fixture runs, the test that notices and the one that doesn't, before the block's.
     assert_eq!(first_block, 2, "{runs:?}");
     assert!(runs[0].contains("fixture_notices") && runs[1].contains("fixture_blind"));
+    // The fixture is a git repository whose tests ask git for its top, and the tool copies its
+    // `.git`: a tool that left `.git` out of its copy would fail the fixture.
+    for run in &runs[..2] {
+        assert!(run.contains("--copy-vcs true"), "{run}");
+    }
+    let src = fs::read_to_string(tree.dir.path().join("log.fixture-src")).unwrap();
+    assert!(
+        src.contains("rev-parse") && src.contains("--show-toplevel"),
+        "{src}"
+    );
     let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
+    let with_git = fs::read_to_string(tree.dir.path().join("log.git")).unwrap_or_default();
+    for dir in dirs.lines().take(2) {
+        assert!(with_git.lines().any(|d| d == dir), "no .git in {dir}");
+    }
     let work = fs::canonicalize(tree.work()).unwrap();
     for dir in dirs.lines().take(2) {
         let dir = fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir));
@@ -2377,7 +2396,7 @@ fn the_fixture_is_judged_first_outside_the_repository() {
 
 #[test]
 fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("fixture-catches-all", "");
@@ -2404,7 +2423,7 @@ fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
 
 #[test]
 fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
-    // req:ci/mutate-script@85b28dfb
+    // req:ci/mutate-script@ec920232
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
