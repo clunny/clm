@@ -1,12 +1,9 @@
 ---
 title: "apply's test that `clm hash` is no command observes only the root's parser"
-kind: question
+kind: deferred
 components: [apply, clm]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
-choices:
-  - "It becomes the root's"
-  - "clm-apply names its commands"
 ---
 
 `apply/commands-in-crate` moved 8 of the 9 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `apply` into `crates/clm-apply/tests/command.rs`, where they call `clm-apply`'s calls. One stays in `crates/clm/tests/cli.rs`:
@@ -20,3 +17,5 @@ What is needed: the spec change that moves the scenario into a requirement of th
 ## The human's answer (2026-11-15)
 
 The first choice, under the standing answer for tests of this kind (`commands-live-in-their-crates`): the scenario "old name gone" becomes the root's, whose one parser holds the command names and the top-level help. The batched spec change that follows the build run moves it, or folds it into `clm/old-command-names-retired` where that requirement already states it, and deletes this item.
+
+Answered, so no longer a question: it waits only for the batched spec change, which is due when the phase 4 build run has drained.

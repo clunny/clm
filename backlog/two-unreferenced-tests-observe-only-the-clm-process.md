@@ -1,13 +1,9 @@
 ---
 title: "Two of check.unreferenced's tests observe only the clm process and can't move into its crate"
-kind: question
+kind: deferred
 components: [check.unreferenced, clm, check]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
-choices:
-  - "Both stay as root tests of routing"
-  - "Detector stays; subdirectory to clm"
-  - "Rewrite both for the crate's call"
 ---
 
 `check.unreferenced/commands-in-crate` moved 11 of the 13 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `check.unreferenced` into `crates/clm-unreferenced/tests/command.rs`. Two stay in `crates/clm/tests/unreferenced.rs`, because what they observe exists only in a `clm` process, so replacing the helper that ran the binary by a call of the crate would change what they assert (the change's "What it removes" says such a test stays and its build files a `question` item that blocks `clm/routes-only`):
@@ -20,3 +16,5 @@ What is needed: say where each of these two scenarios is proven once `clm/routes
 ## The human's answer (2026-11-15)
 
 The first choice: the two scenarios become the root's. A scenario that only a `clm` process can show is the root's to prove, since the root keeps the binary (`commands-live-in-their-crates`). One spec change, made when the build run has drained, moves every such scenario word for word into requirements of the root, these two with those of the other items of this kind; it then deletes this item, and the root's next build re-cites the tests where they stand. Until then the tests stay as they are.
+
+Answered, so no longer a question: it waits only for the batched spec change, which is due when the phase 4 build run has drained.

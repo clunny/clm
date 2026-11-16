@@ -1,13 +1,9 @@
 ---
 title: "Seventeen of init's tests can't move into its crate"
-kind: question
+kind: deferred
 components: [init, clm, check, apply, view.repo, orchestrator.run]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
-choices:
-  - "Root tests; root re-points doc_readers"
-  - "Move each to its command's component"
-  - "Reword the scenarios"
 ---
 
 `init/commands-in-crate` moved 83 of the 100 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `init` into `crates/clm-init/tests/` (`init.rs` 49 of 60, `survey.rs` 34 of 34). `survey.rs`'s `from_a_subdirectory` also cites the root's `clm/root-from-cwd`, so the root keeps it; init's build took its own marker off it and proves its own copy in the crate. Seventeen stay where they are:
@@ -25,3 +21,5 @@ What is needed: for the eleven, a spec change saying where each scenario is prov
 ## The human's answer (2026-11-15)
 
 The first choice. The eleven tests of another component's command on what `clm init` wrote are the root's: the batched spec change that follows the build run moves their scenarios into requirements of the root, or names the capability test that already shows one (`commands-live-in-their-crates`). For the six guide tests, a small code branch makes the root's `doc_readers.rs` name `crates/clm-init/tests/guide.rs`; `init`'s next build then moves them.
+
+Answered, so no longer a question: it waits only for the batched spec change, which is due when the phase 4 build run has drained.
