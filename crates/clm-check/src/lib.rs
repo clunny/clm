@@ -14,6 +14,8 @@ mod attributes;
 mod caps;
 #[cfg(feature = "checkout")]
 mod cites;
+#[cfg(feature = "commands")]
+mod commands;
 #[cfg(feature = "checkout")]
 mod dangling;
 #[cfg(feature = "detectors")]
@@ -23,7 +25,7 @@ mod disjoint;
 #[cfg(feature = "checkout")]
 mod entries;
 mod imports;
-#[cfg(feature = "checkout")]
+#[cfg(feature = "commands")]
 mod lists;
 mod ownership;
 #[cfg(feature = "checkout")]
@@ -55,11 +57,14 @@ pub use clm_coverage::{
 #[cfg(feature = "checkout")]
 pub use clm_coverage::{Scan, scan};
 pub use clm_model::Violation;
+#[cfg(feature = "commands")]
+pub use commands::{
+    BacklogArgs, CheckArgs, CheckInputs, CoverageArgs, Env, SizeArgs, backlog_command,
+    check_command, coverage_command, size_command,
+};
 #[cfg(feature = "detectors")]
 pub use detectors::{Detector, detectors};
 pub use imports::undeclared_imports;
-#[cfg(feature = "checkout")]
-pub use lists::{coverage_lines, deleted_tests_lines, obsolete_tests_lines};
 #[cfg(feature = "detectors")]
 pub use size::size;
 pub use size::{Budgets, Count, Length, Size, TestPart, size_of};

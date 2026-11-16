@@ -14,7 +14,7 @@ const RULE: &str = "check/coverage-lists";
 /// `clm coverage`'s lines: each requirement's coverage, then one
 /// `<id> uncounted <file>:<line>[ ...]` line per entry whose markers stand outside every
 /// test. `Err` carries spec violations that make the report unreliable.
-pub fn coverage_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> {
+pub(crate) fn coverage_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> {
     let mut lines: Vec<String> = crate::coverage(root)?
         .iter()
         .map(ToString::to_string)
@@ -29,7 +29,7 @@ pub fn coverage_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> {
 
 /// `clm coverage --obsolete-tests`: a count line, then a `DELETE` or `UNCITE` line per test
 /// holding a marker that cites what a live change removed.
-pub fn obsolete_tests_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> {
+pub(crate) fn obsolete_tests_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> {
     let graph = load(root)?;
     let tests = obsolete_tests(&graph, &read_files(root));
     let delete = tests.iter().filter(|t| t.every).count();
@@ -54,7 +54,7 @@ pub fn obsolete_tests_lines(root: &Path) -> Result<Vec<String>, Vec<Violation>> 
 /// `clm coverage --deleted-tests <base>`: a count line, then a `DELETED` line per citing test
 /// of the revision `base` that the working tree holds no test of that name for. `Err` names
 /// `base` when it resolves to no commit.
-pub fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>, Vec<Violation>> {
+pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>, Vec<Violation>> {
     load(root)?;
     let fail = |why: String| {
         vec![Violation {

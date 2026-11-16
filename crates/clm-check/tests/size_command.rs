@@ -1,21 +1,76 @@
+//! `clm size` through `clm-check`'s call (`commands-in-crate`), with the budgets `crates/clm`
+//! would load from `config` given as an argument.
+
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 
+use clm_check::{Budgets, Violation, size_command};
 use tempfile::TempDir;
 
-/// `clm size [<node>]` on `root`, with no user settings.
+/// The exit status a call returned, read as a process's.
+#[derive(Debug)]
+struct Status(u8);
+
+impl Status {
+    fn code(&self) -> Option<i32> {
+        Some(self.0.into())
+    }
+}
+
+/// What a call wrote to its two streams, and what it returned.
+#[derive(Debug)]
+struct Output {
+    status: Status,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+/// `[component_size]` of `root`'s `clm.toml`, as `crates/clm` passes it: 12000 spec and 40000
+/// code tokens where it sets none, and why it can't be loaded for a budget below 1.
+fn repository_budgets(root: &Path) -> Result<Budgets, Violation> {
+    let path = root.join("clm.toml");
+    let table: toml::Table = fs::read_to_string(&path)
+        .unwrap_or_default()
+        .parse()
+        .unwrap();
+    let size = table.get("component_size");
+    let budget = |key: &str, default: u64| match size.and_then(|s| s.get(key)) {
+        None => Ok(default),
+        Some(v) => match v.as_integer().unwrap() {
+            n if n >= 1 => Ok(n as u64),
+            n => Err(Violation {
+                path: path.clone(),
+                rule: "check/node-size",
+                message: format!("`component_size`: `{key}` must be a positive integer, not {n}"),
+            }),
+        },
+    };
+    Ok(Budgets {
+        spec_tokens: budget("spec_tokens", 12000)?,
+        code_tokens: budget("code_tokens", 40000)?,
+    })
+}
+
+/// `clm size [<node>]` on `root`, with the budgets its `clm.toml` gives.
 fn clm_size(root: &Path, node: Option<&str>) -> Output {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_clm"));
-    cmd.env(
-        "XDG_CONFIG_HOME",
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config"),
-    )
-    .arg("size")
-    .args(node)
-    .arg("--root")
-    .arg(root);
-    cmd.output().unwrap()
+    let mut args: Vec<std::ffi::OsString> = node.into_iter().map(Into::into).collect();
+    args.push("--root".into());
+    args.push(root.into());
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code = size_command(
+        &args,
+        Path::new("."),
+        &|_| None,
+        &mut stdout,
+        &mut stderr,
+        &repository_budgets,
+    );
+    Output {
+        status: Status(code),
+        stdout,
+        stderr,
+    }
 }
 
 fn write(root: &Path, rel: &str, content: &[u8]) {

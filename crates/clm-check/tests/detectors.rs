@@ -10,6 +10,7 @@ fn detector(name: &str, command: &[&str], hint: Option<&str>) -> Detector {
         command: command.iter().map(|s| s.to_string()).collect(),
         hint: hint.map(Into::into),
         timeout: 600,
+        requires: None,
     }
 }
 
@@ -60,7 +61,7 @@ fn a_hanging_detector_is_stopped_with_its_children() {
 
 /// `(path, rule, message)` of each violation.
 fn found(root: &Path, list: &[Detector]) -> Vec<(String, &'static str, String)> {
-    detectors(root, list)
+    detectors(root, list, &mut std::io::sink())
         .into_iter()
         .map(|v| (v.path.display().to_string(), v.rule, v.message))
         .collect()

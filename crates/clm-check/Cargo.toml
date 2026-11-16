@@ -6,11 +6,13 @@ license.workspace = true
 publish.workspace = true
 
 [features]
-default = ["checkout", "detectors"]
+default = ["checkout", "detectors", "commands"]
 # Checking a checkout on disk (`run`, `status`, `coverage`, `backlog`); off for wasm builds.
 checkout = ["dep:clm-apply", "dep:clm-git", "clm-coverage/checkout"]
 # Spawning detector commands; off for wasm builds.
 detectors = ["dep:clm-git", "dep:libc"]
+# `clm check`, `clm size`, `clm coverage` and `clm backlog` as calls (`commands-in-crate`).
+commands = ["checkout", "detectors", "dep:clap", "dep:clm-init"]
 
 [[test]]
 name = "assets"
@@ -77,6 +79,18 @@ name = "size"
 required-features = ["checkout", "detectors"]
 
 [[test]]
+name = "cli"
+required-features = ["commands"]
+
+[[test]]
+name = "coverage_lists"
+required-features = ["commands"]
+
+[[test]]
+name = "size_command"
+required-features = ["commands"]
+
+[[test]]
 name = "status"
 required-features = ["checkout"]
 
@@ -85,6 +99,8 @@ clm-model.workspace = true
 clm-coverage = { workspace = true, default-features = false }
 clm-apply = { workspace = true, optional = true }
 clm-git = { workspace = true, optional = true }
+clm-init = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 # `killpg`, to stop a detector together with the processes it started.

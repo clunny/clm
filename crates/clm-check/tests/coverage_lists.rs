@@ -1,7 +1,10 @@
+//! `clm coverage`'s lists through `clm-check`'s call (`commands-in-crate`).
+
 use std::fs;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Command;
 
+use clm_check::coverage_command;
 use tempfile::TempDir;
 
 // Markers are assembled so this file doesn't itself cite (or dangle) them.
@@ -9,18 +12,37 @@ const REQ: &str = concat!("req", ":");
 
 const ROOT: &str = "---\ntitle: R\nstatus: active\nowners: []\n---\n";
 
+/// The exit status a call returned, read as a process's.
+#[derive(Debug)]
+struct Status(u8);
+
+impl Status {
+    fn code(&self) -> Option<i32> {
+        Some(self.0.into())
+    }
+
+    fn success(&self) -> bool {
+        self.0 == 0
+    }
+}
+
+/// What a call wrote to its output stream, and what it returned.
+struct Output {
+    status: Status,
+    stdout: Vec<u8>,
+}
+
+/// `clm coverage <args> --root <root>`.
 fn clm(root: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .env(
-            "XDG_CONFIG_HOME",
-            Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config"),
-        )
-        .arg("coverage")
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .output()
-        .unwrap()
+    let mut words: Vec<std::ffi::OsString> = args.iter().map(Into::into).collect();
+    words.push("--root".into());
+    words.push(root.into());
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let code = coverage_command(&words, Path::new("."), &|_| None, &mut stdout, &mut stderr);
+    Output {
+        status: Status(code),
+        stdout,
+    }
 }
 
 fn out(o: &Output) -> String {
@@ -264,4 +286,29 @@ fn plain_coverage_fails_on_a_graph_that_doesnt_load() {
     let o = clm(dir.path(), &[]);
     assert_eq!(o.status.code(), Some(1));
     assert!(out(&o).contains("specs/a/SPEC.md"), "{}", out(&o));
+}
+
+#[test]
+fn coverage_writes_the_lines_clm_coverage_gives_unchanged() {
+    // req:check/commands-in-crate@ed866c99
+    let dir = repo(&["x", "y"]);
+    let d = dir.path();
+    let x = cite(d, "x");
+    write(
+        d,
+        "tests/t.rs",
+        &format!("#[test]\nfn t() {{\n    // {x}\n}}\n"),
+    );
+    let o = clm(d, &[]);
+    assert_eq!(o.status.code(), Some(0));
+    let (graph, _) = clm_model::load(d);
+    let expected: String = clm_coverage::report(&graph, &clm_coverage::scan(d).req)
+        .iter()
+        .map(|c| format!("{c}\n"))
+        .collect();
+    assert!(
+        expected.contains("a/x current tests/t.rs:3\n"),
+        "{expected}"
+    );
+    assert_eq!(out(&o), expected);
 }

@@ -76,31 +76,8 @@ enum MachineFormat {
 
 #[derive(Subcommand)]
 enum Command {
-    /// Run every deterministic check; exit 1 on any violation.
-    Check {
-        /// Run no dead-code or unused-dependency detector, for a caller that knows no code
-        /// changed.
-        #[arg(long)]
-        no_detectors: bool,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
-    /// List every requirement as current, behind or unbuilt (with citing markers), then the
-    /// obsolete ones.
-    Coverage {
-        /// Print, in place of the coverage, the tests a removed requirement leaves with
-        /// nothing to cite.
-        #[arg(long, conflicts_with = "deleted_tests")]
-        obsolete_tests: bool,
-        /// Print, in place of the coverage, the citing tests of this revision that the
-        /// working tree no longer holds.
-        #[arg(long, value_name = "BASE")]
-        deleted_tests: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Check(clm_check::CheckArgs),
+    Coverage(clm_check::CoverageArgs),
     /// List the requirements whose code hasn't caught up with their spec: behind, unbuilt or
     /// obsolete, with what blocks them.
     Pending {
@@ -115,15 +92,7 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-    /// Report each component's spec and code size in tokens against its budget (advisory).
-    Size {
-        /// Component ID; every component when omitted.
-        #[arg(value_name = "COMPONENT")]
-        node: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Size(clm_check::SizeArgs),
     /// Apply a change's deltas to specs/, all or nothing.
     Apply {
         /// Change ID (directory name under changes/).
@@ -149,12 +118,7 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
-    /// List backlog items: ideas, deferred work, questions and bugs.
-    Backlog {
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    Backlog(clm_check::BacklogArgs),
     /// Print a summary of the repository, then its components, changes and claims; never fetches.
     Status {
         /// Repository root (default: the CLM repository holding the current directory).
@@ -985,40 +949,27 @@ fn dispatch() -> ExitCode {
         eprintln!("{line}");
     }
     match command {
-        Command::Check { no_detectors, root } => {
-            let root = repo_root(root);
-            let mut violations = check(&root, !no_detectors);
-            violations.extend(ledger_on_main(&root));
-            for v in &violations {
-                println!("{}", clm_check::format(v));
-            }
-            if violations.is_empty() {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            }
-        }
-        Command::Coverage {
-            obsolete_tests,
-            deleted_tests,
-            root,
-        } => {
-            let root = repo_root(root);
-            let result = match (&deleted_tests, obsolete_tests) {
-                (Some(base), _) => clm_check::deleted_tests_lines(&root, base),
-                (None, true) => clm_check::obsolete_tests_lines(&root),
-                (None, false) => clm_check::coverage_lines(&root),
+        Command::Check(args) => {
+            let inputs = clm_check::CheckInputs {
+                detectors: &detectors,
+                more: &ledger_on_main,
             };
-            match result {
-                Ok(lines) => {
-                    for line in lines {
-                        println!("{line}");
-                    }
-                    ExitCode::SUCCESS
-                }
-                Err(violations) => report(&violations),
-            }
+            ExitCode::from(clm_check::check_command(
+                command_args(),
+                &found_root(&args.root),
+                &clm_config::process_env,
+                &mut Printed::Out,
+                &mut Printed::Err,
+                &inputs,
+            ))
         }
+        Command::Coverage(args) => ExitCode::from(clm_check::coverage_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Pending { node, at, root } => {
             let (head, result) =
                 clm_view_repo::pending(&repo_root(root), node.as_deref(), at.as_deref());
@@ -1039,7 +990,14 @@ fn dispatch() -> ExitCode {
                 }
             }
         }
-        Command::Size { node, root } => size(&repo_root(root), node.as_deref()),
+        Command::Size(args) => ExitCode::from(clm_check::size_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+            &node_size,
+        )),
         Command::Apply { change, root } => match clm_apply::apply(&repo_root(root), &change) {
             Ok(ops) => {
                 println!("applied {change}");
@@ -1076,15 +1034,13 @@ fn dispatch() -> ExitCode {
             }
             Err(violations) => report(&violations),
         },
-        Command::Backlog { root } => match clm_check::backlog(&repo_root(root)) {
-            Ok(items) => {
-                for item in items {
-                    println!("{item}");
-                }
-                ExitCode::SUCCESS
-            }
-            Err(violations) => report(&violations),
-        },
+        Command::Backlog(args) => ExitCode::from(clm_check::backlog_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Status { root } => {
             let root = repo_root(root);
             match clm_view_repo::status(&root, budgets(&root)) {
@@ -2141,47 +2097,64 @@ fn failed(cmd: &str, e: &clm_git::Failure) -> ExitCode {
 /// `run`'s violations, the imports `depends_on` doesn't declare, then, with `detectors`,
 /// those of the detectors the repository's settings name, or why the settings can't be
 /// loaded.
-fn check(root: &Path, detectors: bool) -> Vec<clm_check::Violation> {
-    let mut violations = clm_check::run(root);
-    match clm_init::import_edges(root) {
-        Ok(edges) => {
-            let (graph, _) = clm_model::load(root);
-            violations.extend(clm_check::undeclared_imports(&graph, &edges));
+/// The root a crate's call takes: the CLM repository found from the current directory, unless
+/// the command's `--root` names one, which the call reads itself.
+fn found_root(given: &Option<PathBuf>) -> PathBuf {
+    match given {
+        Some(_) => PathBuf::from("."),
+        None => repo_root(None),
+    }
+}
+
+/// The command's own arguments, after `clm` and its name, as a crate's call parses them.
+fn command_args() -> impl Iterator<Item = std::ffi::OsString> {
+    std::env::args_os().skip(2)
+}
+
+/// The process's stdout or stderr for a crate's call, failing as `println!` and `eprintln!`
+/// do: a write that fails panics with std's message, so `closed-stdout` holds.
+enum Printed {
+    Out,
+    Err,
+}
+
+impl std::io::Write for Printed {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let (written, name) = match self {
+            Printed::Out => (std::io::stdout().write_all(buf), "stdout"),
+            Printed::Err => (std::io::stderr().write_all(buf), "stderr"),
+        };
+        if let Err(e) = written {
+            panic!("failed printing to {name}: {e}");
         }
-        Err(e) => violations.push(clm_check::Violation {
-            path: root.to_path_buf(),
-            rule: "check/undeclared-imports",
-            message: e,
-        }),
+        Ok(buf.len())
     }
-    if !detectors {
-        return violations;
-    }
-    match clm_config::load(Some(root), &clm_config::process_env) {
-        Ok(settings) => {
-            let list: Vec<_> = settings
-                .detectors
-                .value
-                .into_iter()
-                .filter(|d| match &d.requires {
-                    Some(path) if !root.join(path).exists() => {
-                        eprintln!("{} skipped: no {path}", d.name);
-                        false
-                    }
-                    _ => true,
-                })
-                .map(|d| clm_check::Detector {
-                    name: d.name,
-                    command: d.command,
-                    hint: d.hint,
-                    timeout: d.timeout,
-                })
-                .collect();
-            violations.extend(clm_check::detectors(root, &list));
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Printed::Out => std::io::stdout().flush(),
+            Printed::Err => std::io::stderr().flush(),
         }
-        Err(e) => violations.push(settings_violation(e, "check/detectors")),
     }
-    violations
+}
+
+/// `config`'s detectors for `clm check` on `root`, which skips those whose `requires` names
+/// nothing there (`detector-requires-skip`); why the settings can't be loaded when they can't.
+fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violation> {
+    let settings = clm_config::load(Some(root), &clm_config::process_env)
+        .map_err(|e| settings_violation(e, "check/detectors"))?;
+    Ok(settings
+        .detectors
+        .value
+        .into_iter()
+        .map(|d| clm_check::Detector {
+            name: d.name,
+            command: d.command,
+            hint: d.hint,
+            timeout: d.timeout,
+            requires: d.requires,
+        })
+        .collect())
 }
 
 /// `clm land`, `clm approve` and `clm reconnect`: the lines on stdout, the
@@ -2546,38 +2519,6 @@ fn budgets_from(text: Option<&str>) -> Result<clm_check::Budgets, String> {
         spec_tokens: n.spec_tokens,
         code_tokens: n.code_tokens,
     })
-}
-
-/// `clm size [<node>]`: each node's line, or only `node`'s, with `config`'s `node_size` as
-/// the budgets a node doesn't set.
-fn size(root: &Path, node: Option<&str>) -> ExitCode {
-    let defaults = match node_size(root) {
-        Ok(defaults) => defaults,
-        Err(v) => return report(&[v]),
-    };
-    // Advisory: the sizes of the nodes that loaded, whatever `clm check` would report.
-    let (graph, _) = clm_model::load(root);
-    if let Some(node) = node.filter(|n| !graph.nodes.contains_key(*n)) {
-        return report(&[clm_check::Violation {
-            path: Path::new("specs")
-                .join(node.replace('.', "/"))
-                .join("SPEC.md"),
-            rule: "check/node-size",
-            message: format!("unknown component `{node}`"),
-        }]);
-    }
-    match clm_check::size(root, &graph, &clm_check::scan(root).req, defaults) {
-        Ok(sizes) => {
-            for s in sizes.iter().filter(|s| node.is_none_or(|n| s.node == n)) {
-                println!("{s}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
-            println!("check/node-size: {e}");
-            ExitCode::FAILURE
-        }
-    }
 }
 
 /// `clm capabilities [<slug>]`: the list or one capability's page, as text or JSON.
