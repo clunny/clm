@@ -2153,6 +2153,21 @@ fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
         further.contains("replace f with \\(\\)") && further.contains("test(~proves_x)"),
         "{further}"
     );
+    // The diff's run, the listing and the further run are all in the one tree, made once,
+    // outside the checkout.
+    let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
+    let block: Vec<&str> = dirs.lines().skip(2).collect();
+    assert_eq!(block.len(), 3, "{dirs}");
+    assert!(block.iter().all(|d| *d == block[0]), "{dirs}");
+    let work = fs::canonicalize(tree.work()).unwrap();
+    assert!(!Path::new(block[0]).starts_with(&work), "{dirs}");
+    assert_eq!(
+        log.iter()
+            .filter(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
+            .count(),
+        2,
+        "{log:?}"
+    );
 }
 
 #[test]
@@ -2452,9 +2467,14 @@ fn the_fixture_is_judged_first_outside_the_repository() {
             && src.contains("assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here)")
             && src.matches("in_git_repository();").count() == 2
             && src.contains("\"--porcelain\", \"--untracked-files=no\"")
+            && src.contains("assert_eq!(String::from_utf8(status.stdout).unwrap(), \"\")")
             && src.matches("tracked_files_unchanged();").count() == 1,
         "{src}"
     );
+    // The blind test, not the one that notices, fails when git sees the mutant.
+    let blind = src.split("fn fixture_blind()").nth(1).unwrap_or_default();
+    let blind = &blind[..blind.find("\n    }").unwrap_or(blind.len())];
+    assert!(blind.contains("tracked_files_unchanged();"), "{src}");
     let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
     let with_git = fs::read_to_string(tree.dir.path().join("log.git")).unwrap_or_default();
     for dir in dirs.lines().take(2) {

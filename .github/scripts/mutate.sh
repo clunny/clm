@@ -258,8 +258,6 @@ judge_rust() {
   missed=0
   n=$((n + 1))
   if [ -n "$diff" ]; then
-    # The tool runs in the tree, so a path relative to the checkout is made absolute.
-    case $diff in /*) ;; *) diff=$root/$diff ;; esac
     run_mutants "$work/m$n" --in-diff "$diff"
   fi
   if [ "$caught" -eq 0 ]; then
