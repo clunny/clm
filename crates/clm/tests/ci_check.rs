@@ -2021,11 +2021,7 @@ fn mutate_tree(plan_text: &str) -> Tree {
 fn git(dir: &Path, args: &[&str]) -> String {
     let mut c = Command::new("git");
     c.current_dir(dir).args(args);
-    for (k, _) in std::env::vars_os() {
-        if k.to_string_lossy().starts_with("GIT_") {
-            c.env_remove(k);
-        }
-    }
+    without_git_env(&mut c);
     let out = c
         .env("GIT_AUTHOR_NAME", "t")
         .env("GIT_AUTHOR_EMAIL", "t@example.com")
@@ -2039,6 +2035,18 @@ fn git(dir: &Path, args: &[&str]) -> String {
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
+
+/// Removes the caller's git variables from `c` and keeps the machine's and the user's git
+/// configuration from it, so a signing, hook or remote-name setting there changes nothing.
+fn without_git_env(c: &mut Command) {
+    for (k, _) in std::env::vars_os() {
+        if k.to_string_lossy().starts_with("GIT_") {
+            c.env_remove(k);
+        }
+    }
+    c.env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null");
 }
 
 impl Tree {
@@ -2072,11 +2080,7 @@ impl Tree {
             .env("CLM_MUTATE", self.dir.path().join("plan"))
             .env("CLM_MUTATE_RESULT", &result)
             .env_remove("CLM_LAND_DIR");
-        for (k, _) in std::env::vars_os() {
-            if k.to_string_lossy().starts_with("GIT_") {
-                c.env_remove(k);
-            }
-        }
+        without_git_env(&mut c);
         for (k, v) in extra {
             c.env(k, v);
         }
@@ -2453,7 +2457,7 @@ fn the_fixture_is_judged_first_outside_the_repository() {
         fs::read_to_string(tree.dir.path().join("log.fixture-alternates")).unwrap_or_default();
     let store = alternates.trim();
     assert!(
-        store.starts_with('/') && store.ends_with("/objects") && Path::new(store).is_absolute(),
+        Path::new(store).is_absolute() && store.ends_with("/objects"),
         "alternates: {alternates:?}"
     );
     let status = fs::read_to_string(tree.dir.path().join("log.fixture-status")).unwrap();
@@ -2500,6 +2504,27 @@ fn the_fixture_is_judged_first_outside_the_repository() {
 }
 
 #[test]
+fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
+    // req:ci/mutate-script@d66cd3c1
+    let tree = mutate_tree(&format!("{RUST_BLOCK}{}", RUST_BLOCK.replace("a/x", "a/y")));
+    tree.report("diff-caught", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed", "a/y killed"]);
+    let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
+    let block: Vec<&str> = dirs.lines().skip(2).collect();
+    assert_eq!(block.len(), 2, "{dirs}");
+    assert_eq!(block[0], block[1], "{dirs}");
+    assert_eq!(
+        log.iter()
+            .filter(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
+            .count(),
+        2,
+        "{log:?}"
+    );
+}
+
+#[test]
 fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
     // req:ci/mutate-script@d66cd3c1
     let tree = mutate_tree(RUST_BLOCK);
@@ -2529,7 +2554,15 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
     let index = git(&work, &["rev-parse", "--git-path", "index"]);
     let index = work.join(index);
     let index_before = fs::read(&index).unwrap();
-    let (ok, log, result, stderr) = tree.mutate(&[]);
+    // A caller's git directory and index, and a user's default remote name, change nothing.
+    let config = tree.dir.path().join("gitconfig");
+    fs::write(&config, "[clone]\n\tdefaultRemoteName = upstream\n").unwrap();
+    let main_git = main.join(".git");
+    let (ok, log, result, stderr) = tree.mutate(&[
+        ("GIT_DIR", main_git.to_str().unwrap()),
+        ("GIT_INDEX_FILE", index.to_str().unwrap()),
+        ("GIT_CONFIG_GLOBAL", config.to_str().unwrap()),
+    ]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(result, ["a/x killed"]);
     // The directory the tool ran in for the block, kept by the fake.
@@ -2553,6 +2586,15 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
         })
         .unwrap_or_default();
     assert!(packs.is_empty(), "{packs:?}");
+    // Nor any loose object: the commits it names are all in the checkout's store.
+    let loose: Vec<_> = fs::read_dir(copy.join(".git/objects"))
+        .unwrap()
+        .flatten()
+        .filter(|e| e.file_name().len() == 2 && e.path().is_dir())
+        .filter(|e| fs::read_dir(e.path()).unwrap().next().is_some())
+        .map(|e| e.path())
+        .collect();
+    assert!(loose.is_empty(), "{loose:?}");
     assert_eq!(git(&copy, &["rev-parse", "HEAD"]), third);
     assert_eq!(git(&copy, &["rev-parse", "refs/heads/side"]), first);
     assert_eq!(

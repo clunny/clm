@@ -12,6 +12,9 @@ STRYKER_VERSION=10.1.1
 plan=${CLM_MUTATE:?CLM_MUTATE names the plan}
 result=${CLM_MUTATE_RESULT:?CLM_MUTATE_RESULT names the result file}
 root=$PWD
+# Every git command here, and in the trees the tool tests, asks about the directory it runs in:
+# a git directory or index inherited from a caller would point them at another repository.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
 work=$(mktemp -d)
 fixture_dirs=
 cleanup() {
@@ -79,9 +82,10 @@ rust_tools() {
 make_tree() {
   local src=$1 dest=$2 head
   head=$(git -C "$src" rev-parse --verify HEAD) || return 1
-  git clone -q --shared --no-checkout "$src" "$dest" || return 1
-  # The clone's own `origin` and its branches named for `$1`'s would shadow `$1`'s own refs.
-  git -C "$dest" remote remove origin || return 1
+  # Its remote is named here, whatever `clone.defaultRemoteName` says, and removed with its
+  # branches named for `$1`'s, which would shadow `$1`'s own refs.
+  git clone -q --shared --no-checkout -o clm-mutate-source "$src" "$dest" || return 1
+  git -C "$dest" remote remove clm-mutate-source || return 1
   git -C "$dest" -c advice.detachedHead=false checkout -q --detach "$head" || return 1
   git -C "$dest" fetch -q --no-tags "$src" '+refs/heads/*:refs/heads/*' '+refs/remotes/*:refs/remotes/*' ||
     return 1
