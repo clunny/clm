@@ -33,4 +33,5 @@ When the human answers a `question` item but its work has to wait, such as for o
 ## Edge cases
 
 - **The change that carries the answer out modifies a requirement the deferred item blocks.** In `resolves` alone, the item would be deleted only when the change is archived, and the change can't be archived while the requirement is blocked. So the item's body tells that change to name the item in `from`, and `clm apply` deletes it when it applies the change (`apply/promoted-item`), releasing what it blocks when the change lands.
+- **One change carries out the answers of several deferred items.** `from` names one item, so the change names one there and deletes the others on its own spec branch, listing them in `resolves`. Each is then gone when that branch lands, as the `from` item is. The architecture audit raised this case.
 - **The answer's work turns out to be code-only once the condition is met.** The deferred item is then fixed by component with `clm claim <component> --fix backlog/<slug>` and a `Resolves:` trailer (`deferred-work-resolves-in-code`), which deletes it and releases its blocks.
