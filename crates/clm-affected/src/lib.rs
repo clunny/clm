@@ -1,5 +1,6 @@
-//! `clm affected`: the nodes and files a change can break (specs/check/affected/SPEC.md).
+//! `clm affected`: the components and files a change can break (specs/check/affected/SPEC.md).
 
+mod command;
 mod readers;
 mod select;
 mod why;
@@ -11,6 +12,7 @@ use std::path::Path;
 use clm_git::{Error, Failure, Options};
 use clm_model::Graph;
 
+pub use command::{Args, Settings, command};
 pub use readers::{readers, reads_in};
 pub use select::{Changed, Selection, overlap, select};
 pub use why::why_chain;
@@ -75,7 +77,7 @@ fn load_graph(root: &Path) -> Result<Graph, Failure> {
 /// The readers alone: the files whose reads markers match a path that differs between the
 /// merge base of `base` and `HEAD` and the working tree. It loads neither the graph nor
 /// `[affected] all`.
-pub fn affected_readers(root: &Path, base: &str) -> Result<Vec<String>, Failure> {
+pub(crate) fn affected_readers(root: &Path, base: &str) -> Result<Vec<String>, Failure> {
     Ok(readers(&differing(root, base)?, &scanned(root)?.reads))
 }
 
@@ -245,7 +247,7 @@ pub fn affected_between(
 /// What changing both `a` and `b` can break (`overlap`): each side's selection against
 /// their merge base. Refused with `unknown revision <rev>` for a revision that is no commit
 /// and `no merge base between <a> and <b>` for commits with none.
-pub fn affected_overlap(
+pub(crate) fn affected_overlap(
     root: &Path,
     a: &str,
     b: &str,

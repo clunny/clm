@@ -514,23 +514,7 @@ enum Command {
     },
     /// Print what a change can break: `node <id>` and `file <path>` lines, or `all <path>`
     /// when every test must run.
-    Affected {
-        /// Compare with the merge base of this ref and HEAD (default `origin/main`).
-        #[arg(long)]
-        base: Option<String>,
-        /// Repository root (default: the CLM repository holding the current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-        /// Print only the `file` lines of the tests that read what changed, doc-only paths included.
-        #[arg(long)]
-        readers: bool,
-        /// Print what changing both of two commits can break, each against their merge base.
-        #[arg(long, num_args = 2, value_names = ["A", "B"])]
-        overlap: Option<Vec<String>>,
-        /// Print why the change selects this path: the chain from it to a changed file.
-        #[arg(long, value_name = "PATH")]
-        why: Option<String>,
-    },
+    Affected(clm_affected::Args),
     /// Print the machine's CPU load, available memory and free disk, judged against what this
     /// clone's builds use; exits 0 whatever the states.
     Machine {
@@ -1669,13 +1653,21 @@ fn dispatch() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Command::Affected {
-            base,
-            root,
-            readers,
-            overlap,
-            why,
-        } => affected(&repo_root(root), base, readers, overlap, why.as_deref()),
+        // `Cli` has no options of its own, so the command's arguments follow `clm affected`.
+        Command::Affected(args) => ExitCode::from(clm_affected::command(
+            std::env::args_os().skip(2),
+            &repo_root(args.root),
+            &clm_config::process_env,
+            &|root, env| {
+                clm_config::load(Some(root), env)
+                    .map(|s| s.affected.value.map(|a| a.all).unwrap_or_default())
+                    .map_err(|e| {
+                        clm_check::format(&settings_violation(e, "check.affected/affected-all"))
+                    })
+            },
+            &mut Stdout(std::io::stdout().lock()),
+            &mut std::io::stderr(),
+        )),
         Command::Machine {
             format,
             width,
@@ -2404,85 +2396,24 @@ fn health(root: &Path, expiry: u64) -> ExitCode {
     }
 }
 
-/// `clm affected`: its lines on stdout (`--why` prints the chain for one path instead), with `config`'s `[affected] all` globs.
-fn affected(
-    root: &Path,
-    base: Option<String>,
-    readers: bool,
-    overlap: Option<Vec<String>>,
-    why: Option<&str>,
-) -> ExitCode {
-    for (given, flag) in [
-        (base.is_some(), "--base"),
-        (readers, "--readers"),
-        (why.is_some(), "--why"),
-    ] {
-        if overlap.is_some() && given {
-            eprintln!("clm affected: --overlap and {flag} can't be given together");
-            return ExitCode::FAILURE;
-        }
+/// Standard output for a crate's call: a write that fails panics as `println!` does, so a
+/// reader that has gone ends the command as for any print (`closed-stdout`).
+struct Stdout(std::io::StdoutLock<'static>);
+
+impl std::io::Write for Stdout {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0
+            .write_all(buf)
+            .unwrap_or_else(|e| panic!("failed printing to stdout: {e}"));
+        Ok(buf.len())
     }
-    let base = base.as_deref().unwrap_or("origin/main");
-    if readers && why.is_some() {
-        eprintln!("clm affected: --readers and --why can't be given together");
-        return ExitCode::FAILURE;
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0
+            .flush()
+            .unwrap_or_else(|e| panic!("failed printing to stdout: {e}"));
+        Ok(())
     }
-    if readers {
-        return match clm_affected::affected_readers(root, base) {
-            Ok(files) => {
-                for file in files {
-                    println!("file {file}");
-                }
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("clm affected: {e}");
-                ExitCode::from(e.exit_code())
-            }
-        };
-    }
-    let all = match clm_config::load(Some(root), &clm_config::process_env) {
-        Ok(settings) => settings.affected.value.map(|a| a.all).unwrap_or_default(),
-        Err(e) => {
-            let v = settings_violation(e, "check.affected/affected-all");
-            eprintln!("clm affected: {}", clm_check::format(&v));
-            return ExitCode::FAILURE;
-        }
-    };
-    if let Some(path) = why {
-        return match clm_affected::why(root, base, path, &all) {
-            Ok(lines) => {
-                for line in lines {
-                    println!("{line}");
-                }
-                ExitCode::SUCCESS
-            }
-            Err(e) => {
-                eprintln!("clm affected: {e}");
-                ExitCode::from(e.exit_code())
-            }
-        };
-    }
-    let selection = match &overlap {
-        Some(revs) => clm_affected::affected_overlap(root, &revs[0], &revs[1], &all),
-        None => clm_affected::affected(root, base, &all),
-    };
-    match selection {
-        Ok(clm_affected::Selection::All(path)) => println!("all {path}"),
-        Ok(clm_affected::Selection::Nodes { nodes, files }) => {
-            for node in nodes {
-                println!("node {node}");
-            }
-            for file in files {
-                println!("file {file}");
-            }
-        }
-        Err(e) => {
-            eprintln!("clm affected: {e}");
-            return ExitCode::from(e.exit_code());
-        }
-    }
-    ExitCode::SUCCESS
 }
 
 /// `config`'s `node_size`: the budgets of a node that sets none.
