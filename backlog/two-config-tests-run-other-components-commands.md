@@ -5,9 +5,9 @@ components: [config, clm, check, check.unreferenced]
 origin: 20261115-commands-in-their-crates
 blocks: [clm/routes-only]
 choices:
-  - "Both stay as root tests of this repository's detectors"
-  - "Move each to the component whose command it runs"
-  - "Drop the binary from both scenarios"
+  - "Both stay as root tests"
+  - "Move each to its command's component"
+  - "Reword both scenarios"
 ---
 
 `config/commands-in-crate` moved 35 of the 38 tests `changes/20261115-commands-in-their-crates/moved-tests.txt` lists for `config` into `crates/clm-config/tests/` (`command.rs` and `this_repository.rs`). `this_repository_is_clean` also cites the root's `clm/clean-check-runs-own-clm`, so it stays the root's: config's build took its own marker off it and proves "with this repository as it stands, the detector SHALL exit 0" with `the_retired_terms_detector_passes_here`, which runs the detector's command itself. Two stay in `crates/clm/tests/cli.rs`, because what they observe is another component's command, which `clm-config` (`depends_on: []`) can neither call nor run as a binary, which Cargo gives only to `crates/clm`'s tests:
