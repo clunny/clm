@@ -12,6 +12,7 @@ clm-check.workspace = true
 clm-context.workspace = true
 clm-git.workspace = true
 clm-health.workspace = true
+clap = { workspace = true, features = ["string"] }
 clm-ledger.workspace = true
 clm-regenerate.workspace = true
 clm-rename.workspace = true

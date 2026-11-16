@@ -10,6 +10,9 @@ use clm_git::{Options, REMOTE};
 use clm_regenerate::{Regenerated, exists_at, extract_present, git, io, regenerated, run};
 use scratch::Scratch;
 
+pub use command::{AutosyncArgs, RebaseArgs, autosync_command, rebase_command};
+
+mod command;
 mod items;
 mod renames;
 mod scratch;
@@ -70,9 +73,11 @@ impl Report {
 /// settings can't be loaded, as a line to print. It is called once on every branch that
 /// gets past the rebase and the regenerate step, with the CLM root of `HEAD` checked out in
 /// a temporary worktree, so it reads the settings `main` brought in and never an
-/// uncommitted edit; an error makes the run incomplete.
+/// uncommitted edit; an error makes the run incomplete. `env` is the environment, where the
+/// temporary worktree's `TMPDIR` is read.
 pub fn sync(
     root: &Path,
+    env: &dyn Fn(&str) -> Option<String>,
     settings: impl FnOnce(&Path) -> Result<clm_health::Settings, String>,
 ) -> Result<Report, Error> {
     let marker = git_path(root, "clm/sync-rebase")?;
@@ -161,7 +166,7 @@ pub fn sync(
             renames::Outcome::Other => {}
             renames::Outcome::Left(lines) => return Ok(Report::left(lines)),
             renames::Outcome::Done => {
-                return conclude(root, settings, &onto, base.as_deref(), &base_file, &[]);
+                return conclude(root, env, settings, &onto, base.as_deref(), &base_file, &[]);
             }
         }
     }
@@ -260,7 +265,15 @@ pub fn sync(
         )));
     }
 
-    conclude(root, settings, &onto, base.as_deref(), &base_file, &applied)
+    conclude(
+        root,
+        env,
+        settings,
+        &onto,
+        base.as_deref(),
+        &base_file,
+        &applied,
+    )
 }
 
 /// What follows the rebase, or the regenerated rename commit, on `HEAD`: the regenerate
@@ -268,6 +281,7 @@ pub fn sync(
 /// proposal items, and the judgement of `HEAD` (`judged-by-check`).
 fn conclude(
     root: &Path,
+    env: &dyn Fn(&str) -> Option<String>,
     settings: impl FnOnce(&Path) -> Result<clm_health::Settings, String>,
     onto: &str,
     base: Option<&str>,
@@ -301,7 +315,7 @@ fn conclude(
     }
     // `judged-by-check` (`sync-judges-head`): `HEAD`'s commit, never the working tree, in a
     // temporary worktree removed on every exit path.
-    let scratch = Scratch::new(root)?;
+    let scratch = Scratch::new(root, env)?;
     let left: Vec<String> = left.iter().map(clm_check::format).collect();
     let judged = judge(root, &scratch, branch.as_deref(), settings, &left);
     let warning = scratch.remove();

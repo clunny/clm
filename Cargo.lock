@@ -653,6 +653,7 @@ dependencies = [
 name = "clm-sync"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-apply",
  "clm-check",
  "clm-context",
