@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-workaround-limit-counts-one-answered-cause-once-per-build]
 ---
 
