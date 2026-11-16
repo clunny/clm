@@ -415,6 +415,28 @@ fn decide_after_parent_options() {
         "{}",
         out.stderr
     );
+    // `decide`'s own `--root`, relative to the directory the command runs in, overrides the
+    // root the call is given too.
+    let out = call(
+        clm_effort::capabilities_command,
+        &dir.path().join("nowhere"),
+        dir.path(),
+        &root,
+        &[
+            "decide",
+            "q",
+            "--value",
+            "low",
+            "--decision",
+            "cut",
+            "--root",
+            "repo",
+        ],
+    );
+    assert_eq!(
+        out.stdout, "decided capability/q cut (value low), settles 0 flags\n",
+        "{out:?}"
+    );
     // `decide` is never a slug, wherever it stands.
     for args in [&["--format", "json", "decide"][..], &["decide"]] {
         let out = capabilities(&root, args);
