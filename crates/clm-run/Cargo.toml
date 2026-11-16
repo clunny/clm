@@ -12,4 +12,5 @@ clm-context.workspace = true
 clm-git.workspace = true
 clm-orchestrator.workspace = true
 clm-config.workspace = true
+clap.workspace = true
 tempfile.workspace = true

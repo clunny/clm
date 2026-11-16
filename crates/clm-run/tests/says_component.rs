@@ -134,7 +134,7 @@ fn scanner_spots_old_words_across_lines() {
 fn a_refused_id_says_component() {
     // req:orchestrator.run/says-component@49a0408e
     let dir = tempfile::tempdir().unwrap();
-    let err = clm_run::finish(dir.path(), "a/b", 4).unwrap_err();
+    let err = clm_run::finish(dir.path(), dir.path(), "a/b", 4).unwrap_err();
     assert!(
         format!("{err:?}").contains("`a/b` isn't a component ID"),
         "{err:?}"
