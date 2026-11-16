@@ -199,7 +199,12 @@ where
         .map_or_else(|| root.to_path_buf(), |r| cwd.join(r));
     let settings = settings.map_err(|e| Error::Refused(format!("settings: {e}")));
     let written = if let Some(change) = &args.finish {
-        report("draft", crate::finish(root, change, args.expiry), out, err)
+        report(
+            "draft",
+            crate::finish::finish_in(root, change, args.expiry, cwd),
+            out,
+            err,
+        )
     } else if args.fold {
         match crate::fold(root, &args.slugs) {
             Ok(fold) => fold

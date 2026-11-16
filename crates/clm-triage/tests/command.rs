@@ -195,3 +195,51 @@ fn scenario_arguments_it_cant_parse() {
     assert_eq!(c.code, 2);
     assert!(c.err.contains("Usage: clm draft"), "{}", c.err);
 }
+
+#[test]
+fn warnings_go_to_the_error_stream_and_violations_to_the_output_stream() {
+    // req:orchestrator.triage/commands-in-crate@6d42d28b
+    let r = with_bug();
+    // A spec branch whose change.md doesn't parse is a warning, beside the lines.
+    push_files(
+        &r.work,
+        "spec/20261027-z",
+        &[("changes/20261027-z/change.md", "---\nstatus: [\n---\n")],
+    );
+    let c = triage(&[], &r.work);
+    assert_eq!(c.code, 0, "{}", c.err);
+    assert!(c.out.contains("group bug:check"), "{}", c.out);
+    assert!(c.err.starts_with("clm triage: warning: "), "{}", c.err);
+    // Specs that don't load are one violation line each on the output stream, and 1.
+    write(&r.work, "specs/check/SPEC.md", "---\nnot: [closed\n---\n");
+    push_main(&r.work, "broken");
+    let c = triage(&[], &r.work);
+    assert_eq!(c.code, 1, "{}{}", c.out, c.err);
+    assert!(c.out.contains("specs/check/SPEC.md: "), "{}", c.out);
+    assert!(c.err.is_empty(), "{}", c.err);
+}
+
+#[test]
+fn a_draft_is_dated_in_the_time_zone_the_lookup_gives() {
+    // req:orchestrator.triage/commands-in-crate@6d42d28b
+    // 26 hours apart, so the two dates always differ.
+    for tz in ["Etc/GMT-14", "Etc/GMT+12"] {
+        let r = with_bug();
+        let lookup = |name: &str| (name == "TZ").then(|| tz.to_string());
+        let c = called(|out, err| {
+            draft_command(["a"], &r.work, &r.work, &lookup, settings(3), out, err)
+        });
+        assert_eq!(c.code, 0, "{}", c.err);
+        let date = output(
+            std::process::Command::new("date")
+                .arg("+%Y%m%d")
+                .env("TZ", tz),
+        );
+        let date = String::from_utf8(date.stdout).unwrap();
+        assert!(
+            c.err.ends_with(&format!("draft {}-a\n", date.trim())),
+            "{tz}: {}",
+            c.err
+        );
+    }
+}
