@@ -456,6 +456,7 @@ dependencies = [
 name = "clm-hooks"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-agent-harness",
  "clm-config",
  "clm-git",

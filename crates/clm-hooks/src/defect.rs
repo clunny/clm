@@ -7,13 +7,21 @@ use std::path::Path;
 
 use clm_config::{Defects, Host};
 
-use crate::{clm_root, settings};
+use crate::Env;
 
-/// Files the report found from `cwd`: what to print on success, or why it failed.
-pub fn defect(cwd: &Path, title: &str, nodes: &[String], report: &str) -> Result<String, String> {
-    let settings = settings(Some(cwd)).map_err(|e| format!("settings: {e}"))?;
+/// Files the report with the settings of `root`, the CLM repository holding `cwd` (none
+/// outside one), read through `env`: what to print on success, or why it failed.
+pub(crate) fn defect(
+    root: Option<&Path>,
+    cwd: &Path,
+    title: &str,
+    nodes: &[String],
+    report: &str,
+    env: Env,
+) -> Result<String, String> {
+    let settings = clm_config::load(root, env).map_err(|e| format!("settings: {e}"))?;
     match settings.defects.value {
-        Defects::Backlog => to_backlog(cwd, title, nodes, report),
+        Defects::Backlog => to_backlog(root, title, nodes, report),
         Defects::Ask => to_issue(cwd, title, nodes, report),
         Defects::Off => Ok(format!(
             "CLM defect reporting is off (`defects = off`, from {}); nothing filed.",
@@ -22,9 +30,14 @@ pub fn defect(cwd: &Path, title: &str, nodes: &[String], report: &str) -> Result
     }
 }
 
-/// Writes `backlog/<slug>.md` in the CLM repository holding `cwd` and returns its path.
-fn to_backlog(cwd: &Path, title: &str, nodes: &[String], report: &str) -> Result<String, String> {
-    let root = clm_root(cwd).ok_or("no CLM repository (`specs/SPEC.md`) here; nothing filed")?;
+/// Writes `backlog/<slug>.md` in the CLM repository `root` and returns its path.
+fn to_backlog(
+    root: Option<&Path>,
+    title: &str,
+    nodes: &[String],
+    report: &str,
+) -> Result<String, String> {
+    let root = root.ok_or("no CLM repository (`specs/SPEC.md`) here; nothing filed")?;
     let (graph, _) = clm_model::load(root);
     // A node a live change creates may be named too (`model/backlog-nodes`).
     if let Some(node) = nodes.iter().find(|n| !graph.backlog_node_known(n)) {

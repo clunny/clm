@@ -5,9 +5,13 @@ use std::path::Path;
 
 use clm_agent_harness::{AgentHarness, parse_event};
 
+mod command;
 mod defect;
 mod upgrade;
-pub use defect::defect;
+pub use command::{DefectArgs, HookArgs, autosync_command, defect_command, session_start_command};
+
+/// The environment as a lookup, as each command's call takes it.
+type Env<'a> = &'a dyn Fn(&str) -> Option<String>;
 
 /// `SessionStart`: `clm status` for the CLM repository holding the event's `cwd`, then the
 /// rule for reporting CLM defects unless `defects` is `off` (or the settings' error), else "".
@@ -19,8 +23,13 @@ pub fn session_start(event: &str) -> String {
 /// from the agent harness's own parser, and the text is written the way that agent harness
 /// adds it to the session's context. The exit code is 0.
 pub fn session_start_hook(agent_harness: AgentHarness, event: &str) -> (String, i32) {
+    session_start_in(agent_harness, event, &clm_config::process_env)
+}
+
+/// `session_start_hook` with the settings read through `env`.
+fn session_start_in(agent_harness: AgentHarness, event: &str, env: Env) -> (String, i32) {
     let text = hook_cwd(agent_harness, event)
-        .map(|cwd| session_text(Path::new(&cwd)))
+        .map(|cwd| session_text(Path::new(&cwd), env))
         .unwrap_or_default();
     if text.is_empty() || agent_harness != AgentHarness::Codex {
         return (text, 0);
@@ -35,8 +44,13 @@ pub fn session_start_hook(agent_harness: AgentHarness, event: &str) -> (String, 
 
 /// `autosync` for an agent harness (`hooks-per-agent-harness`): silent, exit code 0.
 pub fn autosync_hook(agent_harness: AgentHarness, event: &str) -> (String, i32) {
+    autosync_hook_in(agent_harness, event, &clm_config::process_env)
+}
+
+/// `autosync_hook` with the settings read through `env`.
+fn autosync_hook_in(agent_harness: AgentHarness, event: &str, env: Env) -> (String, i32) {
     if let Some(cwd) = hook_cwd(agent_harness, event) {
-        autosync_in(Path::new(&cwd));
+        autosync_in(Path::new(&cwd), env);
     }
     (String::new(), 0)
 }
@@ -45,11 +59,11 @@ fn hook_cwd(agent_harness: AgentHarness, event: &str) -> Option<String> {
     parse_event(agent_harness, event).ok()?.cwd
 }
 
-fn session_text(cwd: &Path) -> String {
+fn session_text(cwd: &Path, env: Env) -> String {
     let Some(root) = clm_root(cwd) else {
         return String::new();
     };
-    let settings = settings(Some(root));
+    let settings = clm_config::load(Some(root), env);
     // Oversized nodes marked as `clm status` marks them; without settings, none.
     let budgets = settings.as_ref().ok().map(|s| clm_view_repo::Budgets {
         spec_tokens: s.node_size.value.spec_tokens,
@@ -134,11 +148,11 @@ pub fn autosync(event: &str) {
     autosync_hook(AgentHarness::ClaudeCode, event);
 }
 
-fn autosync_in(cwd: &Path) {
+fn autosync_in(cwd: &Path, env: Env) {
     let Some(root) = clm_root(cwd) else {
         return;
     };
-    if settings(Some(root)).is_ok_and(|s| s.autosync.value) {
+    if clm_config::load(Some(root), env).is_ok_and(|s| s.autosync.value) {
         let _ = clm_sync::autosync(root);
     }
 }
