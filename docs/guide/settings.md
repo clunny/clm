@@ -125,6 +125,8 @@ Where: `clm.toml` or `clm.local.toml`.
 
 How many builds and drafts may run on this clone at once (default 3).
 
+The build loop (`/clm:build`) may start fewer: `clm machine` measures how much disk a build takes here, and the loop starts no more builds and drafts than free space holds, listing the rest as `waits for disk`. They start by themselves once a land frees space; when nothing is running, the loop's queue asks you to free disk, and it goes on once a build fits, with nothing to say.
+
 - **Higher** builds more components in parallel, at the cost of CPU, memory, disk and model usage at once.
 - **Lower** suits a small machine or a tight usage budget.
 

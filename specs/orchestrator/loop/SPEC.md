@@ -2,7 +2,7 @@
 title: Build loop
 status: active
 owners: ["@clunny"]
-depends_on: [orchestrator, orchestrator.run, orchestrator.triage, orchestrator.checkpoint, verify, upgrade, land, view, agent-harness, config, vcs, host, model]
+depends_on: [orchestrator, orchestrator.run, orchestrator.triage, orchestrator.checkpoint, verify, upgrade, land, view, agent-harness, config, vcs, host, model, machine]
 paths: ["crates/clm-loop/**"]
 successor: ""
 serves: [capability/build-from-spec, architecture/agent-harness-adapters, architecture/git-is-truth]
@@ -26,7 +26,7 @@ An action is one line on stdout: `launch <name> <kind> <model> <prompt-file>`, `
 As a library it offers `plan(snapshot)`, a pure function from what a step read to `view`'s queue model, and `stored_plan(root)`, the plan the clone's last step stored with its runs as the loop file holds them now, read without fetching, so `view.repo` shows what the loop acts on (`views-rendered-by-clm`).
 
 ## Design
-Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm build`, which passes it `max_builds` and its own executable as the `clm` it runs. It drives the other commands as subprocesses through their Contracts, reading their output as those Contracts state it: `clm next` for the ready components in priority order, `clm view flight --at origin/main --format json` for each component's priority, `clm triage` for the `group` lines and their priorities, `clm run <component> --review-model <alias>` and `clm run --finish`, `clm draft`, `clm draft --resume`, `clm draft --finish` and `clm draft --fold`, `clm wrap-up` for the housekeeping, the complete changes and what isn't safe, `clm verify --due --dry-run`, `clm upgrade` for the pending migrations, and `clm land`. So every rule of those commands stays theirs, the loop holds none of them, and its build changes no other component's files. Its own git calls (fetching, reading `origin/main`'s tree, the escalation's commit and push) go through `clm-git` (`git-plumbing-layer`).
+Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm build`, which passes it `max_builds` and its own executable as the `clm` it runs. It drives the other commands as subprocesses through their Contracts, reading their output as those Contracts state it: `clm next` for the ready components in priority order, `clm view flight --at origin/main --format json` for each component's priority, `clm triage` for the `group` lines and their priorities, `clm run <component> --review-model <alias>` and `clm run --finish`, `clm draft`, `clm draft --resume`, `clm draft --finish` and `clm draft --fold`, `clm wrap-up` for the housekeeping, the complete changes and what isn't safe, `clm verify --due --dry-run`, `clm upgrade` for the pending migrations, `clm machine --format json` for the disk's `room` and `state`, and `clm land`. So every rule of those commands stays theirs, the loop holds none of them, and its build changes no other component's files. Its own git calls (fetching, reading `origin/main`'s tree, the escalation's commit and push) go through `clm-git` (`git-plumbing-layer`).
 
 **Why in `clm`** (`agent-harness-adapters`, `deterministic-enforcement`). The skill `build` used to hold the loop's rules as prose a model followed: return handling, retries, the order of drafts and builds, the fold, the archive and the watch. A model following prose got several of them wrong in practice, and its state lived only in its context, which compaction loses. Here each rule is code with a test, and the one judgement left to the session is the cause of a stop, which only a model can read from a subagent's output: `clm` keeps the counts and decides.
 
@@ -39,6 +39,8 @@ Crate `clm-loop`, at `crates/clm-loop/`, dispatched by `crates/clm` as `clm buil
 **The lease.** The holder renews it with every command it runs and every interval while `clm build wait` runs; it is live for 15 minutes after the last renewal. 15 minutes is a constant, not a setting (`yagni`): it only has to outlast the wait's interval, which is at most 7 minutes. A session that dies takes its subagents and its `clm build wait` with it, so the lease lapses and the next `start` adopts the loop. Runs the file lists as planned, running or stopped belong to a session that is gone: *orphans*. A build orphan is relaunched with `clm run`, which resumes its branch; a draft orphan with `clm draft --resume`, which continues its spec branch (`orchestrator.triage/draft-resume`); a `land:` or `verify` orphan is run again, since `clm land` of a landed branch and `clm verify --due` are safe to repeat; a fold or archive orphan is dropped and the plan computes it again, its prompt continuing a branch it finds on `origin`. A build or draft orphan whose relaunch is refused, `clm run` or `clm draft --resume` exiting 1, has no subagent and no way to get one, so keeping it would keep the loop busy for ever: the step finishes it as a run that returned with no closing line, tells the human the reason once unless the finish finds it landed, and leaves its component or items to the plan, which launches them afresh when `clm next` or `clm triage` offers them (`loop-start`). `--take-over` is the human's word that a live lease's session is gone; since that session's subagents may still be running when it isn't, an orphan whose branch the last fetch saw advance within the last 15 minutes is relaunched only once it has stayed still for 15 minutes, so two subagents never push over one branch.
 
 **Stops.** Each run counts its stops by cause. What stopped from outside the work is resumed in the same subagent, keeping its context: a limit or a full disk each time it recurs, once it clears, and an outage or a tool failure once, at once. What went wrong in the work is given one resume, then a rebuild with a new subagent on the session's model. A rebuilt run that stops again for the cause that rebuilt it is escalated, as is a run that runs out of context twice. These are `resume-sound-builds`' criteria, now code.
+
+**The disk** (`loop-holds-launches-on-disk`). Builds that run beside each other fill the disk with their worktrees' build output, and a build that runs out of space fails its land check for a reason that has nothing to do with its code; once the disk is full, no build lands. `max_builds` bounds the disk only as a count, which can't know how much a build of this project takes, while `machine` measures it: its `room` is how many more builds free space covers once the running ones have grown to the largest build seen. So each step reads `clm machine --format json` with the rest of the snapshot and launches no more new builds and drafts than that `room`, and none at all while a `disk` condition holds, since a run already stopped on a full disk says the measure fell short. Before any build has been measured there is no `room`, and the loop holds back only while the disk reads `critical`, the state `machine` judges on the filesystem's size alone. A reading that fails, or a disk the system won't read (`unknown`), holds back nothing: the loop then starts builds by places, as it did before it read the disk. An orphan's relaunch isn't held back, since its place counts already and its worktree's growth is in what `room` sets aside. What a land check writes beyond the worktree (the shared land build directory, a browser suite's artifacts) isn't in the measure; the land directory is one, whatever the number of builds, and already takes its space, and the rest is small beside a build's output, so the `room` is not padded for it (`yagni`). The disk frees mostly when a build lands, `clm land` deleting its worktree's build output (`build-places`), so a step that holds work back on the disk while a run of the loop is going waits for it as for a place; only when none of the loop's runs is going, so nothing will free space, does the human's queue ask for disk. Not taken: `clm run` and `clm draft` refusing on the disk themselves, which would hold a rule of the loop's in two commands, and a free-space setting the human sets, which can't be right for every toolchain (`machine-load-measured-by-clm`).
 
 **A build that is over with no return** (`claim-gone-ends-a-build`). The agent harness doesn't always deliver a subagent's final report, and a run the loop finished only on `clm build returned` would then stay `running` for ever. A build's work is over when its claim has left `origin`: `clm run` pushes the claim before the step prints the `launch`, a build pushes nothing but that branch, and only landing (`clm land` deletes the branch after the merge) or a deletion by hand takes it away. So before the housekeeping, while the local branch that tells a landed build from a deleted one is still there, every step finishes each `running` build whose `origin/impl/<component>` is gone or merged, as a run that returned with no closing line (`unclosed-build-reads-finish`). The loop reads the refs only to tell that the build is over; whether it landed stays `clm run --finish`'s to say, so there is one reading of landed. The test reads the remote-tracking refs alone and holds for as long as the run is listed, so it doesn't depend on the step that first sees the land: another session's `clm wrap-up` may have removed the local branch already, and the run is then finished without being counted as landed, which only leaves it out of the summary. Finishing early changes nothing a prompt return would have done, since the housekeeping removes a landed build's worktree at the same step anyway. The report may still arrive after the plan has launched the component again under the same name, and a report names a run only by that name. So `clm build returned` ignores a build's `landed <sha>` line whose commit is older than the run it would be recorded for: no run lands a commit made before it started (`return-rules`). The claim's state on `origin` wouldn't do for this, since another clone may claim the component between a land and its report. Not taken: an action asking the session to judge whether the run is over, which puts a rule of the loop back in a model's hands (`build-loop-in-clm`); a time limit on a run, which can't tell a long build from a lost report; reading `clm wrap-up`'s `removed impl/<component>` line, which is printed once and not at all for a worktree left dirty; and the same rule for drafts, since a draft whose spec change has landed may still be fixing an item on a code branch, so a landed change doesn't mean the draft is over.
 
@@ -208,7 +210,7 @@ The loop SHALL escalate a run, launching it no more, when a rebuilt run (round 2
 - view/queue-view
 
 ### Requirement: plan-order
-The plan SHALL launch, up to the clone's free places (`max_builds` less the places that count, as `orchestrator`'s `places` reads them), in one list sorted by priority (`P1` first): each component `clm next` prints, at the priority `clm view flight --at origin/main --format json` gives it, and each `group` line `clm triage` prints none of whose items a draft of the loop left, at the line's priority; at equal priority a draft SHALL come before a build, and otherwise each keeps its own command's order. A build SHALL launch on the build model `clm agent-harness` names, with `--review-model` the session's model, and a draft on the session's model (`model-per-launch`). It SHALL launch no new build or draft while a drain or a stop is requested. When `clm run` or `clm draft` exits 3 because another session took the place meanwhile, the step SHALL launch nothing more that step and print no action for that run.
+The plan SHALL launch, up to the clone's free places (`max_builds` less the places that count, as `orchestrator`'s `places` reads them), in one list sorted by priority (`P1` first): each component `clm next` prints, at the priority `clm view flight --at origin/main --format json` gives it, and each `group` line `clm triage` prints none of whose items a draft of the loop left, at the line's priority; at equal priority a draft SHALL come before a build, and otherwise each keeps its own command's order. A build SHALL launch on the build model `clm agent-harness` names, with `--review-model` the session's model, and a draft on the session's model (`model-per-launch`). It SHALL launch no new build or draft while a drain or a stop is requested. It SHALL also hold new builds and drafts back on the disk, as `clm machine --format json` read in the step's snapshot gives it: no more of them in a step than its `disk.room` when that is a number; none while `disk.room` is `null` and `disk.state` is `critical`; and none while a `disk` condition holds. A `clm machine` that exits non-zero or prints output that doesn't parse, or a `disk.state` of `unknown`, SHALL hold nothing back. An orphan's relaunch SHALL NOT be held back on the disk. The disk SHALL hold back only the entries the free places would launch, the room counting new launches alone: an entry beyond the free places SHALL keep the reason `waits for a place`, one the places would launch but the disk holds back SHALL be listed in the plan's next section with the reason `waits for disk`, and while stopped runs are being resumed one at a time every entry SHALL keep the reason `waits for stopped runs to resume`. When `clm run` or `clm draft` exits 3 because another session took the place meanwhile, the step SHALL launch nothing more that step and print no action for that run.
 
 #### Scenario: a P1 build before P4 drafts
 - GIVEN `max_builds` 3, three `group` lines at `P4`, and component `a` ready at `P1`
@@ -225,8 +227,29 @@ The plan SHALL launch, up to the clone's free places (`max_builds` less the plac
 - WHEN `clm build step` runs
 - THEN it launches no draft of that line
 
+#### Scenario: room for one build
+- GIVEN `max_builds` 3, no places held, components `a`, `b` and `c` ready at `P2`, and `clm machine --format json` giving `disk.room` 1 and `disk.state` `warn`
+- WHEN `clm build step` runs
+- THEN it prints `launch build:a` and no other `launch`, and the stored plan lists `build:b` and `build:c` with `waits for disk`
+
+#### Scenario: a disk stop holds new builds
+- GIVEN `max_builds` 3, `build:b` stopped with cause `disk`, component `a` ready, and `clm machine --format json` giving `disk.room` 2
+- WHEN `clm build step` runs
+- THEN it prints no `launch build:a`, and the stored plan lists `build:a` with `waits for disk`
+
+#### Scenario: no measurement yet
+- GIVEN `max_builds` 2, component `a` ready, and `clm machine --format json` giving `disk.room` `null`
+- WHEN `clm build step` runs with `disk.state` `critical`, and again in a fresh fixture with `disk.state` `warn`
+- THEN the first prints no `launch`, and the second prints `launch build:a`
+
+#### Scenario: no reading
+- GIVEN `max_builds` 2, component `a` ready, and a `clm machine` that exits 1
+- WHEN `clm build step` runs
+- THEN it prints `launch build:a`
+
 #### Needs
 - view/queue-view
+- machine/disk-room
 
 ### Requirement: plan-fold
 Once the fold list isn't empty and no draft of the loop is running, the plan SHALL launch one fold, `fold:<first-id>`, with the prompt `clm draft --fold` writes for the fold list's IDs in the order their `group` lines came, on the build model, taking no place, also while a drain is requested. Its `proposed <batch> review <url>` SHALL put the batch in the human's queue. After `clm build approved <batch>`, the plan SHALL print `run land:<batch> clm land spec/<batch>`; a land that reports `gate/approval` SHALL put the batch back in the human's queue, and a land that lands SHALL be followed by `clm draft --finish` for each folded draft.
@@ -294,12 +317,17 @@ The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) an
 - view/queue-view
 
 ### Requirement: build-wait
-`clm build wait [--interval <minutes>]` (a positive decimal number of at most 7, default 5) SHALL renew the lease every interval and exit 0, printing one line naming why, as soon as a step would print an action: a place frees while work is ready, new work is on `origin`, a fold is due, a condition clears or its time passes, a draft becomes possible, or a stop is requested; and as soon as a running build's claim has left `origin`, as `claim-gone-ends-a-build` judges it on the remote-tracking refs at each of those 5-second reads, naming the run. It SHALL make that judgement before each run of the housekeeping, its first included, so the step that finishes the build finds its local branch. It SHALL read the loop file, the places and those refs every 5 seconds and fetch `origin` and read the snapshot once per interval. When a fetch fails it SHALL print `clm build wait: fetch failed: <reason>` on stderr and go on. An `--interval` that isn't a positive number of at most 7 SHALL exit 1 before waiting.
+`clm build wait [--interval <minutes>]` (a positive decimal number of at most 7, default 5) SHALL renew the lease every interval and exit 0, printing one line naming why, as soon as a step would print an action: a place frees while work is ready, the disk's room grows while work waits for disk, new work is on `origin`, a fold is due, a condition clears or its time passes, a draft becomes possible, or a stop is requested; and as soon as a running build's claim has left `origin`, as `claim-gone-ends-a-build` judges it on the remote-tracking refs at each of those 5-second reads, naming the run. It SHALL make that judgement before each run of the housekeeping, its first included, so the step that finishes the build finds its local branch. It SHALL read the loop file, the places and those refs every 5 seconds and fetch `origin` and read the snapshot, `clm machine`'s disk included, once per interval. When a fetch fails it SHALL print `clm build wait: fetch failed: <reason>` on stderr and go on. An `--interval` that isn't a positive number of at most 7 SHALL exit 1 before waiting.
 
 #### Scenario: a place frees
 - GIVEN `max_builds` 1, component `a` ready, and the one place held by `build:b`
 - WHEN `clm build wait` runs and `build:b`'s place is freed
 - THEN within 10 seconds it prints a line naming the freed place and exits 0
+
+#### Scenario: the disk frees
+- GIVEN `max_builds` 2, component `a` ready, no places held, and `clm machine --format json` giving `disk.room` 0
+- WHEN `clm build wait --interval 0.1` runs and `clm machine` then gives `disk.room` 1
+- THEN within 20 seconds it prints a line naming the disk and exits 0
 
 #### Scenario: a build lands
 - GIVEN a running `build:a` with a claim `origin/impl/a` that `origin/main` lacks, and nothing ready
@@ -317,6 +345,7 @@ The loop SHALL read the agent harness's abilities (`agent-harness/abilities`) an
 
 #### Needs
 - view/queue-view
+- machine/disk-room
 
 ### Requirement: build-stop
 `clm build stop --drain` SHALL record a drain: no step launches a new build, draft or archive; running runs finish and are handled as usual; the fold list is folded, an approved batch is landed and a due verify is run; and once nothing runs, the step prints the summary's `say` and `end`. `clm build stop --now` SHALL record a stop: the next step prints `stop <name> <task-id>` for every running run, each then returned with cause `stopped`, and once none is running the summary's `say` and `end`. Neither SHALL fetch.
@@ -341,15 +370,21 @@ The summary a drain or a stop ends with SHALL say what the loop's runs landed si
 - view/queue-view
 
 ### Requirement: humans-queue
-The plan SHALL hold the human's queue, each entry with what the human does about it and since when, oldest first: the fold batches waiting for approval (`say "approve <batch>"`); the `question` and `human-task` items on `origin/main` that block requirements, with what they block (`answer backlog/<slug>`), since the commit that added them; the escalations the loop couldn't land; the red results of the loop's verify runs no item has taken in (`take in with /clm:triage`); the work `clm wrap-up` reports isn't safe and its ledger findings; the migrations `clm upgrade` lists (`run /clm:upgrade`); and the conditions only the human can clear (`free disk, then say so`). It SHALL NOT call the host, so intake isn't in it.
+The plan SHALL hold the human's queue, each entry with what the human does about it and since when, oldest first: the fold batches waiting for approval (`say "approve <batch>"`); the `question` and `human-task` items on `origin/main` that block requirements, with what they block (`answer backlog/<slug>`), since the commit that added them; the escalations the loop couldn't land; the red results of the loop's verify runs no item has taken in (`take in with /clm:triage`); the work `clm wrap-up` reports isn't safe and its ledger findings; the migrations `clm upgrade` lists (`run /clm:upgrade`); the conditions only the human can clear (`free disk, then say so`); and, when the disk holds back ready work (`plan-order`) while no run of the loop, of any kind, is planned or running, so no land will free space, since the step's time, the disk (`free disk; the loop goes on once a build fits`). It SHALL NOT call the host, so intake isn't in it.
 
 #### Scenario: escalated build in the queue
 - GIVEN an item `backlog/a-stops-on-work.md` the loop filed, blocking `a/x`
 - WHEN the plan is computed
 - THEN the human's queue lists `a-stops-on-work` with `answer backlog/a-stops-on-work` and `a/x`
 
+#### Scenario: the disk holds work with nothing running
+- GIVEN component `a` ready, no run of the loop planned or running, and a snapshot whose disk gives `room` 0
+- WHEN the plan is computed
+- THEN the human's queue lists the disk with `free disk; the loop goes on once a build fits`, and with `build:b` running instead it doesn't
+
 #### Needs
 - view/queue-view
+- machine/disk-room
 
 ### Requirement: plan-snapshot
 `clm-loop` SHALL offer `plan(snapshot)`, a pure function returning `view`'s queue model with the sections the view shows, in the order and with the reasons the steps act on, and `stored_plan(root)`, which reads the plan the last step stored and the runs as the loop file holds them now, without fetching and without creating or writing any file or directory, or none when the clone has no loop file. Of `clm-loop`'s code, only what writes the loop file SHALL create `<git common dir>/clm/`. `clm build step` SHALL act on, and store, `plan` of the snapshot it read after its fetch.
