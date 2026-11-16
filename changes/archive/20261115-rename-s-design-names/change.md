@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [rename-s-design-names-a-removed-gate-requirement]
 ---
 
