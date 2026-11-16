@@ -84,8 +84,8 @@ fn path_with(hosts: &TempDir) -> String {
     )
 }
 
-/// Calls `clm <args>` in `cwd` as the binary ran: with `path` as `PATH` and git's own config
-/// isolated, on this process for the call, since `git` and the tools a command starts inherit
+/// Calls `clm <args>` in `cwd` as the binary ran: with `path` as `PATH`, an empty
+/// `XDG_CONFIG_HOME` and git's own config isolated, on this process for the call, since `git` and the tools a command starts inherit
 /// them, and no user settings.
 fn clm(cwd: &Path, args: &[&str], path: &str) -> Output {
     let config = TempDir::new().unwrap();
@@ -100,7 +100,17 @@ fn clm(cwd: &Path, args: &[&str], path: &str) -> Output {
     };
     let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
     let [global, nosystem] = common::ISOLATED_GIT;
-    common::call(cwd, args, &env, &[("PATH", path), global, nosystem])
+    common::call(
+        cwd,
+        args,
+        &env,
+        &[
+            ("PATH", path),
+            ("XDG_CONFIG_HOME", &config_home),
+            global,
+            nosystem,
+        ],
+    )
 }
 
 /// Runs `clm init <args>` in `cwd`, expecting exit 0 and no call to `gh`; returns
@@ -925,6 +935,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
         let config_home = config.path().to_str().unwrap();
         let vars = [
             ("PATH", path.as_str()),
+            ("XDG_CONFIG_HOME", config_home),
             ("GIT_DIR", git_dir),
             ("GIT_WORK_TREE", tree_dir),
             ("GIT_CONFIG_GLOBAL", "/dev/null"),
@@ -960,6 +971,7 @@ fn not_a_repository() {
         let config_home = config.path().to_str().unwrap();
         let vars = [
             ("PATH", path.as_str()),
+            ("XDG_CONFIG_HOME", config_home),
             ("GIT_CEILING_DIRECTORIES", ceiling),
         ];
         let env = |key: &str| match key {

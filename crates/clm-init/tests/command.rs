@@ -112,3 +112,36 @@ fn guide_writes_the_page_or_the_unknown_page_error() {
     assert_eq!((code, out.as_str()), (1, ""));
     assert!(err.starts_with("no guide page no-such-page\n"), "{err}");
 }
+
+#[test]
+fn survey_maps_the_root_it_is_given_or_its_root_option() {
+    // req:init/commands-in-crate@130bb26b
+    let tmp = TempDir::new().unwrap();
+    let repo = tmp.path().join("repo");
+    std::fs::create_dir_all(repo.join("tool/src")).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    std::fs::write(repo.join("top.rs"), "fn t() {}\n").unwrap();
+    std::fs::write(repo.join("tool/src/a.rs"), "fn a() {}\n").unwrap();
+    git(&repo, &["add", "-A"]);
+    let map = |cwd: &Path, root: Option<&Path>, args: &[&str]| {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let code = clm_init::survey_command(
+            args.iter().copied(),
+            root,
+            cwd,
+            &|_| None,
+            &mut out,
+            &mut err,
+        );
+        assert_eq!(code, 0, "{}", String::from_utf8_lossy(&err));
+        String::from_utf8(out).unwrap()
+    };
+    let whole = map(&repo, None, &[]);
+    assert!(whole.contains("\ntool/src  rust"), "{whole}");
+    // The root `crates/clm` found is mapped, not the repository's top.
+    let found = map(&repo, Some(&repo.join("tool")), &[]);
+    assert!(found.contains("\nsrc  rust"), "{found}");
+    assert!(!found.contains("tool/src"), "{found}");
+    // `--root`, relative to the directory it runs in, overrides the root it is given.
+    assert_eq!(map(&repo, Some(&repo), &["--root", "tool"]), found);
+}
