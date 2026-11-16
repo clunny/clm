@@ -446,7 +446,7 @@ fn approval_other(root: &Path, rev: &str) -> Result<bool, Error> {
 }
 
 /// Whether the repository has a ledger branch, local or on `origin`.
-pub fn has_ledger(root: &Path) -> Result<bool, Error> {
+pub(crate) fn has_ledger(root: &Path) -> Result<bool, Error> {
     Ok(!read::list(root, "refs/heads/clm/ledger/")?.is_empty()
         || !read::list(root, &read::remote_ledgers())?.is_empty())
 }

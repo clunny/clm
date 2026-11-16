@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Command, Contribution, Ledger};
+use crate::{Command, Contribution};
 
 /// Where a command works and whether a pending required migration stops it.
 pub(crate) struct Located<'a> {
@@ -79,11 +79,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
             | Contribution::Comment { root, .. }
             | Contribution::Label { root, .. } => given(root),
         },
-        C::Ledger { ledger } => match ledger {
-            Ledger::Compact { root, .. }
-            | Ledger::Verify { root, .. }
-            | Ledger::Show { root, .. } => given(root),
-        },
+        C::Ledger(args) => given(args.root()),
         C::Superpowers { .. } => at(None, true),
     }
 }
