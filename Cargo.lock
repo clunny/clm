@@ -336,11 +336,14 @@ dependencies = [
 name = "clm-checkpoint"
 version = "0.26.0"
 dependencies = [
+ "clap",
  "clm-check",
  "clm-git",
  "clm-ledger",
  "clm-model",
  "clm-orchestrator",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

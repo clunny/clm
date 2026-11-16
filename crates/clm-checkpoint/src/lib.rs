@@ -1,4 +1,4 @@
-//! `clm checkpoint`: remove landed work, report work that isn't safe on `origin`, and say
+//! `clm wrap-up`: remove landed work, report work that isn't safe on `origin`, and say
 //! whether the session can end (`checkpoint-before-done`; see
 //! specs/orchestrator/checkpoint/SPEC.md). It reads git, the ledger and the clone's build
 //! places only, and every `git` run goes through `clm-git`.
@@ -7,14 +7,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use clm_git::git;
-pub use clm_orchestrator::Error;
+
+mod command;
+pub use command::{WrapUpArgs, wrap_up_command};
+
+use clm_orchestrator::Error;
 use clm_orchestrator::{DEFAULT_EXPIRY_HOURS, REMOTE, SweepOutcome, Swept, queue_from_refs};
 
-/// What `clm checkpoint` prints, and whether the session can end.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Report {
-    pub lines: Vec<String>,
-    pub ok: bool,
+/// What `clm wrap-up` prints, and whether the session can end.
+pub(crate) struct Report {
+    lines: Vec<String>,
+    ok: bool,
 }
 
 /// The branch families CLM's flow makes.
@@ -43,7 +46,7 @@ const UNRECORDED: &str = "ledger/unrecorded-land";
 
 /// Runs the checkpoint for the repository holding `root`, from its main checkout. The report
 /// ends with `wrap-up ok` or `wrap-up incomplete` (`checkpoint`).
-pub fn checkpoint(root: &Path) -> Result<Report, Error> {
+pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
     let common = git(
         root,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
