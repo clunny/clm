@@ -1,7 +1,7 @@
 ---
 title: "Verify's mutation baseline fails: a clm-health test needs a git repository"
 kind: bug
-components: [check.health]
+components: [ci]
 ---
 
 Step: `clm verify --due` (run by the build loop) runs the mutation step, .github/scripts/mutate.sh, which runs cargo mutants for requirement check.health/health-report.
