@@ -51,7 +51,7 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Intake { root, .. }
         | C::Draft { root, .. }
         | C::Build { root, .. }
-        | C::WrapUp { root }
+        | C::WrapUp(clm_checkpoint::WrapUpArgs { root })
         | C::Rebase { root }
         | C::Autosync { root }
         | C::Land(clm_land::LandArgs { root, .. })

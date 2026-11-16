@@ -299,12 +299,7 @@ enum Command {
     /// Remove merged work, report work that isn't safe on origin, and say whether the
     /// session can end.
     #[command(name = "wrap-up")]
-    WrapUp {
-        /// Repository root, or any worktree of it (default: the CLM repository holding the
-        /// current directory).
-        #[arg(long)]
-        root: Option<PathBuf>,
-    },
+    WrapUp(clm_checkpoint::WrapUpArgs),
     /// Rebase the branch onto origin/main, regenerate applied specs and run `clm check`;
     /// exit 1 with what is left to resolve.
     Rebase {
@@ -1063,7 +1058,13 @@ fn dispatch() -> ExitCode {
             }
         }
         Command::Build { action, root } => build(repo_root(root), cwd, action),
-        Command::WrapUp { root } => wrap_up(root),
+        Command::WrapUp(args) => ExitCode::from(clm_checkpoint::wrap_up_command(
+            command_args(),
+            &found_root(&args.root),
+            &clm_config::process_env,
+            &mut Printed::Out,
+            &mut Printed::Err,
+        )),
         Command::Rebase { root } => rebase(root),
         Command::Autosync { root } => match clm_sync::autosync(&repo_root(root)) {
             Ok(()) => ExitCode::SUCCESS,
@@ -1431,23 +1432,6 @@ fn shown_text(shown: &clm_host::Shown) -> String {
     lines.push("body:".into());
     lines.push(shown.body.clone());
     lines.join("\n")
-}
-
-/// `clm wrap-up`.
-fn wrap_up(root: Option<PathBuf>) -> ExitCode {
-    match clm_checkpoint::checkpoint(&repo_root(root)) {
-        Ok(report) => {
-            for line in &report.lines {
-                println!("{line}");
-            }
-            if report.ok {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            }
-        }
-        Err(e) => orchestrated("wrap-up", Err(e)),
-    }
 }
 
 /// `clm rebase`.
