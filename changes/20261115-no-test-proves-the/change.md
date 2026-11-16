@@ -22,7 +22,7 @@ The work isn't a code-only fix. `sync/judged-by-check`'s scenario `settings can'
 
 ## Outcome
 
-- **`clm/rebase-settings`**: the root hands `clm-sync` the settings `config` loads from the CLM root `clm-sync` gives it, `health` among them, and a load error as a `check.health/health-report` violation line. Two scenarios, each run as a process: a `clm.toml` that can't load, and a repository threshold of 2 that files a reconsider item the default of 3 wouldn't.
+- **`clm/rebase-settings`**: the root hands `clm-sync` the settings `config` loads from the CLM root `clm-sync` gives it, `health` among them, and a load error as a `check.health/health-report` violation line. Two scenarios, each run as a process: a `clm.toml` that can't load, and a repository threshold of 2 that files a reconsider item the default of 3 wouldn't. Each THEN states only what the root contributes (the line's source and rule, the threshold it loaded); the outcome line and exit status stay `sync`'s to state (`sync/judged-by-check`, `sync/file-reconsider-item`), as the architecture audit advised, so no rule of `clm rebase`'s output is stated by two components.
 
 ## Constraints
 
