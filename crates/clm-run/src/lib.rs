@@ -675,7 +675,7 @@ fn listing_owned(items: &[String], conjunction: &str, quote: bool) -> String {
 
 /// The path of `skill`'s `SKILL.md` in the pinned superpowers copy builds follow, with the
 /// environment `env` names and a relative `$CLM_SUPERPOWERS_DIR` read from `cwd`.
-pub fn superpowers_skill(skill: &str, cwd: &Path, env: Lookup) -> Result<String, Error> {
+fn superpowers_skill(skill: &str, cwd: &Path, env: Lookup) -> Result<String, Error> {
     // One plain name, so it can't escape `skills/`; checked before anything is fetched.
     let mut parts = Path::new(skill).components();
     if !matches!(
