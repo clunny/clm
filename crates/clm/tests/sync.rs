@@ -106,14 +106,14 @@ fn node_a(clm_toml: &str) -> (TempDir, std::path::PathBuf) {
     (dir, work)
 }
 
-/// `clm rebase` run as a process in `dir` with no user `config.toml` to load: `HOME` and
-/// `XDG_CONFIG_HOME` name an empty directory, and `TMPDIR` another, whose path stdout is
-/// returned beside.
-fn rebase_without_user_settings(dir: &Path) -> (Output, String) {
+/// `clm <args>` run as a process in `dir` with no user `config.toml` to load: `HOME` and
+/// `XDG_CONFIG_HOME` name an empty directory, and `TMPDIR` another, whose paths (as given and
+/// resolved) are returned beside its output.
+fn clm_without_user_settings(dir: &Path, args: &[&str]) -> (Output, [String; 2]) {
     let home = TempDir::new().unwrap();
     let tmp = TempDir::new().unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .arg("rebase")
+        .args(args)
         .current_dir(dir)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
@@ -122,7 +122,11 @@ fn rebase_without_user_settings(dir: &Path) -> (Output, String) {
         .env("TMPDIR", tmp.path())
         .output()
         .unwrap();
-    (out, tmp.path().to_string_lossy().into_owned())
+    let resolved = tmp.path().canonicalize().unwrap();
+    (
+        out,
+        [tmp.path(), resolved.as_path()].map(|p| p.to_string_lossy().into_owned()),
+    )
 }
 
 #[test]
@@ -130,8 +134,7 @@ fn scenario_settings_that_cant_be_loaded() {
     // req:clm/rebase-settings@01f11df1
     let (_dir, work) = node_a("[component_size]\nspec_tokens = 0\n");
     git(&work, &["checkout", "-q", "-b", "spec/x"]);
-    assert!(!work.join("clm.local.toml").exists());
-    let (out, tmp) = rebase_without_user_settings(&work);
+    let (out, tmp) = clm_without_user_settings(&work, &["rebase"]);
     let stdout = String::from_utf8_lossy(&out.stdout);
     let first = stdout.lines().next().unwrap_or_default();
     let (source, rest) = first
@@ -145,13 +148,21 @@ fn scenario_settings_that_cant_be_loaded() {
         "{out:?}"
     );
     assert!(rest.contains("component_size"), "{out:?}");
-    assert!(!first.contains(&tmp), "{out:?}");
+    assert!(tmp.iter().all(|t| !first.contains(t.as_str())), "{out:?}");
 }
 
 #[test]
 fn scenario_the_repositorys_reconsider_threshold() {
     // req:clm/rebase-settings@01f11df1
-    let (_dir, work) = node_a("[health]\nreconsider = 2\n");
+    // Two flags reach the repository's threshold of 2, and not the default of 3.
+    assert!(files_reconsider_item("[health]\nreconsider = 2\n"));
+    assert!(!files_reconsider_item(""));
+}
+
+/// Whether `clm rebase` files a reconsider item for `a/x`, flagged twice at its version, on
+/// `impl/a` with a committed `clm.toml` holding `clm_toml`.
+fn files_reconsider_item(clm_toml: &str) -> bool {
+    let (_dir, work) = node_a(clm_toml);
     write(
         &work,
         "specs/a/SPEC.md",
@@ -172,17 +183,10 @@ fn scenario_the_repositorys_reconsider_threshold() {
         );
     }
     commit(&work, "two flags");
-    assert!(!work.join("clm.local.toml").exists());
-
-    // Two flags reach the repository's threshold of 2, under the default of 3.
-    let (out, _) = rebase_without_user_settings(&work);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout
-            .lines()
-            .any(|l| l == "filed backlog/reconsider-a-x.md"),
-        "{out:?}"
-    );
+    let (out, _) = clm_without_user_settings(&work, &["rebase"]);
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .any(|l| l == "filed backlog/reconsider-a-x.md")
 }
 
 #[test]
