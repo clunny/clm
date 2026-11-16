@@ -1,114 +1,240 @@
-//! `clm effort record` through the binary (`effort/record-command`).
+//! `clm effort`, `clm capabilities` and `clm architecture` as `clm-effort`'s calls
+//! (`effort/commands-in-crate`): what each prints and how it exits.
 
 #[path = "../../clm-ledger/tests/common/mod.rs"]
 mod common;
 
-use std::process::Command;
+use std::path::{Path, PathBuf};
 
-#[test]
-fn effort_record_cli() {
-    // req:effort/record-command@2365b153
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path().join("repo");
+/// What a call wrote and returned.
+#[derive(Debug)]
+struct Out {
+    code: u8,
+    stdout: String,
+    stderr: String,
+}
+
+type Call = fn(
+    std::vec::IntoIter<String>,
+    &Path,
+    &Path,
+    &dyn Fn(&str) -> Option<String>,
+    &mut dyn std::io::Write,
+    &mut dyn std::io::Write,
+) -> u8;
+
+/// Calls `call` with `args` in `root`, run from `cwd`, with only `HOME` (at `home`) set.
+fn call(call: Call, root: &Path, cwd: &Path, home: &Path, args: &[&str]) -> Out {
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+    let code = call(
+        args.into_iter(),
+        root,
+        cwd,
+        &common::env(home, &[]),
+        &mut stdout,
+        &mut stderr,
+    );
+    Out {
+        code,
+        stdout: String::from_utf8(stdout).unwrap(),
+        stderr: String::from_utf8(stderr).unwrap(),
+    }
+}
+
+/// `clm effort <args>` in `root`, as run from `cwd`.
+fn effort(root: &Path, cwd: &Path, home: &Path, args: &[&str]) -> Out {
+    call(clm_effort::effort_command, root, cwd, home, args)
+}
+
+/// Claude Code's name for the project directory of the sessions run in `path`.
+fn encoded(path: &Path) -> String {
+    path.to_string_lossy()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
+/// A CLM repository at `<dir>/repo` and, under `<dir>/projects`, a session `s1` run there on
+/// `impl/a` and `impl/b`, and on `impl/a` in `<dir>/elsewhere`.
+fn record_repo(dir: &Path) -> PathBuf {
+    let root = dir.join("repo");
     std::fs::create_dir_all(root.join("specs")).unwrap();
     common::repo(&root, "Ann");
     std::fs::write(root.join("specs/SPEC.md"), "---\ntitle: T\n---\n").unwrap();
     std::fs::write(root.join("clm.toml"), "host = \"none\"\n").unwrap();
-    let transcripts = dir.path().join("projects");
-    let encoded: String = root
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    std::fs::create_dir_all(transcripts.join(&encoded)).unwrap();
-    let line = |branch: &str, id: &str| {
+    let transcripts = dir.join("projects");
+    let line = |cwd: &Path, branch: &str, id: &str| {
         serde_json::json!({
             "sessionId": "s1",
             "gitBranch": branch,
-            "cwd": root,
+            "cwd": cwd,
             "timestamp": "2026-10-30T00:00:00.000Z",
             "message": {"id": id, "model": "claude-opus-5-5", "usage": {"input_tokens": 3, "output_tokens": 4}},
         })
         .to_string()
     };
-    std::fs::write(
-        transcripts.join(&encoded).join("s1.jsonl"),
-        format!("{}\n{}\n", line("impl/a", "m1"), line("impl/b", "m2")),
-    )
-    .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args(["effort", "record", "--branch", "impl/a", "--transcripts"])
-        .arg(&transcripts)
-        .arg("--root")
-        .arg(&root)
-        .env("HOME", dir.path())
-        .env_remove("CLM_WRITER")
-        .env_remove("CLAUDE_CONFIG_DIR")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{stdout}{}",
-        String::from_utf8_lossy(&out.stderr)
+    let elsewhere = dir.join("elsewhere");
+    let sessions = [
+        (
+            &root,
+            format!(
+                "{}\n{}\n",
+                line(&root, "impl/a", "m1"),
+                line(&root, "impl/b", "m2")
+            ),
+        ),
+        (
+            &elsewhere,
+            format!("{}\n", line(&elsewhere, "impl/a", "m3")),
+        ),
+    ];
+    for (cwd, lines) in sessions {
+        std::fs::create_dir_all(transcripts.join(encoded(cwd))).unwrap();
+        std::fs::write(transcripts.join(encoded(cwd)).join("s1.jsonl"), lines).unwrap();
+    }
+    root
+}
+
+#[test]
+fn effort_record_cli() {
+    // req:effort/record-command@2365b153
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let root = record_repo(dir.path());
+    let root_arg = root.to_string_lossy().into_owned();
+    let transcripts_arg = dir.path().join("projects").to_string_lossy().into_owned();
+    let nowhere = dir.path().join("nowhere");
+    let out = effort(
+        &nowhere,
+        &root,
+        dir.path(),
+        &[
+            "record",
+            "--branch",
+            "impl/a",
+            "--transcripts",
+            &transcripts_arg,
+            "--root",
+            &root_arg,
+        ],
     );
+    assert_eq!(out.code, 0, "{out:?}");
     assert_eq!(
-        stdout,
+        out.stdout,
         "effort impl/a s1 7 tokens 0s\nrecorded 1 sessions on 1 branches\n"
     );
     // A relative `--cwd` is taken from the directory `clm` runs in.
-    let elsewhere = dir.path().join("elsewhere");
-    let encoded_elsewhere: String = elsewhere
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    std::fs::create_dir_all(transcripts.join(&encoded_elsewhere)).unwrap();
-    let there =
-        line("impl/a", "m3").replace(&*root.to_string_lossy(), &elsewhere.to_string_lossy());
-    std::fs::write(
-        transcripts.join(&encoded_elsewhere).join("s1.jsonl"),
-        there + "\n",
-    )
-    .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args([
-            "effort",
+    let out = effort(
+        &nowhere,
+        dir.path(),
+        dir.path(),
+        &[
             "record",
             "--branch",
             "impl/a",
             "--cwd",
             "elsewhere",
             "--transcripts",
-        ])
-        .arg(&transcripts)
-        .arg("--root")
-        .arg(&root)
-        .current_dir(dir.path())
-        .env("HOME", dir.path())
-        .env_remove("CLM_WRITER")
-        .output()
-        .unwrap();
+            &transcripts_arg,
+            "--root",
+            &root_arg,
+        ],
+    );
     assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
-        "effort impl/a s1 14 tokens 0s\nrecorded 1 sessions on 1 branches\n",
+        out.stdout, "effort impl/a s1 14 tokens 0s\nrecorded 1 sessions on 1 branches\n",
         "{}",
-        String::from_utf8_lossy(&out.stderr)
+        out.stderr
     );
     // Outside a CLM repository it refuses.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args(["effort", "record", "--root"])
-        .arg(&root)
-        .env("HOME", dir.path())
-        .output()
-        .unwrap();
-    assert_eq!(out.status.code(), Some(1));
+    let out = effort(
+        &nowhere,
+        &root,
+        dir.path(),
+        &["record", "--root", &root_arg],
+    );
+    assert_eq!(out.code, 1);
+}
+
+#[test]
+fn effort_record_paths_and_streams() {
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let root = record_repo(dir.path());
+    // `--cwd`, `.` components and all, `--transcripts` and `--root` are taken from the
+    // directory the command runs in, and `--root` overrides the root the call is given.
+    let out = effort(
+        &dir.path().join("nowhere"),
+        dir.path(),
+        dir.path(),
+        &[
+            "record",
+            "--branch",
+            "impl/a",
+            "--cwd",
+            "./elsewhere",
+            "--transcripts",
+            "./projects",
+            "--root",
+            "repo",
+        ],
+    );
+    assert_eq!(
+        out.stdout, "effort impl/a s1 14 tokens 0s\nrecorded 1 sessions on 1 branches\n",
+        "{out:?}"
+    );
+    assert_eq!(out.code, 0, "{out:?}");
+    // A warning goes to the error stream with its prefix.
+    let out = effort(
+        &root,
+        dir.path(),
+        dir.path(),
+        &["record", "--transcripts", "./missing"],
+    );
+    assert_eq!(out.code, 0, "{out:?}");
+    assert_eq!(
+        out.stderr,
+        format!(
+            "warning: no transcripts at {}\n",
+            dir.path().join("missing").display()
+        ),
+        "{out:?}"
+    );
+    assert!(!out.stdout.contains("warning"), "{out:?}");
+    // A failure goes to the error stream after the command's name.
+    std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
+    let out = effort(&root, &root, dir.path(), &["record"]);
+    assert_eq!(out.code, 1, "{out:?}");
+    assert!(out.stderr.starts_with("clm effort: "), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
+fn arguments_it_cant_parse() {
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let calls: [(Call, &[&str]); 3] = [
+        (clm_effort::effort_command, &["record", "--nope"]),
+        (clm_effort::capabilities_command, &["--nope"]),
+        (clm_effort::architecture_command, &["--nope"]),
+    ];
+    for (f, args) in calls {
+        let out = call(f, dir.path(), dir.path(), dir.path(), args);
+        assert_eq!(out.code, 2, "{out:?}");
+        assert!(out.stderr.contains("--nope"), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        // Help isn't an error: it goes to standard output with the status `clm` exits with.
+        let out = call(f, dir.path(), dir.path(), dir.path(), &["--help"]);
+        assert_eq!(out.code, 0, "{out:?}");
+        assert!(out.stdout.contains("Usage"), "{out:?}");
+        assert!(out.stderr.is_empty(), "{out:?}");
+    }
+    // Reaching here is the scenario's last clause: the test's process goes on.
 }
 
 /// A CLM repository with capabilities `p` and `q`, served by node `a`'s two rules.
-fn capabilities_repo(dir: &std::path::Path) -> std::path::PathBuf {
+fn capabilities_repo(dir: &Path) -> PathBuf {
     let root = dir.join("repo");
     std::fs::create_dir_all(root.join("specs/a")).unwrap();
     common::repo(&root, "Ann");
@@ -131,16 +257,8 @@ fn capabilities_repo(dir: &std::path::Path) -> std::path::PathBuf {
     root
 }
 
-fn capabilities(root: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .arg("capabilities")
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .env("HOME", root)
-        .env_remove("CLM_WRITER")
-        .output()
-        .unwrap()
+fn capabilities(root: &Path, args: &[&str]) -> Out {
+    call(clm_effort::capabilities_command, root, root, root, args)
 }
 
 #[test]
@@ -148,13 +266,8 @@ fn capabilities_cli_lists() {
     // req:effort/capabilities-list@daa12c28
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &[]);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{stdout}{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let stdout = &out.stdout;
+    assert_eq!(out.code, 0, "{stdout}{}", out.stderr);
     let lines: Vec<&str> = stdout.lines().collect();
     assert_eq!(
         lines[0],
@@ -179,8 +292,8 @@ fn capabilities_cli_says_components() {
     );
     common::commit(&root, &[("CAPABILITIES.md", caps.as_str())], "r");
     let out = capabilities(&root, &["r"]);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let stdout = &out.stdout;
+    assert_eq!(out.code, 0, "{stdout}");
     assert_eq!(
         stdout.lines().nth(2),
         Some("0 rules · no components"),
@@ -193,13 +306,8 @@ fn capabilities_cli_page() {
     // req:effort/capability-page@dd387c2f
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &["q"]);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{stdout}{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let stdout = &out.stdout;
+    assert_eq!(out.code, 0, "{stdout}{}", out.stderr);
     assert!(
         stdout.starts_with("q\nA person can q.\n1 rules · components a\n"),
         "{stdout}"
@@ -218,16 +326,11 @@ fn capabilities_json_parses() {
     let dir = tempfile::tempdir().unwrap();
     let root = capabilities_repo(dir.path());
     let out = capabilities(&root, &["--format", "json"]);
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let report: clm_effort::Report = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    let report: clm_effort::Report = serde_json::from_str(&out.stdout).unwrap();
     assert_eq!(report.capabilities.len(), 2);
     let out = capabilities(&root, &["p", "--format", "json"]);
-    let cost: clm_effort::Cost = serde_json::from_slice(&out.stdout).unwrap();
+    let cost: clm_effort::Cost = serde_json::from_str(&out.stdout).unwrap();
     assert_eq!((cost.slug.as_str(), cost.commits), ("p", Some(1)));
 }
 
@@ -236,8 +339,8 @@ fn capabilities_unknown_slug_exits_1() {
     // req:effort/capability-page@dd387c2f
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &["nope"]);
-    assert_eq!(out.status.code(), Some(1));
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "no capability nope\n");
+    assert_eq!(out.code, 1);
+    assert_eq!(out.stdout, "no capability nope\n");
 }
 
 #[test]
@@ -247,12 +350,12 @@ fn capabilities_refused_outside_a_clm_repository() {
     let root = capabilities_repo(dir.path());
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = capabilities(&root, &[]);
-    assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("not a CLM repository"));
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("not a CLM repository"));
 }
 
 /// `capabilities_repo`'s files in a clone with a bare `origin`, so the ledger can push.
-fn decide_repo(dir: &std::path::Path) -> std::path::PathBuf {
+fn decide_repo(dir: &Path) -> PathBuf {
     let plain = capabilities_repo(&dir.join("plain"));
     let root = common::clone_with_origin(dir, "repo", "Ann");
     for path in [
@@ -270,19 +373,9 @@ fn decide_repo(dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 /// A friction item `slug` on `a/y`, which serves `q` alone (its own `#### Serves`).
-fn flag(root: &std::path::Path, slug: &str) {
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args(["hashes", "a", "--root"])
-        .arg(root)
-        .output()
-        .unwrap();
-    let hashes = String::from_utf8_lossy(&out.stdout);
-    let version = hashes
-        .lines()
-        .find_map(|l| l.strip_prefix("requirement:y "))
-        .map(|h| &h[..8])
-        .unwrap_or_else(|| panic!("{hashes}"))
-        .to_string();
+fn flag(root: &Path, slug: &str) {
+    let (graph, _) = clm_model::load(root);
+    let version = graph.requirement("a/y").unwrap().version().to_string();
     std::fs::create_dir_all(root.join("backlog")).unwrap();
     std::fs::write(
         root.join(format!("backlog/{slug}.md")),
@@ -291,7 +384,7 @@ fn flag(root: &std::path::Path, slug: &str) {
     .unwrap();
 }
 
-fn decided(root: &std::path::Path) -> Vec<clm_ledger::Record> {
+fn decided(root: &Path) -> Vec<clm_ledger::Record> {
     let fold = clm_ledger::fold(root).unwrap();
     fold.decisions.values().flatten().cloned().collect()
 }
@@ -305,13 +398,8 @@ fn decide_appends_decided() {
         &root,
         &["decide", "p", "--value", "high", "--decision", "keep"],
     );
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{stdout}{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let stdout = &out.stdout;
+    assert_eq!(out.code, 0, "{stdout}{}", out.stderr);
     assert_eq!(
         stdout,
         "decided capability/p keep (value high), settles 0 flags\n"
@@ -341,10 +429,9 @@ fn decide_settles_open_flags() {
         &["decide", "q", "--value", "low", "--decision", "accept"],
     );
     assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
-        "decided capability/q accept (value low), settles 2 flags\n",
+        out.stdout, "decided capability/q accept (value low), settles 2 flags\n",
         "{}",
-        String::from_utf8_lossy(&out.stderr)
+        out.stderr
     );
     let records = decided(&root);
     let clm_ledger::Body::Decided { settles, .. } = &records[0].body else {
@@ -354,7 +441,7 @@ fn decide_settles_open_flags() {
     // A flag filed afterwards is unsettled on `q`.
     flag(&root, "f3");
     let out = capabilities(&root, &["q", "--format", "json"]);
-    let cost: clm_effort::Cost = serde_json::from_slice(&out.stdout).unwrap();
+    let cost: clm_effort::Cost = serde_json::from_str(&out.stdout).unwrap();
     let open: Vec<&str> = cost
         .flags
         .iter()
@@ -373,36 +460,74 @@ fn decide_unknown_slug() {
         &root,
         &["decide", "nope", "--value", "high", "--decision", "keep"],
     );
-    assert_eq!(out.status.code(), Some(1));
-    assert_eq!(String::from_utf8_lossy(&out.stdout), "no capability nope\n");
+    assert_eq!(out.code, 1);
+    assert_eq!(out.stdout, "no capability nope\n");
     assert!(decided(&root).is_empty());
 }
 
 #[test]
 fn decide_after_parent_options() {
     // req:effort/decide-command@e1ca5b43
+    // req:effort/commands-in-crate@c08e640f
     let dir = tempfile::tempdir().unwrap();
     let root = decide_repo(dir.path());
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args(["capabilities", "--root"])
-        .arg(&root)
-        .args(["decide", "p", "--value", "high", "--decision", "keep"])
-        .env("HOME", &root)
-        .env_remove("CLM_WRITER")
-        .output()
-        .unwrap();
+    let given = root.to_string_lossy().into_owned();
+    let out = call(
+        clm_effort::capabilities_command,
+        &dir.path().join("nowhere"),
+        dir.path(),
+        &root,
+        &[
+            "--root",
+            &given,
+            "decide",
+            "p",
+            "--value",
+            "high",
+            "--decision",
+            "keep",
+        ],
+    );
     assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
-        "decided capability/p keep (value high), settles 0 flags\n",
+        out.stdout, "decided capability/p keep (value high), settles 0 flags\n",
         "{}",
-        String::from_utf8_lossy(&out.stderr)
+        out.stderr
     );
     // `decide` is never a slug, wherever it stands.
     for args in [&["--format", "json", "decide"][..], &["decide"]] {
         let out = capabilities(&root, args);
-        assert_ne!(out.status.code(), Some(0), "{args:?}");
+        assert_ne!(out.code, 0, "{args:?}");
         assert!(out.stdout.is_empty(), "{args:?}");
     }
+}
+
+#[test]
+fn decide_own_root_overrides() {
+    // req:effort/commands-in-crate@c08e640f
+    let dir = tempfile::tempdir().unwrap();
+    let root = decide_repo(dir.path());
+    // `decide`'s own `--root`, relative to the directory the command runs in, overrides the
+    // root the call is given.
+    let out = call(
+        clm_effort::capabilities_command,
+        &dir.path().join("nowhere"),
+        dir.path(),
+        &root,
+        &[
+            "decide",
+            "q",
+            "--value",
+            "low",
+            "--decision",
+            "cut",
+            "--root",
+            "repo",
+        ],
+    );
+    assert_eq!(
+        out.stdout, "decided capability/q cut (value low), settles 0 flags\n",
+        "{out:?}"
+    );
 }
 
 #[test]
@@ -415,8 +540,40 @@ fn decide_refused_outside_a_clm_repository() {
         &root,
         &["decide", "p", "--value", "high", "--decision", "keep"],
     );
-    assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("not a CLM repository"));
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("not a CLM repository"));
+}
+
+#[test]
+fn failures_keep_their_prefix() {
+    // req:effort/commands-in-crate@c08e640f
+    // req:effort/decide-command@e1ca5b43
+    let dir = tempfile::tempdir().unwrap();
+    let root = architecture_repo(dir.path());
+    // A slug before `decide` is a usage error for `capabilities` as for `architecture`.
+    let out = capabilities(
+        &root,
+        &["p", "decide", "q", "--value", "high", "--decision", "keep"],
+    );
+    assert_eq!(out.code, 2, "{out:?}");
+    assert!(
+        out.stderr
+            .starts_with("clm capabilities: `decide` takes the slug after it"),
+        "{out:?}"
+    );
+    assert!(decided(&root).is_empty());
+    std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
+    let decide = ["decide", "e", "--value", "high", "--decision", "keep"];
+    for (out, prefix) in [
+        (capabilities(&root, &[]), "clm capabilities: "),
+        (architecture(&root, &[]), "clm architecture: "),
+        (capabilities(&root, &decide), "clm capabilities decide: "),
+        (architecture(&root, &decide), "clm architecture decide: "),
+    ] {
+        assert_eq!(out.code, 1, "{out:?}");
+        assert!(out.stderr.starts_with(prefix), "{prefix} {out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+    }
 }
 
 #[test]
@@ -430,12 +587,12 @@ fn decide_ledger_failure_exits_2() {
         &root,
         &["decide", "p", "--value", "high", "--decision", "keep"],
     );
-    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert_eq!(out.code, 2, "{out:?}");
     assert!(out.stdout.is_empty());
 }
 
 /// `decide_repo` with an architectural constraint `e` enforced by `a/y`.
-fn architecture_repo(dir: &std::path::Path) -> std::path::PathBuf {
+fn architecture_repo(dir: &Path) -> PathBuf {
     let root = decide_repo(dir);
     std::fs::write(
         root.join("ARCHITECTURE.md"),
@@ -446,16 +603,8 @@ fn architecture_repo(dir: &std::path::Path) -> std::path::PathBuf {
     root
 }
 
-fn architecture(root: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .arg("architecture")
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .env("HOME", root)
-        .env_remove("CLM_WRITER")
-        .output()
-        .unwrap()
+fn architecture(root: &Path, args: &[&str]) -> Out {
+    call(clm_effort::architecture_command, root, root, root, args)
 }
 
 #[test]
@@ -468,13 +617,8 @@ fn architecture_decide_appends_decided() {
         &root,
         &["decide", "e", "--value", "medium", "--decision", "redesign"],
     );
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{stdout}{}",
-        String::from_utf8_lossy(&out.stderr)
-    );
+    let stdout = &out.stdout;
+    assert_eq!(out.code, 0, "{stdout}{}", out.stderr);
     assert_eq!(
         stdout,
         "decided architecture/e redesign (value medium), settles 1 flags\n"
@@ -499,36 +643,35 @@ fn architecture_decide_unknown_slug_and_refusals() {
     let root = architecture_repo(dir.path());
     let args = |slug: &'static str| ["decide", slug, "--value", "high", "--decision", "keep"];
     let out = architecture(&root, &args("nope"));
-    assert_eq!(out.status.code(), Some(1));
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
-        "no architectural constraint nope\n"
-    );
+    assert_eq!(out.code, 1);
+    assert_eq!(out.stdout, "no architectural constraint nope\n");
     assert!(decided(&root).is_empty());
     // After the parent's options, as `capabilities decide` allows; a slug before `decide`
     // is a usage error, and `decide` is never a slug.
-    let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-        .args(["architecture", "--root"])
-        .arg(&root)
-        .args(args("e"))
-        .env("HOME", &root)
-        .env_remove("CLM_WRITER")
-        .output()
-        .unwrap();
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let given = root.to_string_lossy().into_owned();
+    let mut after = vec!["--root", given.as_str()];
+    after.extend(args("e"));
+    let out = call(
+        clm_effort::architecture_command,
+        &dir.path().join("nowhere"),
+        dir.path(),
+        &root,
+        &after,
+    );
+    assert_eq!(out.code, 0, "{out:?}");
     let mut before = vec!["e"];
     before.extend(args("x"));
     let out = architecture(&root, &before);
-    assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("`decide` takes the slug after it"));
+    assert_eq!(out.code, 2);
+    assert!(out.stderr.contains("`decide` takes the slug after it"));
     let out = architecture(&root, &["decide"]);
-    assert_ne!(out.status.code(), Some(0));
+    assert_ne!(out.code, 0);
     assert!(out.stdout.is_empty());
     // Outside a CLM repository it refuses.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = architecture(&root, &args("e"));
-    assert_eq!(out.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("not a CLM repository"));
+    assert_eq!(out.code, 1);
+    assert!(out.stderr.contains("not a CLM repository"));
 }
 
 #[test]
@@ -542,7 +685,7 @@ fn architecture_decide_ledger_failure_exits_2() {
         &root,
         &["decide", "u", "--value", "high", "--decision", "keep"],
     );
-    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert_eq!(out.code, 2, "{out:?}");
     assert!(out.stdout.is_empty());
 }
 
@@ -552,14 +695,14 @@ fn architecture_cli_lists_and_pages() {
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     let out = architecture(&root, &[]);
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert_eq!(out.status.code(), Some(0), "{stdout}");
+    let stdout = &out.stdout;
+    assert_eq!(out.code, 0, "{stdout}");
     let first = "architecture 2 · 0 held · 0 ⚑ · costs are estimates: an entry's cost is its enforcing rules' share, counted apart from the capabilities'";
     assert_eq!(stdout.lines().next(), Some(first), "{stdout}");
     // Nothing cites `a/y`, so `e` isn't held yet.
     assert!(stdout.contains("held 0/1"), "{stdout}");
     let out = architecture(&root, &["e"]);
-    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stdout = &out.stdout;
     assert!(stdout.contains("pending a/y"), "{stdout}");
     assert_eq!(
         stdout.lines().last(),
@@ -575,32 +718,26 @@ fn architecture_json_parses() {
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     let out = architecture(&root, &["--format", "json"]);
-    assert_eq!(out.status.code(), Some(0));
-    let list: Vec<clm_effort::Constraint> = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(out.code, 0);
+    let list: Vec<clm_effort::Constraint> = serde_json::from_str(&out.stdout).unwrap();
     let slugs: Vec<&str> = list.iter().map(|c| c.slug.as_str()).collect();
     assert_eq!(slugs, ["e", "u"]);
     assert_eq!(list[0].enforced_by[0].current, Some(false));
     let out = architecture(&root, &["u", "--format", "json"]);
-    let one: clm_effort::Constraint = serde_json::from_slice(&out.stdout).unwrap();
+    let one: clm_effort::Constraint = serde_json::from_str(&out.stdout).unwrap();
     assert_eq!(one.untested.as_deref(), Some("A judgement."));
     let out = architecture(&root, &["nope", "--format", "json"]);
-    assert_eq!(out.status.code(), Some(1));
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
-        "no architectural constraint nope\n"
-    );
+    assert_eq!(out.code, 1);
+    assert_eq!(out.stdout, "no architectural constraint nope\n");
 }
 
 #[test]
 fn architecture_help_says_architectural_constraint() {
     // req:effort/architecture-list@a45a68a0
     for args in [&["--help"][..], &["decide", "--help"][..]] {
-        let out = Command::new(env!("CARGO_BIN_EXE_clm"))
-            .arg("architecture")
-            .args(args)
-            .output()
-            .unwrap();
-        let help = String::from_utf8_lossy(&out.stdout).to_lowercase();
+        let dir = tempfile::tempdir().unwrap();
+        let out = architecture(dir.path(), args);
+        let help = out.stdout.to_lowercase();
         // Words only, so a line wrap or a backtick changes nothing.
         let words: Vec<&str> = help
             .split(|c: char| !c.is_alphanumeric())
@@ -618,9 +755,6 @@ fn architecture_page_unknown_slug_as_text() {
     let dir = tempfile::tempdir().unwrap();
     let root = architecture_repo(dir.path());
     let out = architecture(&root, &["nope"]);
-    assert_eq!(out.status.code(), Some(1));
-    assert_eq!(
-        String::from_utf8_lossy(&out.stdout),
-        "no architectural constraint nope\n"
-    );
+    assert_eq!(out.code, 1);
+    assert_eq!(out.stdout, "no architectural constraint nope\n");
 }

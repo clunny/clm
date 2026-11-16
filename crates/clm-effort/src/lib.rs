@@ -2,6 +2,8 @@
 //! (specs/effort/SPEC.md, `effort-accounted`), and what each capability costs.
 
 #[cfg(feature = "git")]
+mod command;
+#[cfg(feature = "git")]
 mod decide;
 #[cfg(feature = "git")]
 mod history;
@@ -14,9 +16,14 @@ mod text;
 mod transcripts;
 
 #[cfg(feature = "git")]
-pub use decide::{decide, decide_architecture};
+pub use command::{
+    ArchitectureArgs, CapabilitiesArgs, EffortArgs, architecture_command, capabilities_command,
+    effort_command,
+};
 #[cfg(feature = "git")]
-pub use history::{architecture_review, capabilities, history};
+pub use decide::decide;
+#[cfg(feature = "git")]
+pub use history::{capabilities, history};
 pub use prices::dollars;
 #[cfg(feature = "git")]
 pub use record::{Error, Options, Recorded, Unrecorded, record, unrecorded};

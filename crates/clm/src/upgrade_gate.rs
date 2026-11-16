@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::{Architecture, Branch, Capabilities, Command, Contribution, Effort, Ledger, Page};
+use crate::{Branch, Command, Contribution, Ledger, Page};
 
 /// Where a command works and whether a pending required migration stops it.
 pub(crate) struct Located<'a> {
@@ -65,26 +65,9 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
         | C::Survey { root, .. }
         | C::Fingerprint { root, .. } => given(root),
         C::Affected(args) => given(&args.root),
-        C::Capabilities {
-            command: Some(Capabilities::Decide { root: inner, .. }),
-            root,
-            ..
-        }
-        | C::Architecture {
-            command: Some(Architecture::Decide { root: inner, .. }),
-            root,
-            ..
-        } => at(inner.as_deref().or(root.as_deref()), true),
-        C::Capabilities {
-            command: None,
-            root,
-            ..
-        }
-        | C::Architecture {
-            command: None,
-            root,
-            ..
-        } => given(root),
+        C::Effort(args) => at(args.root(), true),
+        C::Capabilities(args) => at(args.root(), true),
+        C::Architecture(args) => at(args.root(), true),
         C::Pr {
             page: Page::Open { root, .. } | Page::Body { root, .. },
         } => given(root),
@@ -105,9 +88,6 @@ pub(crate) fn located(command: &Command) -> Option<Located<'_>> {
             | Ledger::Verify { root, .. }
             | Ledger::Show { root, .. } => given(root),
         },
-        C::Effort {
-            effort: Effort::Record { root, .. },
-        } => given(root),
         C::Superpowers { .. } => at(None, true),
     }
 }
