@@ -77,7 +77,10 @@ where
         .and_then(|mut m| <Line<A> as clap::FromArgMatches>::from_arg_matches_mut(&mut m));
     match parsed {
         Ok(line) => Ok(line.args),
-        Err(e) if e.use_stderr() => Err(write!(err, "{}", e.render()).map_or(2, |()| 2)),
+        Err(e) if e.use_stderr() => {
+            let _ = write!(err, "{}", e.render());
+            Err(2)
+        }
         Err(e) => Err(write!(out, "{}", e.render()).map_or(2, |()| 0)),
     }
 }

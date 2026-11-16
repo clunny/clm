@@ -118,7 +118,8 @@ const LANGS: [Lang; 3] = [
 
 /// Sets up CLM's tooling in the CLM repository found from `cwd`, or at the top of the git
 /// repository holding it when there is none (`init-root`), reading settings through `env`.
-/// Returns the report to print, or why nothing was written. Calls no host: every file is the project's once written.
+/// Returns the report to print, or why nothing was written. Calls no host: every file is the
+/// project's once written.
 pub fn init(cwd: &Path, opts: &Options, env: crate::Env) -> Result<String, String> {
     let langs = langs(&opts.langs)?;
     let top = top_level(cwd)?;

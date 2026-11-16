@@ -919,7 +919,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
     let hosts = fake_hosts();
     let config = TempDir::new().unwrap();
     let out = {
-        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
         let path = path_with(&hosts);
         let (git_dir, tree_dir) = (git_dir.path().to_str().unwrap(), tree.to_str().unwrap());
         let config_home = config.path().to_str().unwrap();
@@ -954,7 +954,7 @@ fn not_a_repository() {
     let hosts = fake_hosts();
     let config = TempDir::new().unwrap();
     let out = {
-        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
         let path = path_with(&hosts);
         let ceiling = tmp.path().to_str().unwrap();
         let config_home = config.path().to_str().unwrap();

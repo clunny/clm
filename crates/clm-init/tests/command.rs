@@ -19,9 +19,13 @@ fn git(dir: &Path, args: &[&str]) {
     assert!(out.status.success(), "git {args:?}: {out:?}");
 }
 
-/// Calls `clm <args>` in `cwd` with no environment: the status and both buffers' text.
+/// Calls `clm <args>` in `cwd` with no environment but git's own config kept out and git
+/// looking no higher than `cwd`'s parent: the status and both buffers' text.
 fn run(cwd: &Path, args: &[&str]) -> (u8, String, String) {
-    let out = common::call(cwd, args, &|_| None, &[]);
+    let ceiling = cwd.parent().unwrap().to_str().unwrap();
+    let [global, nosystem] = common::ISOLATED_GIT;
+    let vars = [global, nosystem, ("GIT_CEILING_DIRECTORIES", ceiling)];
+    let out = common::call(cwd, args, &|_| None, &vars);
     (
         u8::try_from(out.status.code().unwrap()).unwrap(),
         String::from_utf8(out.stdout).unwrap(),
