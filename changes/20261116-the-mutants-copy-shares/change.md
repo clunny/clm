@@ -30,13 +30,14 @@ Plan work under the freeze (`backlog/a-passing-check-proves-less-than-the-spec-c
 
 ## Edge cases and workarounds
 
-- Marking every tracked file unchanged is a workaround for the tool writing mutants into a tree git can see: it hides each mutated file from `git status` and `git diff` in the copy. A test that relies on git noticing its own edits to a tracked file of this repository would be fooled by it; such a test would also write into this repository, which `tests-run-concurrently` forbids.
-- The tree is the checkout's `HEAD`: a hand run judges committed code only, not edits left uncommitted in the checkout. The verify tree is always at a commit, so the pass is unchanged.
+- Marking every tracked file unchanged is a workaround for the tool writing mutants into a tree git can see: it hides each mutated file from `git status` and `git diff` in the copy. Accepted in writing (`redesign-before-workaround`): only a test that edits a tracked file of this repository and then asks git about it would be fooled, and such a test would leave this repository's own checkout changed after every land check that runs it, which a clean tree after `clm land` would show; none does today. The `cargo-mutants` fixture proves with the real tool, at every pass, that the mark survives the copy.
+- The clone carries the checkout's refs by explicit refspecs (`refs/heads/*` and `refs/remotes/*` under the same names), fetched after a detached checkout of `HEAD`, since a plain clone renames branches to `origin/*` and drops remote-tracking ones. Checked on 2026-11-16 in a scratch repository: a shared clone of a detached linked worktree, with those refs fetched and every tracked file marked, copied with `cp -r`, shows no change in `git status` after a tracked file is edited, and its alternates name the main repository's object store absolutely.
+- The fixture checks tracked files only (`--untracked-files=no`), since cargo writes `Cargo.lock` and `target/` into each copy.
 - The clone holds no other git configuration of the checkout (its `user.name`, hooks); no test of this repository reads them from this repository.
 
 ## What it removes
 
-Nothing.
+A hand run's judging of uncommitted edits: `cargo mutants` worked on the checkout's own tree before, and works on its `HEAD` after, so edits left uncommitted in a checkout the script is run in by hand are no longer judged. `clm verify` runs it in the verify tree, which is always at a commit, so no recorded verdict changes. Commit before a hand run.
 
 ## Constraints
 
