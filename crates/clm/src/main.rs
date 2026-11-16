@@ -1315,28 +1315,6 @@ fn survey_root(given: Option<PathBuf>) -> PathBuf {
         .map_or_else(|| PathBuf::from("."), PathBuf::from)
 }
 
-/// Prints an orchestrator result: 0 on success, 1 when refused, 2 when git fails.
-fn orchestrated(cmd: &str, result: Result<String, clm_orchestrator::Error>) -> ExitCode {
-    use clm_orchestrator::Error;
-    match result {
-        Ok(text) => {
-            if !text.is_empty() {
-                println!("{text}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(Error::Refused(why)) => {
-            eprintln!("clm {cmd}: {why}");
-            ExitCode::FAILURE
-        }
-        Err(Error::Spec(violations)) => report(&violations),
-        Err(Error::Git(e)) => {
-            eprintln!("clm {cmd}: {e}");
-            ExitCode::from(2)
-        }
-    }
-}
-
 /// `clm <cmd>: <message>` on stderr, and the `Failure`'s exit code: 1 when `clm <cmd>`
 /// refused, 2 when git failed.
 fn failed(cmd: &str, e: &clm_git::Failure) -> ExitCode {
