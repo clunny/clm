@@ -27,7 +27,7 @@ fn outside(path: &str, text: &str) -> Vec<(String, usize)> {
 
 #[test]
 fn scenario_a_rust_test_and_a_helper() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = [
         format!("// {}", m("a/x")),
         "#[test]".to_string(),
@@ -49,7 +49,7 @@ fn scenario_a_rust_test_and_a_helper() {
 
 #[test]
 fn rust_attributes_and_nesting() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = "\
 #[cfg(test)]
 mod tests {
@@ -102,14 +102,14 @@ mod tests {
 
 #[test]
 fn rust_attribute_without_a_function_is_no_test() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = "#[test]\nstruct S;\n";
     assert!(tests_in(Path::new("t.rs"), text).is_empty());
 }
 
 #[test]
 fn scenario_a_group_above_its_tests() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = [
         format!("// {}", m("a/h")),
         String::new(),
@@ -133,7 +133,7 @@ fn scenario_a_group_above_its_tests() {
 
 #[test]
 fn typescript_modifiers_and_extensions() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = "\
 test.describe.serial('phone', () => {
   test.only('a', async () => {
@@ -170,14 +170,14 @@ test.describe.serial('phone', () => {
 
 #[test]
 fn scenario_a_playwright_group() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = format!("// {}\ntest.describe('phone', () => {{\n}});\n", m("a/x"));
     assert!(outside("e.spec.ts", &text).is_empty());
 }
 
 #[test]
 fn scenario_a_python_test() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = [
         "def test_x():".to_string(),
         format!("    # {}", m("a/x")),
@@ -195,7 +195,7 @@ fn scenario_a_python_test() {
 
 #[test]
 fn python_classes_decorators_and_signatures() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = "\
 import pytest
 
@@ -233,7 +233,7 @@ class Tesla:
 
 #[test]
 fn scenario_another_language() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = format!("// {}\nfunc TestX(t *testing.T) {{\n}}\n", m("a/x"));
     assert!(tests_in(Path::new("a_test.go"), &text).is_empty());
     assert!(markers_outside_tests(Path::new("a_test.go"), &text).is_empty());
@@ -241,7 +241,7 @@ fn scenario_another_language() {
 
 #[test]
 fn markdown_has_no_tests_and_no_outside_markers() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = format!("{}\n", m("a/x"));
     assert!(tests_in(Path::new("n.md"), &text).is_empty());
     assert!(markers_outside_tests(Path::new("n.md"), &text).is_empty());
@@ -250,7 +250,7 @@ fn markdown_has_no_tests_and_no_outside_markers() {
 #[cfg(feature = "checkout")]
 #[test]
 fn scan_holds_the_outside_markers_beside_req() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let dir = tempfile::TempDir::new().unwrap();
     let text = format!(
         "#[test]\nfn t() {{\n    // {}\n}}\nfn h() {{\n    // {}\n}}\n",
@@ -265,7 +265,7 @@ fn scan_holds_the_outside_markers_beside_req() {
 
 #[test]
 fn rust_one_line_attribute_and_array_signature() {
-    // req:check.coverage/test-spans@35aefb3e
+    // req:check.coverage/test-spans@90fb3da6
     let text = "#[test] fn one() {\n}\n#[test]\nfn two(buf: [u8; 4]) {\n    let _ = buf;\n}\n";
     let found: Vec<_> = spans("t.rs", text)
         .into_iter()
@@ -275,4 +275,187 @@ fn rust_one_line_attribute_and_array_signature() {
         found,
         [("one".to_string(), 1, 2), ("two".to_string(), 3, 6)]
     );
+}
+
+fn rust_spans(text: &str) -> Vec<(String, usize, usize)> {
+    spans("t.rs", text)
+        .into_iter()
+        .map(|(n, _, a, b)| (n, a, b))
+        .collect()
+}
+
+#[test]
+fn scenario_braces_in_literals() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = [
+        "#[test]".to_string(),
+        "fn a() {".to_string(),
+        "    let at = rest.find('{');".to_string(),
+        "    let url = \"https://x/{\";".to_string(),
+        "}".to_string(),
+        "#[test]".to_string(),
+        "fn b() {".to_string(),
+        format!("    // {}", m("a/y")),
+        "}".to_string(),
+    ]
+    .join("\n");
+    assert_eq!(
+        rust_spans(&text),
+        [("a".to_string(), 1, 5), ("b".to_string(), 6, 9)]
+    );
+    // With no test after it to bound it, `a` still closes on line 5: the literals are read.
+    let alone = text.lines().take(5).collect::<Vec<_>>().join("\n") + "\nfn helper() {\n}";
+    assert_eq!(rust_spans(&alone), [("a".to_string(), 1, 5)]);
+}
+
+#[test]
+fn rust_prefixed_raw_strings() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+#[test]
+fn a() {
+    let b = br#\"x\"}\"#;
+    let c = cr#\"y\"{\"#;
+}
+fn helper() {
+}
+";
+    assert_eq!(rust_spans(text), [("a".to_string(), 1, 5)]);
+}
+
+#[test]
+fn scenario_a_brace_the_scanner_does_not_read() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = [
+        "#[test]".to_string(),
+        "fn a() {".to_string(),
+        "    /* { */".to_string(),
+        "}".to_string(),
+        format!("// {}", m("a/y")),
+        "#[test]".to_string(),
+        "fn b() {".to_string(),
+        "}".to_string(),
+    ]
+    .join("\n");
+    assert_eq!(
+        rust_spans(&text),
+        [("a".to_string(), 1, 4), ("b".to_string(), 5, 8)]
+    );
+}
+
+#[test]
+fn scenario_a_parenthesis_in_a_string() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = [
+        "it('a', () => {".to_string(),
+        "  f(')');".to_string(),
+        "});".to_string(),
+        String::new(),
+        format!("// {}", m("a/y")),
+    ]
+    .join("\n");
+    assert_eq!(spans("a.test.ts", &text), [("a".to_string(), false, 1, 3)]);
+    assert_eq!(outside("a.test.ts", &text), [("a/y".to_string(), 5)]);
+}
+
+#[test]
+fn rust_test_attribute_inside_a_string_starts_no_test() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+#[test]
+fn fixture() {
+    let src = \"
+#[test]
+fn inner() {
+\";
+    let raw = r#\"
+#[test]
+fn raw_inner() { \"}\" }
+\"#;
+    let bytes = br\"{\";
+}
+fn helper() {
+}
+";
+    assert_eq!(rust_spans(text), [("fixture".to_string(), 1, 12)]);
+}
+
+#[test]
+fn rust_escapes_lifetimes_and_char_literals() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+#[test]
+fn a<'x>(s: &'x str) -> &'x str {
+    let q = '\\'';
+    let b = '\\\\';
+    let close = '}';
+    let e = \"\\\"}\";
+    'outer: loop { break 'outer; }
+    s
+}
+fn helper() {
+}
+";
+    assert_eq!(rust_spans(text), [("a".to_string(), 1, 9)]);
+}
+
+#[test]
+fn rust_one_line_tests_in_a_row() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "#[test] fn one() {}\n#[test] fn two() {}\n";
+    assert_eq!(
+        rust_spans(text),
+        [("one".to_string(), 1, 1), ("two".to_string(), 2, 2)]
+    );
+}
+
+#[test]
+fn script_literals_across_lines() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+it('a', () => {
+  const t = `)
+  ${x}(`;
+  const u = \"https://x/)\"; // )
+  const v = 'it\\'s)';
+});
+it(\"b\", () => {
+  f(\"(\");
+});
+const z = 1;
+";
+    assert_eq!(
+        spans("a.test.js", text),
+        [
+            ("a".to_string(), false, 1, 6),
+            ("b".to_string(), false, 7, 9),
+        ]
+    );
+}
+
+#[test]
+fn script_quote_ends_at_its_line() {
+    // req:check.coverage/test-spans@90fb3da6
+    // An apostrophe in a regular expression or JSX text costs that line alone.
+    let text = "\
+it('a', () => {
+  const r = /'/;
+  f(1);
+});
+const z = 1;
+";
+    assert_eq!(spans("a.test.jsx", text), [("a".to_string(), false, 1, 4)]);
+}
+
+#[test]
+fn rust_comment_inside_a_string_is_no_line_of_the_test_below() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+const S: &str = \"
+// in the string\";
+#[test]
+fn a() {
+}
+";
+    assert_eq!(rust_spans(text), [("a".to_string(), 3, 5)]);
 }
