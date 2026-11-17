@@ -11,7 +11,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clm_check::{Pending, State as ReqState};
+use clm_coverage::{Pending, State as ReqState};
 use clm_git::{git, git_isolated};
 use clm_model::{Files, Graph};
 pub use clm_orchestrator::Error;
@@ -1218,8 +1218,8 @@ fn pending_in(dir: &Path, node: &str) -> Result<(Graph, Vec<Pending>), Error> {
     if !graph.nodes.contains_key(node) {
         return Err(Error::Refused(format!("no component `{node}`")));
     }
-    let markers = clm_check::scan(dir).req;
-    let mut pending: Vec<Pending> = clm_check::pending(&graph, &markers)
+    let markers = clm_coverage::scan(dir).req;
+    let mut pending: Vec<Pending> = clm_coverage::pending(&graph, &markers)
         .into_iter()
         .filter(|p| p.node == node)
         .collect();

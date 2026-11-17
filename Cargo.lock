@@ -645,9 +645,9 @@ name = "clm-run"
 version = "0.26.0"
 dependencies = [
  "clap",
- "clm-check",
  "clm-config",
  "clm-context",
+ "clm-coverage",
  "clm-git",
  "clm-model",
  "clm-orchestrator",
