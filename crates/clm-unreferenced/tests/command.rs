@@ -128,7 +128,7 @@ fn arguments_it_cannot_parse() {
 
 #[test]
 fn scenario_findings() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let lib = format!(
         "mod x;\n\npub fn f() {{}}\n{}pub fn z() {{}}\n",
         "\n".repeat(6)
@@ -151,7 +151,7 @@ fn scenario_findings() {
 
 #[test]
 fn scenario_clean_or_no_rust() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let used = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -182,7 +182,7 @@ fn scenario_clean_or_no_rust() {
 
 #[test]
 fn scenario_broken_manifest() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     for (path, text) in [
         ("crates/a/Cargo.toml", "[package\n"),
         ("web/package.json", "{\"name\": \n"),
@@ -199,7 +199,7 @@ fn scenario_broken_manifest() {
 
 #[test]
 fn package_findings_are_worded_for_packages() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -279,7 +279,7 @@ fn one_name_for_a_crate_and_a_package_skips_both() {
 
 #[test]
 fn root_option_names_the_repository() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     // req:check.unreferenced/commands-in-crate@215013cd
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
@@ -372,7 +372,7 @@ fn scenario_entry_given_as_an_argument() {
 #[test]
 fn scenario_stale_entry() {
     // req:check.unreferenced/entry-attributes@69e092f6
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -394,4 +394,67 @@ fn scenario_stale_entry() {
         String::from_utf8(out.stdout).unwrap(),
         "clm.toml: allow zz skips no finding\nclm.toml: entry napi marks no item\n"
     );
+}
+
+#[test]
+fn stale_entries_follow_in_the_order_given() {
+    // req:check.unreferenced/report@849ec044
+    let dir = repo(&[
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+    ]);
+    let out = clm(
+        dir.path(),
+        &[
+            "unreferenced",
+            "--entry",
+            "zeta",
+            "--allow",
+            "a::f",
+            "--entry",
+            "alpha",
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "clm.toml: entry zeta marks no item\nclm.toml: entry alpha marks no item\n"
+    );
+}
+
+#[test]
+fn runs_no_cargo_npm_node_or_python() {
+    // req:check.unreferenced/report@849ec044
+    use std::os::unix::fs::PermissionsExt;
+    let dir = repo(&[
+        ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
+        ("crates/a/Cargo.toml", A_MANIFEST),
+        ("crates/a/src/lib.rs", "pub fn f() {}\n"),
+        (
+            "packages/core/package.json",
+            "{\"name\": \"@acme/core\", \"main\": \"index.ts\"}\n",
+        ),
+        ("packages/core/index.ts", "export function g() {}\n"),
+        ("py/pyproject.toml", "[project]\nname = \"acme-py\"\n"),
+        ("py/acme_py/__init__.py", "def h():\n    pass\n"),
+    ]);
+    // Stand-ins that record their own run, ahead of everything else on `PATH`; `git` stays
+    // reachable behind them. Safe: the tests run one per process (`ci/nextest-runner`).
+    let bin = TempDir::new().unwrap();
+    let ran = bin.path().join("ran");
+    for tool in ["cargo", "npm", "npx", "node", "python", "python3"] {
+        let path = bin.path().join(tool);
+        let script = format!("#!/bin/sh\necho {tool} >> '{}'\n", ran.display());
+        fs::write(&path, script).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let path = format!(
+        "{}:{}",
+        bin.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    unsafe { std::env::set_var("PATH", path) };
+    let out = clm(dir.path(), &["unreferenced"]);
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert!(!ran.exists(), "ran {:?}", fs::read_to_string(&ran));
 }

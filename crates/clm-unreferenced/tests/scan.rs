@@ -592,7 +592,7 @@ fn re_exports_chain_and_skip_restricted_self_and_underscore() {
 #[test]
 fn carriers_in_a_test_module_file_and_other_files_carry_nothing() {
     // req:check.unreferenced/references@daf06376
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -726,7 +726,7 @@ fn scenario_stale_entries() {
 
 #[test]
 fn findings_sorted_by_path_then_line_number() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let mut lib = String::from("mod x;\n\npub fn f() {}\n");
     lib.push_str(&"\n".repeat(6));
     lib.push_str("pub fn z() {}\n");
@@ -750,7 +750,7 @@ fn findings_sorted_by_path_then_line_number() {
 
 #[test]
 fn invalid_utf8_and_parse_errors_are_used_as_far_as_they_parse() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
         (
@@ -772,7 +772,7 @@ fn invalid_utf8_and_parse_errors_are_used_as_far_as_they_parse() {
 #[cfg(unix)]
 #[test]
 fn unreadable_tracked_file_is_an_error_naming_it() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     use std::os::unix::fs::PermissionsExt;
     let dir = repo(&[
         ("crates/a/Cargo.toml", &manifest("a")),
@@ -790,7 +790,7 @@ fn unreadable_tracked_file_is_an_error_naming_it() {
 
 #[test]
 fn broken_manifests_are_errors_naming_the_file() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[("crates/a/Cargo.toml", "[package\nname = 1\n")]);
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.starts_with("crates/a/Cargo.toml: "), "{err}");
@@ -809,7 +809,7 @@ fn broken_manifests_are_errors_naming_the_file() {
 
 #[test]
 fn git_failing_is_an_error_naming_the_command() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = TempDir::new().unwrap();
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.contains("git"), "{err}");

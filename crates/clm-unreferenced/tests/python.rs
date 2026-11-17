@@ -131,7 +131,7 @@ fn star_import_cycles_end() {
 
 #[test]
 fn broken_pyproject_is_an_error_naming_it() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[("svc/pyproject.toml", "[project\n")]);
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.starts_with("svc/pyproject.toml: "), "{err}");
@@ -285,7 +285,7 @@ fn renamed_imports_and_variable_annotations_carry() {
 #[test]
 fn pyi_files_count_and_untracked_files_do_not() {
     // req:check.unreferenced/python-uses@4c45195c
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         (
             "p/__init__.py",
