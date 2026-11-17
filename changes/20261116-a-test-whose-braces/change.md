@@ -31,6 +31,8 @@ No change or code fix since 2026-11-09 fixes it: `20261114-test-spans-leaves-cou
 - A Rust character literal is told from a lifetime or label (`'a`) by its closing quote: `'x'`, `'\x'`, `'\u{..}'` are literals, `'a` followed by anything but `'` is not.
 - Rust strings and template literals may run across lines, so the literal state carries from line to line.
 - A template literal's `${…}` is read as part of the string; a parenthesis inside it is skipped, which leaves the count right whenever the expression's own parentheses balance.
+- A Rust file is read for literals from its first line, so a fixture string holding `#[test]` (as `crates/clm-coverage/tests/test_spans.rs` has) neither starts a test nor bounds the one holding it. The bound is the next test's first line as `tests_in` returns it, the comments above its attribute included.
+- A TypeScript or JavaScript `'` or `"` string ends at its line's end, so a stray apostrophe (a regular expression, JSX text) costs one line.
 - Block comments and regular expression literals are not read; the Rust bound covers them, and TypeScript and JavaScript stay approximate for them.
 
 ## Constraints
