@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clm_check::{Length, Marker, Size};
+use clm_check::{Length, Size};
+use clm_coverage::Marker;
 use clm_model::{Files, Graph, Violation};
 
 use clm_view::At;
@@ -93,7 +94,7 @@ pub(crate) fn read(
     }
     let markers: Vec<Marker> = files
         .iter()
-        .filter_map(|(path, bytes)| Some(clm_check::markers_in(path, text(bytes)?)))
+        .filter_map(|(path, bytes)| Some(clm_coverage::markers_in(path, text(bytes)?)))
         .flatten()
         .collect();
     let oversized = budgets.and_then(|budgets| {

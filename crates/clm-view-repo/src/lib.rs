@@ -11,7 +11,8 @@ use std::io::Write;
 use std::path::Path;
 
 pub use clm_check::Budgets;
-use clm_check::{Marker, Size};
+use clm_check::Size;
+use clm_coverage::Marker;
 use clm_model::{Graph, Violation};
 use clm_orchestrator::DEFAULT_EXPIRY_HOURS;
 use clm_view::{
@@ -27,7 +28,7 @@ fn load(root: &Path) -> Result<(Graph, Vec<Marker>), Vec<Violation>> {
     if !violations.is_empty() {
         return Err(violations);
     }
-    let markers = clm_check::scan(root).req;
+    let markers = clm_coverage::scan(root).req;
     Ok((graph, markers))
 }
 
@@ -269,7 +270,7 @@ fn head_text(head: Head) -> String {
 }
 
 /// What `clm pending` prints: the line naming the commit for stderr, and the pending lines.
-type PendingReport = (Option<String>, Result<Vec<clm_check::Pending>, Error>);
+type PendingReport = (Option<String>, Result<Vec<clm_coverage::Pending>, Error>);
 
 /// `clm pending [<component>] [--at <rev>]` (`pending-names-its-commit`): the line naming
 /// the commit it describes, in plain text (none when `HEAD` can't be read, or when `rev`
