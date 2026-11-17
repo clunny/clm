@@ -19,14 +19,14 @@ phase_start=0
 # Every time is whole seconds and never negative: the shell's clock can step back during a run,
 # and a time below 0 prints as 0.
 on_exit() {
-  local status=$? total=$SECONDS took p
+  local status=$? now=$SECONDS total took p
   trap - EXIT
-  if [ "$total" -lt 0 ]; then total=0; fi
+  total=$((now < 0 ? 0 : now))
   if [ "$status" -ne 0 ]; then
     # Outside any phase (phase_name empty) the whole run so far is the time.
     [ -n "$phase_name" ] || phase_start=0
-    took=$((SECONDS - phase_start))
-    if [ "$took" -lt 0 ]; then took=0; fi
+    took=$((now - phase_start))
+    took=$((took < 0 ? 0 : took))
     echo "ci-check: failed in ${phase_name:-setup} after ${took}s, ${total}s total" >&2
   else
     {
@@ -56,7 +56,7 @@ timed() {
   "$@"
   echo "::endgroup::"
   took=$((SECONDS - phase_start))
-  if [ "$took" -lt 0 ]; then took=0; fi
+  took=$((took < 0 ? 0 : took))
   echo "ci-check: $phase_name ${took}s" >&2
   phase_log+=("${took}s $phase_name")
   phase_name=

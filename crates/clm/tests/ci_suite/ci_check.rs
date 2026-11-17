@@ -1749,9 +1749,9 @@ fn a_clock_that_steps_back_prints_no_negative_time() {
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
     // An exported bash function runs in the script's own shell, so it moves the script's
-    // clock: `cargo fmt` sets `SECONDS` back by 100, then runs the fake on `PATH`.
-    let cargo =
-        "() { if [ \"$1\" = fmt ]; then SECONDS=$((SECONDS - 100)); fi; command cargo \"$@\"; }";
+    // clock: `cargo fmt` sets `SECONDS` back by 100, logging that it did, then runs the fake on
+    // `PATH`.
+    let cargo = "() { if [ \"$1\" = fmt ]; then SECONDS=$((SECONDS - 100)); echo stepped >> \"$CI_LOG\"; fi; command cargo \"$@\"; }";
     let out = tree.output_env(
         None,
         "",
@@ -1761,6 +1761,9 @@ fn a_clock_that_steps_back_prints_no_negative_time() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "{stderr}");
+    // The clock did step back: the script ran the function, not only the fake.
+    let log = fs::read_to_string(tree.dir.path().join("log")).unwrap();
+    assert!(log.lines().any(|l| l == "stepped"), "{log}");
     let lines: Vec<&str> = stderr.lines().collect();
     assert!(lines.contains(&"ci-check: fmt 0s"), "{stderr}");
     let secs = |n: &str| {
@@ -1792,9 +1795,9 @@ fn a_failure_after_the_clock_steps_back_prints_no_negative_time() {
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
-    // `cargo clippy` sets the script's clock back by 100 seconds and fails, so both the failing
-    // phase and the run started before the clock's step.
-    let cargo = "() { if [ \"$1\" = clippy ]; then SECONDS=$((SECONDS - 100)); return 3; fi; command cargo \"$@\"; }";
+    // `cargo clippy` sets the script's clock back far past any run's length and fails, so both
+    // the failing phase and the run started before the clock's step.
+    let cargo = "() { if [ \"$1\" = clippy ]; then SECONDS=$((SECONDS - 100000)); return 3; fi; command cargo \"$@\"; }";
     let out = tree.output_env(
         None,
         "",
