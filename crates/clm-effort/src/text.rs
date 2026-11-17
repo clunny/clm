@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn numbers_read_as_the_panel_reads_them() {
-        // req:effort/capabilities-list@daa12c28
+        // req:effort/capabilities-list@be270c03
         let cases = [
             (850.0, "850"),
             (999.6, "1k"),
@@ -377,7 +377,7 @@ mod tests {
 
     #[test]
     fn footer_padded_to_a_wide_slug() {
-        // req:effort/capabilities-list@daa12c28
+        // req:effort/capabilities-list@be270c03
         let report = Report {
             capabilities: vec![cost("a-very-long-capability-slug")],
             ..Report::default()

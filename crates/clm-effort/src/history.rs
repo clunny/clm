@@ -213,12 +213,7 @@ fn history_of(root: &Path, graph: &Graph) -> Result<History, Error> {
 
 /// The graph of the CLM repository at `root`, or a refusal.
 pub(crate) fn graph(root: &Path) -> Result<Graph, Error> {
-    if !root.join("specs/SPEC.md").is_file() {
-        return Err(Error::Refused(format!(
-            "not a CLM repository: {} has no specs/SPEC.md",
-            root.display()
-        )));
-    }
+    crate::record::clm_repository(root)?;
     let (graph, violations) = clm_model::load(root);
     match violations.first() {
         Some(v) => Err(Error::Refused(format!(

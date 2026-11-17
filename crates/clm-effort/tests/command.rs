@@ -202,11 +202,11 @@ fn effort_record_paths_and_streams() {
         "{out:?}"
     );
     assert!(!out.stdout.contains("warning"), "{out:?}");
-    // A failure goes to the error stream after the command's name.
+    // A refusal goes to the error stream.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = effort(&root, &root, dir.path(), &["record"]);
     assert_eq!(out.code, 1, "{out:?}");
-    assert!(out.stderr.starts_with("clm effort: "), "{out:?}");
+    assert!(out.stderr.starts_with("not a CLM repository"), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
 }
 
@@ -263,7 +263,7 @@ fn capabilities(root: &Path, args: &[&str]) -> Out {
 
 #[test]
 fn capabilities_cli_lists() {
-    // req:effort/capabilities-list@daa12c28
+    // req:effort/capabilities-list@be270c03
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &[]);
     let stdout = &out.stdout;
@@ -279,6 +279,23 @@ fn capabilities_cli_lists() {
     );
     assert!(lines[2].starts_with("  q  "), "{stdout}");
     assert_eq!(lines.len(), 5, "{stdout}");
+}
+
+#[test]
+fn capabilities_cli_outside_a_clm_repository() {
+    // req:effort/capabilities-list@be270c03
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("plain");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("CAPABILITIES.md"),
+        "## Capabilities\n\n### Capability: p\nA person can p.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n",
+    )
+    .unwrap();
+    let out = capabilities(&root, &[]);
+    assert_eq!(out.code, 1, "{out:?}");
+    assert_eq!(out.stdout, "", "{out:?}");
+    assert!(out.stderr.starts_with("not a CLM repository"), "{out:?}");
 }
 
 #[test]
@@ -562,7 +579,8 @@ fn failures_keep_their_prefix() {
         "{out:?}"
     );
     assert!(decided(&root).is_empty());
-    std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
+    // Specs that don't load: a failure that keeps the command's name before it.
+    std::fs::write(root.join("specs/SPEC.md"), "---\ntitle: [\n---\n").unwrap();
     let decide = ["decide", "e", "--value", "high", "--decision", "keep"];
     for (out, prefix) in [
         (capabilities(&root, &[]), "clm capabilities: "),

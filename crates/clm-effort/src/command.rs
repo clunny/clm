@@ -385,9 +385,15 @@ fn print_recorded(done: &Recorded, out: &mut dyn Write, err: &mut dyn Write) -> 
     Ok(())
 }
 
-/// Writes `e` to `err` after `prefix` and gives its exit status.
+/// Writes `e` to `err` after `prefix` and gives its exit status; a directory that isn't a
+/// CLM repository gets no prefix, so its line starts `not a CLM repository`
+/// (`capabilities-list`).
 fn failed(prefix: &str, e: &Error, err: &mut dyn Write) -> io::Result<u8> {
-    writeln!(err, "{prefix}: {e}").map(|()| e.exit_code())
+    match e {
+        Error::NotClm(_) => writeln!(err, "{e}"),
+        _ => writeln!(err, "{prefix}: {e}"),
+    }
+    .map(|()| e.exit_code())
 }
 
 /// `clm <command> <slug> decide ...` isn't a decision on `<slug>`.

@@ -260,7 +260,7 @@ fn flag_on_two_capabilities() {
 
 #[test]
 fn list_text_lines() {
-    // req:effort/capabilities-list@daa12c28
+    // req:effort/capabilities-list@be270c03
     let (graph, fold) = flagged();
     let report = run(&graph, &fold);
     assert_eq!(
