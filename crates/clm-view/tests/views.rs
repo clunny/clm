@@ -28,7 +28,7 @@ fn lines(text: &str) -> Vec<&str> {
 
 /// `clm` (root), `check`, `check.drift` depending on `model`, owned by `@a`, with 2
 /// requirements, `x` current and `y` cited only at an older version; `model` with none.
-fn nested() -> (clm_model::Graph, Vec<clm_check::Marker>) {
+fn nested() -> (clm_model::Graph, Vec<clm_coverage::Marker>) {
     let g = graph(&[
         ("specs/SPEC.md", &node("active", "", "", &[])),
         ("specs/check/SPEC.md", &node("active", "", "", &["c"])),
@@ -47,13 +47,13 @@ fn nested() -> (clm_model::Graph, Vec<clm_check::Marker>) {
 }
 
 /// The spec view's chart, with the queue states the flight model gives for no claims.
-fn spec_chart(g: &clm_model::Graph, markers: &[clm_check::Marker]) -> View {
+fn spec_chart(g: &clm_model::Graph, markers: &[clm_coverage::Marker]) -> View {
     spec_with(g, markers, &[])
 }
 
 fn spec_with(
     g: &clm_model::Graph,
-    markers: &[clm_check::Marker],
+    markers: &[clm_coverage::Marker],
     refs: &[clm_orchestrator::ClaimRef],
 ) -> View {
     View::Spec(
@@ -145,7 +145,7 @@ fn counted(
     n: usize,
     current_n: usize,
     behind: usize,
-) -> (clm_model::Graph, Vec<clm_check::Marker>) {
+) -> (clm_model::Graph, Vec<clm_coverage::Marker>) {
     let names: Vec<String> = (0..n).map(|i| format!("r{i}")).collect();
     let refs: Vec<&str> = names.iter().map(String::as_str).collect();
     let g = graph(&[
@@ -228,7 +228,7 @@ fn scenario_queue_states_on_the_chart() {
 
 /// Node `a` with `a/x` current, and an applied change whose delta removed `a/old`, which a
 /// test still cites.
-fn obsolete() -> (clm_model::Graph, Vec<clm_check::Marker>) {
+fn obsolete() -> (clm_model::Graph, Vec<clm_coverage::Marker>) {
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -288,8 +288,8 @@ fn removed_node() -> clm_model::Graph {
 }
 
 /// A bare marker citing `id` in `path` at `line`.
-fn cite_in(id: &str, path: &str, line: usize) -> clm_check::Marker {
-    clm_check::Marker {
+fn cite_in(id: &str, path: &str, line: usize) -> clm_coverage::Marker {
+    clm_coverage::Marker {
         path: path.into(),
         ..marker(id, None, line)
     }
@@ -298,7 +298,7 @@ fn cite_in(id: &str, path: &str, line: usize) -> clm_check::Marker {
 /// The `obsolete` count of each node in the spec model, by ID.
 fn obsolete_by_node(
     g: &clm_model::Graph,
-    markers: &[clm_check::Marker],
+    markers: &[clm_coverage::Marker],
 ) -> std::collections::BTreeMap<String, usize> {
     spec_view(g, markers, None)
         .nodes
@@ -588,7 +588,7 @@ fn each_change_is_exactly_its_change_progress() {
     let markers = [current(&g, "n/x"), marker("n/y", None, 2)];
     let view = flight_view(&g, &markers, &[], NOW, EXPIRY);
     let listed: Vec<_> = view.changes.iter().flat_map(|g| &g.changes).collect();
-    let progress: Vec<_> = clm_check::change_progress(&g, &markers)
+    let progress: Vec<_> = clm_coverage::change_progress(&g, &markers)
         .into_iter()
         .filter(|p| p.change != "g")
         .collect();
@@ -1721,7 +1721,7 @@ fn scenario_blockers_nothing_blocked_line() {
 /// an `applied` change `20260101-c` adding both, an archived change and a `done` one with
 /// deltas for `a`; items `q` (question, `Ask`) and `b` (bug, `Fix`) naming `a`, and `o`
 /// naming only `b`.
-fn detailed() -> (clm_model::Graph, Vec<clm_check::Marker>) {
+fn detailed() -> (clm_model::Graph, Vec<clm_coverage::Marker>) {
     let a = "---\ntitle: A\nstatus: active\nowners: []\ndepends_on: []\n---\n\n\
              ## Contract\nAlpha does X.\n\n\n## Design\nd\n\n## Requirements\n\n\
              ### Requirement: x\nIt SHALL.\n\n#### Scenario: s\n- ok\n\n\

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use clm_check::{Marker, Row, State, report, status_report};
+use clm_coverage::{Marker, Row, State, report, status_report};
 use clm_model::{BacklogKind, ChangeStatus, Graph, Layer, Status};
 use clm_orchestrator::{ClaimRef, DEFAULT_EXPIRY_HOURS, claim_state, claims_section};
 

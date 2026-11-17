@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use clm_check::{Marker, State, pending, report};
+use clm_coverage::{Marker, State, pending, report};
 use clm_model::{Graph, Layer};
 use serde::Serialize;
 
@@ -65,7 +65,7 @@ pub struct SpecNode {
     pub backlog: Vec<NodeItem>,
 }
 
-/// A live change with a delta for a node, its progress as `clm_check::change_progress`
+/// A live change with a delta for a node, its progress as `clm_coverage::change_progress`
 /// gives it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct NodeChange {

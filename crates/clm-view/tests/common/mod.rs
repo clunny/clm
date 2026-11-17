@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use clm_check::Marker;
+use clm_coverage::Marker;
 use clm_model::{Files, Graph};
 use clm_orchestrator::{ClaimRef, DEFAULT_EXPIRY_HOURS};
 use clm_view::{Format, Name, View, blockers_view, flight_view, queue_states, render, spec_view};
