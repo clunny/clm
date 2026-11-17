@@ -584,3 +584,67 @@ describe('g', () => {
         ]
     );
 }
+
+#[test]
+fn rust_block_comment_lines_above_a_test() {
+    // req:check.coverage/test-spans@090a9eca
+    // A middle line of a block comment is a comment line; a line that closes one and then
+    // holds code is a code line.
+    let text = "\
+/*
+  a 12\" ruler
+*/
+#[test]
+fn a() {}
+/* x
+*/ const X: u8 = 1;
+#[test]
+fn b() {}
+";
+    assert_eq!(
+        rust_spans(text),
+        [("a".to_string(), 1, 5), ("b".to_string(), 8, 9)]
+    );
+}
+
+#[test]
+fn script_block_comment_lines_above_a_test() {
+    // req:check.coverage/test-spans@090a9eca
+    let text = "\
+/*
+  a note
+*/
+it('a', () => {});
+/* x
+*/ const y = 1;
+it('b', () => {});
+";
+    assert_eq!(
+        spans("a.test.ts", text),
+        [
+            ("a".to_string(), false, 1, 4),
+            ("b".to_string(), false, 7, 7),
+        ]
+    );
+}
+
+#[test]
+fn script_call_reading_starts_on_its_own_line() {
+    // req:check.coverage/test-spans@090a9eca
+    // `a` leaves a template literal open; `b` is read from its own line and closes there.
+    let text = "\
+it('a', () => {
+  f(/`/);
+});
+it('b', () => {
+});
+const z = 1;
+";
+    assert_eq!(
+        spans("a.test.ts", text),
+        [
+            ("a".to_string(), false, 1, 3),
+            ("b".to_string(), false, 4, 5),
+        ]
+    );
+}

@@ -308,9 +308,13 @@ struct RustTest {
 fn rust_tests(lines: &[&str]) -> Vec<TestSpan> {
     let read = rust_lines(lines);
     // A comment line or an attribute line, which a test's first lines may be: never a line
-    // that starts inside a string, and always one that starts inside a block comment.
+    // that starts inside a string, and one that starts inside a block comment unless code
+    // follows its close.
     let above = |i: usize| match read[i].start {
-        RustState::Comment(_) => true,
+        RustState::Comment(_) => {
+            let code = read[i].code.trim_start();
+            code.is_empty() || code.starts_with("#[")
+        }
         RustState::None => read[i].code.trim_start().starts_with("#[") || is_comment(lines[i]),
         RustState::Plain | RustState::Raw(_) => false,
     };
@@ -424,13 +428,29 @@ fn script_name(args: &str) -> String {
 }
 
 fn script_tests(lines: &[&str]) -> Vec<TestSpan> {
+    // The comment lines a test's first lines may be: a line starting inside a block comment
+    // a line above opened is one unless code follows its close, whether or not it starts
+    // with `*`.
+    let mut open = ScriptOpen::None;
+    let comment: Vec<bool> = lines
+        .iter()
+        .map(|line| {
+            let starts = open == ScriptOpen::Comment;
+            let code = script_code(line, &mut open);
+            if starts {
+                code.trim().is_empty()
+            } else {
+                is_comment(line)
+            }
+        })
+        .collect();
     // Each call: its line, its group flag, its name and its first line (0-based).
     let calls: Vec<(usize, bool, String, usize)> = lines
         .iter()
         .enumerate()
         .filter_map(|(at, line)| {
             let (group, args) = script_call(line)?;
-            let first = first_above(at, 0, |i| is_comment(lines[i]));
+            let first = first_above(at, 0, |i| comment[i]);
             Some((at, group, script_name(args), first))
         })
         .collect();
