@@ -14,7 +14,7 @@ The rules behind `clm hook session-start`, `clm hook autosync` and `clm defect` 
 `clm-hooks` offers each of `clm defect`, `clm hook session-start` and `clm hook autosync` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the directory it runs in and the text on standard input, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
 
 ## Design
-Crate `clm-hooks`, called from `crates/clm`'s `clm hook session-start`, `clm hook autosync` and `clm defect` subcommands. The guard is crate `clm-guard`, the child `plugin.hooks.guard`, with the shell reading as its child `plugin.hooks.guard.shell` (`guard-split`); `clm-guard` reads settings through this crate's `settings`, and this crate depends on nothing of it.
+Crate `clm-hooks`, called from `crates/clm`'s `clm hook session-start`, `clm hook autosync` and `clm defect` subcommands. The guard is crate `clm-guard`, the child `plugin.hooks.guard`, with the shell reading as its child `plugin.hooks.guard.shell` (`guard-split`); `clm-guard` finds the CLM root with this crate's `clm_root` and loads settings there under its call's own environment lookup, where this crate's `settings` reads the process's, and this crate depends on nothing of it.
 
 This component's tests are under `crates/clm-hooks/tests/` and call the crate (`commands-in-crate`); that `clm check` accepts an item `clm defect` wrote is the root's to prove (`clm/check-across-components`).
 

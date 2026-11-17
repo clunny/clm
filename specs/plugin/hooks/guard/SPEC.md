@@ -9,7 +9,7 @@ serves: [capability/guard-sessions, capability/work-from-any-agent-harness, arch
 ---
 
 ## Contract
-The rules behind `clm hook guard` (`hook-logic-in-clm`): which Bash commands the guard asks the human about or blocks, and why. It asks the human to confirm `clm approve`, `clm capabilities decide` and `clm architecture decide` (`approval-policy`), blocks pushes to `main` from a repository under CLM (`guard-blocks-push-to-main`), release runs (`release-by-dispatch`) and a `clm land` whose output is piped (`guard-refuses-piped-land`), and asks about `clm defect` when the report leaves the project. Crate `clm-guard`: `guard(event)`, which returns a `Decision` (`Allow`, `Ask(reason)` or `Block(reason)`); `guard_within(event, budgets)`, the same judgement with the time `Budgets` its git queries and host lookups may spend, `guard` being `guard_within` with `Budgets::HOOK` (`hook-budgets`); and `ask_json(reason)`, the `ask` permission decision's JSON; `crates/clm`'s `clm hook guard` prints and exits by them. How a command is read before the rules judge it is `plugin.hooks.guard.shell`.
+The rules behind `clm hook guard` (`hook-logic-in-clm`): which Bash commands the guard asks the human about or blocks, and why. It asks the human to confirm `clm approve`, `clm capabilities decide` and `clm architecture decide` (`approval-policy`), blocks pushes to `main` from a repository under CLM (`guard-blocks-push-to-main`), release runs (`release-by-dispatch`) and a `clm land` whose output is piped (`guard-refuses-piped-land`), and asks about `clm defect` when the report leaves the project. Crate `clm-guard`: `guard(event)`, which returns a `Decision` (`Allow`, `Ask(reason)` or `Block(reason)`); `guard_within(event, budgets)`, the same judgement with the time `Budgets` its git queries and host lookups may spend, `guard` being `guard_within` with `Budgets::HOOK` (`hook-budgets`); and `ask_json(reason)`, the `ask` permission decision's JSON; `clm hook guard`'s call, below, prints and exits by them. How a command is read before the rules judge it is `plugin.hooks.guard.shell`.
 
 `clm-guard` offers `clm hook guard` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the text on standard input, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. It takes no repository root: the guard places each command by its event's `cwd`. `crates/clm` routes the command to it and adds nothing to what it writes.
 
@@ -318,7 +318,7 @@ A segment runs `clm` when its command (`guard-command-position`) is `clm` or end
 - capability/land-safely
 
 ### Requirement: hook-budgets
-`clm-guard` SHALL offer `Budgets`, a push budget and a lookup budget, with `Budgets::HOOK` a push budget of 20 seconds and a lookup budget of 30 seconds, and `guard_within(event, budgets)`, which SHALL judge `event` as `guard` does, its `push-guard` queries sharing `budgets`' push budget and its `release-guard` lookups its lookup budget. `guard(event)` SHALL return what `guard_within(event, Budgets::HOOK)` returns, and `clm hook guard`, whose call judges through `guard_hook` so that it can render for the agent harness its arguments name and load settings with its own environment lookup (`guard-per-agent-harness`, `commands-in-crate`), SHALL judge with `Budgets::HOOK` too. No environment variable, setting or argument SHALL change the budgets `clm hook guard` uses: together they keep the hook under Claude Code's 60-second hook timeout, which lets the command through.
+`clm-guard` SHALL offer `Budgets`, a push budget and a lookup budget, with `Budgets::HOOK` a push budget of 20 seconds and a lookup budget of 30 seconds, and `guard_within(event, budgets)`, which SHALL judge `event` as `guard` does, its `push-guard` queries sharing `budgets`' push budget and its `release-guard` lookups its lookup budget. `guard(event)` SHALL return what `guard_within(event, Budgets::HOOK)` returns, and `clm hook guard`, whose call renders for the agent harness its arguments name and loads settings with its own environment lookup (`guard-per-agent-harness`, `commands-in-crate`), SHALL judge with `Budgets::HOOK` too. No environment variable, setting or argument SHALL change the budgets `clm hook guard` uses: together they keep the hook under Claude Code's 60-second hook timeout, which lets the command through.
 
 #### Scenario: the hook's budgets
 - GIVEN `clm-guard`
@@ -328,12 +328,12 @@ A segment runs `clm` when its command (`guard-command-position`) is `clm` or end
 #### Scenario: nothing shortens the hook's budgets
 - GIVEN the workspace
 - WHEN a test in `clm-guard` reads every file under `crates/clm-guard/src` and `crates/clm/src`
-- THEN no file under `crates/clm/src` names `guard_within`, or `Budgets` on a line that names `clm_guard`, and no file under `crates/clm-guard/src` outside a `//` comment calls `std::env::var` or `var_os` with a name holding `BUDGET`
+- THEN no file under `crates/clm/src` names `guard_within` or `clm-guard`'s `Budgets`, and no file under `crates/clm-guard/src` outside a `//` comment calls `std::env::var` or `var_os` with a name holding `BUDGET`
 
 #### Scenario: the hook judges with the hook's budgets
 - GIVEN the workspace
 - WHEN a test in `clm-guard` reads `crates/clm-guard/src/lib.rs`
-- THEN the body of `guard` is one call of `guard_within` with `event` and `Budgets::HOOK`, and the judging behind `guard_hook` passes `Budgets::HOOK`
+- THEN the body of `guard` is one call of `guard_within` with `event` and `Budgets::HOOK`, and the judging that `clm hook guard`'s call runs passes `Budgets::HOOK`
 
 #### Serves
 - architecture/land-locally

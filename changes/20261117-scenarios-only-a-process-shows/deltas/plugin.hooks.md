@@ -5,7 +5,7 @@ base: { design: "86c120ecb3081d86" }
 
 ## MODIFIED Design
 
-Crate `clm-hooks`, called from `crates/clm`'s `clm hook session-start`, `clm hook autosync` and `clm defect` subcommands. The guard is crate `clm-guard`, the child `plugin.hooks.guard`, with the shell reading as its child `plugin.hooks.guard.shell` (`guard-split`); `clm-guard` reads settings through this crate's `settings`, and this crate depends on nothing of it.
+Crate `clm-hooks`, called from `crates/clm`'s `clm hook session-start`, `clm hook autosync` and `clm defect` subcommands. The guard is crate `clm-guard`, the child `plugin.hooks.guard`, with the shell reading as its child `plugin.hooks.guard.shell` (`guard-split`); `clm-guard` finds the CLM root with this crate's `clm_root` and loads settings there under its call's own environment lookup, where this crate's `settings` reads the process's, and this crate depends on nothing of it.
 
 This component's tests are under `crates/clm-hooks/tests/` and call the crate (`commands-in-crate`); that `clm check` accepts an item `clm defect` wrote is the root's to prove (`clm/check-across-components`).
 
