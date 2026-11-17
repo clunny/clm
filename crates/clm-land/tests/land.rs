@@ -411,6 +411,7 @@ fn clm_in_a_subdirectory_builds_under_its_own_clm_directory() {
 #[test]
 fn land_from_a_linked_worktree() {
     // req:land/shared-land-target@2c8695d7
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let linked = f.path("linked");
@@ -441,7 +442,7 @@ fn land_from_a_linked_worktree() {
             ambient("CARGO_INCREMENTAL")
         )]
     );
-    // And held it through `clm check` (land/land-target-lock@66ccebd0).
+    // And held it through `clm check` (`land/land-target-lock`).
     assert_eq!(f.lines("clm-check-lock.log"), ["held"]);
 }
 
@@ -479,12 +480,13 @@ done"#,
 #[test]
 fn caller_target_changes_nothing() {
     // req:land/shared-land-target@2c8695d7
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let env = f.env(&[("CARGO_TARGET_DIR", "/elsewhere")]);
     clm_land::land(&f.work(), Some("impl/a"), &env).unwrap();
     // The land neither reads nor sets it: the check holds the lock and gets the same place
-    // (land/land-target-lock@66ccebd0).
+    // (`land/land-target-lock`).
     let target = f.work().join(".clm/land");
     assert_eq!(
         f.lines("check-env.log"),
@@ -545,7 +547,7 @@ fn copy_failure_refused() {
     // A `TMPDIR` that is a file, so no directory can be made in it.
     let tmp = f.path("not-a-dir");
     f.write("not-a-dir", "");
-    let env = f.env(&[("TMPDIR", tmp.to_str().unwrap()), ("CLM_GATE", "")]);
+    let env = f.env(&[("TMPDIR", tmp.to_str().unwrap()), ("CLM_AFFECTED", "")]);
     let why = refused(clm_land::land(&f.work(), Some("impl/a"), &env));
     assert!(why.contains(tmp.to_str().unwrap()), "{why}");
     assert_eq!(f.remote("main"), old);
