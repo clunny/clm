@@ -1598,6 +1598,10 @@ fn status_names_the_checkout_after_its_title() {
     assert_eq!(lines[1], "  commit abc1234  ⚠ 2 behind origin/main");
     assert!(lines[2].starts_with("  components "), "{behind}");
     assert_eq!(
+        status(Some(&checkout(Some(1)))).lines().nth(1),
+        Some("  commit abc1234  ⚠ 1 behind origin/main")
+    );
+    assert_eq!(
         status(Some(&checkout(Some(0)))).lines().nth(1),
         Some("  commit abc1234")
     );
