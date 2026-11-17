@@ -85,3 +85,10 @@ Not behaviour, and removed without asking: the two sentences of `config` that sa
 - `clm/routes-only` still waits on `tests-of-components-with-no-crate-sit-in-the-root-s-test-files` and `some-tests-prove-a-component-from-another-component-s-files`, and on `init/commands-in-crate`.
 - The twelve items this change answers by its spec edits are deleted in its branch. `workaround-sync-commands-in-crate-1` and `no-test-runs-the-affected-all-settings-crates-clm-passes` stay until the builds of `sync` and of `clm/routes-only` have done their code.
 - `three-crates-format-a-violation-s-line-by-hand` was read and left: it is code only, one component at a time under `clm claim <component> --fix`.
+
+## Open questions
+
+From the architecture audit, left as they are:
+
+- **`land/land-binary-copy` keeps its rule while the root proves most of it.** The code that copies the binary is `land`'s, so `land` states the rule, and its crate can show only the copy that can't be made; `clm/land-as-a-process` states the rest with the scenarios that need the binary. The rule is so stated in two places. Left, because the human's answer puts the scenarios in the root and the code can't follow them; phase 5's regrouping should take it up.
+- **The root grows by three requirements and 20 scenarios while over its budget** (`slim-components`). The plan item records them as candidates for phase 5's regrouping.
