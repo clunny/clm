@@ -68,9 +68,7 @@ const CAP_PANEL_SUITE: [&str; 2] = [
     "capabilities/panel$ npm test",
 ];
 
-#[path = "../../clm-git/tests/exec/mod.rs"]
-mod exec;
-use exec::write_exec as executable;
+use crate::exec::write_exec as executable;
 
 /// A work tree holding the real scripts, `web/` and `plugin-panel/`, with the fakes in `bin/`
 /// beside it.
