@@ -417,25 +417,11 @@ impl Body {
 
     /// A `mutated` body with `left` as its `left`, and any other body unchanged, so a caller
     /// that built its body with `mutated` sets `left` without naming the variant's fields.
-    pub fn with_left(self, left: Vec<String>) -> Body {
-        match self {
-            Body::Mutated {
-                commit,
-                since,
-                killed,
-                unproven,
-                not_judged,
-                ..
-            } => Body::Mutated {
-                commit,
-                since,
-                killed,
-                unproven,
-                not_judged,
-                left,
-            },
-            other => other,
+    pub fn with_left(mut self, left: Vec<String>) -> Body {
+        if let Body::Mutated { left: slot, .. } = &mut self {
+            *slot = left;
         }
+        self
     }
 
     /// The record kind, as `kind` holds it.

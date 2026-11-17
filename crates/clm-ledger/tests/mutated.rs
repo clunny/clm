@@ -260,7 +260,13 @@ fn a_bad_left() {
     .join("\n");
     let fold = fold_records(&[("one", &text)]);
     assert_eq!(fold.warnings.len(), 3, "{:?}", fold.warnings);
-    assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
+    for (warning, n) in fold.warnings.iter().zip(1..) {
+        assert!(
+            warning.contains(&format!("line {n}")),
+            "{:?}",
+            fold.warnings
+        );
+    }
     let held: Vec<_> = fold.mutations[&id('c')].iter().map(|r| &r.id).collect();
     assert_eq!(held, ["m4"]);
 }

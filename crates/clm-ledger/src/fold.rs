@@ -2,6 +2,7 @@
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -366,7 +367,7 @@ pub fn show(fold: &Fold) -> Vec<String> {
                         not_judged.len()
                     );
                     if !left.is_empty() {
-                        what.push_str(&format!(" {} left", left.len()));
+                        let _ = write!(what, " {} left", left.len());
                     }
                     what
                 }
