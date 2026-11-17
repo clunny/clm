@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-quote-in-a-block-comment-hides-the-tests-after-it]
 ---
 
