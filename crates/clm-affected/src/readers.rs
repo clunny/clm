@@ -27,11 +27,9 @@ pub fn readers(differing: &[Changed], reads: &BTreeMap<String, Vec<String>>) -> 
     reads
         .iter()
         .filter(|(_, globs)| {
-            globs.iter().any(|g| {
-                differing
-                    .iter()
-                    .any(|c| clm_check::path_matches(g, &c.path))
-            })
+            globs
+                .iter()
+                .any(|g| differing.iter().any(|c| clm_coverage::matches(g, &c.path)))
         })
         .map(|(path, _)| path.clone())
         .collect()

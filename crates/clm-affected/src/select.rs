@@ -42,9 +42,9 @@ pub fn select(
 
     let mut nodes = BTreeSet::new();
     for c in &changed {
-        let owner = clm_check::owner(graph, Path::new(&c.path));
+        let owner = clm_coverage::owner(graph, Path::new(&c.path));
         match owner {
-            Some(owner) if !all.iter().any(|g| clm_check::path_matches(g, &c.path)) => {
+            Some(owner) if !all.iter().any(|g| clm_coverage::matches(g, &c.path)) => {
                 nodes.insert(owner.to_string());
             }
             _ => return Selection::All(c.path.clone()),
@@ -59,7 +59,7 @@ pub fn select(
         .collect();
     for (path, cited) in files {
         let hit = if cited.is_empty() {
-            clm_check::owner(graph, Path::new(path)).is_some_and(|o| nodes.contains(o))
+            clm_coverage::owner(graph, Path::new(path)).is_some_and(|o| nodes.contains(o))
         } else {
             cited
                 .iter()
@@ -78,10 +78,10 @@ pub fn select(
 /// Whether an exemption of `path`'s owner names it for `undeclared-imports`: it imports code
 /// the graph doesn't connect it to (`affected-files`).
 fn exempt_from_undeclared_imports(graph: &Graph, path: &str) -> bool {
-    clm_check::owner(graph, Path::new(path)).is_some_and(|o| {
+    clm_coverage::owner(graph, Path::new(path)).is_some_and(|o| {
         graph.nodes[o].frontmatter.exemptions.iter().any(|e| {
             e.rule == clm_model::ExemptRule::UndeclaredImports
-                && e.files.iter().any(|g| clm_check::path_matches(g, path))
+                && e.files.iter().any(|g| clm_coverage::matches(g, path))
         })
     })
 }
