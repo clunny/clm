@@ -202,11 +202,11 @@ fn effort_record_paths_and_streams() {
         "{out:?}"
     );
     assert!(!out.stdout.contains("warning"), "{out:?}");
-    // A refusal goes to the error stream.
+    // A failure goes to the error stream after the command's name.
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let out = effort(&root, &root, dir.path(), &["record"]);
     assert_eq!(out.code, 1, "{out:?}");
-    assert!(out.stderr.starts_with("not a CLM repository"), "{out:?}");
+    assert!(out.stderr.starts_with("clm effort: "), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
 }
 
@@ -366,7 +366,7 @@ fn capabilities_refused_outside_a_clm_repository() {
     let dir = tempfile::tempdir().unwrap();
     let root = capabilities_repo(dir.path());
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
-    let out = capabilities(&root, &[]);
+    let out = capabilities(&root, &["p"]);
     assert_eq!(out.code, 1);
     assert!(out.stderr.contains("not a CLM repository"));
 }
@@ -579,11 +579,9 @@ fn failures_keep_their_prefix() {
         "{out:?}"
     );
     assert!(decided(&root).is_empty());
-    // Specs that don't load: a failure that keeps the command's name before it.
-    std::fs::write(root.join("specs/SPEC.md"), "---\ntitle: [\n---\n").unwrap();
+    std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let decide = ["decide", "e", "--value", "high", "--decision", "keep"];
     for (out, prefix) in [
-        (capabilities(&root, &[]), "clm capabilities: "),
         (architecture(&root, &[]), "clm architecture: "),
         (capabilities(&root, &decide), "clm capabilities decide: "),
         (architecture(&root, &decide), "clm architecture decide: "),

@@ -294,23 +294,27 @@ where
                 err,
             ),
         },
-        None => page(
-            "capabilities",
-            capabilities(&root),
-            args.slug.as_deref(),
-            args.format,
-            |report, slug| match slug {
-                None => Some((list_text(report), serde_json::to_string_pretty(report))),
-                Some(slug) => report
-                    .capabilities
-                    .iter()
-                    .find(|c| c.slug == slug)
-                    .map(|cost| (page_text(cost), serde_json::to_string_pretty(cost))),
-            },
-            |slug| format!("no capability {slug}"),
-            out,
-            err,
-        ),
+        None => match capabilities(&root) {
+            // Its own line, so it starts `not a CLM repository` (`capabilities-list`).
+            Err(e @ Error::NotClm(_)) => writeln!(err, "{e}").map(|()| e.exit_code()),
+            loaded => page(
+                "capabilities",
+                loaded,
+                args.slug.as_deref(),
+                args.format,
+                |report, slug| match slug {
+                    None => Some((list_text(report), serde_json::to_string_pretty(report))),
+                    Some(slug) => report
+                        .capabilities
+                        .iter()
+                        .find(|c| c.slug == slug)
+                        .map(|cost| (page_text(cost), serde_json::to_string_pretty(cost))),
+                },
+                |slug| format!("no capability {slug}"),
+                out,
+                err,
+            ),
+        },
     };
     written.unwrap_or(2)
 }
@@ -385,15 +389,9 @@ fn print_recorded(done: &Recorded, out: &mut dyn Write, err: &mut dyn Write) -> 
     Ok(())
 }
 
-/// Writes `e` to `err` after `prefix` and gives its exit status; a directory that isn't a
-/// CLM repository gets no prefix, so its line starts `not a CLM repository`
-/// (`capabilities-list`).
+/// Writes `e` to `err` after `prefix` and gives its exit status.
 fn failed(prefix: &str, e: &Error, err: &mut dyn Write) -> io::Result<u8> {
-    match e {
-        Error::NotClm(_) => writeln!(err, "{e}"),
-        _ => writeln!(err, "{prefix}: {e}"),
-    }
-    .map(|()| e.exit_code())
+    writeln!(err, "{prefix}: {e}").map(|()| e.exit_code())
 }
 
 /// `clm <command> <slug> decide ...` isn't a decision on `<slug>`.
