@@ -1,11 +1,10 @@
 //! Where the tests of a file are (`test-spans`): a line scanner for three language
 //! families, with no parser, so the crate builds for `wasm32-unknown-unknown`. It skips
-//! string and character literals and line comments, and nothing else: a brace in a block
-//! comment or a parenthesis in a regular expression can still end a span late, which costs
-//! that test's markers their standing (a Rust span ends no later than the line above the
-//! next test) and shows as `uncounted`, never a crash. A quote in what it doesn't read (a
-//! `"` in a Rust block comment, a backtick in a regular expression) costs more: it opens a
-//! literal that can run to the end of the file (`backlog/a-quote-in-a-block-comment-hides-the-tests-after-it`).
+//! string and character literals and line and block comments, and nothing else: a
+//! regular expression holding a quote or a parenthesis, or a brace it still miscounts, can
+//! end a span late. A test's span ends no later than the line above the next test (or, in
+//! TypeScript and JavaScript, group), so a misread costs that test's markers their
+//! standing and shows as `uncounted`, never the tests after it.
 
 use std::path::Path;
 
@@ -102,53 +101,74 @@ fn first_above(at: usize, floor: usize, above: impl Fn(usize) -> bool) -> usize 
 // Rust
 
 /// A Rust line as the scanner reads it: its code, with a `//` comment dropped and every
-/// string and character literal blanked, and whether it starts inside a string.
+/// block comment and string and character literal blanked, and what it starts inside.
 struct RustLine {
     code: String,
-    in_string: bool,
+    start: RustState,
 }
 
-/// The string literal the scanner is inside: none, `"…"` (with escapes), or raw with its
-/// number of `#`.
-#[derive(Clone, Copy)]
-enum RustString {
+/// What the scanner is inside: code, a `"…"` string (with escapes), a raw string with its
+/// number of `#`, or block comments to the depth given.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RustState {
     None,
     Plain,
     Raw(usize),
+    Comment(usize),
 }
 
 fn is_ident(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// The file's lines read for literals from its first line, a string running across lines.
+/// The file's lines read for literals and block comments from its first line, each running
+/// across lines, a block comment nesting.
 fn rust_lines(lines: &[&str]) -> Vec<RustLine> {
-    let mut string = RustString::None;
+    let mut string = RustState::None;
     lines
         .iter()
         .map(|line| {
-            let in_string = !matches!(string, RustString::None);
+            let start = string;
             let chars: Vec<char> = line.chars().collect();
             let mut code = String::with_capacity(line.len());
             let blank = |code: &mut String, n: usize| code.extend((0..n).map(|_| ' '));
             let mut i = 0;
             while i < chars.len() {
                 let c = chars[i];
+                let next = chars.get(i + 1).copied();
                 match string {
-                    RustString::Plain => {
+                    RustState::Comment(depth) => {
+                        let n = match (c, next) {
+                            ('/', Some('*')) => {
+                                string = RustState::Comment(depth + 1);
+                                2
+                            }
+                            ('*', Some('/')) => {
+                                string = match depth {
+                                    1 => RustState::None,
+                                    _ => RustState::Comment(depth - 1),
+                                };
+                                2
+                            }
+                            _ => 1,
+                        };
+                        blank(&mut code, n);
+                        i += n;
+                    }
+                    RustState::Plain => {
                         let n = if c == '\\' { 2 } else { 1 };
                         if c == '"' {
-                            string = RustString::None;
+                            string = RustState::None;
                         }
                         blank(&mut code, n.min(chars.len() - i));
                         i += n;
                     }
-                    RustString::Raw(hashes) => {
+                    RustState::Raw(hashes) => {
                         let closes = c == '"'
                             && chars.len() > i + hashes
                             && chars[i + 1..=i + hashes].iter().all(|&h| h == '#');
                         let n = if closes {
-                            string = RustString::None;
+                            string = RustState::None;
                             1 + hashes
                         } else {
                             1
@@ -156,17 +176,20 @@ fn rust_lines(lines: &[&str]) -> Vec<RustLine> {
                         blank(&mut code, n);
                         i += n;
                     }
-                    RustString::None => {
-                        let next = chars.get(i + 1).copied();
+                    RustState::None => {
                         if c == '/' && next == Some('/') {
                             break;
                         }
-                        if c == '"' {
-                            string = RustString::Plain;
+                        if c == '/' && next == Some('*') {
+                            string = RustState::Comment(1);
+                            blank(&mut code, 2);
+                            i += 2;
+                        } else if c == '"' {
+                            string = RustState::Plain;
                             blank(&mut code, 1);
                             i += 1;
                         } else if let Some(hashes) = raw_string_start(&chars, i) {
-                            string = RustString::Raw(hashes);
+                            string = RustState::Raw(hashes);
                             blank(&mut code, 2 + hashes);
                             i += 2 + hashes;
                         } else if c == '\'' {
@@ -184,7 +207,7 @@ fn rust_lines(lines: &[&str]) -> Vec<RustLine> {
                     }
                 }
             }
-            RustLine { code, in_string }
+            RustLine { code, start }
         })
         .collect()
 }
@@ -284,9 +307,12 @@ struct RustTest {
 
 fn rust_tests(lines: &[&str]) -> Vec<TestSpan> {
     let read = rust_lines(lines);
-    // A comment line or an attribute line, which a test's first lines may be.
-    let above = |i: usize| {
-        !read[i].in_string && (read[i].code.trim_start().starts_with("#[") || is_comment(lines[i]))
+    // A comment line or an attribute line, which a test's first lines may be: never a line
+    // that starts inside a string, and always one that starts inside a block comment.
+    let above = |i: usize| match read[i].start {
+        RustState::Comment(_) => true,
+        RustState::None => read[i].code.trim_start().starts_with("#[") || is_comment(lines[i]),
+        RustState::Plain | RustState::Raw(_) => false,
     };
     let mut found: Vec<RustTest> = Vec::new();
     let mut i = 0;
@@ -398,29 +424,46 @@ fn script_name(args: &str) -> String {
 }
 
 fn script_tests(lines: &[&str]) -> Vec<TestSpan> {
-    let mut out = Vec::new();
-    for (at, line) in lines.iter().enumerate() {
-        let Some((group, args)) = script_call(line) else {
-            continue;
-        };
-        let first = first_above(at, 0, |i| is_comment(lines[i]));
-        out.push(TestSpan {
-            name: script_name(args),
-            group,
-            first: first + 1,
-            last: script_close(lines, at) + 1,
-        });
-    }
-    out
+    // Each call: its line, its group flag, its name and its first line (0-based).
+    let calls: Vec<(usize, bool, String, usize)> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(at, line)| {
+            let (group, args) = script_call(line)?;
+            let first = first_above(at, 0, |i| is_comment(lines[i]));
+            Some((at, group, script_name(args), first))
+        })
+        .collect();
+    let end = lines.len().saturating_sub(1);
+    calls
+        .iter()
+        .enumerate()
+        .map(|(k, &(at, group, ref name, first))| {
+            // A test, not a group, ends no later than the line above the next call's first
+            // line, so what the scanner misreads costs only that test.
+            let bound = match calls.get(k + 1) {
+                Some(&(_, _, _, next)) if !group => next - 1,
+                _ => end,
+            };
+            TestSpan {
+                name: name.clone(),
+                group,
+                first: first + 1,
+                last: script_close(lines, at, bound) + 1,
+            }
+        })
+        .collect()
 }
 
 /// The line that closes the call starting on `at`: where its parentheses balance, and no
-/// further group of arguments follows on that line (`it.each(table)('name', fn)`).
-fn script_close(lines: &[&str], at: usize) -> usize {
+/// further group of arguments follows on that line (`it.each(table)('name', fn)`); `bound`
+/// when they don't by then. Its reading starts on its own line, whatever a line above left
+/// open.
+fn script_close(lines: &[&str], at: usize, bound: usize) -> usize {
     let mut depth = 0usize;
-    let mut template = false;
-    for (i, line) in lines.iter().enumerate().skip(at) {
-        let text = script_code(line, &mut template);
+    let mut open = ScriptOpen::None;
+    for (i, line) in lines.iter().enumerate().take(bound + 1).skip(at) {
+        let text = script_code(line, &mut open);
         for (pos, c) in text.char_indices() {
             if c == '(' {
                 depth += 1;
@@ -432,39 +475,61 @@ fn script_close(lines: &[&str], at: usize) -> usize {
             }
         }
     }
-    lines.len().saturating_sub(1)
+    bound
 }
 
-/// `line` with a `//` comment dropped and its string and template literals blanked: a `'`
-/// or `"` string ends at the end of its line, and a template literal, `${…}` included, runs
-/// across lines while `template` says the line starts inside one.
-fn script_code(line: &str, template: &mut bool) -> String {
+/// What the TypeScript and JavaScript scanner is inside: code, a string or template literal
+/// by its quote, or a block comment.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ScriptOpen {
+    None,
+    Quote(char),
+    Comment,
+}
+
+/// `line` with a `//` comment dropped and its block comments and string and template
+/// literals blanked: a `'` or `"` string ends at the end of its line, and a block comment
+/// and a template literal, `${…}` included, run across lines, `open` saying what the line
+/// starts inside.
+fn script_code(line: &str, open: &mut ScriptOpen) -> String {
     let mut out = String::with_capacity(line.len());
-    let mut quote = template.then_some('`');
     let mut chars = line.chars().peekable();
     while let Some(c) = chars.next() {
-        match quote {
-            Some(q) => {
+        match *open {
+            ScriptOpen::Comment => {
+                out.push(' ');
+                if c == '*' && chars.next_if_eq(&'/').is_some() {
+                    out.push(' ');
+                    *open = ScriptOpen::None;
+                }
+            }
+            ScriptOpen::Quote(q) => {
                 out.push(' ');
                 if c == '\\' {
                     if chars.next().is_some() {
                         out.push(' ');
                     }
                 } else if c == q {
-                    quote = None;
+                    *open = ScriptOpen::None;
                 }
             }
-            None => match c {
+            ScriptOpen::None => match c {
                 '/' if chars.peek() == Some(&'/') => break,
+                '/' if chars.next_if_eq(&'*').is_some() => {
+                    out.push_str("  ");
+                    *open = ScriptOpen::Comment;
+                }
                 '\'' | '"' | '`' => {
-                    quote = Some(c);
+                    *open = ScriptOpen::Quote(c);
                     out.push(' ');
                 }
                 _ => out.push(c),
             },
         }
     }
-    *template = quote == Some('`');
+    if matches!(*open, ScriptOpen::Quote('\'' | '"')) {
+        *open = ScriptOpen::None;
+    }
     out
 }
 
