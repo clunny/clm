@@ -164,6 +164,17 @@ fn the_guides_readers_in_other_crates() {
 }
 
 #[test]
+fn the_guides_directory_readers_mark_every_page() {
+    // req:clm/doc-readers-marked@a5e3c957
+    // A page no file names yet: only a reader marking `docs/guide/**` selects it.
+    assert_selects(
+        &selected(&["docs/guide/a-page-yet-to-be-written.md"]),
+        &["crates/clm-init/src/guide.rs", GUIDE, RETIRED],
+        &[GLOSSARY, SETTINGS],
+    );
+}
+
+#[test]
 fn the_settings_pages_reader() {
     // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
