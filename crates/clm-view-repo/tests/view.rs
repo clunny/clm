@@ -131,7 +131,13 @@ fn scenario_offline() {
         .unwrap_or_else(|| panic!("{text}"));
     assert!(line.contains("claimed"), "{text}");
     let v = json(&clm(dir.path(), &["view", "flight", "--format", "json"]));
-    assert_eq!(v["nodes"][0]["state"], "claimed");
+    let x = v["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["node"] == "x")
+        .unwrap_or_else(|| panic!("{v:#}"));
+    assert_eq!(x["state"], "claimed");
 }
 
 #[test]

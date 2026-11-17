@@ -70,8 +70,8 @@ fn budgets_in(text: Option<&str>) -> Result<Budgets, String> {
         None => Ok(default),
         Some(v) => v
             .as_integer()
-            .map(|n| n as u64)
-            .ok_or_else(|| format!("`component_size.{key}` is no number")),
+            .and_then(|n| u64::try_from(n).ok())
+            .ok_or_else(|| format!("`component_size.{key}` is no count")),
     };
     Ok(Budgets {
         spec_tokens: budget("spec_tokens", 12000)?,

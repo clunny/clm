@@ -160,6 +160,7 @@ fn status_and_view_never_fetch() {
     assert!(text.contains("\n  claims 1 live\n"), "{text}");
     assert!(text.ends_with("\nclaims\n  a  live\n\n"), "{text}");
     let out = clm(d, &["view", "flight", "--format", "json"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
     let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     let z = v["nodes"]
         .as_array()
@@ -214,11 +215,23 @@ fn nodes_line(text: &str) -> String {
 fn scenario_oversized_node() {
     // req:view.repo/reads-the-repository@8ad0cdee
     let dir = sized("");
+    // `c`'s code is over the repository's budget but within the `size_budget` it sets.
+    write(
+        dir.path(),
+        "specs/c/SPEC.md",
+        &node("active", &[]).replace(
+            "owners: []\n",
+            "owners: []\npaths: [\"src/c/**\"]\nsize_budget: { code_tokens: 1000 }\n",
+        ),
+    );
+    write(dir.path(), "src/c/x.rs", &"c".repeat(800));
+    git_env(dir.path(), &["add", "-A"], &[]);
     let text = status(dir.path());
     let line = nodes_line(&text);
     assert!(line.ends_with(", 1 oversized"), "{text}");
     assert!(row(&text, "a").ends_with("  oversized"), "{text}");
     assert!(!row(&text, "b").contains("oversized"), "{text}");
+    assert!(!row(&text, "c").contains("oversized"), "{text}");
 }
 
 #[test]
