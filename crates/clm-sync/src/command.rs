@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 use clap::Parser;
 
+/// The name `clm rebase` is run by, which its usage, warnings and outcome line carry.
+const REBASE: &str = "rebase";
+
 /// The arguments of `clm rebase`, as the command-line parser reads them.
 #[derive(clap::Args, Debug)]
 pub struct RebaseArgs {
@@ -82,7 +85,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    match parsed::<RebaseLine, _, _>(args, "clm rebase", out, err) {
+    match parsed::<RebaseLine, _, _>(args, &format!("clm {REBASE}"), out, err) {
         Err(code) => code,
         Ok(RebaseLine { args }) => {
             let root = args.root.as_deref().unwrap_or(root);
@@ -101,7 +104,7 @@ fn rebase(
     let (code, outcome) = match crate::sync(root, env, settings) {
         Ok(report) => {
             for warning in &report.warnings {
-                writeln!(err, "clm rebase: {warning}")?;
+                writeln!(err, "clm {REBASE}: {warning}")?;
             }
             for line in &report.lines {
                 writeln!(out, "{line}")?;
@@ -113,14 +116,14 @@ fn rebase(
             }
         }
         Err(e) => {
-            writeln!(err, "clm rebase: {e}")?;
+            writeln!(err, "clm {REBASE}: {e}")?;
             match e.exit_code() {
                 1 => (1, "incomplete"),
                 code => (code, "failed"),
             }
         }
     };
-    writeln!(out, "rebase {outcome}")?;
+    writeln!(out, "{REBASE} {outcome}")?;
     Ok(code)
 }
 
