@@ -38,6 +38,7 @@ clm-upgrade.workspace = true
 clm-machine.workspace = true
 clm-loop.workspace = true
 clap.workspace = true
+libc = "0.2"
 serde_json.workspace = true
 
 [dev-dependencies]

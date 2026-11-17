@@ -265,6 +265,7 @@ dependencies = [
  "clm-verify",
  "clm-view",
  "clm-view-repo",
+ "libc",
  "roxmltree",
  "serde_json",
  "serde_yaml",
