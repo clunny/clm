@@ -295,7 +295,7 @@ fn stderr(out: &Output) -> String {
 
 #[test]
 fn pending_behind_origin_main() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let before = tree_state(d);
@@ -303,8 +303,11 @@ fn pending_behind_origin_main() {
     let main = git(d, &["rev-parse", "origin/main"])[..7].to_string();
     let here = clm(d, &["pending"]);
     assert_eq!(here.status.code(), Some(0), "{here:?}");
-    assert!(stdout(&here).starts_with("a/x "), "{}", stdout(&here));
-    assert!(stdout(&here).trim_end().ends_with("unbuilt"));
+    // Exactly the list `check.coverage` gives: `a/x <version> unbuilt`.
+    let (graph, _) = clm_model::load(d);
+    let x = graph.requirement("a/x").unwrap().version().to_string();
+    assert_eq!(stdout(&here), format!("a/x {x} unbuilt\n"));
+    assert_eq!(stdout(&here), pending_lines(d, None));
     assert_eq!(
         stderr(&here),
         format!("commit {head}  ⚠ 1 behind origin/main\n")
@@ -322,9 +325,77 @@ fn pending_behind_origin_main() {
     assert_eq!(tree_state(d), before);
 }
 
+/// What `check.coverage` lists as pending for the working tree of `d`, one line each.
+fn pending_lines(d: &Path, component: Option<&str>) -> String {
+    clm_check::pending_in(d, component)
+        .unwrap()
+        .iter()
+        .map(|p| format!("{p}\n"))
+        .collect()
+}
+
+#[test]
+fn pending_names_no_commit_without_head() {
+    // req:view.repo/pending-names-its-commit@3e612c59
+    // No repository, and then a repository with no commit yet: no `HEAD` to name.
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", &node("", &["x"]));
+    for _ in 0..2 {
+        let out = clm(d, &["pending"]);
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        assert_eq!(stdout(&out), pending_lines(d, None));
+        assert!(!stdout(&out).is_empty());
+        assert!(!stderr(&out).contains("commit"), "{}", stderr(&out));
+        git(d, &["init", "-q", "-b", "main"]);
+    }
+}
+
+#[test]
+fn pending_at_narrows_to_a_component() {
+    // req:view.repo/pending-names-its-commit@3e612c59
+    // Two pending components at the commit: `--at` narrows to the one named, as without it,
+    // and `g`, which an applied change at that commit removed, is refused as one it doesn't hold.
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", &node("", &["x"]));
+    write(d, "specs/b/SPEC.md", &node("", &["y"]));
+    init(d);
+    let here = clm(d, &["pending", "a"]);
+    let there = clm(d, &["pending", "a", "--at", "HEAD"]);
+    assert_eq!(there.status.code(), Some(0), "{there:?}");
+    assert_eq!(stdout(&there), pending_lines(d, Some("a")));
+    assert!(stdout(&there).starts_with("a/x "), "{}", stdout(&there));
+    assert!(!stdout(&there).contains("b/y"), "{}", stdout(&there));
+    assert_eq!(stdout(&here), stdout(&there));
+    write(
+        d,
+        "changes/r/change.md",
+        "---\nstatus: applied\n---\n\nIntent.\n",
+    );
+    write(
+        d,
+        "changes/r/deltas/g.md",
+        "---\ncomponent: g\nremove: true\n---\n## REMOVED Requirements\n\n### Requirement: y <!-- base: 0123456789abcdef -->\n",
+    );
+    git(d, &["add", "-A"]);
+    git(d, &["commit", "-qm", "remove g"]);
+    let here = clm(d, &["pending", "g"]);
+    let there = clm(d, &["pending", "g", "--at", "HEAD"]);
+    assert_eq!(there.status.code(), Some(1), "{there:?}");
+    assert!(
+        stdout(&there).contains("unknown component `g`"),
+        "{}",
+        stdout(&there)
+    );
+    assert_eq!(stdout(&here), stdout(&there));
+}
+
 #[test]
 fn pending_up_to_date() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     git(d, &["merge", "-q", "--ff-only", "origin/main"]);
@@ -337,7 +408,7 @@ fn pending_up_to_date() {
 
 #[test]
 fn pending_no_such_commit() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let out = clm(dir.path(), &["pending", "--at", "nowhere"]);
     assert_eq!(out.status.code(), Some(1));
@@ -347,7 +418,7 @@ fn pending_no_such_commit() {
 
 #[test]
 fn pending_names_its_commit_beside_violations_and_narrows_alike() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let head = git(d, &["rev-parse", "HEAD"])[..7].to_string();
