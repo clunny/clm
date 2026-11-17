@@ -12,6 +12,8 @@ Such helpers sit in the test files of at least `orchestrator.checkpoint`, `land`
 
 **A bound on each test.** `.config/nextest.toml` sets the default profile's `slow-timeout` to end a test after 15 minutes and count it failed (`ci/tests-time-bounded`). nextest reads the file from the workspace root wherever it runs, so the bound reaches every run above with nothing on a command line, and the run fails naming the test that hung. A test that needs longer is to be made faster.
 
+**Built as an exception to the freeze.** It is not one of the phases of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims.md`, whose freeze holds back all other work. On 2026-11-16 the human made it an exception and had it built at once (`20261116-a-verify-can-hang`): the mutation pass that reaches the coverage run is phase 3's evidence, and a verify that hangs records nothing.
+
 Rejected:
 - **Making each helper safe under `cargo test`**, with a shared lock per test binary or the environment passed to the command under test. It changes the test files of seven or more components for a runner no check uses, `commands-live-in-their-crates` rejected threading an environment through the calls, and a lock serialises every test that touches the environment.
 - **`cargo test -- --test-threads=1`** for coverage and the release: one test at a time also gives a test its process to itself, but makes the instrumented run and the release's run far slower, and a hang stays unbounded.
