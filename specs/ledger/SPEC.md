@@ -172,7 +172,7 @@ Every record also has `id` (random 128-bit hex, except an `effort` record's, whi
 - THEN `approved f` is still there, and `clm ledger verify` still accepts that land
 
 ### Requirement: verify
-`clm ledger verify [--since <rev>]` SHALL report, in `check`'s format, `ledger/unrecorded-land` for each commit on `main`'s first-parent chain after `<rev>`, merge or not, that no `landed` record names, except one whose message starts `Release v`, and `ledger/unchecked-land` for each landed commit whose land's code key no `checked` record names, exiting 0 with no output when there are none and 1 otherwise. A land's code key SHALL be its record's `code_key`, or, only when the record has none, its legacy key: the commit's tree hashed as `code_key` does with `docs/spec-format.md` left out as well (`legacy-code-key`). `clm check` SHALL run it when the checked-out branch is `main` and the repository has a ledger branch.
+`clm ledger verify [--since <rev>]` SHALL report, in `check`'s format, `ledger/unrecorded-land` for each commit on `main`'s first-parent chain after `<rev>`, merge or not, that no `landed` record names, except one whose message starts `Release v`, and `ledger/unchecked-land` for each landed commit whose land's code key no `checked` record names, exiting 0 with no output when there are none and 1 otherwise. A land's code key SHALL be its record's `code_key`, or, only when the record has none, its legacy key: the commit's tree hashed as `code_key` does with `docs/spec-format.md` left out as well (`legacy-code-key`). `clm-ledger` SHALL offer the same findings, as violations, for `clm check` to report: those of `main` when the checked-out branch is `main` and the repository has a ledger branch, and none otherwise. That `clm check` reports them is the root's to state and prove, since `crates/clm` hands one crate's findings to the other's call (`clm/check-across-components`).
 
 #### Scenario: clean history
 - GIVEN a `main` whose two merge commits each have a `landed` record and whose code keys have `checked` records
@@ -209,10 +209,10 @@ Every record also has `id` (random 128-bit hex, except an `effort` record's, whi
 - WHEN `clm ledger verify` runs
 - THEN it prints nothing and exits 0
 
-#### Scenario: check runs it on main
+#### Scenario: offered to the check on main only
 - GIVEN a repository on `main` with a ledger branch and the history of *push behind clm's back*
-- WHEN `clm check` runs
-- THEN it reports `ledger/unrecorded-land`
+- WHEN a test reads the findings `clm-ledger` offers `clm check`, and again with another branch checked out
+- THEN the first hold `ledger/unrecorded-land`, and the second are empty
 
 #### Serves
 - capability/land-safely

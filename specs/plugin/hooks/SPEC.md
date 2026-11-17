@@ -14,9 +14,9 @@ The rules behind `clm hook session-start`, `clm hook autosync` and `clm defect` 
 `clm-hooks` offers each of `clm defect`, `clm hook session-start` and `clm hook autosync` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the directory it runs in and the text on standard input, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
 
 ## Design
-Crate `clm-hooks`, called from `crates/clm`'s `clm hook session-start`, `clm hook autosync` and `clm defect` subcommands. The guard is crate `clm-guard`, the child `plugin.hooks.guard`, with the shell reading as its child `plugin.hooks.guard.shell` (`guard-split`); `clm-guard` reads settings through this crate's `settings`, and this crate depends on nothing of it.
+Crate `clm-hooks`, called from `crates/clm`'s `clm hook session-start`, `clm hook autosync` and `clm defect` subcommands. The guard is crate `clm-guard`, the child `plugin.hooks.guard`, with the shell reading as its child `plugin.hooks.guard.shell` (`guard-split`); `clm-guard` finds the CLM root with this crate's `clm_root` and loads settings there under its call's own environment lookup, where this crate's `settings` reads the process's, and this crate depends on nothing of it.
 
-This component's tests are `crates/clm-hooks/tests/hooks.rs` and `git_layer.rs`, and, for what runs the built binary, `crates/clm/tests/hooks.rs` and `crates/clm/tests/defect.rs`.
+This component's tests are under `crates/clm-hooks/tests/` and call the crate (`commands-in-crate`); that `clm check` accepts an item `clm defect` wrote is the root's to prove (`clm/check-across-components`).
 
 **Defects** (`defect-reports`). `clm defect --title <title> [--component <component>]...` reads the report from stdin and loads the settings for the CLM repository found from the current directory, or none. By `defects`:
 - `backlog` (`defect-backlog`): `clm check` validates the components as for any item.
@@ -113,7 +113,7 @@ With `defects` set to `backlog`, `clm defect --title <title> [--component <compo
 #### Scenario: on a spec branch
 - GIVEN a CLM repository with `defects = "backlog"` and a live change `20261022-x`, on branch `spec/20261022-x`
 - WHEN `clm defect --title "Gate passes a stale task" --component gate` runs with a report on stdin
-- THEN `backlog/gate-passes-a-stale-task.md` has `kind: bug`, `components: [gate]`, `origin: 20261022-x` and the report, and `clm check` accepts it
+- THEN `backlog/gate-passes-a-stale-task.md` has `kind: bug`, `components: [gate]`, `origin: 20261022-x` and the report
 
 #### Scenario: on an implementation branch
 - GIVEN the same repository, on branch `impl/gate`, then on `impl/archive/20261022-x`, then on `impl/20261022-x/gate`
@@ -123,7 +123,7 @@ With `defects` set to `backlog`, `clm defect --title <title> [--component <compo
 #### Scenario: node a live change creates
 - GIVEN the same repository, with a live change whose delta for component `fresh` has `create: true`
 - WHEN `clm defect --title "Fresh misfires" --component fresh` runs with a report on stdin
-- THEN it writes `backlog/fresh-misfires.md` with `components: [fresh]`, exits 0, and `clm check` accepts the item
+- THEN it writes `backlog/fresh-misfires.md` with `components: [fresh]` and exits 0
 
 #### Scenario: unknown node
 - GIVEN the same repository

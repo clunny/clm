@@ -226,22 +226,7 @@ After a successful push, `clm land` SHALL delete the landed branch on `origin` t
 - upgrade/migration-starter-land-dir
 
 ### Requirement: land-target-lock
-A `clm land` that will run `[land] check` SHALL hold an exclusive advisory lock on `.clm/land.lock` beside the main worktree's `.clm/land` from before it checks the head out into the land tree until the push of the merge commit has gone through and the target's cap has been applied (`land-target-cap`), or the attempt ends sooner, so that the gate on the merge commit, `clm check`, the push and the cap run under it, releasing it on every exit path, whatever `CARGO_TARGET_DIR` the caller set. A land that waits for the lock SHALL say so on stderr, naming `.clm/land`. A land that waited for the lock SHALL merge its branch with `main` as `origin` holds it once the lock is its own, never with a `main` it fetched before it waited, whichever check it then runs. A land that runs no `[land] check`, because its code key was already checked or no check is set, SHALL NOT take this lock.
-
-#### Scenario: overlapping lands
-- GIVEN two branches `impl/a` and `impl/b` of one clone, no `checked` records, and a `[land] check` that appends `start <branch>` to a log, sleeps 2 seconds and appends `end <branch>`
-- WHEN `clm land impl/a` and `clm land impl/b` start at once, from two linked worktrees
-- THEN in the log every `start <branch>` is followed by the `end` of that same branch before any other `start`, so the two checks never interleave, and the land that waited printed `waiting` naming `.clm/land` on stderr
-
-#### Scenario: a caller's target takes the lock too
-- GIVEN the same branches and check, and `CARGO_TARGET_DIR` set to a different directory of the caller's for each land
-- WHEN `clm land impl/a` and `clm land impl/b` start at once
-- THEN both land, the two checks never interleave in the log, and the land that waited printed `waiting` naming `.clm/land` on stderr
-
-#### Scenario: held through the gate on the merge
-- GIVEN the same two branches, a `[land] check` that appends `check <branch>` to a log and sleeps 2 seconds, and a fake `CLM_GATE` that appends `gate` to it and passes
-- WHEN `clm land impl/a` and `clm land impl/b` start at once
-- THEN the log reads `gate`, `check <one branch>`, `gate` and then `gate`, `check <the other>`, `gate`: both of a land's gate runs fall between its lock's taking and release, never inside the other land's
+A `clm land` that will run `[land] check` SHALL hold an exclusive advisory lock on `.clm/land.lock` beside the main worktree's `.clm/land` from before it checks the head out into the land tree until the push of the merge commit has gone through and the target's cap has been applied (`land-target-cap`), or the attempt ends sooner, so that the gate on the merge commit, `clm check`, the push and the cap run under it, releasing it on every exit path, whatever `CARGO_TARGET_DIR` the caller set. A land that waits for the lock SHALL say so on stderr, naming `.clm/land`. A land that waited for the lock SHALL merge its branch with `main` as `origin` holds it once the lock is its own, never with a `main` it fetched before it waited, whichever check it then runs. A land that runs no `[land] check`, because its code key was already checked or no check is set, SHALL NOT take this lock. That two `clm land` processes never run their checks at once needs two processes, so the root states and proves it (`clm/land-as-a-process`).
 
 #### Scenario: checked code takes no lock
 - GIVEN a branch that changes only `specs/x/SPEC.md`, a `checked` record for `origin/main`'s code key, and another process holding the lock
@@ -267,17 +252,12 @@ A `clm land` that will run `[land] check` SHALL hold an exclusive advisory lock 
 - upgrade/migration-starter-land-dir
 
 ### Requirement: land-binary-copy
-Before running its first subcommand, `clm land` SHALL copy its own binary into a fresh directory under the system's temporary directory and run the gate and `clm check` from that copy, unless `CLM_GATE` or `CLM_CHECK` names the command; it SHALL remove the copy on every exit path. When the copy can't be made it SHALL exit 1 naming the path, pushing and recording nothing.
+Before running its first subcommand, `clm land` SHALL copy its own binary into a fresh directory under the system's temporary directory and run the gate and `clm check` from that copy, unless `CLM_GATE` or `CLM_CHECK` names the command; it SHALL remove the copy on every exit path. When the copy can't be made it SHALL exit 1 naming the path, pushing and recording nothing. That the land runs from the copy and leaves none behind needs the `clm` binary's own file, which only a `clm` process has, so the root states and proves it (`clm/land-as-a-process`).
 
-#### Scenario: check deletes the binary
-- GIVEN a `clm` binary copied to a scratch path, a repository whose `[land] check` deletes that scratch path, and `CLM_GATE` and `CLM_CHECK` unset
-- WHEN the scratch `clm land` runs on a branch
-- THEN it lands and prints `landed <sha> code`
-
-#### Scenario: copy removed
-- GIVEN an empty `TMPDIR` of the test's own
-- WHEN `clm land` runs on a branch and lands
-- THEN `TMPDIR` is empty again
+#### Scenario: the copy can't be made
+- GIVEN a `TMPDIR` that is a file, so no directory can be made in it
+- WHEN a land of a branch runs
+- THEN it is refused naming that path, the gate never ran, `main` is unchanged and no record is written
 
 ### Requirement: land-frees-build-target
 After a successful push of an `impl/*` branch, `clm land` SHALL delete the `target/` directory at the top of the worktree it runs in when that worktree is a linked one whose `HEAD` is the landed branch, and print `removed <path>`. It SHALL NOT delete the main worktree's `target/`, delete anything after a `spec/*` or `propose/*` land or a land that pushed nothing, or fail the land when the delete fails.

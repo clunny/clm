@@ -533,17 +533,17 @@ On a branch that adds exactly one change, live or new archived, whose `change.md
 - rename/finish
 
 ### Requirement: warnings-name-the-command
-The warnings the rebase prints on stderr that name the command (those `file-proposal-items` prints when the ledger can't be read, for each ledger warning and for each proposal it skips, and the error for a temporary worktree it couldn't remove) SHALL name the command as it was run: `clm rebase: <warning>` when run as `clm rebase`, and, while the old subcommand `sync` still runs (`clm/renamed-commands`), the old name followed by `: ` and the same warning, exactly as before. `clm-sync` SHALL hold no string literal that names the command: the warnings its report returns carry no prefix, and the root, which knows the name it was run by, prints each with that prefix (`clm/rebase-warnings-prefixed`).
+The warnings the rebase prints on stderr that name the command (those `file-proposal-items` prints when the ledger can't be read, for each ledger warning and for each proposal it skips, and the error for a temporary worktree it couldn't remove) SHALL name the command: each is printed as `clm rebase: <warning>`. The warnings `clm_sync::sync`'s report returns carry no prefix, and `clm-sync`'s call of `clm rebase`, which writes everything the command prints (`commands-in-crate`), writes each with it. The call takes no argument that names the command, and nothing bars `clm-sync`'s source from naming it.
 
 #### Scenario: a skipped proposal's warning
 - GIVEN branch `impl/a` and the ledger fold holding an open proposal whose slug is `Not Kebab`
 - WHEN `clm_sync::sync` runs
 - THEN its report's warnings hold one starting `skipped proposal` and naming that proposal, and none starts with `clm`
 
-#### Scenario: no command name in the crate
-- GIVEN the workspace
-- WHEN a test reads every file under `crates/clm-sync/src`
-- THEN no string literal holds `clm` followed by a space and `rebase` or the old subcommand `sync`
+#### Scenario: a skipped proposal
+- GIVEN branch `impl/a` and the ledger fold holding an open proposal whose slug is `Not Kebab`
+- WHEN `clm rebase` runs
+- THEN its stderr holds `clm rebase: skipped proposal` naming that proposal
 
 #### Serves
 - architecture/plain-terms

@@ -59,7 +59,7 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 
 **`clm guide`** (`guide-in-the-binary`, `spec-format-in-the-guide`, `guide-table-at-build-time`). `docs/guide/` is the one source of the guide's own pages, and `docs/spec-format.md` joins them as the page `spec-format`, since an adopter's sessions write deltas, requirements and markers in that format. The table of `(name, markdown)` pages is generated, not written: `crates/clm-init/build.rs` lists the `.md` files of `docs/guide/` and writes `$OUT_DIR/guide_pages.rs`, a `const PAGES` holding one `include_str!` per page, by the file's absolute path written with `{:?}`, which escapes any character a string literal can't hold as it is, which `guide.rs` pulls in with `include!`. The binary holds every page's bytes as of the build and reads no file at run time, and a page added to `docs/guide/` on a spec branch is in the next build with no edit under `crates/`: adding a page is one spec change, reviewed as `guide-from-docs` wants (`guide-table-from-files`). `name` is the file name without `.md`, ordered as `guide-table-from-files` says; `spec-format` is the one page the index list doesn't name (`reference` links it). The ordering is one pure function over the directory's file names and `README.md`'s text, with a reader that lists a directory and calls it, in a module the build script pulls in with `#[path]`, as `crates/clm/build.rs` does `version.rs`; the crate holds it as `#[cfg(test)] mod`, since nothing at run time calls it and clippy denies dead code, and its unit tests run the reader on a temporary directory without a build. The module uses `std` alone, since it compiles in the build script too. The script prints `cargo:rerun-if-changed` for `docs/guide/` (a directory, which Cargo scans whole, so a page added or removed reruns it), for `docs/spec-format.md`, for itself and for the module it pulls in, since a script that prints the directive at all is rerun for those paths alone. `clm guide` prints one line per page, `<name>  <title>` (two spaces between), the title being the page's first `# ` heading. `clm guide <page>` prints that page's Markdown unchanged; an unknown name exits 1 and prints the index to stderr. Links between guide pages stay relative (`shaping-the-graph.md`, and `../spec-format.md` from a page in `docs/guide/`), which a session reads as `clm guide shaping-the-graph` or `clm guide spec-format`. A test reads `docs/guide/` and fails when a `.md` page there is missing from the table, as proof that the generated table is complete; the tests that read each page's file from `docs/guide/<name>.md` read `docs/spec-format.md` for `spec-format`, and the one that checks the order allows pages the list doesn't name between those it does and `spec-format`. No `include_str!` under `crates/clm-init/src/` names a `docs/guide/` path, and a test that scans the source files fails on one that does, so the table can't quietly go back to being written by hand; the tests and the link fixtures name the directory as a path to read, and the scanning test builds its needle with `concat!` so it doesn't match itself.
 
-**Links stay inside the guide** (`guide-links-inside`). A guide page's links must work wherever the page is read: in `clm guide`'s output in an adopter's project and on GitHub. The page's directory is `docs/guide/`, or `docs/` for `spec-format`. CLM's own repository files, its decisions and its `ARCHITECTURE.md`, are named in prose as CLM's repository, never linked, since an adopter's project has neither. The rule is a function over a page's file path and Markdown, with the set of page files, so its own tests feed it failing and passing cases without touching `docs/`. A link whose target is wrapped in `<...>` or followed by a title (`[t](x.md "title")`) is judged by its path alone. Reference-style definitions (`[label]: target`) and autolinks (`<https://...>`) aren't inline links and aren't read. The scanner is hand-written, with no Markdown dependency: it skips fenced blocks (```` ``` ```` or `~~~` fences) and code spans of any backtick count, and doesn't exempt indented blocks, which the guide doesn't use; link text may nest brackets and a target may hold balanced parentheses, as in CommonMark. A scheme is `[A-Za-z][A-Za-z0-9+.-]*:`. A relative path is normalised lexically (`./x.md` is `x.md`, `a/../x.md` is `x.md`), and one that climbs above the repository root, or keeps a `?` query, fails. Two pages with one name, such as a later `docs/guide/spec-format.md`, fail the tests, as they should. The scenarios that run the binary are proved in `crates/clm/tests/guide.rs`, where `init/guide-command`'s binary tests are.
+**Links stay inside the guide** (`guide-links-inside`). A guide page's links must work wherever the page is read: in `clm guide`'s output in an adopter's project and on GitHub. The page's directory is `docs/guide/`, or `docs/` for `spec-format`. CLM's own repository files, its decisions and its `ARCHITECTURE.md`, are named in prose as CLM's repository, never linked, since an adopter's project has neither. The rule is a function over a page's file path and Markdown, with the set of page files, so its own tests feed it failing and passing cases without touching `docs/`. A link whose target is wrapped in `<...>` or followed by a title (`[t](x.md "title")`) is judged by its path alone. Reference-style definitions (`[label]: target`) and autolinks (`<https://...>`) aren't inline links and aren't read. The scanner is hand-written, with no Markdown dependency: it skips fenced blocks (```` ``` ```` or `~~~` fences) and code spans of any backtick count, and doesn't exempt indented blocks, which the guide doesn't use; link text may nest brackets and a target may hold balanced parentheses, as in CommonMark. A scheme is `[A-Za-z][A-Za-z0-9+.-]*:`. A relative path is normalised lexically (`./x.md` is `x.md`, `a/../x.md` is `x.md`), and one that climbs above the repository root, or keeps a `?` query, fails. Two pages with one name, such as a later `docs/guide/spec-format.md`, fail the tests, as they should. Its scenarios are proved in `crates/clm-init/tests/guide.rs`, by `clm-init`'s call of `clm guide`, where `init/guide-command`'s tests are (`commands-in-crate`).
 
 **The constraints page** (`guide-constraints-page`). `clm guide constraints` is the one guide page not read from a file: `clm-init` builds it at run time from `model`'s compiled copy of CLM's carried entries (`model/carried-constraints`), so it is the set the running `clm` enforces. It has no file under `docs/guide/`, so `guide-table-from-files` and `guide-links-inside` don't read it.
 
@@ -79,17 +79,17 @@ Directories are listed by path, depth-first, and edges sorted, so the output is 
 ## Requirements
 
 ### Requirement: init-files
-`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md`, `AGENTS.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `AGENTS.md` SHALL hold the project's instructions for every agent harness (`platform`), and the `CLAUDE.md` it writes SHALL be the one line `@AGENTS.md`, which Claude Code reads as an import, so every agent harness reads one text. When the repository already has a `CLAUDE.md` that doesn't hold the line `@AGENTS.md`, `clm init` SHALL keep it, still write a missing `AGENTS.md`, and print a line saying to add `@AGENTS.md` to `CLAUDE.md` so Claude Code reads the same instructions. `clm.toml` SHALL set `host` (from `--host`, else what `clm-host`'s `host_for_remote` gives for `origin`'s URL, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, `clm guide constraints`, where CLM's carried constraints are. On the result, `clm check` SHALL pass. Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh` and no `az`.
+`clm init` SHALL write `clm.toml`, `scripts/clm-check.sh` (executable), `ARCHITECTURE.md`, `CAPABILITIES.md`, `specs/SPEC.md`, `AGENTS.md` and `CLAUDE.md`, each only when it is missing, and SHALL write no file under `.github/`. `AGENTS.md` SHALL hold the project's instructions for every agent harness (`platform`), and the `CLAUDE.md` it writes SHALL be the one line `@AGENTS.md`, which Claude Code reads as an import, so every agent harness reads one text. When the repository already has a `CLAUDE.md` that doesn't hold the line `@AGENTS.md`, `clm init` SHALL keep it, still write a missing `AGENTS.md`, and print a line saying to add `@AGENTS.md` to `CLAUDE.md` so Claude Code reads the same instructions. `clm.toml` SHALL set `host` (from `--host`, else what `clm-host`'s `host_for_remote` gives for `origin`'s URL, or `none` with no remote), `approval = "any"` and `[land] check = "scripts/clm-check.sh"`. Neither `ARCHITECTURE.md` nor `CAPABILITIES.md` SHALL hold an entry; `ARCHITECTURE.md` SHALL name, outside its `## Constraints` section, `clm guide constraints`, where CLM's carried constraints are. That the other commands accept the result is something only a `clm` process shows, so the root states and proves it (`clm/init-result-accepted`). Outside a git repository it SHALL exit 1 and write nothing. It SHALL call no `gh` and no `az`.
 
 #### Scenario: empty repository
 - GIVEN an empty git repository whose `origin` is `https://github.com/o/r.git`
 - WHEN `clm init --lang rust` runs
-- THEN all seven files exist, `CLAUDE.md` is `@AGENTS.md`, `clm-check.sh` is executable and holds `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, `.github/` doesn't exist, and `clm check` exits 0
+- THEN all seven files exist, `CLAUDE.md` is `@AGENTS.md`, `clm-check.sh` is executable and holds `cargo test`, `clm.toml` holds the Rust detector, `host = "github"`, `approval = "any"` and `check = "scripts/clm-check.sh"`, and `.github/` doesn't exist
 
 #### Scenario: human layers
 - GIVEN an empty git repository, and another holding a `CAPABILITIES.md` of its own
 - WHEN `clm init` runs in each
-- THEN in the first `clm hashes architecture` and `clm hashes capability` list nothing, `clm pending` lists nothing, and `ARCHITECTURE.md` names `clm guide constraints`, and in the second `CAPABILITIES.md` is unchanged and the output says `kept CAPABILITIES.md`
+- THEN in the first neither `ARCHITECTURE.md` nor `CAPABILITIES.md` holds an entry and `ARCHITECTURE.md` names `clm guide constraints`, and in the second `CAPABILITIES.md` is unchanged and the output says `kept CAPABILITIES.md`
 
 #### Scenario: no remote
 - GIVEN an empty git repository with no remote
@@ -442,7 +442,7 @@ The `ARCHITECTURE.md` that `clm init` writes SHALL say, in its preamble, that ea
 #### Scenario: fresh repository
 - GIVEN an empty git repository
 - WHEN `clm init` runs
-- THEN its `ARCHITECTURE.md` names `#### Enforced by` and `#### Untested`, holds no `req:architecture/` and no `## Enforced by clm`, names `clm guide constraints` and `#### Replaces`, and `clm check` exits 0
+- THEN its `ARCHITECTURE.md` names `#### Enforced by` and `#### Untested`, holds no `req:architecture/` and no `## Enforced by clm`, and names `clm guide constraints` and `#### Replaces`
 
 #### Serves
 - capability/adopt-clm
@@ -528,7 +528,7 @@ The files `clm init` writes SHALL call an entry of `ARCHITECTURE.md` an architec
 #### Scenario: the written layers
 - GIVEN an empty git repository
 - WHEN `clm init` runs
-- THEN its `ARCHITECTURE.md` holds `The architectural constraints:` and `## Constraints` and no `## Requirements`, its `AGENTS.md` holds `architectural constraints`, neither holds the old term, and `clm check` exits 0
+- THEN its `ARCHITECTURE.md` holds `The architectural constraints:` and `## Constraints` and no `## Requirements`, its `AGENTS.md` holds `architectural constraints`, and neither holds the old term
 
 #### Serves
 - architecture/plain-terms
@@ -542,7 +542,7 @@ The root `SPEC.md` `clm init` writes SHALL have `status: unbuilt`; no file under
 #### Scenario: a new repository
 - GIVEN an empty repository
 - WHEN `clm init` runs
-- THEN its `specs/SPEC.md` has `status: unbuilt`, no file under `crates/clm-init/templates/` holds a word `plain-terms-renames` replaced, and the model loads the tree with no violation
+- THEN its `specs/SPEC.md` has `status: unbuilt`, no file under `crates/clm-init/templates/` holds a word `plain-terms-renames` replaced, and `clm-model` loads the tree `clm init` wrote with no violation
 
 #### Serves
 - architecture/plain-terms
@@ -568,22 +568,17 @@ The text `clm-init` prints and writes SHALL say component, components, ancestors
 - architecture/plain-terms
 
 ### Requirement: init-without-manifest
-For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first change to the CLM root (the parent of the script's own directory), wherever it is run from, and then run each language's line only when its manifest exists there: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the result of `clm init --lang rust --lang typescript --lang python` SHALL pass both `clm check` and `scripts/clm-check.sh`.
+For each `--lang`, the `scripts/clm-check.sh` that `clm init` writes SHALL first change to the CLM root (the parent of the script's own directory), wherever it is run from, and then run each language's line only when its manifest exists there: `cargo test` when `Cargo.toml` does, `npm ci && npm test` when `package.json` does, and `pytest` when `pyproject.toml` or `setup.py` does; with none of them it SHALL exit 0. Each detector SHALL have a `requires` naming its language's manifest: `Cargo.toml` for `rust`, `package.json` for `typescript` and `pyproject.toml` for `python`. The `typescript` detector SHALL have the command `["node_modules/.bin/knip"]`, `requires = "package.json"` and the hint `npm ci (or npm install --save-dev knip when package.json doesn't list it)`, so a repository without a `package.json` skips it and one whose dependencies aren't installed reports `could not run` with that hint rather than `failed`. In a repository with no code, the `scripts/clm-check.sh` that `clm init --lang rust --lang typescript --lang python` writes SHALL pass. That `clm check` passes there too, and what it reports when the dependencies aren't installed, is the root's to state and prove (`clm/init-result-accepted`).
 
 #### Scenario: empty repository, every language
 - GIVEN an empty git repository, and on `PATH` a `cargo`, `npm` and `pytest` that each exit 1
-- WHEN `clm init --lang rust --lang typescript --lang python` runs, then `clm check` and `scripts/clm-check.sh`
-- THEN both exit 0, none of the three stubs ran, and `clm check`'s stderr names each detector as skipped
+- WHEN `clm init --lang rust --lang typescript --lang python` runs, then `scripts/clm-check.sh`, from the root and from a subdirectory
+- THEN the script exits 0 each time, none of the three stubs ran, each detector in `clm.toml` has the `requires` naming its manifest, and the `typescript` detector has the command `node_modules/.bin/knip`
 
 #### Scenario: manifest added later
 - GIVEN that repository once it holds a `package.json`, and on `PATH` an `npm` that records its arguments and exits 0
 - WHEN `scripts/clm-check.sh` runs
 - THEN the stub recorded `ci` and then `test`
-
-#### Scenario: dependencies not installed
-- GIVEN a repository holding a `package.json` and no `node_modules/`
-- WHEN `clm init --lang typescript` runs and then `clm check`
-- THEN `clm check` exits 1 with a line starting `clm.toml: check/detectors: typescript-dead-code could not run:` and ending `; install with: npm ci (or npm install --save-dev knip when package.json doesn't list it)`
 
 #### Serves
 - capability/adopt-clm
@@ -656,12 +651,12 @@ When the CLM repository has no `specs/SPEC.md` as it starts, `clm init` SHALL ad
 #### Scenario: empty repository
 - GIVEN an empty git repository
 - WHEN `clm init` runs
-- THEN `.claude/settings.json` holds `permissions.allow` with exactly the twenty-six rules, `Bash(clm build)`, `Bash(clm build *)`, `Bash(clm land)`, `Bash(clm land *)`, `Bash(clm setup)`, `Bash(clm setup *)` and `Bash(clm verify *)` among them, none naming `approve` or `git`, and `clm check` exits 0
+- THEN `.claude/settings.json` holds `permissions.allow` with exactly the twenty-six rules, `Bash(clm build)`, `Bash(clm build *)`, `Bash(clm land)`, `Bash(clm land *)`, `Bash(clm setup)`, `Bash(clm setup *)` and `Bash(clm verify *)` among them, and none naming `approve` or `git`
 
 #### Scenario: plugins already enabled
 - GIVEN a git repository with no `specs/`, holding an untracked `.claude/settings.json` that sets `enabledPlugins` and `permissions.allow` `["Bash(make *)", "Bash(clm land *)"]`
 - WHEN `clm init` runs
-- THEN `.claude/settings.json` still sets `enabledPlugins`, its `permissions.allow` starts with `Bash(make *)` and `Bash(clm land *)`, holds each rule once, and `clm check` exits 0
+- THEN `.claude/settings.json` still sets `enabledPlugins`, its `permissions.allow` starts with `Bash(make *)` and `Bash(clm land *)`, and holds each rule once
 
 #### Scenario: settings that aren't JSON
 - GIVEN a git repository with no `specs/` and a `.claude/settings.json` holding `{`
@@ -772,12 +767,12 @@ When the repository's current branch isn't `main` and neither a local `main` nor
 - THEN no next step names `git branch -m`
 
 ### Requirement: init-build-setup
-When `typescript` is among the `--lang` values given, the `clm.toml` that `clm init` writes SHALL set `[build] setup = "test ! -f package.json || npm ci"`, so a repository with no `package.json` yet passes the setup and one with it installs its packages into the tree the setup runs in; without `--lang typescript` it SHALL write no `[build]` table. On the result, `clm check` SHALL pass, and `clm setup` SHALL exit 0 in a repository with no `package.json`.
+When `typescript` is among the `--lang` values given, the `clm.toml` that `clm init` writes SHALL set `[build] setup = "test ! -f package.json || npm ci"`, so a repository with no `package.json` yet passes the setup and one with it installs its packages into the tree the setup runs in; without `--lang typescript` it SHALL write no `[build]` table. That `clm setup` runs the setup it wrote, and `clm check` passes on the result, is the root's to state and prove (`clm/init-result-accepted`).
 
 #### Scenario: a TypeScript project
 - GIVEN a git repository with no code
-- WHEN `clm init --lang typescript` runs, then `clm config get build` and `clm setup`
-- THEN `clm config get build` prints `setup=test ! -f package.json || npm ci` and the path of `clm.toml`, `clm setup` exits 0, and `clm check` exits 0
+- WHEN `clm init --lang typescript` runs
+- THEN `clm.toml` holds a `[build]` table whose `setup` is `test ! -f package.json || npm ci`
 
 #### Scenario: a Rust project
 - GIVEN a git repository with no code
@@ -899,7 +894,7 @@ For each line `<id> <version> <hash>` of `crates/clm-init/migrations.lock`, a mi
 - upgrade/shipped-migrations-frozen
 
 ### Requirement: commands-in-crate
-`clm-init` SHALL offer each of `clm init`, `clm survey` and `clm guide` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the directory it runs in, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `init`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `init`'s own files and call `clm-init` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`).
+`clm-init` SHALL offer each of `clm init`, `clm survey` and `clm guide` as a call of its own that takes the command's arguments as the command line gives them, the repository root `crates/clm` found from the current directory, which the command's `--root` overrides, the directory it runs in, the environment as a lookup, and a stream each for standard output and standard error. The call SHALL write to those streams everything the command prints, each line on the stream and with the prefix the command gives it, and SHALL return the command's exit status, never ending the process itself; for arguments it can't parse it SHALL write the usage error to the error stream and return 2. What `crates/clm` passes it today, of the settings and of other components' results, it takes as further arguments, since a crate loads only the settings of a component it depends on. Every test of `init`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `init`'s own files and call `clm-init` itself, this call where the requirement states what a command prints or how it exits: none runs the `clm` binary (`commands-live-in-their-crates`). The tests of `clm guide` among them SHALL sit in `crates/clm-init/tests/guide.rs`, which holds their `clm:reads` markers of `docs/guide/**` and `docs/spec-format.md` (`clm/doc-readers-marked`), and none of `init`'s tests SHALL be left in `crates/clm/tests/init.rs` or `crates/clm/tests/guide.rs`: a test there that also runs another component's command is the root's (`clm/init-result-accepted`), and `init` proves what `clm init` wrote in a test of its own, leaving the root's test where it is.
 
 #### Scenario: a command called in a test
 - GIVEN a fixture repository, and a test in `init`'s own files
@@ -914,3 +909,6 @@ For each line `<id> <version> <hash>` of `crates/clm-init/migrations.lock`, a mi
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
+
+#### Needs
+- clm/init-result-accepted

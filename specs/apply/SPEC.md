@@ -98,7 +98,7 @@ A delta with `create: true` SHALL write a new SPEC.md from its Frontmatter, Cont
 - THEN it exits 1 and nothing changes
 
 ### Requirement: hash-command
-`clm hashes <node-id>` SHALL print the component's element hashes, and `clm hashes architecture` and `clm hashes capability` the layer's entry hashes, in file order, as the Contract describes. When component `capability` loads, `clm hashes capability` SHALL print its element hashes before the entries', so a delta for that component can record its bases. A component's hashes SHALL equal the hashes `validate` compares bases against; an entry's is the version tests cite, since no delta edits a human layer. `clm hash` SHALL be no command: it SHALL fail as any unknown subcommand does. Every message CLM prints that points to the command, such as `apply/stale-base`'s for a missing base, SHALL name `clm hashes`.
+`clm hashes <node-id>` SHALL print the component's element hashes, and `clm hashes architecture` and `clm hashes capability` the layer's entry hashes, in file order, as the Contract describes. When component `capability` loads, `clm hashes capability` SHALL print its element hashes before the entries', so a delta for that component can record its bases. A component's hashes SHALL equal the hashes `validate` compares bases against; an entry's is the version tests cite, since no delta edits a human layer. That `clm hash` is no command is the root's to state and prove, since its one parser holds the command names (`clm/old-command-names-retired`). Every message CLM prints that points to the command, such as `apply/stale-base`'s for a missing base, SHALL name `clm hashes`.
 
 #### Scenario: hash then modify
 - GIVEN the hash `clm hashes a` prints for `requirement:r`
@@ -115,11 +115,6 @@ A delta with `create: true` SHALL write a new SPEC.md from its Frontmatter, Cont
 - WHEN `clm hashes capability` runs
 - THEN it prints `frontmatter`, `contract` and `design` lines, then `capability:a <hash>`
 - AND a delta for component `capability` that records the printed `design` hash as its base and modifies its Design reports no staleness
-
-#### Scenario: old name gone
-- GIVEN a CLM repository with component `a`
-- WHEN `clm hash a` runs
-- THEN it exits non-zero, as for an unknown subcommand, and prints no hashes
 
 #### Serves
 - capability/prove-by-tests

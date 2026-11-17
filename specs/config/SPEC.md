@@ -419,7 +419,7 @@ Loading SHALL take `affected` only from the repository's `clm.toml` or the clone
 - capability/land-safely
 
 ### Requirement: unreferenced-detector
-This repository's `clm.toml` SHALL name, after `unused-dependencies`, a detector `unreferenced-public-items` whose command is `"clm"`, `"unreferenced"`, then any `"--entry", "<attribute>"` pairs (`check.unreferenced/entry-attributes`) and then only `"--allow", "<entry>"` pairs, each entry naming one item (`<crate>::<name>` or `<crate>::<Type>::<name>`), never a whole library, and whose hint is `scripts/dev-install.sh`. The array SHALL hold the two command words on its first line and one pair per line after them, and every pair SHALL come under a `#` comment line within the array that gives its reason: kept (live by a route the name match can't see, saying which) or pending (naming `backlog/narrow-public-items-<component>`, `<component>` being the item's component ID with `.` replaced by `-`). With those arguments, `clm unreferenced` SHALL exit 0 on this repository, so every entry excuses a finding and no finding is unexcused. Every `backlog/narrow-public-items-<component>` a pending comment names SHALL exist. An entry for an item of `clm-config`, this component's own crate, SHALL be kept, never pending: this component's build narrows or removes the rest of its findings. Its tests SHALL live in `crates/clm/tests/cli.rs`, beside `this_repository_is_clean`, since one runs the `clm` binary.
+This repository's `clm.toml` SHALL name, after `unused-dependencies`, a detector `unreferenced-public-items` whose command is `"clm"`, `"unreferenced"`, then any `"--entry", "<attribute>"` pairs (`check.unreferenced/entry-attributes`) and then only `"--allow", "<entry>"` pairs, each entry naming one item (`<crate>::<name>` or `<crate>::<Type>::<name>`), never a whole library, and whose hint is `scripts/dev-install.sh`. The array SHALL hold the two command words on its first line and one pair per line after them, and every pair SHALL come under a `#` comment line within the array that gives its reason: kept (live by a route the name match can't see, saying which) or pending (naming `backlog/narrow-public-items-<component>`, `<component>` being the item's component ID with `.` replaced by `-`). With those arguments `clm unreferenced` exits 0 on this repository, so every entry excuses a finding and no finding is unexcused; that is another component's command run on this repository, so the root states and proves it (`clm/check-across-components`). Every `backlog/narrow-public-items-<component>` a pending comment names SHALL exist. An entry for an item of `clm-config`, this component's own crate, SHALL be kept, never pending: this component's build narrows or removes the rest of its findings.
 
 #### Scenario: named here
 - GIVEN this repository's `clm.toml`
@@ -430,11 +430,6 @@ This repository's `clm.toml` SHALL name, after `unused-dependencies`, a detector
 - GIVEN this repository's `clm.toml`
 - WHEN a test reads the `unreferenced-public-items` command's array as text
 - THEN its first line holds `"clm", "unreferenced",`, every other non-blank line is a `#` comment, one `"--entry", "<attribute>",` pair or one `"--allow", "<entry>",` pair, no `"--entry"` line comes after an `"--allow"` line, the first pair's line comes after a comment line, and every `backlog/narrow-public-items-<component>` a comment names is a file under `backlog/`, and no pending comment names a `config` item
-
-#### Scenario: clean with the list
-- GIVEN this repository and the `clm` binary under test
-- WHEN `clm unreferenced` runs with the arguments of the detector's command after `unreferenced`
-- THEN it prints nothing and exits 0
 
 #### Serves
 - capability/no-dead-weight
@@ -840,17 +835,12 @@ Loading SHALL take `env` only from the repository's `clm.toml` or the clone's `c
 - THEN it gives `A=1` from `abc123:clm.toml` and `B=2` from `clm.local.toml`
 
 ### Requirement: retired-terms-detector
-This repository's `clm.toml` SHALL name, after `unreferenced-public-items`, a detector `retired-terms` whose command is `["sh", "scripts/retired-terms.sh"]`, the root's scan for retired terms run with no path (`clm/retired-terms`), and whose hint says the script needs only `sh` and `grep`. `clm check` then fails, naming each file, line and term the scan prints, on a branch whose text names a retired term, so a spec branch finds it while it is drafted rather than at its land. With this repository as it stands, the detector SHALL exit 0. Its test SHALL live in `crates/clm/tests/cli.rs`, beside `this_repository_is_clean`, which runs `clm check` with the detectors.
+This repository's `clm.toml` SHALL name, after `unreferenced-public-items`, a detector `retired-terms` whose command is `["sh", "scripts/retired-terms.sh"]`, the root's scan for retired terms run with no path (`clm/retired-terms`), and whose hint says the script needs only `sh` and `grep`. `clm check` then fails, naming each file, line and term the scan prints, on a branch whose text names a retired term, so a spec branch finds it while it is drafted rather than at its land; that is `clm check` running a detector, which only a `clm` process shows, so the root states and proves it (`clm/check-across-components`). With this repository as it stands, the detector SHALL exit 0.
 
 #### Scenario: named here
 - GIVEN this repository's `clm.toml`
 - WHEN the settings are loaded
 - THEN `detectors` holds `unused-dependencies`, then `unreferenced-public-items`, then `retired-terms`, whose command is `sh`, `scripts/retired-terms.sh` and whose hint names `sh` and `grep`
-
-#### Scenario: a retired term in a spec fails the check
-- GIVEN a fixture repository holding a copy of `scripts/retired-terms.sh`, a `clm.toml` naming only the `retired-terms` detector as this repository's names it, a `scripts/retired-terms.txt` holding `grommet stub`, and a `specs/` file reading `make it a grommet stub`
-- WHEN `clm check` runs there
-- THEN it prints that file, its line and `grommet stub`, and reports `clm.toml: check/detectors: retired-terms failed (exit 1)`
 
 #### Serves
 - architecture/plain-terms
