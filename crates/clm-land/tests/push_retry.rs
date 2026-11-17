@@ -6,15 +6,16 @@ mod common;
 use clm_ledger::Body;
 use common::Fixture;
 
-/// Logs the time, in nanoseconds, of each push naming `refs/heads/main` to `main-pushes.log`,
-/// and declines it with `declined by test` while `decline` (bash, with `n` the push's number)
-/// holds.
+/// Logs the time since boot, in seconds to two places, of each push naming `refs/heads/main` to
+/// `main-pushes.log`, and declines it with `declined by test` while `decline` (bash, with `n`
+/// the push's number) holds.
 fn main_hook(decline: &str) -> String {
     format!(
         r#"
 while read -r old new ref; do
   if [ "$ref" = refs/heads/main ]; then
-    date +%s%N >> "$DIR/main-pushes.log"
+    # The seconds since boot, which never step back as the wall clock can.
+    cut -d' ' -f1 /proc/uptime >> "$DIR/main-pushes.log"
     n=$(wc -l < "$DIR/main-pushes.log")
     if {decline}; then echo "declined by test" >&2; exit 1; fi
   fi
@@ -61,13 +62,15 @@ fn refused_every_time_then_rerun() {
         Err(clm_land::Error::Git(why)) => why,
         other => panic!("expected a git failure, got {other:?}"),
     };
-    let times: Vec<u128> = f
+    // Hundredths of a second since boot, as `/proc/uptime` gives them.
+    let times: Vec<u64> = f
         .lines("main-pushes.log")
         .iter()
-        .map(|t| t.parse().unwrap())
+        .map(|t| t.replace('.', "").parse().unwrap())
         .collect();
     assert_eq!(times.len(), 3, "{times:?}");
-    const SEC: u128 = 1_000_000_000;
+    // A second, less the one hundredth each reading may have been rounded down by.
+    const SEC: u64 = 99;
     assert!(times[1] - times[0] >= SEC, "{times:?}");
     assert!(times[2] - times[1] >= 2 * SEC, "{times:?}");
     for needle in ["declined by test", "may be transient", "clm land impl/a"] {
