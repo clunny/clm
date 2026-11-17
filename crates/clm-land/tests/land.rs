@@ -447,7 +447,7 @@ fn land_from_a_linked_worktree() {
 
 #[test]
 fn lock_held_through_the_gate_on_the_merge_and_the_push() {
-    // req:land/land-target-lock@2dadb710
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     // `origin`'s hook logs whether the lock is held when `main` is pushed.
@@ -499,7 +499,7 @@ fn caller_target_changes_nothing() {
 
 #[test]
 fn lock_released_after_a_failing_check() {
-    // req:land/land-target-lock@2dadb710
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     f.write("check-fails", "");
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -523,7 +523,7 @@ fn lock_released_after_a_failing_check() {
 
 #[test]
 fn conflict_takes_no_lock() {
-    // req:land/land-target-lock@2dadb710
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     f.advance_main("b.txt", "other\n");
@@ -538,7 +538,7 @@ fn conflict_takes_no_lock() {
 
 #[test]
 fn copy_failure_refused() {
-    // req:land/land-binary-copy@7e2d6c4e
+    // req:land/land-binary-copy@48a84515
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
