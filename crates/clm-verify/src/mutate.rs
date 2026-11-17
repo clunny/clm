@@ -353,6 +353,7 @@ fn launch(
         .env("CLM_MUTATE_JOBS", jobs.to_string())
         .env("CLM_SLOT", (ctx.max_builds + 1).to_string());
     let mut child = shell.spawn()?;
+    let group = group_of(&child);
     let limit = ctx.verify.mutate_minutes.map(|m| {
         (
             m,
@@ -361,7 +362,7 @@ fn launch(
         )
     });
     let started = Instant::now();
-    loop {
+    let watched = (|| loop {
         if let Some(status) = child.try_wait()? {
             return Ok(Ended::Exited(status.code()));
         }
@@ -375,30 +376,49 @@ fn launch(
             return Ok(why);
         }
         std::thread::sleep(POLL);
+    })();
+    if watched.is_err() {
+        // Nothing watches the command once the pass gives up on it, so it ends here.
+        signal(group, libc::SIGKILL);
     }
+    watched
+}
+
+/// Sends `signal` to the process group `group`, and says whether the group holds a process.
+fn signal(group: libc::pid_t, signal: libc::c_int) -> bool {
+    // SAFETY: `killpg` takes plain integers and touches no memory of ours.
+    unsafe { libc::killpg(group, signal) == 0 }
 }
 
 /// Sends `SIGTERM` to the group `child` leads, and `SIGKILL` when it hasn't ended after
-/// `grace`.
+/// `grace`. The command has ended when no process of its group is left: `sh -c` may end at
+/// once while a script it started ignores the signal.
 fn end_group(child: &mut Child, grace: Duration) -> Result<(), Error> {
-    // The child leads its own group (`process_group(0)`), so its ID is the group's.
-    let group = child.id() as libc::pid_t;
-    // SAFETY: `killpg` takes plain integers and touches no memory of ours.
-    unsafe { libc::killpg(group, libc::SIGTERM) };
-    // The command has ended when no process of its group is left: `sh -c` may end at once
-    // while a script it started ignores the signal.
+    let group = group_of(child);
+    signal(group, libc::SIGTERM);
     let asked = Instant::now();
+    let ended = |child: &mut Child| -> Result<bool, Error> {
+        // Signal 0 only asks whether the group holds a process; once the leader is reaped
+        // and the group is empty its ID may be reused, so nothing is sent to it then.
+        Ok(child.try_wait()?.is_some() && !signal(group, 0))
+    };
     while asked.elapsed() < grace {
-        // SAFETY: as above; signal 0 only asks whether the group holds a process.
-        if child.try_wait()?.is_some() && unsafe { libc::killpg(group, 0) } != 0 {
+        if ended(child)? {
             return Ok(());
         }
         std::thread::sleep(POLL);
     }
-    // SAFETY: as above.
-    unsafe { libc::killpg(group, libc::SIGKILL) };
-    child.wait()?;
+    if !ended(child)? {
+        signal(group, libc::SIGKILL);
+        child.wait()?;
+    }
     Ok(())
+}
+
+/// The process group `child` leads: it was started with `process_group(0)`, so its ID is
+/// the group's.
+fn group_of(child: &Child) -> libc::pid_t {
+    child.id() as libc::pid_t
 }
 
 /// The verdict lines of the result file that end in a newline, the last for a requirement

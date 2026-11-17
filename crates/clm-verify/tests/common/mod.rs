@@ -59,6 +59,24 @@ if [ -e "$DIR/fail-path" ] && [ -e "$(cat "$DIR/fail-path")" ]; then exit 1; fi
 [ ! -e "$DIR/check-fails" ]
 "#;
 
+/// `clm_verify::verify_with` in the repository at `root` with a memory file that doesn't
+/// exist, the real lengths of a minute and of the grace, no stop request and no announcement.
+pub fn verify(
+    root: &Path,
+    request: &Request,
+    env: &clm_verify::Env,
+) -> Result<Outcome, clm_verify::Error> {
+    let stop = AtomicBool::new(false);
+    let memory = root.join("no-such-meminfo");
+    let call = Call {
+        memory: &memory,
+        minute: Duration::from_secs(60),
+        grace: Duration::from_secs(10),
+        stop: &stop,
+    };
+    clm_verify::verify_with(root, request, env, &call, |_| {})
+}
+
 pub struct Fixture {
     dir: TempDir,
 }
@@ -219,15 +237,7 @@ impl Fixture {
     /// The call the tests give `clm-verify` unless they say otherwise: a memory file that
     /// doesn't exist, the real lengths of a minute and of the grace, and no stop request.
     pub fn run(&self, request: &Request) -> Outcome {
-        let stop = AtomicBool::new(false);
-        let memory = self.path("meminfo");
-        let call = Call {
-            memory: &memory,
-            minute: Duration::from_secs(60),
-            grace: Duration::from_secs(10),
-            stop: &stop,
-        };
-        self.run_with(request, &call)
+        verify(&self.work(), request, &self.env()).unwrap()
     }
 
     pub fn run_with(&self, request: &Request, call: &Call) -> Outcome {

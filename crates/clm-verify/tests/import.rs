@@ -237,7 +237,7 @@ fn no_result_is_pending_even_with_nothing_landed() {
 fn settings_that_cannot_be_used_exit_1() {
     // req:verify/settings-from-main@bbaa1ef1
     let f = Fixture::new(Some("mode = \"pipeline\"\ntriggers = [\"work-done\"]"));
-    let err = clm_verify::verify(&f.work(), &Request::Import, &f.env()).unwrap_err();
+    let err = common::verify(&f.work(), &Request::Import, &f.env()).unwrap_err();
     assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
 }
 
@@ -279,7 +279,7 @@ fn a_host_that_fails_exits_1_with_its_message() {
     let f = Fixture::new(Some(IMPORT));
     f.land(&[("a.txt", "1\n")], "one");
     let err = with_gh(&f, &["fail".to_string()], || {
-        clm_verify::verify(&f.work(), &Request::Import, &f.env()).unwrap_err()
+        common::verify(&f.work(), &Request::Import, &f.env()).unwrap_err()
     });
     let clm_verify::Error::Refused(why) = err else {
         panic!("{err}")

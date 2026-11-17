@@ -217,16 +217,10 @@ impl<'a> Call<'a> {
     }
 }
 
-/// Runs one `clm verify` command in the repository at `root` with the standard call and no
-/// stop request. `env` is the environment `config` reads.
-pub fn verify(root: &Path, request: &Request, env: &Env) -> Result<Outcome, Error> {
-    let stop = AtomicBool::new(false);
-    verify_with(root, request, env, &Call::standard(&stop), |_| {})
-}
-
-/// `verify` with `call`, calling `announce` with the outcome as soon as the result is
+/// Runs one `clm verify` command in the repository at `root` with `call`. `env` is the
+/// environment `config` reads. It calls `announce` with the outcome as soon as the result is
 /// recorded, before the mutation pass a green run goes on to, so the caller can print the
-/// outcome line first (`mutation-pass`). The pass's own notes come last in the returned
+/// outcome line first (`mutation-pass`); the pass's own notes come last in the returned
 /// outcome's notes.
 pub fn verify_with(
     root: &Path,

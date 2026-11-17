@@ -92,18 +92,12 @@ impl State {
     /// What the newest `mutated` record on the chain up to position `end` inclusive left, in
     /// its order, each with the commit its diff runs from: the `since` of the oldest record of
     /// the unbroken run of newest records whose `left` names it (`mutation-pass`). A commit's
-    /// newest record is the newest by `at`.
+    /// newest record is the newest by `at`, which the fold lists first.
     pub(crate) fn carried(&self, end: usize) -> Vec<(String, Option<String>)> {
         let newest: Vec<&Body> = self.chain[..=end]
             .iter()
             .rev()
-            .filter_map(|c| {
-                self.fold
-                    .mutations
-                    .get(c)?
-                    .iter()
-                    .max_by(|a, b| a.at.cmp(&b.at))
-            })
+            .filter_map(|c| self.fold.mutations.get(c)?.first())
             .map(|r| &r.body)
             .collect();
         let Some(Body::Mutated { left, .. }) = newest.first() else {

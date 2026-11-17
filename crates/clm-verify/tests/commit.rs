@@ -78,7 +78,7 @@ fn not_on_main() {
     let side = f.commit(&[("a.txt", "side\n")], "side");
     f.git(&work, &["push", "-q", "origin", "side"]);
     f.git(&work, &["checkout", "-q", "main"]);
-    let err = clm_verify::verify(&work, &Request::Commit(side), &f.env()).unwrap_err();
+    let err = common::verify(&work, &Request::Commit(side), &f.env()).unwrap_err();
     let clm_verify::Error::Refused(why) = err else {
         panic!("{err}")
     };
@@ -125,7 +125,7 @@ fn a_revision_that_is_no_commit_is_refused() {
     // req:verify/verify-commit@af1f0935
     let f = Fixture::new(Some(LOCAL));
     f.land(&[("a.txt", "1\n")], "one");
-    let err = clm_verify::verify(
+    let err = common::verify(
         &f.work(),
         &Request::Commit("origin/nonesuch".to_string()),
         &f.env(),
@@ -149,6 +149,6 @@ fn a_merged_branch_commit_is_not_a_land() {
         &["merge", "-q", "--no-ff", "-m", "merge side", "side"],
     );
     f.git(&work, &["push", "-q", "origin", "main"]);
-    let err = clm_verify::verify(&work, &Request::Commit(side), &f.env()).unwrap_err();
+    let err = common::verify(&work, &Request::Commit(side), &f.env()).unwrap_err();
     assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
 }

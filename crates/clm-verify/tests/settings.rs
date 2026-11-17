@@ -61,7 +61,7 @@ fn an_invalid_setting_on_main() {
     );
     f.git(&f.work(), &["reset", "-q", "--hard", &before_land]);
     let before = f.records().len();
-    let err = clm_verify::verify(
+    let err = common::verify(
         &f.work(),
         &Request::Due {
             work_done: false,
@@ -85,7 +85,7 @@ fn a_fetch_that_fails_is_a_git_failure() {
         &f.work(),
         &["remote", "set-url", "origin", "/nonexistent/x"],
     );
-    let err = clm_verify::verify(
+    let err = common::verify(
         &f.work(),
         &Request::Due {
             work_done: false,
