@@ -102,13 +102,7 @@ fn run_pass(ctx: &Ctx, state: &State, end: usize, command: &str) -> Result<Vec<S
     ));
     clm_ledger::append(
         &ctx.root,
-        Body::Mutated {
-            commit,
-            since,
-            killed,
-            unproven,
-            not_judged,
-        },
+        Body::mutated(commit, since, killed, unproven, not_judged),
         ctx.env,
     )?;
     Ok(notes)
