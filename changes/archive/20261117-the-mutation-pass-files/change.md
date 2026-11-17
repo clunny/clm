@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-mutation-pass-files-unproven-again-on-a-requirement-its]
 ---
 
