@@ -1,5 +1,7 @@
 ---
 status: applied
+human_burdens:
+  - "Each release's prepare job builds cargo-nextest: a few more minutes per release"
 resolves: [clm-verify-s-coverage-step-hangs-forever-on-tests-that-change]
 ---
 
@@ -35,6 +37,10 @@ Hand edits: `AGENTS.md` tells a session to run `cargo nextest run` and `cargo te
 
 Backlog: `backlog/a-verify-can-hang-on-a-test-until-the-plan-s-freeze-ends.md`, a `question` blocking the four requirements until the human says whether to build them as an exception to the freeze.
 
+## What it removes
+
+- `ci/test-tools`'s scenario "not in the release" (the release workflow and `release-prepare.sh` name neither `test-tools.sh` nor `nextest`) and its sentence "No workflow and no other script SHALL run it", with the release's `cargo test --all` run. They are replaced by a scenario that the release runs `test-tools.sh` and the tests under nextest. `removal-needs-a-yes`: the human's approval of this change is that yes.
+
 ## Constraints and known edge cases
 
 - The release's `prepare` job builds `cargo-nextest` with `cargo install`, a few minutes on its hosted runner.
@@ -42,6 +48,9 @@ Backlog: `backlog/a-verify-can-hang-on-a-test-until-the-plan-s-freeze-ends.md`, 
 - `cargo llvm-cov nextest` runs no doctest, as plain `cargo llvm-cov` didn't either; doctests stay unbounded under `cargo test --doc`.
 - The fake `git` helpers keep stripping only their own directory: under one process per test there is only one.
 - A person who runs plain `cargo test` by hand can still meet the hang; `AGENTS.md` says not to.
+- `ci/tests-time-bounded` is proven at the land by reading the file only; no land-check test runs the real `nextest` against a hanging test (`land-checks-stay-fast`).
+- `ci/npm-installs-bounded`, also unbuilt and blocked by the plan's freeze, edits the same `coverage.sh` lines and tests; whichever `ci` build comes second rebases on the first.
+- The builds of these requirements also fix the comments they make stale: the headers of `test-tools.sh` and `detector-tools.sh`, the comment on `coverage.sh`'s `cargo llvm-cov` line and `release.yml`'s prepare-step comment; the test `the_release_builds_no_nextest` in `crates/clm/tests/ci_check.rs` is replaced, and `release_workflow.rs`'s fake `cargo` records `nextest run` and `test --doc` instead of passing them to the real cargo.
 
 ## Open questions
 
