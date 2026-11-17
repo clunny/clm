@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-verify-can-t-file-an-unproven-mutant-when-its-own-clm-binary]
 ---
 
