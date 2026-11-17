@@ -24,14 +24,20 @@ The mutation pass stops filing `unproven` on a requirement whose rule is data in
 - `verify/mutation-pass`: each block lists, after its `test` lines and before `limit 20`, one `reads <glob>` line per distinct marker glob in the files holding its citing tests, sorted. Design names why.
 - `ci/mutate-script`: a block holding a `reads` line whose tests run no line with a mutant of its files, or whose StrykerJS mutants are all `NoCoverage`, is `not-judged`; without a `reads` line it is `survived` as before.
 - `check.affected`'s Contract names `readers` and `reads_in` as library calls; both exist and are proven by `check.affected/affected-readers`'s tests, so nothing is built there.
-- The decision `mutation-after-land` records the step.
+- The decision `mutation-after-land` records the step, and the settings guide (`docs/guide/settings.md`) describes the `reads` line to any project's command and tells it to ignore lines it doesn't know.
 
 ## Edge cases and workarounds
 
-- An empty test in a file that carries a `clm:reads` marker reads as `not-judged`, not `unproven`. Accepted: the marker is a declaration a reviewer sees, and a file that reads no repository file has no reason to carry one.
+- An empty test in a file that carries a `clm:reads` marker reads as `not-judged`, not `unproven`. Markers are read per file, so this covers every test in shared files that carry them (`crates/clm/tests/cli.rs`, `crates/clm-check/tests/cli.rs`, `crates/clm-health/tests/command.rs`, `crates/clm-config/tests/this_repository.rs`), about 27 requirements' citing tests. Accepted: reading only markers inside a test's span would find none, since every marker sits at a file's head, and those tests mostly run their component's code, which keeps them judged by mutants.
+- A marker in another file of the same test target (a suite's `main.rs`) gives no `reads` line, as for `check.affected`'s readers.
 - A `reads` line changes nothing for a block whose tests run its code: such a block is judged by its mutants as today.
 
 ## Constraints
 
 - `verify` builds first: `mutate.sh` ignores an unknown plan line, so the plan can carry `reads` before the script reads it; `ci/mutate-script` needs `verify/mutation-pass` already.
 - No new setting, no new plan line beyond `reads`, no new verdict word.
+
+## Open questions
+
+- `ARCHITECTURE.md`'s `proven-by-tests` `#### Untested` block lists what the mutation pass doesn't judge, and doesn't name this new case (an empty test in a file that carries a `clm:reads` marker), nor the data-rule `not-judged` of `20261116-the-mutation-pass-judges`. Left as it is: the block summarises, and editing it is the human's call. Raised by the architecture audit.
+
