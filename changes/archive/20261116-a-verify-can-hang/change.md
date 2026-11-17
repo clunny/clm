@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-verify-can-hang-on-a-test-until-the-plan-s-freeze-ends]
 ---
 
