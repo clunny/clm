@@ -1,8 +1,8 @@
 //! Where the tests of a file are (`test-spans`): a line scanner for three language
 //! families, with no parser, so the crate builds for `wasm32-unknown-unknown`. It skips
 //! string and character literals and line and block comments, and nothing else: a
-//! regular expression holding a quote or a parenthesis, or a brace it still miscounts, can
-//! end a span late. A test's span ends no later than the line above the next test (or, in
+//! regular expression holding a quote, a parenthesis or `/*`, or a brace it still
+//! miscounts, can end a span late. A test's span ends no later than the line above the next test (or, in
 //! TypeScript and JavaScript, group), so a misread costs that test's markers their
 //! standing and shows as `uncounted`, never the tests after it.
 
@@ -444,35 +444,35 @@ fn script_tests(lines: &[&str]) -> Vec<TestSpan> {
             }
         })
         .collect();
-    // Each call: its line, its group flag, its name and its first line (0-based).
-    let calls: Vec<(usize, bool, String, usize)> = lines
+    // Each call, by the line (0-based) it starts on; its last line is found below.
+    let mut calls: Vec<(usize, TestSpan)> = lines
         .iter()
         .enumerate()
         .filter_map(|(at, line)| {
             let (group, args) = script_call(line)?;
-            let first = first_above(at, 0, |i| comment[i]);
-            Some((at, group, script_name(args), first))
+            let first = first_above(at, 0, |i| comment[i]) + 1;
+            let name = script_name(args);
+            let span = TestSpan {
+                name,
+                group,
+                first,
+                last: first,
+            };
+            Some((at, span))
         })
         .collect();
+    let firsts: Vec<usize> = calls.iter().map(|(_, t)| t.first).collect();
     let end = lines.len().saturating_sub(1);
-    calls
-        .iter()
-        .enumerate()
-        .map(|(k, &(at, group, ref name, first))| {
-            // A test, not a group, ends no later than the line above the next call's first
-            // line, so what the scanner misreads costs only that test.
-            let bound = match calls.get(k + 1) {
-                Some(&(_, _, _, next)) if !group => next - 1,
-                _ => end,
-            };
-            TestSpan {
-                name: name.clone(),
-                group,
-                first: first + 1,
-                last: script_close(lines, at, bound) + 1,
-            }
-        })
-        .collect()
+    for (k, (at, t)) in calls.iter_mut().enumerate() {
+        // A test, not a group, ends no later than the line above the next call's first
+        // line, so what the scanner misreads costs only that test.
+        let bound = match firsts.get(k + 1) {
+            Some(&next) if !t.group => next - 2,
+            _ => end,
+        };
+        t.last = script_close(lines, *at, bound) + 1;
+    }
+    calls.into_iter().map(|(_, t)| t).collect()
 }
 
 /// The line that closes the call starting on `at`: where its parentheses balance, and no
