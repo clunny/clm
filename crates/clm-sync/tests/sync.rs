@@ -528,7 +528,7 @@ fn a_change_built_on_another_sorts_first() {
 
 #[test]
 fn applied_assets_survive_regeneration() {
-    // req:sync/reapply@85e68c87 req:apply/apply-assets@786adb62
+    // req:sync/reapply@85e68c87
     let r = repo("spec/y");
     main_moves(&r, &[("specs/a/assets/old.png", "png")]);
     git(&r.work, &["pull", "-q", "--rebase", "origin", "main"]);
