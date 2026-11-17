@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-draft-prompt-gives-a-bug-in-prompt-wording-no-route]
 ---
 
