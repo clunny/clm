@@ -164,9 +164,63 @@ fn records(dir: &Path, rev: &str) -> String {
     sh(dir, &["show", &format!("{rev}:records.jsonl")])
 }
 
-/// So the next record's `at` is later.
+thread_local! {
+    /// The latest `at` of the records this test appended through `append`.
+    static LATEST: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+/// `clm_ledger::append`, noting the record's `at` for `tick`.
+fn append(
+    root: &Path,
+    entry: impl Into<clm_ledger::Entry>,
+    env: &dyn Fn(&str) -> Option<String>,
+) -> Result<clm_ledger::Appended, clm_ledger::Error> {
+    let appended = clm_ledger::append(root, entry, env)?;
+    LATEST.with_borrow_mut(|latest| {
+        if appended.record.at > *latest {
+            latest.clone_from(&appended.record.at);
+        }
+    });
+    Ok(appended)
+}
+
+/// So the next record's `at` is later than every record's this test appended: waits until the
+/// wall clock reads later than the latest, however far the clock stepped back since.
 fn tick() {
-    std::thread::sleep(std::time::Duration::from_millis(5));
+    let latest = LATEST.with_borrow(Clone::clone);
+    let start = std::time::Instant::now();
+    while at_now() <= latest {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(30),
+            "the clock stayed before {latest}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+/// The wall clock as a record's `at`, `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+fn at_now() -> String {
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    let secs = since.as_secs();
+    // Howard Hinnant's `civil_from_days`.
+    let z = (secs / 86_400) as i64 + 719_468;
+    let (era, doe) = (z.div_euclid(146_097), z.rem_euclid(146_097));
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    let rem = secs % 86_400;
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60,
+        since.subsec_millis()
+    )
 }
 
 #[test]
@@ -176,10 +230,10 @@ fn compact_prunes_a_landed_approval_and_older_checks() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let b = clone_with_origin(home, "b", "B");
-    let mine = clm_ledger::append(&a, approved("f"), &env(home, &[])).unwrap();
-    clm_ledger::append(&a, checked("k"), &env(home, &[])).unwrap();
+    let mine = append(&a, approved("f"), &env(home, &[])).unwrap();
+    append(&a, checked("k"), &env(home, &[])).unwrap();
     tick();
-    let theirs = clm_ledger::append(&b, landed("c", "f", Some("m")), &env(home, &[])).unwrap();
+    let theirs = append(&b, landed("c", "f", Some("m")), &env(home, &[])).unwrap();
     let origin = home.join("origin.git");
     let their_branch = format!("clm/ledger/{}", theirs.record.writer);
     let their_tip = sh(&origin, &["rev-parse", &their_branch]);
@@ -202,9 +256,9 @@ fn compact_warns_when_origin_refuses_the_push() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
-    let mine = clm_ledger::append(&a, approved("f"), &env(home, &[])).unwrap();
+    let mine = append(&a, approved("f"), &env(home, &[])).unwrap();
     tick();
-    clm_ledger::append(&a, landed("c", "f", Some("m")), &env(home, &[])).unwrap();
+    append(&a, landed("c", "f", Some("m")), &env(home, &[])).unwrap();
     let origin = home.join("origin.git");
     let hook = origin.join("hooks/pre-receive");
     std::fs::create_dir_all(hook.parent().unwrap()).unwrap();
@@ -231,9 +285,9 @@ fn compact_keeps_an_open_approval() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let b = clone_with_origin(home, "b", "B");
-    let mine = clm_ledger::append(&a, approved("g"), &env(home, &[])).unwrap();
+    let mine = append(&a, approved("g"), &env(home, &[])).unwrap();
     tick();
-    clm_ledger::append(&b, landed("c", "other", Some("m")), &env(home, &[])).unwrap();
+    append(&b, landed("c", "other", Some("m")), &env(home, &[])).unwrap();
     let branch = format!("clm/ledger/{}", mine.record.writer);
     let before = sh(&a, &["rev-parse", &branch]);
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
@@ -250,9 +304,9 @@ fn compact_keeps_lands_and_newer_checks() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let mine = clm_ledger::append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    let mine = append(&a, landed("c", "f", Some("m")), &env).unwrap();
     tick();
-    clm_ledger::append(&a, checked("newer"), &env).unwrap();
+    append(&a, checked("newer"), &env).unwrap();
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 0");
@@ -301,7 +355,7 @@ fn compact_drops_reviewed_lines() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let mine = clm_ledger::append(&a, approved("g"), &env).unwrap();
+    let mine = append(&a, approved("g"), &env).unwrap();
     let branch = format!("clm/ledger/{}", mine.record.writer);
     let reviewed = r#"{"id":"r1","writer":"x/1","at":"2026-01-01T00:00:00.000Z","kind":"reviewed","fingerprint":"f"}"#;
     append_line(&a, &branch, reviewed);
@@ -339,11 +393,11 @@ fn compact_keeps_an_older_lands_check() {
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0", "Merge b1"]);
     let env = env(dir.path(), &[]);
     let key = legacy_key(dir.path(), &merges[0]);
-    clm_ledger::append(dir.path(), checked(&key), &env).unwrap();
+    append(dir.path(), checked(&key), &env).unwrap();
     // Written before `landed` records named their code key: checked under its legacy key.
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", None), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", None), &env).unwrap();
     tick();
-    clm_ledger::append(dir.path(), landed(&merges[1], "g", Some("m")), &env).unwrap();
+    append(dir.path(), landed(&merges[1], "g", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 0");
@@ -363,12 +417,12 @@ fn compact_keeps_every_check_when_a_lands_key_is_unknown() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), approved("f"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked("old"), &env).unwrap();
+    append(dir.path(), approved("f"), &env).unwrap();
+    append(dir.path(), checked("old"), &env).unwrap();
     tick();
     let missing = "0123456789abcdef0123456789abcdef01234567";
-    clm_ledger::append(dir.path(), landed(missing, "f", None), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "g", Some("m")), &env).unwrap();
+    append(dir.path(), landed(missing, "f", None), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "g", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
@@ -440,9 +494,9 @@ fn legacy_key(dir: &Path, commit: &str) -> String {
 fn record_land(dir: &Path, commit: &str) {
     let key = clm_ledger::code_key(dir, commit).unwrap();
     let env = env(dir, &[]);
-    clm_ledger::append(dir, checked(&key), &env).unwrap();
+    append(dir, checked(&key), &env).unwrap();
     tick();
-    clm_ledger::append(dir, landed(commit, "f", Some(&key)), &env).unwrap();
+    append(dir, landed(commit, "f", Some(&key)), &env).unwrap();
 }
 
 #[test]
@@ -454,8 +508,8 @@ fn verify_clean_history() {
     // computed from the commit.
     let env = env(dir.path(), &[]);
     let key = clm_ledger::code_key(dir.path(), &merges[0]).unwrap();
-    clm_ledger::append(dir.path(), checked(&key), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", None), &env).unwrap();
+    append(dir.path(), checked(&key), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", None), &env).unwrap();
     record_land(dir.path(), &merges[1]);
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
@@ -467,8 +521,8 @@ fn verify_reads_the_recorded_key() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked("k"), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("k")), &env).unwrap();
+    append(dir.path(), checked("k"), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("k")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
 }
@@ -480,8 +534,8 @@ fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
     let legacy = legacy_key(dir.path(), &merges[0]);
-    clm_ledger::append(dir.path(), checked(&legacy), &vars).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", None), &vars).unwrap();
+    append(dir.path(), checked(&legacy), &vars).unwrap();
+    append(dir.path(), landed(&merges[0], "f", None), &vars).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
 
@@ -490,8 +544,8 @@ fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
     let live = clm_ledger::code_key(dir.path(), &merges[0]).unwrap();
-    clm_ledger::append(dir.path(), checked(&live), &vars).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", None), &vars).unwrap();
+    append(dir.path(), checked(&live), &vars).unwrap();
+    append(dir.path(), landed(&merges[0], "f", None), &vars).unwrap();
     let (code, out, _) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
     assert!(out.contains("ledger/unchecked-land"), "{out}");
@@ -572,8 +626,8 @@ fn verify_reports_a_land_no_check_names() {
     let env = env(dir.path(), &[]);
     // The commit's computed key is checked, but the land's own key `k` isn't.
     let computed = clm_ledger::code_key(dir.path(), &merges[1]).unwrap();
-    clm_ledger::append(dir.path(), checked(&computed), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[1], "f", Some("k")), &env).unwrap();
+    append(dir.path(), checked(&computed), &env).unwrap();
+    append(dir.path(), landed(&merges[1], "f", Some("k")), &env).unwrap();
     let (code, out, _) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
     assert_eq!(out.lines().count(), 1, "{out}");
@@ -590,9 +644,9 @@ fn show_lists_the_fold_in_time_order() {
     repo(dir.path(), "T");
     std::fs::write(dir.path().join("clm.toml"), "host = \"none\"\n").unwrap();
     let env = env(dir.path(), &[]);
-    let a = clm_ledger::append(dir.path(), approved("f"), &env).unwrap();
+    let a = append(dir.path(), approved("f"), &env).unwrap();
     tick();
-    let l = clm_ledger::append(dir.path(), landed("c", "f", None), &env).unwrap();
+    let l = append(dir.path(), landed("c", "f", None), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let w = &a.record.writer;
@@ -622,7 +676,7 @@ fn show_prints_whether_a_land_needed_review() {
     {
         (*kind, *review, *branch) = (LandKind::Spec, true, "spec/x".into());
     }
-    let l = clm_ledger::append(dir.path(), body, &env).unwrap();
+    let l = append(dir.path(), body, &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let w = &l.record.writer;
@@ -640,9 +694,9 @@ fn show_sorts_across_ledgers() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let b = clone_with_origin(home, "b", "B");
-    clm_ledger::append(&b, approved("old"), &env(home, &[])).unwrap();
+    append(&b, approved("old"), &env(home, &[])).unwrap();
     tick();
-    clm_ledger::append(&a, approved("new"), &env(home, &[])).unwrap();
+    append(&a, approved("new"), &env(home, &[])).unwrap();
     sh(&a, &["fetch", "-q", "origin"]);
     let (code, out, err) = clm(&a, home, &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
@@ -738,13 +792,13 @@ fn append_signed(dir: &Path, person: &str, key: &Path, namespace: &str, body: Bo
     ];
     let env = env(dir, &vars);
     let signed = clm_ledger::sign(dir, body, namespace, &env).unwrap();
-    clm_ledger::append(dir, signed, &env).unwrap();
+    append(dir, signed, &env).unwrap();
 }
 
 /// A spec land of `commit` that needed review, naming `fingerprint`, its code key checked.
 fn hard_land(dir: &Path, commit: &str, fingerprint: &str) -> Body {
     let key = clm_ledger::code_key(dir, commit).unwrap();
-    clm_ledger::append(dir, checked(&key), &env(dir, &[])).unwrap();
+    append(dir, checked(&key), &env(dir, &[])).unwrap();
     Body::Landed {
         commit: commit.into(),
         branch: "spec/x".into(),
@@ -787,7 +841,7 @@ fn verify_judges_a_land_by_any_signed_record() {
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
     let land = hard_land(root, &s.merge, &s.fingerprint);
-    clm_ledger::append(root, land.clone(), &env(root, &[])).unwrap();
+    append(root, land.clone(), &env(root, &[])).unwrap();
     append_signed(root, "christopher-lunny", &s.christopher, "clm-land", land);
     append_signed(
         root,
@@ -890,7 +944,7 @@ fn verify_unsigned_land() {
     let root = dir.path();
     let s = signed_main(root, "Christopher Lunny");
     let land = hard_land(root, &s.merge, &s.fingerprint);
-    clm_ledger::append(root, land, &env(root, &[])).unwrap();
+    append(root, land, &env(root, &[])).unwrap();
     append_signed(
         root,
         "dana",
@@ -946,10 +1000,10 @@ fn compact_keeps_a_signed_lands_approval() {
     // `dana`'s approval of a diff that a land before the switch names still goes.
     let before = sh(root, &["rev-parse", &format!("{}^1", s.merge)]);
     let env = env(root, &[("CLM_WRITER", "dana")]);
-    clm_ledger::append(root, approved("old"), &env).unwrap();
+    append(root, approved("old"), &env).unwrap();
     tick();
     let old = hard_land(root, &before, "old");
-    clm_ledger::append(root, old, &env).unwrap();
+    append(root, old, &env).unwrap();
     // Compacting as `dana`.
     sh(root, &["config", "user.name", "Dana"]);
     let (code, out, err) = clm(root, root, &["ledger", "compact"]);
@@ -970,7 +1024,7 @@ fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
     let root = dir.path();
     history(root, &["Merge b0"]);
     let env = env(root, &[]);
-    clm_ledger::append(root, approved("f"), &env).unwrap();
+    append(root, approved("f"), &env).unwrap();
     tick();
     let missing = "0123456789abcdef0123456789abcdef01234567";
     let land = Body::Landed {
@@ -986,7 +1040,7 @@ fn compact_keeps_the_approval_of_a_land_that_needed_review_not_fetched() {
         recheck: None,
         recheck_files: None,
     };
-    clm_ledger::append(root, land, &env).unwrap();
+    append(root, land, &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 0");
@@ -1014,8 +1068,8 @@ fn verify_before_the_switch() {
     let env = env(root, &[]);
     for (commit, fingerprint) in [(&merges[0], "f0"), (&switch, "f1")] {
         let land = hard_land(root, commit, fingerprint);
-        clm_ledger::append(root, approved(fingerprint), &env).unwrap();
-        clm_ledger::append(root, land, &env).unwrap();
+        append(root, approved(fingerprint), &env).unwrap();
+        append(root, land, &env).unwrap();
     }
     let (code, out, err) = clm(root, root, &["ledger", "verify"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
@@ -1037,12 +1091,12 @@ fn show_prints_a_subscription_without_its_keys() {
     repo(root, "T");
     std::fs::write(root.join("clm.toml"), "host = \"none\"\n").unwrap();
     let env = env(root, &[("CLM_WRITER", "alice")]);
-    let s = clm_ledger::append(root, subscribed("https://push.example/s/2"), &env).unwrap();
+    let s = append(root, subscribed("https://push.example/s/2"), &env).unwrap();
     tick();
     let end = Body::Unsubscribed {
         subscription: s.record.id.clone(),
     };
-    let u = clm_ledger::append(root, end, &env).unwrap();
+    let u = append(root, end, &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let (id, w) = (&s.record.id, &s.record.writer);
@@ -1067,14 +1121,14 @@ fn compact_keeps_subscription_records() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let s = clm_ledger::append(&a, subscribed("https://push.example/s/1"), &env).unwrap();
+    let s = append(&a, subscribed("https://push.example/s/1"), &env).unwrap();
     let end = Body::Unsubscribed {
         subscription: s.record.id.clone(),
     };
-    clm_ledger::append(&a, end, &env).unwrap();
-    clm_ledger::append(&a, approved("f"), &env).unwrap();
+    append(&a, end, &env).unwrap();
+    append(&a, approved("f"), &env).unwrap();
     tick();
-    clm_ledger::append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    append(&a, landed("c", "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
@@ -1138,7 +1192,7 @@ fn merge_files(dir: &Path, name: &str, files: &[(&str, &str)]) -> (String, Strin
 /// A land of `commit` recorded as `kind` and `review`, its code key checked.
 fn land_as(dir: &Path, commit: &str, fingerprint: &str, kind: LandKind, review: bool) -> Body {
     let key = clm_ledger::code_key(dir, commit).unwrap();
-    clm_ledger::append(dir, checked(&key), &env(dir, &[])).unwrap();
+    append(dir, checked(&key), &env(dir, &[])).unwrap();
     Body::Landed {
         commit: commit.into(),
         branch: "x".into(),
@@ -1298,7 +1352,7 @@ fn review_before_the_switch() {
     let _keys = signed_main_with_specs(root, false);
     let (merge, fingerprint) = architecture_change(root);
     let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
-    clm_ledger::append(root, land, &env(root, &[])).unwrap();
+    append(root, land, &env(root, &[])).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
 }
@@ -1328,7 +1382,7 @@ fn review_unsigned_land_is_not_recomputed() {
     let _keys = signed_main_with_specs(root, true);
     let (merge, fingerprint) = architecture_change(root);
     let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
-    clm_ledger::append(root, land, &env(root, &[])).unwrap();
+    append(root, land, &env(root, &[])).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
     assert_eq!(code, Some(1), "{out}{err}");
     assert_eq!(out.lines().count(), 1, "{out}");
@@ -1458,12 +1512,12 @@ fn show_prints_proposals() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let env = env(root, alices(root));
-    let p = clm_ledger::append(root, proposed("export-csv"), &env).unwrap();
+    let p = append(root, proposed("export-csv"), &env).unwrap();
     tick();
     let end = Body::Withdrawn {
         proposal: p.record.id.clone(),
     };
-    let w = clm_ledger::append(root, end, &env).unwrap();
+    let w = append(root, end, &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let (id, who) = (&p.record.id, &p.record.writer);
@@ -1484,14 +1538,14 @@ fn compact_keeps_proposal_records() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let p = clm_ledger::append(&a, proposed("dark-mode"), &env).unwrap();
+    let p = append(&a, proposed("dark-mode"), &env).unwrap();
     let end = Body::Withdrawn {
         proposal: p.record.id.clone(),
     };
-    clm_ledger::append(&a, end, &env).unwrap();
-    clm_ledger::append(&a, approved("f"), &env).unwrap();
+    append(&a, end, &env).unwrap();
+    append(&a, approved("f"), &env).unwrap();
     tick();
-    clm_ledger::append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    append(&a, landed("c", "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
@@ -1514,7 +1568,7 @@ fn show_prints_answers() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let env = env(root, alices(root));
-    let a = clm_ledger::append(root, answered("q", "yes"), &env).unwrap();
+    let a = append(root, answered("q", "yes"), &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let (id, who) = (&a.record.id, &a.record.writer);
@@ -1529,10 +1583,10 @@ fn compact_keeps_answers() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let r = clm_ledger::append(&a, answered("q", "yes"), &env).unwrap();
-    clm_ledger::append(&a, approved("f"), &env).unwrap();
+    let r = append(&a, answered("q", "yes"), &env).unwrap();
+    append(&a, approved("f"), &env).unwrap();
     tick();
-    clm_ledger::append(&a, landed("c", "f", Some("m")), &env).unwrap();
+    append(&a, landed("c", "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
@@ -1564,13 +1618,13 @@ fn show_prints_feedback_on_one_line() {
     let root = dir.path();
     let env = env(root, alices(root));
     let r = changes_requested("f", "  Split the\n   requirement  \n");
-    let r = clm_ledger::append(root, r, &env).unwrap();
+    let r = append(root, r, &env).unwrap();
     tick();
     // Each run of whitespace holding a line break is one space; others stay.
     let c = commented("f", None, "Why  this?\r\n\r\nAnd that.\u{2028}Done.");
-    let c = clm_ledger::append(root, c, &env).unwrap();
+    let c = append(root, c, &env).unwrap();
     tick();
-    let t = clm_ledger::append(root, commented("f", Some("n/r"), "ok"), &env).unwrap();
+    let t = append(root, commented("f", Some("n/r"), "ok"), &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let who = &r.record.writer;
@@ -1593,8 +1647,8 @@ fn compact_prunes_landed_feedback() {
     let a = clone_with_origin(home, "a", "A");
     let b = clone_with_origin(home, "b", "B");
     let env = env(home, &[]);
-    let mine = clm_ledger::append(&a, commented("f", Some("n/r"), "Why?"), &env).unwrap();
-    clm_ledger::append(&a, changes_requested("f", "Split it"), &env).unwrap();
+    let mine = append(&a, commented("f", Some("n/r"), "Why?"), &env).unwrap();
+    append(&a, changes_requested("f", "Split it"), &env).unwrap();
     // Whatever its branch, feedback at a landed fingerprint goes.
     let elsewhere = Body::Commented {
         branch: "spec/y".into(),
@@ -1602,13 +1656,13 @@ fn compact_prunes_landed_feedback() {
         target: None,
         text: "Keep me".into(),
     };
-    clm_ledger::append(&a, elsewhere, &env).unwrap();
+    append(&a, elsewhere, &env).unwrap();
     tick();
     let mut land = landed("c", "f", Some("m"));
     if let Body::Landed { branch, .. } = &mut land {
         *branch = "spec/renamed".into();
     }
-    clm_ledger::append(&b, land, &env).unwrap();
+    append(&b, land, &env).unwrap();
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 2");
@@ -1636,7 +1690,7 @@ fn compact_prunes_feedback_at_a_signed_lands_fingerprint() {
     );
     let env = env(root, &[("CLM_WRITER", "dana")]);
     let note = commented(&s.fingerprint, None, "Looks right");
-    clm_ledger::append(root, note, &env).unwrap();
+    append(root, note, &env).unwrap();
     sh(root, &["config", "user.name", "Dana"]);
     let (code, out, err) = clm(root, root, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
@@ -1681,9 +1735,9 @@ fn show_effort_and_decided() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let env = env(root, alices(root));
-    let e = clm_ledger::append(root, effort(5), &env).unwrap();
+    let e = append(root, effort(5), &env).unwrap();
     tick();
-    let d = clm_ledger::append(root, decided("capability/x"), &env).unwrap();
+    let d = append(root, decided("capability/x"), &env).unwrap();
     let (code, out, err) = clm(root, root, &["ledger", "show"]);
     assert_eq!(code, Some(0), "{err}");
     let who = &e.record.writer;
@@ -1705,11 +1759,11 @@ fn compact_drops_superseded_effort() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let early = clm_ledger::append(&a, effort(5), &env).unwrap();
-    clm_ledger::append(&a, decided("capability/x"), &env).unwrap();
+    let early = append(&a, effort(5), &env).unwrap();
+    append(&a, decided("capability/x"), &env).unwrap();
     tick();
-    let late = clm_ledger::append(&a, effort(50), &env).unwrap();
-    clm_ledger::append(&a, decided("capability/x"), &env).unwrap();
+    let late = append(&a, effort(50), &env).unwrap();
+    append(&a, decided("capability/x"), &env).unwrap();
     assert_eq!(early.record.id, late.record.id);
     let (code, out, err) = clm(&a, home, &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
@@ -1815,7 +1869,7 @@ fn compact_settles_an_effort_tie() {
     let home = dir.path();
     let a = clone_with_origin(home, "a", "A");
     let env = env(home, &[]);
-    let first = clm_ledger::append(&a, effort(5), &env).unwrap();
+    let first = append(&a, effort(5), &env).unwrap();
     let branch = format!("clm/ledger/{}", first.record.writer);
     let line = records(&a, &branch).replace(r#""output":5"#, r#""output":6"#);
     append_line(&a, &branch, &line);
@@ -1852,10 +1906,10 @@ fn verify_counts_a_composed_check() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked_by("h", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("b", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), checked_by("h", "x"), &env).unwrap();
+    append(dir.path(), checked_by("b", "x"), &env).unwrap();
+    append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
 }
@@ -1866,9 +1920,9 @@ fn verify_rejects_a_composed_check_whose_basis_is_missing() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked_by("h", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), checked_by("h", "x"), &env).unwrap();
+    append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, _) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
     assert!(
@@ -1883,10 +1937,10 @@ fn verify_rejects_a_composed_check_whose_basis_ran_another_command() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked_by("h", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("b", "y"), &env).unwrap();
-    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), checked_by("h", "x"), &env).unwrap();
+    append(dir.path(), checked_by("b", "y"), &env).unwrap();
+    append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, _) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!(code, Some(1), "{out}");
     assert!(out.contains("ledger/unchecked-land"), "{out}");
@@ -1898,9 +1952,9 @@ fn verify_takes_a_whole_check_beside_a_broken_composed_one() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("m", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    append(dir.path(), checked_by("m", "x"), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "verify"]);
     assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
 }
@@ -1911,11 +1965,11 @@ fn compact_keeps_the_basis_of_a_composed_check() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked_by("h", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("b", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    append(dir.path(), checked_by("h", "x"), &env).unwrap();
+    append(dir.path(), checked_by("b", "x"), &env).unwrap();
+    append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
     tick();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 0");
@@ -1931,10 +1985,10 @@ fn compact_still_prunes_a_check_no_land_or_basis_names() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked_by("old", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("m", "x"), &env).unwrap();
+    append(dir.path(), checked_by("old", "x"), &env).unwrap();
+    append(dir.path(), checked_by("m", "x"), &env).unwrap();
     tick();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     assert_eq!(out.trim(), "removed 1");
@@ -1949,13 +2003,13 @@ fn compact_keeps_chains_of_bases() {
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
     // `deep` and `b2` are the basis of composed `h`; `h` and `b` of composed `m`, a land's key.
-    clm_ledger::append(dir.path(), checked_by("deep", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("b2", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), composed("h", "x", "deep", "b2"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("b", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
+    append(dir.path(), checked_by("deep", "x"), &env).unwrap();
+    append(dir.path(), checked_by("b2", "x"), &env).unwrap();
+    append(dir.path(), composed("h", "x", "deep", "b2"), &env).unwrap();
+    append(dir.path(), checked_by("b", "x"), &env).unwrap();
+    append(dir.path(), composed("m", "x", "h", "b"), &env).unwrap();
     tick();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("m")), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     let fold = clm_ledger::fold(dir.path()).unwrap();
@@ -1970,11 +2024,11 @@ fn compact_keeps_the_basis_of_a_composed_check_newer_than_every_land() {
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
-    clm_ledger::append(dir.path(), checked_by("n1", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), checked_by("n2", "x"), &env).unwrap();
-    clm_ledger::append(dir.path(), landed(&merges[0], "f", Some("k")), &env).unwrap();
+    append(dir.path(), checked_by("n1", "x"), &env).unwrap();
+    append(dir.path(), checked_by("n2", "x"), &env).unwrap();
+    append(dir.path(), landed(&merges[0], "f", Some("k")), &env).unwrap();
     tick();
-    clm_ledger::append(dir.path(), composed("later", "x", "n1", "n2"), &env).unwrap();
+    append(dir.path(), composed("later", "x", "n1", "n2"), &env).unwrap();
     let (code, out, err) = clm(dir.path(), dir.path(), &["ledger", "compact"]);
     assert_eq!(code, Some(0), "{out}{err}");
     let fold = clm_ledger::fold(dir.path()).unwrap();
