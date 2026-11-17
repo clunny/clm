@@ -29,13 +29,14 @@ impl Exe {
         }
         let own = std::env::current_exe()
             .map_err(|e| Error::Refused(format!("can't find `clm`'s own binary to copy: {e}")))?;
+        let (named, from) = source(own);
         let parent = temp_parent(repo.env).map_err(|e| {
             Error::Refused(format!("can't copy `clm`: no temporary directory: {e}"))
         })?;
         let refused = |at: &Path, e: std::io::Error| {
             Error::Refused(format!(
                 "can't copy `clm` ({}) to {}: {e}",
-                own.display(),
+                named.display(),
                 at.display()
             ))
         };
@@ -43,10 +44,9 @@ impl Exe {
             .prefix("land-bin-")
             .tempdir_in(&parent)
             .map_err(|e| refused(&parent, e))?;
-        let name = own.file_name().unwrap_or("clm".as_ref());
-        let path = dir.path().join(name);
+        let path = dir.path().join(named.file_name().unwrap_or("clm".as_ref()));
         // `fs::copy` keeps the file's permissions, so the copy stays executable.
-        std::fs::copy(&own, &path).map_err(|e| refused(&path, e))?;
+        std::fs::copy(&from, &path).map_err(|e| refused(&path, e))?;
         Ok(Exe {
             path,
             _dir: Some(dir),
@@ -56,4 +56,30 @@ impl Exe {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
+}
+
+/// The path the running binary `own`, as `current_exe` gives it, goes by, and the file to
+/// copy for it. A path ending in ` (deleted)` that names no file is Linux's sign that the file
+/// the process started from was replaced or deleted: it goes by the path without the suffix,
+/// and the file to copy is the one now at that path when one exists, else the running image
+/// at `/proc/self/exe`.
+#[cfg(unix)]
+fn source(own: PathBuf) -> (PathBuf, PathBuf) {
+    use std::os::unix::ffi::OsStrExt;
+    let cut = own
+        .as_os_str()
+        .as_bytes()
+        .strip_suffix(b" (deleted)")
+        .filter(|_| !own.exists())
+        .map(|b| PathBuf::from(std::ffi::OsStr::from_bytes(b)));
+    match cut {
+        Some(named) if named.exists() => (named.clone(), named),
+        Some(named) => (named, PathBuf::from("/proc/self/exe")),
+        None => (own.clone(), own),
+    }
+}
+
+#[cfg(not(unix))]
+fn source(own: PathBuf) -> (PathBuf, PathBuf) {
+    (own.clone(), own)
 }
