@@ -1,23 +1,23 @@
-//! `clm guide`: the guide compiled into the binary, readable outside any repository.
+//! `clm guide`: the guide compiled into the binary, readable outside any repository, through
+//! `clm-init`'s call.
 // clm:reads ARCHITECTURE.md
 // clm:reads docs/guide/**
 // clm:reads docs/spec-format.md
 
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::Output;
 
 use tempfile::TempDir;
 
-/// Runs `clm guide <args>` in a directory that isn't in a git repository.
+mod common;
+
+/// Calls `clm guide <args>` in a directory outside any CLM repository.
 fn guide(args: &[&str]) -> Output {
     let tmp = TempDir::new().unwrap();
-    Command::new(env!("CARGO_BIN_EXE_clm"))
-        .arg("guide")
-        .args(args)
-        .current_dir(tmp.path())
-        .env("GIT_CEILING_DIRECTORIES", tmp.path())
-        .output()
-        .unwrap()
+    assert_eq!(common::found_root(tmp.path()), None);
+    let mut all = vec!["guide"];
+    all.extend(args);
+    common::call(tmp.path(), &all, &common::process_env, &[])
 }
 
 #[test]

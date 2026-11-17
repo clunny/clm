@@ -35,7 +35,7 @@ fn run(cwd: &Path, args: &[&str]) -> (u8, String, String) {
 
 #[test]
 fn init_writes_what_it_prints_to_the_buffers() {
-    // req:init/commands-in-crate@130bb26b
+    // req:init/commands-in-crate@646de73d
     let tmp = TempDir::new().unwrap();
     git(tmp.path(), &["init", "-q", "-b", "main"]);
     let (code, out, err) = run(tmp.path(), &["init", "--lang", "rust"]);
@@ -57,7 +57,7 @@ fn init_writes_what_it_prints_to_the_buffers() {
 
 #[test]
 fn an_option_init_does_not_have() {
-    // req:init/commands-in-crate@130bb26b
+    // req:init/commands-in-crate@646de73d
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(tmp.path(), &["init", "--no-such-option"]);
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
@@ -76,7 +76,7 @@ fn an_option_init_does_not_have() {
 
 #[test]
 fn survey_and_guide_refuse_what_they_do_not_have() {
-    // req:init/commands-in-crate@130bb26b
+    // req:init/commands-in-crate@646de73d
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(tmp.path(), &["survey", "--nope"]);
     assert_eq!((code, out.as_str()), (2, ""), "{err}");
@@ -88,7 +88,7 @@ fn survey_and_guide_refuse_what_they_do_not_have() {
 
 #[test]
 fn survey_writes_its_map_and_its_error_with_the_prefix() {
-    // req:init/commands-in-crate@130bb26b
+    // req:init/commands-in-crate@646de73d
     let tmp = TempDir::new().unwrap();
     git(tmp.path(), &["init", "-q", "-b", "main"]);
     std::fs::write(tmp.path().join("a.rs"), "fn a() {}\n").unwrap();
@@ -103,7 +103,7 @@ fn survey_writes_its_map_and_its_error_with_the_prefix() {
 
 #[test]
 fn guide_writes_the_page_or_the_unknown_page_error() {
-    // req:init/commands-in-crate@130bb26b
+    // req:init/commands-in-crate@646de73d
     let tmp = TempDir::new().unwrap();
     let (code, out, err) = run(tmp.path(), &["guide", "constraints"]);
     assert_eq!((code, err.as_str()), (0, ""));
@@ -115,7 +115,7 @@ fn guide_writes_the_page_or_the_unknown_page_error() {
 
 #[test]
 fn survey_maps_the_root_it_is_given_or_its_root_option() {
-    // req:init/commands-in-crate@130bb26b
+    // req:init/commands-in-crate@646de73d
     let tmp = TempDir::new().unwrap();
     let repo = tmp.path().join("repo");
     std::fs::create_dir_all(repo.join("tool/src")).unwrap();

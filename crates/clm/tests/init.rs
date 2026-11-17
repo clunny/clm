@@ -1,6 +1,7 @@
 //! `clm init` as the binary runs it, with a fake `gh` on `PATH` that it must never call: the
-//! root's tests of its values, and `init`'s tests that run another component's command on
-//! what it wrote. The rest are `init`'s, in `crates/clm-init/tests/init.rs`.
+//! root's tests of its values and of the other commands run on what it wrote
+//! (`init-result-accepted`). What `clm init` writes is `init`'s to prove, in
+//! `crates/clm-init/tests/init.rs`.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -138,7 +139,6 @@ fn host_line(dir: &Path) -> String {
 #[test]
 fn empty_repository() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-files@2e91537b
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     let hosts = fake_hosts();
@@ -207,39 +207,8 @@ fn human_layers() {
 }
 
 #[test]
-fn init_writes_capabilities() {
-    // req:init/init-files@2e91537b
-    let (_tmp, dir) = repo();
-    let hosts = fake_hosts();
-    let out = init(&dir, &["--lang", "rust"], &hosts);
-    assert!(out.contains("wrote CAPABILITIES.md\n"), "{out}");
-    let caps = read(&dir, "CAPABILITIES.md");
-    assert!(caps.contains("\n## Capabilities\n"), "{caps}");
-    // No entry the project's own tests would have to prove.
-    for layer in ["capability", "architecture"] {
-        assert_eq!(layer_entries(&dir, layer, &hosts), Vec::<String>::new());
-    }
-    let pending = clm(&dir, &["pending"], &path_with(&hosts));
-    assert_eq!(String::from_utf8_lossy(&pending.stdout), "", "{pending:?}");
-    // CLM's carried constraints are named by where they are, outside `## Constraints`.
-    let arch = read(&dir, "ARCHITECTURE.md");
-    let before = &arch[..arch.find("\n## Constraints\n").expect(&arch)];
-    assert!(before.contains("`clm guide constraints`"), "{arch}");
-    let check = clm(&dir, &["check"], &path_with(&hosts));
-    assert_eq!(check.status.code(), Some(0), "{check:?}");
-
-    // An existing CAPABILITIES.md is the project's.
-    let (_tmp2, other) = repo();
-    write(&other, "CAPABILITIES.md", "# Ours\n");
-    let out = init(&other, &["--lang", "rust"], &hosts);
-    assert_eq!(read(&other, "CAPABILITIES.md"), "# Ours\n");
-    assert!(out.contains("kept CAPABILITIES.md\n"), "{out}");
-}
-
-#[test]
 fn template_says_architectural_constraint() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/template-says-architectural-constraint@edbeb5d2
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -283,7 +252,6 @@ fn template_says_architectural_constraint() {
 #[test]
 fn templates_say_new_words() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/templates-say-new-words@4e249586
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -313,7 +281,6 @@ fn templates_say_new_words() {
 #[test]
 fn architecture_template_proof() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/architecture-template-proof@54ed99e1
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -370,7 +337,6 @@ fn config(dir: &Path, key: &str) -> String {
 #[test]
 fn typescript_project_sets_build_setup() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-build-setup@aeb0d060
     let (_tmp, dir) = repo();
     init(&dir, &["--lang", "typescript"], &fake_hosts());
     let out = clm(&dir, &["config", "get", "build"], "/usr/bin:/bin");
@@ -393,7 +359,6 @@ fn typescript_project_sets_build_setup() {
 #[test]
 fn setup_installs_when_package_json_exists() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-build-setup@aeb0d060
     let (_tmp, dir) = repo();
     init(&dir, &["--lang", "typescript"], &fake_hosts());
     write(&dir, "package.json", "{}\n");
@@ -442,7 +407,6 @@ fn allowed(dir: &Path) -> Vec<String> {
 #[test]
 fn init_seeds_the_allow_rules() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-seeds-permissions@bda454a5
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -472,7 +436,6 @@ fn init_seeds_the_allow_rules() {
 #[test]
 fn init_keeps_the_settings_it_finds() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-seeds-permissions@bda454a5
     let (_tmp, dir) = repo();
     write(
         &dir,
@@ -527,7 +490,6 @@ fn run_check_script(dir: &Path, cwd: &Path, stubs: &TempDir) -> Output {
 #[test]
 fn empty_repository_every_language() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-without-manifest@30800928
     let (_tmp, dir) = repo();
     let failing = stubs(&["cargo", "npm", "pytest"], 1);
     init(
@@ -575,7 +537,6 @@ fn empty_repository_every_language() {
 #[test]
 fn dependencies_not_installed() {
     // req:clm/init-result-accepted@f3e67ac2
-    // req:init/init-without-manifest@30800928
     let (_tmp, dir) = repo();
     write(&dir, "package.json", "{}\n");
     init(&dir, &["--lang", "typescript"], &fake_hosts());
