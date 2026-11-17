@@ -1106,7 +1106,7 @@ fn this_repository_ignores_local_and_session_files() {
 
 #[test]
 fn this_repository_verifies_the_whole_suite_after_lands() {
-    // req:config/verify-here@fb827562
+    // req:config/verify-here@826e104c
     let text =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
     let f = Fixture::new(None, Some(&text));
@@ -1114,7 +1114,7 @@ fn this_repository_verifies_the_whole_suite_after_lands() {
     let (value, layer) = s.get("verify").unwrap();
     assert_eq!(
         value,
-        "mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh,mutate_jobs=6,mutate_minutes=60"
+        "mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh"
     );
     assert_eq!(layer, &Layer::File(f.repo_file()));
 }

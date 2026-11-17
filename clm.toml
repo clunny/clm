@@ -79,5 +79,3 @@ mode = "local"
 triggers = ["queue-drained"]
 every = { lands = 20 }
 mutate = ".github/scripts/mutate.sh"
-mutate_jobs = 6
-mutate_minutes = 60
