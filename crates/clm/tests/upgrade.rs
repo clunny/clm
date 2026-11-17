@@ -88,7 +88,6 @@ fn stamp_too_new(root: &Path) {
 }
 
 // req:clm/upgrade-command@0552ef64
-// req:upgrade/shipped-migrations-frozen@46f86d46
 #[test]
 fn lock_runs_on_the_upgrade_crate_and_refuses_a_too_new_project() {
     let dir = initialised();
