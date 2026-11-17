@@ -2,7 +2,7 @@
 
 mod common;
 
-use clm_check::Marker;
+use clm_coverage::Marker;
 use clm_model::{Graph, Priority};
 use clm_orchestrator::{ClaimRef, Queue, State, queue_from_refs};
 use common::*;

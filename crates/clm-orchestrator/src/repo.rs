@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use clm_check::Marker;
+use clm_coverage::Marker;
 use clm_model::{BacklogKind, Graph};
 
 use crate::queue::{ClaimRef, Queue, State, claim_state, claims_section, queue_from_refs};
@@ -488,7 +488,7 @@ pub(crate) fn with_main<T>(
     let tmp = extract_main(root)?;
     let tree = tmp.path();
     let graph = load(tree)?;
-    let markers = clm_check::scan(tree).req;
+    let markers = clm_coverage::scan(tree).req;
     f(&graph, &markers)
 }
 
