@@ -3140,23 +3140,32 @@ fn tests_that_run_none_of_the_code_survive_untried() {
 #[test]
 fn tests_that_read_the_repositorys_files_and_run_none_of_the_code_are_not_judged() {
     // req:ci/mutate-script@1ac5990f
-    let tree = mutate_tree(
-        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nreads specs/**\nlimit 20\n",
-    );
+    // The block of `tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_more`,
+    // whose diff's mutant and further ones would survive, with a `reads` line.
+    let tree = mutate_tree(&RUST_BLOCK.replace("limit 20", "reads specs/**\nlimit 20"));
     tree.report(
         "list",
-        "3 3 crates/clm-check/src/lib.rs:3:5: replace on_three with ()\n30 30 crates/clm-check/src/lib.rs:30:5: replace on_thirty with ()\n",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace m3 with ()\n4 4 crates/clm-check/src/lib.rs:4:5: replace m4 with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n",
     );
     tree.report("lcov-run", "");
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(result, ["a/x not-judged"]);
     assert!(block_tries(&log).is_empty(), "{log:?}");
-    // A `reads` line changes nothing when the tests run a mutant's line: it is tried.
+    // A `reads` line changes nothing when the tests run a mutant's line: it is tried and judged.
     tree.report("lcov-run", "3\n");
-    let (ok, log, _, stderr) = tree.mutate(&[]);
+    let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(block_tries(&log).len(), 1, "{log:?}");
+    assert_eq!(result, ["a/x survived 1"]);
+    tree.report("further-caught", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
 }
 
 #[test]
