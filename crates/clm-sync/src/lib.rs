@@ -611,16 +611,16 @@ fn archive_complete(
         .filter(|p| !p.is_empty())
         .map(PathBuf::from)
         .collect();
-    let mut markers = clm_check::scan(root).req;
+    let mut markers = clm_coverage::scan(root).req;
     markers.retain(|m| tracked.contains(&m.path));
-    let pending = clm_check::pending(&graph, &markers);
+    let pending = clm_coverage::pending(&graph, &markers);
     let activated: Vec<&clm_model::Node> = graph
         .nodes
         .values()
         .filter(|n| n.frontmatter.status == clm_model::Status::Specd)
         .filter(|n| !pending.iter().any(|p| p.node == n.id))
         .collect();
-    let complete = clm_check::complete_changes(&graph, &markers);
+    let complete = clm_coverage::complete_changes(&graph, &markers);
     // The one refusal `archive` can give once a status is `done`, tested before anything is
     // written, so a refused archive leaves the tree as it was.
     for id in &complete {
