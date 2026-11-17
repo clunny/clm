@@ -1100,7 +1100,7 @@ fn other_pipes_are_allowed() {
 
 #[test]
 fn the_hooks_budgets_are_twenty_and_thirty_seconds() {
-    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    // req:plugin.hooks.guard/hook-budgets@991e0eaf
     assert_eq!(Budgets::HOOK.push, Duration::from_secs(20));
     assert_eq!(Budgets::HOOK.lookup, Duration::from_secs(30));
 }
@@ -1122,7 +1122,7 @@ fn sources(dir: &Path) -> Vec<(std::path::PathBuf, String)> {
 
 #[test]
 fn nothing_shortens_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    // req:plugin.hooks.guard/hook-budgets@991e0eaf
     let krate = Path::new(env!("CARGO_MANIFEST_DIR"));
     // The guard's own names, not `clm-check`'s `Budgets`, which `main.rs` also uses.
     let clm = sources(&krate.parent().unwrap().join("clm/src"));
@@ -1131,16 +1131,19 @@ fn nothing_shortens_the_hooks_budgets() {
         "main.rs wasn't read"
     );
     for (path, text) in &clm {
-        for (n, line) in text.lines().enumerate() {
-            let names_guards = line.contains("guard_within")
-                || (line.contains("clm_guard") && line.contains("Budgets"));
-            assert!(
-                !names_guards,
-                "{}:{} names the guard's budgets",
-                path.display(),
-                n + 1
-            );
-        }
+        assert!(
+            !text.contains("guard_within"),
+            "{} names `guard_within`",
+            path.display()
+        );
+        // A file that reaches `clm_guard` names `Budgets` only as `clm_check`'s, so no import
+        // over several lines or under an alias brings in the guard's.
+        let others = text.replace("clm_check::Budgets", "");
+        assert!(
+            !(text.contains("clm_guard") && others.contains("Budgets")),
+            "{} names the guard's `Budgets`",
+            path.display()
+        );
     }
     let own = sources(&krate.join("src"));
     assert!(
@@ -1163,7 +1166,7 @@ fn nothing_shortens_the_hooks_budgets() {
 
 #[test]
 fn the_hook_judges_with_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    // req:plugin.hooks.guard/hook-budgets@991e0eaf
     let lib = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).unwrap();
     // The whole function, whitespace aside, so its body is that one call and nothing else.
     // Each brace sits in a string with its partner: `clm-coverage` finds a test's end by
@@ -1174,22 +1177,42 @@ fn the_hook_judges_with_the_hooks_budgets() {
     let guards = lib.matches("pub fn guard(").count();
     assert_eq!(guards, 1, "lib.rs defines `guard` {guards} times");
     assert!(lib.contains(function), "`guard` isn't `{function}`");
-    // The hook's own path, `clm hook guard`'s call, judges with the same budgets.
+    // The hook's own path, `clm hook guard`'s call, judges with the same budgets: across
+    // every source file, each judgement passes `Budgets::HOOK`, but `guard_within`'s, which
+    // passes the budgets it was given, and the call runs the judgement that does.
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let hook = "judge_event(agent_harness, event, &Budgets::HOOK, env)";
-    assert_eq!(
-        lib.matches("judge_event(").count(),
-        3,
-        "judge_event's callers moved"
-    );
+    let within =
+        "judge_event( AgentHarness::ClaudeCode, event, budgets, &clm_config::process_env, )";
+    let definition = "judge_event(agent_harness: AgentHarness, event: &str, budgets: &Budgets,";
+    for (path, text) in sources(&src) {
+        let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        for (at, _) in text.match_indices("judge_event(") {
+            let rest = &text[at..];
+            assert!(
+                [hook, within, definition]
+                    .iter()
+                    .any(|allowed| rest.starts_with(allowed)),
+                "{} judges with other budgets: {}",
+                path.display(),
+                &text[at..(at + 80).min(text.len())]
+            );
+        }
+    }
     assert!(
         lib.contains(hook),
         "the hook doesn't judge with `Budgets::HOOK`"
+    );
+    let call = fs::read_to_string(src.join("command_call.rs")).unwrap();
+    assert!(
+        call.contains("guard_hook_in(agent_harness, event, env)"),
+        "`clm hook guard`'s call doesn't judge through `guard_hook_in`"
     );
 }
 
 #[test]
 fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
-    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    // req:plugin.hooks.guard/hook-budgets@991e0eaf
     use clm_agent_harness::{AgentHarness::ClaudeCode, render};
     let dir = TempDir::new().unwrap();
     let w = dir.path().join("w");
@@ -1448,7 +1471,7 @@ fn hook_args(args: &[&str], event: &str, env: &[(&str, &str)]) -> Output {
 
 #[test]
 fn the_call_prints_and_exits_as_the_hook_does() {
-    // req:plugin.hooks.guard/commands-in-crate@11cfbd2d
+    // req:plugin.hooks.guard/commands-in-crate@136dbe76
     let repo = clm_repo(None);
     // A block: the reason on the error stream, a line of its own, and exit 2.
     let push = bash_in("git push origin main", repo.path());
@@ -1494,20 +1517,25 @@ fn the_call_prints_and_exits_as_the_hook_does() {
 
 #[test]
 fn the_call_returns_2_on_arguments_it_cant_parse() {
-    // req:plugin.hooks.guard/commands-in-crate@11cfbd2d
-    let out = hook_args(&["guard", "--nope"], &bash("clm approve spec/x"), &[]);
-    assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert!(out.stdout.is_empty(), "{out:?}");
-    let err = String::from_utf8(out.stderr).unwrap();
-    assert!(err.contains("--nope") && err.contains("Usage"), "{err}");
-    // The test's process goes on.
-    let out = hook_args(&["guard", "--agent-harness"], &bash("ls"), &[]);
-    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    // req:plugin.hooks.guard/commands-in-crate@136dbe76
+    // An option it doesn't have, `--root` among them, since it takes no repository root (the
+    // guard places each command by its event's `cwd`); the test's process goes on after each.
+    for (args, named) in [
+        (&["guard", "--nope"][..], "--nope"),
+        (&["guard", "--root", "."][..], "--root"),
+        (&["guard", "--agent-harness"][..], "--agent-harness"),
+    ] {
+        let out = hook_args(args, &bash("clm approve spec/x"), &[]);
+        assert_eq!(out.status.code(), Some(2), "{out:?}");
+        assert!(out.stdout.is_empty(), "{out:?}");
+        let err = String::from_utf8(out.stderr).unwrap();
+        assert!(err.contains(named) && err.starts_with("error:"), "{err}");
+    }
 }
 
 #[test]
 fn the_call_reads_the_settings_from_its_environment() {
-    // req:plugin.hooks.guard/commands-in-crate@11cfbd2d
+    // req:plugin.hooks.guard/commands-in-crate@136dbe76
     // A report the guard can't show is refused under `ask`, and let through under
     // `backlog`, which only the lookup holds, not this process's environment.
     let nowhere = TempDir::new().unwrap();
