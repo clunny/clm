@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The mutation pass's command (`clm.toml`'s `[verify] mutate`; specs/ci/SPEC.md,
 # ci/mutate-script): run from the repository root with `CLM_MUTATE` naming the plan `clm verify`
-# wrote and `CLM_MUTATE_RESULT` the file to write a verdict line per requirement to:
-# `<id> killed`, `<id> survived <n>` or `<id> not-judged`. No land, check or workflow runs it.
+# wrote and `CLM_MUTATE_RESULT` the file to append a verdict line per requirement to, as soon as
+# it is judged: `<id> killed`, `<id> survived <n>` or `<id> not-judged`. It judges up to
+# `CLM_MUTATE_JOBS` blocks at once. No land, check or workflow runs it.
 set -euo pipefail
 
 # The newest releases at build time.
@@ -24,6 +25,41 @@ cleanup() {
   for d in $fixture_dirs; do rm -rf "${root:?}/$d/clm-mutate-fixture"; done
 }
 trap cleanup EXIT
+
+# Every process this script started, at any depth: the blocks, and the tools they run.
+descendants() {
+  ps -A -o pid= -o ppid= | awk -v root=$$ '
+    { parent[$1] = $2 }
+    END {
+      for (p in parent) {
+        q = p
+        while (q != root && (q in parent) && q > 1) q = parent[q]
+        if (q == root && p != root) print p
+      }
+    }'
+}
+# Ended, as `clm verify` ends a pass at its limit or on a stop request: the blocks running and
+# whatever they run are ended, and the temporary directory removed, before the script exits.
+# The lines already written stay (`verify/mutation-pass`).
+on_term() {
+  local pids
+  trap - TERM
+  pids=$(descendants || true)
+  # shellcheck disable=SC2086 # one pid per word
+  [ -z "$pids" ] || kill -TERM $pids 2>/dev/null || true
+  wait 2>/dev/null || true
+  exit 143
+}
+trap on_term TERM
+
+# The blocks it may judge at once, and the slot and build directory of each job number.
+jobs_max=${CLM_MUTATE_JOBS:-1}
+case $jobs_max in '' | *[!0-9]*) jobs_max=1 ;; esac
+jobs_max=$((10#$jobs_max))
+[ "$jobs_max" -gt 0 ] || jobs_max=1
+slot_base=${CLM_SLOT:-0}
+target_base=${CARGO_TARGET_DIR:-target}
+case $target_base in /*) ;; *) target_base=$root/$target_base ;; esac
 : >"$result"
 nl='
 '
@@ -297,13 +333,15 @@ run_mutants() {
   esac
 }
 
-# Judges the Rust files of a block. Sets `verdict` to killed, survived <n> or not-judged.
-judge_rust() {
-  local f t file name package filter packages= filters= p out
-  local files=() n=0 re_args=()
-  mutants_args=()
+# The block's Rust files, `rust_files`, and the packages and filterset of its Rust tests,
+# `packages` and `filterset`; fails when it has none of either, and cargo-mutants judges nothing.
+rust_selection() {
+  local f t file name package filter out
+  rust_files=()
+  packages=
+  filterset=
   for f in ${code[@]+"${code[@]}"}; do
-    case $f in crates/*.rs) files+=("$f") ;; esac
+    case $f in crates/*.rs) rust_files+=("$f") ;; esac
   done
   for t in ${tests[@]+"${tests[@]}"}; do
     file=${t%%"$tab"*}
@@ -315,14 +353,21 @@ judge_rust() {
     package=${out%%"$tab"*}
     filter=${out#*"$tab"}
     case " $packages " in *" $package "*) ;; *) packages="$packages $package" ;; esac
-    if [ -n "$filters" ]; then filters="$filters | $filter"; else filters=$filter; fi
+    if [ -n "$filterset" ]; then filterset="$filterset | $filter"; else filterset=$filter; fi
   done
-  if [ "${#files[@]}" -eq 0 ] || [ -z "$filters" ]; then
+  [ "${#rust_files[@]}" -gt 0 ] && [ -n "$filterset" ]
+}
+
+# Judges the Rust files of a block, its tools ready. Sets `verdict` to killed, survived <n> or
+# not-judged.
+judge_rust() {
+  local f p n=0 re_args=() files=()
+  mutants_args=()
+  if ! rust_selection; then
     verdict=not-judged
     return
   fi
-  rust_tools
-  filterset=$filters
+  files=("${rust_files[@]}")
   for p in $packages; do mutants_args+=(--test-package "$p"); done
   for f in ${files[@]+"${files[@]}"}; do mutants_args+=(--file "$f"); done
   # The diff's mutants, and the further ones: the files' others, in the tool's order.
@@ -371,9 +416,7 @@ judge_rust() {
 
 # --- TypeScript: StrykerJS with its vitest runner, in the directory of the files ---
 
-ts_ready=
 ts_tools() {
-  case " $ts_ready " in *" $1 "*) return ;; esac
   (
     cd "$root/$1"
     npm ci --ignore-scripts
@@ -382,7 +425,6 @@ ts_tools() {
       "@stryker-mutator/core@$STRYKER_VERSION" "@stryker-mutator/vitest-runner@$STRYKER_VERSION"
   ) || die "StrykerJS could not be installed in $1 (requirement $id)"
   ts_fixture "$1"
-  ts_ready="$ts_ready $1"
 }
 
 # Judges a fixture with StrykerJS in the npm directory $1, with that directory's own vitest and
@@ -461,6 +503,8 @@ diff_ranges() {
 # exist: StrykerJS 10.1.1 reads a `tsconfig.json` it finds with `ts.parseConfigFileTextToJson`,
 # which the TypeScript 7 of `web/` and `plugin-panel/` lacks, to rewrite the paths in it for its
 # sandbox. Nothing here needs that rewrite: the run mutates and runs vitest, with no type checker.
+# Its configuration files and its sandbox are named for `tag`, the block or the fixture, so runs
+# of two blocks at once in one directory share neither.
 run_stryker() {
   local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s u all
   shift 2
@@ -474,9 +518,9 @@ run_stryker() {
     fi
   done
   for f in ${ts_tests[@]+"${ts_tests[@]}"}; do includes="$includes'${f#"$dir"/}',"; done
-  mkdir -p "$root/$dir/node_modules/.clm-mutate"
-  vcfg=$root/$dir/node_modules/.clm-mutate/vitest.config.mts
-  scfg=$root/$dir/node_modules/.clm-mutate/stryker.config.json
+  mkdir -p "$root/$dir/node_modules/.clm-mutate/$tag"
+  vcfg=$root/$dir/node_modules/.clm-mutate/$tag/vitest.config.mts
+  scfg=$root/$dir/node_modules/.clm-mutate/$tag/stryker.config.json
   {
     echo "$base"
     [ -n "$base" ] || echo "const base: any = {};"
@@ -490,6 +534,7 @@ run_stryker() {
   "reporters": ["json"],
   "jsonReporter": { "fileName": "$work/$report/mutation.json" },
   "tsconfigFile": "$root/$dir/node_modules/.clm-mutate/no-tsconfig.json",
+  "tempDirName": ".stryker-tmp-clm-$tag",
   "concurrency": 2,
   "mutate": [${ranges%,}]
 }
@@ -529,27 +574,39 @@ count_stryker() {
   all=$(printf '%s\n' "$lines" | grep -c "$tab" || true)
 }
 
-judge_ts() {
-  local f dir= files=() ranges=() capped=() t file k s u all
+# The block's npm directory, `ts_dir`, its TypeScript files there, `ts_files`, relative to it,
+# and its vitest tests, `ts_tests`; fails when it has none of either, and StrykerJS judges
+# nothing.
+ts_selection() {
+  local f t file
+  ts_dir=
+  ts_files=()
   ts_tests=()
   for f in ${code[@]+"${code[@]}"}; do
     case $f in
-      web/src/*.ts | web/src/*.tsx) [ -n "$dir" ] || dir=web ;;
-      plugin-panel/*.ts | plugin-panel/*.tsx) [ -n "$dir" ] || dir=plugin-panel ;;
+      web/src/*.ts | web/src/*.tsx) [ -n "$ts_dir" ] || ts_dir=web ;;
+      plugin-panel/*.ts | plugin-panel/*.tsx) [ -n "$ts_dir" ] || ts_dir=plugin-panel ;;
       *) continue ;;
     esac
-    case $f in "$dir"/*) files+=("${f#"$dir"/}") ;; esac
+    case $f in "$ts_dir"/*) ts_files+=("${f#"$ts_dir"/}") ;; esac
   done
   for t in ${tests[@]+"${tests[@]}"}; do
     file=${t%%"$tab"*}
     # A vitest file of the directory; Playwright's specs are judged by no tool here.
-    case $file in "$dir"/e2e/* | capabilities/*) continue ;; "$dir"/*) ts_tests+=("$file") ;; esac
+    case $file in "$ts_dir"/e2e/* | capabilities/*) continue ;; "$ts_dir"/*) ts_tests+=("$file") ;; esac
   done
-  if [ -z "$dir" ] || [ "${#files[@]}" -eq 0 ] || [ "${#ts_tests[@]}" -eq 0 ]; then
+  [ -n "$ts_dir" ] && [ "${#ts_files[@]}" -gt 0 ] && [ "${#ts_tests[@]}" -gt 0 ]
+}
+
+# Judges the TypeScript files of a block, its directory's tools ready. Sets `verdict`.
+judge_ts() {
+  local f dir files=() ranges=() capped=() k s u all
+  if ! ts_selection; then
     verdict=not-judged
     return
   fi
-  ts_tools "$dir"
+  dir=$ts_dir
+  files=("${ts_files[@]}")
   caught=0
   missed=0
   untested=0
@@ -587,19 +644,43 @@ judge_ts() {
 
 # --- the plan ---
 
-id=
-code=()
-tests=()
-diff=
-limit=20
+# Each block's lines, in the plan's order.
+blocks=()
+block=
+while IFS= read -r -u 3 line || [ -n "$line" ]; do
+  case $line in
+    "requirement "*)
+      [ -z "$block" ] || blocks+=("$block")
+      block=$line
+      ;;
+    *) [ -z "$block" ] || block="$block$nl$line" ;;
+  esac
+done 3<"$plan"
+[ -z "$block" ] || blocks+=("$block")
 
-# Writes the verdict of the block read so far.
+# Sets `id`, `code`, `tests`, `diff` and `limit` from block $1.
+load_block() {
+  local l
+  id=
+  code=()
+  tests=()
+  diff=
+  limit=20
+  while IFS= read -r l; do
+    case $l in
+      "requirement "*) id=${l#requirement } ;;
+      "code "*) code+=("${l#code }") ;;
+      "diff "*) diff=${l#diff } ;;
+      "test "*) tests+=("${l#test }") ;;
+      "limit "*) limit=${l#limit } ;;
+    esac
+  done <<<"${blocks[$1]}"
+}
+
+# Appends the verdict of the block loaded, in one write, ending in a newline.
 finish_block() {
   local rust_v ts_v v total x
-  [ -n "$id" ] || return 0
   verdict=not-judged
-  rust_v=not-judged
-  ts_v=not-judged
   judge_rust
   rust_v=$verdict
   judge_ts
@@ -613,26 +694,83 @@ finish_block() {
     done
     if [ "$total" -gt 0 ]; then v="survived $total"; else v=not-judged; fi
   fi
-  echo "$id $v" >>"$result"
+  printf '%s\n' "$id $v" >>"$result"
 }
 
-while IFS= read -r -u 3 line || [ -n "$line" ]; do
-  case $line in
-    "requirement "*)
-      finish_block
-      id=${line#requirement }
-      code=()
-      tests=()
-      diff=
-      limit=20
+# Every tool the plan's blocks need is installed, and every fixture judged, before any block
+# starts: cargo-mutants' once, and StrykerJS's once for each npm directory, named for the first
+# block that needs it.
+tag=fixture
+rust_needed=
+ts_dirs=
+ts_ids=()
+for i in ${blocks[@]+"${!blocks[@]}"}; do
+  load_block "$i"
+  if [ -z "$rust_needed" ] && rust_selection; then rust_needed=$id; fi
+  if ts_selection; then
+    case " $ts_dirs " in *" $ts_dir "*) ;; *)
+      ts_dirs="$ts_dirs $ts_dir"
+      ts_ids+=("$id")
       ;;
-    "code "*) code+=("${line#code }") ;;
-    "diff "*) diff=${line#diff } ;;
-    "test "*) tests+=("${line#test }") ;;
-    "limit "*) limit=${line#limit } ;;
-  esac
-done 3<"$plan"
-finish_block
+    esac
+  fi
+done
+if [ -n "$rust_needed" ]; then
+  id=$rust_needed
+  rust_tools
+fi
+n=0
+for d in $ts_dirs; do
+  id=${ts_ids[$n]}
+  n=$((n + 1))
+  ts_tools "$d"
+done
+
+# Judges block $1 as job $2, in a work directory of its own, with the job's `CLM_SLOT` and
+# `CARGO_TARGET_DIR`. Run in a subshell of its own: a tool that fails ends it alone.
+run_block() {
+  trap - EXIT TERM
+  work=$work/block-$1
+  mkdir -p "$work"
+  tag=$1
+  export CLM_SLOT=$((slot_base + $2 - 1)) CARGO_TARGET_DIR=$target_base/mutate-job-$2
+  load_block "$1"
+  finish_block
+}
+
+# Starts the blocks in the plan's order, each in a job number no running block holds. Once a
+# block fails, it starts no other, and lets those running finish and write their lines.
+count=${#blocks[@]}
+[ "$jobs_max" -le "$count" ] || jobs_max=$((count > 0 ? count : 1))
+pid_of=()
+next=0
+running=0
+failed=false
+while :; do
+  for ((j = 1; j <= jobs_max; j++)); do
+    p=${pid_of[j]:-}
+    if [ -n "$p" ] && ! kill -0 "$p" 2>/dev/null; then
+      status=0
+      wait "$p" || status=$?
+      [ "$status" -eq 0 ] || failed=true
+      pid_of[j]=
+      running=$((running - 1))
+    fi
+  done
+  if ! $failed; then
+    for ((j = 1; j <= jobs_max && next < count; j++)); do
+      [ -z "${pid_of[j]:-}" ] || continue
+      run_block "$next" "$j" &
+      pid_of[j]=$!
+      running=$((running + 1))
+      next=$((next + 1))
+    done
+  fi
+  [ "$running" -gt 0 ] || break
+  sleep 0.1
+done
+if $failed; then exit 1; fi
+
 
 .github/scripts/coverage.sh
 if [ -n "${CLM_LAND_DIR:-}" ]; then
