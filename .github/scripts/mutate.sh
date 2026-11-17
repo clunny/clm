@@ -398,9 +398,14 @@ judge_rust() {
   covered_lines
   awk -F'\t' 'FILENAME == ARGV[1] { d[$4] = 1; next } !($4 in d)' "$work/diff" "$work/all" >"$work/further"
   # Tests that run no line of any file with a mutant can notice no change to it: every mutant
-  # they would be given survives, untried.
+  # they would be given survives, untried. Unless they read the repository's own files, whose
+  # data may be the rule they prove: then nothing here judges them.
   if ! awk -F'\t' 'FILENAME == ARGV[1] { has[$1] = 1; next } ($1 in has) { found = 1; exit }
       END { exit !found }' "$work/all" "$work/covered"; then
+    if [ -n "$reads" ]; then
+      verdict=not-judged
+      return
+    fi
     n=$(lines_in "$work/further")
     [ "$n" -le "$limit" ] || n=$limit
     n=$((n + $(lines_in "$work/diff")))
@@ -646,11 +651,13 @@ judge_ts() {
   # Each mutant once, though both runs report those on the diff's lines among the first `limit`.
   # A mutant no test runs is neither caught nor survived, unless every mutant reported is one no
   # test runs: then the tests can notice no change to the code, and every one survives, as for
-  # an empty test.
+  # an empty test, unless the block reads the repository's own files, when none is judged.
   count_stryker "$work"/s[12]/mutants.tsv
   caught=$k
   missed=$s
-  if [ "$caught" -eq 0 ] && [ "$missed" -eq 0 ] && [ "$u" -gt 0 ] && [ "$u" -eq "$all" ]; then missed=$u; fi
+  if [ "$caught" -eq 0 ] && [ "$missed" -eq 0 ] && [ "$u" -gt 0 ] && [ "$u" -eq "$all" ] && [ -z "$reads" ]; then
+    missed=$u
+  fi
   if [ "$caught" -gt 0 ]; then
     verdict=killed
   elif [ "$missed" -gt 0 ]; then
@@ -676,7 +683,8 @@ while IFS= read -r -u 3 line || [ -n "$line" ]; do
 done 3<"$plan"
 [ -z "$block" ] || blocks+=("$block")
 
-# Sets `id`, `code`, `tests`, `diff` and `limit` from block $1.
+# Sets `id`, `code`, `tests`, `diff`, `limit` and `reads`, set when the block holds a `reads`
+# line, from block $1.
 load_block() {
   local l
   id=
@@ -684,6 +692,7 @@ load_block() {
   tests=()
   diff=
   limit=20
+  reads=
   while IFS= read -r l; do
     case $l in
       "requirement "*) id=${l#requirement } ;;
@@ -691,6 +700,7 @@ load_block() {
       "diff "*) diff=${l#diff } ;;
       "test "*) tests+=("${l#test }") ;;
       "limit "*) limit=${l#limit } ;;
+      "reads "*) reads=1 ;;
     esac
   done <<<"${blocks[$1]}"
 }
