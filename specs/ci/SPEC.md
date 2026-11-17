@@ -528,7 +528,7 @@ Every script and workflow of this repository that runs the Rust tests SHALL run 
 - THEN the `prepare` job has a step running `.github/scripts/test-tools.sh` after the step running `.github/scripts/detector-tools.sh` and before the step running `.github/scripts/release-prepare.sh`, and no other job names `test-tools.sh` or `nextest`
 
 ### Requirement: phase-times
-`.github/scripts/ci-check.sh` SHALL time each phase it runs: the tool installs, as one phase `tools`, then `cargo fmt`, `cargo clippy`, the wasm builds, the Rust tests, and each npm suite, capability package and `claude plugin validate` it runs. After each it SHALL print `ci-check: <phase> <n>s` to stderr, `<n>` the whole seconds it took. On exit it SHALL keep its exit status and print to stderr: when it passes, `ci-check: phases`, then one line `<n>s <phase>` per phase, in order, then `<n>s total`; when a phase fails, only `ci-check: failed in <phase> after <n>s, <n>s total`. It SHALL print nothing of these to stdout.
+`.github/scripts/ci-check.sh` SHALL time each phase it runs: the tool installs, as one phase `tools`, then `cargo fmt`, `cargo clippy`, the wasm builds, the Rust tests, and each npm suite, capability package and `claude plugin validate` it runs. After each it SHALL print `ci-check: <phase> <n>s` to stderr, `<n>` the whole seconds it took. On exit it SHALL keep its exit status and print to stderr: when it passes, `ci-check: phases`, then one line `<n>s <phase>` per phase, in order, then `<n>s total`; when a phase fails, only `ci-check: failed in <phase> after <n>s, <n>s total`. It SHALL print nothing of these to stdout. Every `<n>` SHALL be a count of whole seconds, never negative: a time the shell's clock gives as less than 0, because the clock stepped back during the run, SHALL print as `0s`.
 
 #### Scenario: a passing run
 - GIVEN the script with fakes on `PATH` for `cargo`, `npm` and `npx` that record their arguments and pass, and an empty selection file
@@ -539,6 +539,11 @@ Every script and workflow of this repository that runs the Rust tests SHALL run 
 - GIVEN the same fakes, but the `cargo` fake exits 3 on `clippy`
 - WHEN it runs
 - THEN it exits 3, stderr's last line is `ci-check: failed in clippy after <n>s, <n>s total`, stderr holds no `ci-check: phases`, and no line names a wasm-build or test phase
+
+#### Scenario: the clock steps back
+- GIVEN the same fakes, but `cargo fmt` sets the script's own shell clock (`SECONDS`) back by 100 seconds while it runs, as an exported bash function named `cargo` that takes precedence over the fake on `PATH`
+- WHEN it runs
+- THEN it exits 0, stderr holds `ci-check: fmt 0s`, and every `<n>` it prints, in each phase's line, the summary and `<n>s total`, is a count of digits with no `-`
 
 ### Requirement: step-markers
 `.github/scripts/ci-check.sh` SHALL print on stdout `::group::<phase>` before each phase it times (`phase-times`) and `::endgroup::` after it, and, when `CLM_SELECTION` selects files, inside a phase it runs because of them, `::clm-selected::<path>` for each selected file that made it run that phase, each once: for the Rust tests each `file` line that selected a package, for `web/`'s suite each selected file under `web/`, for `web/site/` its own directory's selected files, for `capabilities/web/` the files that made it run `web/`'s suite and its own directory's selected files, for `plugin-panel/`, `capabilities/panel/` and `claude plugin validate plugin-panel` each selected file under `plugin-panel/` and their own directory, and for `claude plugin validate plugin` each selected file under `plugin/`. The phases every run has, and every phase of a full run, SHALL name no file.
