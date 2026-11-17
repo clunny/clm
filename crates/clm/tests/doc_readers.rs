@@ -78,18 +78,7 @@ fn assert_selects(selected: &[String], wanted: &[&str], unwanted: &[&str]) {
 }
 
 /// The file holding the tests of `clm guide`, which read the guide's pages and the spec format.
-/// They sit in the root's `guide.rs` until `init`'s build moves them into its own crate
-/// (`commands-live-in-their-crates`), so it is the moved file once it holds a reads marker,
-/// and the root's until then, even while the moved file is being written.
-fn guide_tests() -> &'static str {
-    let moved = "crates/clm-init/tests/guide.rs";
-    if markers().contains_key(moved) {
-        moved
-    } else {
-        "crates/clm/tests/guide.rs"
-    }
-}
-
+const GUIDE: &str = "crates/clm-init/tests/guide.rs";
 const README: &str = "crates/clm/tests/readme.rs";
 const GLOSSARY: &str = "crates/clm/tests/glossary.rs";
 const RETIRED: &str = "crates/clm/tests/retired_terms.rs";
@@ -97,13 +86,13 @@ const SETTINGS: &str = "crates/clm-config/tests/settings_guide.rs";
 
 #[test]
 fn the_retired_terms_test_reads_the_specs() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(&selected(&["specs/SPEC.md"]), &[RETIRED], &[README]);
 }
 
 #[test]
 fn the_root_documents_have_readers() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     let docs = [
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
@@ -119,7 +108,7 @@ fn the_root_documents_have_readers() {
 
 #[test]
 fn the_readers_of_clm_toml() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
         &selected(&["clm.toml"]),
         &["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"],
@@ -129,27 +118,27 @@ fn the_readers_of_clm_toml() {
 
 #[test]
 fn the_guides_readers() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
         &selected(&["docs/guide/glossary.md"]),
-        &[GLOSSARY, RETIRED, guide_tests()],
+        &[GLOSSARY, RETIRED, GUIDE],
         &[README, SETTINGS],
     );
 }
 
 #[test]
 fn the_spec_formats_readers() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
         &selected(&["docs/spec-format.md"]),
-        &[RETIRED, "crates/clm-init/src/guide.rs", guide_tests()],
+        &[RETIRED, "crates/clm-init/src/guide.rs", GUIDE],
         &[GLOSSARY, SETTINGS],
     );
 }
 
 #[test]
 fn other_crates_read_architecture_md() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
         &selected(&["ARCHITECTURE.md"]),
         &[
@@ -163,7 +152,7 @@ fn other_crates_read_architecture_md() {
 
 #[test]
 fn the_guides_readers_in_other_crates() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
         &selected(&["docs/guide/quickstart.md"]),
         &[
@@ -175,8 +164,19 @@ fn the_guides_readers_in_other_crates() {
 }
 
 #[test]
+fn the_guides_directory_readers_mark_every_page() {
+    // req:clm/doc-readers-marked@a5e3c957
+    // A page no file names yet: only a reader marking `docs/guide/**` selects it.
+    assert_selects(
+        &selected(&["docs/guide/a-page-yet-to-be-written.md"]),
+        &["crates/clm-init/src/guide.rs", GUIDE, RETIRED],
+        &[GLOSSARY, SETTINGS],
+    );
+}
+
+#[test]
 fn the_settings_pages_reader() {
-    // req:clm/doc-readers-marked@3125f2de
+    // req:clm/doc-readers-marked@a5e3c957
     assert_selects(
         &selected(&["docs/guide/settings.md"]),
         &[SETTINGS],
