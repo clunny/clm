@@ -255,6 +255,18 @@ impl Tree {
         selection: Option<&std::ffi::OsStr>,
         path: &std::ffi::OsStr,
     ) -> std::process::Output {
+        self.output_env(ci, fail, selection, path, &[])
+    }
+
+    /// As `output`, with each of `env` also set.
+    fn output_env(
+        &self,
+        ci: Option<&str>,
+        fail: &str,
+        selection: Option<&std::ffi::OsStr>,
+        path: &std::ffi::OsStr,
+        env: &[(&str, &str)],
+    ) -> std::process::Output {
         let log = self.dir.path().join("log");
         let _ = fs::remove_file(&log);
         let mut c = Command::new(Path::new(".github/scripts").join(self.script));
@@ -270,6 +282,7 @@ impl Tree {
         if let Some(selection) = selection {
             c.env("CLM_SELECTION", selection);
         }
+        c.envs(env.iter().copied());
         c.output().unwrap()
     }
 }
@@ -1613,7 +1626,7 @@ fn test_tools_run_between_the_detector_tools_and_cargo() {
 
 #[test]
 fn a_full_run_times_every_phase_it_runs() {
-    // req:ci/phase-times@e8375a0b
+    // req:ci/phase-times@45a0a289
     let tree = Tree::new();
     let out = tree.output(None, "", None, &tree.path());
     assert!(out.status.success());
@@ -1653,7 +1666,7 @@ fn phase_lines(text: &str) -> Vec<&str> {
 
 #[test]
 fn a_passing_run_prints_its_phase_times() {
-    // req:ci/phase-times@e8375a0b
+    // req:ci/phase-times@45a0a289
     let tree = Tree::new();
     let file = tree.dir.path().join("selection");
     fs::write(&file, "").unwrap();
@@ -1695,7 +1708,7 @@ fn a_passing_run_prints_its_phase_times() {
 
 #[test]
 fn a_failing_phase_prints_only_where_it_failed() {
-    // req:ci/phase-times@e8375a0b
+    // req:ci/phase-times@45a0a289
     let tree = Tree::new();
     tree.fake(
         "cargo",
@@ -1725,6 +1738,78 @@ fn a_failing_phase_prints_only_where_it_failed() {
         !phases
             .iter()
             .any(|l| l.contains("wasm") || l.contains("tests")),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_clock_that_steps_back_prints_no_negative_time() {
+    // req:ci/phase-times@45a0a289
+    let tree = Tree::new();
+    let file = tree.dir.path().join("selection");
+    fs::write(&file, "").unwrap();
+    // An exported bash function runs in the script's own shell, so it moves the script's
+    // clock: `cargo fmt` sets `SECONDS` back by 100, logging that it did, then runs the fake on
+    // `PATH`.
+    let cargo = "() { if [ \"$1\" = fmt ]; then SECONDS=$((SECONDS - 100)); echo stepped >> \"$CI_LOG\"; fi; command cargo \"$@\"; }";
+    let out = tree.output_env(
+        None,
+        "",
+        Some(file.as_os_str()),
+        &tree.path(),
+        &[("BASH_FUNC_cargo%%", cargo)],
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+    // The clock did step back: the script ran the function, not only the fake.
+    let log = fs::read_to_string(tree.dir.path().join("log")).unwrap();
+    assert!(log.lines().any(|l| l == "stepped"), "{log}");
+    let lines: Vec<&str> = stderr.lines().collect();
+    assert!(lines.contains(&"ci-check: fmt 0s"), "{stderr}");
+    let secs = |n: &str| {
+        n.strip_suffix('s')
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    };
+    // Each phase's line, then the summary's lines and the total.
+    let summary = lines.iter().position(|l| *l == "ci-check: phases").unwrap();
+    let phases: Vec<&str> = lines[..summary]
+        .iter()
+        .filter_map(|l| l.strip_prefix("ci-check: "))
+        .collect();
+    assert_eq!(phases.len(), 5, "{stderr}");
+    for rest in phases {
+        let (_, n) = rest.rsplit_once(' ').unwrap();
+        assert!(secs(n), "{rest}: {stderr}");
+    }
+    assert_eq!(lines.len() - summary, 1 + 5 + 1, "{stderr}");
+    for line in &lines[summary + 1..] {
+        let (n, _) = line.split_once(' ').unwrap();
+        assert!(secs(n), "{line}: {stderr}");
+    }
+    assert!(lines.last().unwrap().ends_with("s total"), "{stderr}");
+}
+
+#[test]
+fn a_failure_after_the_clock_steps_back_prints_no_negative_time() {
+    // req:ci/phase-times@45a0a289
+    let tree = Tree::new();
+    let file = tree.dir.path().join("selection");
+    fs::write(&file, "").unwrap();
+    // `cargo clippy` sets the script's clock back far past any run's length and fails, so both
+    // the failing phase and the run started before the clock's step.
+    let cargo = "() { if [ \"$1\" = clippy ]; then SECONDS=$((SECONDS - 100000)); return 3; fi; command cargo \"$@\"; }";
+    let out = tree.output_env(
+        None,
+        "",
+        Some(file.as_os_str()),
+        &tree.path(),
+        &[("BASH_FUNC_cargo%%", cargo)],
+    );
+    assert_eq!(out.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        stderr.lines().last(),
+        Some("ci-check: failed in clippy after 0s, 0s total"),
         "{stderr}"
     );
 }
