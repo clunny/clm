@@ -13,4 +13,6 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+clm-coverage.workspace = true
+roxmltree = "0.21"
 tempfile.workspace = true
