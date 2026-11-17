@@ -50,7 +50,6 @@ fn repo() -> TempDir {
 
 #[test]
 fn violations_and_unknown_nodes_exit_1() {
-    // req:check.coverage/pending-report@4a6b0203
     let dir = repo();
     let d = dir.path();
     let (code, out) = clm_pending(d, Some("nope"));
@@ -64,7 +63,6 @@ fn violations_and_unknown_nodes_exit_1() {
 
 #[test]
 fn scenario_removed_node_from_the_cli() {
-    // req:check.coverage/pending-report@4a6b0203
     let dir = repo();
     let d = dir.path();
     write(
