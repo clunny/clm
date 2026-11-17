@@ -131,7 +131,7 @@ fn scenario_text_from_the_crate_below() {
     let d = dir.path();
     let out = status(d, &[]);
     let (graph, _) = clm_model::load(d);
-    let markers = clm_check::scan(d).req;
+    let markers = clm_coverage::scan(d).req;
     let sizes = clm_check::size(d, &graph, &markers, defaults(d).unwrap()).unwrap();
     let oversized = sizes
         .into_iter()
