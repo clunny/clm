@@ -28,19 +28,25 @@ No change or code fix since 2026-11-10 fixes it: `20261115-the-build-loop-waits`
 
 ## Outcome
 
-- `orchestrator.loop/launched-refuses-an-earlier-task` (new): `clm build launched <name> <task-id>` exits 1, the loop file unchanged, when the task ID is another run's or an earlier run's of the name, naming that run and saying the printed `launch` is a new run; a step that plans or relaunches a run under a listed name keeps the task IDs of the runs of that name before it.
+- `orchestrator.loop/launched-refuses-an-earlier-task` (new): `clm build launched <name> <task-id>` exits 1, changing nothing, when the task ID is one the loop file records other than the current run's own: another run's, or one kept as an earlier run's of any name. The loop keeps a run's task ID with its name whenever it clears or replaces it (a rebuild, an orphan's relaunch, a new run planned under a finished run's name). The stderr names the run the task belonged to and says the printed action is a new run, to be started as a new subagent (`launch`) or a new command (`run`).
+- `capability/build-from-spec`'s test reports one task ID for two runs in `drain_the_queue` and `resume_in_a_new_session`; the requirement's own build gives each run its own ID, keeping the citations (`capability-tests-follow-rules`).
 - `backlog/the-fix-for-a-landed-build-s-task-reported-for-its-successor-is-outside-the-freeze` (`kind: question`) blocks the requirement until the human answers.
-- No capability test sees a difference: `capability/build-from-spec` reports each launch with a new task ID.
+- `backlog/the-build-skill-doesn-t-say-what-a-refused-clm-build-launched-means` (`kind: deferred`, `plugin`): the `build` skill's `launch` and `run` bullets say that a printed action is always a new run and what a refused `launched` means, once the requirement is built (the architecture audit's finding, `method-in-the-plugin`). It is prompt text, which no requirement states (`prompt-text-is-source`).
+- `backlog/a-late-report-of-a-landed-build-s-subagent-is-recorded-for-the-next-build-of-its` (`kind: bug`): the edge case below, filed so that it isn't lost (`fold-small-defer-large`, the audit's finding).
 
 ## Constraints
 
 - No action line, run name, Contract form or prompt file changes; `launched` gains a refusal, exit 1, which the Contract already gives for work that isn't possible.
+- The loop file gains one optional field per run, so a file an earlier `clm` wrote loads unchanged and `version` stays 1; no migration is needed (`upgrades-carry-migrations`). `loop-file`'s list isn't amended: the new requirement states the field, and `loop-file` is already behind and blocked by the plan item.
+- A refused `launched` doesn't renew the lease, as no refusing `clm build` command does (`pause`, a live `start`, a run the loop doesn't list), though `step-actions` says every command renews it.
 - `view`'s queue model is unchanged.
 
 ## Edge cases
 
-- **The old subagent's report.** A landed build's late `landed <sha>` is already ignored (`return-rules`). A report of another kind from it, such as `none --cause context`, would still be recorded for the new run, since `returned` names a run only by its name; a build whose claim has left `origin` has nothing left to stop on, so this is left until it is seen.
+- **The old subagent's report.** A landed build's late `landed <sha>` is already ignored (`return-rules`). A report of another kind from it, such as `none --cause context`, would still be recorded for the new run, since `returned` names a run only by its name; it is filed as `backlog/a-late-report-of-a-landed-build-s-subagent-is-recorded-for-the-next-build-of-its`, outside this change, which only stops the wrong record at `launched`.
 - **A task ID reported twice for the current run** is not refused: `launched` repeated for the same run stays harmless.
+- **A new `start` forgets returned runs**, and their task IDs with them. Their subagents died with the session the start replaces, so no session reports them.
+- **A different task ID for a run already `running`** is still recorded over the old one, as now.
 
 ## Open questions
 
