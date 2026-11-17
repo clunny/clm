@@ -148,7 +148,6 @@ fn latest_migration() -> String {
 
 #[test]
 fn a_stamp_only_land_runs_no_check() {
-    // req:land/settings-unchanged-is-checked@d27ea07f
     // The land that takes an upgrade changes `clm.toml` only by its `upgraded` stamp, and the
     // check it would run was already run on the same code.
     let repo = Repo::init();
