@@ -10,7 +10,7 @@ Lets the `left` field of `20261116-a-mutation-pass-that-stops` land without brea
 
 ## Problem
 
-The `ledger` build of `ledger/mutated-record` stopped: adding `left` to `clm_ledger::Body::Mutated` breaks the four struct literals `verify` builds it with (`crates/clm-verify/src/mutate.rs`, `tests/file.rs`, twice in `tests/mutate.rs`), and a build may change only its own component's files (`path-ownership`). The change that added `left` wrote no step that moves `verify` off the literal first. Every pattern of the variant, in `ledger` and `verify` alike, already ends in `..`, so only the literals break.
+The `ledger` build of `ledger/mutated-record` stopped: adding `left` to `clm_ledger::Body::Mutated` breaks the struct literals `verify` builds it with, in `crates/clm-verify/src/mutate.rs`, `tests/file.rs` and `tests/mutate.rs`, and a build may change only its own component's files (`path-ownership`). The change that added `left` wrote no step that moves `verify` off the literal first. Every pattern of the variant, in `ledger` and `verify` alike, already ends in `..`, so only the literals break.
 
 ## Approaches
 
@@ -34,6 +34,9 @@ The build order is `ledger/mutated-constructor`, then `verify/mutated-through-co
 
 - `ledger`'s own test `crates/clm-ledger/tests/mutated.rs` builds the variant by literal; it is `ledger`'s file, so the build of `ledger/mutated-record` updates it with the field.
 - `verify/mutated-through-constructor` is proven by reading `verify`'s files, which a build that adds a literal later would fail.
+
+- The constructor's parameters take the variant's field types (`String`, `Option<String>`, `Vec<String>`), so `verify`'s calls pass what its literals passed; `with_left` returns any body but a `mutated` one unchanged.
+- The builder check and the architecture audit counted `verify`'s literals differently (four or five, one line in `tests/mutate.rs` read as a literal or a pattern); the requirement names none by line, so its build moves every literal it finds.
 
 ## Open questions
 

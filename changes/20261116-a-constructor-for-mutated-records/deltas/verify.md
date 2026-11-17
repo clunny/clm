@@ -10,7 +10,7 @@ component: verify
 #### Scenario: no literal of the variant
 - GIVEN the files under `crates/clm-verify/`
 - WHEN they are read
-- THEN every `Body::Mutated {` in them opens a pattern whose fields end in `..`, and the record the mutation pass appends is built by `Body::mutated`
+- THEN for every `Body::Mutated {` in them, the text up to its matching `}` ends in `..` before that `}`, and `src/mutate.rs` calls `Body::mutated(`; the test that reads them builds the text it searches for so that it never appears whole in its own file
 
 #### Scenario: the record is unchanged
 - GIVEN a passing check and `a/x` due, with a fake `mutate` that writes `a/x killed`
