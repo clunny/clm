@@ -202,7 +202,7 @@ fn unreferenced_allow_list_gives_every_entry_a_reason() {
 
 #[test]
 fn the_retired_terms_detector_passes_here() {
-    // req:config/retired-terms-detector@afaa1f7a
+    // req:config/retired-terms-detector@1e881e15
     // The detector's command as `clm check` runs it, from the repository's root.
     let detector = this_repository_detectors()
         .into_iter()

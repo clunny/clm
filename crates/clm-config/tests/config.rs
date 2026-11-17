@@ -1121,7 +1121,7 @@ fn this_repository_verifies_the_whole_suite_after_lands() {
 
 #[test]
 fn this_repository_names_the_retired_terms_detector_last() {
-    // req:config/retired-terms-detector@afaa1f7a
+    // req:config/retired-terms-detector@1e881e15
     let text =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
     let f = Fixture::new(None, Some(&text));
