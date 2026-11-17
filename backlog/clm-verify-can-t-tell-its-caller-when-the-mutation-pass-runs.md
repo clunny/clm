@@ -3,9 +3,9 @@ title: "clm-verify can't tell its caller when the mutation pass runs"
 kind: question
 components: [clm, verify]
 choices:
-  - "verify's Call gains a hook the pass calls as it starts and ends"
-  - "the filing after the pass counts as the pass; Outcome says whether a pass follows"
-  - "the root's approximation stands; reword clm/verify-command"
+  - "Call gains pass start and end hooks"
+  - "Outcome says whether a pass follows"
+  - "Reword clm/verify-command to fit"
 ---
 
 `clm/verify-command` has `clm verify` catch `SIGINT` and `SIGTERM` "while the mutation pass runs" and let a signal "at any other time" end it as it would any process. `clm-verify`'s `verify_with` gives the root one moment only, `announce`, called with every outcome before the pass a green run goes on to; `Outcome::mutate`, which says whether a pass follows, is crate-private, and nothing marks the pass's end before `file::file` lands what passes found, which runs after it in `local` mode with `mutate` set whether or not a pass ran.
