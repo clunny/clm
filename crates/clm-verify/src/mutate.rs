@@ -266,8 +266,8 @@ pub(crate) fn scratch(ctx: &Ctx) -> Result<tempfile::TempDir, Error> {
 }
 
 /// The plan text for the due requirements, in the order given: per requirement, its
-/// component's code files, the diff of them from its base when there is one, its citing tests
-/// and the limit.
+/// component's code files, the diff of them from its base when there is one, its citing tests,
+/// the distinct globs of the reads markers in the files holding them, and the limit.
 fn write_plan(
     dir: &Path,
     graph: &clm_model::Graph,
@@ -278,6 +278,8 @@ fn write_plan(
 ) -> Result<String, Error> {
     let tracked = clm_git::tracked_files(dir)?;
     let mut plan = String::new();
+    // Each citing file's globs, read once however many requirements its tests cite.
+    let mut globs_of: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for (n, (id, base)) in blocks.iter().enumerate() {
         let component = id.split('/').next().unwrap_or_default();
         let code: Vec<String> = tracked
@@ -299,8 +301,22 @@ fn write_plan(
                 plan.push_str(&format!("diff {}\n", file.display()));
             }
         }
-        for cite in cites.iter().filter(|c| &c.id == id) {
+        let mine: Vec<&Cite> = cites.iter().filter(|c| &c.id == id).collect();
+        for cite in &mine {
             plan.push_str(&format!("test {}\t{}\n", cite.path, cite.name));
+        }
+        let mut reads = BTreeSet::new();
+        for cite in &mine {
+            let globs = globs_of.entry(cite.path.as_str()).or_insert_with(|| {
+                // A file that can't be read names no glob, as `cites` skips it.
+                fs::read_to_string(dir.join(&cite.path))
+                    .map(|text| clm_affected::reads_in(&text))
+                    .unwrap_or_default()
+            });
+            reads.extend(globs.iter().cloned());
+        }
+        for glob in reads {
+            plan.push_str(&format!("reads {glob}\n"));
         }
         plan.push_str(&format!("limit {LIMIT}\n"));
     }
