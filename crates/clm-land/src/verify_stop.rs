@@ -73,7 +73,7 @@ pub(crate) fn check(
         paths.get(component).is_some_and(|globs| {
             files
                 .iter()
-                .any(|f| globs.iter().any(|g| clm_check::matches(g, f)))
+                .any(|f| globs.iter().any(|g| clm_coverage::matches(g, f)))
         })
     };
 
