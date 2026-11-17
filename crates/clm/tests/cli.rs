@@ -144,7 +144,6 @@ fn unreferenced_detector() -> clm_config::Detector {
 #[test]
 fn unreferenced_is_clean_with_the_allow_list() {
     // req:clm/check-across-components@45a113b3
-    // req:config/unreferenced-detector@f0c53e15
     let detector = unreferenced_detector();
     let out = clm_command()
         .args(&detector.command[1..])
@@ -361,7 +360,6 @@ fn check_runs_a_detector_whose_required_file_exists() {
 #[test]
 fn check_fails_on_a_retired_term_in_a_spec() {
     // req:clm/check-across-components@45a113b3
-    // req:config/retired-terms-detector@1e881e15
     let script = fs::read_to_string(repo_root().join("scripts/retired-terms.sh")).unwrap();
     let dir = detector_repo(None);
     write(dir.path(), "scripts/retired-terms.sh", &script);

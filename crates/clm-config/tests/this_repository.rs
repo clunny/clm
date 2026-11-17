@@ -97,7 +97,7 @@ fn crate_node_slug(krate: &str) -> String {
 
 #[test]
 fn unreferenced_detector_is_named_here() {
-    // req:config/unreferenced-detector@f0c53e15
+    // req:config/unreferenced-detector@d9f516a5
     let names: Vec<_> = this_repository_detectors()
         .into_iter()
         .map(|d| d.name)
@@ -138,7 +138,7 @@ fn unreferenced_detector_is_named_here() {
 
 #[test]
 fn unreferenced_allow_list_gives_every_entry_a_reason() {
-    // req:config/unreferenced-detector@f0c53e15
+    // req:config/unreferenced-detector@d9f516a5
     let lines = unreferenced_command_lines();
     let mut lines = lines.iter().filter(|l| !l.is_empty());
     assert_eq!(
@@ -180,7 +180,12 @@ fn unreferenced_allow_list_gives_every_entry_a_reason() {
             allowing = true;
             let reason = reason.join(" ");
             let krate = entry.split("::").next().unwrap();
-            if krate == "clm_config" || !reason.contains("narrow-public-items-") {
+            if krate == "clm_config" {
+                assert!(
+                    reason.contains("Kept") && !reason.contains("narrow-public-items-"),
+                    "{entry} of clm-config is not kept"
+                );
+            } else if !reason.contains("narrow-public-items-") {
                 assert!(
                     reason.contains("Kept"),
                     "{entry} is neither kept nor pending"
