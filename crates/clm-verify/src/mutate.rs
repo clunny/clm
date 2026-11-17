@@ -1,21 +1,31 @@
 //! `mutation-pass`: after a green verification, the project's `[verify] mutate` command is
 //! asked whether the tests that cite each requirement built since the last pass notice a change
-//! to the requirement's component, and a `mutated` record says what it found.
+//! to the requirement's component, and a `mutated` record says what it found, and what it
+//! didn't reach.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::os::fd::AsFd;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
 use clm_coverage::{TestSpan, marker_spans, markers_in, owner, tests_in};
 use clm_ledger::Body;
 
 use crate::chain::State;
-use crate::{Ctx, Error, run, tree};
+use crate::{Call, Ctx, Error, run, tree};
 
 /// How many mutants beyond the code the lands changed the command may try per requirement.
 const LIMIT: usize = 20;
+
+/// The available memory, in kB, each requirement judged at once is given: 2 GiB.
+const KB_PER_JOB: u64 = 2_097_152;
+
+/// How often the pass looks at its command while it runs.
+const POLL: Duration = Duration::from_millis(50);
 
 /// A test citing a requirement at its current version.
 pub(crate) struct Cite {
@@ -30,79 +40,111 @@ pub(crate) struct Cite {
 enum Verdict {
     Killed,
     Survived(u64),
+    NotJudged,
+}
+
+/// How the command ended.
+enum Ended {
+    /// By itself, with its exit status; none when a signal ended it.
+    Exited(Option<i32>),
+    /// At `[verify] mutate_minutes`, that many.
+    Limit(u64),
+    /// At the call's stop request.
+    Stopped,
 }
 
 /// Runs the pass for the commit at position `end` of the chain, which passed, and returns the
 /// notes it leaves for stderr. A failure of the pass is a note, never an error: it changes
 /// nothing about the verification.
-pub(crate) fn pass(ctx: &Ctx, state: &State, end: usize) -> Vec<String> {
+pub(crate) fn pass(ctx: &Ctx, state: &State, end: usize, call: &Call) -> Vec<String> {
     let Some(command) = ctx.verify.mutate.as_deref() else {
         return Vec::new();
     };
-    match run_pass(ctx, state, end, command) {
+    match run_pass(ctx, state, end, command, call) {
         Ok(notes) => notes,
         Err(why) => vec![format!("mutation: {why}; nothing recorded")],
     }
 }
 
-fn run_pass(ctx: &Ctx, state: &State, end: usize, command: &str) -> Result<Vec<String>, Error> {
+fn run_pass(
+    ctx: &Ctx,
+    state: &State,
+    end: usize,
+    command: &str,
+    call: &Call,
+) -> Result<Vec<String>, Error> {
     let commit = state.chain[end].clone();
     let tree = tree::Tree::at(ctx, &commit)?;
     let since = state.mutation_base(ctx, end)?;
     let (graph, _) = clm_model::load(&tree.dir);
     let cites = cites(&tree.dir, &graph)?;
-    let due = match &since {
+    let fresh = match &since {
         Some(since) => due(&tree.dir, since, &cites)?,
         None => cites.iter().map(|c| c.id.clone()).collect(),
     };
+    // What the newest record left goes first, each with the commit its diff runs from, and
+    // only while a test still cites it at its current version; then the rest in ID order.
+    let mut blocks: Vec<(String, Option<String>)> = Vec::new();
+    for (id, base) in state.carried(end) {
+        if cites.iter().any(|c| c.id == id) && !blocks.iter().any(|(b, _)| *b == id) {
+            blocks.push((id, base));
+        }
+    }
+    for id in fresh {
+        if !blocks.iter().any(|(b, _)| *b == id) {
+            blocks.push((id, since.clone()));
+        }
+    }
     let mut notes = Vec::new();
     let mut verdicts = BTreeMap::new();
-    if !due.is_empty() {
+    if !blocks.is_empty() {
         let scratch = scratch(ctx)?;
         let plan = scratch.path().join("plan");
         let result = scratch.path().join("result");
         fs::write(
             &plan,
-            write_plan(
-                &tree.dir,
-                &graph,
-                since.as_deref(),
-                &commit,
-                &due,
-                &cites,
-                scratch.path(),
-            )?,
+            write_plan(&tree.dir, &graph, &commit, &blocks, &cites, scratch.path())?,
         )?;
         fs::write(&result, "")?;
-        let status = launch(ctx, &tree.dir, &commit, command, &plan, &result)?;
-        if status != Some(0) {
-            let status = status.map_or("a signal".to_string(), |s| s.to_string());
-            return Ok(vec![format!(
-                "mutation: {command} failed with status {status}; nothing recorded"
-            )]);
+        match launch(ctx, call, &tree.dir, &commit, command, &plan, &result)? {
+            Ended::Exited(Some(0)) => {}
+            Ended::Exited(status) => {
+                let status = status.map_or("a signal".to_string(), |s| s.to_string());
+                notes.push(format!("mutation: {command} failed with status {status}"));
+            }
+            Ended::Limit(minutes) => notes.push(format!(
+                "mutation: stopped at its limit of {minutes} minutes"
+            )),
+            Ended::Stopped => notes.push("mutation: stopped".to_string()),
         }
-        verdicts = read_verdicts(&fs::read_to_string(&result)?);
+        verdicts = read_verdicts(&String::from_utf8_lossy(&fs::read(&result)?));
     }
-    let (mut killed, mut unproven, mut not_judged) = (Vec::new(), Vec::new(), Vec::new());
-    for id in &due {
+    let (mut killed, mut unproven, mut not_judged, mut left) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for (id, _) in &blocks {
         match verdicts.get(id) {
             Some(Verdict::Killed) => killed.push(id.clone()),
             Some(Verdict::Survived(n)) if *n > 0 => {
                 let version = graph.requirement(id).map(|r| r.version().to_string());
                 unproven.push(format!("{id}@{}", version.unwrap_or_default()));
             }
-            _ => not_judged.push(id.clone()),
+            Some(_) => not_judged.push(id.clone()),
+            None => left.push(id.clone()),
         }
     }
-    notes.push(format!(
+    let mut counts = format!(
         "mutation: {} killed, {} unproven, {} not judged",
         killed.len(),
         unproven.len(),
         not_judged.len()
-    ));
+    );
+    if !left.is_empty() {
+        counts.push_str(&format!(", {} left", left.len()));
+    }
+    notes.push(counts);
     clm_ledger::append(
         &ctx.root,
-        Body::mutated(commit, since, killed, unproven, not_judged),
+        Body::mutated(commit, since, killed, unproven, not_judged).with_left(left),
         ctx.env,
     )?;
     Ok(notes)
@@ -223,21 +265,20 @@ pub(crate) fn scratch(ctx: &Ctx) -> Result<tempfile::TempDir, Error> {
         .tempdir_in(std::path::absolute(parent)?)?)
 }
 
-/// The plan text for the due requirements: per requirement in ID order, its component's code
-/// files, the diff of them since `since` when there is one, its citing tests and the limit.
-#[allow(clippy::too_many_arguments)]
+/// The plan text for the due requirements, in the order given: per requirement, its
+/// component's code files, the diff of them from its base when there is one, its citing tests
+/// and the limit.
 fn write_plan(
     dir: &Path,
     graph: &clm_model::Graph,
-    since: Option<&str>,
     commit: &str,
-    due: &BTreeSet<String>,
+    blocks: &[(String, Option<String>)],
     cites: &[Cite],
     scratch: &Path,
 ) -> Result<String, Error> {
     let tracked = clm_git::tracked_files(dir)?;
     let mut plan = String::new();
-    for (n, id) in due.iter().enumerate() {
+    for (n, (id, base)) in blocks.iter().enumerate() {
         let component = id.split('/').next().unwrap_or_default();
         let code: Vec<String> = tracked
             .iter()
@@ -248,8 +289,8 @@ fn write_plan(
         for path in &code {
             plan.push_str(&format!("code {path}\n"));
         }
-        if let (Some(since), false) = (since, code.is_empty()) {
-            let mut args = vec!["diff", since, commit, "--"];
+        if let (Some(base), false) = (base, code.is_empty()) {
+            let mut args = vec!["diff", base.as_str(), commit, "--"];
             args.extend(code.iter().map(String::as_str));
             let diff = clm_git::git(dir, &args)?;
             if !diff.is_empty() {
@@ -266,18 +307,36 @@ fn write_plan(
     Ok(plan)
 }
 
-/// Runs the command through `sh -c` in the verify tree, its output copied to stderr, with a
-/// slot of its own and no check lock, and returns its exit status.
+/// How many requirements the command may judge at once: one per 2 GiB of the `MemAvailable`
+/// line of `memory`, at least 1 and at most `ceiling`; 1 with no ceiling, or when the file or
+/// the line can't be read.
+fn jobs(memory: &Path, ceiling: Option<u64>) -> u64 {
+    let Some(ceiling) = ceiling else {
+        return 1;
+    };
+    let available = fs::read_to_string(memory).ok().and_then(|text| {
+        text.lines()
+            .find_map(|l| l.strip_prefix("MemAvailable:"))
+            .and_then(|rest| rest.split_whitespace().next()?.parse::<u64>().ok())
+    });
+    available.map_or(1, |kb| (kb / KB_PER_JOB).min(ceiling).max(1))
+}
+
+/// Runs the command through `sh -c` in the verify tree, in a process group of its own, its
+/// output copied to stderr, with slots of its own and no check lock, and ends the group at
+/// `[verify] mutate_minutes` or at the call's stop request.
 fn launch(
     ctx: &Ctx,
+    call: &Call,
     dir: &Path,
     commit: &str,
     command: &str,
     plan: &Path,
     result: &Path,
-) -> Result<Option<i32>, Error> {
+) -> Result<Ended, Error> {
     let build = tree::places(ctx)?.join("verify-build");
     let output = std::io::stderr().as_fd().try_clone_to_owned()?;
+    let jobs = jobs(call.memory, ctx.verify.mutate_jobs);
     let mut shell = Command::new("sh");
     shell
         .arg("-c")
@@ -285,23 +344,73 @@ fn launch(
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::from(output))
+        .process_group(0)
         .env_remove("CLM_SELECTION")
         .envs(run::env_of(ctx, commit)?)
         .env("CLM_LAND_DIR", build)
         .env("CLM_MUTATE", plan)
         .env("CLM_MUTATE_RESULT", result)
+        .env("CLM_MUTATE_JOBS", jobs.to_string())
         .env("CLM_SLOT", (ctx.max_builds + 1).to_string());
-    Ok(shell.status()?.code())
+    let mut child = shell.spawn()?;
+    let limit = ctx.verify.mutate_minutes.map(|m| {
+        (
+            m,
+            call.minute
+                .saturating_mul(u32::try_from(m).unwrap_or(u32::MAX)),
+        )
+    });
+    let started = Instant::now();
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Ended::Exited(status.code()));
+        }
+        let why = match limit {
+            _ if call.stop.load(Ordering::SeqCst) => Some(Ended::Stopped),
+            Some((minutes, length)) if started.elapsed() >= length => Some(Ended::Limit(minutes)),
+            _ => None,
+        };
+        if let Some(why) = why {
+            end_group(&mut child, call.grace)?;
+            return Ok(why);
+        }
+        std::thread::sleep(POLL);
+    }
 }
 
-/// The verdict lines of the result file: `<id> killed` and `<id> survived <n>`; a line saying
-/// `<id> not-judged`, or anything else, leaves the requirement not judged.
+/// Sends `SIGTERM` to the group `child` leads, and `SIGKILL` when it hasn't ended after
+/// `grace`.
+fn end_group(child: &mut Child, grace: Duration) -> Result<(), Error> {
+    // The child leads its own group (`process_group(0)`), so its ID is the group's.
+    let group = child.id() as libc::pid_t;
+    // SAFETY: `killpg` takes plain integers and touches no memory of ours.
+    unsafe { libc::killpg(group, libc::SIGTERM) };
+    // The command has ended when no process of its group is left: `sh -c` may end at once
+    // while a script it started ignores the signal.
+    let asked = Instant::now();
+    while asked.elapsed() < grace {
+        // SAFETY: as above; signal 0 only asks whether the group holds a process.
+        if child.try_wait()?.is_some() && unsafe { libc::killpg(group, 0) } != 0 {
+            return Ok(());
+        }
+        std::thread::sleep(POLL);
+    }
+    // SAFETY: as above.
+    unsafe { libc::killpg(group, libc::SIGKILL) };
+    child.wait()?;
+    Ok(())
+}
+
+/// The verdict lines of the result file that end in a newline, the last for a requirement
+/// holding: `<id> killed`, `<id> survived <n>` and `<id> not-judged`; a line that doesn't
+/// parse is ignored.
 fn read_verdicts(text: &str) -> BTreeMap<String, Verdict> {
     let mut out = BTreeMap::new();
-    for line in text.lines() {
+    for line in text.split_inclusive('\n').filter(|l| l.ends_with('\n')) {
         let words: Vec<&str> = line.split_whitespace().collect();
         let verdict = match words.as_slice() {
             [_, "killed"] => Verdict::Killed,
+            [_, "not-judged"] => Verdict::NotJudged,
             [_, "survived", n] => match n.parse() {
                 Ok(n) => Verdict::Survived(n),
                 Err(_) => continue,

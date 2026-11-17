@@ -89,6 +89,42 @@ impl State {
         Ok(None)
     }
 
+    /// What the newest `mutated` record on the chain up to position `end` inclusive left, in
+    /// its order, each with the commit its diff runs from: the `since` of the oldest record of
+    /// the unbroken run of newest records whose `left` names it (`mutation-pass`). A commit's
+    /// newest record is the newest by `at`.
+    pub(crate) fn carried(&self, end: usize) -> Vec<(String, Option<String>)> {
+        let newest: Vec<&Body> = self.chain[..=end]
+            .iter()
+            .rev()
+            .filter_map(|c| {
+                self.fold
+                    .mutations
+                    .get(c)?
+                    .iter()
+                    .max_by(|a, b| a.at.cmp(&b.at))
+            })
+            .map(|r| &r.body)
+            .collect();
+        let Some(Body::Mutated { left, .. }) = newest.first() else {
+            return Vec::new();
+        };
+        left.iter()
+            .map(|id| {
+                let mut base = None;
+                for body in &newest {
+                    match body {
+                        Body::Mutated { left, since, .. } if left.contains(id) => {
+                            base = since.clone()
+                        }
+                        _ => break,
+                    }
+                }
+                (id.clone(), base)
+            })
+            .collect()
+    }
+
     /// The lands after the last verified commit before position `end`, up to `end`
     /// inclusive, oldest first, and that commit's position.
     pub(crate) fn unverified(&self, end: usize) -> (Option<usize>, &[String]) {
