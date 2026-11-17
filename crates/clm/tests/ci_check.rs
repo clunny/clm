@@ -1921,10 +1921,25 @@ fn without_a_land_place_the_cargo_variables_stay() {
     }
 }
 
-/// A `cargo` for `mutate.sh`: records its arguments; for `cargo mutants` prints nothing for
-/// `--version`, the lines of `bin/list` for `--list`, and otherwise writes the outcome lists the
-/// run would: `bin/diff-caught` and `bin/diff-missed` hold the mutants caught and missed for a
-/// run on the diff, `bin/further-caught` and `bin/further-missed` for the run on named mutants.
+/// A `cargo` for `mutate.sh`: records its arguments.
+///
+/// `cargo llvm-cov` prints `bin/llvm-cov-version` for `--version` (nothing when absent), and
+/// otherwise writes its directory to `$CI_LOG.cov-cwd` and, unless `bin/llvm-cov-no-report`
+/// exists, the lcov report `--output-path` names: for each `code` file of the plan `CLM_MUTATE`
+/// names, an `SF:` line naming it absolutely under the real path of the directory it runs in, as
+/// the tool does, and a `DA:` line for each of its lines 1 to 40, run unless `bin/lcov-run` lists
+/// the lines run (one per line, `<n>` for every file or `<file>:<n>` for one; an empty file for
+/// none). Then it exits with the status in `bin/llvm-cov-exit` when it exists,
+/// the report written, so the status alone tells a failed run.
+///
+/// `cargo mutants` prints nothing for `--version`. For `--list --json` it prints, as the tool
+/// does, a pretty JSON array of the mutants `bin/list` lists as `<first line> <last line>
+/// <name>`, each in the file its name names before the first `:` and in a function spanning lines
+/// 1 to 99, which is not the mutant's span; with `--in-diff`, those of `bin/diff-list` when it
+/// exists. Without `bin/list`, one mutant on line 1 of the first `--file`. For a run it writes the
+/// outcome lists: `bin/diff-caught` and `bin/diff-missed` hold the mutants caught and missed for
+/// a run on the diff, `bin/further-caught` and `bin/further-missed` for the run on further
+/// mutants; when neither of a run's files exists, every mutant it is given by `--re` is missed.
 /// It exits 2 when a mutant was missed, as `cargo mutants` does, and with the status in
 /// `bin/mutants-exit` for a run on the repository's files. A run of the script's fixture, which
 /// names one of its two tests, catches the mutants of the first and misses those of the second,
@@ -1937,8 +1952,36 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// the directory it runs in to `$CI_LOG.tree`, since the script removes it when it ends.
 const CARGO_MUTANTS: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
-[ "$1" = mutants ] || exit 0
 bin=$(dirname "$0")
+arg_after() {
+  local want=$1 prev= a
+  shift
+  for a; do
+    [ "$prev" != "$want" ] || { echo "$a"; return; }
+    prev=$a
+  done
+}
+if [ "$1" = llvm-cov ]; then
+  case " $* " in
+    *" --version "*) cat "$bin/llvm-cov-version" 2>/dev/null; exit 0 ;;
+  esac
+  echo "$PWD" >> "$CI_LOG.cov-cwd"
+  report=$(arg_after --output-path "$@")
+  [ ! -e "$bin/llvm-cov-no-report" ] || exit 0
+  : > "$report"
+  sed -n 's/^code //p' "$CLM_MUTATE" | while IFS= read -r f; do
+    echo "SF:$(pwd -P)/$f" >> "$report"
+    for n in $(seq 1 40); do
+      run=1
+      if [ -e "$bin/lcov-run" ]; then grep -qx -e "$n" -e "$f:$n" "$bin/lcov-run" || run=0; fi
+      echo "DA:$n,$run" >> "$report"
+    done
+    echo end_of_record >> "$report"
+  done
+  [ ! -e "$bin/llvm-cov-exit" ] || exit "$(cat "$bin/llvm-cov-exit")"
+  exit 0
+fi
+[ "$1" = mutants ] || exit 0
 case " $* " in
   *" --version "*) exit 0 ;;
 esac
@@ -1958,13 +2001,39 @@ case " $* " in
   *) [ -e "$CI_LOG.tree" ] || cp -R . "$CI_LOG.tree" ;;
 esac
 case " $* " in
-  *" --list "*) cat "$bin/list" 2>/dev/null; exit 0 ;;
+  *" --list "*)
+    list=$bin/list
+    case " $* " in *" --in-diff "*) [ ! -e "$bin/diff-list" ] || list=$bin/diff-list ;; esac
+    if [ -e "$list" ]; then
+      lines=$(cat "$list")
+    else
+      lines="1 1 $(arg_after --file "$@"):1:1: replace f with ()"
+    fi
+    # As the tool does, a diff with no mutant of the files prints nothing, not `[]`.
+    case " $* " in *" --in-diff "*) [ -n "$lines" ] || exit 0 ;; esac
+    echo "["
+    sep=
+    while read -r first last name; do
+      [ -n "$name" ] || continue
+      printf '%s  {\n' "$sep"
+      printf '    "file": "%s",\n' "${name%%:*}"
+      printf '    "function": {\n      "function_name": "f",\n      "span": {\n'
+      printf '        "end": {\n          "column": 2,\n          "line": 99\n        },\n'
+      printf '        "start": {\n          "column": 1,\n          "line": 1\n        }\n      }\n    },\n'
+      printf '    "name": "%s",\n' "$(printf '%s' "$name" | sed 's/["\\]/\\&/g')"
+      printf '    "span": {\n'
+      printf '      "end": {\n        "column": 9,\n        "line": %s\n      },\n' "$last"
+      printf '      "start": {\n        "column": 5,\n        "line": %s\n      }\n    }\n' "$first"
+      printf '  }'
+      sep=,
+    done <<EOF
+$lines
+EOF
+    printf '\n]\n'
+    exit 0
+    ;;
 esac
-out=; prev=
-for a; do
-  [ "$prev" != --output ] || out=$a
-  prev=$a
-done
+out=$(arg_after --output "$@")
 mode=further
 case " $* " in
   *" --in-diff "*) mode=diff ;;
@@ -1976,8 +2045,13 @@ case $mode in
   blind) caught=0; missed=1; [ ! -e "$bin/fixture-catches-all" ] || { caught=1; missed=0; } ;;
   *)
     [ ! -e "$bin/mutants-exit" ] || exit "$(cat "$bin/mutants-exit")"
-    caught=$(cat "$bin/$mode-caught" 2>/dev/null || echo 0)
-    missed=$(cat "$bin/$mode-missed" 2>/dev/null || echo 0)
+    if [ -e "$bin/$mode-caught" ] || [ -e "$bin/$mode-missed" ]; then
+      caught=$(cat "$bin/$mode-caught" 2>/dev/null || echo 0)
+      missed=$(cat "$bin/$mode-missed" 2>/dev/null || echo 0)
+    else
+      caught=0
+      missed=$(printf '%s\n' "$@" | grep -cx -- --re || true)
+    fi
     ;;
 esac
 mkdir -p "$out/mutants.out"
@@ -1987,10 +2061,14 @@ for i in $(seq 1 "$missed"); do echo "missed $i" >> "$out/mutants.out/missed.txt
 "#;
 /// An `npx` for `mutate.sh`: records its arguments led by its directory and, for `stryker run
 /// <config>`, writes the report the configuration file names with the mutants of
-/// `bin/stryker-killed` and `bin/stryker-survived`, and keeps copies of the configuration file
+/// `bin/stryker-killed`, `bin/stryker-survived` and `bin/stryker-nocov` (reported `NoCoverage`),
+/// each on a line of its own counted from 1 in each run, so two runs report the same mutants,
+/// and one `CompileError` unless `bin/stryker-nocov` exists without `bin/stryker-compile-error`;
+/// and keeps copies of the configuration file
 /// and of the vitest configuration it names in `$CI_LOG.stryker` and `$CI_LOG.vitest`. A run on
 /// the script's fixture reports its first function's mutant killed and its second's survived,
-/// unless `bin/stryker-fixture-kills-all` exists. A run on anything else exits with the status in
+/// unless `bin/stryker-fixture-kills-all` exists, or reports another of the second's `NoCoverage` when
+/// `bin/stryker-fixture-blind-nocov` exists. A run on anything else exits with the status in
 /// `bin/stryker-exit`, writing no report.
 const NPX_STRYKER: &str = r#"#!/usr/bin/env bash
 echo "$(basename "$PWD")\$ npx $*" >> "$CI_LOG"
@@ -2003,6 +2081,8 @@ if grep -q clm-mutate-fixture "$cfg"; then
     killed=0; survived=1
   elif grep -q 'fixture.ts:1-1' "$cfg" || [ -e "$bin/stryker-fixture-kills-all" ]; then
     killed=1; survived=0
+  elif [ -e "$bin/stryker-fixture-blind-nocov" ]; then
+    killed=0; survived=1; nocov=1
   else
     killed=0; survived=1
   fi
@@ -2012,12 +2092,23 @@ else
   [ ! -e "$bin/stryker-exit" ] || exit "$(cat "$bin/stryker-exit")"
   killed=$(cat "$bin/stryker-killed" 2>/dev/null || echo 0)
   survived=$(cat "$bin/stryker-survived" 2>/dev/null || echo 0)
+  nocov=$(cat "$bin/stryker-nocov" 2>/dev/null || echo 0)
 fi
+n=0
+mutant() {
+  n=$((n + 1))
+  printf '{"status":"%s","mutatorName":"M","replacement":"r","location":{"start":{"line":%s,"column":1},"end":{"line":%s,"column":2}}}' "$1" "$n" "$n"
+}
 {
   printf '{"files":{"a":{"mutants":['
-  for i in $(seq 1 "$killed"); do printf '{"status":"Killed"},'; done
-  for i in $(seq 1 "$survived"); do printf '{"status":"Survived"},'; done
-  printf '{"status":"CompileError"}]}}}'
+  sep=
+  for i in $(seq 1 "$killed"); do printf '%s' "$sep"; mutant Killed; sep=,; done
+  for i in $(seq 1 "$survived"); do printf '%s' "$sep"; mutant Survived; sep=,; done
+  for i in $(seq 1 "${nocov:-0}"); do printf '%s' "$sep"; mutant NoCoverage; sep=,; done
+  if [ ! -e "$bin/stryker-nocov" ] || [ -e "$bin/stryker-compile-error" ]; then
+    printf '%s' "$sep"; mutant CompileError
+  fi
+  printf ']}}}'
 } >"$report"
 "#;
 
@@ -2034,6 +2125,10 @@ fn mutate_tree(plan_text: &str) -> Tree {
     );
     tree.fake("cargo", CARGO_MUTANTS);
     tree.fake("npx", NPX_STRYKER);
+    tree.fake(
+        "rustup",
+        "#!/usr/bin/env bash\necho \"rustup $*\" >> \"$CI_LOG\"\n",
+    );
     fs::write(tree.dir.path().join("plan"), plan_text).unwrap();
     // A checkout at a commit, as the verify tree always is.
     git(&tree.work(), &["init", "-q", "-b", "main"]);
@@ -2093,6 +2188,7 @@ impl Tree {
             "fixture-src",
             "fixture-alternates",
             "fixture-status",
+            "cov-cwd",
             "stryker",
             "vitest",
         ] {
@@ -2131,16 +2227,25 @@ const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndif
 
 #[test]
 fn a_rust_requirement_whose_test_notices_is_killed() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:1: replace d with ()\n2 2 crates/clm-check/src/lib.rs:2:1: replace f with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:1: replace d with ()\n",
+    );
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(result, ["a/x killed"]);
-    let run = log
+    let tries: Vec<&String> = log
         .iter()
-        .find(|l| l.starts_with("cargo mutants ") && l.contains("--in-diff"))
-        .unwrap_or_else(|| panic!("{log:?}"));
+        .filter(|l| l.starts_with("cargo mutants ") && l.contains("--re "))
+        .collect();
+    let run = tries.first().unwrap_or_else(|| panic!("{log:?}"));
     for part in [
         "--in-diff /tmp/the.diff",
         "--test-package clm-check",
@@ -2156,38 +2261,55 @@ fn a_rust_requirement_whose_test_notices_is_killed() {
         assert!(run.contains(part), "no {part} in {run}");
     }
     assert!(!run.contains("binary("), "{run}");
-    // Caught on the diff, so no further mutants are drawn, and the pass ends with coverage.
-    assert!(!log.iter().any(|l| l.contains("--list")), "{log:?}");
+    // Caught on the diff, so no further mutant is tried, and the pass ends with coverage.
+    assert_eq!(tries.len(), 1, "{log:?}");
     assert_eq!(log.last().unwrap(), "coverage.sh", "{log:?}");
 }
 
 #[test]
 fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-missed", "3");
     tree.report("further-missed", "2");
     tree.report(
         "list",
-        "crates/clm-check/src/lib.rs:1:1: replace f with ()\n",
+        "1 1 crates/clm-check/src/lib.rs:1:1: replace g with \"x\"\n2 2 crates/clm-check/src/lib.rs:2:1: replace f with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:1: replace g with \"x\"\n",
     );
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(result, ["a/x survived 5"]);
-    // The further run names the listed mutant, and the tests are still the block's alone.
-    let further = log
+    // The diff's run names the diff's mutant; the further run names the listed mutant that
+    // isn't the diff's, and the tests are still the block's alone.
+    let tried: Vec<&String> = log
         .iter()
-        .find(|l| l.starts_with("cargo mutants ") && l.contains("--re "))
-        .unwrap_or_else(|| panic!("{log:?}"));
+        .filter(|l| l.starts_with("cargo mutants ") && l.contains("--re "))
+        .collect();
+    assert_eq!(tried.len(), 2, "{log:?}");
     assert!(
-        further.contains("replace f with \\(\\)") && further.contains("test(~proves_x)"),
+        tried[0].contains("--in-diff") && tried[0].contains("replace g with \"x\""),
+        "{}",
+        tried[0]
+    );
+    let further = tried[1];
+    assert!(
+        further.contains("replace f with \\(\\)")
+            && !further.contains("replace g")
+            && !further.contains("--in-diff")
+            && further.contains("test(~proves_x)"),
         "{further}"
     );
-    // The diff's run, the listing and the further run are all in the one tree, made once,
-    // outside the checkout.
+    // The listings and the runs, and the run that finds the lines the tests run, are all in the
+    // one tree, made once, outside the checkout.
     let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
     let block: Vec<&str> = dirs.lines().skip(2).collect();
-    assert_eq!(block.len(), 3, "{dirs}");
+    assert_eq!(block.len(), 4, "{dirs}");
+    let cov = fs::read_to_string(tree.dir.path().join("log.cov-cwd")).unwrap();
+    assert_eq!(cov.lines().collect::<Vec<_>>(), [block[0]], "{cov}");
     assert!(block.iter().all(|d| *d == block[0]), "{dirs}");
     let work = fs::canonicalize(tree.work()).unwrap();
     assert!(!Path::new(block[0]).starts_with(&work), "{dirs}");
@@ -2202,7 +2324,7 @@ fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
 
 #[test]
 fn a_block_of_playwright_specs_is_not_judged() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(
         "requirement w/y\ncode web/src/app.ts\ntest web/e2e/app.spec.ts\tpaints\nlimit 20\n",
     );
@@ -2218,7 +2340,7 @@ fn a_block_of_playwright_specs_is_not_judged() {
 
 #[test]
 fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree("");
     let diff = tree.dir.path().join("the.diff");
     fs::write(
@@ -2291,7 +2413,7 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
 
 #[test]
 fn a_plan_with_nothing_to_mutate_is_not_judged() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree("requirement d/z\ncode docs/readme.md\ntest docs/t.rs\tt\nlimit 20\n");
     let (ok, log, result, _) = tree.mutate(&[]);
     assert!(ok, "{log:?}");
@@ -2300,7 +2422,7 @@ fn a_plan_with_nothing_to_mutate_is_not_judged() {
 
 #[test]
 fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let land = tree.dir.path().join("land");
@@ -2318,7 +2440,7 @@ fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
 
 #[test]
 fn the_mutation_tools_are_pinned_and_installed_when_absent() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let (_, log, _, _) = tree.mutate(&[]);
@@ -2339,7 +2461,24 @@ fn the_mutation_tools_are_pinned_and_installed_when_absent() {
                 .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
         "{install}"
     );
-    // Present at the pinned version, it is not installed again.
+    // `cargo-llvm-cov`, which finds the lines the tests run, at the version `coverage.sh` pins,
+    // installed as `coverage.sh` installs it.
+    let pin = script_lines("coverage.sh")
+        .into_iter()
+        .find(|l| l.starts_with("cargo install ") && l.ends_with(" cargo-llvm-cov"))
+        .expect("coverage.sh installs cargo-llvm-cov");
+    let llvm_cov = pin.split_whitespace().nth(4).unwrap().to_owned();
+    assert!(log.contains(&pin), "no `{pin}` in {log:?}");
+    let rustup = log
+        .iter()
+        .position(|l| l == "rustup component add llvm-tools-preview")
+        .unwrap_or_else(|| panic!("{log:?}"));
+    let cov = log
+        .iter()
+        .position(|l| l.starts_with("cargo llvm-cov nextest "))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    assert!(rustup < cov, "{log:?}");
+    // Present at the pinned versions, neither is installed again.
     tree.fake(
         "cargo",
         &CARGO_MUTANTS.replace(
@@ -2347,16 +2486,18 @@ fn the_mutation_tools_are_pinned_and_installed_when_absent() {
             &format!("*\" --version \"*) echo \"cargo-mutants {version}\"; exit 0 ;;"),
         ),
     );
+    tree.report("llvm-cov-version", &format!("cargo-llvm-cov {llvm_cov}\n"));
     let (_, log, _, _) = tree.mutate(&[]);
     assert!(
-        !log.iter().any(|l| l.starts_with("cargo install ")),
+        !log.iter()
+            .any(|l| l.starts_with("cargo install ") || l.starts_with("rustup ")),
         "{log:?}"
     );
 }
 
 #[test]
 fn the_mutation_script_is_in_no_land_check_or_workflow() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     // clm:reads clm.toml
     // clm:reads .github/**
     let toml = fs::read_to_string(repo().join("clm.toml")).unwrap();
@@ -2393,7 +2534,7 @@ fn the_mutation_script_is_in_no_land_check_or_workflow() {
 
 #[test]
 fn vitest_tests_that_notice_nothing_survive() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(
         "requirement p/q\ncode plugin-panel/src/a.ts\ntest plugin-panel/test/a.test.ts\tt\nlimit 20\n",
     );
@@ -2415,7 +2556,7 @@ fn vitest_tests_that_notice_nothing_survive() {
 
 #[test]
 fn a_tool_that_fails_leaves_no_verdict() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("mutants-exit", "4");
@@ -2439,7 +2580,7 @@ const WEB_BLOCK: &str =
 
 #[test]
 fn stryker_that_runs_no_test_leaves_no_verdict() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-exit", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2453,7 +2594,7 @@ fn stryker_that_runs_no_test_leaves_no_verdict() {
 
 #[test]
 fn the_fixture_is_judged_first_outside_the_repository() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let before = snapshot(&tree.work());
@@ -2531,7 +2672,7 @@ fn the_fixture_is_judged_first_outside_the_repository() {
 
 #[test]
 fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(&format!("{RUST_BLOCK}{}", RUST_BLOCK.replace("a/x", "a/y")));
     tree.report("diff-caught", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2539,8 +2680,9 @@ fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
     assert_eq!(result, ["a/x killed", "a/y killed"]);
     let dirs = fs::read_to_string(tree.dir.path().join("log.cwd")).unwrap();
     let block: Vec<&str> = dirs.lines().skip(2).collect();
-    assert_eq!(block.len(), 2, "{dirs}");
-    assert_eq!(block[0], block[1], "{dirs}");
+    // Each block lists its mutants, those of its diff, and tries the diff's.
+    assert_eq!(block.len(), 6, "{dirs}");
+    assert!(block.iter().all(|d| *d == block[0]), "{dirs}");
     assert_eq!(
         log.iter()
             .filter(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
@@ -2552,7 +2694,7 @@ fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
 
 #[test]
 fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     // The checkout is a linked worktree of a repository with a branch and a remote-tracking
@@ -2639,7 +2781,7 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
 
 #[test]
 fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("fixture-catches-all", "");
@@ -2666,7 +2808,7 @@ fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
 
 #[test]
 fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
-    // req:ci/mutate-script@d66cd3c1
+    // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2699,6 +2841,356 @@ fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
         "{stderr}"
     );
     assert!(result.is_empty(), "{result:?}");
+}
+
+/// A Rust block with no diff and one test, whose file has two mutants, one on line 3 alone and
+/// one on line 30 alone, and whose tests the fake `cargo llvm-cov` reports running `run`.
+fn lines_tree(run: &str) -> Tree {
+    let tree = mutate_tree(
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
+    );
+    tree.report(
+        "list",
+        "3 3 crates/clm-check/src/lib.rs:3:5: replace on_three with ()\n30 30 crates/clm-check/src/lib.rs:30:5: replace on_thirty with ()\n",
+    );
+    tree.report("lcov-run", run);
+    tree
+}
+
+/// The `cargo mutants` calls of `log` that try mutants of the block's file.
+fn block_tries(log: &[String]) -> Vec<&String> {
+    log.iter()
+        .filter(|l| {
+            l.starts_with("cargo mutants ")
+                && l.contains("--file crates/clm-check/src/lib.rs")
+                && !l.contains(" --list")
+        })
+        .collect()
+}
+
+#[test]
+fn a_mutant_the_tests_never_run_is_not_tried() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = lines_tree("3\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    // The lines are learnt from the block's tests alone, under the block's filterset, over its
+    // test packages, before any mutant is tried.
+    let cov = log
+        .iter()
+        .position(|l| l.starts_with("cargo llvm-cov nextest "))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    for part in [
+        "--no-rustc-wrapper",
+        "--no-tests=pass",
+        "--lcov",
+        "--package clm-check",
+        "binary_id(=clm-check::it)",
+        "test(~proves_x)",
+    ] {
+        assert!(log[cov].contains(part), "no {part} in {}", log[cov]);
+    }
+    assert!(!log[cov].contains("--workspace"), "{}", log[cov]);
+    // After the fixture has been judged.
+    let fixture = log
+        .iter()
+        .rposition(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    assert!(fixture < cov, "{log:?}");
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(
+        tries[0].contains("replace on_three") && !tries[0].contains("replace on_thirty"),
+        "{}",
+        tries[0]
+    );
+    let first_try = log.iter().position(|l| l == tries[0]).unwrap();
+    assert!(cov < first_try, "{log:?}");
+}
+
+#[test]
+fn a_mutant_is_tried_when_any_line_of_its_span_runs() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = lines_tree("12\n");
+    tree.report(
+        "list",
+        "10 14 crates/clm-check/src/lib.rs:10:5: replace spanning with ()\n20 20 crates/clm-check/src/lib.rs:20:5: replace elsewhere with ()\n",
+    );
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(
+        tries[0].contains("replace spanning") && !tries[0].contains("replace elsewhere"),
+        "{}",
+        tries[0]
+    );
+}
+
+#[test]
+fn the_limit_counts_only_mutants_the_script_may_try() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 2\n",
+    );
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace m1 with ()\n2 2 crates/clm-check/src/lib.rs:2:5: replace m2 with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace m3 with ()\n4 4 crates/clm-check/src/lib.rs:4:5: replace m4 with ()\n",
+    );
+    tree.report("lcov-run", "2\n3\n4\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 2"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    let named: Vec<&str> = ["m1", "m2", "m3", "m4"]
+        .into_iter()
+        .filter(|m| tries[0].contains(&format!("replace {m} ")))
+        .collect();
+    assert_eq!(named, ["m2", "m3"], "{}", tries[0]);
+}
+
+#[test]
+fn tests_that_run_none_of_the_code_survive_untried() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = lines_tree("");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 2"]);
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn tests_that_run_the_code_but_no_mutant_of_it_are_not_judged() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = lines_tree("10\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x not-judged"]);
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn the_run_that_finds_the_lines_failing_leaves_no_verdict() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = lines_tree("3\n");
+    tree.report("llvm-cov-exit", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("cargo llvm-cov") && stderr.contains("a/x"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+    // Nor does one that ends well but writes no report.
+    fs::remove_file(tree.dir.path().join("bin/llvm-cov-exit")).unwrap();
+    tree.report("llvm-cov-no-report", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("cargo llvm-cov") && stderr.contains("a/x"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn a_diff_mutant_the_tests_never_run_is_not_tried() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d1 with ()\n5 5 crates/clm-check/src/lib.rs:5:5: replace d5 with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace f3 with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d1 with ()\n5 5 crates/clm-check/src/lib.rs:5:5: replace d5 with ()\n",
+    );
+    tree.report("lcov-run", "3\n5\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 2"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 2, "{log:?}");
+    assert!(
+        tries[0].contains("--in-diff")
+            && tries[0].contains("replace d5")
+            && !tries[0].contains("replace d1"),
+        "{}",
+        tries[0]
+    );
+    assert!(tries[1].contains("replace f3"), "{}", tries[1]);
+    // With no diff mutant the tests run, none of the diff's is tried, and the further ones are.
+    tree.report("lcov-run", "3\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(
+        !tries[0].contains("--in-diff") && tries[0].contains("replace f3"),
+        "{}",
+        tries[0]
+    );
+}
+
+#[test]
+fn lines_run_only_in_a_file_with_no_mutant_count_as_none_run() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ncode crates/clm-check/src/other.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
+    );
+    tree.report(
+        "list",
+        "3 3 crates/clm-check/src/lib.rs:3:5: replace on_three with ()\n",
+    );
+    tree.report("lcov-run", "crates/clm-check/src/other.rs:3\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn the_lines_are_read_from_a_tree_reached_through_a_link() {
+    // req:ci/mutate-script@28ff1a91
+    // The tool writes real paths; the temporary directory the tree is made in is a link.
+    let tree = lines_tree("3\n");
+    let real = tree.dir.path().join("real-tmp");
+    fs::create_dir_all(&real).unwrap();
+    let link = tree.dir.path().join("linked-tmp");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[("TMPDIR", link.to_str().unwrap())]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let cov = fs::read_to_string(tree.dir.path().join("log.cov-cwd")).unwrap();
+    assert!(cov.starts_with(link.to_str().unwrap()), "{cov}");
+}
+
+#[test]
+fn tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_more() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK.replace("limit 20", "limit 2").as_str());
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n2 2 crates/clm-check/src/lib.rs:2:5: replace m2 with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace m3 with ()\n4 4 crates/clm-check/src/lib.rs:4:5: replace m4 with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n",
+    );
+    tree.report("lcov-run", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    // The diff's one mutant and the first 2 of the 3 further ones.
+    assert_eq!(result, ["a/x survived 3"]);
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn a_mutant_stryker_finds_no_test_running_is_neither_caught_nor_survived() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(WEB_BLOCK);
+    tree.report("stryker-survived", "1");
+    tree.report("stryker-nocov", "2");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y survived 1"]);
+}
+
+#[test]
+fn stryker_finding_no_test_running_any_mutant_counts_them_all_survived() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(WEB_BLOCK);
+    tree.report("stryker-nocov", "2");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y survived 2"]);
+    // Not when it reports any other mutant, as one that didn't build.
+    tree.report("stryker-compile-error", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y not-judged"]);
+}
+
+#[test]
+fn a_mutant_both_stryker_runs_report_counts_once() {
+    // req:ci/mutate-script@28ff1a91
+    // The diff's lines are among the first `limit`, so the further run reports its mutants again.
+    let tree = mutate_tree("");
+    let diff = tree.dir.path().join("the.diff");
+    fs::write(
+        &diff,
+        "--- a/web/src/app.ts\n+++ b/web/src/app.ts\n@@ -3,0 +4,2 @@\n+x\n+y\n",
+    )
+    .unwrap();
+    fs::write(
+        tree.dir.path().join("plan"),
+        format!("{WEB_BLOCK}diff {}\n", diff.display()),
+    )
+    .unwrap();
+    tree.report("stryker-nocov", "2");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    let runs = log
+        .iter()
+        .filter(|l| l.starts_with("web$ npx stryker run "))
+        .count();
+    // The fixture's two, the diff's and the further one.
+    assert_eq!(runs, 4, "{log:?}");
+    assert_eq!(result, ["w/y survived 2"]);
+    tree.report("stryker-survived", "1");
+    fs::remove_file(tree.dir.path().join("bin/stryker-nocov")).unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y survived 1"]);
+}
+
+#[test]
+fn stryker_whose_fixture_shows_no_test_running_the_blind_function_judges_nothing() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(WEB_BLOCK);
+    tree.report("stryker-killed", "1");
+    tree.report("stryker-fixture-blind-nocov", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("StrykerJS") && stderr.contains("fixture"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+}
+
+#[test]
+fn a_diff_with_no_mutant_lists_none_and_the_further_ones_are_tried() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK);
+    // The real tool prints nothing at all for such a diff.
+    tree.report("diff-list", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(!tries[0].contains("--in-diff"), "{}", tries[0]);
+}
+
+#[test]
+fn a_block_whose_files_have_no_mutant_is_not_judged_without_finding_lines() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report("list", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x not-judged"]);
+    assert!(
+        !log.iter().any(|l| l.starts_with("cargo llvm-cov nextest")),
+        "{log:?}"
+    );
 }
 
 /// Every file under `dir`, but `target/`, which the script's coverage step writes, with its
