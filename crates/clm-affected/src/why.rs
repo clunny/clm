@@ -34,7 +34,7 @@ pub fn why_chain(
         .filter_map(|c| {
             Some((
                 c.path.as_str(),
-                clm_check::owner(graph, Path::new(&c.path))?,
+                clm_coverage::owner(graph, Path::new(&c.path))?,
             ))
         })
         .collect();
@@ -47,7 +47,7 @@ pub fn why_chain(
     if let Some(read) = reads.get(path).and_then(|globs| {
         differing
             .iter()
-            .find(|c| globs.iter().any(|g| clm_check::path_matches(g, &c.path)))
+            .find(|c| globs.iter().any(|g| clm_coverage::matches(g, &c.path)))
     }) {
         return vec![format!("{path} reads {}", read.path)];
     }
@@ -63,7 +63,8 @@ pub fn why_chain(
     let (mut lines, start) = match cites {
         Some(component) => (vec![format!("{path} cites {component}")], component),
         None => {
-            let owner = clm_check::owner(graph, Path::new(path)).expect("a selected file is owned");
+            let owner =
+                clm_coverage::owner(graph, Path::new(path)).expect("a selected file is owned");
             if !affected.contains(owner) {
                 return vec![format!("{path} exempt from undeclared-imports")];
             }
