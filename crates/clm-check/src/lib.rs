@@ -213,7 +213,7 @@ pub fn pending_for(
                 path: std::path::Path::new("specs")
                     .join(node.replace('.', "/"))
                     .join("SPEC.md"),
-                rule: "check.coverage/pending-report",
+                rule: "check/pending-narrows-on-a-graph",
                 message: format!("unknown component `{node}`"),
             }]);
         }
