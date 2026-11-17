@@ -346,8 +346,10 @@ judge_rust() {
     return
   fi
   tryable "$work/diff" >"$work/diff-try"
-  # The limit counts only the mutants that may be tried.
-  tryable "$work/further" | head -n "$limit" >"$work/further-try"
+  # The limit counts only the mutants that may be tried. Cut from a file, not a pipe: a reader
+  # that stops at the limit would kill a longer writer with SIGPIPE, and `pipefail` the script.
+  tryable "$work/further" >"$work/further-all"
+  head -n "$limit" "$work/further-all" >"$work/further-try"
   caught=0
   missed=0
   if [ -s "$work/diff-try" ]; then
