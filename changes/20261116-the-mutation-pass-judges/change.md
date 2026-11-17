@@ -5,7 +5,7 @@ resolves: [the-mutation-pass-judges-a-requirement-by-mutants-its-tests-never-rea
 
 ## Intent
 
-The mutation pass judges a requirement only by mutants of code its tests run. `.github/scripts/mutate.sh` first runs a Rust block's tests alone under `cargo llvm-cov nextest` and tries, of the diff's mutants and of the further ones, only those with a line of their span among the lines run; StrykerJS's `NoCoverage` mutants count as not tried. A requirement whose tests run no line any mutant changes, as when its rule lives in a data or text file such as `clm.toml`, is `not-judged` instead of `unproven`. This is plan work: the mutation pass is phase 3's evidence, and a false `unproven` item costs a build each time it is filed and teaches sessions to delete the pass's findings unread.
+The mutation pass judges a requirement only by mutants of code its tests run. `.github/scripts/mutate.sh` first runs a Rust block's tests alone under `cargo llvm-cov nextest` and tries, of the diff's mutants and of the further ones, only those with a line of their span among the lines run; StrykerJS's `NoCoverage` mutants count as not tried. A requirement whose tests run lines of its files but none a mutant changes, as when its rule lives in a data or text file such as `clm.toml`, is `not-judged` instead of `unproven`; one whose tests run no line of its files at all, as an empty test, stays `unproven`, so the case the pass was built for is still caught. This is plan work: the mutation pass is phase 3's evidence, and a false `unproven` item costs a build each time it is filed and teaches sessions to delete the pass's findings unread.
 
 ## Problem
 
@@ -23,18 +23,19 @@ No requirement states which mutants count, so this is a spec change (`code-fix-n
 
 ## Outcome
 
-- `ci/mutate-script` is modified: mutants of either kind are tried only when the block's tests run a line of their span, learnt from one run of those tests under `cargo llvm-cov nextest`; StrykerJS's `NoCoverage` mutants are neither caught nor survived; a block whose tests run no line any mutant changes is `not-judged`; a reach run that fails or writes no report fails the script, so nothing is recorded. Four scenarios are added and one reworded.
+- `ci/mutate-script` is modified: mutants of either kind are tried only when the block's tests run a line of their span, learnt from one run of those tests under `cargo llvm-cov nextest`; StrykerJS's `NoCoverage` mutants are neither caught nor survived; a block whose tests run its files but no line a mutant changes is `not-judged`, and one whose tests run none of its files counts its untried mutants as survived; a reach run that fails or writes no report fails the script, so nothing is recorded. Six scenarios are added and one reworded.
 - `verify`'s Design says the command tries only mutants of lines the requirement's tests run. Its plan and `verify/mutation-pass` are unchanged.
-- `mutation-after-land` records the choice.
+- `mutation-after-land` records the choice, and the guide's `settings.md` tells an adopter's `[verify] mutate` command the same (`method-in-the-plugin`).
 
 ## Constraints
 
 - `land-checks-stay-fast`: the reach run belongs to the mutation pass, after the land; nothing in the land check runs it.
-- `tests-time-bounded`: the reach run goes through nextest, whose bound on a test holds.
+- `ci/tests-time-bounded`: the reach run goes through nextest, whose bound on a test holds.
 - The script's tests fake `cargo llvm-cov` as they fake `cargo mutants`, so they install and run nothing real.
 
 ## Edge cases and workarounds
 
+- An empty test, or any whose tests run no line of the block's files, tries no mutant and counts the diff's and the first `limit` further mutants as survived, so it is still filed `unproven` (`mutation-after-land`'s founding case). For StrykerJS the same holds when every mutant it reports is `NoCoverage`.
 - A mutant's span covering several lines counts as run when any one of them ran: a whole-function replacement is reached when the function is.
 - The further mutants are chosen after the reach filter, so the limit of 20 counts mutants the tests run, not mutants listed.
 - StrykerJS's further mutants are still the first `limit` lines of each file, which it can't count beforehand; with `NoCoverage` not counted, a block whose tests run none of those lines is `not-judged`, not `unproven`.
@@ -42,3 +43,4 @@ No requirement states which mutants count, so this is a spec change (`code-fix-n
 ## Open questions
 
 - Cost: each Rust block gets one instrumented run of its own tests, on top of its mutants. The instrumented build is shared across blocks; whether the pass's time grows noticeably is for `backlog/a-mutation-pass-that-stops-starts-over-and-has-no-limit-on-its-time` to measure.
+- `proven-by-tests`' `#### Untested` block lists what the pass doesn't judge; it doesn't name a requirement whose tests run its files but no line a mutant changes, which this change makes `not-judged`. Adding it edits `ARCHITECTURE.md`, which the human reviews, so it is left here (architecture audit).
