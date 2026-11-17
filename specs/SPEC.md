@@ -25,7 +25,7 @@ The root's `paths` name `crates/clm`'s manifest, build script, sources and top-l
 
 Until `routes-only` is built, the top-level test files under `crates/clm/tests/` still hold tests of other components, which run the binary because Cargo gives it only to this package's tests. `changes/20261115-commands-in-their-crates/moved-tests.txt` (under `changes/archive/` once the change is complete) lists each one: the component it proves, its file, its name and whether it runs the binary. A component's build of `commands-in-crate` moves every test on its lines into its own crate under the same name, with the arguments it passes and everything it asserts unchanged, replacing only the helper that ran the binary by a call of the crate; it deletes the test from the root's file, with any helper nothing there uses any longer and the file itself when nothing is left in it, and deletes no test it hasn't moved. Its pull request says how many it moved against how many the list holds for it. In the same build it points its arm of `crates/clm/src/main.rs` at the call and deletes the code there that the call replaces. The land lets a build change a root test file that cites its component until `gate/own-files` is built without that clause, which waits for `routes-only` and for the backlog items that move the other tests; from then on a build changes its own files, the wiring and a capability test it serves, whatever a file cites. Where a component's Design or a requirement's wording still places its tests under `crates/clm/tests/`, this paragraph and the component's `commands-in-crate` hold.
 
-Three cases need more than the helper. **A test on two components' lines, or one that also cites a requirement of the root**, is never deleted by the first build to reach it: that build writes a test of its own requirement in its own crate and takes its own marker off the test, which stays until no marker of another component is left on it; a test that cites a requirement of the root stays the root's. **A test that set the binary's environment or directory** (a `PATH` holding a stand-in for `git`, `gh` or `claude`, `TMPDIR`, a `GIT_` variable, the directory it ran in) sets them on its own process for the length of the call: `git` and the tools a command starts inherit the process's environment, not the lookup, and the tests run one per process (`ci/nextest-runner`), so no other test sees them. Code of the crate that reads the process's environment, directory or executable path itself reads it through the call's arguments instead. **A test of something only a process has** (a signal, a closed stream, the binary's own file, two commands running at once) stays where it is, and the build files a `deferred` item naming it, which blocks `clm/routes-only`. So does a test whose scenario runs another component's command on what this component made, as a test of `clm check` on what `clm init` wrote does: the crate can neither call a crate above it nor run the binary. Such a scenario is the root's to prove, and one spec change moves them all into requirements of the root once the moves are built (`commands-live-in-their-crates`). Leaving such a test with its item is this design and not a workaround: the build flags none with `clm workaround`, finishes the rest of its requirement, and one item per component names every test it left. The item is `deferred` and not a `question`, since the human has answered for the whole class and a question would show as waiting on them: its body says which tests stayed and why, and that it is due with the spec change that follows the build run. A scenario that says `clm <command>` runs, or that the `clm` binary does, states what a person sees and is not reworded: the crate's call proves it, and `routes-only` proves the binary adds nothing, so a build files no question for the wording.
+Three cases need more than the helper. **A test on two components' lines, or one that also cites a requirement of the root**, is never deleted by the first build to reach it: that build writes a test of its own requirement in its own crate and takes its own marker off the test, which stays until no marker of another component is left on it; a test that cites a requirement of the root stays the root's. **A test that set the binary's environment or directory** (a `PATH` holding a stand-in for `git`, `gh` or `claude`, `TMPDIR`, a `GIT_` variable, the directory it ran in) sets them on its own process for the length of the call: `git` and the tools a command starts inherit the process's environment, not the lookup, and the tests run one per process (`ci/nextest-runner`), so no other test sees them. Code of the crate that reads the process's environment, directory or executable path itself reads it through the call's arguments instead. **A test of something only a process has** (a signal, a closed stream, the binary's own file, two commands running at once) stays where it is, and the build files a `deferred` item naming it, which blocks `clm/routes-only`. So does a test whose scenario runs another component's command on what this component made, as a test of `clm check` on what `clm init` wrote does: the crate can neither call a crate above it nor run the binary. Such a scenario is the root's to prove, and a spec change moves it into a requirement of the root (`commands-live-in-their-crates`): `init-result-accepted`, `check-across-components` and `land-as-a-process` hold those the first builds left, and `root-from-cwd` and `old-command-names-retired` the two that were the root's own rule already. A scenario that is wholly such moves whole, word for word. One that also states what its own component made is split at the clause: the component keeps what its crate can show and proves it there, and the root states the clause that runs the other command, in the same words. Leaving such a test with its item is this design and not a workaround: the build flags none with `clm workaround`, finishes the rest of its requirement, and one item per component names every test it left. The item is `deferred` and not a `question`, since the human has answered for the whole class and a question would show as waiting on them: its body says which tests stayed and why, and that it is due with the spec change that follows the build run. A scenario that says `clm <command>` runs, or that the `clm` binary does, states what a person sees and is not reworded: the crate's call proves it, and `routes-only` proves the binary adds nothing, so a build files no question for the wording.
 
 `crates/clm/src/main.rs` is dispatch only, and the build of whichever component gains or changes a command edits it, with `crates/clm/src/upgrade_gate.rs`, the list of commands that run in a project behind on a required migration, and `crates/clm/Cargo.toml`, `Cargo.toml` and `Cargo.lock` when the component adds a crate: the root's own builds cover only the root's requirements. Those five files are the root's `wiring` (`model/wiring-globs`), and naming them turns the land's ownership rule on here (`land/build-holds-own-files`, `own-files-at-the-gate`). They are the files in which each component registers itself with the product; the root's other source files are its own behaviour and stay out (`own-files-at-the-gate` holds the measurement behind the list). `clm.toml` stays out too: it is `config`'s, and each setting this repository makes is a requirement of `config`. `upgrade`'s migrations stay out, and need no entry: a migration written today is `init`'s, beside the file it carries a change of (`migrations-live-with-init`). Two builds in one wave may both touch those files; `clm rebase`'s rebase reports the conflict and the session resolves it.
 
@@ -85,7 +85,7 @@ Three cases need more than the helper. **A test on two components' lines, or one
 ## Requirements
 
 ### Requirement: root-from-cwd
-Every `clm` command with a `--root` option SHALL, when it isn't given, use the first of the current directory and its parents that holds `specs/SPEC.md`, searching no further up than the first directory that holds `.git` (a directory or a file), and the current directory when there is none, except that `clm survey` SHALL then use the top of the git repository. An explicit `--root` SHALL be used as given.
+Every `clm` command with a `--root` option SHALL, when it isn't given, use the first of the current directory and its parents that holds `specs/SPEC.md`, searching no further up than the first directory that holds `.git` (a directory or a file), and the current directory when there is none, except that `clm survey` and `clm unreferenced` SHALL then use the top of the git repository. An explicit `--root` SHALL be used as given.
 
 #### Scenario: from a subdirectory
 - GIVEN a CLM repository and the current directory `changes/` inside it
@@ -112,9 +112,15 @@ Every `clm` command with a `--root` option SHALL, when it isn't given, use the f
 - WHEN `clm survey` runs without `--root`
 - THEN it prints the same as when run from the repository's top level
 
+#### Scenario: from a subdirectory of a project without CLM
+- GIVEN a git repository with no `specs/SPEC.md`, holding library `a` with an unused `pub fn f`
+- WHEN `clm unreferenced` runs from `crates/a/src`
+- THEN it prints the line for `a::f` with the path `crates/a/src/lib.rs`
+
 #### Serves
 - capability/see-project-state
 - capability/adopt-clm
+- capability/no-dead-weight
 
 ### Requirement: pinned-toolchain
 `rust-toolchain.toml` SHALL pin `channel` to an exact `MAJOR.MINOR.PATCH` version and list the `rustfmt` and `clippy` components and the `wasm32-unknown-unknown` target.
@@ -481,27 +487,18 @@ The help `clm` prints for its commands (`clm --help`, and each subcommand's `--h
 #### Serves
 - architecture/plain-terms
 
-### Requirement: rebase-warnings-prefixed
-The root SHALL print each warning `clm_sync::sync`'s report returns on stderr as `clm rebase: <warning>`.
-
-#### Scenario: a skipped proposal
-- GIVEN branch `impl/a` and the ledger fold holding an open proposal whose slug is `Not Kebab`
-- WHEN `clm rebase` runs
-- THEN its stderr holds `clm rebase: skipped proposal` naming that proposal
-
-#### Needs
-- sync/warnings-name-the-command
-
-#### Serves
-- architecture/plain-terms
-
 ### Requirement: old-command-names-retired
-The old names of the commands `renamed-commands` names, the subcommands `sync`, `checkpoint` and `page`, SHALL no longer run: `clm` given one of them SHALL fail as it fails for any unknown subcommand. `clm/retired-terms`'s list SHALL hold each old name written after `clm` and a space, and each outcome line that starts with an old name, so none comes back (`plain-terms`). No `clm:remove-by 20261101-rename-commands-contract` marker SHALL be left.
+The old names of the commands `renamed-commands` names, the subcommands `sync`, `checkpoint` and `page`, SHALL no longer run: `clm` given one of them SHALL fail as it fails for any unknown subcommand. `clm hash`, which `clm hashes` replaced (`apply/hash-command`), SHALL be no command either and SHALL fail the same way, and `clm --help` SHALL name `hashes` and no `hash`. `clm/retired-terms`'s list SHALL hold each old name written after `clm` and a space, and each outcome line that starts with an old name, so none comes back (`plain-terms`). No `clm:remove-by 20261101-rename-commands-contract` marker SHALL be left.
 
 #### Scenario: an old name is refused
 - GIVEN a branch with one commit on top of `origin/main`
 - WHEN `clm` runs with the subcommand `sync`
 - THEN it exits non-zero naming the unknown subcommand, and the branch is unchanged
+
+#### Scenario: old name gone
+- GIVEN a CLM repository with component `a`
+- WHEN `clm hash a` runs
+- THEN it exits non-zero, as for an unknown subcommand, and prints no hashes
 
 #### Scenario: the old names retired
 - GIVEN the repository
@@ -784,7 +781,7 @@ Each file of a crate under `crates/` that holds a test, an integration test unde
 #### Scenario: the guide's readers
 - GIVEN the same markers
 - WHEN `readers` runs on them with `docs/guide/glossary.md` as the only differing path
-- THEN it selects `crates/clm/tests/glossary.rs`, `crates/clm/tests/guide.rs` and `crates/clm/tests/retired_terms.rs`
+- THEN it selects `crates/clm/tests/glossary.rs`, `crates/clm-init/tests/guide.rs` and `crates/clm/tests/retired_terms.rs`
 
 #### Scenario: the guide's readers in other crates
 - GIVEN the same markers
@@ -799,10 +796,11 @@ Each file of a crate under `crates/` that holds a test, an integration test unde
 #### Scenario: the spec format's readers
 - GIVEN the same markers
 - WHEN `readers` runs on them with `docs/spec-format.md` as the only differing path
-- THEN it selects `crates/clm/tests/guide.rs`, `crates/clm/tests/retired_terms.rs` and `crates/clm-init/src/guide.rs`
+- THEN it selects `crates/clm-init/tests/guide.rs`, `crates/clm/tests/retired_terms.rs` and `crates/clm-init/src/guide.rs`
 
 #### Needs
 - check.affected/affected-readers
+- init/commands-in-crate
 
 ### Requirement: detector-requires-skip
 The `clm check` command SHALL leave out of the detectors it passes to `clm-check` each detector whose `requires`, as the settings load it (`config/detector-requires-setting`), names a path that doesn't exist under the repository root, writing `<name> skipped: no <path>` to its stderr and reporting no `check/detectors` violation for it; a detector whose `requires` exists, or that has none, SHALL be passed and run as `check/detectors` says. `clm-check`'s `Detector` doesn't change: the skip is the root's, which owns the call (`architecture/path-ownership`).
@@ -1112,6 +1110,11 @@ For every command a component offers as a call (`commands-in-crate`), `crates/cl
 - WHEN `clm check` runs as a process
 - THEN it exits with the status `clm-check`'s call returns for that repository, and prints nothing the call didn't write
 
+#### Scenario: the settings a routed command is passed
+- GIVEN a fixture repository whose `clm.toml` sets `[affected]` `all = ["Cargo.lock"]`, on a branch that changes only `Cargo.lock`, and the same repository with `all = 3`
+- WHEN `clm affected --base main` runs as a process in each
+- THEN the first prints only `all Cargo.lock`, and the second exits non-zero with a line naming `clm.toml` and `check.affected/affected-all`, as `clm check` prints a violation
+
 #### Scenario: every command routes
 - GIVEN the commands `clm --help` lists
 - WHEN each runs as a process with `--help`
@@ -1162,3 +1165,120 @@ For `clm rebase`, the root SHALL hand `clm-sync` the settings `config` loads fro
 #### Serves
 - capability/prove-by-tests
 - capability/configure-clm
+
+### Requirement: init-result-accepted
+What `clm init` writes SHALL be a CLM repository the other commands accept, whatever `--lang` it was given. In a repository with no code, `clm check` SHALL pass on it, `clm hashes architecture`, `clm hashes capability` and `clm pending` SHALL list nothing, and `clm setup` SHALL exit 0 while there is no `package.json` and run `npm ci` once there is one. Where a detector's tool isn't installed, `clm check` SHALL report that the detector could not run, with the hint `clm init` wrote, never that it failed. What `clm init` writes is `init`'s to state and to prove in its own crate; each scenario here runs another component's command on it, which only a `clm` process shows, so each SHALL be proven by running the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: empty repository
+- GIVEN an empty git repository whose `origin` is `https://github.com/o/r.git`
+- WHEN `clm init --lang rust` runs, and then `clm check`
+- THEN `clm check` exits 0
+
+#### Scenario: human layers
+- GIVEN an empty git repository
+- WHEN `clm init` runs
+- THEN `clm hashes architecture` and `clm hashes capability` list nothing, and `clm pending` lists nothing
+
+#### Scenario: the written layers
+- GIVEN an empty git repository
+- WHEN `clm init` runs, and then `clm check`
+- THEN `clm check` exits 0
+
+#### Scenario: plugins already enabled
+- GIVEN a git repository with no `specs/`, holding an untracked `.claude/settings.json` that sets `enabledPlugins` and `permissions.allow` `["Bash(make *)", "Bash(clm land *)"]`
+- WHEN `clm init` runs, and then `clm check`
+- THEN `clm check` exits 0
+
+#### Scenario: empty repository, every language
+- GIVEN an empty git repository, and on `PATH` a `cargo`, `npm` and `pytest` that each exit 1
+- WHEN `clm init --lang rust --lang typescript --lang python` runs, then `clm check`
+- THEN it exits 0, none of the three stubs ran, and `clm check`'s stderr names each detector as skipped
+
+#### Scenario: dependencies not installed
+- GIVEN a repository holding a `package.json` and no `node_modules/`
+- WHEN `clm init --lang typescript` runs and then `clm check`
+- THEN `clm check` exits 1 with a line starting `clm.toml: check/detectors: typescript-dead-code could not run:` and ending `; install with: npm ci (or npm install --save-dev knip when package.json doesn't list it)`
+
+#### Scenario: a TypeScript project
+- GIVEN a git repository with no code
+- WHEN `clm init --lang typescript` runs, then `clm config get build` and `clm setup`
+- THEN `clm config get build` prints `setup=test ! -f package.json || npm ci` and the path of `clm.toml`, `clm setup` exits 0, and `clm check` exits 0
+
+#### Scenario: a package.json added later
+- GIVEN the repository of *a TypeScript project* once it holds a `package.json`, and on `PATH` an `npm` that records its arguments and exits 0
+- WHEN `clm setup` runs
+- THEN it exits 0 and the stub recorded `ci`
+
+#### Serves
+- capability/adopt-clm
+
+### Requirement: check-across-components
+`clm check`, run as the `clm` binary, SHALL join what the other components give it. It SHALL report the findings of the ledger's audit (`ledger/verify`) when the checked-out branch is `main` and the repository has a ledger branch, and none of them on another branch. It SHALL run each detector `clm.toml` names as a child process, the project's own `clm unreferenced` and this repository's `scripts/retired-terms.sh` among them, and report one that fails as `check/detectors`, with what the detector printed on standard error. It SHALL accept a backlog item `clm defect` wrote. On this repository, `clm unreferenced` with the arguments of `clm.toml`'s `unreferenced-public-items` detector SHALL exit 0 (`config/unreferenced-detector`). Each scenario runs one component's command on what another made or offers, which only a `clm` process shows, so each SHALL be proven by running the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: check runs it on main
+- GIVEN a repository on `main` with a ledger branch and the history of `ledger/verify`'s *push behind clm's back*, a `main` with a merge commit no `landed` record names
+- WHEN `clm check` runs
+- THEN it reports `ledger/unrecorded-land`
+
+#### Scenario: named as a detector
+- GIVEN a CLM fixture repository whose own checks pass, with a `clm.toml` detector `unreferenced-public-items` whose command is the `clm` binary under test with `unreferenced`, and a library with an unused `pub fn f`
+- WHEN `clm check` runs
+- THEN stdout contains `clm.toml: check/detectors: unreferenced-public-items failed (exit 1)` and stderr contains the line naming `f`
+
+#### Scenario: a retired term in a spec fails the check
+- GIVEN a fixture repository holding a copy of `scripts/retired-terms.sh`, a `clm.toml` naming only the `retired-terms` detector as this repository's names it, a `scripts/retired-terms.txt` holding `grommet stub`, and a `specs/` file reading `make it a grommet stub`
+- WHEN `clm check` runs there
+- THEN it prints that file, its line and `grommet stub`, and reports `clm.toml: check/detectors: retired-terms failed (exit 1)`
+
+#### Scenario: clean with the list
+- GIVEN this repository and the `clm` binary under test
+- WHEN `clm unreferenced` runs with the arguments of the detector's command after `unreferenced`
+- THEN it prints nothing and exits 0
+
+#### Scenario: an item filed on a spec branch
+- GIVEN a CLM repository with `defects = "backlog"` and a live change `20261022-x`, on branch `spec/20261022-x`
+- WHEN `clm defect --title "Gate passes a stale task" --component gate` runs with a report on stdin, and then `clm check`
+- THEN `clm check` accepts it
+
+#### Scenario: an item for a component a live change creates
+- GIVEN the same repository, with a live change whose delta for component `fresh` has `create: true`
+- WHEN `clm defect --title "Fresh misfires" --component fresh` runs with a report on stdin, and then `clm check`
+- THEN `clm check` accepts the item
+
+#### Serves
+- capability/catch-drift
+- capability/no-dead-weight
+- capability/report-defects
+- capability/land-safely
+
+### Requirement: land-as-a-process
+`clm land`, run as the `clm` binary, SHALL run the gate and `clm check` from the copy of its own binary that `land/land-binary-copy` states and leave no copy behind, and two `clm land` processes of one clone SHALL never run their checks at once, whatever `CARGO_TARGET_DIR` each was given, the one that waits saying so, as `land/land-target-lock` states. `land` states both rules and proves what its crate's call can show; these scenarios need the binary's own file, or two processes at once, which only a `clm` process has, so each SHALL be proven by running the `clm` binary (`commands-live-in-their-crates`).
+
+#### Scenario: check deletes the binary
+- GIVEN a `clm` binary copied to a scratch path, a repository whose `[land] check` deletes that scratch path, and `CLM_GATE` and `CLM_CHECK` unset
+- WHEN the scratch `clm land` runs on a branch
+- THEN it lands and prints `landed <sha> code`
+
+#### Scenario: copy removed
+- GIVEN an empty `TMPDIR` of the test's own
+- WHEN `clm land` runs on a branch and lands
+- THEN `TMPDIR` is empty again
+
+#### Scenario: overlapping lands
+- GIVEN two branches `impl/a` and `impl/b` of one clone, no `checked` records, and a `[land] check` that appends `start <branch>` to a log, sleeps 2 seconds and appends `end <branch>`
+- WHEN `clm land impl/a` and `clm land impl/b` start at once, from two linked worktrees
+- THEN in the log every `start <branch>` is followed by the `end` of that same branch before any other `start`, so the two checks never interleave, and the land that waited printed `waiting` naming `.clm/land` on stderr
+
+#### Scenario: a caller's target takes the lock too
+- GIVEN the same branches and check, and `CARGO_TARGET_DIR` set to a different directory of the caller's for each land
+- WHEN `clm land impl/a` and `clm land impl/b` start at once
+- THEN both land, the two checks never interleave in the log, and the land that waited printed `waiting` naming `.clm/land` on stderr
+
+#### Scenario: held through the gate on the merge
+- GIVEN the same two branches, a `[land] check` that appends `check <branch>` to a log and sleeps 2 seconds, and a fake `CLM_GATE` that appends `gate` to it and passes
+- WHEN `clm land impl/a` and `clm land impl/b` start at once
+- THEN the log reads `gate`, `check <one branch>`, `gate` and then `gate`, `check <the other>`, `gate`: both of a land's gate runs fall between its lock's taking and release, never inside the other land's
+
+#### Serves
+- capability/land-safely
+- capability/work-concurrently
