@@ -6,14 +6,24 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use clm_affected::{Changed, readers, reads_in};
 use clm_git::{Options, run};
 
+fn root() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
 /// Each file `check`'s coverage scan reads in this repository's tree (tracked or untracked and
 /// not ignored, UTF-8, not Markdown) that holds a reads marker, with its globs.
-fn markers() -> BTreeMap<String, Vec<String>> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+fn markers() -> &'static BTreeMap<String, Vec<String>> {
+    static MARKERS: OnceLock<BTreeMap<String, Vec<String>>> = OnceLock::new();
+    MARKERS.get_or_init(scan)
+}
+
+fn scan() -> BTreeMap<String, Vec<String>> {
+    let root = root();
     let listed = run(
         &root,
         "git",
@@ -44,127 +54,132 @@ fn markers() -> BTreeMap<String, Vec<String>> {
     out
 }
 
-fn differing(paths: &[&str]) -> Vec<Changed> {
-    paths
+/// The files `readers` selects from this repository's markers when `paths` differ.
+fn selected(paths: &[&str]) -> Vec<String> {
+    let differing: Vec<Changed> = paths
         .iter()
         .map(|p| Changed {
             path: (*p).to_string(),
             exists: true,
         })
-        .collect()
+        .collect();
+    readers(&differing, markers())
 }
+
+/// Asserts `selected` holds each of `wanted` and none of `unwanted`, each a reader of other
+/// documents only, so markers that matched every path fail as markers that matched none do.
+fn assert_selects(selected: &[String], wanted: &[&str], unwanted: &[&str]) {
+    for file in wanted {
+        assert!(selected.iter().any(|s| s == file), "{file}: {selected:?}");
+    }
+    for file in unwanted {
+        assert!(!selected.iter().any(|s| s == file), "{file}: {selected:?}");
+    }
+}
+
+/// The file holding the tests of `clm guide`, which read the guide's pages and the spec format.
+/// They sit in the root's `guide.rs` until `init`'s build moves them into its own crate
+/// (`commands-live-in-their-crates`), so it is the moved file once it holds a reads marker,
+/// and the root's until then, even while the moved file is being written.
+fn guide_tests() -> &'static str {
+    let moved = "crates/clm-init/tests/guide.rs";
+    if markers().contains_key(moved) {
+        moved
+    } else {
+        "crates/clm/tests/guide.rs"
+    }
+}
+
+const README: &str = "crates/clm/tests/readme.rs";
+const GLOSSARY: &str = "crates/clm/tests/glossary.rs";
+const RETIRED: &str = "crates/clm/tests/retired_terms.rs";
+const SETTINGS: &str = "crates/clm-config/tests/settings_guide.rs";
 
 #[test]
 fn the_retired_terms_test_reads_the_specs() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["specs/SPEC.md"]), &markers());
-    assert!(
-        selected.contains(&"crates/clm/tests/retired_terms.rs".to_string()),
-        "{selected:?}"
-    );
+    assert_selects(&selected(&["specs/SPEC.md"]), &[RETIRED], &[README]);
 }
 
 #[test]
 fn the_root_documents_have_readers() {
     // req:clm/doc-readers-marked@3125f2de
-    let all = markers();
-    for doc in [
+    let docs = [
         "ARCHITECTURE.md",
         "CAPABILITIES.md",
         "CLAUDE.md",
         "README.md",
-    ] {
-        let selected = readers(&differing(&[doc]), &all);
-        assert!(
-            selected.contains(&"crates/clm/tests/retired_terms.rs".to_string()),
-            "{doc}: {selected:?}"
-        );
+    ];
+    assert_selects(&selected(&docs), &[RETIRED, README], &[GLOSSARY]);
+    for doc in docs {
+        let unwanted: &[&str] = if doc == "README.md" { &[] } else { &[README] };
+        assert_selects(&selected(&[doc]), &[RETIRED], unwanted);
     }
-    let selected = readers(&differing(&["README.md"]), &all);
-    assert!(
-        selected.contains(&"crates/clm/tests/readme.rs".to_string()),
-        "{selected:?}"
-    );
 }
 
 #[test]
 fn the_readers_of_clm_toml() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["clm.toml"]), &markers());
-    for file in ["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"] {
-        assert!(selected.contains(&file.to_string()), "{selected:?}");
-    }
-}
-
-/// The tests of `clm guide` read the guide's pages and the spec format. They sit in the root's
-/// `guide.rs` until `init`'s build moves them into its own crate (`commands-live-in-their-crates`),
-/// so either file counts, and one of them must be selected.
-fn the_guide_tests_are(selected: &[String]) -> bool {
-    [
-        "crates/clm/tests/guide.rs",
-        "crates/clm-init/tests/guide.rs",
-    ]
-    .iter()
-    .any(|file| selected.contains(&file.to_string()))
+    assert_selects(
+        &selected(&["clm.toml"]),
+        &["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"],
+        &[README, GLOSSARY, RETIRED],
+    );
 }
 
 #[test]
 fn the_guides_readers() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["docs/guide/glossary.md"]), &markers());
-    for file in [
-        "crates/clm/tests/glossary.rs",
-        "crates/clm/tests/retired_terms.rs",
-    ] {
-        assert!(selected.contains(&file.to_string()), "{selected:?}");
-    }
-    assert!(the_guide_tests_are(&selected), "{selected:?}");
+    assert_selects(
+        &selected(&["docs/guide/glossary.md"]),
+        &[GLOSSARY, RETIRED, guide_tests()],
+        &[README, SETTINGS],
+    );
 }
 
 #[test]
 fn the_spec_formats_readers() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["docs/spec-format.md"]), &markers());
-    for file in [
-        "crates/clm/tests/retired_terms.rs",
-        "crates/clm-init/src/guide.rs",
-    ] {
-        assert!(selected.contains(&file.to_string()), "{selected:?}");
-    }
-    assert!(the_guide_tests_are(&selected), "{selected:?}");
+    assert_selects(
+        &selected(&["docs/spec-format.md"]),
+        &[RETIRED, "crates/clm-init/src/guide.rs", guide_tests()],
+        &[GLOSSARY, SETTINGS],
+    );
 }
 
 #[test]
 fn other_crates_read_architecture_md() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["ARCHITECTURE.md"]), &markers());
-    for file in [
-        "crates/clm-init/tests/says_component.rs",
-        "crates/clm-model/tests/carried.rs",
-        "crates/clm-context/tests/carried.rs",
-    ] {
-        assert!(selected.contains(&file.to_string()), "{selected:?}");
-    }
+    assert_selects(
+        &selected(&["ARCHITECTURE.md"]),
+        &[
+            "crates/clm-init/tests/says_component.rs",
+            "crates/clm-model/tests/carried.rs",
+            "crates/clm-context/tests/carried.rs",
+        ],
+        &[GLOSSARY, SETTINGS],
+    );
 }
 
 #[test]
 fn the_guides_readers_in_other_crates() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["docs/guide/quickstart.md"]), &markers());
-    for file in [
-        "crates/clm-init/src/guide.rs",
-        "crates/clm-init/src/guide/entry_pages.rs",
-    ] {
-        assert!(selected.contains(&file.to_string()), "{selected:?}");
-    }
+    assert_selects(
+        &selected(&["docs/guide/quickstart.md"]),
+        &[
+            "crates/clm-init/src/guide.rs",
+            "crates/clm-init/src/guide/entry_pages.rs",
+        ],
+        &[GLOSSARY, SETTINGS],
+    );
 }
 
 #[test]
 fn the_settings_pages_reader() {
     // req:clm/doc-readers-marked@3125f2de
-    let selected = readers(&differing(&["docs/guide/settings.md"]), &markers());
-    assert!(
-        selected.contains(&"crates/clm-config/tests/settings_guide.rs".to_string()),
-        "{selected:?}"
+    assert_selects(
+        &selected(&["docs/guide/settings.md"]),
+        &[SETTINGS],
+        &[GLOSSARY, README],
     );
 }
