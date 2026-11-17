@@ -28,7 +28,9 @@ pub struct Recorded {
 
 #[derive(Debug)]
 pub enum Error {
-    /// The command doesn't run here: no CLM repository.
+    /// The command doesn't run here: this directory holds no `specs/SPEC.md`.
+    NotClm(PathBuf),
+    /// The command doesn't run here: the specs don't load.
     Refused(String),
     /// `CAPABILITIES.md` holds no capability with this slug.
     NoCapability(String),
@@ -44,7 +46,10 @@ impl Error {
     /// 1 when refused or the capability is unknown, 2 when git, the ledger or reading the files fails.
     pub fn exit_code(&self) -> u8 {
         match self {
-            Error::Refused(_) | Error::NoCapability(_) | Error::NoArchitecture(_) => 1,
+            Error::NotClm(_)
+            | Error::Refused(_)
+            | Error::NoCapability(_)
+            | Error::NoArchitecture(_) => 1,
             Error::Git(_) | Error::Ledger(_) | Error::Io(_) => 2,
         }
     }
@@ -53,6 +58,11 @@ impl Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::NotClm(root) => write!(
+                f,
+                "not a CLM repository: {} has no specs/SPEC.md",
+                root.display()
+            ),
             Error::Refused(why) => f.write_str(why),
             Error::NoCapability(slug) => write!(f, "no capability {slug}"),
             Error::NoArchitecture(slug) => write!(f, "no architectural constraint {slug}"),
@@ -148,6 +158,15 @@ pub fn record(
     Ok(Recorded { lines, warnings })
 }
 
+/// `Ok` when `root` holds `specs/SPEC.md`, else the refusal every command gives there.
+pub(crate) fn clm_repository(root: &Path) -> Result<(), Error> {
+    if root.join("specs/SPEC.md").is_file() {
+        Ok(())
+    } else {
+        Err(Error::NotClm(root.to_path_buf()))
+    }
+}
+
 /// The sessions whose counts grew past the fold's, each count the larger of the two, and
 /// the reading's warnings.
 fn grown(
@@ -155,12 +174,7 @@ fn grown(
     options: &Options,
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<(Vec<SessionWork>, Vec<String>), Error> {
-    if !root.join("specs/SPEC.md").is_file() {
-        return Err(Error::Refused(format!(
-            "not a CLM repository: {} has no specs/SPEC.md",
-            root.display()
-        )));
-    }
+    clm_repository(root)?;
     let mut counted: Vec<PathBuf> = clm_git::worktrees(root)?
         .into_iter()
         .map(|w| w.path)

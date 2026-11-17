@@ -263,7 +263,7 @@ fn capabilities(root: &Path, args: &[&str]) -> Out {
 
 #[test]
 fn capabilities_cli_lists() {
-    // req:effort/capabilities-list@daa12c28
+    // req:effort/capabilities-list@be270c03
     let dir = tempfile::tempdir().unwrap();
     let out = capabilities(&capabilities_repo(dir.path()), &[]);
     let stdout = &out.stdout;
@@ -279,6 +279,23 @@ fn capabilities_cli_lists() {
     );
     assert!(lines[2].starts_with("  q  "), "{stdout}");
     assert_eq!(lines.len(), 5, "{stdout}");
+}
+
+#[test]
+fn capabilities_cli_outside_a_clm_repository() {
+    // req:effort/capabilities-list@be270c03
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("plain");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("CAPABILITIES.md"),
+        "## Capabilities\n\n### Capability: p\nA person can p.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n",
+    )
+    .unwrap();
+    let out = capabilities(&root, &[]);
+    assert_eq!(out.code, 1, "{out:?}");
+    assert_eq!(out.stdout, "", "{out:?}");
+    assert!(out.stderr.starts_with("not a CLM repository"), "{out:?}");
 }
 
 #[test]
@@ -349,7 +366,7 @@ fn capabilities_refused_outside_a_clm_repository() {
     let dir = tempfile::tempdir().unwrap();
     let root = capabilities_repo(dir.path());
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
-    let out = capabilities(&root, &[]);
+    let out = capabilities(&root, &["p"]);
     assert_eq!(out.code, 1);
     assert!(out.stderr.contains("not a CLM repository"));
 }
@@ -565,7 +582,6 @@ fn failures_keep_their_prefix() {
     std::fs::remove_file(root.join("specs/SPEC.md")).unwrap();
     let decide = ["decide", "e", "--value", "high", "--decision", "keep"];
     for (out, prefix) in [
-        (capabilities(&root, &[]), "clm capabilities: "),
         (architecture(&root, &[]), "clm architecture: "),
         (capabilities(&root, &decide), "clm capabilities decide: "),
         (architecture(&root, &decide), "clm architecture decide: "),
