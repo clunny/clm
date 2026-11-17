@@ -180,7 +180,12 @@ fn unreferenced_allow_list_gives_every_entry_a_reason() {
             allowing = true;
             let reason = reason.join(" ");
             let krate = entry.split("::").next().unwrap();
-            if krate == "clm_config" || !reason.contains("narrow-public-items-") {
+            if krate == "clm_config" {
+                assert!(
+                    reason.contains("Kept") && !reason.contains("narrow-public-items-"),
+                    "{entry} of clm-config is not kept"
+                );
+            } else if !reason.contains("narrow-public-items-") {
                 assert!(
                     reason.contains("Kept"),
                     "{entry} is neither kept nor pending"
