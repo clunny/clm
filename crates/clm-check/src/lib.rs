@@ -48,12 +48,14 @@ mod untraced;
 use std::path::Path;
 
 pub use attributes::linguist_excluded;
+// clm:remove-by 20261115-check-passes-on-no-coverage: every reader imports `clm-coverage`.
 pub use clm_coverage::{
     ChangeProgress, Coverage, DeletedTest, Marker, ObsoleteTest, Pending, Row, STATE_NAMES, State,
     StatusReport, TestSpan, Uncounted, change_progress, complete_changes, deleted_tests,
     markers_in, markers_outside_tests, matches, matches as path_matches, obsolete_tests, owner,
     pending, removed, report, status_report, tests_in, uncounted,
 };
+// clm:remove-by 20261115-check-passes-on-no-coverage
 #[cfg(feature = "checkout")]
 pub use clm_coverage::{Scan, scan};
 pub use clm_model::Violation;
