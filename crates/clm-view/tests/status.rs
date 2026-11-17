@@ -186,26 +186,24 @@ fn scenario_oversized_node() {
     let (graph, markers) = common::read(d);
     let size: std::collections::BTreeSet<String> = ["a".to_string()].into();
     let text = clm_view::status_text(&graph, &markers, &[], &[], common::NOW, Some(&size), None);
-    let line = text
+    let summary = summary(&text);
+    let line = summary
         .lines()
         .find(|l| l.starts_with("  components "))
         .unwrap();
     assert!(line.ends_with(", 1 oversized"), "{text}");
-    let row = |id: &str| {
+    // Whether `id`'s row in the `components` section holds the cell `oversized`.
+    let marked = |id: &str| {
         let prefix = format!("  {id} ");
         text.lines()
             .skip_while(|l| *l != "components")
             .find(|l| l.starts_with(&prefix))
             .unwrap()
-            .to_string()
+            .split("  ")
+            .any(|c| c.trim() == "oversized")
     };
-    assert!(
-        row("a").split("  ").any(|c| c.trim() == "oversized"),
-        "{text}"
-    );
-    for id in ["b", "c"] {
-        assert!(!row(id).contains("oversized"), "{text}");
-    }
+    assert!(marked("a"), "{text}");
+    assert!(!marked("b") && !marked("c"), "{text}");
 }
 
 #[test]
