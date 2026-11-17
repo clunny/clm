@@ -74,6 +74,14 @@ fn every_nextest_run_ends_a_test_after_fifteen_minutes() {
                     "{name} passes {flag}: {line}"
                 );
             }
+            // Nor by nextest's short flag or its environment variables.
+            assert!(
+                !(line.contains("nextest") && line.split_whitespace().any(|w| w.starts_with("-P"))),
+                "{name} passes -P: {line}"
+            );
+            for var in ["NEXTEST_PROFILE", "NEXTEST_CONFIG"] {
+                assert!(!line.contains(var), "{name} sets {var}: {line}");
+            }
         }
     }
 }
@@ -125,16 +133,21 @@ fn no_file_under_github_runs_the_tests_outside_nextest() {
     for (name, text) in github_files() {
         for line in code_lines(&text) {
             let words: Vec<&str> = line.split_whitespace().collect();
-            for (i, pair) in words.windows(2).enumerate() {
-                if pair[0] != "cargo" {
-                    continue;
-                }
-                let rest = &words[i + 2..];
-                if pair[1] == "test" {
+            for (i, _) in words.iter().enumerate().filter(|(_, w)| **w == "cargo") {
+                // The subcommand is the first word after `cargo` that is no toolchain
+                // (`+stable`) or option (`--locked`).
+                // Its arguments end where the shell starts another command.
+                let rest: Vec<&str> = words[i + 1..]
+                    .iter()
+                    .skip_while(|w| w.starts_with('+') || w.starts_with('-'))
+                    .take_while(|w| !matches!(**w, "&&" | "||" | ";" | "|"))
+                    .copied()
+                    .collect();
+                if rest.first() == Some(&"test") {
                     assert!(rest.contains(&"--doc"), "{name}: {line}");
                 }
-                if pair[1] == "llvm-cov" {
-                    assert_eq!(rest.first(), Some(&"nextest"), "{name}: {line}");
+                if rest.first() == Some(&"llvm-cov") {
+                    assert_eq!(rest.get(1), Some(&"nextest"), "{name}: {line}");
                 }
             }
         }

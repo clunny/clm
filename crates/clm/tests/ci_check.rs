@@ -1225,12 +1225,11 @@ fn a_deleted_eval_file_only_validates_the_plugin() {
 }
 
 /// A `cargo` that records its arguments and writes a record for `<tree>/crates/clm/src/main.rs`
-/// at the `--output-path` it is given. Where `bin/fail-cargo` exists it exits 100 for
-/// `llvm-cov nextest`, writing nothing, as nextest does when a test fails or is ended at its
-/// bound.
+/// at the `--output-path` it is given. Where `bin/fail-cargo` exists it then exits 100 for
+/// `llvm-cov nextest`, as nextest does when a test fails or is ended at its bound, so only the
+/// exit status, not a missing tracefile, can stop the script.
 const CARGO_COVERAGE: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
-if [ "$1 $2" = "llvm-cov nextest" ] && [ -e "$(dirname "$0")/fail-cargo" ]; then exit 100; fi
 prev=
 for a; do
   if [ "$prev" = --output-path ]; then
@@ -1238,6 +1237,7 @@ for a; do
   fi
   prev=$a
 done
+if [ "$1 $2" = "llvm-cov nextest" ] && [ -e "$(dirname "$0")/fail-cargo" ]; then exit 100; fi
 "#;
 /// An `npx` that records its arguments, led by its directory, prints a version with more words
 /// after it for `vitest --version`, and for `vitest run` writes `lcov.info` under the
