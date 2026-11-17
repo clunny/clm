@@ -1194,44 +1194,57 @@ fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
     let dir = TempDir::new().unwrap();
     let w = dir.path().join("w");
     checkout_on(&w, "impl/x/b");
-    let within = |event: &str, budgets: &Budgets| {
-        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
-        clm_guard::guard_within(event, budgets)
-    };
-    // Git answers this push's queries at once: the hook's budgets let it through, and spent
-    // ones block it, so the judgement below depends on the budgets it is given.
-    let implicit = bash_in_opt("git push", Some(&w));
-    let spent = Budgets {
+    let fake = TempDir::new().unwrap();
+    let path = fake_rest_gh(
+        fake.path(),
+        &fake.path().join("calls"),
+        "https://github.com/o/r",
+    );
+    // Git answers the push's queries and the fake `gh` the re-run's lookups at once, so the
+    // hook's budgets let both through, and a spent budget blocks only what spends it.
+    let push = bash_in_opt("git push", Some(&w));
+    let rerun = bash_in_opt("gh run rerun 42", Some(&w));
+    // Blocked with no query: a judgement that ignores the event allows it.
+    let to_main = bash_in_opt("git push origin HEAD:main", Some(&w));
+    let no_push = Budgets {
         push: Duration::ZERO,
+        ..Budgets::HOOK
+    };
+    let no_lookup = Budgets {
         lookup: Duration::ZERO,
+        ..Budgets::HOOK
     };
-    let Decision::Block(why) = within(&implicit, &spent) else {
-        panic!("a spent budget didn't block the implicit push")
+    let env = [("PATH", path.as_str())];
+    let judged = {
+        let _exclusive = FORKS.write().unwrap_or_else(PoisonError::into_inner);
+        // The developer's own git config must not leak in, as `hook_args` keeps it out.
+        let isolated = [
+            ("GIT_CONFIG_GLOBAL", "/dev/null"),
+            ("GIT_CONFIG_NOSYSTEM", "1"),
+        ];
+        let _set = ProcessEnv::set(isolated.iter().chain(&env));
+        let within = clm_guard::guard_within;
+        let blocked = |d: Decision, why: &str| matches!(d, Decision::Block(r) if r.contains(why));
+        assert!(blocked(within(&push, &no_push), "didn't answer in time"));
+        assert_eq!(within(&rerun, &no_push), Decision::Allow);
+        assert_eq!(within(&push, &no_lookup), Decision::Allow);
+        assert!(blocked(within(&rerun, &no_lookup), "humans-cut-releases"));
+        [&push, &rerun, &to_main].map(|event| {
+            (
+                within(event, &Budgets::HOOK),
+                clm_guard::guard(event),
+                clm_guard::guard_hook(ClaudeCode, event),
+            )
+        })
     };
-    assert!(why.contains("didn't answer in time"), "{why}");
-    let events = [
-        (implicit, Decision::Allow),
-        (
-            bash_in_opt("git push origin HEAD:main", Some(&w)),
-            Decision::Block(String::new()),
-        ),
-        (
-            bash_in_opt("clm approve spec/x", Some(&w)),
-            Decision::Ask(String::new()),
-        ),
-        (bash_in_opt("ls", Some(&w)), Decision::Allow),
-    ];
-    for (event, kind) in &events {
-        let hooks = within(event, &Budgets::HOOK);
-        assert_eq!(
-            std::mem::discriminant(&hooks),
-            std::mem::discriminant(kind),
-            "{event}: {hooks:?}"
-        );
-        assert_eq!(guard(event), hooks, "{event}");
-        let rendered = render(ClaudeCode, &hooks);
-        assert_eq!(guard_hook(ClaudeCode, event), rendered, "{event}");
-        let out = hook("guard", event);
+    assert_eq!(judged[0].0, Decision::Allow);
+    assert_eq!(judged[1].0, Decision::Allow);
+    assert!(matches!(judged[2].0, Decision::Block(_)), "{judged:?}");
+    for (event, (hooks, guarded, hooked)) in [&push, &rerun, &to_main].into_iter().zip(&judged) {
+        assert_eq!(guarded, hooks, "{event}");
+        let rendered = render(ClaudeCode, hooks);
+        assert_eq!(hooked, &rendered, "{event}");
+        let out = hook_env("guard", event, &env);
         assert_eq!(out.status.code(), Some(rendered.exit_code), "{event}");
         assert_eq!(
             String::from_utf8_lossy(&out.stdout),
