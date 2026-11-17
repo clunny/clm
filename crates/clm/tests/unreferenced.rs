@@ -46,6 +46,7 @@ const TAIL: &str = "is public but nothing outside its library uses it";
 
 #[test]
 fn scenario_from_a_subdirectory_of_a_project_without_clm() {
+    // req:clm/root-from-cwd@7274c252
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -60,6 +61,7 @@ fn scenario_from_a_subdirectory_of_a_project_without_clm() {
 
 #[test]
 fn scenario_named_as_a_detector() {
+    // req:clm/check-across-components@45a113b3
     let clm_toml = format!(
         "[[detectors]]\nname = \"unreferenced-public-items\"\ncommand = [{:?}, \"unreferenced\"]\n",
         env!("CARGO_BIN_EXE_clm")

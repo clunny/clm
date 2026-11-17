@@ -54,6 +54,7 @@ fn with_spec() -> Fixture {
 
 #[test]
 fn check_deletes_the_binary() {
+    // req:clm/land-as-a-process@ac304254
     // req:land/land-binary-copy@7e2d6c4e
     let f = with_spec();
     let scratch = f.path("clm-scratch");
@@ -78,6 +79,7 @@ fn check_deletes_the_binary() {
 
 #[test]
 fn copy_removed() {
+    // req:clm/land-as-a-process@ac304254
     // req:land/land-binary-copy@7e2d6c4e
     let f = with_spec();
     f.branch("impl/a", &[("b.txt", "b\n")]);
@@ -160,6 +162,7 @@ fn both_landed(f: &Fixture, first: Child, second: Child) -> String {
 
 #[test]
 fn overlapping_lands() {
+    // req:clm/land-as-a-process@ac304254
     // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.write("hold", "");
@@ -190,6 +193,7 @@ fn overlapping_lands() {
 
 #[test]
 fn a_callers_target_takes_the_lock_too() {
+    // req:clm/land-as-a-process@ac304254
     // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.write("hold", "");
@@ -233,6 +237,7 @@ fn a_callers_target_takes_the_lock_too() {
 
 #[test]
 fn held_through_the_gate_on_the_merge() {
+    // req:clm/land-as-a-process@ac304254
     // req:land/land-target-lock@2dadb710
     let f = Fixture::new("");
     f.write("check-sleeps", "2");

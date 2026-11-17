@@ -352,7 +352,7 @@ fn the_repository_holds_no_retired_term() {
 
 #[test]
 fn the_old_command_names_are_on_the_list() {
-    // req:clm/old-command-names-retired@ad3289be
+    // req:clm/old-command-names-retired@24a5a6f9
     let list = retired();
     for term in [
         "clm sync",

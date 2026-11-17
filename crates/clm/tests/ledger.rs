@@ -83,6 +83,7 @@ fn record_land(dir: &Path, commit: &str) {
 
 #[test]
 fn check_runs_verify_on_main() {
+    // req:clm/check-across-components@45a113b3
     // req:ledger/verify@ff314001
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);

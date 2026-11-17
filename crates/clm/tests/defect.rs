@@ -76,6 +76,7 @@ const REPORT: &str = "`clm gate` passed a task whose basis had changed.\n";
 
 #[test]
 fn backlog_on_a_spec_branch() {
+    // req:clm/check-across-components@45a113b3
     // req:plugin.hooks/defect-backlog@064ef91e
     let repo = repo("defects = \"backlog\"\n");
     git(repo.path(), &["checkout", "-q", "-b", "spec/20261022-x"]);
@@ -126,6 +127,7 @@ fn backlog_on_a_spec_branch() {
 
 #[test]
 fn backlog_node_a_live_change_creates() {
+    // req:clm/check-across-components@45a113b3
     // req:plugin.hooks/defect-backlog@064ef91e
     let repo = repo("defects = \"backlog\"\n");
     write(

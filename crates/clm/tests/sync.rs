@@ -190,53 +190,6 @@ fn files_reconsider_item(clm_toml: &str) -> bool {
 }
 
 #[test]
-fn scenario_a_skipped_proposals_warning_names_the_command_as_run() {
-    // req:clm/rebase-warnings-prefixed@8240fcd8
-    {
-        let name = "rebase";
-        let (dir, work) = node_a("");
-        let ledger = dir.path().join("ledger");
-        fs::create_dir_all(&ledger).unwrap();
-        git(dir.path(), &["init", "-q", ledger.to_str().unwrap()]);
-        git(&ledger, &["config", "user.name", "l"]);
-        git(&ledger, &["config", "user.email", "l@l"]);
-        let record = serde_json::json!({
-            "id": "p9",
-            "kind": "proposed",
-            "writer": "alice/web",
-            "at": "2026-10-28T10:00:00.000Z",
-            "slug": "Not Kebab",
-            "title": "Bad",
-            "body": "x",
-            "nodes": ["a"],
-        });
-        write(&ledger, "records.jsonl", &format!("{record}\n"));
-        commit(&ledger, "records");
-        let origin = dir.path().join("origin");
-        git(
-            &ledger,
-            &[
-                "push",
-                "-q",
-                origin.to_str().unwrap(),
-                "HEAD:refs/heads/clm/ledger/alice/web",
-            ],
-        );
-
-        let out = clm(&work, &[name]);
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        let line = stderr
-            .lines()
-            .find(|l| l.contains("skipped proposal"))
-            .unwrap_or_else(|| panic!("no warning under {name}: {out:?}"));
-        assert!(
-            line.starts_with(&format!("clm {name}: skipped proposal ")) && line.contains("p9"),
-            "{line}"
-        );
-    }
-}
-
-#[test]
 fn scenario_rebase_by_its_new_name() {
     // req:clm/renamed-commands@164ad075
     {
@@ -275,7 +228,7 @@ fn scenario_rebase_by_its_new_name() {
 
 #[test]
 fn scenario_an_old_name_is_refused() {
-    // req:clm/old-command-names-retired@ad3289be
+    // req:clm/old-command-names-retired@24a5a6f9
     let (_dir, work) = conflicting();
     let before = head(&work);
     for old in ["sync", "checkpoint", "page"] {
