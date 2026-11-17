@@ -5,7 +5,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use clm_check::{Budgets, Coverage as Cited, Length, Marker};
+use clm_check::{Budgets, Length};
+use clm_coverage::{Coverage as Cited, Marker};
 use clm_model::{Files, Graph};
 use serde::Serialize;
 use serde_json::Value;
@@ -168,7 +169,7 @@ pub(crate) fn build(state: &State, graph: &Graph, violations: &[String], files: 
     } else {
         Vec::new()
     };
-    let coverage = clm_check::report(graph, &markers);
+    let coverage = clm_coverage::report(graph, &markers);
     let cited: BTreeMap<&str, &Cited> = coverage.iter().map(|c| (c.id.as_str(), c)).collect();
     let oversized = oversized(state, graph, files, &markers);
     let spec = clm_view::spec_view(graph, &markers, oversized.as_ref().ok());
@@ -240,7 +241,7 @@ fn nodes(graph: &Graph, cited: Option<&BTreeMap<&str, &Cited>>) -> Vec<NodeView>
 
 /// Each change outside the archive with its progress exactly as `clm status` gives it.
 fn changes(graph: &Graph, markers: &[Marker], complete: bool) -> Vec<ChangeView> {
-    clm_check::change_progress(graph, markers)
+    clm_coverage::change_progress(graph, markers)
         .into_iter()
         .filter_map(|p| {
             let c = graph.changes.get(&p.change)?;

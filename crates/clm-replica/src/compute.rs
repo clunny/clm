@@ -77,9 +77,9 @@ pub(crate) fn views(state: &State, files: &Files, now: u64) -> Views {
     };
     let signed = signed(state);
     let current = state.index_complete().then(|| {
-        clm_check::report(&graph, &state.markers())
+        clm_coverage::report(&graph, &state.markers())
             .into_iter()
-            .filter(|c| c.state == clm_check::State::Current)
+            .filter(|c| c.state == clm_coverage::State::Current)
             .map(|c| c.id)
             .collect::<BTreeSet<String>>()
     });
