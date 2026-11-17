@@ -335,6 +335,7 @@ fn the_repository_holds_no_retired_term() {
     // req:clm/architecture-term-retired@926dc04b
     // req:clm/old-state-and-key-names-retired@381faa28
     // req:clm/retired-terms@78943b19
+    // req:clm/old-command-names-retired@24a5a6f9
     let root = repo_root();
     let got = scan(&root, &[]);
     assert!(got.code == 0, "retired terms:\n{}{}", got.out, got.err);
