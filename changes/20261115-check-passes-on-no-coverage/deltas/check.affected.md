@@ -1,6 +1,6 @@
 ---
 component: check.affected
-base: { contract: "119c18d9d555d70a", design: "acaa6a6aef517afd" }
+base: { contract: "b6588a0f789a596e", design: "acaa6a6aef517afd" }
 ---
 
 ## MODIFIED Contract
@@ -16,7 +16,7 @@ base: { contract: "119c18d9d555d70a", design: "acaa6a6aef517afd" }
 
 It exits 0 with its output, 1 with the reason when `--readers` and `--why` are both given, when `<ref>` doesn't resolve to a commit, when it has no merge base with `HEAD`, or when the graph or the settings can't be loaded, and 2 when git fails otherwise.
 
-`clm-affected` offers `clm affected` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+`clm-affected` offers `clm affected` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes. As library calls it offers too `readers(differing, reads)` and `reads_in(text)`, the globs of the `clm:reads` markers in a file's text, which `verify` reads to name the files a requirement's tests read (`verify/mutation-pass`).
 
 ## MODIFIED Design
 
