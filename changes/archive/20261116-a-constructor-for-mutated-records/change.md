@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [adding-left-to-mutated-records-breaks-verifys-struct-literals]
 priority: P2
 ---
