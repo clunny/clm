@@ -3,7 +3,9 @@
 //! string and character literals and line comments, and nothing else: a brace in a block
 //! comment or a parenthesis in a regular expression can still end a span late, which costs
 //! that test's markers their standing (a Rust span ends no later than the line above the
-//! next test) and shows as `uncounted`, never a crash.
+//! next test) and shows as `uncounted`, never a crash. A quote in what it doesn't read (a
+//! `"` in a Rust block comment, a backtick in a regular expression) costs more: it opens a
+//! literal that can run to the end of the file (`backlog/a-quote-in-a-block-comment-hides-the-tests-after-it`).
 
 use std::path::Path;
 
@@ -215,12 +217,12 @@ fn char_literal(chars: &[char], at: usize) -> Option<usize> {
     }
 }
 
-/// The line (0-based) on which the braces first balance after `at`; the end of the file
-/// when they never do, and `at` when nothing opens and the line ends with `;`.
-fn closing(lines: &[RustLine], at: usize) -> usize {
+/// The line (0-based) on which the braces first balance after `at`; `bound` when they
+/// don't by then, and `at` when nothing opens and the line ends with `;`.
+fn closing(lines: &[RustLine], at: usize, bound: usize) -> usize {
     let mut depth = 0usize;
     let mut opened = false;
-    for (i, line) in lines.iter().enumerate().skip(at) {
+    for (i, line) in lines.iter().enumerate().take(bound + 1).skip(at) {
         for c in line.code.chars() {
             if c == '{' {
                 depth += 1;
@@ -236,7 +238,7 @@ fn closing(lines: &[RustLine], at: usize) -> usize {
             return i;
         }
     }
-    lines.len().saturating_sub(1)
+    bound
 }
 
 /// The attribute's path's last segment is `test`, `rstest` or `test_case`, or ends `_test`.
@@ -246,7 +248,7 @@ fn is_test_attribute(line: &str) -> bool {
     };
     let path: String = rest
         .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_' || *c == ':')
+        .take_while(|&c| is_ident(c) || c == ':')
         .collect();
     let last = path.rsplit("::").next().unwrap_or("");
     matches!(last, "test" | "rstest" | "test_case") || last.ends_with("_test")
@@ -258,11 +260,11 @@ fn fn_name(line: &str) -> Option<String> {
     while let Some(at) = rest.find("fn ") {
         let before = rest[..at].chars().next_back();
         let rest_after = &rest[at + 3..];
-        if !before.is_some_and(|c| c.is_alphanumeric() || c == '_') {
+        if !before.is_some_and(is_ident) {
             let name: String = rest_after
                 .trim_start()
                 .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .take_while(|&c| is_ident(c))
                 .collect();
             if !name.is_empty() {
                 return Some(name);
@@ -337,7 +339,7 @@ fn rust_tests(lines: &[&str]) -> Vec<TestSpan> {
         .into_iter()
         .zip(bounds)
         .map(|(t, bound)| TestSpan {
-            last: closing(&read, t.at).min(bound) + 1,
+            last: closing(&read, t.at, bound) + 1,
             name: t.name,
             group: false,
             first: t.first + 1,
@@ -367,10 +369,7 @@ fn script_call(line: &str) -> Option<(bool, &str)> {
     rest = &rest[head.len()..];
     let mut group = head == "describe";
     while let Some(after) = rest.strip_prefix('.') {
-        let word: String = after
-            .chars()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .collect();
+        let word: String = after.chars().take_while(|&c| is_ident(c)).collect();
         if head == "test" && word == "describe" && !group {
             group = true;
         } else if MODIFIERS.contains(&word.as_str()) {
@@ -488,7 +487,7 @@ fn python_header(line: &str) -> Option<(String, bool)> {
     let name: String = rest
         .trim_start()
         .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .take_while(|&c| is_ident(c))
         .collect();
     let wanted = if class {
         name.starts_with("Test")
