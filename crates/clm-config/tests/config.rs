@@ -2080,19 +2080,34 @@ fn verify_mutate_jobs_and_minutes_print_after_mutate() {
 #[test]
 fn verify_mutate_jobs_or_minutes_without_mutate_or_not_positive_fail() {
     // req:config/verify-setting@3cf7f3fc
-    for bad in [
-        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate_jobs = 2\n",
-        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate_minutes = 2\n",
-        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\nmutate_jobs = 0\n",
-        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\nmutate_minutes = 0\n",
-        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\nmutate_minutes = \"1h\"\n",
-        "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\nmutate_jobs = -1\n",
+    let local = "[verify]\ncheck = \"x\"\nmode = \"local\"\n";
+    for (extra, reason) in [
+        ("mutate_jobs = 2\n", "beside `mutate`"),
+        ("mutate_minutes = 2\n", "beside `mutate`"),
+        ("mutate = \"m\"\nmutate_jobs = 0\n", "positive integer"),
+        ("mutate = \"m\"\nmutate_minutes = 0\n", "positive integer"),
+        (
+            "mutate = \"m\"\nmutate_minutes = \"1h\"\n",
+            "positive integer",
+        ),
+        ("mutate = \"m\"\nmutate_jobs = -1\n", "positive integer"),
+        ("mutate = \"m\"\nmutate_jobs = 1.5\n", "positive integer"),
     ] {
-        let f = Fixture::new(None, Some(bad));
+        let bad = format!("{local}{extra}");
+        let f = Fixture::new(None, Some(&bad));
         let e = f.load(&[]).unwrap_err();
         assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
         assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
-        assert!(e.message.contains("mutate_"), "{bad}: {}", e.message);
+        assert!(e.message.contains(reason), "{bad}: {}", e.message);
+        let f = Fixture::new(None, None).local(&bad);
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(
+            e.source,
+            Some(f.local_file().display().to_string()),
+            "{bad}"
+        );
+        assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
+        assert!(e.message.contains(reason), "{bad}: {}", e.message);
     }
 }
 
