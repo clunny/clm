@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [two-config-tests-run-other-components-commands, two-unreferenced-tests-observe-only-the-clm-process, seventeen-init-tests-can-t-move-into-its-crate, five-land-tests-observe-only-the-clm-process, apply-s-old-name-gone-test-observes-only-the-root-s-parser, clm-check-s-run-of-the-ledger-audit-is-proven-only-through-the-binary, two-defect-tests-run-clm-check-on-the-item-they-wrote, effort-scenarios-still-name-the-clm-binary, two-doc-readers-scenarios-name-the-guide-tests-old-file, the-guards-spec-still-describes-it-before-its-call, clm-hook-guard-does-not-judge-through-guard, workaround-sync-commands-in-crate-1, no-test-runs-the-affected-all-settings-crates-clm-passes, workaround-plugin.hooks.guard-hook-budgets-1]
 ---
 
