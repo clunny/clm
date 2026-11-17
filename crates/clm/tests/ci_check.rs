@@ -1225,7 +1225,9 @@ fn a_deleted_eval_file_only_validates_the_plugin() {
 }
 
 /// A `cargo` that records its arguments and writes a record for `<tree>/crates/clm/src/main.rs`
-/// at the `--output-path` it is given.
+/// at the `--output-path` it is given. Where `bin/fail-cargo` exists it then exits 100 for
+/// `llvm-cov nextest`, as nextest does when a test fails or is ended at its bound, so only the
+/// exit status, not a missing tracefile, can stop the script.
 const CARGO_COVERAGE: &str = r#"#!/usr/bin/env bash
 echo "cargo $*" >> "$CI_LOG"
 prev=
@@ -1235,6 +1237,7 @@ for a; do
   fi
   prev=$a
 done
+if [ "$1 $2" = "llvm-cov nextest" ] && [ -e "$(dirname "$0")/fail-cargo" ]; then exit 100; fi
 "#;
 /// An `npx` that records its arguments, led by its directory, prints a version with more words
 /// after it for `vitest --version`, and for `vitest run` writes `lcov.info` under the
@@ -1284,7 +1287,7 @@ fn tracefile_sources(tree: &Tree) -> Vec<String> {
 
 #[test]
 fn coverage_writes_one_tracefile_from_three_suites() {
-    // req:ci/coverage-script@b19a3b0a
+    // req:ci/coverage-script@7b99367f
     let tree = coverage_tree();
     let (ok, log, stderr) = tree.exec(None, "", None, &tree.path());
     assert!(ok, "{log:?} {stderr}");
@@ -1296,16 +1299,28 @@ fn coverage_writes_one_tracefile_from_three_suites() {
     // The detector tools first, then the coverage tools, then the suites.
     assert!(log[0].ends_with(" cargo-machete"), "{log:?}");
     let rustup = at(&|l| l == "rustup component add llvm-tools-preview");
+    let nextest = at(&|l| {
+        l.starts_with("cargo install --locked --version ") && l.ends_with(" cargo-nextest")
+    });
     let install = at(&|l| {
         l.starts_with("cargo install --locked --version ") && l.ends_with(" cargo-llvm-cov")
     });
     let cargo_run = at(&|l| {
-        l.starts_with("cargo llvm-cov --workspace --no-rustc-wrapper --lcov --output-path ")
+        l.starts_with("cargo llvm-cov nextest --workspace --no-rustc-wrapper --lcov --output-path ")
     });
     assert!(
-        0 < rustup && rustup < cargo_run && install < cargo_run,
+        0 < rustup && rustup < cargo_run && install < cargo_run && nextest < cargo_run,
         "{log:?}"
     );
+    // The Rust tests run only under nextest: no `cargo test`, no plain `cargo llvm-cov`.
+    for line in log.iter().filter(|l| l.starts_with("cargo ")) {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        assert_ne!(words[1], "test", "{line}");
+        assert!(
+            words[1] != "llvm-cov" || words.get(2) == Some(&"nextest"),
+            "{line}"
+        );
+    }
     for dir in ["web", "plugin-panel"] {
         let ci = at(&|l| l == format!("{dir}$ npm ci --ignore-scripts"));
         let version = at(&|l| l == format!("{dir}$ npx vitest --version"));
@@ -1349,7 +1364,7 @@ fn coverage_writes_one_tracefile_from_three_suites() {
 
 #[test]
 fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
-    // req:ci/coverage-script@b19a3b0a
+    // req:ci/coverage-script@7b99367f
     let tree = coverage_tree();
     // The tool writes real paths, `pwd -P`'s; the shell's `$PWD` names the checkout by its link.
     let physical = CARGO_COVERAGE.replace("\"$PWD/crates", "\"$(pwd -P)/crates");
@@ -1383,7 +1398,7 @@ fn coverage_reads_the_same_from_a_checkout_reached_through_a_link() {
 
 #[test]
 fn a_failing_coverage_suite_fails_the_script() {
-    // req:ci/coverage-script@b19a3b0a
+    // req:ci/coverage-script@7b99367f
     let tree = coverage_tree();
     // A tracefile from an earlier run stays as it was.
     fs::create_dir_all(tree.work().join("target")).unwrap();
@@ -1398,11 +1413,26 @@ fn a_failing_coverage_suite_fails_the_script() {
         "{log:?}"
     );
     assert_eq!(tracefile_sources(&tree), ["old"]);
+
+    // A failing Rust run, as nextest's exit 100 for a test that failed or met its bound, stops
+    // the script before any npm suite.
+    let tree = coverage_tree();
+    fs::create_dir_all(tree.work().join("target")).unwrap();
+    fs::write(tree.work().join("target/lcov.info"), "SF:old\n").unwrap();
+    fs::write(tree.dir.path().join("bin/fail-cargo"), "").unwrap();
+    let (ok, log, _) = tree.exec(None, "", None, &tree.path());
+    assert!(!ok, "{log:?}");
+    assert!(
+        log.last().unwrap().starts_with("cargo llvm-cov nextest "),
+        "{log:?}"
+    );
+    assert!(!log.iter().any(|l| l.contains("$ npm ")), "{log:?}");
+    assert_eq!(tracefile_sources(&tree), ["old"]);
 }
 
 #[test]
 fn nothing_else_runs_coverage() {
-    // req:ci/coverage-script@b19a3b0a
+    // req:ci/coverage-script@7b99367f
     for path in [
         script_path("ci-check.sh"),
         script_path("detector-tools.sh"),
@@ -1421,17 +1451,21 @@ fn nothing_else_runs_coverage() {
 
 #[test]
 fn coverage_tools_are_pinned() {
-    // req:ci/coverage-script@b19a3b0a
+    // req:ci/coverage-script@7b99367f
     let lines = script_lines("coverage.sh");
     let tools = lines
         .iter()
         .position(|l| l == ".github/scripts/detector-tools.sh")
         .unwrap_or_else(|| panic!("coverage.sh doesn't run detector-tools.sh: {lines:?}"));
+    let test_tools = lines
+        .iter()
+        .position(|l| l == ".github/scripts/test-tools.sh")
+        .unwrap_or_else(|| panic!("coverage.sh doesn't run test-tools.sh: {lines:?}"));
     let cargo = lines
         .iter()
         .position(|l| l.split_whitespace().any(|w| w == "cargo"))
         .unwrap_or_else(|| panic!("no cargo line: {lines:?}"));
-    assert!(tools < cargo, "{lines:?}");
+    assert!(tools < test_tools && test_tools < cargo, "{lines:?}");
     let install = lines
         .iter()
         .find(|l| l.starts_with("cargo install ") && l.ends_with(" cargo-llvm-cov"))
@@ -1451,12 +1485,16 @@ fn coverage_tools_are_pinned() {
                 .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
         "not an exact x.y.z version: {version}"
     );
-    // The instrumentation goes in `RUSTFLAGS`, which the nested wasm builds remove, and a
-    // failing test fails the run.
+    // The tests run under nextest, the instrumentation goes in `RUSTFLAGS`, which the nested
+    // wasm builds remove, and a failing test fails the run.
     let llvm_cov = lines
         .iter()
         .find(|l| l.starts_with("cargo llvm-cov "))
         .unwrap_or_else(|| panic!("no cargo llvm-cov line: {lines:?}"));
+    assert!(
+        llvm_cov.starts_with("cargo llvm-cov nextest "),
+        "{llvm_cov}"
+    );
     assert!(
         llvm_cov
             .split_whitespace()
@@ -1484,7 +1522,7 @@ fn coverage_tools_are_pinned() {
 
 #[test]
 fn nextest_replaces_cargo_test_but_for_doctests() {
-    // req:ci/nextest-runner@6d7394a1
+    // req:ci/nextest-runner@26bed54d
     let (ok, log) = Tree::new().run(None, "");
     assert!(ok, "{log:?}");
     assert_eq!(tests_run(&log), [NEXTEST_ALL, DOC_TESTS]);
@@ -1498,7 +1536,7 @@ fn nextest_replaces_cargo_test_but_for_doctests() {
 
 #[test]
 fn test_tools_installs_only_nextest_pinned() {
-    // req:ci/test-tools@b136de2a
+    // req:ci/test-tools@8da0e835
     let lines = script_lines("test-tools.sh");
     let installs: Vec<_> = lines
         .iter()
@@ -1534,22 +1572,25 @@ fn test_tools_installs_only_nextest_pinned() {
 
 #[test]
 fn test_tools_run_between_the_detector_tools_and_cargo() {
-    // req:ci/test-tools@b136de2a
-    let lines = script_lines("ci-check.sh");
-    let at = |line: &str| {
-        lines
+    // req:ci/test-tools@8da0e835
+    for script in ["ci-check.sh", "coverage.sh"] {
+        let lines = script_lines(script);
+        let at = |line: &str| {
+            lines
+                .iter()
+                .position(|l| l == line)
+                .unwrap_or_else(|| panic!("{script} doesn't run {line}: {lines:?}"))
+        };
+        let detectors = at(".github/scripts/detector-tools.sh");
+        let tests = at(".github/scripts/test-tools.sh");
+        let cargo = lines
             .iter()
-            .position(|l| l == line)
-            .unwrap_or_else(|| panic!("ci-check.sh doesn't run {line}: {lines:?}"))
-    };
-    let detectors = at(".github/scripts/detector-tools.sh");
-    let tests = at(".github/scripts/test-tools.sh");
-    let cargo = lines
-        .iter()
-        .position(|l| l.split_whitespace().any(|w| w == "cargo"))
-        .unwrap();
-    assert!(detectors < tests && tests < cargo, "{lines:?}");
-    // And nothing else runs it or installs `cargo-nextest`.
+            .position(|l| l.split_whitespace().any(|w| w == "cargo"))
+            .unwrap();
+        assert!(detectors < tests && tests < cargo, "{script}: {lines:?}");
+    }
+    // And nothing else runs it, but the release workflow's `prepare` job, or installs
+    // `cargo-nextest`.
     let github = repo().join(".github");
     for dir in ["workflows", "scripts"] {
         for entry in fs::read_dir(github.join(dir)).unwrap() {
@@ -1558,7 +1599,8 @@ fn test_tools_run_between_the_detector_tools_and_cargo() {
             let text = fs::read_to_string(&path).unwrap();
             for line in text.lines().filter(|l| !l.trim_start().starts_with('#')) {
                 assert!(
-                    !line.contains("test-tools.sh") || name == "ci-check.sh",
+                    !line.contains("test-tools.sh")
+                        || ["ci-check.sh", "coverage.sh", "release.yml"].contains(&name.as_str()),
                     "{name} runs test-tools.sh: {line}"
                 );
                 assert!(
@@ -1568,22 +1610,6 @@ fn test_tools_run_between_the_detector_tools_and_cargo() {
                 );
             }
         }
-    }
-}
-
-#[test]
-fn the_release_builds_no_nextest() {
-    // req:ci/test-tools@b136de2a
-    for path in [
-        repo().join(".github/workflows/release.yml"),
-        script_path("release-prepare.sh"),
-    ] {
-        let text = fs::read_to_string(&path).unwrap();
-        assert!(
-            !text.contains("test-tools.sh") && !text.contains("nextest"),
-            "{}",
-            path.display()
-        );
     }
 }
 

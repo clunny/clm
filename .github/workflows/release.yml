@@ -35,6 +35,9 @@ jobs:
       # `release-prepare.sh` runs the tests, and `this_repository_is_clean` runs the detectors.
       - name: detector tools
         run: .github/scripts/detector-tools.sh
+      # `release-prepare.sh` runs the Rust tests under `cargo-nextest` (ci/test-tools).
+      - name: test tools
+        run: .github/scripts/test-tools.sh
       - name: prepare
         id: prepare
         env:

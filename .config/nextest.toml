@@ -1,0 +1,7 @@
+# Read by `cargo nextest` from the workspace root wherever it runs: `ci-check.sh`, `coverage.sh`
+# through `cargo llvm-cov nextest`, each copy `mutate.sh`'s `cargo mutants` tests, the release's
+# `prepare` job and a session's own run (specs/ci/SPEC.md, ci/tests-time-bounded). A test still
+# running after 60 seconds is reported slow, and ended, counted failed, after fifteen such
+# periods, so a hung test fails the run in bounded time, naming the test.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 15 }
