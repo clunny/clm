@@ -266,8 +266,8 @@ pub(crate) fn scratch(ctx: &Ctx) -> Result<tempfile::TempDir, Error> {
 }
 
 /// The plan text for the due requirements, in the order given: per requirement, its
-/// component's code files, the diff of them from its base when there is one, its citing tests
-/// and the limit.
+/// component's code files, the diff of them from its base when there is one, its citing tests,
+/// the distinct globs of the reads markers in the files holding them, and the limit.
 fn write_plan(
     dir: &Path,
     graph: &clm_model::Graph,
@@ -299,8 +299,17 @@ fn write_plan(
                 plan.push_str(&format!("diff {}\n", file.display()));
             }
         }
-        for cite in cites.iter().filter(|c| &c.id == id) {
+        let mine: Vec<&Cite> = cites.iter().filter(|c| &c.id == id).collect();
+        for cite in &mine {
             plan.push_str(&format!("test {}\t{}\n", cite.path, cite.name));
+        }
+        let files: BTreeSet<&str> = mine.iter().map(|c| c.path.as_str()).collect();
+        let mut reads = BTreeSet::new();
+        for file in files {
+            reads.extend(clm_affected::reads_in(&fs::read_to_string(dir.join(file))?));
+        }
+        for glob in reads {
+            plan.push_str(&format!("reads {glob}\n"));
         }
         plan.push_str(&format!("limit {LIMIT}\n"));
     }
