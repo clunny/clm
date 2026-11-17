@@ -1923,12 +1923,13 @@ fn without_a_land_place_the_cargo_variables_stay() {
 
 /// A `cargo` for `mutate.sh`: records its arguments.
 ///
-/// `cargo llvm-cov` prints `bin/llvm-cov-version` for `--version` (nothing when absent), exits
-/// with the status in `bin/llvm-cov-exit` when it exists, and otherwise writes the lcov report
-/// `--output-path` names, and its directory to `$CI_LOG.cov-cwd`: for each `code` file of the
-/// plan `CLM_MUTATE` names, an `SF:` line naming it absolutely under the directory it runs in, and
-/// a `DA:` line for each of its lines 1 to 40, run unless `bin/lcov-run` lists the line numbers
-/// run (one per line; an empty file for none).
+/// `cargo llvm-cov` prints `bin/llvm-cov-version` for `--version` (nothing when absent), and
+/// otherwise writes its directory to `$CI_LOG.cov-cwd` and, unless `bin/llvm-cov-no-report`
+/// exists, the lcov report `--output-path` names: for each `code` file of the plan `CLM_MUTATE`
+/// names, an `SF:` line naming it absolutely under the directory it runs in, and a `DA:` line for
+/// each of its lines 1 to 40, run unless `bin/lcov-run` lists the line numbers run (one per line;
+/// an empty file for none). Then it exits with the status in `bin/llvm-cov-exit` when it exists,
+/// the report written, so the status alone tells a failed run.
 ///
 /// `cargo mutants` prints nothing for `--version`. For `--list --json` it prints, as the tool
 /// does, a pretty JSON array of the mutants `bin/list` lists as `<first line> <last line>
@@ -1963,9 +1964,9 @@ if [ "$1" = llvm-cov ]; then
   case " $* " in
     *" --version "*) cat "$bin/llvm-cov-version" 2>/dev/null; exit 0 ;;
   esac
-  [ ! -e "$bin/llvm-cov-exit" ] || exit "$(cat "$bin/llvm-cov-exit")"
   echo "$PWD" >> "$CI_LOG.cov-cwd"
   report=$(arg_after --output-path "$@")
+  [ ! -e "$bin/llvm-cov-no-report" ] || exit 0
   : > "$report"
   sed -n 's/^code //p' "$CLM_MUTATE" | while IFS= read -r f; do
     echo "SF:$PWD/$f" >> "$report"
@@ -1976,6 +1977,7 @@ if [ "$1" = llvm-cov ]; then
     done
     echo end_of_record >> "$report"
   done
+  [ ! -e "$bin/llvm-cov-exit" ] || exit "$(cat "$bin/llvm-cov-exit")"
   exit 0
 fi
 [ "$1" = mutants ] || exit 0
@@ -2959,6 +2961,37 @@ fn the_run_that_finds_the_lines_failing_leaves_no_verdict() {
         "{stderr}"
     );
     assert!(result.is_empty(), "{result:?}");
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+    // Nor does one that ends well but writes no report.
+    fs::remove_file(tree.dir.path().join("bin/llvm-cov-exit")).unwrap();
+    tree.report("llvm-cov-no-report", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("cargo llvm-cov") && stderr.contains("a/x"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_more() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK.replace("limit 20", "limit 2").as_str());
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n2 2 crates/clm-check/src/lib.rs:2:5: replace m2 with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace m3 with ()\n4 4 crates/clm-check/src/lib.rs:4:5: replace m4 with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n",
+    );
+    tree.report("lcov-run", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    // The diff's one mutant and the first 2 of the 3 further ones.
+    assert_eq!(result, ["a/x survived 3"]);
     assert!(block_tries(&log).is_empty(), "{log:?}");
 }
 
