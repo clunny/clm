@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 mod closed_stdout;
 mod none_remote;
+mod stop_signal;
 mod upgrade_command;
 mod upgrade_gate;
 
@@ -1218,24 +1219,35 @@ fn detectors(root: &Path) -> Result<Vec<clm_check::Detector>, clm_check::Violati
 /// code; 1 with the reason when it can't run, 2 when git fails.
 fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
     // The outcome is printed as soon as the result is recorded, before a mutation pass runs;
-    // the pass's own notes follow.
+    // the pass's own notes follow. From then until the call returns, `SIGINT` and `SIGTERM`
+    // stop the pass instead of the process (`verify-command`).
     let mut shown = 0;
+    let mut catching = None;
     let announce = |outcome: &clm_verify::Outcome| {
         println!("{}", outcome.line);
         for note in &outcome.notes {
             eprintln!("clm verify: {note}");
         }
         shown = outcome.notes.len();
+        // Only a run whose check passed goes on to the pass; `clm-verify` doesn't say whether
+        // this one does, nor when its pass ends before the filing that follows it
+        // (`backlog/clm-verify-can-t-tell-its-caller-when-the-mutation-pass-runs`).
+        if outcome.line.starts_with("verify passed ") {
+            catching = Some(stop_signal::install());
+        }
     };
-    // No signal sets the stop request yet (`clm/verify-command`).
-    let stop = std::sync::atomic::AtomicBool::new(false);
-    let call = clm_verify::Call::standard(&stop);
-    match clm_verify::verify_with(root, request, &clm_config::process_env, &call, announce) {
+    let call = clm_verify::Call::standard(&stop_signal::STOP);
+    let result = clm_verify::verify_with(root, request, &clm_config::process_env, &call, announce);
+    let caught = catching.and_then(stop_signal::Installed::restore);
+    match result {
         Ok(outcome) => {
             for note in &outcome.notes[shown..] {
                 eprintln!("clm verify: {note}");
             }
-            ExitCode::from(outcome.code)
+            match caught {
+                Some(signal) => ExitCode::from(128 + signal as u8),
+                None => ExitCode::from(outcome.code),
+            }
         }
         Err(clm_verify::Error::Refused(why)) => {
             eprintln!("clm verify: {why}");
