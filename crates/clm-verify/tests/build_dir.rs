@@ -65,7 +65,7 @@ fn a_runs_place() {
             linked.to_str().unwrap(),
         ],
     );
-    let out = clm_verify::verify(
+    let out = common::verify(
         &linked,
         &clm_verify::Request::Due {
             work_done: false,

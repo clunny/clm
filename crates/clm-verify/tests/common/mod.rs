@@ -7,9 +7,11 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 use clm_ledger::{Body, Record, VerifyMode};
-use clm_verify::{Outcome, Request};
+use clm_verify::{Call, Outcome, Request};
 use tempfile::TempDir;
 
 #[path = "../../../clm-git/tests/exec/mod.rs"]
@@ -56,6 +58,24 @@ fi
 if [ -e "$DIR/fail-path" ] && [ -e "$(cat "$DIR/fail-path")" ]; then exit 1; fi
 [ ! -e "$DIR/check-fails" ]
 "#;
+
+/// `clm_verify::verify_with` in the repository at `root` with a memory file that doesn't
+/// exist, the real lengths of a minute and of the grace, no stop request and no announcement.
+pub fn verify(
+    root: &Path,
+    request: &Request,
+    env: &clm_verify::Env,
+) -> Result<Outcome, clm_verify::Error> {
+    let stop = AtomicBool::new(false);
+    let memory = root.join("no-such-meminfo");
+    let call = Call {
+        memory: &memory,
+        minute: Duration::from_secs(60),
+        grace: Duration::from_secs(10),
+        stop: &stop,
+    };
+    clm_verify::verify_with(root, request, env, &call, |_| {})
+}
 
 pub struct Fixture {
     dir: TempDir,
@@ -214,8 +234,14 @@ impl Fixture {
         move |key: &str| map.get(key).cloned()
     }
 
+    /// The call the tests give `clm-verify` unless they say otherwise: a memory file that
+    /// doesn't exist, the real lengths of a minute and of the grace, and no stop request.
     pub fn run(&self, request: &Request) -> Outcome {
-        clm_verify::verify(&self.work(), request, &self.env()).unwrap()
+        verify(&self.work(), request, &self.env()).unwrap()
+    }
+
+    pub fn run_with(&self, request: &Request, call: &Call) -> Outcome {
+        clm_verify::verify_with(&self.work(), request, &self.env(), call, |_| {}).unwrap()
     }
 
     pub fn due(&self) -> Outcome {
@@ -223,6 +249,17 @@ impl Fixture {
             work_done: false,
             dry_run: false,
         })
+    }
+
+    /// `clm verify --due` with `call`.
+    pub fn due_with(&self, call: &Call) -> Outcome {
+        self.run_with(
+            &Request::Due {
+                work_done: false,
+                dry_run: false,
+            },
+            call,
+        )
     }
 
     pub fn dry(&self, work_done: bool) -> Outcome {

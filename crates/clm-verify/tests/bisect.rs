@@ -155,7 +155,7 @@ fn only_a_red_commit_can_be_bisected() {
     // req:verify/verify-bisect@b2330a00
     let (f, [g, ..]) = three_lands("mode = \"local\"\ntriggers = []");
     for sha in [g, f.back(0)] {
-        let err = clm_verify::verify(&f.work(), &Request::Bisect(sha), &f.env()).unwrap_err();
+        let err = common::verify(&f.work(), &Request::Bisect(sha), &f.env()).unwrap_err();
         assert!(matches!(err, clm_verify::Error::Refused(_)), "{err}");
     }
     assert!(f.lines("check-head.log").is_empty());

@@ -19,6 +19,8 @@ pub use kept::kept_log;
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::time::Duration;
 
 pub use clm_land::Env;
 
@@ -192,19 +194,39 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// Runs one `clm verify` command in the repository at `root`. `env` is the environment
-/// `config` reads.
-pub fn verify(root: &Path, request: &Request, env: &Env) -> Result<Outcome, Error> {
-    verify_announcing(root, request, env, |_| {})
+/// What the caller gives the mutation pass (`mutation-pass`): the file it reads available
+/// memory from, the length of a minute and of the grace between `SIGTERM` and `SIGKILL`, and a
+/// stop request the pass watches while its command runs.
+pub struct Call<'a> {
+    pub memory: &'a Path,
+    pub minute: Duration,
+    pub grace: Duration,
+    pub stop: &'a AtomicBool,
 }
 
-/// `verify`, calling `announce` with the outcome as soon as the result is recorded, before the
-/// mutation pass a green run goes on to, so the caller can print the outcome line first
-/// (`mutation-pass`). The pass's own notes come last in the returned outcome's notes.
-pub fn verify_announcing(
+impl<'a> Call<'a> {
+    /// The call `clm` makes: `/proc/meminfo`, a minute of 60 seconds and a grace of 10, with
+    /// `stop` as its stop request (`clm/verify-command`).
+    pub fn standard(stop: &'a AtomicBool) -> Self {
+        Call {
+            memory: Path::new("/proc/meminfo"),
+            minute: Duration::from_secs(60),
+            grace: Duration::from_secs(10),
+            stop,
+        }
+    }
+}
+
+/// Runs one `clm verify` command in the repository at `root` with `call`. `env` is the
+/// environment `config` reads. It calls `announce` with the outcome as soon as the result is
+/// recorded, before the mutation pass a green run goes on to, so the caller can print the
+/// outcome line first (`mutation-pass`); the pass's own notes come last in the returned
+/// outcome's notes.
+pub fn verify_with(
     root: &Path,
     request: &Request,
     env: &Env,
+    call: &Call,
     announce: impl FnOnce(&Outcome),
 ) -> Result<Outcome, Error> {
     let ctx = match Ctx::open(root, env)? {
@@ -224,7 +246,7 @@ pub fn verify_announcing(
     }?;
     announce(&outcome);
     if let Some(end) = outcome.mutate {
-        outcome.notes.extend(mutate::pass(&ctx, &state, end));
+        outcome.notes.extend(mutate::pass(&ctx, &state, end, call));
     }
     // What the pass found reaches `main` as backlog items, whether or not a run was due
     // (`files-unproven`); only a clone in `local` mode holds the right to land them.

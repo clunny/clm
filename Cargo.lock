@@ -725,6 +725,7 @@ dependencies = [
  "clm-land",
  "clm-ledger",
  "clm-model",
+ "libc",
  "tempfile",
  "toml",
 ]

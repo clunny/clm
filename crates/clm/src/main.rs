@@ -1227,7 +1227,10 @@ fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
         }
         shown = outcome.notes.len();
     };
-    match clm_verify::verify_announcing(root, request, &clm_config::process_env, announce) {
+    // No signal sets the stop request yet (`clm/verify-command`).
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let call = clm_verify::Call::standard(&stop);
+    match clm_verify::verify_with(root, request, &clm_config::process_env, &call, announce) {
         Ok(outcome) => {
             for note in &outcome.notes[shown..] {
                 eprintln!("clm verify: {note}");
