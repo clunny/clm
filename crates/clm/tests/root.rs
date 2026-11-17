@@ -44,7 +44,7 @@ fn clm_repo(top: &Path, rel: &str) {
 
 #[test]
 fn from_a_subdirectory() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     clm_repo(top, "");
@@ -68,7 +68,7 @@ fn nested_survey_repo(top: &Path) -> std::path::PathBuf {
 
 #[test]
 fn survey_from_a_subdirectory() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let tool = nested_survey_repo(dir.path());
 
@@ -81,7 +81,7 @@ fn survey_from_a_subdirectory() {
 
 #[test]
 fn survey_nodes_from_a_subdirectory() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     // The node map covers `tool/`'s code only, so a survey of the git top would report
     // `src/main.rs`; the file is read relative to the directory it's given in.
     let dir = TempDir::new().unwrap();
@@ -101,7 +101,7 @@ fn survey_nodes_from_a_subdirectory() {
 
 #[test]
 fn survey_explicit_root_is_used_as_given() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     let tool = nested_survey_repo(top);
@@ -129,7 +129,7 @@ fn init_takes_no_root() {
 
 #[test]
 fn a_bad_clm_toml_is_named_as_from_the_top() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     clm_repo(top, "");
@@ -149,7 +149,7 @@ fn a_bad_clm_toml_is_named_as_from_the_top() {
 
 #[test]
 fn the_nearest_clm_repository_wins() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     clm_repo(top, "");
@@ -164,7 +164,7 @@ fn the_nearest_clm_repository_wins() {
 
 #[test]
 fn the_search_stops_at_git() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     // A CLM repository above a git repository that isn't one: not this repository's.
@@ -181,7 +181,7 @@ fn the_search_stops_at_git() {
 
 #[test]
 fn explicit_root_is_used_as_given() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     clm_repo(top, "");
@@ -197,7 +197,7 @@ fn explicit_root_is_used_as_given() {
 
 #[test]
 fn from_a_worktrees_subdirectory() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let r = repo();
     // A linked worktree on the shelf inside the main checkout, as `clm run` makes it.
     fs::write(r.work.join(".git/info/exclude"), ".clm/\n").unwrap();
@@ -230,7 +230,7 @@ fn from_a_worktrees_subdirectory() {
 
 #[test]
 fn the_search_stops_at_a_worktrees_git_file() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let r = repo();
     // A worktree inside the main checkout whose own tree holds no CLM repository: the
     // search must stop at its `.git` file, not climb on to the main checkout's spec.
@@ -258,7 +258,7 @@ fn the_search_stops_at_a_worktrees_git_file() {
 
 #[test]
 fn inside_a_larger_repository() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     clm_repo(top, "tool");
@@ -274,7 +274,7 @@ fn inside_a_larger_repository() {
 
 #[test]
 fn no_clm_repository() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     git(top, &["init", "-q", "-b", "main"]);

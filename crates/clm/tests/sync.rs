@@ -188,10 +188,11 @@ fn files_reconsider_item(clm_toml: &str) -> bool {
         .lines()
         .any(|l| l == "filed backlog/reconsider-a-x.md")
 }
-
 #[test]
 fn scenario_a_skipped_proposals_warning_names_the_command_as_run() {
-    // req:clm/rebase-warnings-prefixed@8240fcd8
+    // No marker: `clm/rebase-warnings-prefixed` is removed and its scenario moved to
+    // `sync/warnings-name-the-command`; kept until `sync`'s crate proves it
+    // (backlog/the-root-keeps-a-test-of-sync-s-skipped-proposal-warning.md).
     {
         let name = "rebase";
         let (dir, work) = node_a("");
@@ -275,7 +276,7 @@ fn scenario_rebase_by_its_new_name() {
 
 #[test]
 fn scenario_an_old_name_is_refused() {
-    // req:clm/old-command-names-retired@ad3289be
+    // req:clm/old-command-names-retired@24a5a6f9
     let (_dir, work) = conflicting();
     let before = head(&work);
     for old in ["sync", "checkpoint", "page"] {

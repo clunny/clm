@@ -75,7 +75,7 @@ const TWO_CRATES: &[(&str, &[u8])] = &[
 
 #[test]
 fn from_a_subdirectory() {
-    // req:clm/root-from-cwd@839330d9
+    // req:clm/root-from-cwd@7274c252
     // Before `clm init` there's no CLM root; the survey still maps the whole repository.
     let repo = repo(TWO_CRATES);
     let out = clm(&repo.path().join("crates/a"), &["survey"]);

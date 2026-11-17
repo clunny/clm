@@ -143,6 +143,7 @@ fn unreferenced_detector() -> clm_config::Detector {
 
 #[test]
 fn unreferenced_is_clean_with_the_allow_list() {
+    // req:clm/check-across-components@45a113b3
     // req:config/unreferenced-detector@f0c53e15
     let detector = unreferenced_detector();
     let out = clm_command()
@@ -218,7 +219,7 @@ fn change_repo(delta: &str) -> TempDir {
 
 #[test]
 fn hash_is_no_command() {
-    // `clm hash` is no command: the root's to prove (`clm/old-command-names-retired`), whose build cites this test.
+    // req:clm/old-command-names-retired@24a5a6f9
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(dir.path(), "specs/a/SPEC.md", NODE);
     // Not stderr whole: clap's for `hash` may suggest `hashes`, unlike a made-up name's.
@@ -359,6 +360,7 @@ fn check_runs_a_detector_whose_required_file_exists() {
 
 #[test]
 fn check_fails_on_a_retired_term_in_a_spec() {
+    // req:clm/check-across-components@45a113b3
     // req:config/retired-terms-detector@1e881e15
     let script = fs::read_to_string(repo_root().join("scripts/retired-terms.sh")).unwrap();
     let dir = detector_repo(None);
