@@ -66,13 +66,16 @@ fn budgets_in(text: Option<&str>) -> Result<Budgets, String> {
         .parse()
         .map_err(|e| format!("{e}"))?;
     let size = table.get("component_size");
-    let budget = |key: &str, default: u64| {
-        size.and_then(|s| s.get(key))
-            .map_or(default, |v| v.as_integer().unwrap() as u64)
+    let budget = |key: &str, default: u64| match size.and_then(|s| s.get(key)) {
+        None => Ok(default),
+        Some(v) => v
+            .as_integer()
+            .map(|n| n as u64)
+            .ok_or_else(|| format!("`component_size.{key}` is no number")),
     };
     Ok(Budgets {
-        spec_tokens: budget("spec_tokens", 12000),
-        code_tokens: budget("code_tokens", 40000),
+        spec_tokens: budget("spec_tokens", 12000)?,
+        code_tokens: budget("code_tokens", 40000)?,
     })
 }
 
@@ -95,6 +98,14 @@ pub fn clm(root: &Path, args: &[&str]) -> Output {
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     let here = Path::new(".");
     let code = match *name {
+        "status" => clm_view_repo::status_command(
+            &argv,
+            here,
+            &|_| None,
+            &mut stdout,
+            &mut stderr,
+            &repository_budgets,
+        ),
         "view" => clm_view_repo::view_command(
             &argv,
             here,
