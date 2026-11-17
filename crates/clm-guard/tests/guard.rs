@@ -2029,6 +2029,8 @@ fn guard_quotes_the_defect_report_it_asks_about() {
         "{reason}"
     );
     assert!(reason.contains("The gate misfired."), "{reason}");
+    assert!(reason.contains("pull request body"), "{reason}");
+    assert!(!reason.contains("page"), "{reason}");
     // An unquoted heredoc with nothing to expand is sent as written.
     let (code, reason) = guard_in(
         nowhere.path(),
