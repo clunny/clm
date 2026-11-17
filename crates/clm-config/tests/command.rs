@@ -299,7 +299,7 @@ fn this_repositorys_clm_toml() {
     // req:config/host-setting@5ef6c885
     // req:config/affected-setting@7b51c4ec
     // req:config/health-lcov-here@62a2a08d
-    // req:config/verify-here@826e104c
+    // req:config/verify-here@fb827562
     // This repository's `clm.toml`, in a fresh repository, so a `clm.local.toml` in the
     // developer's clone can't change the answer.
     let text =
@@ -317,7 +317,7 @@ fn this_repositorys_clm_toml() {
         ),
         (
             "verify",
-            "mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh",
+            "mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh,mutate_jobs=6,mutate_minutes=60",
         ),
     ] {
         let (out, file) = config_get_in_repo(Some(&text), key);
