@@ -501,7 +501,7 @@ fn record_land(dir: &Path, commit: &str) {
 
 #[test]
 fn verify_clean_history() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     // The first land written before `landed` records named their code key: its key is
@@ -517,7 +517,7 @@ fn verify_clean_history() {
 
 #[test]
 fn verify_reads_the_recorded_key() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     let env = env(dir.path(), &[]);
@@ -529,7 +529,7 @@ fn verify_reads_the_recorded_key() {
 
 #[test]
 fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history_holding(dir.path(), &[GUIDE_PAGE], &["Merge b0"]);
     let vars = env(dir.path(), &[]);
@@ -553,7 +553,7 @@ fn verify_reads_the_legacy_key_of_a_land_recorded_without_one() {
 
 #[test]
 fn verify_reports_a_push_behind_clms_back() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
@@ -574,7 +574,7 @@ fn verify_reports_a_push_behind_clms_back() {
 
 #[test]
 fn verify_starts_from_the_first_land() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     // Merges from before the ledger existed aren't reported.
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
@@ -585,7 +585,7 @@ fn verify_starts_from_the_first_land() {
 
 #[test]
 fn verify_reports_a_direct_push() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0"]);
     record_land(dir.path(), &merges[0]);
@@ -607,7 +607,7 @@ fn verify_reports_a_direct_push() {
 
 #[test]
 fn verify_exempts_releases() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     // A release merge, and a version bump that fast-forwarded onto `main`.
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Release v0.9.0"]);
@@ -618,8 +618,29 @@ fn verify_exempts_releases() {
 }
 
 #[test]
+fn verify_findings_offered_to_the_check_on_main_only() {
+    // req:ledger/verify@0a969f83
+    let dir = tempfile::tempdir().unwrap();
+    let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
+    record_land(dir.path(), &merges[0]);
+    let vars = [
+        ("HOME", Some(dir.path().as_os_str())),
+        ("XDG_CONFIG_HOME", None),
+        ("CLM_WRITER", None),
+    ];
+    let found = with_vars(&vars, || clm_ledger::on_main(dir.path()));
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].rule, "ledger/unrecorded-land", "{found:?}");
+    assert!(found[0].message.contains(&merges[1]), "{found:?}");
+    // With another branch checked out, it offers none.
+    sh(dir.path(), &["switch", "-q", "-c", "other"]);
+    let found = with_vars(&vars, || clm_ledger::on_main(dir.path()));
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
 fn verify_reports_a_land_no_check_names() {
-    // req:ledger/verify@ff314001
+    // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
     record_land(dir.path(), &merges[0]);
