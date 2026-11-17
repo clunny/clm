@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use clm_check::Marker;
+use clm_coverage::Marker;
 
 pub use write::{Refusal, Validated, Write};
 
@@ -148,7 +148,7 @@ pub(crate) struct Blob {
     pub mode: String,
 }
 
-/// One marker of a scanned file, as `clm_check::markers_in` found it.
+/// One marker of a scanned file, as `clm_coverage::markers_in` found it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Found {
     pub id: String,
@@ -248,7 +248,7 @@ impl State {
         let binary = binary || nul;
         let markers = match &text {
             Some(t) if scannable(&path) && !binary => {
-                clm_check::markers_in(std::path::Path::new(&path), t)
+                clm_coverage::markers_in(std::path::Path::new(&path), t)
                     .into_iter()
                     .map(|m: Marker| Found {
                         id: m.id,

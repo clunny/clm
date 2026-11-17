@@ -123,7 +123,7 @@ fn fixture_repo_matches_clm() {
 
     // The `spec` model, as `clm view spec --format json` prints it, sizes included.
     let none = std::collections::BTreeSet::new();
-    let spec = clm_view::spec_view(&graph, &clm_check::scan(dir.path()).req, Some(&none));
+    let spec = clm_view::spec_view(&graph, &clm_coverage::scan(dir.path()).req, Some(&none));
     assert_eq!(snap["spec"], serde_json::to_value(&spec).unwrap());
 }
 
@@ -269,7 +269,7 @@ fn clm_size(dir: &Path) -> BTreeMap<String, bool> {
         code_tokens: n.code_tokens,
     };
     let (graph, _) = clm_model::load(dir);
-    clm_check::size(dir, &graph, &clm_check::scan(dir).req, defaults)
+    clm_check::size(dir, &graph, &clm_coverage::scan(dir).req, defaults)
         .unwrap()
         .into_iter()
         .map(|s| (s.node.clone(), s.oversized()))
