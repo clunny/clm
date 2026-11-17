@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use clm_affected::{Changed, readers, reads_in};
 use clm_git::{Options, run};
@@ -16,7 +17,12 @@ fn root() -> std::path::PathBuf {
 
 /// Each file `check`'s coverage scan reads in this repository's tree (tracked or untracked and
 /// not ignored, UTF-8, not Markdown) that holds a reads marker, with its globs.
-fn markers() -> BTreeMap<String, Vec<String>> {
+fn markers() -> &'static BTreeMap<String, Vec<String>> {
+    static MARKERS: OnceLock<BTreeMap<String, Vec<String>>> = OnceLock::new();
+    MARKERS.get_or_init(scan)
+}
+
+fn scan() -> BTreeMap<String, Vec<String>> {
     let root = root();
     let listed = run(
         &root,
@@ -57,7 +63,7 @@ fn selected(paths: &[&str]) -> Vec<String> {
             exists: true,
         })
         .collect();
-    readers(&differing, &markers())
+    readers(&differing, markers())
 }
 
 /// Asserts `selected` holds each of `wanted` and none of `unwanted`, each a reader of other
@@ -73,10 +79,11 @@ fn assert_selects(selected: &[String], wanted: &[&str], unwanted: &[&str]) {
 
 /// The file holding the tests of `clm guide`, which read the guide's pages and the spec format.
 /// They sit in the root's `guide.rs` until `init`'s build moves them into its own crate
-/// (`commands-live-in-their-crates`), so it is whichever of the two the tree holds.
+/// (`commands-live-in-their-crates`), so it is the moved file once it holds a reads marker,
+/// and the root's until then, even while the moved file is being written.
 fn guide_tests() -> &'static str {
     let moved = "crates/clm-init/tests/guide.rs";
-    if root().join(moved).is_file() {
+    if markers().contains_key(moved) {
         moved
     } else {
         "crates/clm/tests/guide.rs"
@@ -104,8 +111,9 @@ fn the_root_documents_have_readers() {
         "README.md",
     ];
     assert_selects(&selected(&docs), &[RETIRED, README], &[GLOSSARY]);
-    for doc in &docs[..3] {
-        assert_selects(&selected(&[doc]), &[RETIRED], &[README]);
+    for doc in docs {
+        let unwanted: &[&str] = if doc == "README.md" { &[] } else { &[README] };
+        assert_selects(&selected(&[doc]), &[RETIRED], unwanted);
     }
 }
 
