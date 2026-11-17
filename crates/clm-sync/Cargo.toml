@@ -10,6 +10,7 @@ clap = { workspace = true, features = ["string"] }
 clm-model.workspace = true
 clm-apply.workspace = true
 clm-check.workspace = true
+clm-coverage.workspace = true
 clm-context.workspace = true
 clm-git.workspace = true
 clm-health.workspace = true
