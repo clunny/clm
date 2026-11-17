@@ -1165,11 +1165,14 @@ fn nothing_shortens_the_hooks_budgets() {
 fn the_hook_judges_with_the_hooks_budgets() {
     // req:plugin.hooks.guard/hook-budgets@0a955c81
     let lib = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs")).unwrap();
-    let start = lib.find("pub fn guard(event: &str) -> Decision {").unwrap();
-    let rest = &lib[start..];
-    let body = &rest[rest.find('{').unwrap() + 1..rest.find("\n}").unwrap()];
-    let words: Vec<&str> = body.split_whitespace().collect();
-    assert_eq!(words.join(" "), "guard_within(event, &Budgets::HOOK)");
+    // The whole function, whitespace aside, so its body is that one call and nothing else.
+    // Each brace sits in a string with its partner: `clm-coverage` finds a test's end by
+    // counting braces, and one alone would carry this test's span over every later test.
+    let words: Vec<&str> = lib.split_whitespace().collect();
+    let lib = words.join(" ");
+    let function = "pub fn guard(event: &str) -> Decision { guard_within(event, &Budgets::HOOK) }";
+    assert_eq!(lib.matches("pub fn guard(").count(), 1, "{lib}");
+    assert!(lib.contains(function), "`guard` isn't `{function}`");
 }
 
 const WHOLE_LINE_REFUSED: &str = "nothing in it ran";
@@ -1772,6 +1775,13 @@ fn guard_looks_a_rerun_up_where_it_runs() {
     }
 }
 
+/// A shell line printing `url` as `gh repo view --json url` would. A URL's `//` sits apart
+/// from the JSON's braces: `clm-coverage` reads a test's end by counting braces outside a
+/// `//` comment, so a test holding both on one line would never end.
+fn echo_url(url: &str) -> String {
+    format!("echo '{{\"url\":\"{url}\"}}'")
+}
+
 #[test]
 fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
     // req:plugin.hooks.guard/release-run-lookup@3024a9da
@@ -1781,12 +1791,12 @@ fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
                   echo '{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}'; exit 0; fi\n";
     let cwd = TempDir::new().unwrap();
     for view in [
-        "echo 'no git remotes found' >&2; exit 1",
-        "echo '{\"url\":\"o/r\"}'",
-        "echo '{\"url\":\"https://github.com/o/r/\"}'",
-        "echo '{\"url\":\"https://github.com/o\"}'",
-        "echo '{\"url\":\"https:///o/r\"}'",
-        "echo '{}'",
+        "echo 'no git remotes found' >&2; exit 1".to_string(),
+        echo_url("o/r"),
+        echo_url("https://github.com/o/r/"),
+        echo_url("https://github.com/o"),
+        echo_url("https:///o/r"),
+        "echo '{}'".to_string(),
     ] {
         let fake = TempDir::new().unwrap();
         let path = path_with_gh(fake.path(), &format!("#!/bin/sh\n{api_ci}{view}\n"));
@@ -1796,7 +1806,7 @@ fn guard_blocks_a_rerun_whose_repository_cant_be_resolved() {
     }
     // The same fake, answering `repo view` well, lets the CI run's re-run through.
     let fake = TempDir::new().unwrap();
-    let view = "echo '{\"url\":\"https://github.com/o/r\"}'";
+    let view = echo_url("https://github.com/o/r");
     let path = path_with_gh(fake.path(), &format!("#!/bin/sh\n{api_ci}{view}\n"));
     assert_eq!(
         guard_in(cwd.path(), "gh run rerun 42", &[("PATH", &path)]),
