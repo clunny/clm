@@ -157,9 +157,7 @@ fn template_says_pull_request() {
     // calls a host's pull request a page, as only the guide has pages.
     let arch = read(&dir, "ARCHITECTURE.md");
     assert!(!arch.contains("page's URL"), "{arch}");
-    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("../clm-init/templates");
-    for entry in fs::read_dir(templates).unwrap() {
-        let path = entry.unwrap().path();
+    for path in templates() {
         for line in fs::read_to_string(&path).unwrap().lines() {
             assert!(!line.contains("page's"), "{}: {line}", path.display());
         }
@@ -1512,7 +1510,6 @@ fn init_seeds_the_allow_rules() {
     let allow = allowed(&dir);
     assert_eq!(allow, rules());
     assert_eq!(clm_init::UNATTENDED_RULES.to_vec(), rules());
-    assert_eq!(allow.len(), 26);
     for rule in [
         "Bash(clm build)",
         "Bash(clm build *)",
@@ -1590,6 +1587,12 @@ fn empty_repository_every_language() {
     let typescript = table("typescript-dead-code");
     assert!(
         typescript.contains("command = [\"node_modules/.bin/knip\"]"),
+        "{typescript}"
+    );
+    assert!(
+        typescript.contains(
+            "hint = \"npm ci (or npm install --save-dev knip when package.json doesn't list it)\"\n"
+        ),
         "{typescript}"
     );
     // From the root and from a subdirectory, the script finds nothing to run and passes.

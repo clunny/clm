@@ -11,18 +11,13 @@ use tempfile::TempDir;
 
 mod common;
 
-/// Calls `clm guide <args>` in a directory that isn't in a git repository.
+/// Calls `clm guide <args>` in a directory outside any CLM repository.
 fn guide(args: &[&str]) -> Output {
     let tmp = TempDir::new().unwrap();
+    assert_eq!(common::found_root(tmp.path()), None);
     let mut all = vec!["guide"];
     all.extend(args);
-    let ceiling = tmp.path().to_str().unwrap();
-    common::call(
-        tmp.path(),
-        &all,
-        &common::process_env,
-        &[("GIT_CEILING_DIRECTORIES", ceiling)],
-    )
+    common::call(tmp.path(), &all, &common::process_env, &[])
 }
 
 #[test]
