@@ -109,10 +109,16 @@ fn the_root_documents_have_readers() {
 #[test]
 fn the_readers_of_clm_toml() {
     // req:clm/doc-readers-marked@a5e3c957
+    let selected = selected(&["clm.toml"]);
     assert_selects(
-        &selected(&["clm.toml"]),
-        &["crates/clm/tests/cli.rs", "crates/clm/tests/ci_check.rs"],
+        &selected,
+        &["crates/clm/tests/cli.rs"],
         &[README, GLOSSARY, RETIRED],
+    );
+    // `ci`'s test of the check script, wherever `ci` keeps it.
+    assert!(
+        selected.iter().any(|s| s.ends_with("/ci_check.rs")),
+        "{selected:?}"
     );
 }
 
