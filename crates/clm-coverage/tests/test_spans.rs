@@ -303,6 +303,24 @@ fn scenario_braces_in_literals() {
         rust_spans(&text),
         [("a".to_string(), 1, 5), ("b".to_string(), 6, 9)]
     );
+    // With no test after it to bound it, `a` still closes on line 5: the literals are read.
+    let alone = text.lines().take(5).collect::<Vec<_>>().join("\n") + "\nfn helper() {\n}";
+    assert_eq!(rust_spans(&alone), [("a".to_string(), 1, 5)]);
+}
+
+#[test]
+fn rust_prefixed_raw_strings() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+#[test]
+fn a() {
+    let b = br#\"x\"}\"#;
+    let c = cr#\"y\"{\"#;
+}
+fn helper() {
+}
+";
+    assert_eq!(rust_spans(text), [("a".to_string(), 1, 5)]);
 }
 
 #[test]
