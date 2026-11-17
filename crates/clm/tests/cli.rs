@@ -218,7 +218,7 @@ fn change_repo(delta: &str) -> TempDir {
 
 #[test]
 fn hash_is_no_command() {
-    // req:apply/hash-command@971912c5
+    // `clm hash` is no command: the root's to prove (`clm/old-command-names-retired`), whose build cites this test.
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(dir.path(), "specs/a/SPEC.md", NODE);
     // Not stderr whole: clap's for `hash` may suggest `hashes`, unlike a made-up name's.

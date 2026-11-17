@@ -145,7 +145,7 @@ fn arguments_it_cant_parse() {
 
 #[test]
 fn hashes_prints_elements_usable_as_bases() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let (code, out) = clm(dir.path(), &["hashes", "clm"]);
     assert_eq!(code, Some(0));
@@ -169,7 +169,7 @@ fn hashes_prints_elements_usable_as_bases() {
 
 #[test]
 fn hashes_prints_asset_lines() {
-    // req:apply/hash-command@971912c5 req:apply/apply-assets@786adb62
+    // req:apply/hash-command@752d167d req:apply/apply-assets@786adb62
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(dir.path(), "specs/a/SPEC.md", NODE);
     write(dir.path(), "specs/a/assets/m.html", "<p>m</p>\n");
@@ -181,7 +181,7 @@ fn hashes_prints_asset_lines() {
 
 #[test]
 fn hashes_fails_on_an_unknown_node() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let out = call_with_root(dir.path(), &["hashes", "nope"]);
     let stderr = out.stderr;
@@ -271,7 +271,7 @@ fn backlog_and_archive_commands() {
 
 #[test]
 fn hashes_of_layers() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let entry = |slug: &str| {
         format!("### Capability: {slug}\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n")
@@ -306,7 +306,7 @@ fn hashes_of_layers() {
 
 #[test]
 fn hashes_of_the_capability_node_come_first() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(
         dir.path(),

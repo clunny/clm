@@ -251,7 +251,7 @@ fn removal_compares_the_whole_hash() {
 
 #[test]
 fn modification_without_base_is_invalid() {
-    // req:apply/stale-base@6b3410c6 req:apply/hash-command@971912c5
+    // req:apply/stale-base@6b3410c6 req:apply/hash-command@752d167d
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -575,7 +575,7 @@ fn success_marks_change_applied() {
 
 #[test]
 fn hashes_match_what_validation_compares() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = repo(&[]);
     let d = dir.path();
     let (graph, _) = load(d);
@@ -806,7 +806,7 @@ fn created_node_gets_its_assets() {
 
 #[test]
 fn hashes_of_the_capability_node() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -842,7 +842,7 @@ fn hashes_of_the_capability_node() {
 
 #[test]
 fn hashes_of_a_layer_without_its_node() {
-    // req:apply/hash-command@971912c5
+    // req:apply/hash-command@752d167d
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -862,7 +862,7 @@ fn hashes_of_a_layer_without_its_node() {
 
 #[test]
 fn hashes_lists_assets_after_requirements() {
-    // req:apply/hash-command@971912c5 req:apply/apply-assets@786adb62
+    // req:apply/hash-command@752d167d req:apply/apply-assets@786adb62
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/z.txt", "z\n");
