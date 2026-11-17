@@ -40,6 +40,8 @@ Nothing since 2026-11-10 fixes it: `20261117-clm-build-step-prints`, which filed
 
 - **A return naming the run's own task, or an ID the loop doesn't keep** is handled by `return-rules`, as now.
 - **A return for a planned run** (the new run printed, not yet launched) whose task is an earlier run's is ignored too, and the step's `launch` is printed again unchanged.
+- **A late report after `clm build start`.** A start drops the runs that returned, and their kept task IDs with them. The subagents of the session it replaces report to that session, not to the new one, so no late report reaches the loop through it.
+- **Both requirements build together.** The new requirement's fixtures need the loop-file field `launched-refuses-an-earlier-task` adds, so one build of `orchestrator.loop` takes both, once the question item lets it; the `--task` flag is wired through the root's `clm build` dispatch, and the scenarios run the binary.
 - **A session running the skill's old text** passes no `--task`, and the defect stays for it until the skill's sentence is built.
 
 ## Open questions
