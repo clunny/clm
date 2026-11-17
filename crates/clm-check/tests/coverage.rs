@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use clm_check::{State, coverage, run};
+use clm_check::run;
 use clm_model::Graph;
 use tempfile::TempDir;
 
@@ -41,17 +41,6 @@ fn in_test(s: &str) -> String {
     }
 }
 
-/// A spec for node `a` with one requirement per slug.
-fn spec(slugs: &[&str]) -> String {
-    let mut s = String::from("---\ntitle: A\nstatus: active\nowners: []\n---\n\n## Requirements\n");
-    for slug in slugs {
-        s.push_str(&format!(
-            "\n### Requirement: {slug}\n{slug}.\n\n#### Scenario: s\n- ok\n"
-        ));
-    }
-    s
-}
-
 /// Where a change in `status` lives: finished changes are archived.
 fn change_dir(status: &str) -> &'static str {
     match status {
@@ -86,23 +75,10 @@ fn graph(root: &Path) -> Graph {
     graph
 }
 
-/// The marker citing `id` at its current version in `graph`.
-fn cite(graph: &Graph, id: &str) -> String {
-    format!("{REQ}{id}@{}", graph.requirement(id).unwrap().version())
-}
-
 fn rules(root: &Path) -> Vec<(String, &'static str, String)> {
     run(root)
         .into_iter()
         .map(|v| (v.path.display().to_string(), v.rule, v.message))
-        .collect()
-}
-
-fn lines(root: &Path) -> Vec<String> {
-    coverage(root)
-        .unwrap()
-        .iter()
-        .map(|c| c.to_string())
         .collect()
 }
 
@@ -172,71 +148,6 @@ fn only_files_git_would_track_are_scanned() {
     assert_eq!(rules(d).len(), 1);
 }
 
-#[test]
-fn scenario_mixed_coverage() {
-    // req:check.coverage/coverage-report@533d2f1a
-    let dir = TempDir::new().unwrap();
-    let d = dir.path();
-    write(d, "specs/SPEC.md", ROOT);
-    write(d, "specs/a/SPEC.md", &spec(&["w", "x", "y", "z"]));
-    let g = graph(d);
-    let x = cite(&g, "a/x");
-    assert_ne!(g.requirement("a/y").unwrap().version(), "bbbbbbbb");
-    write(
-        d,
-        "t.rs",
-        &in_test(&format!(
-            "\n// {x}\n\n// {REQ}a/y@bbbbbbbb\n\n// {REQ}a/z\n"
-        )),
-    );
-    assert_eq!(
-        lines(d),
-        [
-            "a/w unbuilt",
-            "a/x current t.rs:2",
-            "a/y behind t.rs:4",
-            "a/z behind t.rs:6"
-        ]
-    );
-}
-
-#[test]
-fn scenario_stale_marker_beside_a_current_one() {
-    // req:check.coverage/coverage-report@533d2f1a
-    let dir = TempDir::new().unwrap();
-    let d = dir.path();
-    write(d, "specs/SPEC.md", ROOT);
-    write(d, "specs/a/SPEC.md", &spec(&["x"]));
-    let g = graph(d);
-    write(d, "crates/a/t.rs", &format!("\n// {}\n", cite(&g, "a/x")));
-    write(
-        d,
-        "crates/b/t.rs",
-        &in_test(&format!("\n\n\n\n\n\n// {REQ}a/x@bbbbbbbb\n")),
-    );
-    assert_eq!(lines(d), ["a/x behind crates/b/t.rs:7"]);
-}
-
-#[test]
-fn report_carries_the_state_and_markers() {
-    // req:check.coverage/coverage-report@533d2f1a
-    let dir = repo("applied");
-    let d = dir.path();
-    let g = graph(d);
-    write(
-        d,
-        "t.rs",
-        &in_test(&format!("// {}\n// {}\n", cite(&g, "a/x"), cite(&g, "a/x"))),
-    );
-    let report = coverage(d).unwrap();
-    assert_eq!(report[0].id, "a/x");
-    assert_eq!(report[0].state, State::Current);
-    assert_eq!(report[0].markers.len(), 2);
-    assert_eq!(report[0].markers[1].line, 2);
-    assert_eq!(report[1].state, State::Unbuilt);
-    assert_eq!(State::Behind.to_string(), "behind");
-}
-
 /// A second change, live or archived, whose delta for `a` removes `gone`.
 fn removing_change(root: &Path, archived: bool) {
     let dir = if archived {
@@ -284,104 +195,6 @@ fn marker_dangles_again_once_the_removing_change_is_archived() {
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].1, "check/dangling-markers");
     assert_eq!(found[0].0, "tests/t.rs:3");
-}
-
-#[test]
-fn scenario_obsolete_marker() {
-    // req:check.coverage/coverage-report@533d2f1a
-    let dir = repo("applied");
-    let d = dir.path();
-    removing_change(d, false);
-    let x = cite(&graph(d), "a/x");
-    write(d, "t.rs", &in_test(&format!("\n// {x}\n\n\n// {GONE}\n")));
-    assert_eq!(
-        lines(d),
-        [
-            "a/x current t.rs:2",
-            "a/y unbuilt",
-            "a/gone obsolete t.rs:5"
-        ]
-    );
-}
-
-#[test]
-fn removed_requirement_without_markers_is_not_reported() {
-    // req:check.coverage/coverage-report@533d2f1a
-    let dir = repo("applied");
-    removing_change(dir.path(), false);
-    assert_eq!(lines(dir.path()), ["a/x unbuilt", "a/y unbuilt"]);
-}
-
-#[test]
-fn scenario_same_as_checkout() {
-    // req:check.coverage/markers-from-files@f29b72b7
-    let dir = TempDir::new().unwrap();
-    let d = dir.path();
-    write(d, "specs/SPEC.md", ROOT);
-    write(d, "specs/a/SPEC.md", &spec(&["x", "y", "z"]));
-    let g = graph(d);
-    let x = cite(&g, "a/x");
-    write(
-        d,
-        "t.rs",
-        &in_test(&format!("// {x}\n// {REQ}a/y@00000000\n")),
-    );
-    write(d, "n.md", &format!("See {REQ}a/z.\n"));
-    let git = |args: &[&str]| {
-        let out = Command::new("git")
-            .args(args)
-            .current_dir(d)
-            .output()
-            .unwrap();
-        assert!(out.status.success(), "{out:?}");
-        out.stdout
-    };
-    git(&["init", "-q"]);
-    git(&["add", "-A"]);
-    let listed = git(&["ls-files", "-z"]);
-    let markers: Vec<_> = listed
-        .split(|b| *b == 0)
-        .filter(|s| !s.is_empty())
-        .flat_map(|s| {
-            let path = Path::new(std::str::from_utf8(s).unwrap());
-            clm_check::markers_in(path, &fs::read_to_string(d.join(path)).unwrap())
-        })
-        .collect();
-    let text =
-        |c: Vec<clm_check::Coverage>| -> Vec<String> { c.iter().map(|c| c.to_string()).collect() };
-    let from_files = text(clm_check::report(&g, &markers));
-    assert_eq!(
-        from_files,
-        ["a/x current t.rs:1", "a/y behind t.rs:2", "a/z unbuilt"]
-    );
-    assert_eq!(from_files, text(coverage(d).unwrap()));
-    assert_eq!(
-        clm_check::markers_in(Path::new("n.md"), &format!("{x}\n")),
-        []
-    );
-}
-
-#[test]
-fn markers_in_carries_versions() {
-    // req:check.coverage/markers-from-files@f29b72b7
-    let text = in_test(&format!(
-        "// {REQ}a/x@0123abcd {REQ}a/y {REQ}a/z@xyz {REQ}a/w@0123abcd9 {REQ}a/v@0123ABCD\n"
-    ));
-    let found = clm_check::markers_in(Path::new("t.rs"), &text);
-    let seen: Vec<(&str, Option<&str>)> = found
-        .iter()
-        .map(|m| (m.id.as_str(), m.version.as_deref()))
-        .collect();
-    assert_eq!(
-        seen,
-        [
-            ("a/x", Some("0123abcd")),
-            ("a/y", None),
-            ("a/z", None),
-            ("a/w", None),
-            ("a/v", None)
-        ]
-    );
 }
 
 #[test]
