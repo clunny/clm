@@ -638,7 +638,7 @@ fn dispatch() -> ExitCode {
             let mut event = String::new();
             let _ = std::io::stdin().read_to_string(&mut event);
             // The hook's own arguments, after `clm hook <name>`.
-            let hook_args = std::env::args_os().skip(3);
+            let hook_args = command_args().skip(1);
             let env = &clm_config::process_env;
             let (out, err) = (&mut Printed::Out, &mut Printed::Err);
             ExitCode::from(match hook {
@@ -1184,10 +1184,14 @@ impl std::io::Write for Printed {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        match self {
-            Printed::Out => std::io::stdout().flush(),
-            Printed::Err => std::io::stderr().flush(),
+        let (flushed, name) = match self {
+            Printed::Out => (std::io::stdout().flush(), "stdout"),
+            Printed::Err => (std::io::stderr().flush(), "stderr"),
+        };
+        if let Err(e) = flushed {
+            panic!("failed printing to {name}: {e}");
         }
+        Ok(())
     }
 }
 

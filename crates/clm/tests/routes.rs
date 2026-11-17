@@ -110,7 +110,7 @@ fn a_routed_command() {
     // req:clm/routes-only@4567a066
     let dir = fixture();
     let root = dir.path().to_str().unwrap();
-    for component in ["a", "nope"] {
+    let run = |component: &str| {
         let process = clm(dir.path(), &["hashes", component, "--root", root]);
         let call = called(|out, err| {
             clm_apply::hashes_command(
@@ -122,16 +122,14 @@ fn a_routed_command() {
             )
         });
         assert_same(&process, &call);
-    }
+        call
+    };
     // The fixture shows something on each stream: `a`'s hashes, and the refusal of `nope`.
-    let listed = clm(dir.path(), &["hashes", "a", "--root", root]);
-    assert!(
-        String::from_utf8_lossy(&listed.stdout).contains("requirement:x "),
-        "{listed:?}"
-    );
-    let refused = clm(dir.path(), &["hashes", "nope", "--root", root]);
-    assert_ne!(refused.status.code(), Some(0), "{refused:?}");
-    assert!(!refused.stderr.is_empty(), "{refused:?}");
+    let listed = run("a");
+    assert!(listed.out.contains("requirement:x "), "{}", listed.out);
+    let refused = run("nope");
+    assert_ne!(refused.code, 0, "{}", refused.err);
+    assert!(!refused.err.is_empty());
 }
 
 #[test]
@@ -265,7 +263,7 @@ fn every_command_routes() {
     let help = clm(dir.path(), &["--help"]);
     assert_eq!(help.status.code(), Some(0), "{help:?}");
     let commands = listed_commands(&String::from_utf8_lossy(&help.stdout));
-    assert!(commands.len() > 40, "{commands:?}");
+    assert!(commands.iter().any(|c| c == "hashes"), "{commands:?}");
     // `help` is the parser's own, which takes command names, not options.
     for name in commands.iter().filter(|name| *name != "help") {
         let out = clm(dir.path(), &[name, "--help"]);

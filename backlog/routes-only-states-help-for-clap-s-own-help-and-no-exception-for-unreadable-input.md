@@ -3,8 +3,8 @@ title: "`routes-only` asks `--help` of clap's own `help` and allows the root no 
 kind: question
 components: [clm]
 choices:
-  - "Word the scenario as the commands other than the parser's own `help`, and allow the root's errors reading stdin or the current directory"
-  - "Turn off clap's `help` subcommand, and move those errors into the crates"
+  - "Reword the requirement to admit both"
+  - "Change the code to fit the text"
 ---
 
 Two places where `clm/routes-only@4567a066`, as written, says more than the built code does, found by the spec-auditor on its build:
