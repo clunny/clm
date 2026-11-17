@@ -42,6 +42,7 @@ libc = "0.2"
 serde_json.workspace = true
 
 [dev-dependencies]
+clm-coverage.workspace = true
 tempfile.workspace = true
 sha2.workspace = true
 roxmltree = "0.21"

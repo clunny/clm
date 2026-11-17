@@ -242,6 +242,7 @@ dependencies = [
  "clm-checkpoint",
  "clm-config",
  "clm-context",
+ "clm-coverage",
  "clm-effort",
  "clm-gate",
  "clm-git",

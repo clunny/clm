@@ -291,7 +291,7 @@ fn scenario_claimed_node_and_command_matches_library() {
 
     let (graph, violations) = clm_model::load(dir.path());
     assert!(violations.is_empty());
-    let markers = clm_check::scan(dir.path()).req;
+    let markers = clm_coverage::scan(dir.path()).req;
     let refs = clm_orchestrator::claim_refs(dir.path());
     assert_eq!(refs.len(), 1);
     let now = SystemTime::now()
