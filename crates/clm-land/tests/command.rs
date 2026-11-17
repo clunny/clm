@@ -34,6 +34,20 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// A stream the test reads while the call still writes to it.
+#[derive(Clone, Default)]
+struct Shared(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Shared {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Sets `name` to `value` on this process for the length of `run`: `git` and the commands a
 /// land starts inherit the process's environment, not the lookup. The tests run one per
 /// process (`ci/nextest-runner`), so no other test sees it.
@@ -250,7 +264,7 @@ fn pushed_though_git_failed() {
 
 #[test]
 fn checked_code_takes_no_lock() {
-    // req:land/land-target-lock@2dadb710
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     f.branch("spec/x", &[("specs/x/SPEC.md", "# x\n")]);
     let key = clm_ledger::code_key(&f.work(), "origin/main").unwrap();
@@ -281,6 +295,48 @@ fn checked_code_takes_no_lock() {
     drop(held);
     assert_eq!(code, 0, "{stderr}");
     assert!(!stderr.contains("waiting"), "{stderr}");
+}
+
+#[test]
+fn a_waiting_land_says_so() {
+    // req:land/land-target-lock@017c470a
+    let f = Fixture::new("");
+    f.branch("impl/a", &[("b.txt", "b\n")]);
+    // Another process's land holds the lock, through a file of this test's own.
+    let home = f.work().join(".clm");
+    fs::create_dir_all(&home).unwrap();
+    let held = File::create(home.join("land.lock")).unwrap();
+    held.lock().unwrap();
+    let stderr = Shared::default();
+    let (work, env, mut err) = (f.work(), f.env(&[]), stderr.clone());
+    let (sent, got) = mpsc::channel();
+    let landing = std::thread::spawn(move || {
+        let mut stdout = Vec::new();
+        let code = clm_land::land_command(["impl/a"], &work, &env, &mut stdout, &mut err);
+        let _ = sent.send(code);
+    });
+    // The line names `.clm/land`; how many are ahead is `land/lock-queue`'s.
+    let waiting = format!(
+        "waiting for another land's check on {}",
+        home.join("land").display()
+    );
+    let said = || text(&stderr.0.lock().unwrap());
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    while !said().contains(&waiting) {
+        assert!(std::time::Instant::now() < deadline, "{}", said());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // It waits for the lock, and lands once it is free.
+    assert!(
+        matches!(got.try_recv(), Err(mpsc::TryRecvError::Empty)),
+        "{}",
+        said()
+    );
+    drop(held);
+    let code = got.recv_timeout(Duration::from_secs(60));
+    assert_eq!(code, Ok(0), "{}", said());
+    landing.join().unwrap();
+    assert_eq!(said().matches(&waiting).count(), 1, "{}", said());
 }
 
 #[test]

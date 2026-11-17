@@ -144,7 +144,7 @@ fn tree_logging_check(f: &Fixture) {
 
 #[test]
 fn a_land_that_waited_checks_the_new_main() {
-    // req:land/land-target-lock@2dadb710
+    // req:land/land-target-lock@017c470a
     let f = Fixture::new("");
     tree_logging_check(&f);
     f.branch("impl/a", &[("a-file.txt", "a\n")]);
