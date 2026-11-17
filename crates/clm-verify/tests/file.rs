@@ -47,13 +47,13 @@ fn filing(mode: &str, entry: Option<&str>) -> Filing {
         "a test",
     );
     f.verified(&found, true);
-    let body = Body::Mutated {
-        commit: found.clone(),
-        since: None,
-        killed: vec![],
-        unproven: vec![format!("a/thing@{}", entry.unwrap_or(&version))],
-        not_judged: vec![],
-    };
+    let body = Body::mutated(
+        found.clone(),
+        None,
+        vec![],
+        vec![format!("a/thing@{}", entry.unwrap_or(&version))],
+        vec![],
+    );
     clm_ledger::append(&f.work(), body, &f.env()).unwrap();
     Filing { f, version, found }
 }

@@ -74,13 +74,7 @@ fn pass(mutate: bool, old_test: bool) -> Pass {
     let files: Vec<(&str, &str)> = files.iter().map(|(n, t)| (*n, t.as_str())).collect();
     let base = f.land(&files, "baseline");
     f.verified(&base, true);
-    let body = Body::Mutated {
-        commit: base,
-        since: None,
-        killed: vec![],
-        unproven: vec![],
-        not_judged: vec![],
-    };
+    let body = Body::mutated(base, None, vec![], vec![], vec![]);
     clm_ledger::append(&f.work(), body, &f.env()).unwrap();
     Pass { f, version }
 }
@@ -116,6 +110,7 @@ fn said(out: &clm_verify::Outcome, start: &str) -> bool {
 #[test]
 fn a_new_test_that_notices() {
     // req:verify/mutation-pass@cf9b872b
+    // req:verify/mutated-through-constructor@899e8820
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     land_new_test(&p);
@@ -447,13 +442,7 @@ fn the_pass_starts_from_the_newest_mutated_record() {
     let p = pass(true, false);
     p.f.write("mutate-result", "a/thing killed\n");
     let middle = p.f.land(&[("crates/a/src/lib.rs", "9\n")], "middle");
-    let body = Body::Mutated {
-        commit: middle.clone(),
-        since: None,
-        killed: vec![],
-        unproven: vec![],
-        not_judged: vec![],
-    };
+    let body = Body::mutated(middle.clone(), None, vec![], vec![], vec![]);
     clm_ledger::append(&p.f.work(), body, &p.f.env()).unwrap();
     land_new_test(&p);
     p.f.due();
