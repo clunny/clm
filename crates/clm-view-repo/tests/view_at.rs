@@ -398,3 +398,36 @@ fn in_test(s: &str) -> String {
         format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
     }
 }
+
+#[test]
+fn at_a_commit_changes_from_its_tree_and_claims_from_the_refs() {
+    // req:view.repo/view-at-rev@3e653d69
+    // `HEAD` holds a live change the working tree has deleted, and `origin/impl/a` claims
+    // `a`: `--at HEAD` lists the commit's change, and both list the claim.
+    let dir = ahead_of_the_checkout();
+    let d = dir.path();
+    write(
+        d,
+        "changes/c/change.md",
+        "---\nstatus: applied\n---\n\nIntent.\n",
+    );
+    write(
+        d,
+        "changes/c/deltas/a.md",
+        "---\ncomponent: a\n---\n## ADDED Requirements\n\n### Requirement: y\nIt SHALL.\n\n#### Scenario: s\n- ok\n",
+    );
+    git(d, &["add", "-A"]);
+    git(d, &["commit", "-qm", "change"]);
+    git(d, &["update-ref", "refs/remotes/origin/impl/a", "HEAD"]);
+    fs::remove_dir_all(d.join("changes")).unwrap();
+    let hash = git(d, &["rev-parse", "HEAD"])[..7].to_string();
+    let here = stdout(&clm(d, &["view", "flight"]));
+    let there = stdout(&clm(d, &["view", "flight", "--at", "HEAD"]));
+    // Without `--at`, the checkout line `view/view-command` defines.
+    assert!(here.starts_with(&format!("commit {hash} ")), "{here}");
+    assert!(here.contains("\n  a  P5  claimed "), "{here}");
+    assert!(here.contains("changes\n  none\n"), "{here}");
+    assert!(there.starts_with(&format!("HEAD {hash} ")), "{there}");
+    assert!(there.contains("\n  a  P5  claimed "), "{there}");
+    assert!(there.contains("\n    c  P5 "), "{there}");
+}
