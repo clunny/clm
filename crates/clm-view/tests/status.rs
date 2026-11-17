@@ -91,6 +91,26 @@ fn item(root: &Path, slug: &str, kind: &str) {
 }
 
 #[test]
+fn scenario_groups_in_order() {
+    // req:view/status-report@538240fb
+    let dir = base();
+    let d = dir.path();
+    change(d, "20260101-a", "applied", &["x"]);
+    change(d, "20260101-z", "implementing", &["y"]);
+    let text = status(d);
+    assert!(
+        text.contains(
+            "changes\n  implementing\n    20260101-z  0/1 requirements\n  applied\n    20260101-a  1/1 requirements  complete\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("changes 2 live: 1 implementing, 1 applied, 1 complete\n"),
+        "{text}"
+    );
+}
+
+#[test]
 fn scenario_summary() {
     // req:view/status-report@538240fb
     let dir = base();
