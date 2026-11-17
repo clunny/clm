@@ -107,7 +107,7 @@ fn counts(view: &clm_view::SpecView, id: &str) -> (usize, usize, usize, usize) {
 
 #[test]
 fn spec_view_counts_cited_capabilities_on_the_root_only() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (_dir, graph) = scenario();
     let view = clm_view::spec_view(&graph, &[marker_on_x(&graph)], None);
     let ids: Vec<&str> = view.nodes.iter().map(|n| n.node.as_str()).collect();
@@ -118,7 +118,7 @@ fn spec_view_counts_cited_capabilities_on_the_root_only() {
 
 #[test]
 fn spec_view_counts_capabilities_on_the_capability_node() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (_dir, graph) = graph(
         &[arch("e", &["a/x"], false)],
         &[("b", false), ("u", true)],
@@ -143,7 +143,7 @@ fn summary(graph: &Graph, markers: &[clm_coverage::Marker]) -> String {
 
 #[test]
 fn summary_counts_entries() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let (_dir, graph) = scenario();
     let line = summary(&graph, &[marker_on_x(&graph)]);
     assert!(
@@ -160,7 +160,7 @@ fn summary_counts_entries() {
 
 #[test]
 fn summary_entry_with_both_blocks_counts_twice() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let (_dir, graph) = graph(&[arch("e", &["a/x"], true)], &[("b", false)], &[]);
     let line = summary(&graph, &[marker_on_x(&graph)]);
     assert!(
@@ -171,7 +171,7 @@ fn summary_entry_with_both_blocks_counts_twice() {
 
 #[test]
 fn summary_without_architecture_or_untested() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let (_dir, graph) = graph(&[], &[("b", false)], &[]);
     let line = summary(&graph, &[marker_on_x(&graph)]);
     assert!(line.ends_with("; 1/2 requirements current"), "{line}");

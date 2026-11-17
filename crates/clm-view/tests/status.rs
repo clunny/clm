@@ -92,7 +92,7 @@ fn item(root: &Path, slug: &str, kind: &str) {
 
 #[test]
 fn scenario_groups_in_order() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     change(d, "20260101-a", "applied", &["x"]);
@@ -112,7 +112,7 @@ fn scenario_groups_in_order() {
 
 #[test]
 fn scenario_summary() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -143,7 +143,7 @@ fn scenario_summary() {
 
 #[test]
 fn summary_counts_unbuilt_nodes() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -157,7 +157,7 @@ fn summary_counts_unbuilt_nodes() {
 
 #[test]
 fn scenario_aligned_columns() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -175,8 +175,42 @@ fn scenario_aligned_columns() {
 }
 
 #[test]
+fn scenario_oversized_node() {
+    // req:view/status-report@b8fbd7b2
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    for id in ["a", "b", "c"] {
+        write(d, &format!("specs/{id}/SPEC.md"), &node("active", &["x"]));
+    }
+    let (graph, markers) = common::read(d);
+    let size: std::collections::BTreeSet<String> = ["a".to_string()].into();
+    let text = clm_view::status_text(&graph, &markers, &[], &[], common::NOW, Some(&size), None);
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("  components "))
+        .unwrap();
+    assert!(line.ends_with(", 1 oversized"), "{text}");
+    let row = |id: &str| {
+        let prefix = format!("  {id} ");
+        text.lines()
+            .skip_while(|l| *l != "components")
+            .find(|l| l.starts_with(&prefix))
+            .unwrap()
+            .to_string()
+    };
+    assert!(
+        row("a").split("  ").any(|c| c.trim() == "oversized"),
+        "{text}"
+    );
+    for id in ["b", "c"] {
+        assert!(!row(id).contains("oversized"), "{text}");
+    }
+}
+
+#[test]
 fn scenario_changes_grouped() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -196,7 +230,7 @@ fn scenario_changes_grouped() {
 
 #[test]
 fn scenario_complete_change() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     change(d, "20260101-c", "applied", &["x", "y"]);
@@ -214,7 +248,7 @@ fn scenario_complete_change() {
 
 #[test]
 fn scenario_waiting_on_you() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     item(d, "q", "question");
@@ -233,7 +267,7 @@ fn scenario_waiting_on_you() {
 
 #[test]
 fn a_change_awaiting_approval_waits_on_you_and_a_node_writing_a_protected_path_is_ready() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     write(
@@ -257,7 +291,7 @@ fn a_change_awaiting_approval_waits_on_you_and_a_node_writing_a_protected_path_i
 
 #[test]
 fn scenario_claims_counted() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node("specd", &["x"]));
@@ -277,7 +311,7 @@ fn scenario_claims_counted() {
 
 #[test]
 fn backlog_claims_are_counted_with_node_claims() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node("specd", &["x"]));
@@ -291,7 +325,7 @@ fn backlog_claims_are_counted_with_node_claims() {
 
 #[test]
 fn merged_claims_are_counted_and_released() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node("specd", &["x"]));
@@ -315,7 +349,7 @@ fn merged_claims_are_counted_and_released() {
 
 #[test]
 fn scenario_pending_states() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -338,7 +372,7 @@ fn scenario_pending_states() {
 
 #[test]
 fn summary_orders_statuses_states_and_kinds() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     // Nodes in every pending state: `a` and `i` ready (`i` writes a protected path), `b`
@@ -391,7 +425,7 @@ fn summary_orders_statuses_states_and_kinds() {
 
 #[test]
 fn scenario_nothing_in_flight() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let dir = base();
     let d = dir.path();
     cite(d, "u", &["a/y"]);

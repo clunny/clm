@@ -142,7 +142,7 @@ fn scenario_svg() {
 
 #[test]
 fn scenario_nested_nodes() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/check/SPEC.md", &node("", &["c"]));
@@ -247,7 +247,7 @@ fn scenario_node_detail_from_the_command() {
 
 #[test]
 fn scenario_a_removed_nodes_markers() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -282,7 +282,7 @@ fn scenario_a_removed_nodes_markers() {
 
 #[test]
 fn spec_chart_shows_the_queue_state_from_the_claim_refs() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let dir = two_nodes();
     let refs = [claim("a", 1)];
     let text = view_of(dir.path(), Name::Spec, Format::Text, DEFAULT_WIDTH, &refs);
