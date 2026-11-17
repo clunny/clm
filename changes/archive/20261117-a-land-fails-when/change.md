@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-land-fails-when-ci-check-prints-a-negative-phase-time]
 ---
 
