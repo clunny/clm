@@ -172,7 +172,7 @@ fn scenario_same_as_next_on_a_repo() {
     // and `e` alone claimed.
     git(&r.work, &["fetch", "-q", "origin"]);
     let graph = load(&r.work);
-    let markers = clm_check::scan(&r.work).req;
+    let markers = clm_coverage::scan(&r.work).req;
     let queue = queue_from_refs(&graph, &markers, &claim_refs(&r.work), now(), 4);
     let in_state = |f: fn(&State) -> bool| -> Vec<&str> {
         queue

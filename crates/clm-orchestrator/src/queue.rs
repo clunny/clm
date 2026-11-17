@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use clm_check::{Marker, Pending, complete_changes, pending};
+use clm_coverage::{Marker, Pending, complete_changes, pending};
 use clm_model::{Graph, Priority};
 use serde::Serialize;
 

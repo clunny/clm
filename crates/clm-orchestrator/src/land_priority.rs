@@ -16,7 +16,7 @@ use crate::repo::load;
 pub fn land_priority(root: &Path, branch: &str, base: &str, head: &str) -> Result<Priority, Error> {
     let tree = clm_git::extract_tree(root, base)?;
     let graph = load(tree.path())?;
-    let markers = clm_check::scan(tree.path()).req;
+    let markers = clm_coverage::scan(tree.path()).req;
     let mut found = Vec::new();
     if let Some(component) = branch.strip_prefix(crate::repo::BRANCH_PREFIX) {
         let queue = queue_from_refs(&graph, &markers, &[], 0, 0);
