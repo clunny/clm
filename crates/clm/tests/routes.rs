@@ -131,6 +131,7 @@ fn a_routed_command() {
     );
     let refused = clm(dir.path(), &["hashes", "nope", "--root", root]);
     assert_ne!(refused.status.code(), Some(0), "{refused:?}");
+    assert!(!refused.stderr.is_empty(), "{refused:?}");
 }
 
 #[test]
@@ -185,6 +186,7 @@ fn the_settings_a_routed_command_is_passed() {
     let set = affected_fixture("[affected]\nall = [\"Cargo.lock\"]\n");
     let out = clm(set.path(), &["affected", "--base", "main"]);
     assert_eq!(String::from_utf8_lossy(&out.stdout), "all Cargo.lock\n");
+    assert_eq!(String::from_utf8_lossy(&out.stderr), "", "{out:?}");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
 
     let invalid = affected_fixture("[affected]\nall = 3\n");
