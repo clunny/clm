@@ -2067,7 +2067,7 @@ for i in $(seq 1 "$missed"); do echo "missed $i" >> "$out/mutants.out/missed.txt
 /// and keeps copies of the configuration file
 /// and of the vitest configuration it names in `$CI_LOG.stryker` and `$CI_LOG.vitest`. A run on
 /// the script's fixture reports its first function's mutant killed and its second's survived,
-/// unless `bin/stryker-fixture-kills-all` exists, or reports the second's `NoCoverage` when
+/// unless `bin/stryker-fixture-kills-all` exists, or reports another of the second's `NoCoverage` when
 /// `bin/stryker-fixture-blind-nocov` exists. A run on anything else exits with the status in
 /// `bin/stryker-exit`, writing no report.
 const NPX_STRYKER: &str = r#"#!/usr/bin/env bash
@@ -2082,7 +2082,7 @@ if grep -q clm-mutate-fixture "$cfg"; then
   elif grep -q 'fixture.ts:1-1' "$cfg" || [ -e "$bin/stryker-fixture-kills-all" ]; then
     killed=1; survived=0
   elif [ -e "$bin/stryker-fixture-blind-nocov" ]; then
-    killed=0; survived=0; nocov=1
+    killed=0; survived=1; nocov=1
   else
     killed=0; survived=1
   fi
