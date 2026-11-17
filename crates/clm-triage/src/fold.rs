@@ -192,7 +192,8 @@ const UNATTENDED: &str = "You are running unattended: no one will answer questio
     approval. Claude Code may ask the human to confirm a tool call: wait for that. When \
     Claude Code refuses a write, don't write it another way, such as through Bash: stop and \
     say why. A subagent you launch names its model: set the Agent tool's `model` to \
-    `sonnet` (`model: \"sonnet\"`), the model builds run on (`model-per-launch`); never \
+    the one `clm agent-harness` prints as `build-model`, the model builds run on \
+    (`model-per-launch`); never \
     launch a subagent without naming its model. Keep the scratch files you write while \
     working under this worktree's `.clm/`, which git ignores, and never in a scratchpad or \
     temporary directory your system prompt names or any other directory shared with other \
@@ -284,7 +285,7 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          `spec review`, since the folded changes need review. {GATE} A `human-task` item the \
          fold adds is a burden: declare one for it in the `human_burdens` of the change it \
          concerns. Then the builder check (`blocked-by-backlog`) on the elements where \
-         two changes met: launch a fresh subagent, its `model` `sonnet` as above, that \
+         two changes met: launch a fresh subagent, its `model` the build model as above, that \
          reads them as their builder, without this conversation, and lists its questions. \
          In the same message, launch the `architecture-auditor` subagent beside it, with the \
          Agent tool's `model` set to the alias of your own model, in the words \

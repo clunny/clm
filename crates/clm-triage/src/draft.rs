@@ -646,7 +646,8 @@ fn prompt_for(
          demote a priority.\n\n\
          Then the builder check (`blocked-by-backlog`): launch a fresh subagent that reads the \
          change as its builder, without this conversation, and lists its questions, with the \
-         Agent tool's `model` set to `sonnet` (`model: \"sonnet\"`), the model builds run on \
+         Agent tool's `model` set to the one `clm agent-harness` prints as `build-model`, the \
+         model builds run on \
          (`model-per-launch`); never launch a subagent without naming its model. In the same \
          message, launch the `architecture-auditor` subagent beside it, with the Agent tool's \
          `model` set to the alias of your own model, in the words `your own model`, since the \
