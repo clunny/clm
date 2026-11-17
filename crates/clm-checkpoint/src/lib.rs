@@ -185,7 +185,7 @@ pub(crate) fn checkpoint(root: &Path) -> Result<Report, Error> {
     // The violations above say why nothing is judged complete or done on a graph that
     // doesn't load.
     let (complete, held) = if load_violations.is_empty() {
-        let markers = clm_check::scan(tree).req;
+        let markers = clm_coverage::scan(tree).req;
         // Claims play no part in which changes are complete.
         let queue = queue_from_refs(&graph, &markers, &[], 0, DEFAULT_EXPIRY_HOURS);
         let held: BTreeSet<String> = graph
