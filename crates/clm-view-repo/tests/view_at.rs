@@ -96,7 +96,7 @@ fn tree_state(d: &Path) -> (String, String) {
 
 #[test]
 fn scenario_ahead_of_the_checkout() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let before = tree_state(d);
@@ -112,7 +112,7 @@ fn scenario_ahead_of_the_checkout() {
 
 #[test]
 fn scenario_header() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     fetch_head(
@@ -151,7 +151,7 @@ fn fetch_head(path: &Path, ago: std::time::Duration) {
 
 #[test]
 fn scenario_fetched_from_another_worktree() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     git(d, &["switch", "-q", "--detach"]);
@@ -190,7 +190,7 @@ fn node_json<'v>(v: &'v serde_json::Value, id: &str) -> &'v serde_json::Value {
 
 #[test]
 fn scenario_detached_never_fetched() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     git(d, &["switch", "-q", "--detach"]);
@@ -209,7 +209,7 @@ fn scenario_detached_never_fetched() {
 
 #[test]
 fn scenario_no_such_commit() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     let dir = ahead_of_the_checkout();
     let out = clm(dir.path(), &["view", "spec", "--at", "nowhere"]);
     assert_eq!(out.status.code(), Some(1));
@@ -220,7 +220,7 @@ fn scenario_no_such_commit() {
 
 #[test]
 fn at_a_commit_sizes_by_its_own_settings() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     // The working tree's settings mark `a`; the commit holds no `clm.toml`, so its
@@ -252,7 +252,7 @@ fn at_a_commit_sizes_by_its_own_settings() {
 
 #[test]
 fn at_a_commit_below_the_repositorys_top() {
-    // req:view.repo/view-at-rev@6e9e02ab
+    // req:view.repo/view-at-rev@3e653d69
     // The CLM root is `clm/` in a larger repository whose top `.gitattributes` marks `a`'s
     // generated code, and which holds a binary blob citing `a/x`, and a backlog item.
     let dir = TempDir::new().unwrap();
