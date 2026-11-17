@@ -113,7 +113,6 @@ fn clm_with(dir: &Path, args: &[&str], env: &dyn Fn(&str) -> Option<String>) -> 
     let code = match args[0] {
         "rebase" => clm_sync::rebase_command(
             rest,
-            "rebase",
             dir,
             env,
             &mut stdout,
@@ -393,6 +392,50 @@ fn rebase_without_user_settings(dir: &Path) -> (Option<i32>, String) {
         out.status.code(),
         stdout.replace(&*tmp.path().to_string_lossy(), "<TMPDIR>"),
     )
+}
+
+#[test]
+fn a_skipped_proposals_warning_is_written_as_clm_rebase() {
+    // req:sync/warnings-name-the-command@f6774cd0
+    let (dir, work) = node_a("");
+    let ledger = dir.path().join("ledger");
+    git(dir.path(), &["init", "-q", ledger.to_str().unwrap()]);
+    git(&ledger, &["config", "user.name", "l"]);
+    git(&ledger, &["config", "user.email", "l@l"]);
+    let record = serde_json::json!({
+        "id": "p9",
+        "kind": "proposed",
+        "writer": "alice/web",
+        "at": "2026-10-28T10:00:00.000Z",
+        "slug": "Not Kebab",
+        "title": "Bad",
+        "body": "x",
+        "nodes": ["a"],
+    });
+    write(&ledger, "records.jsonl", &format!("{record}\n"));
+    commit(&ledger, "records");
+    let origin = dir.path().join("origin");
+    git(
+        &ledger,
+        &[
+            "push",
+            "-q",
+            origin.to_str().unwrap(),
+            "HEAD:refs/heads/clm/ledger/alice/web",
+        ],
+    );
+
+    let out = clm(&work, &["rebase"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let skipped: Vec<_> = stderr
+        .lines()
+        .filter(|l| l.contains("skipped proposal"))
+        .collect();
+    assert_eq!(skipped.len(), 1, "{out:?}");
+    assert!(
+        skipped[0].starts_with("clm rebase: skipped proposal ") && skipped[0].contains("p9"),
+        "{out:?}"
+    );
 }
 
 #[test]
