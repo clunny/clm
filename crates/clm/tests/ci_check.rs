@@ -1926,9 +1926,10 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// `cargo llvm-cov` prints `bin/llvm-cov-version` for `--version` (nothing when absent), and
 /// otherwise writes its directory to `$CI_LOG.cov-cwd` and, unless `bin/llvm-cov-no-report`
 /// exists, the lcov report `--output-path` names: for each `code` file of the plan `CLM_MUTATE`
-/// names, an `SF:` line naming it absolutely under the directory it runs in, and a `DA:` line for
-/// each of its lines 1 to 40, run unless `bin/lcov-run` lists the line numbers run (one per line;
-/// an empty file for none). Then it exits with the status in `bin/llvm-cov-exit` when it exists,
+/// names, an `SF:` line naming it absolutely under the real path of the directory it runs in, as
+/// the tool does, and a `DA:` line for each of its lines 1 to 40, run unless `bin/lcov-run` lists
+/// the lines run (one per line, `<n>` for every file or `<file>:<n>` for one; an empty file for
+/// none). Then it exits with the status in `bin/llvm-cov-exit` when it exists,
 /// the report written, so the status alone tells a failed run.
 ///
 /// `cargo mutants` prints nothing for `--version`. For `--list --json` it prints, as the tool
@@ -1969,10 +1970,10 @@ if [ "$1" = llvm-cov ]; then
   [ ! -e "$bin/llvm-cov-no-report" ] || exit 0
   : > "$report"
   sed -n 's/^code //p' "$CLM_MUTATE" | while IFS= read -r f; do
-    echo "SF:$PWD/$f" >> "$report"
+    echo "SF:$(pwd -P)/$f" >> "$report"
     for n in $(seq 1 40); do
       run=1
-      if [ -e "$bin/lcov-run" ]; then grep -qx "$n" "$bin/lcov-run" || run=0; fi
+      if [ -e "$bin/lcov-run" ]; then grep -qx -e "$n" -e "$f:$n" "$bin/lcov-run" || run=0; fi
       echo "DA:$n,$run" >> "$report"
     done
     echo end_of_record >> "$report"
@@ -2008,6 +2009,8 @@ case " $* " in
     else
       lines="1 1 $(arg_after --file "$@"):1:1: replace f with ()"
     fi
+    # As the tool does, a diff with no mutant of the files prints nothing, not `[]`.
+    case " $* " in *" --in-diff "*) [ -n "$lines" ] || exit 0 ;; esac
     echo "["
     sep=
     while read -r first last name; do
@@ -2059,10 +2062,13 @@ for i in $(seq 1 "$missed"); do echo "missed $i" >> "$out/mutants.out/missed.txt
 /// An `npx` for `mutate.sh`: records its arguments led by its directory and, for `stryker run
 /// <config>`, writes the report the configuration file names with the mutants of
 /// `bin/stryker-killed`, `bin/stryker-survived` and `bin/stryker-nocov` (reported `NoCoverage`),
+/// each on a line of its own counted from 1 in each run, so two runs report the same mutants,
+/// and one `CompileError` unless `bin/stryker-nocov` exists without `bin/stryker-compile-error`;
 /// and keeps copies of the configuration file
 /// and of the vitest configuration it names in `$CI_LOG.stryker` and `$CI_LOG.vitest`. A run on
 /// the script's fixture reports its first function's mutant killed and its second's survived,
-/// unless `bin/stryker-fixture-kills-all` exists. A run on anything else exits with the status in
+/// unless `bin/stryker-fixture-kills-all` exists, or reports the second's `NoCoverage` when
+/// `bin/stryker-fixture-blind-nocov` exists. A run on anything else exits with the status in
 /// `bin/stryker-exit`, writing no report.
 const NPX_STRYKER: &str = r#"#!/usr/bin/env bash
 echo "$(basename "$PWD")\$ npx $*" >> "$CI_LOG"
@@ -2075,6 +2081,8 @@ if grep -q clm-mutate-fixture "$cfg"; then
     killed=0; survived=1
   elif grep -q 'fixture.ts:1-1' "$cfg" || [ -e "$bin/stryker-fixture-kills-all" ]; then
     killed=1; survived=0
+  elif [ -e "$bin/stryker-fixture-blind-nocov" ]; then
+    killed=0; survived=0; nocov=1
   else
     killed=0; survived=1
   fi
@@ -2086,12 +2094,21 @@ else
   survived=$(cat "$bin/stryker-survived" 2>/dev/null || echo 0)
   nocov=$(cat "$bin/stryker-nocov" 2>/dev/null || echo 0)
 fi
+n=0
+mutant() {
+  n=$((n + 1))
+  printf '{"status":"%s","mutatorName":"M","replacement":"r","location":{"start":{"line":%s,"column":1},"end":{"line":%s,"column":2}}}' "$1" "$n" "$n"
+}
 {
   printf '{"files":{"a":{"mutants":['
-  for i in $(seq 1 "$killed"); do printf '{"status":"Killed"},'; done
-  for i in $(seq 1 "$survived"); do printf '{"status":"Survived"},'; done
-  for i in $(seq 1 "${nocov:-0}"); do printf '{"status":"NoCoverage"},'; done
-  printf '{"status":"CompileError"}]}}}'
+  sep=
+  for i in $(seq 1 "$killed"); do printf '%s' "$sep"; mutant Killed; sep=,; done
+  for i in $(seq 1 "$survived"); do printf '%s' "$sep"; mutant Survived; sep=,; done
+  for i in $(seq 1 "${nocov:-0}"); do printf '%s' "$sep"; mutant NoCoverage; sep=,; done
+  if [ ! -e "$bin/stryker-nocov" ] || [ -e "$bin/stryker-compile-error" ]; then
+    printf '%s' "$sep"; mutant CompileError
+  fi
+  printf ']}}}'
 } >"$report"
 "#;
 
@@ -2875,6 +2892,12 @@ fn a_mutant_the_tests_never_run_is_not_tried() {
         assert!(log[cov].contains(part), "no {part} in {}", log[cov]);
     }
     assert!(!log[cov].contains("--workspace"), "{}", log[cov]);
+    // After the fixture has been judged.
+    let fixture = log
+        .iter()
+        .rposition(|l| l.starts_with("cargo mutants ") && l.contains("fixture_"))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    assert!(fixture < cov, "{log:?}");
     let tries = block_tries(&log);
     assert_eq!(tries.len(), 1, "{log:?}");
     assert!(
@@ -2976,6 +2999,79 @@ fn the_run_that_finds_the_lines_failing_leaves_no_verdict() {
 }
 
 #[test]
+fn a_diff_mutant_the_tests_never_run_is_not_tried() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d1 with ()\n5 5 crates/clm-check/src/lib.rs:5:5: replace d5 with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace f3 with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d1 with ()\n5 5 crates/clm-check/src/lib.rs:5:5: replace d5 with ()\n",
+    );
+    tree.report("lcov-run", "3\n5\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 2"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 2, "{log:?}");
+    assert!(
+        tries[0].contains("--in-diff")
+            && tries[0].contains("replace d5")
+            && !tries[0].contains("replace d1"),
+        "{}",
+        tries[0]
+    );
+    assert!(tries[1].contains("replace f3"), "{}", tries[1]);
+    // With no diff mutant the tests run, none of the diff's is tried, and the further ones are.
+    tree.report("lcov-run", "3\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(
+        !tries[0].contains("--in-diff") && tries[0].contains("replace f3"),
+        "{}",
+        tries[0]
+    );
+}
+
+#[test]
+fn lines_run_only_in_a_file_with_no_mutant_count_as_none_run() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ncode crates/clm-check/src/other.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
+    );
+    tree.report(
+        "list",
+        "3 3 crates/clm-check/src/lib.rs:3:5: replace on_three with ()\n",
+    );
+    tree.report("lcov-run", "crates/clm-check/src/other.rs:3\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn the_lines_are_read_from_a_tree_reached_through_a_link() {
+    // req:ci/mutate-script@28ff1a91
+    // The tool writes real paths; the temporary directory the tree is made in is a link.
+    let tree = lines_tree("3\n");
+    let real = tree.dir.path().join("real-tmp");
+    fs::create_dir_all(&real).unwrap();
+    let link = tree.dir.path().join("linked-tmp");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[("TMPDIR", link.to_str().unwrap())]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let cov = fs::read_to_string(tree.dir.path().join("log.cov-cwd")).unwrap();
+    assert!(cov.starts_with(link.to_str().unwrap()), "{cov}");
+}
+
+#[test]
 fn tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_more() {
     // req:ci/mutate-script@28ff1a91
     let tree = mutate_tree(RUST_BLOCK.replace("limit 20", "limit 2").as_str());
@@ -3014,6 +3110,87 @@ fn stryker_finding_no_test_running_any_mutant_counts_them_all_survived() {
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(result, ["w/y survived 2"]);
+    // Not when it reports any other mutant, as one that didn't build.
+    tree.report("stryker-compile-error", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y not-judged"]);
+}
+
+#[test]
+fn a_mutant_both_stryker_runs_report_counts_once() {
+    // req:ci/mutate-script@28ff1a91
+    // The diff's lines are among the first `limit`, so the further run reports its mutants again.
+    let tree = mutate_tree("");
+    let diff = tree.dir.path().join("the.diff");
+    fs::write(
+        &diff,
+        "--- a/web/src/app.ts\n+++ b/web/src/app.ts\n@@ -3,0 +4,2 @@\n+x\n+y\n",
+    )
+    .unwrap();
+    fs::write(
+        tree.dir.path().join("plan"),
+        format!("{WEB_BLOCK}diff {}\n", diff.display()),
+    )
+    .unwrap();
+    tree.report("stryker-nocov", "2");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    let runs = log
+        .iter()
+        .filter(|l| l.starts_with("web$ npx stryker run "))
+        .count();
+    // The fixture's two, the diff's and the further one.
+    assert_eq!(runs, 4, "{log:?}");
+    assert_eq!(result, ["w/y survived 2"]);
+    tree.report("stryker-survived", "1");
+    fs::remove_file(tree.dir.path().join("bin/stryker-nocov")).unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["w/y survived 1"]);
+}
+
+#[test]
+fn stryker_whose_fixture_shows_no_test_running_the_blind_function_judges_nothing() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(WEB_BLOCK);
+    tree.report("stryker-killed", "1");
+    tree.report("stryker-fixture-blind-nocov", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("StrykerJS") && stderr.contains("fixture"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+}
+
+#[test]
+fn a_diff_with_no_mutant_lists_none_and_the_further_ones_are_tried() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK);
+    // The real tool prints nothing at all for such a diff.
+    tree.report("diff-list", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(!tries[0].contains("--in-diff"), "{}", tries[0]);
+}
+
+#[test]
+fn a_block_whose_files_have_no_mutant_is_not_judged_without_finding_lines() {
+    // req:ci/mutate-script@28ff1a91
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report("list", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x not-judged"]);
+    assert!(
+        !log.iter().any(|l| l.starts_with("cargo llvm-cov nextest")),
+        "{log:?}"
+    );
 }
 
 /// Every file under `dir`, but `target/`, which the script's coverage step writes, with its

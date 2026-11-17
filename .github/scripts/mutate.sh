@@ -104,12 +104,17 @@ covered_lines() {
 
 # Writes to $1 a `<file>	<first line>	<last line>	<name>` line for each mutant
 # `cargo mutants --list --json` lists for the block's files, in its order, with the further
-# arguments given.
+# arguments given. With `--in-diff`, the tool prints nothing at all, not `[]`, when the diff
+# holds no mutant of the files: that lists none.
 list_mutants() {
   local out=$1
   shift
   (cd "$tree" && cargo mutants --list --json "${mutants_args[@]}" "$@") >"$out.json" ||
     die "cargo mutants failed to list mutants for requirement $id"
+  if ! grep -q '[^[:space:]]' "$out.json"; then
+    : >"$out"
+    return
+  fi
   node -e '
     for (const m of JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")))
       console.log([m.file, m.span.start.line, m.span.end.line, m.name].join("\t"));
@@ -320,11 +325,15 @@ judge_rust() {
   filterset=$filters
   for p in $packages; do mutants_args+=(--test-package "$p"); done
   for f in ${files[@]+"${files[@]}"}; do mutants_args+=(--file "$f"); done
-  covered_lines
   # The diff's mutants, and the further ones: the files' others, in the tool's order.
   list_mutants "$work/all"
+  if ! [ -s "$work/all" ]; then
+    verdict=not-judged
+    return
+  fi
   : >"$work/diff"
   if [ -n "$diff" ]; then list_mutants "$work/diff" --in-diff "$diff"; fi
+  covered_lines
   awk -F'\t' 'FILENAME == ARGV[1] { d[$4] = 1; next } !($4 in d)' "$work/diff" "$work/all" >"$work/further"
   # Tests that run no line of any file with a mutant can notice no change to it: every mutant
   # they would be given survives, untried.
@@ -414,8 +423,9 @@ EOF
   untested=0
   run_stryker "$dir" f2 "$fix/fixture.ts:2-2" ||
     die "StrykerJS failed on its fixture in $dir"
-  missed=$((missed + untested))
-  { [ "$missed" -gt 0 ] && [ "$caught" -eq 0 ]; } ||
+  # Survived, not `NoCoverage`: the blind test runs the function, and a StrykerJS that saw no
+  # test run it would count a block's mutants wrongly.
+  { [ "$missed" -gt 0 ] && [ "$caught" -eq 0 ] && [ "$untested" -eq 0 ]; } ||
     die "StrykerJS judged its fixture wrongly in $dir: $caught caught and $missed missed for the test that doesn't"
   rm -rf "${root:?}/$dir/$fix"
   ts_tests=("${saved[@]+"${saved[@]}"}")
@@ -439,7 +449,9 @@ diff_ranges() {
 
 # Runs StrykerJS in the npm directory $1 on the `mutate` ranges after $2, the name of its report,
 # with the vitest tests `ts_tests` alone; adds its killed and survived mutants to `caught` and
-# `missed`, and those it reports `NoCoverage`, which no test runs, to `untested`. StrykerJS takes a runner's options from no command line, so it is given them in a
+# `missed`, and those it reports `NoCoverage`, which no test runs, to `untested`, and writes
+# its mutants to `mutants.tsv` beside its report. StrykerJS takes a runner's options from no
+# command line, so it is given them in a
 # configuration file under the directory's `node_modules/`: the test runner, the vitest
 # configuration that names those tests, the reporter and the ranges. It sets no
 # `thresholds.break`, so StrykerJS's exit status never depends on a score. Returns 1 when StrykerJS
@@ -448,7 +460,7 @@ diff_ranges() {
 # which the TypeScript 7 of `web/` and `plugin-panel/` lacks, to rewrite the paths in it for its
 # sandbox. Nothing here needs that rewrite: the run mutates and runs vitest, with no type checker.
 run_stryker() {
-  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s u
+  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s u all
   shift 2
   rm -rf "${work:?}/$report"
   mkdir -p "$work/$report"
@@ -487,16 +499,36 @@ EOF
   rm -f "$vcfg" "$scfg"
   json=$work/$report/mutation.json
   if [ "$status" -ne 0 ] || ! [ -f "$json" ]; then return 1; fi
-  k=$({ grep -Eo '"status": ?"(Killed|Timeout)"' "$json" || true; } | wc -l | tr -d ' ')
-  s=$({ grep -Eo '"status": ?"Survived"' "$json" || true; } | wc -l | tr -d ' ')
-  u=$({ grep -Eo '"status": ?"NoCoverage"' "$json" || true; } | wc -l | tr -d ' ')
+  # A `<status>	<file>:<span>:<mutator>:<replacement>` line per mutant, which names it the same
+  # in every run, so a mutant two runs report counts once.
+  node -e '
+    const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    for (const [file, f] of Object.entries(r.files || {}))
+      for (const m of f.mutants || []) {
+        const l = m.location || {}, s = l.start || {}, e = l.end || {};
+        console.log(m.status + "\t" + [file, s.line, s.column, e.line, e.column, m.mutatorName,
+          m.replacement].join(":").replace(/[\t\n]/g, " "));
+      }
+  ' "$json" >"$work/$report/mutants.tsv" || return 1
+  count_stryker "$work/$report/mutants.tsv"
   caught=$((caught + k))
   missed=$((missed + s))
   untested=$((untested + u))
 }
 
+# Sets `k`, `s`, `u` and `all` to the mutants of the reports' lines $@ caught (killed or timed
+# out), survived, reported `NoCoverage`, and reported at all, each mutant once.
+count_stryker() {
+  local lines
+  lines=$(cat "$@" | sort -t "$tab" -k2 -u)
+  k=$(printf '%s\n' "$lines" | grep -Ec '^(Killed|Timeout)'"$tab" || true)
+  s=$(printf '%s\n' "$lines" | grep -c '^Survived'"$tab" || true)
+  u=$(printf '%s\n' "$lines" | grep -c '^NoCoverage'"$tab" || true)
+  all=$(printf '%s\n' "$lines" | grep -c "$tab" || true)
+}
+
 judge_ts() {
-  local f dir= files=() ranges=() capped=() t file
+  local f dir= files=() ranges=() capped=() t file k s u all
   ts_tests=()
   for f in ${code[@]+"${code[@]}"}; do
     case $f in
@@ -519,6 +551,7 @@ judge_ts() {
   caught=0
   missed=0
   untested=0
+  rm -rf "${work:?}/s1" "${work:?}/s2"
   if [ -n "$diff" ]; then
     while IFS= read -r r; do
       [ -z "$r" ] || ranges+=("$r")
@@ -533,9 +566,14 @@ judge_ts() {
     for f in ${files[@]+"${files[@]}"}; do capped+=("$f:1-$limit"); done
     run_stryker "$dir" s2 "${capped[@]}" || die "StrykerJS failed for requirement $id"
   fi
-  # A mutant no test runs is neither caught nor survived, unless no test runs any: then the
-  # tests can notice no change to the code, and every one survives, as for an empty test.
-  if [ "$caught" -eq 0 ] && [ "$missed" -eq 0 ]; then missed=$untested; fi
+  # Each mutant once, though both runs report those on the diff's lines among the first `limit`.
+  # A mutant no test runs is neither caught nor survived, unless every mutant reported is one no
+  # test runs: then the tests can notice no change to the code, and every one survives, as for
+  # an empty test.
+  count_stryker "$work"/s[12]/mutants.tsv
+  caught=$k
+  missed=$s
+  if [ "$caught" -eq 0 ] && [ "$missed" -eq 0 ] && [ "$u" -gt 0 ] && [ "$u" -eq "$all" ]; then missed=$u; fi
   if [ "$caught" -gt 0 ]; then
     verdict=killed
   elif [ "$missed" -gt 0 ]; then
