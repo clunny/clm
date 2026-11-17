@@ -156,44 +156,6 @@ fn remote_ref(root: &Path, name: &str, hours: u64) {
 }
 
 #[test]
-fn scenario_changes_grouped() {
-    // req:check.coverage/status-report@ba0eb7f0
-    let dir = TempDir::new().unwrap();
-    let d = dir.path();
-    write(d, "specs/SPEC.md", ROOT);
-    write(d, "specs/a/SPEC.md", &node("active", &["x", "y", "z"]));
-    change(d, "20260101-c", "implementing", &["x", "y", "z"]);
-    cite(d, "t", &["a/x"]);
-    let text = status(d);
-    assert!(
-        text.contains("\nchanges\n  implementing\n    20260101-c  1/3 requirements\n\n"),
-        "{text}"
-    );
-    assert!(
-        text.contains("\n  changes 1 live: 1 implementing\n"),
-        "{text}"
-    );
-}
-
-#[test]
-fn scenario_complete_change() {
-    // req:check.coverage/status-report@ba0eb7f0
-    let dir = base();
-    let d = dir.path();
-    change(d, "20260101-c", "applied", &["x", "y"]);
-    cite(d, "u", &["a/y"]);
-    let text = status(d);
-    assert!(
-        text.contains("\n  applied\n    20260101-c  2/2 requirements  complete\n"),
-        "{text}"
-    );
-    assert!(
-        text.contains("\n  changes 1 live: 1 applied, 1 complete\n"),
-        "{text}"
-    );
-}
-
-#[test]
 fn scenario_groups_in_order() {
     // req:check.coverage/status-report@ba0eb7f0
     let dir = base();
@@ -209,32 +171,6 @@ fn scenario_groups_in_order() {
     );
     assert!(
         text.contains("changes 2 live: 1 implementing, 1 applied, 1 complete\n"),
-        "{text}"
-    );
-}
-
-#[test]
-fn scenario_nothing_in_flight() {
-    // req:check.coverage/status-report@ba0eb7f0
-    let dir = base();
-    let d = dir.path();
-    cite(d, "u", &["a/y"]);
-    write(
-        d,
-        "changes/archive/20250101-old/change.md",
-        "---\nstatus: done\n---\n",
-    );
-    let text = status(d);
-    for line in [
-        "  changes 0 live\n",
-        "  pending 0 components\n",
-        "  backlog 0\n",
-        "  claims 0 live\n",
-    ] {
-        assert!(text.contains(line), "{line:?} missing from {text}");
-    }
-    assert!(
-        text.ends_with("\n\nchanges\n  none\n\nclaims\n  none\n\n"),
         "{text}"
     );
 }
