@@ -526,7 +526,7 @@ fn script_block_comment_across_lines() {
     let text = "\
 describe('g', () => {
   it('a', () => { /* (
-  ' ) */
+  ) ' */
     f(1);
   });
   /* it's */ const r = '/*';
