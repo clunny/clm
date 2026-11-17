@@ -25,3 +25,7 @@ A land of an `impl/*` branch failed in its `tests` step on `ci_check::a_passing_
 ## Edge cases and workarounds
 
 - A step back of the clock prints `0s` for the phase it happened in and for the total when the total would be negative; the times of the other phases are as before.
+
+## Open questions
+
+- The scenario `the clock steps back` fakes the step with an exported bash function (`BASH_FUNC_cargo%=...`). Apple's patched bash 3.2 imports exported functions under another name, so that one test may not step the clock on a Mac with the system bash. Lands and verifies run on Linux, so this is left as it is.
