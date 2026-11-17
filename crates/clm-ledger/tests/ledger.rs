@@ -19,12 +19,7 @@ fn clm(root: &Path, home: &Path, args: &[&str]) -> (Option<i32>, String, String)
     let mut line: Vec<&str> = args.to_vec();
     line.extend(["--root", root.to_str().unwrap()]);
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let vars = [
-        ("HOME", Some(home.as_os_str())),
-        ("XDG_CONFIG_HOME", None),
-        ("CLM_WRITER", None),
-    ];
-    let code = with_vars(&vars, || {
+    let code = with_vars(&isolated(home), || {
         clm_ledger::ledger_command(line, root, &env(home, &[]), &mut out, &mut err)
     });
     (
@@ -32,6 +27,16 @@ fn clm(root: &Path, home: &Path, args: &[&str]) -> (Option<i32>, String, String)
         String::from_utf8(out).unwrap(),
         String::from_utf8(err).unwrap(),
     )
+}
+
+/// The variables a call runs under: `HOME` at `home`, and no `XDG_CONFIG_HOME` or
+/// `CLM_WRITER`, so it reads no developer's config.
+fn isolated(home: &Path) -> [(&'static str, Option<&std::ffi::OsStr>); 3] {
+    [
+        ("HOME", Some(home.as_os_str())),
+        ("XDG_CONFIG_HOME", None),
+        ("CLM_WRITER", None),
+    ]
 }
 
 /// Runs `run` with each of `vars` set, or removed for `None`, on this process. Tests run one
@@ -622,14 +627,14 @@ fn verify_findings_offered_to_the_check_on_main_only() {
     // req:ledger/verify@0a969f83
     let dir = tempfile::tempdir().unwrap();
     let merges = history(dir.path(), &["Merge b0", "Merge b1"]);
+    let vars = isolated(dir.path());
+    // On `main` with no ledger branch, it offers none.
+    let found = with_vars(&vars, || clm_ledger::on_main(dir.path()));
+    assert!(found.is_empty(), "{found:?}");
     record_land(dir.path(), &merges[0]);
-    let vars = [
-        ("HOME", Some(dir.path().as_os_str())),
-        ("XDG_CONFIG_HOME", None),
-        ("CLM_WRITER", None),
-    ];
     let found = with_vars(&vars, || clm_ledger::on_main(dir.path()));
     assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].path, Path::new("main"), "{found:?}");
     assert_eq!(found[0].rule, "ledger/unrecorded-land", "{found:?}");
     assert!(found[0].message.contains(&merges[1]), "{found:?}");
     // With another branch checked out, it offers none.
