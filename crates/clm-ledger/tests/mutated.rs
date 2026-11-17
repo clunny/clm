@@ -20,13 +20,13 @@ fn plain(n: u32, commit: char, at: &str) -> String {
 }
 
 fn body(commit: char, unproven: &[&str]) -> Body {
-    Body::Mutated {
-        commit: id(commit),
-        since: None,
-        killed: vec![],
-        unproven: unproven.iter().map(|s| s.to_string()).collect(),
-        not_judged: vec![],
-    }
+    Body::mutated(
+        id(commit),
+        None,
+        vec![],
+        unproven.iter().map(|s| s.to_string()).collect(),
+        vec![],
+    )
 }
 
 #[test]
@@ -198,11 +198,17 @@ fn the_same_record_as_a_literal() {
         vec!["c/z".into()],
     );
     assert_eq!(built, literal);
-    let done = clm_ledger::append(&a, built, &env(dir.path(), &[])).unwrap();
+    let home = dir.path();
+    let from_built = clm_ledger::append(&a, built, &env(home, &[])).unwrap();
+    let from_literal = clm_ledger::append(&a, literal.clone(), &env(home, &[])).unwrap();
     let fold = clm_ledger::fold(&a).unwrap();
     assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
     let held = &fold.mutations[&id('c')];
-    assert_eq!(held.len(), 1);
-    assert_eq!(held[0].id, done.record.id);
-    assert_eq!(held[0].body, literal);
+    assert_eq!(held.len(), 2);
+    let body_of = |rid: &str| &held.iter().find(|r| r.id == rid).unwrap().body;
+    assert_eq!(body_of(&from_built.record.id), &literal);
+    assert_eq!(
+        body_of(&from_built.record.id),
+        body_of(&from_literal.record.id)
+    );
 }
