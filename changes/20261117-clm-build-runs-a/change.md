@@ -32,4 +32,4 @@ No change or code fix since 2026-11-10 fixes it: `20261117-clm-verify-can-t` gav
 
 ## Open questions
 
-None.
+- The root's Design has crate code read the process's executable path through the call's arguments. The fallback runs the fixed path `/proc/self/exe`, which `clm-loop` names itself rather than taking from `crates/clm`. The change leaves it so, as `clm-land` already does for `land/land-binary-copy`: it is a constant Linux path, not a reading of the process's state, and passing it in would edit the root's code for nothing a test could tell apart.
