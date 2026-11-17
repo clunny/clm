@@ -439,6 +439,66 @@ fn what_is_left_goes_first() {
     assert_eq!(killed, ids(&["a/thing", "a/other"]));
 }
 
+/// Appends a `mutated` record for `commit` with `since` and `left`, a little after the last,
+/// so records read in the order they were appended.
+fn record(f: &Fixture, commit: &str, since: Option<String>, left: &[&str]) {
+    std::thread::sleep(Duration::from_millis(5));
+    let body =
+        Body::mutated(commit.to_string(), since, vec![], vec![], vec![]).with_left(ids(left));
+    clm_ledger::append(&f.work(), body, &f.env()).unwrap();
+}
+
+#[test]
+fn a_carried_diff_runs_from_the_oldest_record_that_left_it() {
+    // req:verify/mutation-pass@1dea303f
+    let p = pass(true, false);
+    let base = p.f.back(0);
+    let (path, test) = test_of(&p.f, "thing");
+    let x = p.f.land(
+        &[
+            (&path, &test),
+            ("crates/a/src/one.rs", "the first change\n"),
+        ],
+        "X",
+    );
+    record(&p.f, &x, Some(base), &["a/thing"]);
+    let y =
+        p.f.land(&[("crates/a/src/two.rs", "the second change\n")], "Y");
+    // Of `Y`'s two records the newer, by `at`, is the one that counts.
+    record(&p.f, &y, Some(x.clone()), &[]);
+    record(&p.f, &y, Some(x), &["a/thing"]);
+    let c = p.f.land(&[("crates/b/src/lib.rs", "b\n")], "C");
+    // The newest record is on `C` itself.
+    record(&p.f, &c, Some(y), &["a/thing"]);
+    p.f.write("mutate-result", "a/thing killed\n");
+    p.f.due();
+    let plan = p.f.lines("plan");
+    assert_eq!(
+        plan.first().map(String::as_str),
+        Some("requirement a/thing")
+    );
+    let diff = std::fs::read_to_string(p.f.path("diff-1")).unwrap();
+    assert!(diff.contains("the first change"), "{diff}");
+    assert!(diff.contains("the second change"), "{diff}");
+    assert_eq!(lists(&p.f)[0], ids(&["a/thing"]));
+}
+
+#[test]
+fn a_record_on_the_verified_commit_carries_its_left() {
+    // req:verify/mutation-pass@1dea303f
+    let p = pass(true, false);
+    let base = p.f.back(0);
+    let (path, test) = test_of(&p.f, "thing");
+    let x = p.f.land(&[(&path, &test)], "X");
+    record(&p.f, &x, Some(base), &[]);
+    let c = p.f.land(&[("crates/b/src/lib.rs", "b\n")], "C");
+    record(&p.f, &c, Some(x), &["a/thing"]);
+    p.f.write("mutate-result", "a/thing killed\n");
+    p.f.due();
+    assert!(p.f.path("mutate-ran").exists(), "nothing was carried");
+    assert_eq!(lists(&p.f)[0], ids(&["a/thing"]));
+}
+
 #[test]
 fn a_left_requirement_no_longer_cited_is_dropped() {
     // req:verify/mutation-pass@1dea303f
@@ -554,8 +614,8 @@ fn the_time_limit() {
         &format!(
             "#!/bin/sh\nDIR='{}'\n\
              echo 'a/thing killed' >> \"$CLM_MUTATE_RESULT\"\n\
-             sleep 300 &\necho $! > \"$DIR/child\"\necho $$ > \"$DIR/leader\"\n\
-             trap '' TERM\nsleep 300\n",
+             sleep 20 &\necho $! > \"$DIR/child\"\necho $$ > \"$DIR/leader\"\n\
+             trap '' TERM\nsleep 20\n",
             dir.display().to_string().trim_end_matches('/')
         ),
     );
@@ -568,8 +628,10 @@ fn the_time_limit() {
         Duration::from_secs(1),
         &stop,
     ));
+    // The fake ends by itself after 20 seconds, so a pass that fails to end it fails here
+    // rather than hanging.
     assert!(
-        started.elapsed() < Duration::from_secs(30),
+        started.elapsed() < Duration::from_secs(15),
         "{:?}",
         started.elapsed()
     );
@@ -601,12 +663,15 @@ fn a_stop_request() {
         &format!(
             "#!/bin/sh\nDIR='{}'\necho $$ > \"$DIR/leader\"\n\
              echo 'a/thing killed' >> \"$CLM_MUTATE_RESULT\"\n: > \"$DIR/written\"\n\
-             while [ ! -e \"$DIR/never\" ]; do sleep 0.05; done\n",
+             i=0\nwhile [ ! -e \"$DIR/never\" ] && [ $i -lt 400 ]; do sleep 0.05; i=$((i + 1)); done\n",
             dir.display().to_string().trim_end_matches('/')
         ),
     );
     let stop = AtomicBool::new(false);
     let memory = p.f.path("meminfo");
+    // The fake gives up waiting after about 20 seconds, so a pass that ignores the stop
+    // request fails here rather than hanging.
+    let started = std::time::Instant::now();
     let out = std::thread::scope(|s| {
         let verifying = s.spawn(|| {
             p.f.due_with(&call(
@@ -620,6 +685,11 @@ fn a_stop_request() {
         stop.store(true, Ordering::SeqCst);
         verifying.join().unwrap()
     });
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "{:?}",
+        started.elapsed()
+    );
     assert!(out.line.starts_with("verify passed "), "{out:?}");
     assert!(!running(&p.f.lines("leader")[0]), "the command still runs");
     let [killed, _, _, left] = lists(&p.f);
