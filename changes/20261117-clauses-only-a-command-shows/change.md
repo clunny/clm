@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [twenty-view-tests-show-what-only-the-commands-do, six-check-coverage-tests-assert-what-other-crates-do, view-repo-s-commit-line-is-rendered-and-proven-in-view]
 ---
 
