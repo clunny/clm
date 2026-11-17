@@ -76,6 +76,20 @@ fn cite(root: &Path, file: &str, ids: &[&str]) {
     write(root, &format!("tests/{file}.rs"), &text);
 }
 
+#[test]
+fn invalid_graph_prints_violations() {
+    // req:view.repo/arguments-and-exit@b12cc5de
+    let dir = base();
+    // Valid, `clm status` exits 0.
+    status(dir.path());
+    write(dir.path(), "specs/b/SPEC.md", "---\ntitle: B\n---\n");
+    let out = clm_status(dir.path());
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(text.contains("model/valid-frontmatter"), "{text}");
+    assert!(!text.contains("CLM status"), "{text}");
+}
+
 fn git_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let out = Command::new("git")
         .args([

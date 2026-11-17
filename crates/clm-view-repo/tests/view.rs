@@ -287,3 +287,137 @@ fn scenario_checkout_current() {
     let v = json(&clm(bare.path(), &["view", "spec", "--format", "json"]));
     assert_eq!(v.get("checkout"), None, "{v:#}");
 }
+
+#[test]
+fn scenario_width() {
+    // req:view.repo/arguments-and-exit@b12cc5de
+    let dir = TempDir::new().unwrap();
+    let long = "n".repeat(60);
+    write(dir.path(), "specs/SPEC.md", ROOT);
+    write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
+    write(
+        dir.path(),
+        &format!("specs/{long}/SPEC.md"),
+        &node("a", &["y"]),
+    );
+    let out = clm(dir.path(), &["view", "spec", "--width", "40"]);
+    let text = stdout(&out);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    for line in text.lines() {
+        assert!(line.chars().count() <= 40, "{line:?}");
+    }
+    assert!(text.contains('…'), "{text}");
+    // The default is 100 columns: a longer line is cut there.
+    let longer = "m".repeat(120);
+    write(
+        dir.path(),
+        &format!("specs/{longer}/SPEC.md"),
+        &node("a", &["y"]),
+    );
+    let out = clm(dir.path(), &["view", "spec"]);
+    let text = stdout(&out);
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    let widest = text.lines().map(|l| l.chars().count()).max().unwrap();
+    assert_eq!(widest, 100, "{text}");
+    assert!(text.contains(&long) && !text.contains(&longer), "{text}");
+    // The 120-character ID's line is the one cut, at 100 columns.
+    let cut = text
+        .lines()
+        .find(|l| l.contains(&longer[..10]))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert_eq!(cut.chars().count(), 100, "{cut:?}");
+    assert!(cut.ends_with('…'), "{cut:?}");
+}
+
+#[test]
+fn scenario_unknown_view() {
+    // req:view.repo/arguments-and-exit@b12cc5de
+    let dir = two_nodes();
+    let stderr = |out: &Output| String::from_utf8(out.stderr.clone()).unwrap();
+    let out = clm(dir.path(), &["view", "everything"]);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    let err = stderr(&out);
+    for name in ["spec", "flight", "blockers", "queue"] {
+        assert!(err.contains(name), "{err}");
+    }
+    for format in ["pdf", "png"] {
+        let out = clm(dir.path(), &["view", "spec", "--format", format]);
+        assert_eq!(out.status.code(), Some(2), "{format}");
+        assert!(stderr(&out).contains(format), "{}", stderr(&out));
+    }
+    let out = clm(dir.path(), &["view", "queue", "--format", "svg"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("svg"), "{}", stderr(&out));
+    let out = clm(dir.path(), &["view", "spec", "--width", "0"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(stderr(&out).contains("--width"), "{}", stderr(&out));
+    assert!(out.stdout.is_empty(), "{out:?}");
+}
+
+#[test]
+fn violations_exit_1() {
+    // req:view.repo/arguments-and-exit@b12cc5de
+    let dir = two_nodes();
+    write(dir.path(), "specs/c/SPEC.md", "---\ntitle: C\n---\n");
+    let out = clm(dir.path(), &["view", "spec"]);
+    let text = stdout(&out);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(text.contains("model/valid-frontmatter"), "{text}");
+    // The violations stand in place of the chart: they are all it prints.
+    let (_, violations) = clm_model::load(dir.path());
+    let expected: String = violations.iter().map(|v| format!("{v}\n")).collect();
+    assert_eq!(text, expected);
+}
+
+#[test]
+fn scenario_claimed_node_and_command_matches_library() {
+    // req:view.repo/arguments-and-exit@b12cc5de
+    let dir = two_nodes();
+    init(dir.path());
+    claim_ref(dir.path(), "a", 1);
+    let out = clm(dir.path(), &["view", "flight", "--format", "json"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let v = json(&out);
+    let a = v["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["node"] == "a")
+        .unwrap();
+    assert_eq!(a["state"], "claimed");
+    assert_eq!(a["pending"][0]["state"], "unbuilt");
+
+    let (graph, violations) = clm_model::load(dir.path());
+    assert!(violations.is_empty());
+    let markers = clm_coverage::scan(dir.path()).req;
+    let refs = clm_orchestrator::claim_refs(dir.path());
+    assert_eq!(refs.len(), 1);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let model = clm_view::flight_view(
+        &graph,
+        &markers,
+        &refs,
+        now,
+        clm_orchestrator::DEFAULT_EXPIRY_HOURS,
+    );
+    // The same once the command's `checkout` is removed.
+    let mut without = v.clone();
+    without.as_object_mut().unwrap().remove("checkout");
+    assert_eq!(without, serde_json::to_value(&model).unwrap());
+    let checkout = clm_view::Head::Checkout(clm_view::Checkout {
+        commit: head7(dir.path()),
+        behind: None,
+    });
+    assert_eq!(
+        stdout(&out),
+        clm_view::render(
+            &clm_view::View::Flight(model),
+            clm_view::Format::Json,
+            100,
+            Some(&checkout)
+        )
+    );
+}
