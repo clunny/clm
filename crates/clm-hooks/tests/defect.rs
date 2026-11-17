@@ -162,7 +162,7 @@ const REPORT: &str = "`clm gate` passed a task whose basis had changed.\n";
 
 #[test]
 fn backlog_item_body_and_origin() {
-    // req:plugin.hooks/defect-backlog@064ef91e
+    // req:plugin.hooks/defect-backlog@06439020
     let repo = repo("defects = \"backlog\"\n");
     // A report without a final newline ends in exactly one; a title of only punctuation
     // still gets a file name.
@@ -187,8 +187,54 @@ fn backlog_item_body_and_origin() {
 }
 
 #[test]
+fn backlog_on_a_spec_branch() {
+    // req:plugin.hooks/defect-backlog@06439020
+    let repo = repo("defects = \"backlog\"\n");
+    git(repo.path(), &["checkout", "-q", "-b", "spec/20261022-x"]);
+    let title = "Gate passes a stale task";
+    let out = defect(
+        repo.path(),
+        &["--title", title, "--component", "gate"],
+        REPORT,
+        &[],
+    );
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    let item = fs::read_to_string(repo.path().join("backlog/gate-passes-a-stale-task.md")).unwrap();
+    assert_eq!(
+        item,
+        format!(
+            "---\ntitle: \"{title}\"\nkind: bug\ncomponents: [gate]\norigin: 20261022-x\n---\n\n{REPORT}"
+        )
+    );
+}
+
+#[test]
+fn backlog_node_a_live_change_creates() {
+    // req:plugin.hooks/defect-backlog@06439020
+    let repo = repo("defects = \"backlog\"\n");
+    write(
+        repo.path(),
+        "changes/20261022-x/deltas/fresh.md",
+        "---\ncomponent: fresh\ncreate: true\n---\n## Frontmatter\n```yaml\ntitle: Fresh\nstatus: specd\nowners: []\n```\n\n## Contract\nc\n",
+    );
+    let out = defect(
+        repo.path(),
+        &["--title", "Fresh misfires", "--component", "fresh"],
+        REPORT,
+        &[],
+    );
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        "backlog/fresh-misfires.md"
+    );
+    let item = fs::read_to_string(repo.path().join("backlog/fresh-misfires.md")).unwrap();
+    assert!(item.contains("\ncomponents: [fresh]\n"), "{item}");
+}
+
+#[test]
 fn backlog_on_an_implementation_branch() {
-    // req:plugin.hooks/defect-backlog@064ef91e
+    // req:plugin.hooks/defect-backlog@06439020
     let repo = repo("defects = \"backlog\"\n");
     for (branch, title) in [
         ("impl/gate", "On a node"),
@@ -206,7 +252,7 @@ fn backlog_on_an_implementation_branch() {
 
 #[test]
 fn backlog_long_title() {
-    // req:plugin.hooks/defect-backlog@064ef91e
+    // req:plugin.hooks/defect-backlog@06439020
     let repo = repo("defects = \"backlog\"\n");
     let title = "word ".repeat(80);
     let out = defect(repo.path(), &["--title", &title], REPORT, &[]);
@@ -227,7 +273,7 @@ fn backlog_long_title() {
 
 #[test]
 fn backlog_unknown_node() {
-    // req:plugin.hooks/defect-backlog@064ef91e
+    // req:plugin.hooks/defect-backlog@06439020
     let repo = repo("defects = \"backlog\"\n");
     let out = defect(
         repo.path(),
@@ -245,7 +291,7 @@ fn backlog_unknown_node() {
 
 #[test]
 fn backlog_outside_a_clm_repository() {
-    // req:plugin.hooks/defect-backlog@064ef91e
+    // req:plugin.hooks/defect-backlog@06439020
     let dir = TempDir::new().unwrap();
     git(dir.path(), &["init", "-q"]);
     let out = defect(
@@ -260,7 +306,7 @@ fn backlog_outside_a_clm_repository() {
 
 #[test]
 fn backlog_taken_slug() {
-    // req:plugin.hooks/defect-backlog@064ef91e
+    // req:plugin.hooks/defect-backlog@06439020
     let repo = repo("defects = \"backlog\"\n");
     let args = ["--title", "Gate passes a stale task", "--component", "gate"];
     for expected in [
