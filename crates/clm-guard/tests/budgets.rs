@@ -26,6 +26,15 @@ fn fake_first(dir: &Path, program: &str, script: &str, original: &str) {
     unsafe { std::env::set_var("PATH", path) };
 }
 
+/// The shell line that answers `gh repo view --json url` for `o/r` and exits. The URL's `//`
+/// sits on a line of its own, apart from the JSON's braces: `clm-coverage` reads a test's
+/// end by counting braces outside a `//` comment, so a `{` before it would count, its `}`
+/// after it wouldn't, and the test's span would never end.
+fn answers_repo_view() -> String {
+    let url = "https://github.com/o/r";
+    format!("if [ \"$1\" = repo ]; then echo '{{\"url\":\"{url}\"}}'; exit 0; fi\n")
+}
+
 fn judge(cwd: &Path, command: &str, budgets: &Budgets) -> (Decision, Duration) {
     let event = serde_json::json!({
         "tool_name": "Bash",
@@ -152,9 +161,11 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
     fake_first(
         slow.path(),
         "gh",
-        "#!/bin/sh\nsleep 0.6\nif [ \"$1\" = repo ]; then \
-         echo '{\"url\":\"https://github.com/o/r\"}'; exit 0; fi\n\
-         echo '{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}'\n",
+        &format!(
+            "#!/bin/sh\nsleep 0.6\n{}\
+             echo '{{\"name\":\"CI\",\"path\":\".github/workflows/ci.yml\"}}'\n",
+            answers_repo_view()
+        ),
         &original,
     );
     let (decision, _) = judge(cwd.path(), "gh run rerun 42", &one_second);
@@ -168,13 +179,13 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
 
     // A lookup that never answers: one never answers `repo view`, one answers it but never
     // `api`. Each writes its process ID to `pids` and then `exec`s its sleep.
-    for answers_repo_view in [false, true] {
+    for views_repo in [false, true] {
         let gh = TempDir::new().unwrap();
         let pids = gh.path().join("pids");
-        let view = if answers_repo_view {
-            "if [ \"$1\" = repo ]; then echo '{\"url\":\"https://github.com/o/r\"}'; exit 0; fi\n"
+        let view = if views_repo {
+            answers_repo_view()
         } else {
-            ""
+            String::new()
         };
         fake_first(
             gh.path(),
