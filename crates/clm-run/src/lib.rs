@@ -634,7 +634,10 @@ pub fn prompt(job: &Job) -> String {
             p.push_str(&format!(
                 "  Re-cite each marker that cites it at another version or without one, wherever \
                  its file sits, another component's `paths` included, after checking that its \
-                 test proves the current text (`path-ownership`): {}.\n",
+                 test proves the current text (`path-ownership`): {}. When a test proves what \
+                 the current text no longer states, because the diff above moved its scenario \
+                 to another requirement or removed it, take its marker off instead of re-citing \
+                 it; the requirement that now states it is cited by its own build.\n",
                 item.markers.join(", ")
             ));
         }
