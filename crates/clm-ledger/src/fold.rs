@@ -2,6 +2,7 @@
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -356,13 +357,20 @@ pub fn show(fold: &Fold) -> Vec<String> {
                     killed,
                     unproven,
                     not_judged,
+                    left,
                     ..
-                } => format!(
-                    "{commit} {} killed {} unproven {} not judged",
-                    killed.len(),
-                    unproven.len(),
-                    not_judged.len()
-                ),
+                } => {
+                    let mut what = format!(
+                        "{commit} {} killed {} unproven {} not judged",
+                        killed.len(),
+                        unproven.len(),
+                        not_judged.len()
+                    );
+                    if !left.is_empty() {
+                        let _ = write!(what, " {} left", left.len());
+                    }
+                    what
+                }
             };
             format!("{kind} {what} {writer} {at}")
         })
