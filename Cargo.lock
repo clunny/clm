@@ -382,6 +382,7 @@ version = "0.26.0"
 dependencies = [
  "clap",
  "clm-check",
+ "clm-coverage",
  "clm-git",
  "clm-ledger",
  "clm-model",

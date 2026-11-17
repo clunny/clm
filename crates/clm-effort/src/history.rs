@@ -198,7 +198,7 @@ fn history_of(root: &Path, graph: &Graph) -> Result<History, Error> {
         spec_tokens: 0,
         code_tokens: 0,
     };
-    let sizes = clm_check::size(root, graph, &clm_check::scan(root).req, budgets)
+    let sizes = clm_check::size(root, graph, &clm_coverage::scan(root).req, budgets)
         .map_err(Error::Io)?
         .into_iter()
         .map(|s| (s.node, s.spec.tokens + s.code.tokens))
@@ -255,9 +255,9 @@ pub(crate) fn architecture_review(root: &Path) -> Result<Vec<Constraint>, Error>
     let flag_text = flag_text(&graph, &|path| {
         std::fs::read_to_string(root.join(path)).ok()
     });
-    let current: BTreeSet<String> = clm_check::report(&graph, &clm_check::scan(root).req)
+    let current: BTreeSet<String> = clm_coverage::report(&graph, &clm_coverage::scan(root).req)
         .into_iter()
-        .filter(|c| c.state == clm_check::State::Current)
+        .filter(|c| c.state == clm_coverage::State::Current)
         .map(|c| c.id)
         .collect();
     Ok(architecture(
