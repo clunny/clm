@@ -87,7 +87,17 @@ Where: `clm.toml` or `clm.local.toml`.
 - **`mutate` unset** (the default): a test that asserts nothing still reads as proof.
 - **`mutate` set**: each pass costs machine time after the land, from minutes to an hour, and holds no land. A requirement whose tests notice no change gets a bug item and reads as not built until a build mends the test. Your command reads a plan from the file `CLM_MUTATE` names and writes one verdict per requirement to the file `CLM_MUTATE_RESULT` names, with the mutation tool of your language. Not with `mode = "import"`.
 
-The plan holds one block per requirement: `requirement <id>`, a `code <path>` line for each file of its component, `diff <path>` naming a diff of what changed in them since the last pass (left out when nothing did), a `test <file>`, tab, `<name>` line for each test that cites it, and `limit <n>`. Mutate the diff's lines first and then up to `<n>` more of the code files, running only those tests, and only mutants of lines those tests run, since no test citing the requirement could notice any other, and write `<id> killed` when they failed for a mutant, `<id> survived <n>` when `<n>` mutants were tried and they passed for all, or `<id> not-judged`, as when the tests run its files but no line a mutant changes. Tests that run no line of the files at all notice nothing: write `survived`. Exit 0 whatever the verdicts.
+The plan holds one block per requirement: `requirement <id>`, a `code <path>` line for each file of its component, `diff <path>` naming a diff of what changed in them since the last pass (left out when nothing did), a `test <file>`, tab, `<name>` line for each test that cites it, and `limit <n>`. Mutate the diff's lines first and then up to `<n>` more of the code files, running only those tests, and only mutants of lines those tests run, since no test citing the requirement could notice any other, and write `<id> killed` when they failed for a mutant, `<id> survived <n>` when `<n>` mutants were tried and they passed for all, or `<id> not-judged`, as when the tests run its files but no line a mutant changes. Tests that run no line of the files at all notice nothing: write `survived`. Append each verdict line as soon as it is reached, in one write, since a pass that is stopped keeps the lines already written and carries the rest to the next pass. Exit 0 whatever the verdicts.
+
+Optional `mutate_jobs`: the most requirements the pass judges at once. `clm verify` passes your command `CLM_MUTATE_JOBS`, this ceiling cut down to one per 2 GiB of available memory, and `CLM_SLOT`, the first of that many slots no build or check uses; give each requirement you judge at once its own build directory and the next slot.
+
+- **Unset** (the default, 1): a pass uses one core and the least memory, and takes as long as its requirements one after another.
+- **Set higher**: a large pass takes a fraction of the time, at the cost of memory and disk for each requirement at once, and your tests must pass beside each other.
+
+Optional `mutate_minutes`: the longest a pass runs. When it is reached, `clm verify` stops your command, records the verdicts it wrote and names the requirements it didn't reach, which the next pass judges first.
+
+- **Unset** (the default): a pass runs until it has judged everything due; after a land that touched many tests that can take hours.
+- **Set**: `main` is verified within a bounded time after each run, and a large pass is spread over several runs.
 
 Where: `clm.toml` or `clm.local.toml`. `clm verify` reads `clm.toml`'s `[verify]` as committed on `origin/main`, never from the checkout it runs in, so an edit takes effect once it lands.
 

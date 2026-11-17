@@ -41,7 +41,7 @@ Some settings describe the repository rather than the user, and only the reposit
 | `build` | a table with `setup`, a non-empty string: the shell command that makes a fresh worktree of the repository ready to run its tests, such as one installing its dependencies into it, which `clm setup` runs before a build's first test run (`tests-run-in-their-own-tree`, `build-setup-step`) | none: a build's worktree gets nothing before its tests run |
 | `env` | a table whose keys are environment variable names (an ASCII letter or `_`, then ASCII letters, digits and `_`), none beginning `CLM_` and none `CI`, which CLM sets or removes itself, and whose values are strings holding no NUL, carriage return or newline: variables CLM sets in the environment of `[build] setup`, `[land] check` and `[verify] check`, each replacing the value the caller's environment holds, before the variables CLM sets for the run itself (`env-table`) | none: the commands get the caller's environment and CLM's own variables |
 | `affected` | a table with `all`, an array of globs written as in a component's `paths`: changed files that make `clm affected` select every test although a component's `paths` hold them, such as a lockfile or the toolchain pin (`graph-test-selection`) | none: no glob |
-| `verify` | a table: `check`, a non-empty string, the slow-test command `clm verify` runs after the land; `mode`, `local`, `pipeline` or `import`: where the slow tests run and who records the result; optional `triggers`, an array of `change-done`, `queue-drained` and `work-done` (the last only with `mode = "local"`); optional `every`, a table with `lands` and `days`, each a positive integer; and `workflow`, a non-empty string, required with `mode = "import"` and refused otherwise: the host pipeline whose runs `clm verify` reads (`verify-after-land`) | none: slow tests stay in `[land] check` |
+| `verify` | a table: `check`, a non-empty string, the slow-test command `clm verify` runs after the land; `mode`, `local`, `pipeline` or `import`: where the slow tests run and who records the result; optional `triggers`, an array of `change-done`, `queue-drained` and `work-done` (the last only with `mode = "local"`); optional `every`, a table with `lands` and `days`, each a positive integer; `workflow`, a non-empty string, required with `mode = "import"` and refused otherwise: the host pipeline whose runs `clm verify` reads (`verify-after-land`); and optional `mutate`, the mutation pass's command, with `mutate_jobs`, the most requirements it judges at once, and `mutate_minutes`, the longest a pass runs, each a positive integer set only beside `mutate` (`mutation-after-land`) | none: slow tests stay in `[land] check` |
 | `component_size` | a table with `spec_tokens` and `code_tokens`, each a positive integer: the size in tokens above which a component whose frontmatter sets no `size_budget` is oversized (`node-size-budgets`, `oversized-is-a-state`, `component-size-setting`) | `spec_tokens = 12000`, `code_tokens = 40000` |
 | `health` | a table with `reconsider`, `scenarios`, `exceptions` and `stale_days`, each a positive integer, and `lcov`, a path relative to the repository root, at least one ordinary name with no root, prefix or `..` component and neither `,`, `=` nor a control character in it, optional: the score at which `clm rebase` files a reconsider item for a requirement, the scenario and exception-clause counts above which `clm health` flags one, the days after which an open `question` or `human` item is reported, and the lcov file `clm health` reads (`health-advises`, `lcov-coverage-signal`) | `reconsider = 3`, `scenarios = 6`, `exceptions = 4`, `stale_days = 30`, no `lcov` |
 | `effort` | a table with `workaround_flag`, a positive integer: the count of unsettled workaround flags on one capability at which `clm workaround` warns and exits 3, telling the session to stop and ask whether to redesign it (`redesign-before-workaround`, `check.health`) | `workaround_flag = 3` |
@@ -615,7 +615,7 @@ Loading the settings SHALL accept `upgraded`, a string, and `declined_migrations
 - capability/upgrade-clm
 
 ### Requirement: verify-setting
-Loading SHALL take `verify` only from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table with `check`, a non-empty string; `mode`, one of `local`, `pipeline` and `import`; optional `triggers`, an array of distinct values among `change-done`, `queue-drained` and `work-done`, default empty; optional `every`, a table whose keys `lands` and `days` are each optional and a positive integer; `workflow`, a non-empty string; and optional `mutate`, a non-empty string, the command of the mutation pass (`verify/mutation-pass`). It SHALL fail naming the file that sets it and `verify` for a `verify` that isn't a table, for any other key in it or in `every`, for a missing or empty `check`, a missing or unknown `mode`, an unknown or repeated trigger, `work-done` with a `mode` other than `local`, an `every` value that isn't a positive integer, a `workflow` missing with `mode = "import"` or set with another mode, an empty `mutate` or one set with `mode = "import"`, where no check runs here; and SHALL fail naming the user's `config.toml` and the key when that file sets it. `clm config get verify` SHALL print `mode=<mode>,check=<command>`, followed by `,triggers=<t>+<t>...` when there are triggers, `,every.lands=<n>` and `,every.days=<n>` when set `,workflow=<name>` when set and `,mutate=<command>` when set, and the path of the file that sets it, or nothing and `default`.
+Loading SHALL take `verify` only from the repository's `clm.toml` or the clone's `clm.local.toml`, as a table with `check`, a non-empty string; `mode`, one of `local`, `pipeline` and `import`; optional `triggers`, an array of distinct values among `change-done`, `queue-drained` and `work-done`, default empty; optional `every`, a table whose keys `lands` and `days` are each optional and a positive integer; `workflow`, a non-empty string; optional `mutate`, a non-empty string, the command of the mutation pass (`verify/mutation-pass`); optional `mutate_jobs`, a positive integer, the most requirements the pass judges at once, default 1; and optional `mutate_minutes`, a positive integer, the longest a pass runs, unset meaning no limit. It SHALL fail naming the file that sets it and `verify` for a `verify` that isn't a table, for any other key in it or in `every`, for a missing or empty `check`, a missing or unknown `mode`, an unknown or repeated trigger, `work-done` with a `mode` other than `local`, an `every` value that isn't a positive integer, a `workflow` missing with `mode = "import"` or set with another mode, an empty `mutate` or one set with `mode = "import"`, where no check runs here, and a `mutate_jobs` or `mutate_minutes` that isn't a positive integer or is set without `mutate`; and SHALL fail naming the user's `config.toml` and the key when that file sets it. `clm config get verify` SHALL print `mode=<mode>,check=<command>`, followed by `,triggers=<t>+<t>...` when there are triggers, `,every.lands=<n>` and `,every.days=<n>` when set `,workflow=<name>` when set, `,mutate=<command>` when set, and `,mutate_jobs=<n>` and `,mutate_minutes=<n>` when set, and the path of the file that sets it, or nothing and `default`.
 
 #### Scenario: set
 - GIVEN a repository `clm.toml` with `[verify]`, `check = "scripts/slow.sh"`, `mode = "local"` and `triggers = ["change-done", "work-done"]`
@@ -656,6 +656,21 @@ Loading SHALL take `verify` only from the repository's `clm.toml` or the clone's
 - GIVEN a repository `clm.toml` with `[verify]`, `check = "x"`, `mode = "import"`, `workflow = "slow"` and `mutate = "m"`
 - WHEN the settings are loaded
 - THEN it fails naming `clm.toml` and `verify`
+
+#### Scenario: a bounded pass that runs requirements at once
+- GIVEN a repository `clm.toml` with `[verify]`, `check = "x"`, `mode = "local"`, `mutate = "m"`, `mutate_jobs = 6` and `mutate_minutes = 60`
+- WHEN `clm config get verify` runs
+- THEN it prints `mode=local,check=x,mutate=m,mutate_jobs=6,mutate_minutes=60` and the file's path
+
+#### Scenario: jobs without a pass
+- GIVEN a repository `clm.toml` with `[verify]`, `check = "x"`, `mode = "local"` and `mutate_jobs = 2`
+- WHEN the settings load
+- THEN loading fails naming the file and `verify`
+
+#### Scenario: no jobs or minutes
+- GIVEN the same with `mutate = "m"` and, in turn, `mutate_jobs = 0`, `mutate_minutes = 0` and `mutate_minutes = "1h"`
+- WHEN the settings load
+- THEN loading fails each time naming the file and `verify`
 
 #### Serves
 - architecture/proven-by-tests
@@ -703,12 +718,12 @@ The guide's page `docs/guide/settings.md` SHALL hold, for every key `clm config 
 - THEN it reports nothing
 
 ### Requirement: verify-here
-This repository's `clm.toml` SHALL set `[verify]` with `check = ".github/scripts/ci-check.sh"`, `mode = "local"`, `triggers = ["queue-drained"]`, `every = { lands = 20 }` and `mutate = ".github/scripts/mutate.sh"`, and no other key of the table, so the whole suite runs after lands that checked only where the branch and `main` overlap (`land/overlap-recheck`), on this machine, once the build queue drains and at least every 20 lands, and the mutation pass follows each run that passed (`verify/mutation-pass`, `ci/mutate-script`).
+This repository's `clm.toml` SHALL set `[verify]` with `check = ".github/scripts/ci-check.sh"`, `mode = "local"`, `triggers = ["queue-drained"]`, `every = { lands = 20 }`, `mutate = ".github/scripts/mutate.sh"`, `mutate_jobs = 6` and `mutate_minutes = 60`, and no other key of the table, so the whole suite runs after lands that checked only where the branch and `main` overlap (`land/overlap-recheck`), on this machine, once the build queue drains and at least every 20 lands, and the mutation pass follows each run that passed (`verify/mutation-pass`, `ci/mutate-script`), judging up to six requirements at once as free memory allows and stopping after an hour, with what it didn't reach carried to the next pass.
 
 #### Scenario: this repository
 - GIVEN this repository's `clm.toml`
 - WHEN `clm config get verify` runs against it
-- THEN it prints `mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh` and the file's path
+- THEN it prints `mode=local,check=.github/scripts/ci-check.sh,triggers=queue-drained,every.lands=20,mutate=.github/scripts/mutate.sh,mutate_jobs=6,mutate_minutes=60` and the file's path
 
 #### Serves
 - capability/land-safely
