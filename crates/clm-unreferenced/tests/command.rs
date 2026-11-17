@@ -128,7 +128,7 @@ fn arguments_it_cannot_parse() {
 
 #[test]
 fn scenario_findings() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let lib = format!(
         "mod x;\n\npub fn f() {{}}\n{}pub fn z() {{}}\n",
         "\n".repeat(6)
@@ -151,7 +151,7 @@ fn scenario_findings() {
 
 #[test]
 fn scenario_clean_or_no_rust() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let used = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -182,7 +182,7 @@ fn scenario_clean_or_no_rust() {
 
 #[test]
 fn scenario_broken_manifest() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     for (path, text) in [
         ("crates/a/Cargo.toml", "[package\n"),
         ("web/package.json", "{\"name\": \n"),
@@ -199,7 +199,7 @@ fn scenario_broken_manifest() {
 
 #[test]
 fn package_findings_are_worded_for_packages() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),
@@ -279,7 +279,7 @@ fn one_name_for_a_crate_and_a_package_skips_both() {
 
 #[test]
 fn root_option_names_the_repository() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     // req:check.unreferenced/commands-in-crate@215013cd
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
@@ -372,7 +372,7 @@ fn scenario_entry_given_as_an_argument() {
 #[test]
 fn scenario_stale_entry() {
     // req:check.unreferenced/entry-attributes@69e092f6
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("crates/a/Cargo.toml", A_MANIFEST),
         ("crates/a/src/lib.rs", "pub fn f() {}\n"),

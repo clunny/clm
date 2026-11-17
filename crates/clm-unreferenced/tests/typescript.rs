@@ -191,7 +191,7 @@ fn deepest_package_owns_a_file() {
 
 #[test]
 fn broken_package_json_is_an_error_naming_it() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[("web/package.json", "{\"name\": ")]);
     let err = clm_unreferenced::scan(dir.path(), &[], &[]).unwrap_err();
     assert!(err.starts_with("web/package.json: "), "{err}");
@@ -349,7 +349,7 @@ fn heritage_interface_extends_and_variable_annotations_carry_private_members_do_
 #[test]
 fn every_embedding_file_counts_and_other_files_do_not() {
     // req:check.unreferenced/typescript-uses@18d0ccf0
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (
@@ -368,7 +368,7 @@ fn every_embedding_file_counts_and_other_files_do_not() {
 
 #[test]
 fn a_file_that_parses_with_errors_is_used_as_far_as_it_parses() {
-    // req:check.unreferenced/report@27b2d762
+    // req:check.unreferenced/report@849ec044
     let dir = repo(&[
         ("p/package.json", r#"{"name": "p"}"#),
         (
