@@ -28,6 +28,7 @@ No change or code fix since 2026-11-10 fixes it: `20261116-the-build-loop-shows`
 - `orchestrator.loop/draft-waits-for-its-build` (new): the plan launches no draft of a `group` line naming a component whose build the loop holds or lists in the same plan; it lists it with `waits for build:<component>` (or `waits for stopped runs to resume` while those resume), it takes no place and no disk room, and it is launched as any other once no such build is held or listed. A line with no components never waits so.
 - `orchestrator.loop/plan-order` (modified): its `group` lines exclude a draft that waits for its component's build.
 - `backlog/the-fix-for-a-bug-draft-beside-its-component-s-build-is-outside-the-freeze` (`kind: question`) blocks the two requirements until the human answers.
+- `docs/decisions/build-loop-in-clm.md`'s *Priority across drafts and builds* names the exception to a draft going first at equal priority, and why (the architecture audit's finding).
 - No capability test sees a difference: `capability/build-from-spec` drains components, not `group` lines.
 
 ## Constraints
