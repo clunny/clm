@@ -1187,6 +1187,60 @@ fn the_hook_judges_with_the_hooks_budgets() {
     );
 }
 
+#[test]
+fn the_guard_and_the_hook_judge_with_the_hooks_budgets() {
+    // req:plugin.hooks.guard/hook-budgets@0a955c81
+    use clm_agent_harness::{AgentHarness::ClaudeCode, render};
+    let dir = TempDir::new().unwrap();
+    let w = dir.path().join("w");
+    checkout_on(&w, "impl/x/b");
+    let within = |event: &str, budgets: &Budgets| {
+        let _shared = FORKS.read().unwrap_or_else(PoisonError::into_inner);
+        clm_guard::guard_within(event, budgets)
+    };
+    // Git answers this push's queries at once: the hook's budgets let it through, and spent
+    // ones block it, so the judgement below depends on the budgets it is given.
+    let implicit = bash_in_opt("git push", Some(&w));
+    let spent = Budgets {
+        push: Duration::ZERO,
+        lookup: Duration::ZERO,
+    };
+    let Decision::Block(why) = within(&implicit, &spent) else {
+        panic!("a spent budget didn't block the implicit push")
+    };
+    assert!(why.contains("didn't answer in time"), "{why}");
+    let events = [
+        (implicit, Decision::Allow),
+        (
+            bash_in_opt("git push origin HEAD:main", Some(&w)),
+            Decision::Block(String::new()),
+        ),
+        (
+            bash_in_opt("clm approve spec/x", Some(&w)),
+            Decision::Ask(String::new()),
+        ),
+        (bash_in_opt("ls", Some(&w)), Decision::Allow),
+    ];
+    for (event, kind) in &events {
+        let hooks = within(event, &Budgets::HOOK);
+        assert_eq!(
+            std::mem::discriminant(&hooks),
+            std::mem::discriminant(kind),
+            "{event}: {hooks:?}"
+        );
+        assert_eq!(guard(event), hooks, "{event}");
+        let rendered = render(ClaudeCode, &hooks);
+        assert_eq!(guard_hook(ClaudeCode, event), rendered, "{event}");
+        let out = hook("guard", event);
+        assert_eq!(out.status.code(), Some(rendered.exit_code), "{event}");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout),
+            rendered.stdout,
+            "{event}"
+        );
+    }
+}
+
 const WHOLE_LINE_REFUSED: &str = "nothing in it ran";
 
 #[test]
