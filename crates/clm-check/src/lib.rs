@@ -206,7 +206,8 @@ pub fn pending_for(
 ) -> Result<Vec<Pending>, Vec<Violation>> {
     let mut list = pending(graph, markers);
     if let Some(node) = component {
-        // A removed node's obsolete markers are pending on the nodes owning their files.
+        // A component the graph doesn't hold, a removed one included, is refused; a removed
+        // component's obsolete markers are pending on the components owning their files.
         if !graph.nodes.contains_key(node) {
             return Err(vec![Violation {
                 path: std::path::Path::new("specs")

@@ -95,11 +95,19 @@ fn node_with_paths(root: &Path, id: &str, paths: &str) {
 
 #[test]
 fn a_removed_node_is_an_unknown_node() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check/pending-narrows-on-a-graph@1c3731b9
     let dir = removed_node_repo();
     let d = dir.path();
     write(d, "t.rs", &in_test(&format!("// {REQ}g/x\n")));
-    assert!(clm_check::pending_in(d, Some("g")).is_err());
+    let removed = clm_check::pending_in(d, Some("g")).unwrap_err();
+    assert_eq!(removed[0].rule, "check.coverage/pending-report");
+    assert_eq!(removed[0].message, "unknown component `g`");
+    assert_eq!(removed[0].path, Path::new("specs/g/SPEC.md"));
+    let on_graph = clm_check::pending_for(&graph(d), &clm_check::scan(d).req, Some("g"));
+    assert_eq!(
+        clm_check::format(&on_graph.unwrap_err()[0]),
+        clm_check::format(&removed[0])
+    );
     let unknown = clm_check::pending_in(d, Some("nope")).unwrap_err();
     assert_eq!(unknown[0].rule, "check.coverage/pending-report");
     assert_eq!(lines(d, Some("clm")), ["g/x obsolete t.rs:1"]);
@@ -185,7 +193,7 @@ fn paths_match_as_git_glob_pathspecs_do() {
 
 #[test]
 fn pending_for_narrows_a_loaded_graph_as_pending_in_does() {
-    // req:check/pending-narrows-on-a-graph@1c2fb00a
+    // req:check/pending-narrows-on-a-graph@1c3731b9
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -206,7 +214,10 @@ fn pending_for_narrows_a_loaded_graph_as_pending_in_does() {
     assert_eq!(from_graph[0].id, "a/x");
     let first = clm_check::pending_in(d, Some("nope")).unwrap_err();
     let second = clm_check::pending_for(&g, &markers, Some("nope")).unwrap_err();
-    assert_eq!(first[0].message, second[0].message);
-    assert_eq!(first[0].path, second[0].path);
-    assert!(first[0].message.contains("nope"));
+    assert_eq!(clm_check::format(&first[0]), clm_check::format(&second[0]));
+    assert_eq!(second[0].rule, "check.coverage/pending-report");
+    assert_eq!(second[0].message, "unknown component `nope`");
+    assert_eq!(second[0].path, Path::new("specs/nope/SPEC.md"));
+    let dotted = clm_check::pending_for(&g, &markers, Some("a.nope")).unwrap_err();
+    assert_eq!(dotted[0].path, Path::new("specs/a/nope/SPEC.md"));
 }
