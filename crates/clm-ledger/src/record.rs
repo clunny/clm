@@ -388,6 +388,24 @@ impl Decision {
 }
 
 impl Body {
+    /// A `mutated` body, so a caller builds one without a literal of the variant and a field
+    /// the variant gains later breaks no caller (`mutated-constructor`).
+    pub fn mutated(
+        commit: String,
+        since: Option<String>,
+        killed: Vec<String>,
+        unproven: Vec<String>,
+        not_judged: Vec<String>,
+    ) -> Body {
+        Body::Mutated {
+            commit,
+            since,
+            killed,
+            unproven,
+            not_judged,
+        }
+    }
+
     /// The record kind, as `kind` holds it.
     pub fn kind(&self) -> &'static str {
         match self {

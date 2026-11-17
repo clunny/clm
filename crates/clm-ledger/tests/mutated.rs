@@ -177,3 +177,32 @@ fn compacted() {
     assert!(!ids.contains(&&old_clean.id));
     assert_eq!(fold.mutations[&id('d')][0].id, other_commit.id);
 }
+
+#[test]
+fn the_same_record_as_a_literal() {
+    // req:ledger/mutated-constructor@4fb59d5a
+    let dir = tempfile::tempdir().unwrap();
+    let a = clone_with_origin(dir.path(), "a", "A");
+    let literal = Body::Mutated {
+        commit: id('c'),
+        since: Some(id('b')),
+        killed: vec!["a/x".into()],
+        unproven: vec!["b/y@0123abcd".into()],
+        not_judged: vec!["c/z".into()],
+    };
+    let built = Body::mutated(
+        id('c'),
+        Some(id('b')),
+        vec!["a/x".into()],
+        vec!["b/y@0123abcd".into()],
+        vec!["c/z".into()],
+    );
+    assert_eq!(built, literal);
+    let done = clm_ledger::append(&a, built, &env(dir.path(), &[])).unwrap();
+    let fold = clm_ledger::fold(&a).unwrap();
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    let held = &fold.mutations[&id('c')];
+    assert_eq!(held.len(), 1);
+    assert_eq!(held[0].id, done.record.id);
+    assert_eq!(held[0].body, literal);
+}
