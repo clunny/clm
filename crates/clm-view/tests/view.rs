@@ -87,7 +87,7 @@ fn in_test(s: &str) -> String {
 
 #[test]
 fn scenario_plain_chart() {
-    // req:view/view-command@0fb30947
+    // req:view/view-command@632cf6f3
     let dir = two_nodes();
     let text = view(dir.path(), Name::Spec, Format::Text);
     assert!(text.contains(" a ") && text.contains(" b "), "{text}");
@@ -97,7 +97,7 @@ fn scenario_plain_chart() {
 
 #[test]
 fn scenario_coloured_chart() {
-    // req:view/view-command@0fb30947
+    // req:view/view-command@632cf6f3
     let dir = two_nodes();
     let plain = view(dir.path(), Name::Spec, Format::Text);
     let ansi = view(dir.path(), Name::Spec, Format::Ansi);
@@ -120,7 +120,7 @@ fn scenario_coloured_chart() {
 
 #[test]
 fn scenario_svg() {
-    // req:view/view-command@0fb30947
+    // req:view/view-command@632cf6f3
     let dir = two_nodes();
     let text = view(dir.path(), Name::Spec, Format::Svg);
     let doc = roxmltree::Document::parse(&text).unwrap_or_else(|e| panic!("{e}: {text}"));
