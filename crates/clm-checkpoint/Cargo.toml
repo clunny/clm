@@ -9,6 +9,7 @@ publish.workspace = true
 clap.workspace = true
 clm-model.workspace = true
 clm-check.workspace = true
+clm-coverage.workspace = true
 clm-git.workspace = true
 clm-ledger.workspace = true
 clm-orchestrator.workspace = true
