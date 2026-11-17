@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-build-runs-a-deleted-clm-path]
 ---
 
