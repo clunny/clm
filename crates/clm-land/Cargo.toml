@@ -8,7 +8,6 @@ publish.workspace = true
 [dependencies]
 clap.workspace = true
 clm-approval.workspace = true
-clm-check.workspace = true
 clm-coverage.workspace = true
 clm-config.workspace = true
 clm-effort.workspace = true
