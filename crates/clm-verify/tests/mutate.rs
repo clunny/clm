@@ -167,23 +167,34 @@ fn a_test_that_reads_the_repositorys_files() {
         "// {reads} specs/**\n// {reads} ARCHITECTURE.md\n{}",
         test_file(&p.version, "let _ = 1;")
     );
+    // A second citing test file repeats one glob and adds another; a test file of `a` whose
+    // test cites nothing reads `docs/**`.
+    let second = format!(
+        "// {reads} specs/**\n// {reads} README.md\n{}",
+        test_file(&p.version, "let _ = 2;")
+    );
+    let unrelated = format!("// {reads} docs/**\n#[test]\nfn unrelated() {{}}\n");
     p.f.land(
         &[
             ("crates/a/src/lib.rs", "2\n"),
-            ("crates/a/src/other.rs", &format!("// {reads} docs/**\n")),
             ("crates/a/tests/x.rs", &test),
+            ("crates/a/tests/y.rs", &second),
+            ("crates/a/tests/z.rs", &unrelated),
         ],
         "a new test that reads",
     );
     p.f.due();
     let plan = p.f.lines("plan");
     let at = |line: &str| plan.iter().position(|l| l == line);
-    let test_line = at("test crates/a/tests/x.rs\tproves_x").expect("test line");
+    let test_line = at("test crates/a/tests/y.rs\tproves_x").expect("test line");
     let arch = at("reads ARCHITECTURE.md").expect("reads ARCHITECTURE.md");
+    let readme = at("reads README.md").expect("reads README.md");
     let specs = at("reads specs/**").expect("reads specs/**");
     let limit = at("limit 20").expect("limit");
+    let all: Vec<&String> = plan.iter().filter(|l| l.starts_with("reads ")).collect();
+    assert_eq!(all.len(), 3, "each glob once: {plan:?}");
     assert!(
-        test_line < arch && arch < specs && specs < limit,
+        test_line < arch && arch < readme && readme < specs && specs < limit,
         "{plan:?}"
     );
     assert_eq!(at("reads docs/**"), None, "{plan:?}");

@@ -278,6 +278,8 @@ fn write_plan(
 ) -> Result<String, Error> {
     let tracked = clm_git::tracked_files(dir)?;
     let mut plan = String::new();
+    // Each citing file's globs, read once however many requirements its tests cite.
+    let mut globs_of: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for (n, (id, base)) in blocks.iter().enumerate() {
         let component = id.split('/').next().unwrap_or_default();
         let code: Vec<String> = tracked
@@ -303,10 +305,15 @@ fn write_plan(
         for cite in &mine {
             plan.push_str(&format!("test {}\t{}\n", cite.path, cite.name));
         }
-        let files: BTreeSet<&str> = mine.iter().map(|c| c.path.as_str()).collect();
         let mut reads = BTreeSet::new();
-        for file in files {
-            reads.extend(clm_affected::reads_in(&fs::read_to_string(dir.join(file))?));
+        for cite in &mine {
+            let globs = globs_of.entry(cite.path.as_str()).or_insert_with(|| {
+                // A file that can't be read names no glob, as `cites` skips it.
+                fs::read_to_string(dir.join(&cite.path))
+                    .map(|text| clm_affected::reads_in(&text))
+                    .unwrap_or_default()
+            });
+            reads.extend(globs.iter().cloned());
         }
         for glob in reads {
             plan.push_str(&format!("reads {glob}\n"));
