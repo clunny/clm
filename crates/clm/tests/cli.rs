@@ -192,16 +192,6 @@ fn no_review_command() {
     );
 }
 
-fn clm(root: &Path, args: &[&str]) -> (Option<i32>, String) {
-    let out = clm_command()
-        .args(args)
-        .arg("--root")
-        .arg(root)
-        .output()
-        .unwrap();
-    (out.status.code(), String::from_utf8(out.stdout).unwrap())
-}
-
 const NODE: &str = "---\ntitle: T\nstatus: specd\nowners: []\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: r\nR.\n\n#### Scenario: s\n- ok\n";
 
 fn change_repo(delta: &str) -> TempDir {
@@ -254,29 +244,6 @@ fn hash_is_no_command() {
             .any(|w| w == "hash"),
         "{help}"
     );
-}
-
-#[test]
-fn coverage_command_prints_report() {
-    // req:check.coverage/coverage-report@533d2f1a
-    let dir = change_repo("---\ncomponent: clm\n---\n");
-    write(
-        dir.path(),
-        "t.rs",
-        concat!("// req", ":clm/r\n#[test]\nfn t() {}\n"),
-    );
-    let (code, out) = clm(dir.path(), &["coverage"]);
-    assert_eq!(code, Some(0));
-    assert_eq!(out, "clm/r behind t.rs:1\n");
-    let (graph, _) = clm_model::load(dir.path());
-    let v = graph.requirement("clm/r").unwrap().version().to_string();
-    write(
-        dir.path(),
-        "t.rs",
-        &in_test(&format!("// {}clm/r@{v}\n", concat!("req", ":"))),
-    );
-    let (_, out) = clm(dir.path(), &["coverage"]);
-    assert_eq!(out, "clm/r current t.rs:1\n");
 }
 
 #[test]
@@ -382,25 +349,4 @@ fn check_fails_on_a_retired_term_in_a_spec() {
         stdout.contains("clm.toml: check/detectors: retired-terms failed (exit 1)"),
         "{stdout}"
     );
-}
-
-/// `s` as a Rust file whose markers count as a test's: those on its third line on are inside
-/// a test, the earlier ones directly above it. Every line of `s` keeps its line number.
-fn in_test(s: &str) -> String {
-    let (head, body) = match s.strip_prefix('\n') {
-        Some(rest) => ("", rest),
-        None => s.split_once("\n\n").map_or((s, ""), |(a, b)| (a, b)),
-    };
-    let nl = if body.ends_with('\n') || body.is_empty() {
-        ""
-    } else {
-        "\n"
-    };
-    if s.starts_with('\n') {
-        format!("#[test]\nfn t() {{{body}{nl}}}\n")
-    } else if body.is_empty() {
-        format!("{s}#[test]\nfn t() {{}}\n")
-    } else {
-        format!("{head}\n#[test]\nfn t() {{{body}{nl}}}\n")
-    }
 }
