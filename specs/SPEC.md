@@ -1159,6 +1159,7 @@ For every command a component offers as a call (`commands-in-crate`), `crates/cl
 - view/view-command
 - view/view-library
 - check.coverage/pending-report
+- check.coverage/status-report
 
 ### Requirement: rebase-settings
 For `clm rebase`, the root SHALL hand `clm-sync` the settings `config` loads from the CLM root `clm-sync` gives it, `health` among them, so the repository's `[health] reconsider` is the threshold at which `clm rebase` files a reconsider item (`sync/file-reconsider-item`). When they don't load, the root SHALL hand it the error as `clm check` prints a violation of `check.health/health-report`: `<source>: check.health/health-report: <error>`, the source being the file that failed to load, or `settings` when the error names none (`sync/judged-by-check`). Each scenario SHALL be proven by running the `clm` binary, with no user `config.toml` and no `clm.local.toml` for it to load.
