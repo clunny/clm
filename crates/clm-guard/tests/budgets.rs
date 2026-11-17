@@ -179,11 +179,11 @@ fn queries_and_lookups_that_outlast_their_budget_block() {
 
     // A lookup that never answers: one never answers `repo view`, one answers it but never
     // `api`. Each writes its process ID to `pids` and then `exec`s its sleep.
-    for answers_repo_view in [false, true] {
+    for views_repo in [false, true] {
         let gh = TempDir::new().unwrap();
         let pids = gh.path().join("pids");
-        let view = if answers_repo_view {
-            self::answers_repo_view()
+        let view = if views_repo {
+            answers_repo_view()
         } else {
             String::new()
         };

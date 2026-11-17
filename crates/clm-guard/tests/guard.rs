@@ -1171,8 +1171,20 @@ fn the_hook_judges_with_the_hooks_budgets() {
     let words: Vec<&str> = lib.split_whitespace().collect();
     let lib = words.join(" ");
     let function = "pub fn guard(event: &str) -> Decision { guard_within(event, &Budgets::HOOK) }";
-    assert_eq!(lib.matches("pub fn guard(").count(), 1, "{lib}");
+    let guards = lib.matches("pub fn guard(").count();
+    assert_eq!(guards, 1, "lib.rs defines `guard` {guards} times");
     assert!(lib.contains(function), "`guard` isn't `{function}`");
+    // The hook's own path, `clm hook guard`'s call, judges with the same budgets.
+    let hook = "judge_event(agent_harness, event, &Budgets::HOOK, env)";
+    assert_eq!(
+        lib.matches("judge_event(").count(),
+        3,
+        "judge_event's callers moved"
+    );
+    assert!(
+        lib.contains(hook),
+        "the hook doesn't judge with `Budgets::HOOK`"
+    );
 }
 
 const WHOLE_LINE_REFUSED: &str = "nothing in it ran";
@@ -1400,11 +1412,9 @@ fn the_call_prints_and_exits_as_the_hook_does() {
     let rendered = guard_hook(clm_agent_harness::AgentHarness::Codex, &approve);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert!(out.stdout.is_empty(), "{out:?}");
-    assert_eq!(
-        String::from_utf8(out.stderr).unwrap(),
-        format!("{}\n", rendered.stderr)
-    );
-    assert!(rendered.stderr.contains("own terminal"), "{rendered:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(err, format!("{}\n", rendered.stderr));
+    assert!(err.contains("own terminal"), "{err}");
     // An agent harness it doesn't know: exit 1, naming it, and nothing on the output stream.
     let out = hook_args(&["guard", "--agent-harness", "nope"], &approve, &[]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
