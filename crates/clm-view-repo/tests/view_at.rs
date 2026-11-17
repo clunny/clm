@@ -295,7 +295,7 @@ fn stderr(out: &Output) -> String {
 
 #[test]
 fn pending_behind_origin_main() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let before = tree_state(d);
@@ -324,7 +324,7 @@ fn pending_behind_origin_main() {
 
 #[test]
 fn pending_up_to_date() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     git(d, &["merge", "-q", "--ff-only", "origin/main"]);
@@ -337,7 +337,7 @@ fn pending_up_to_date() {
 
 #[test]
 fn pending_no_such_commit() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let out = clm(dir.path(), &["pending", "--at", "nowhere"]);
     assert_eq!(out.status.code(), Some(1));
@@ -347,7 +347,7 @@ fn pending_no_such_commit() {
 
 #[test]
 fn pending_names_its_commit_beside_violations_and_narrows_alike() {
-    // req:view.repo/pending-names-its-commit@bcee5366
+    // req:view.repo/pending-names-its-commit@3e612c59
     let dir = ahead_of_the_checkout();
     let d = dir.path();
     let head = git(d, &["rev-parse", "HEAD"])[..7].to_string();
