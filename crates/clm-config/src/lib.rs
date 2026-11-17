@@ -326,6 +326,12 @@ pub struct Verify {
     /// The command of the mutation pass (`verify/mutation-pass`); never empty, and never set
     /// with `VerifyMode::Import`.
     pub mutate: Option<String>,
+    /// The most requirements the mutation pass judges at once; at least 1, set only with
+    /// `mutate`. None: one at a time.
+    pub mutate_jobs: Option<u64>,
+    /// The longest a mutation pass runs, in minutes; at least 1, set only with `mutate`.
+    /// None: no limit.
+    pub mutate_minutes: Option<u64>,
 }
 
 impl fmt::Display for Verify {
@@ -346,6 +352,12 @@ impl fmt::Display for Verify {
         }
         if let Some(mutate) = &self.mutate {
             write!(f, ",mutate={mutate}")?;
+        }
+        if let Some(jobs) = self.mutate_jobs {
+            write!(f, ",mutate_jobs={jobs}")?;
+        }
+        if let Some(minutes) = self.mutate_minutes {
+            write!(f, ",mutate_minutes={minutes}")?;
         }
         Ok(())
     }
@@ -1183,7 +1195,8 @@ pub fn committed_env(
 
 /// Reads `[verify]`: a table with a non-empty string `check`, a `mode`, optional distinct
 /// `triggers`, an optional `every` table of positive integers and a `workflow` that `import`
-/// requires and the other modes refuse.
+/// requires and the other modes refuse, an optional `mutate` command, and `mutate_jobs` and
+/// `mutate_minutes`, positive integers set only beside `mutate`.
 fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
     let fail = |problem: String| Error::file(path, format!("`verify`: {problem}"));
     let toml::Value::Table(table) = value else {
@@ -1192,11 +1205,19 @@ fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
     if let Some(key) = table.keys().find(|k| {
         !matches!(
             k.as_str(),
-            "check" | "mode" | "triggers" | "every" | "workflow" | "mutate"
+            "check"
+                | "mode"
+                | "triggers"
+                | "every"
+                | "workflow"
+                | "mutate"
+                | "mutate_jobs"
+                | "mutate_minutes"
         )
     }) {
         return Err(fail(format!(
-            "unknown key `{key}`, expected `check`, `mode`, `triggers`, `every`, `workflow` or `mutate`"
+            "unknown key `{key}`, expected `check`, `mode`, `triggers`, `every`, `workflow`, `mutate`, \
+             `mutate_jobs` or `mutate_minutes`"
         )));
     }
     let check = match table.get("check") {
@@ -1296,6 +1317,19 @@ fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
             )));
         }
     };
+    let bound = |key: &str| -> Result<Option<u64>, Error> {
+        let Some(value) = table.get(key) else {
+            return Ok(None);
+        };
+        if mutate.is_none() {
+            return Err(fail(format!("`{key}` is only set beside `mutate`")));
+        }
+        at_least_one(value.as_integer())
+            .map(Some)
+            .ok_or_else(|| fail(format!("`{key}` must be a positive integer, not {value}")))
+    };
+    let mutate_jobs = bound("mutate_jobs")?;
+    let mutate_minutes = bound("mutate_minutes")?;
     Ok(Verify {
         check,
         mode,
@@ -1304,6 +1338,8 @@ fn verify(value: toml::Value, path: &Path) -> Result<Verify, Error> {
         every_days,
         workflow,
         mutate,
+        mutate_jobs,
+        mutate_minutes,
     })
 }
 

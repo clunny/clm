@@ -666,7 +666,7 @@ fn this_repository_names_the_retired_terms_detector() {
 
 #[test]
 fn config_get_verify_prints_the_table_and_the_file() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let (out, file) = config_get_in_repo(
         Some("[verify]\ncheck = \"scripts/slow.sh\"\nmode = \"local\"\n"),
         "verify",
@@ -677,4 +677,18 @@ fn config_get_verify_prints_the_table_and_the_file() {
     );
     let (out, _) = config_get_in_repo(None, "verify");
     assert_eq!(out, "\tdefault\n");
+    let (out, file) = config_get_in_repo(
+        Some(
+            "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\n\
+             mutate_jobs = 6\nmutate_minutes = 60\n",
+        ),
+        "verify",
+    );
+    assert_eq!(
+        out,
+        format!(
+            "mode=local,check=x,mutate=m,mutate_jobs=6,mutate_minutes=60\t{}\n",
+            file.display()
+        )
+    );
 }

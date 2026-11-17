@@ -1887,7 +1887,7 @@ fn local_file_takes_skip_migrations_but_not_the_repository_state_keys() {
 
 #[test]
 fn verify_set_prints_its_fields_and_layer() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let f = Fixture::new(
         None,
         Some(
@@ -1906,7 +1906,7 @@ fn verify_set_prints_its_fields_and_layer() {
 
 #[test]
 fn verify_every_and_workflow_print_after_the_triggers() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let f = Fixture::new(
         None,
         Some(
@@ -1931,7 +1931,7 @@ fn verify_every_and_workflow_print_after_the_triggers() {
 
 #[test]
 fn verify_unset_is_nothing_from_default() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let s = Fixture::new(None, Some("defects = \"off\"\n"))
         .load(&[])
         .unwrap();
@@ -1943,7 +1943,7 @@ fn verify_unset_is_nothing_from_default() {
 
 #[test]
 fn verify_local_file_may_set_it() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let f = Fixture::new(None, Some("[verify]\ncheck = \"a\"\nmode = \"local\"\n"))
         .local("[verify]\ncheck = \"b\"\nmode = \"pipeline\"\n");
     let s = f.load(&[]).unwrap();
@@ -1954,7 +1954,7 @@ fn verify_local_file_may_set_it() {
 
 #[test]
 fn bad_verify_fails_naming_the_file_and_key() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     for bad in [
         "verify = \"x\"\n",
         "[verify]\nmode = \"local\"\n",
@@ -1990,7 +1990,7 @@ fn bad_verify_fails_naming_the_file_and_key() {
 
 #[test]
 fn verify_mutate_prints_last_and_is_refused_when_empty_or_with_import() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let f = Fixture::new(
         None,
         Some("[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"scripts/mutate.sh\"\n"),
@@ -2034,8 +2034,86 @@ fn verify_mutate_prints_last_and_is_refused_when_empty_or_with_import() {
 }
 
 #[test]
+fn verify_mutate_jobs_and_minutes_print_after_mutate() {
+    // req:config/verify-setting@3cf7f3fc
+    let f = Fixture::new(
+        None,
+        Some(
+            "[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\n\
+             mutate_jobs = 6\nmutate_minutes = 60\n",
+        ),
+    );
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("verify").unwrap();
+    assert_eq!(
+        value,
+        "mode=local,check=x,mutate=m,mutate_jobs=6,mutate_minutes=60"
+    );
+    assert_eq!(*layer, Layer::File(f.repo_file()));
+    let verify = s.verify.value.unwrap();
+    assert_eq!(verify.mutate_jobs, Some(6));
+    assert_eq!(verify.mutate_minutes, Some(60));
+    for (extra, shown) in [
+        (
+            "mutate_jobs = 2\n",
+            "mode=local,check=x,mutate=m,mutate_jobs=2",
+        ),
+        (
+            "mutate_minutes = 5\n",
+            "mode=local,check=x,mutate=m,mutate_minutes=5",
+        ),
+    ] {
+        let toml = format!("[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\n{extra}");
+        let s = Fixture::new(None, Some(&toml)).load(&[]).unwrap();
+        assert_eq!(s.get("verify").unwrap().0, shown, "{extra}");
+    }
+    let s = Fixture::new(
+        None,
+        Some("[verify]\ncheck = \"x\"\nmode = \"local\"\nmutate = \"m\"\n"),
+    )
+    .load(&[])
+    .unwrap();
+    let verify = s.verify.value.unwrap();
+    assert_eq!((verify.mutate_jobs, verify.mutate_minutes), (None, None));
+}
+
+#[test]
+fn verify_mutate_jobs_or_minutes_without_mutate_or_not_positive_fail() {
+    // req:config/verify-setting@3cf7f3fc
+    let local = "[verify]\ncheck = \"x\"\nmode = \"local\"\n";
+    for (extra, reason) in [
+        ("mutate_jobs = 2\n", "beside `mutate`"),
+        ("mutate_minutes = 2\n", "beside `mutate`"),
+        ("mutate = \"m\"\nmutate_jobs = 0\n", "positive integer"),
+        ("mutate = \"m\"\nmutate_minutes = 0\n", "positive integer"),
+        (
+            "mutate = \"m\"\nmutate_minutes = \"1h\"\n",
+            "positive integer",
+        ),
+        ("mutate = \"m\"\nmutate_jobs = -1\n", "positive integer"),
+        ("mutate = \"m\"\nmutate_jobs = 1.5\n", "positive integer"),
+    ] {
+        let bad = format!("{local}{extra}");
+        let f = Fixture::new(None, Some(&bad));
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(e.source, Some(f.repo_file().display().to_string()), "{bad}");
+        assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
+        assert!(e.message.contains(reason), "{bad}: {}", e.message);
+        let f = Fixture::new(None, None).local(&bad);
+        let e = f.load(&[]).unwrap_err();
+        assert_eq!(
+            e.source,
+            Some(f.local_file().display().to_string()),
+            "{bad}"
+        );
+        assert!(e.message.contains("`verify`"), "{bad}: {}", e.message);
+        assert!(e.message.contains(reason), "{bad}: {}", e.message);
+    }
+}
+
+#[test]
 fn verify_in_the_user_file_fails() {
-    // req:config/verify-setting@93c5194a
+    // req:config/verify-setting@3cf7f3fc
     let e = Fixture::new(Some("[verify]\ncheck = \"x\"\nmode = \"local\"\n"), None)
         .load(&[])
         .unwrap_err();
