@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-s-cli-tests-prove-other-components-through-the-binary]
 ---
 
