@@ -597,7 +597,6 @@ fn dispatch() -> ExitCode {
         // worktree.
         Command::Rebase(args) => ExitCode::from(clm_sync::rebase_command(
             command_args(),
-            "rebase",
             &found_root(&args.root),
             &clm_config::process_env,
             &mut Printed::Out,

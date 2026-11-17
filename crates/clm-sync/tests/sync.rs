@@ -2366,7 +2366,7 @@ fn a_slug_that_isnt_kebab_case_is_skipped_with_a_warning() {
 
 #[test]
 fn a_skipped_proposals_warning_carries_no_command_name() {
-    // req:sync/warnings-name-the-command@32d2f35d
+    // req:sync/warnings-name-the-command@f6774cd0
     let r = repo("impl/a");
     ledger(
         &r,
@@ -2386,28 +2386,6 @@ fn a_skipped_proposals_warning_carries_no_command_name() {
         report.warnings.iter().all(|w| !w.starts_with("clm")),
         "{report:?}"
     );
-}
-
-#[test]
-fn the_crate_names_no_command_in_a_string() {
-    // req:sync/warnings-name-the-command@32d2f35d
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for entry in fs::read_dir(&src).unwrap() {
-        let path = entry.unwrap().path();
-        let text = fs::read_to_string(&path).unwrap();
-        for (n, line) in text.lines().enumerate() {
-            let code = line.split("//").next().unwrap();
-            for name in ["rebase", "sync"] {
-                let named = format!("clm {name}");
-                assert!(
-                    !(code.contains('"') && code.contains(&named)),
-                    "{}:{} names `{named}` in a string",
-                    path.display(),
-                    n + 1
-                );
-            }
-        }
-    }
 }
 
 #[test]

@@ -1,6 +1,6 @@
 //! `clm rebase` and `clm autosync` as calls (`commands-in-crate`): their arguments, what they
-//! print and their exit status. The rebase's call is given the name it was run by, which the
-//! crate never spells itself (`warnings-name-the-command`).
+//! print and their exit status. The rebase's call writes each warning as `clm rebase: <text>`
+//! (`warnings-name-the-command`).
 
 use std::ffi::OsString;
 use std::io::{self, Write};
@@ -62,17 +62,16 @@ where
     })
 }
 
-/// `clm rebase`, run as `clm <name>`, with `args`, the strings the command line gives after
-/// the command's name, in `root` unless `--root` overrides it, with `env` as the environment.
-/// `settings` loads the `health` settings from the CLM root it is given, or says why they
-/// can't be loaded, as `sync` takes it. Writes what the command prints to `out` and `err`,
-/// each warning and error on `err` as `clm <name>: <text>`, and returns its exit status: 0
-/// when the branch is up to date and passes, 1 when something is left, 2 when git fails or
-/// for arguments it can't parse. The last line on `out` states the outcome, `<name> ok`,
-/// `<name> incomplete` or `<name> failed` (`outcome-line`).
+/// `clm rebase` with `args`, the strings the command line gives after the command's name, in
+/// `root` unless `--root` overrides it, with `env` as the environment. `settings` loads the
+/// `health` settings from the CLM root it is given, or says why they can't be loaded, as
+/// `sync` takes it. Writes what the command prints to `out` and `err`, each warning and error
+/// on `err` as `clm rebase: <text>`, and returns its exit status: 0 when the branch is up to
+/// date and passes, 1 when something is left, 2 when git fails or for arguments it can't
+/// parse. The last line on `out` states the outcome, `rebase ok`, `rebase incomplete` or
+/// `rebase failed` (`outcome-line`).
 pub fn rebase_command<I, T>(
     args: I,
-    name: &str,
     root: &Path,
     env: &dyn Fn(&str) -> Option<String>,
     out: &mut dyn Write,
@@ -83,18 +82,17 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    match parsed::<RebaseLine, _, _>(args, &format!("clm {name}"), out, err) {
+    match parsed::<RebaseLine, _, _>(args, "clm rebase", out, err) {
         Err(code) => code,
         Ok(RebaseLine { args }) => {
             let root = args.root.as_deref().unwrap_or(root);
-            rebase(root, name, env, out, err, settings).unwrap_or(2)
+            rebase(root, env, out, err, settings).unwrap_or(2)
         }
     }
 }
 
 fn rebase(
     root: &Path,
-    name: &str,
     env: &dyn Fn(&str) -> Option<String>,
     out: &mut dyn Write,
     err: &mut dyn Write,
@@ -103,7 +101,7 @@ fn rebase(
     let (code, outcome) = match crate::sync(root, env, settings) {
         Ok(report) => {
             for warning in &report.warnings {
-                writeln!(err, "clm {name}: {warning}")?;
+                writeln!(err, "clm rebase: {warning}")?;
             }
             for line in &report.lines {
                 writeln!(out, "{line}")?;
@@ -115,14 +113,14 @@ fn rebase(
             }
         }
         Err(e) => {
-            writeln!(err, "clm {name}: {e}")?;
+            writeln!(err, "clm rebase: {e}")?;
             match e.exit_code() {
                 1 => (1, "incomplete"),
                 code => (code, "failed"),
             }
         }
     };
-    writeln!(out, "{name} {outcome}")?;
+    writeln!(out, "rebase {outcome}")?;
     Ok(code)
 }
 
