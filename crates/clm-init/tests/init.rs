@@ -262,7 +262,7 @@ fn root_outside_skips_clm_files_and_escapes() {
 
 #[test]
 fn no_remote() {
-    // req:init/init-files@2e91537b
+    // req:init/init-files@35b2667c
     let (_tmp, dir) = repo();
     init(&dir, &[], &fake_hosts());
     assert_eq!(host_line(&dir), "host = \"none\"");
@@ -270,7 +270,7 @@ fn no_remote() {
 
 #[test]
 fn host_given() {
-    // req:init/init-files@2e91537b
+    // req:init/init-files@35b2667c
     let (_tmp, dir) = repo();
     origin(&dir, "https://github.com/o/r.git");
     init(&dir, &["--host", "git"], &fake_hosts());
@@ -284,7 +284,7 @@ fn host_given() {
 
 #[test]
 fn azure_remote() {
-    // req:init/init-files@2e91537b
+    // req:init/init-files@35b2667c
     let (_tmp, dir) = repo();
     origin(&dir, "https://o@dev.azure.com/o/p/_git/r");
     let hosts = fake_hosts();
@@ -295,7 +295,7 @@ fn azure_remote() {
 
 #[test]
 fn host_from_origin() {
-    // req:init/init-files@2e91537b
+    // req:init/init-files@35b2667c
     for (url, host) in [
         ("git@github.com:o/r.git", "github"),
         ("https://GitHub.com/o/r", "github"),
@@ -312,7 +312,7 @@ fn host_from_origin() {
 
 #[test]
 fn project_files_kept() {
-    // req:init/init-files@2e91537b
+    // req:init/init-files@35b2667c
     let (_tmp, dir) = repo();
     write(&dir, "CLAUDE.md", "# Our rules\n");
     write(&dir, "clm.toml", "defects = \"off\"\n");
@@ -352,7 +352,7 @@ fn config(dir: &Path, key: &str) -> String {
 
 #[test]
 fn typescript_without_detectors_still_sets_build_setup() {
-    // req:init/init-build-setup@aeb0d060
+    // req:init/init-build-setup@8f81ad45
     let (_tmp, dir) = repo();
     init(
         &dir,
@@ -368,7 +368,7 @@ fn typescript_without_detectors_still_sets_build_setup() {
 
 #[test]
 fn other_projects_have_no_build_table() {
-    // req:init/init-build-setup@aeb0d060
+    // req:init/init-build-setup@8f81ad45
     let hosts = fake_hosts();
     for langs in [&["--lang", "rust"][..], &["--lang", "python"], &[]] {
         let (_tmp, dir) = repo();
@@ -657,7 +657,7 @@ fn allowed(dir: &Path) -> Vec<String> {
 
 #[test]
 fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
-    // req:init/init-seeds-permissions@bda454a5
+    // req:init/init-seeds-permissions@88ca3bd9
     let (_tmp, dir) = repo();
     write(&dir, ".claude/settings.json", "  \n");
     init(&dir, &[], &fake_hosts());
@@ -671,7 +671,7 @@ fn init_writes_whitespace_settings_new_and_keeps_complete_ones() {
 
 #[test]
 fn init_leaves_settings_that_arent_json() {
-    // req:init/init-seeds-permissions@bda454a5
+    // req:init/init-seeds-permissions@88ca3bd9
     for text in [
         "{",
         "[]",
@@ -688,7 +688,7 @@ fn init_leaves_settings_that_arent_json() {
 
 #[test]
 fn a_rerun_leaves_the_settings_alone() {
-    // req:init/init-seeds-permissions@bda454a5
+    // req:init/init-seeds-permissions@88ca3bd9
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -712,7 +712,7 @@ fn a_rerun_leaves_the_settings_alone() {
 
 #[test]
 fn a_rerun_with_the_rules_names_nothing() {
-    // req:init/init-seeds-permissions@bda454a5
+    // req:init/init-seeds-permissions@88ca3bd9
     let (_tmp, dir) = repo();
     let hosts = fake_hosts();
     init(&dir, &[], &hosts);
@@ -958,7 +958,7 @@ fn search_stops_at_the_top_without_a_git_entry() {
 
 #[test]
 fn not_a_repository() {
-    // req:init/init-files@2e91537b
+    // req:init/init-files@35b2667c
     let tmp = TempDir::new().unwrap();
     let dir = tmp.path().join("plain");
     fs::create_dir(&dir).unwrap();
@@ -1279,7 +1279,7 @@ fn run_check_script(dir: &Path, cwd: &Path, stubs: &TempDir) -> Output {
 
 #[test]
 fn manifest_added_later() {
-    // req:init/init-without-manifest@30800928
+    // req:init/init-without-manifest@dc17c7c8
     let (_tmp, dir) = repo();
     init(
         &dir,
@@ -1301,7 +1301,7 @@ fn manifest_added_later() {
 
 #[test]
 fn rust_and_python_manifests() {
-    // req:init/init-without-manifest@30800928
+    // req:init/init-without-manifest@dc17c7c8
     let (_tmp, dir) = repo();
     init(&dir, &["--lang", "rust", "--lang", "python"], &fake_hosts());
     write(&dir, "Cargo.toml", "");
@@ -1321,4 +1321,282 @@ fn survey_counts_agents_md_as_a_spec_file() {
     git(&dir, &["add", "-A"]);
     init(&dir, &[], &fake_hosts());
     assert_eq!(spec_key(&dir, "outside"), r#"outside: ["src/**"]"#);
+}
+
+/// What `clm init` wrote, as `clm-model` loads it: the entries of both human layers and the
+/// violations. The other commands' view of the result is the root's (`clm/init-result-accepted`).
+fn loaded(dir: &Path) -> (Vec<String>, Vec<String>) {
+    let (graph, violations) = clm_model::load(dir);
+    let entries = graph
+        .layers
+        .values()
+        .flatten()
+        .map(|r| r.id.clone())
+        .collect();
+    let violations = violations.iter().map(|v| format!("{v:?}")).collect();
+    (entries, violations)
+}
+
+#[test]
+fn empty_repository() {
+    // req:init/init-files@35b2667c
+    let (_tmp, dir) = repo();
+    origin(&dir, "https://github.com/o/r.git");
+    let out = init(&dir, &["--lang", "rust"], &fake_hosts());
+    for file in FILES {
+        assert!(dir.join(file).is_file(), "{file} missing");
+        assert!(out.contains(&format!("wrote {file}\n")), "{out}");
+    }
+    assert!(!dir.join(".github").exists(), "{out}");
+    let check = dir.join("scripts/clm-check.sh");
+    assert_eq!(
+        fs::metadata(&check).unwrap().permissions().mode() & 0o111,
+        0o111
+    );
+    let script = read(&dir, "scripts/clm-check.sh");
+    assert!(script.starts_with("#!/usr/bin/env bash\n"), "{script}");
+    assert!(script.contains("cargo test"), "{script}");
+    let toml = read(&dir, "clm.toml");
+    assert!(toml.contains("command = [\"cargo-machete\"]"), "{toml}");
+    assert!(toml.lines().any(|l| l == "host = \"github\""), "{toml}");
+    assert!(toml.lines().any(|l| l == "approval = \"any\""), "{toml}");
+    assert!(
+        toml.contains("\n[land]\ncheck = \"scripts/clm-check.sh\"\n"),
+        "{toml}"
+    );
+    assert_eq!(read(&dir, "CLAUDE.md"), "@AGENTS.md\n");
+    // `config` reads the settings back as written.
+    assert_eq!(config(&dir, "host"), "github");
+    assert_eq!(config(&dir, "approval"), "any");
+    assert_eq!(config(&dir, "land"), "check=scripts/clm-check.sh");
+}
+
+#[test]
+fn human_layers() {
+    // req:init/init-files@35b2667c
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let caps = read(&dir, "CAPABILITIES.md");
+    assert!(caps.contains("\n## Capabilities\n"), "{caps}");
+    // No entry the project's own tests would have to prove.
+    let (entries, violations) = loaded(&dir);
+    assert_eq!(entries, Vec::<String>::new());
+    assert_eq!(violations, Vec::<String>::new());
+    // CLM's carried constraints are named by where they are, outside `## Constraints`.
+    let arch = read(&dir, "ARCHITECTURE.md");
+    let before = &arch[..arch.find("\n## Constraints\n").expect(&arch)];
+    assert!(before.contains("`clm guide constraints`"), "{arch}");
+
+    // An existing CAPABILITIES.md is the project's.
+    let (_tmp2, other) = repo();
+    write(&other, "CAPABILITIES.md", "# Ours\n");
+    let out = init(&other, &[], &fake_hosts());
+    assert_eq!(read(&other, "CAPABILITIES.md"), "# Ours\n");
+    assert!(out.contains("kept CAPABILITIES.md\n"), "{out}");
+}
+
+/// Whether `text` holds the old term: the word `architecture` followed by `requirement(s)`.
+fn holds_old_term(text: &str) -> bool {
+    let words: Vec<String> = text
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    words
+        .windows(2)
+        .any(|w| w[0] == "architecture" && w[1].starts_with("requirement"))
+}
+
+/// The files under `crates/clm-init/templates/`.
+fn templates() -> Vec<std::path::PathBuf> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+    fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect()
+}
+
+#[test]
+fn template_says_architectural_constraint() {
+    // req:init/template-says-architectural-constraint@b04e7622
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let arch = read(&dir, "ARCHITECTURE.md");
+    let agents = read(&dir, "AGENTS.md");
+    assert!(
+        arch.contains("\nThe architectural constraints:"),
+        "preamble: {arch}"
+    );
+    assert!(arch.contains("\n## Constraints\n"), "{arch}");
+    assert!(!arch.contains("## Requirements"), "{arch}");
+    assert!(
+        agents.contains("architectural constraints apply to all work"),
+        "{agents}"
+    );
+    assert!(!holds_old_term(&arch) && !holds_old_term(&agents));
+    for path in templates() {
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(
+            !holds_old_term(&text),
+            "{} holds the old term",
+            path.display()
+        );
+    }
+}
+
+#[test]
+fn templates_say_new_words() {
+    // req:init/templates-say-new-words@5d88e574
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    assert!(read(&dir, "specs/SPEC.md").contains("\nstatus: unbuilt\n"));
+    // No template holds a word `plain-terms-renames` replaced.
+    for path in templates() {
+        for line in fs::read_to_string(&path).unwrap().lines() {
+            assert!(
+                !line.contains("specd")
+                    && line.trim() != "kind: human"
+                    && !line.contains("kind: friction")
+                    && !line
+                        .split(|c: char| !c.is_alphanumeric() && c != '_')
+                        .any(|w| w == "burdens"),
+                "{}: {line}",
+                path.display()
+            );
+        }
+    }
+    // `clm-model` loads the tree `clm init` wrote with no violation.
+    assert_eq!(loaded(&dir).1, Vec::<String>::new());
+}
+
+#[test]
+fn architecture_template_proof() {
+    // req:init/architecture-template-proof@c54b4702
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let arch = read(&dir, "ARCHITECTURE.md");
+    // The preamble says how an entry is proved, and that no test cites one.
+    let preamble = &arch[..arch.find("\n## Constraints\n").expect(&arch)];
+    for needle in [
+        "under `#### Enforced by`",
+        "under `#### Untested`, or both",
+        "A test never cites an entry",
+        "`clm guide constraints`",
+        "`#### Replaces`",
+    ] {
+        assert!(preamble.contains(needle), "{needle}: {preamble}");
+    }
+    assert!(!arch.contains(concat!("req", ":architecture/")), "{arch}");
+    // No carried constraint is stated in the file: they come from the `clm` that runs.
+    assert!(!arch.contains("## Enforced by clm"), "{arch}");
+}
+
+#[test]
+fn typescript_project_sets_build_setup() {
+    // req:init/init-build-setup@8f81ad45
+    let (_tmp, dir) = repo();
+    init(&dir, &["--lang", "typescript"], &fake_hosts());
+    let toml: toml::Table = read(&dir, "clm.toml").parse().unwrap();
+    assert_eq!(
+        toml["build"]["setup"].as_str(),
+        Some("test ! -f package.json || npm ci"),
+        "{toml}"
+    );
+}
+
+#[test]
+fn init_seeds_the_allow_rules() {
+    // req:init/init-seeds-permissions@88ca3bd9
+    let (_tmp, dir) = repo();
+    init(&dir, &[], &fake_hosts());
+    let allow = allowed(&dir);
+    assert_eq!(allow, rules());
+    assert_eq!(clm_init::UNATTENDED_RULES.to_vec(), rules());
+    assert_eq!(allow.len(), 26);
+    for rule in [
+        "Bash(clm build)",
+        "Bash(clm build *)",
+        "Bash(clm land)",
+        "Bash(clm land *)",
+        "Bash(clm setup)",
+        "Bash(clm setup *)",
+        "Bash(clm verify *)",
+    ] {
+        assert!(allow.contains(&rule.to_owned()), "{rule}");
+    }
+    assert!(
+        allow
+            .iter()
+            .all(|r| !r.contains("approve") && !r.contains("git"))
+    );
+    let text = read(&dir, ".claude/settings.json");
+    assert!(
+        text.ends_with("}\n") && text.contains("\n  \"permissions\""),
+        "{text}"
+    );
+}
+
+#[test]
+fn init_keeps_the_settings_it_finds() {
+    // req:init/init-seeds-permissions@88ca3bd9
+    let (_tmp, dir) = repo();
+    write(
+        &dir,
+        ".claude/settings.json",
+        r#"{"permissions":{"deny":["x"],"allow":["Bash(make *)","Bash(clm land *)"]},"enabledPlugins":{"clm@clm":true}}"#,
+    );
+    init(&dir, &[], &fake_hosts());
+    let json: serde_json::Value =
+        serde_json::from_str(&read(&dir, ".claude/settings.json")).unwrap();
+    assert_eq!(json["enabledPlugins"]["clm@clm"], true);
+    assert_eq!(json["permissions"]["deny"][0], "x");
+    let allow = allowed(&dir);
+    assert_eq!(allow[..2], ["Bash(make *)", "Bash(clm land *)"]);
+    for rule in rules() {
+        assert_eq!(allow.iter().filter(|r| **r == rule).count(), 1, "{rule}");
+    }
+    let keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["permissions", "enabledPlugins"]);
+}
+
+#[test]
+fn empty_repository_every_language() {
+    // req:init/init-without-manifest@dc17c7c8
+    let (_tmp, dir) = repo();
+    let failing = stubs(&["cargo", "npm", "pytest"], 1);
+    init(
+        &dir,
+        &["--lang", "rust", "--lang", "typescript", "--lang", "python"],
+        &fake_hosts(),
+    );
+    let toml = read(&dir, "clm.toml");
+    let table = |detector: &str| {
+        toml.split("[[detectors]]")
+            .find(|t| t.contains(&format!("name = \"{detector}\"")))
+            .unwrap_or_else(|| panic!("{detector}: {toml}"))
+    };
+    // Each detector's own table names its manifest.
+    for (detector, manifest) in [
+        ("rust-unused-dependencies", "Cargo.toml"),
+        ("typescript-dead-code", "package.json"),
+        ("python-dead-code", "pyproject.toml"),
+    ] {
+        let table = table(detector);
+        assert!(
+            table.contains(&format!("requires = \"{manifest}\"\n")),
+            "{table}"
+        );
+    }
+    let typescript = table("typescript-dead-code");
+    assert!(
+        typescript.contains("command = [\"node_modules/.bin/knip\"]"),
+        "{typescript}"
+    );
+    // From the root and from a subdirectory, the script finds nothing to run and passes.
+    fs::create_dir(dir.join("sub")).unwrap();
+    for cwd in [&dir, &dir.join("sub")] {
+        let script = run_check_script(&dir, cwd, &failing);
+        assert_eq!(script.status.code(), Some(0), "{script:?}");
+    }
+    assert_eq!(host_calls(&failing), "", "a stub ran");
 }
