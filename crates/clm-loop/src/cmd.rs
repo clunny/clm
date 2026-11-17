@@ -56,19 +56,27 @@ pub(crate) fn clm_in(
 /// The `clm` to run now for `clm`, the path `clm build` started from. On Linux, once that file
 /// is replaced or deleted, `current_exe` gives it with ` (deleted)` appended: run the file now at
 /// the path without the suffix, or else the running image. Any other path runs as given.
+#[cfg(target_os = "linux")]
 fn resolve(clm: &Path) -> PathBuf {
+    use std::os::unix::ffi::OsStrExt;
     if clm.exists() {
         return clm.to_path_buf();
     }
-    let Some(path) = clm.to_str().and_then(|s| s.strip_suffix(" (deleted)")) else {
+    let Some(path) = clm.as_os_str().as_bytes().strip_suffix(b" (deleted)") else {
         return clm.to_path_buf();
     };
-    let now = PathBuf::from(path);
+    let now = PathBuf::from(std::ffi::OsStr::from_bytes(path));
     if now.exists() {
         now
     } else {
         PathBuf::from("/proc/self/exe")
     }
+}
+
+/// Elsewhere no replaced binary's path carries a suffix: every path runs as given.
+#[cfg(not(target_os = "linux"))]
+fn resolve(clm: &Path) -> PathBuf {
+    clm.to_path_buf()
 }
 
 /// `clm <args>` that must exit 0: its stdout, or a failure carrying its reason.

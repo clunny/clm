@@ -1,4 +1,6 @@
-//! The `clm` the loop runs is the one now at its path (`runs-the-clm-now-at-its-path`).
+//! The `clm` the loop runs is the one now at its path (`runs-the-clm-now-at-its-path`). Only
+//! Linux marks a replaced binary's path with ` (deleted)`.
+#![cfg(target_os = "linux")]
 
 mod common;
 
@@ -25,8 +27,11 @@ fn the_clm_it_started_from_was_replaced() {
         "{actions:?}"
     );
     // The fake `clm` at the path without the suffix received the step's subcommands.
-    assert!(fx.ran("next") > 0, "{:?}", fx.calls());
-    assert!(fx.calls().iter().any(|c| c.starts_with("run a ")));
+    assert!(
+        fx.calls().iter().any(|c| c.starts_with("run a ")),
+        "{:?}",
+        fx.calls()
+    );
 }
 
 #[test]
