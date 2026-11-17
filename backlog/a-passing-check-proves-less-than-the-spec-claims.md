@@ -142,7 +142,7 @@ Five root causes produce nearly all the workarounds: one-component builds agains
 5. **Two designs, by `/clm:propose`:** `web-tests-prove-one-web-component-from-another-s-files` and `a-build-is-told-to-re-cite-a-marker-in-a-file-it-may-not-change`. They block `gate/own-files`.
 6. **`/clm:build`** builds `gate/own-files` and `land/build-holds-own-files`: the clause is gone from the code.
 7. **Two closing spec branches:** `nothing-holds-the-root-s-test-files-to-the-root-s-requirements`, and `clm-check-still-re-exports-the-coverage-library`, which applies the proposed `20261115-check-passes-on-no-coverage`.
-Beside these, any time, and plan work by the human's word (2026-11-16): `backlog/a-mutation-pass-that-stops-starts-over-and-has-no-limit-on-its-time`. The pass after phase 4's builds held 219 requirements and ran for about three hours, and the passes before it had each failed and recorded nothing. Propose it before step 3's moves make the next large pass, if it can be.
+Beside these, any time, and plan work by the human's word (2026-11-16): `backlog/a-mutation-pass-that-stops-starts-over-and-has-no-limit-on-its-time`. The human set it at `P2`, and it now also asks that the pass judge several requirements at once: the machine sat at a load of 0.5 on 24 cores throughout. The pass after phase 4's builds held 219 requirements and ran for about three hours, and the passes before it had each failed and recorded nothing. Propose it before step 3's moves make the next large pass, if it can be.
 
 8. **Rewrite the phase 4 paragraph above as done,** with what was measured at the end: the root's size, how many tests stayed the root's, and the share of builds that filed an item.
 
