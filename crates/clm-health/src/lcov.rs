@@ -54,7 +54,7 @@ pub(crate) fn unexercised(root: &Path, graph: &Graph, lcov: Option<&str>) -> Sec
     let mut total = 0;
     let mut lines = Vec::new();
     for (path, counts) in parse(root, &text) {
-        if clm_check::owner(graph, Path::new(&path)).is_none() {
+        if clm_coverage::owner(graph, Path::new(&path)).is_none() {
             continue;
         }
         let zeros: Vec<u64> = counts

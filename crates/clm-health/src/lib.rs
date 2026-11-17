@@ -141,7 +141,7 @@ pub fn report(root: &Path, settings: &Settings, expiry: u64) -> Result<Report, F
         )));
     }
     let (graph, _) = clm_model::load(root);
-    let markers = clm_check::scan(root).req;
+    let markers = clm_coverage::scan(root).req;
     let sizes = clm_check::size(root, &graph, &markers, settings.component_size)
         .map_err(|e| Failure::Git(e.to_string()))?;
     let now = clm_git::now();

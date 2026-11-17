@@ -4,7 +4,8 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use clm_check::{Marker, Size, State};
+use clm_check::Size;
+use clm_coverage::{Marker, State};
 use clm_model::{BacklogKind, ChangeStatus, Graph};
 
 use crate::{Failure, Section, finding};
@@ -30,7 +31,7 @@ pub(crate) fn check(root: &Path) -> Section {
 /// Each node with pending requirements, with how many are in each pending state.
 pub(crate) fn pending(graph: &Graph, markers: &[Marker]) -> Section {
     let mut counts: BTreeMap<&str, [usize; 3]> = BTreeMap::new();
-    let list = clm_check::pending(graph, markers);
+    let list = clm_coverage::pending(graph, markers);
     for p in &list {
         let slot = match p.state {
             State::Unbuilt => 0,
@@ -111,7 +112,7 @@ pub(crate) fn lapsed_claims(root: &Path, expiry: u64, now: u64) -> Result<Sectio
 /// Each `applied` or `implementing` change outside the archive with requirements, none
 /// of them current.
 pub(crate) fn stalled_changes(graph: &Graph, markers: &[Marker]) -> Section {
-    let lines = clm_check::change_progress(graph, markers)
+    let lines = clm_coverage::change_progress(graph, markers)
         .into_iter()
         .filter(|p| p.current == 0 && p.total > 0)
         .filter_map(|p| {

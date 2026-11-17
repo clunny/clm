@@ -34,13 +34,13 @@ pub(crate) fn section(root: &Path, graph: &Graph) -> Result<Section, Failure> {
         }
         let owned: Vec<String> = files
             .iter()
-            .filter(|f| clm_check::owner(graph, f) == Some(id.as_str()))
+            .filter(|f| clm_coverage::owner(graph, f) == Some(id.as_str()))
             .map(|f| f.to_string_lossy().into_owned())
             .collect();
         for e in &node.frontmatter.exemptions {
             let count = owned
                 .iter()
-                .filter(|f| e.files.iter().any(|g| clm_check::path_matches(g, f)))
+                .filter(|f| e.files.iter().any(|g| clm_coverage::matches(g, f)))
                 .count();
             let mut message = format!("{id}: {} until {}: {count} files", name(e.rule), e.until);
             let slug = e.until.strip_prefix("backlog/").unwrap_or(&e.until);
