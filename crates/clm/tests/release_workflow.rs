@@ -1257,7 +1257,8 @@ fn failing_tests_push_no_bump() {
     f.git(&f.work(), &["push", "-q", "origin", "main"]);
     let r = f.run("0.2.0");
     assert_refused(&r);
-    assert!(r.stderr.contains("test failed"), "{}", r.stderr);
+    // The failing test's own panic, as nextest reports it.
+    assert!(r.stderr.contains("broken"), "{}", r.stderr);
 }
 
 #[test]

@@ -7,6 +7,8 @@ set -euo pipefail
 
 # The suite's `this_repository_is_clean` runs `clm check`, detectors and all.
 .github/scripts/detector-tools.sh
+# The Rust tests run under `cargo-nextest`, one process per test (ci/nextest-runner).
+.github/scripts/test-tools.sh
 rustup component add llvm-tools-preview
 cargo install --locked --version 0.9.1 cargo-llvm-cov
 
@@ -26,11 +28,15 @@ relative_to_root() {
     { print }' "$1" >"$2"
 }
 
-# Builds in `target/llvm-cov-target/`, so the ordinary build stays warm. Its `SF:` paths are
-# absolute under the root, which `relative_to_root` strips. `--no-rustc-wrapper` puts the instrumentation in `RUSTFLAGS`, which
+# `nextest` runs each test in a process of its own, as every run of the Rust tests here does:
+# plain `cargo llvm-cov` would run them through `cargo test`, threads of one process, where
+# tests that change their own process's `PATH` meet. Builds in `target/llvm-cov-target/`, so the
+# ordinary build stays warm. Its `SF:` paths are absolute under the root, which
+# `relative_to_root` strips. `--no-rustc-wrapper` puts the instrumentation in `RUSTFLAGS`, which
 # the suite's nested `wasm32-unknown-unknown` builds remove, so those aren't instrumented (with
-# the wrapper they were, and failed on `profiler_builtins`). A failing test fails the run.
-cargo llvm-cov --workspace --no-rustc-wrapper --lcov --output-path target/coverage/cargo-abs.info
+# the wrapper they were, and failed on `profiler_builtins`). A failing test, one nextest ends at
+# its bound (`.config/nextest.toml`) included, fails the run.
+cargo llvm-cov nextest --workspace --no-rustc-wrapper --lcov --output-path target/coverage/cargo-abs.info
 relative_to_root target/coverage/cargo-abs.info target/coverage/cargo.info
 
 # One npm directory's vitest suite, with `@vitest/coverage-v8` at the installed vitest's version

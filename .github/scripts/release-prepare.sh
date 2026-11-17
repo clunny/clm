@@ -99,7 +99,10 @@ git add "$cargo_toml" Cargo.lock "$plugin_json" "$codex_json" "$panel_json" "$co
 # The lock step leaves init's own lock only when init ships a migration.
 init_lock=crates/clm-init/migrations.lock
 [ ! -f "$init_lock" ] || git add "$init_lock"
-cargo test --all
+# The Rust tests run one process per test under nextest, which the job's `test-tools.sh` step
+# installed, then the doctests, which nextest can't run (ci/nextest-runner).
+cargo nextest run --workspace --no-tests=pass
+cargo test --doc --workspace
 
 git -c user.name='github-actions[bot]' \
   -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
