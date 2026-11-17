@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [an-unknown-component-in-clm-pending-names-a-rule-that-no-longer-states-it]
 ---
 
