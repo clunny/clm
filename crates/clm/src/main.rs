@@ -823,9 +823,8 @@ fn dispatch() -> ExitCode {
             &mut Printed::Out,
             &mut Printed::Err,
         )),
-        // `Cli` has no options of its own, so the command's arguments follow `clm affected`.
         Command::Affected(args) => ExitCode::from(clm_affected::command(
-            std::env::args_os().skip(2),
+            command_args(),
             &repo_root(args.root),
             &clm_config::process_env,
             &|root, env| {
@@ -835,8 +834,8 @@ fn dispatch() -> ExitCode {
                         clm_check::format(&settings_violation(e, "check.affected/affected-all"))
                     })
             },
-            &mut Stdout(std::io::stdout().lock()),
-            &mut std::io::stderr(),
+            &mut Printed::Out,
+            &mut Printed::Err,
         )),
         Command::Machine {
             format,
@@ -850,12 +849,12 @@ fn dispatch() -> ExitCode {
                 .map(health_settings)
                 .map_err(|e| settings_violation(e, "check.health/health-report"));
             ExitCode::from(clm_health::health_command(
-                std::env::args_os().skip(2),
+                command_args(),
                 &root,
                 settings,
                 &clm_config::process_env,
-                &mut Stdout(std::io::stdout().lock()),
-                &mut std::io::stderr(),
+                &mut Printed::Out,
+                &mut Printed::Err,
             ))
         }
         Command::Workaround(args) => {
@@ -864,21 +863,21 @@ fn dispatch() -> ExitCode {
                 .map(|s| s.effort.value.workaround_flag)
                 .map_err(|e| e.to_string());
             ExitCode::from(clm_health::workaround_command(
-                std::env::args_os().skip(2),
+                command_args(),
                 &root,
                 workaround_flag,
                 &mut std::io::stdin(),
                 &clm_config::process_env,
-                &mut Stdout(std::io::stdout().lock()),
-                &mut std::io::stderr(),
+                &mut Printed::Out,
+                &mut Printed::Err,
             ))
         }
         Command::Unreferenced(args) => ExitCode::from(clm_unreferenced::command(
-            std::env::args_os().skip(2),
+            command_args(),
             &survey_root(args.root),
             &clm_config::process_env,
-            &mut Stdout(std::io::stdout().lock()),
-            &mut std::io::stderr(),
+            &mut Printed::Out,
+            &mut Printed::Err,
         )),
         Command::Survey(_) => ExitCode::from(clm_init::survey_command(
             command_args(),
@@ -1146,9 +1145,6 @@ fn failed(cmd: &str, e: &clm_git::Failure) -> ExitCode {
     ExitCode::from(e.exit_code())
 }
 
-/// `run`'s violations, the imports `depends_on` doesn't declare, then, with `detectors`,
-/// those of the detectors the repository's settings name, or why the settings can't be
-/// loaded.
 /// The root a crate's call takes: the CLM repository found from the current directory, unless
 /// the command's `--root` names one, which the call reads itself.
 fn found_root(given: &Option<PathBuf>) -> PathBuf {
@@ -1345,26 +1341,6 @@ fn machine(root: &Path, format: MachineFormat, width: usize, expiry: u64) -> Exi
             eprintln!("clm machine: {e}");
             ExitCode::FAILURE
         }
-    }
-}
-
-/// Standard output for a crate's call: a write that fails panics as `println!` does, so a
-/// reader that has gone ends the command as for any print (`closed-stdout`).
-struct Stdout(std::io::StdoutLock<'static>);
-
-impl std::io::Write for Stdout {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.0
-            .write_all(buf)
-            .unwrap_or_else(|e| panic!("failed printing to stdout: {e}"));
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.0
-            .flush()
-            .unwrap_or_else(|e| panic!("failed printing to stdout: {e}"));
-        Ok(())
     }
 }
 
