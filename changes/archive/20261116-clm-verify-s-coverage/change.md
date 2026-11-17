@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 human_burdens:
   - "Each release's prepare job builds cargo-nextest: a few more minutes per release"
 resolves: [clm-verify-s-coverage-step-hangs-forever-on-tests-that-change]
