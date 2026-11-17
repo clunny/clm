@@ -308,13 +308,37 @@ impl Fixture {
             .record
     }
 
-    /// The `verified` records the work clone sees, oldest first, as their bodies.
+    /// The `verified` records the work clone sees, in the order they were appended, as their
+    /// bodies. Not by `at`: the wall clock may step back between two appends, and the later
+    /// record would then sort first.
     pub fn records(&self) -> Vec<Body> {
-        self.git(&self.work(), &["fetch", "-q", "origin"]);
-        let fold = clm_ledger::fold(&self.work()).unwrap();
-        let mut all: Vec<Record> = fold.verifications.into_values().flatten().collect();
-        all.sort_by(|a, b| a.at.cmp(&b.at));
-        all.into_iter().map(|r| r.body).collect()
+        let work = self.work();
+        self.git(&work, &["fetch", "-q", "origin"]);
+        let refs = self.git(
+            &work,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/heads/clm/ledger/",
+                "refs/remotes/origin/clm/ledger/",
+            ],
+        );
+        let mut seen = std::collections::BTreeSet::new();
+        let mut all = Vec::new();
+        for name in refs.lines() {
+            let text = self.git(&work, &["show", &format!("{name}:records.jsonl")]);
+            for line in text.lines() {
+                let fold = clm_ledger::fold_records(&[(name, line)]);
+                for record in fold.records {
+                    if matches!(record.body, Body::Verified { .. })
+                        && seen.insert(record.id.clone())
+                    {
+                        all.push(record.body);
+                    }
+                }
+            }
+        }
+        all
     }
 
     pub fn verify_tree(&self) -> PathBuf {

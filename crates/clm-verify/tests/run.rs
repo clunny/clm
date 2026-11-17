@@ -298,9 +298,16 @@ fn the_verdict_outlives_a_failing_stderr() {
             .output()
             .unwrap();
         let said = String::from_utf8_lossy(&out.stdout);
-        assert!(out.status.success() && said.contains("1 passed"), "{said}");
+        assert!(
+            out.status.success() && said.contains("1 passed"),
+            "{}: {said}",
+            out.status
+        );
         return;
     }
+    // The child's stderr is `/dev/full`, so its panic message goes to stdout, where the
+    // parent's assertion shows it.
+    std::panic::set_hook(Box::new(|info| println!("child panicked: {info}")));
     let f = every_land();
     let green = f.land(&[("a.txt", "1\n")], "green");
     f.verified(&green, true);
