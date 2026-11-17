@@ -1,0 +1,220 @@
+---
+component: view
+base: { contract: "523d59d3420cd17e", design: "0fcbb6558003ef70" }
+---
+
+## MODIFIED Contract
+
+Views of a CLM repository for people to read (`views-rendered-by-clm`). `clm view <name>` prints one of four views:
+- **`spec`**: the architecture. Every component nested under its parent, with its status, its requirements counted by coverage state and drawn as a bar segmented by state with `n/m` current of total, owners and `depends_on` edges; its chart and SVG also show each pending component's queue state, and mark a component that is over its size budget (`oversized-is-a-state`).
+- **`flight`**: the work in flight. Every component with pending work and its queue state (`ready`, `claimed`, `blocked`), who holds its claim and for how long, and its pending requirements; then every live change with its requirements current of those its deltas add or modify, and whether it is complete.
+- **`blockers`**: what holds work up. Every component that can't start, grouped under the blocker at the end of its chain of waits, ranked by how many components that blocker holds up, with what waits on the human first.
+- **`queue`**: the build loop's plan (`orchestrator.loop`): what runs, what the loop launches next in its order with each entry's priority and why it is there, what waits on the human, and what waits on other work. It has no `svg` form.
+
+`--format text` (the default) draws a chart in box-drawing characters for a terminal or the chat; `--format ansi` draws the same chart coloured with ANSI escapes; `--format svg` prints a standalone SVG document; `--format json` prints the view's model. `--width <columns>` fits the chart to a width. `clm status` prints a grouped summary of the repository: totals first, then components, changes and claims.
+
+Both read the working tree and the local refs only and never fetch, and exit 0, or print the spec graph's violations and exit 1; what the commands read, how they take their arguments and how they exit are `view.repo`'s to state and prove (`view.repo/reads-the-repository`, `view.repo/arguments-and-exit`), and this component states what is drawn for what it is handed. Since `clm next` reads `origin/main` instead, both name the commit they describe and warn when it is behind `origin/main` as of the last fetch (`views-name-their-commit`): `clm status`'s summary and each chart begin with the checkout line `status-report` defines, and the JSON carries the same as `checkout`. The models and renderers are library calls without git or a checkout, taking what `queue_from_refs` takes, so the `web` Worker computes the same views, and the crate builds for `wasm32-unknown-unknown` (`view-library`). Reading the repository for the two commands, the working tree, the checkout and the refs, is `view.repo`'s, and so is `clm view <name> --at <rev>`, which describes `<rev>`'s commit instead of the working tree (`view.repo/view-at-rev`); the CLM pane always passes `--at origin/main` (`plugin.panel`).
+
+## MODIFIED Design
+
+Crate `clm-view`, with a model per view and a renderer per format. The commands are `view.repo`'s crate, `clm-view-repo`, which reads the repository and hands this crate's models and renderers what it read: `crates/clm` dispatches `clm view` and `clm status` to it, and the `clm-hooks` session-start hook prints its status. `clm_check` gives the `components` and `changes` rows of `clm status` as cells, and `clm_orchestrator` the `claims` rows, each proven by tests in its own crate; `clm-view` adds the summary and lays the sections out.
+
+**Models.** `spec_view`, `flight_view` and `blockers_view` take the graph and markers as `clm_check::report` does, and the component states and pending requirements from `clm_orchestrator::queue_from_refs`; `status` is built from all three. The `spec` model is a function of the graph and markers alone, so the `web` app stores it in a snapshot; the queue state its chart and SVG show is the `flight` model's, computed from the same refs and handed to the renderer beside the model (a component the `flight` model doesn't list is `converged`), so `clm view spec` and `clm view flight` never disagree about a component. JSON is the serde form of the model, with snake_case keys and a top-level `"view"` naming the view; fields may be added, never renamed or removed without a spec change, since the `web` app and the plugin's panel read them.
+
+**Checkout** (`views-name-their-commit`). `view.repo` reads the checkout through `clm-git` (`git-plumbing-layer`): `HEAD`'s hash is cut to 7 hex digits rather than taken from `--short`, which can lengthen. The line is cut to `--width` like the chart's own lines, its `⚠` part amber in `ansi` and the SVG (`colour-meanings`).
+
+**Oversized components** (`oversized-is-a-state`). `spec_view` and `status` take an optional size report, `check`'s `size(...)` result, computed as `clm size` computes it; when the command passes none (`view.repo/reads-the-repository`), nothing is marked. The web app's `replica` passes none until it can compute one (`replica/snapshot-size`).
+
+**Component detail** (`component-detail`). The inspector's fields ride on the `spec` model so the panel draws them from it rather than reading `specs/`, `changes/` or `backlog/` itself (`views-rendered-by-clm`). All three are functions of the graph and markers, so the model stays one the `web` app can store in a snapshot, at the cost of one more coverage pass in `spec_view`. The `web` Worker's shape check (`web.worker`'s `current_shape` in `crates/clm-web/src/snapshot.rs`) lists the fields, so it sees a snapshot stored before them as stale and rebuilds it; nothing deserialises the model, so they carry no serde default. The spec branches on `origin` that touch the component aren't here: `clm view` reads the working tree and the local refs, not each branch's tree.
+
+**Blockers** (`blockers-view`). A component's waits are the edges `queue_from_refs`'s `blocked { by }` gives it; `depends_on` gives none (`needs-alone-order`). A need's edge goes on to the needed requirement's own blockers when that requirement is blocked, so the root is never a `ready` component whose session would leave the needed requirement out. A component waiting on several things appears under each root its waits reach. The `flight` model's components carry no `paths` and no `waiting_on`, and the view shows no `waiting` state.
+
+**Charts.** Long names are cut with `…`. The spec chart is an indented tree drawn with `├─ └─ │`, each component's line holding, in order, its ID, status, queue state, `⚠ oversized`, bar and `n/m`, owners, and `→` with its dependencies. The bar is ten cells shared in proportion among the component's current (`█`), behind (`▓`) and unbuilt (`░`) requirements, each non-zero count getting at least one cell and the rest going by largest remainder, ties in the order current, behind, unbuilt. `spec_view` takes the obsolete counts from `clm_check::pending` rather than from the requirement's ID, so the spec chart, the `flight` view and `clm next` agree on which component holds a removed requirement (`node-removal`). The flight chart draws each component's pending requirements as a bar of behind, unbuilt and obsolete, and each change's requirements as a bar with `complete` where it applies. The pinned line shapes (`flight-component-lines`, `spec-component-lines`, `blockers-root-lines`) exist because the `clm-panel` plugin finds a component's line by its prefix to add its own rows beneath and presses lines by position, the nth such line being the model's nth component or root (`plugin.panel`'s `component-inspector` and `blocker-chains`); they change only with this spec. Colours, in `ansi` and SVG, are `colour-meanings`, shared with the `web` app. The SVG lays components out in layers, dependents above their dependencies, with children inside their parent's box; it embeds its own styles and fonts fall back to the system's. Each box holds its label, its bar as coloured segments and `n/m`; a `converged` component keeps the outline of its status.
+
+**Size budget** (`slim-components`, `node-size-budgets`). The code budget is 55000 tokens, over the default 40000, because the three views and `clm status` share one chart and SVG shell (`chart.rs`, `svg.rs` and the head line every form begins with), which a split by view would leave in the parent while each child held a third of its callers.
+
+**Queue** (`queue-view`). The `queue` model is a plain type this crate defines, with no git and no dependency on `orchestrator.loop`, which computes it (`plan`); `view.repo` hands it to the renderers, so imports run one way, `view` below `orchestrator.loop` below `view.repo`, and the crate still builds for `wasm32-unknown-unknown`. Its chart has no layout of its own beyond sections of lines, so it has no `svg` form: the web app shows no loop, which is one clone's.
+
+## MODIFIED Requirements
+
+### Requirement: status-report <!-- base: 538240fb449f1ac1 -->
+`clm status` SHALL print, for the graph, markers, claim refs, checkout and size report it is handed, which `view.repo` reads from the repository (`view.repo/reads-the-repository`), a summary and then its sections: `components` and `changes` (`check`'s `status-report`), each `components` row gaining the cell `oversized` when the component is oversized (`oversized-is-a-state`), then `claims` (`orchestrator`'s `status-claims`). It SHALL hold no review section: nothing is reviewed after it lands (`yes-no-review`). The summary is the line `CLM status` followed by these lines, each indented two spaces:
+- the checkout line, when it is handed a checkout: `commit <hash>`, the checkout's commit, followed by two spaces and `⚠ <n> behind origin/main` when the checkout's count `n` of commits behind `origin/main` is given and non-zero (`views-name-their-commit`);
+- `components <n>: <a> active, <s> unbuilt; <current>/<total> requirements current`, counting the capabilities that don't hold `#### Untested` with the requirements (`model/human-layers`), followed by `, architecture <e>/<t> enforced` when `ARCHITECTURE.md` holds entries, `<t>` the entries holding an `#### Enforced by` block and `<e>` those of them `check.coverage`'s `coverage-report` gives as current, then `, <u> untested` when any entry of either layer holds `#### Untested`, an entry holding both blocks counting in `<t>` and in `<u>`, then `, <k> oversized` when any component is oversized (`human-layer-proof`);
+- `changes <n> live`, followed by `: ` and `<count> <status>` for each status that has changes outside the archive, in the order `implementing`, `applied`, `approved`, `proposed`, separated by `, `, then `, <count> complete` when any live change is complete;
+- `pending <n> components`, followed by `: ` and `<count> <state>` for each of `claimed`, `ready` and `blocked` that has components, separated by `, `, counting the components `queue_from_refs` gives with the default expiry;
+- `waiting on you <n>`, followed by `: ` and what waits on the human: every `question` and `human-task` backlog item as `backlog/<slug>`, whether or not it blocks a requirement, and the `proposed` and `approved` changes outside the archive as `changes/<id>`, sorted, separated by `, `, when there are any;
+- `backlog <n>`, followed by `: ` and `<count> <kind>` for each kind that has items, in the order bug, deferred, idea, question, human-task, then any other, separated by `, `;
+- `claims <n> live`, followed by `, <count> lapsed` and `, <count> merged` when there are any.
+
+A blank line follows the summary and each section. A section is its name on a line, then its rows, each indented two spaces, or four under a group's name, which is itself indented two. The cells of a section's rows are separated by at least two spaces, each column starting at the same position on every row of the section. The command's exit status is `view.repo/arguments-and-exit`'s.
+
+#### Scenario: entries in the summary
+- GIVEN component `a` with requirement `a/x` current, `capability/b` cited by nothing, `capability/u` holding `#### Untested`, `architecture/e` enforced by `a/x`, and `architecture/f` holding only `#### Untested`
+- WHEN `clm status` runs
+- THEN its summary contains `1/2 requirements current, architecture 1/1 enforced, 2 untested`
+
+#### Scenario: summary
+- GIVEN the root `clm` (active, no requirements) and component `a` (active, requirements `a/x` current and `a/y` not), change `20260101-c` with status `applied` whose delta adds both, and two `idea` backlog items
+- WHEN `clm status` runs, and then again with no change outside the archive, no backlog item, no claim ref and `a/y` current
+- THEN its first line is `CLM status`, and its summary contains `components 2: 2 active, 0 unbuilt; 1/2 requirements current`, `changes 1 live: 1 applied`, `pending 1 components: 1 ready` and `backlog 2: 2 idea`; the second summary contains `changes 0 live`, `pending 0 components`, `backlog 0` and `claims 0 live`
+
+#### Scenario: aligned columns
+- GIVEN components `a` and `check`, `a` with 10 requirements and `check` with 2
+- WHEN `clm status` runs
+- THEN the `components` rows start `  a      ` and `  check  `, their status cells starting in the same column
+
+#### Scenario: changes grouped
+- GIVEN change `20260101-c` with status `implementing` whose deltas add three requirements, one current
+- WHEN `clm status` runs
+- THEN the `changes` section has the line `  implementing` followed by `    20260101-c  1/3 requirements`
+
+#### Scenario: waiting on you
+- GIVEN backlog items `q` of kind `question` and `h` of kind `human-task`
+- WHEN `clm status` runs
+- THEN its summary contains `waiting on you 2: backlog/h, backlog/q`
+
+#### Scenario: claims counted
+- GIVEN remote-tracking refs `origin/impl/b` committed 1 hour ago and `origin/impl/d` committed 5 hours ago
+- WHEN `clm status` runs
+- THEN its summary contains `claims 1 live, 1 lapsed`
+
+#### Scenario: oversized node
+- GIVEN a size report in which component `a` is oversized and components `b` and `c` are not
+- WHEN the status is built with it
+- THEN its `components` summary line ends `, 1 oversized`, `a`'s row holds the cell `oversized`, and neither `b`'s row nor `c`'s holds such a cell
+
+#### Scenario: checkout line
+- GIVEN a checkout two commits behind `origin/main`
+- WHEN the status is built with it, then with a checkout whose count is 0, then with one that has no count, and then with no checkout
+- THEN the first's line after `CLM status` is `  commit `, the checkout's commit and `  ⚠ 2 behind origin/main`, the second's is `  commit ` and the commit and nothing more, the third's starts `  commit ` and holds no `behind`, and the last's starts `  components `
+
+#### Scenario: pending states
+- GIVEN component `a` with an uncited requirement, component `b` with an uncited requirement claimed by a branch pushed an hour ago, and component `x` whose only pending requirement is in the `blocks` of `backlog/q`
+- WHEN `clm status` runs
+- THEN its summary contains `pending 3 components: 1 claimed, 1 ready, 1 blocked`, and no line of the summary names a `waiting` state
+
+#### Serves
+- capability/see-project-state
+- architecture/slim-components
+
+#### Needs
+- check.coverage/coverage-report
+- check.coverage/status-report
+- plugin.panel/component-inspector
+- model/parse-backlog
+- check.coverage/state-names
+- plugin.hooks/session-status
+- view.repo/reads-the-repository
+- view.repo/arguments-and-exit
+
+### Requirement: view-command <!-- base: 0fb3094764ed659e -->
+`clm view <name>` SHALL print the `spec`, `flight`, `blockers` or `queue` view of the graph, markers, claim refs and checkout it is handed, which `view.repo` reads from the repository (`view.repo/reads-the-repository`). `--format` SHALL select the form: `text` (the default), a chart in box-drawing characters with no escape sequences; `ansi`, the same characters with ANSI colour escapes added; `svg`, a standalone SVG document; and `json`, the view's model. In `text` and `ansi`, no line SHALL be wider than the columns `--width` gives it, and every state the chart shows SHALL be written as a word or symbol, not only as a colour. When it is handed a checkout, the `text` and `ansi` charts SHALL begin with the checkout line as `status-report` defines it, the `svg` document SHALL hold the same words, and the `json` model SHALL carry a top-level `checkout` with the line's `commit` and, when the checkout's count is given, that count as `behind`, 0 included (`views-name-their-commit`). When it is handed a commit in place of a checkout, as `clm view <name> --at <rev>` hands it (`view.repo/view-at-rev`), the `text` and `ansi` charts SHALL begin instead with `<rev> <commit>`, then ` · fetched <age> ago` when the time of a fetch is given, `<age>` the time since it as `<n>m` under an hour and `<n>h` from then on, then ` · checkout <branch>`, or ` · checkout detached` when no branch is given, and no `⚠`; the `svg` document SHALL hold the same words, and the `json` model SHALL carry a top-level `at` with `rev`, `commit`, and `fetched` and `branch` when given, and no `checkout`. The command's default width, its usage errors and its exit status are `view.repo/arguments-and-exit`'s.
+
+#### Scenario: plain chart
+- GIVEN a repository with components `a` and `b`, `b` depending on `a`
+- WHEN `clm view spec` runs
+- THEN it exits 0 and its output contains `a` and `b` and no escape character
+
+#### Scenario: coloured chart
+- GIVEN the same repository
+- WHEN `clm view spec --format ansi` runs
+- THEN its output with the ANSI escapes removed is the output of `clm view spec`
+
+#### Scenario: svg
+- GIVEN the same repository
+- WHEN `clm view spec --format svg` runs
+- THEN its output parses as XML with root element `svg` and contains the text `a` and `b`
+
+#### Scenario: checkout behind on the chart
+- GIVEN a checkout three commits behind `origin/main`
+- WHEN the `flight` view is rendered with it as `text`, `svg` and `json`, and then the `spec` view as `json` with a checkout whose count is 0
+- THEN the chart's first line starts `commit ` and ends `⚠ 3 behind origin/main`, the SVG contains the text `3 behind origin/main`, the first JSON's `checkout` has `behind` 3 and the checkout's `commit`, and the last JSON's `checkout` has `behind` 0
+
+#### Scenario: at a commit
+- GIVEN the commit `abc1234` named `origin/main`, fetched 200 seconds ago, with the branch `impl/a` checked out
+- WHEN the `flight` view is rendered with it as `text`, `ansi`, `svg` and `json`, and then as `text` with a fetch 3 hours and 59 minutes ago and no branch, and with no fetch time and no branch
+- THEN the first chart's first line is `origin/main abc1234 · fetched 3m ago · checkout impl/a`, the `ansi` chart's first line holds no `⚠`, the SVG holds the same words, and the JSON has no `checkout` and an `at` with `rev` `origin/main`, `commit` `abc1234`, that fetch time as `fetched` and `branch` `impl/a`; the later charts' first lines are `origin/main abc1234 · fetched 3h ago · checkout detached` and `origin/main abc1234 · checkout detached`
+
+#### Serves
+- capability/see-project-state
+
+#### Needs
+- plugin.panel/views-panel
+- view.repo/reads-the-repository
+- view.repo/arguments-and-exit
+
+### Requirement: spec-view <!-- base: 380d5f8ac7f33f16 -->
+The `spec` view SHALL hold every component exactly once, nested under its parent by ID, with its title, status, owners, `depends_on`, and its requirements counted by coverage state: `current`, `behind`, `unbuilt` and `total` for the requirements the component holds, the counts of the component the capabilities are pending on, which `spec_view` takes from the model's `Graph::capability_tests_node` (`model/capability-tests-component`) rather than deciding itself, including the capabilities that don't hold `#### Untested` (`check.coverage/pending-report`), and no component's counting the architecture entries, and `obsolete` for those a live change removed from it that a marker still cites, together with each requirement removed with its component that a marker in a file the component's `paths` own still cites, or, for a marker in a file no component's `paths` own, the root (`node-removal`). Its chart SHALL show each component below its parent, indented one level further, and its SVG inside its parent's box, each with those facts, its requirements as a bar segmented by state with `<current>/<total>` and `✕<obsolete>` when there are any, and, when the component isn't `converged`, the queue state the `flight` model gives it, coloured as the `flight` chart colours it. When a size report is given, each component SHALL carry `oversized`, true when the report says so, and the chart SHALL show `⚠ oversized` on such a component's line and the SVG `⚠` in its label with an amber outline unless a queue state colours the outline; without a report, `oversized` SHALL be absent and nothing marked (`oversized-is-a-state`).
+
+#### Scenario: entries on the root
+- GIVEN root `clm` with no requirements, `capability/b` cited by nothing, and `architecture/a` enforced by a rule of another component
+- WHEN the `spec` view is built
+- THEN the root's counts are 1 `unbuilt` of 1 `total`, and no component `capability` or `architecture` appears
+
+#### Scenario: nested nodes
+- GIVEN components `clm` (the root), `check` and `check.drift`, where `check.drift` depends on `model`, owned by `@a`, with 2 requirements, one current and one cited only at an older version
+- WHEN `clm view spec --format json` runs
+- THEN `check.drift` has parent `check`, `check` has parent `clm`, and `check.drift` has owners `["@a"]`, `depends_on` `["model"]`, current 1, behind 1, unbuilt 0, obsolete 0 and total 2, and no other count
+
+#### Scenario: tree chart
+- GIVEN the same components
+- WHEN `clm view spec` runs
+- THEN the line for `check.drift` follows the line for `check` and is indented further, and holds a bar of `█` cells then `▓` cells, `1/2`, `@a` and `model`
+
+#### Scenario: a node behind its spec is not full
+- GIVEN component `a` with 4 requirements, 3 current and 1 cited only at an older version
+- WHEN `clm view spec` runs
+- THEN the line for `a` holds `3/4` and a bar with at least one `▓` cell and no `░` cell
+
+#### Scenario: queue states on the chart
+- GIVEN component `a` with one uncited requirement and a live claim ref `impl/a`, component `b` whose only pending requirement is in the `blocks` of `backlog/q`, and component `c` with every requirement current
+- WHEN `clm view spec` runs
+- THEN the line for `a` holds `claimed`, the line for `b` holds `blocked`, and the line for `c` holds no queue state
+
+#### Scenario: obsolete markers
+- GIVEN component `a` with one current requirement, and a change outside the archive whose delta removed `a/old`, which a test still cites
+- WHEN `clm view spec --format json` runs, and then `clm view spec`
+- THEN `a` has current 1, total 1 and obsolete 1, and its chart line holds `1/1` and `✕1`
+
+#### Scenario: a removed node's markers
+- GIVEN component `a` whose `paths` are `src/a/**`, and a change outside the archive whose delta removed component `gone` with its requirement `gone/x`, which a test in `src/a/t.rs` still cites
+- WHEN `clm view spec --format json` runs, and then `clm view spec`
+- THEN `a` has obsolete 1 and its chart line holds `✕1`, and the model holds no component `gone`
+
+#### Scenario: oversized on the chart
+- GIVEN a size report in which component `a` is oversized and component `b` is not
+- WHEN the `spec` view is built with it and rendered as `json`, and then as `text`
+- THEN `a` has `oversized` true and `b` false, and `a`'s chart line holds `⚠ oversized` while `b`'s holds no `⚠`
+
+#### Scenario: oversized without sizes
+- GIVEN the `spec` model computed by the library without a size report
+- WHEN the tests read it
+- THEN every component's `oversized` is absent, and the chart and SVG show no `⚠`
+
+#### Needs
+- check.coverage/pending-report
+- check.coverage/state-names
+- view.repo/reads-the-repository
+
+### Requirement: view-library <!-- base: b5ceab6355330a1d -->
+The `spec`, `flight` and `blockers` models SHALL be library calls of the `clm-view` crate that take the spec graph, the markers, the claim refs with their tip times and whether each is merged into the default branch, the current time and the expiry, and touch no file, process or network. A merged ref isn't a claim: it is left out of what the queue sees, as `merged-claims-released` decides. The models SHALL carry no checkout: the renderer adds the one it is handed at the top level of the JSON (`view-command`), and that `clm view <name> --format json` prints the library's model for the repository is `view.repo/arguments-and-exit`'s. Every test of `view`'s requirements SHALL sit in `view`'s own files and call `clm-view`: none is left in `crates/clm/tests/status.rs` or `crates/clm/tests/view.rs`, where what only the commands show is `view.repo`'s to prove (`commands-live-in-their-crates`), and `scenario_groups_in_order`, which asserts the `changes` section and the summary line this crate lays out, sits among `view`'s tests citing `status-report`; `the_commit_line_heads_every_chart_at_a_commit` cites `view-command` and no requirement of `view.repo`. With its default features disabled, `clm-view` SHALL build for `wasm32-unknown-unknown`, models and renderers alike.
+
+#### Scenario: the model carries no checkout
+- GIVEN the `flight` model of a graph with a pending component and a claim ref
+- WHEN it is serialised, and rendered as `json` with a checkout
+- THEN the first has no `checkout`, and the second is the first with the `checkout` key added
+
+#### Scenario: wasm build
+- GIVEN the workspace
+- WHEN `cargo build -p clm-view --no-default-features --target wasm32-unknown-unknown` runs
+- THEN it succeeds
+
+#### Serves
+- capability/watch-beside-chat
+- capability/follow-from-browser
+
+#### Needs
+- view.repo/reads-the-repository
+- view.repo/arguments-and-exit
+
