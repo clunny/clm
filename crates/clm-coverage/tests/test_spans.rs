@@ -428,3 +428,16 @@ const z = 1;
 ";
     assert_eq!(spans("a.test.jsx", text), [("a".to_string(), false, 1, 4)]);
 }
+
+#[test]
+fn rust_comment_inside_a_string_is_no_line_of_the_test_below() {
+    // req:check.coverage/test-spans@90fb3da6
+    let text = "\
+const S: &str = \"
+// in the string\";
+#[test]
+fn a() {
+}
+";
+    assert_eq!(rust_spans(text), [("a".to_string(), 3, 5)]);
+}
