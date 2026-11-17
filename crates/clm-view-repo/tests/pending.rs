@@ -59,6 +59,10 @@ fn violations_and_unknown_nodes_exit_1() {
     let (code, out) = clm_pending(d, Some("a"));
     assert_eq!(code, Some(1), "{out}");
     assert!(out.contains("model/valid-frontmatter"), "{out}");
+    // The violations stand in place of the list: they are all it prints.
+    let (_, violations) = clm_model::load(d);
+    let expected: String = violations.iter().map(|v| format!("{v}\n")).collect();
+    assert_eq!(out, expected);
 }
 
 #[test]
