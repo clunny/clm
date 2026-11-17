@@ -8,6 +8,8 @@ set -euo pipefail
 # The newest releases at build time.
 MUTANTS_VERSION=27.1.0
 STRYKER_VERSION=10.1.1
+# The version `coverage.sh` pins, which finds the lines a block's tests run.
+LLVM_COV_VERSION=0.9.1
 
 plan=${CLM_MUTATE:?CLM_MUTATE names the plan}
 result=${CLM_MUTATE_RESULT:?CLM_MUTATE_RESULT names the result file}
@@ -67,8 +69,67 @@ rust_tools() {
       die "cargo mutants could not be installed (requirement $id)" ;;
   esac
   rust_fixture
+  # Installed as coverage.sh installs it; `llvm-tools-preview` is a no-op once there.
+  case $(cargo llvm-cov --version 2>/dev/null || true) in
+    *" $LLVM_COV_VERSION") ;;
+    *) { rustup component add llvm-tools-preview &&
+      cargo install --locked --version "$LLVM_COV_VERSION" cargo-llvm-cov; } ||
+      die "cargo llvm-cov could not be installed (requirement $id)" ;;
+  esac
   make_tree "$root" "$tree" || die "cargo mutants' tree could not be made from the checkout (requirement $id)"
   rust_ready=true
+}
+
+# Writes `$work/covered`, a `<file>	<line>` line for each line the block's tests run, paths
+# relative to the tree: one run of the block's tests alone, under its filterset, over its test
+# packages, in the tree. A mutant on no such line is one no test citing the requirement could
+# notice, so it is never tried.
+covered_lines() {
+  local report=$work/covered.info real p args=()
+  rm -f "$report"
+  for p in $packages; do args+=(--package "$p"); done
+  (cd "$tree" && cargo llvm-cov nextest --no-rustc-wrapper --no-tests=pass --lcov --output-path "$report" \
+    "${args[@]}" -E "$filterset") ||
+    die "cargo llvm-cov failed to find the lines the tests of requirement $id run"
+  [ -s "$report" ] || die "cargo llvm-cov wrote no report for requirement $id"
+  # Its `SF:` paths are absolute under the tree, as `$tree` names it or as its real path.
+  real=$(cd "$tree" && pwd -P)
+  a="SF:$tree/" b="SF:$real/" awk -F'[:,]' '
+    BEGIN { a = ENVIRON["a"]; b = ENVIRON["b"] }
+    index($0, a) == 1 { file = substr($0, length(a) + 1); next }
+    index($0, b) == 1 { file = substr($0, length(b) + 1); next }
+    /^SF:/ { file = substr($0, 4); next }
+    /^DA:/ && $3 + 0 > 0 { print file "\t" $2 }' "$report" | sort -u >"$work/covered"
+}
+
+# Writes to $1 a `<file>	<first line>	<last line>	<name>` line for each mutant
+# `cargo mutants --list --json` lists for the block's files, in its order, with the further
+# arguments given.
+list_mutants() {
+  local out=$1
+  shift
+  (cd "$tree" && cargo mutants --list --json "${mutants_args[@]}" "$@") >"$out.json" ||
+    die "cargo mutants failed to list mutants for requirement $id"
+  node -e '
+    for (const m of JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")))
+      console.log([m.file, m.span.start.line, m.span.end.line, m.name].join("\t"));
+  ' "$out.json" >"$out" || die "cargo mutants listed mutants that could not be read for requirement $id"
+}
+
+# The mutants of list $1 with a line from the start to the end of their span the tests run.
+tryable() {
+  awk -F'\t' 'FILENAME == ARGV[1] { run[$1 "\t" $2] = 1; next }
+    { for (l = $2; l <= $3; l++) if (($1 "\t" l) in run) { print; next } }' "$work/covered" "$1"
+}
+
+# Sets `re_args` to a `--re` naming each mutant of list $1 exactly.
+names_of() {
+  local f a b name
+  re_args=()
+  while IFS="$tab" read -r f a b name; do
+    [ -n "$name" ] || continue
+    re_args+=(--re "^$(printf '%s' "$name" | sed -e 's/[][\.*^$(){}?+|/]/\\&/g')\$")
+  done <"$1"
 }
 
 # Makes `$2`, the tree `cargo mutants` runs in and copies with `--copy-vcs true`, from the
@@ -203,6 +264,7 @@ rust_test_filter() {
 # Counts of one cargo-mutants output directory, added to `caught` and `missed`.
 caught=0
 missed=0
+untested=0
 count_outcomes() {
   local out=$1/mutants.out
   caught=$((caught + $(lines_in "$out/caught.txt") + $(lines_in "$out/timeout.txt")))
@@ -232,7 +294,7 @@ run_mutants() {
 
 # Judges the Rust files of a block. Sets `verdict` to killed, survived <n> or not-judged.
 judge_rust() {
-  local f t file name package filter packages= filters= p out list line
+  local f t file name package filter packages= filters= p out
   local files=() n=0 re_args=()
   mutants_args=()
   for f in ${code[@]+"${code[@]}"}; do
@@ -258,29 +320,34 @@ judge_rust() {
   filterset=$filters
   for p in $packages; do mutants_args+=(--test-package "$p"); done
   for f in ${files[@]+"${files[@]}"}; do mutants_args+=(--file "$f"); done
+  covered_lines
+  # The diff's mutants, and the further ones: the files' others, in the tool's order.
+  list_mutants "$work/all"
+  : >"$work/diff"
+  if [ -n "$diff" ]; then list_mutants "$work/diff" --in-diff "$diff"; fi
+  awk -F'\t' 'FILENAME == ARGV[1] { d[$4] = 1; next } !($4 in d)' "$work/diff" "$work/all" >"$work/further"
+  # Tests that run no line of any file with a mutant can notice no change to it: every mutant
+  # they would be given survives, untried.
+  if ! awk -F'\t' 'FILENAME == ARGV[1] { has[$1] = 1; next } ($1 in has) { found = 1; exit }
+      END { exit !found }' "$work/all" "$work/covered"; then
+    n=$(lines_in "$work/further")
+    [ "$n" -le "$limit" ] || n=$limit
+    n=$((n + $(lines_in "$work/diff")))
+    if [ "$n" -gt 0 ]; then verdict="survived $n"; else verdict=not-judged; fi
+    return
+  fi
+  tryable "$work/diff" >"$work/diff-try"
+  # The limit counts only the mutants that may be tried.
+  tryable "$work/further" | head -n "$limit" >"$work/further-try"
   caught=0
   missed=0
-  n=$((n + 1))
-  if [ -n "$diff" ]; then
-    run_mutants "$work/m$n" --in-diff "$diff"
+  if [ -s "$work/diff-try" ]; then
+    names_of "$work/diff-try"
+    run_mutants "$work/m1" --in-diff "$diff" "${re_args[@]}"
   fi
-  if [ "$caught" -eq 0 ]; then
-    # The further mutants: the first `limit` of the files' own, chosen by name.
-    n=$((n + 1))
-    mkdir -p "$work/m$n"
-    (cd "$tree" && cargo mutants --list "${mutants_args[@]}") >"$work/list" 2>/dev/null ||
-      die "cargo mutants failed to list mutants for requirement $id"
-    list=$(head -n "$limit" "$work/list")
-    re_args=()
-    while IFS= read -r line; do
-      [ -n "$line" ] || continue
-      re_args+=(--re "^$(printf '%s' "$line" | sed -e 's/[][\.*^$(){}?+|/]/\\&/g')\$")
-    done <<EOF
-$list
-EOF
-    if [ "${#re_args[@]}" -gt 0 ]; then
-      run_mutants "$work/m$n" "${re_args[@]}"
-    fi
+  if [ "$caught" -eq 0 ] && [ -s "$work/further-try" ]; then
+    names_of "$work/further-try"
+    run_mutants "$work/m2" "${re_args[@]}"
   fi
   if [ "$caught" -gt 0 ]; then
     verdict=killed
@@ -336,14 +403,18 @@ EOF
   ts_tests=("$dir/$fix/fixture.test.ts")
   caught=0
   missed=0
+  untested=0
   run_stryker "$dir" f1 "$fix/fixture.ts:1-1" ||
     die "StrykerJS failed on its fixture in $dir"
+  missed=$((missed + untested))
   { [ "$caught" -gt 0 ] && [ "$missed" -eq 0 ]; } ||
     die "StrykerJS judged its fixture wrongly in $dir: $caught caught and $missed missed for the test that notices"
   caught=0
   missed=0
+  untested=0
   run_stryker "$dir" f2 "$fix/fixture.ts:2-2" ||
     die "StrykerJS failed on its fixture in $dir"
+  missed=$((missed + untested))
   { [ "$missed" -gt 0 ] && [ "$caught" -eq 0 ]; } ||
     die "StrykerJS judged its fixture wrongly in $dir: $caught caught and $missed missed for the test that doesn't"
   rm -rf "${root:?}/$dir/$fix"
@@ -368,7 +439,7 @@ diff_ranges() {
 
 # Runs StrykerJS in the npm directory $1 on the `mutate` ranges after $2, the name of its report,
 # with the vitest tests `ts_tests` alone; adds its killed and survived mutants to `caught` and
-# `missed`. StrykerJS takes a runner's options from no command line, so it is given them in a
+# `missed`, and those it reports `NoCoverage`, which no test runs, to `untested`. StrykerJS takes a runner's options from no command line, so it is given them in a
 # configuration file under the directory's `node_modules/`: the test runner, the vitest
 # configuration that names those tests, the reporter and the ranges. It sets no
 # `thresholds.break`, so StrykerJS's exit status never depends on a score. Returns 1 when StrykerJS
@@ -377,7 +448,7 @@ diff_ranges() {
 # which the TypeScript 7 of `web/` and `plugin-panel/` lacks, to rewrite the paths in it for its
 # sandbox. Nothing here needs that rewrite: the run mutates and runs vitest, with no type checker.
 run_stryker() {
-  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s
+  local dir=$1 report=$2 base vcfg scfg status=0 includes= ranges= f m json k s u
   shift 2
   rm -rf "${work:?}/$report"
   mkdir -p "$work/$report"
@@ -417,9 +488,11 @@ EOF
   json=$work/$report/mutation.json
   if [ "$status" -ne 0 ] || ! [ -f "$json" ]; then return 1; fi
   k=$({ grep -Eo '"status": ?"(Killed|Timeout)"' "$json" || true; } | wc -l | tr -d ' ')
-  s=$({ grep -Eo '"status": ?"(Survived|NoCoverage)"' "$json" || true; } | wc -l | tr -d ' ')
+  s=$({ grep -Eo '"status": ?"Survived"' "$json" || true; } | wc -l | tr -d ' ')
+  u=$({ grep -Eo '"status": ?"NoCoverage"' "$json" || true; } | wc -l | tr -d ' ')
   caught=$((caught + k))
   missed=$((missed + s))
+  untested=$((untested + u))
 }
 
 judge_ts() {
@@ -445,6 +518,7 @@ judge_ts() {
   ts_tools "$dir"
   caught=0
   missed=0
+  untested=0
   if [ -n "$diff" ]; then
     while IFS= read -r r; do
       [ -z "$r" ] || ranges+=("$r")
@@ -459,6 +533,9 @@ judge_ts() {
     for f in ${files[@]+"${files[@]}"}; do capped+=("$f:1-$limit"); done
     run_stryker "$dir" s2 "${capped[@]}" || die "StrykerJS failed for requirement $id"
   fi
+  # A mutant no test runs is neither caught nor survived, unless no test runs any: then the
+  # tests can notice no change to the code, and every one survives, as for an empty test.
+  if [ "$caught" -eq 0 ] && [ "$missed" -eq 0 ]; then missed=$untested; fi
   if [ "$caught" -gt 0 ]; then
     verdict=killed
   elif [ "$missed" -gt 0 ]; then
