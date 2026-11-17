@@ -29,6 +29,7 @@ impl Exe {
         }
         let own = std::env::current_exe()
             .map_err(|e| Error::Refused(format!("can't find `clm`'s own binary to copy: {e}")))?;
+        let (own, name) = source(own);
         let parent = temp_parent(repo.env).map_err(|e| {
             Error::Refused(format!("can't copy `clm`: no temporary directory: {e}"))
         })?;
@@ -43,7 +44,6 @@ impl Exe {
             .prefix("land-bin-")
             .tempdir_in(&parent)
             .map_err(|e| refused(&parent, e))?;
-        let name = own.file_name().unwrap_or("clm".as_ref());
         let path = dir.path().join(name);
         // `fs::copy` keeps the file's permissions, so the copy stays executable.
         std::fs::copy(&own, &path).map_err(|e| refused(&path, e))?;
@@ -56,4 +56,23 @@ impl Exe {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
+}
+
+/// The file to copy for the running binary `own`, as `current_exe` gives it, and the copy's
+/// name. A path ending in ` (deleted)` is Linux's sign that the file the process started from
+/// was replaced or deleted: the file at the path without the suffix when one exists, else the
+/// running image at `/proc/self/exe`.
+fn source(own: PathBuf) -> (PathBuf, std::ffi::OsString) {
+    let stripped = own
+        .to_str()
+        .and_then(|s| s.strip_suffix(" (deleted)"))
+        .map(PathBuf::from);
+    let named = stripped.as_deref().unwrap_or(&own);
+    let name = named.file_name().unwrap_or("clm".as_ref()).to_os_string();
+    let from = match stripped {
+        Some(path) if path.exists() => path,
+        Some(_) => PathBuf::from("/proc/self/exe"),
+        None => own,
+    };
+    (from, name)
 }

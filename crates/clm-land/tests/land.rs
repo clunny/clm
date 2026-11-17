@@ -540,7 +540,7 @@ fn conflict_takes_no_lock() {
 
 #[test]
 fn copy_failure_refused() {
-    // req:land/land-binary-copy@48a84515
+    // req:land/land-binary-copy@a11966b0
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let old = f.remote("main");
