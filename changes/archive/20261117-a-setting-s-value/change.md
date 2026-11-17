@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-setting-s-value-is-offered-to-build-before-the-install-item]
 ---
 
