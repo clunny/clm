@@ -741,7 +741,6 @@ dependencies = [
 name = "clm-view"
 version = "0.26.0"
 dependencies = [
- "clm-check",
  "clm-coverage",
  "clm-model",
  "clm-orchestrator",

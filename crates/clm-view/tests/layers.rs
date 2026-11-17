@@ -91,8 +91,8 @@ fn scenario() -> (TempDir, Graph) {
     )
 }
 
-fn marker_on_x(graph: &Graph) -> clm_check::Marker {
-    clm_check::Marker {
+fn marker_on_x(graph: &Graph) -> clm_coverage::Marker {
+    clm_coverage::Marker {
         id: "a/x".into(),
         version: Some(graph.requirement("a/x").unwrap().version().into()),
         path: "tests/t.rs".into(),
@@ -133,7 +133,7 @@ fn spec_view_counts_capabilities_on_the_capability_node() {
     assert_eq!(counts(&view, "a"), (0, 0, 1, 1));
 }
 
-fn summary(graph: &Graph, markers: &[clm_check::Marker]) -> String {
+fn summary(graph: &Graph, markers: &[clm_coverage::Marker]) -> String {
     let text = clm_view::status_text(graph, markers, &[], &[], 0, None, None);
     text.lines()
         .find(|l| l.starts_with("  components "))

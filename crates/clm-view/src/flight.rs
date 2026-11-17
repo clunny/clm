@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use clm_check::{ChangeProgress, Marker, change_progress, pending};
+use clm_coverage::{ChangeProgress, Marker, change_progress, pending};
 use clm_model::{Change, ChangeStatus, Graph, Priority};
 use clm_orchestrator::{Block, ClaimRef, Requirement, State, queue_from_refs};
 use serde::Serialize;

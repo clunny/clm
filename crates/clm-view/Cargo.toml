@@ -7,7 +7,7 @@ publish.workspace = true
 
 [dependencies]
 clm-model.workspace = true
-clm-check = { workspace = true, default-features = false }
+clm-coverage = { workspace = true, default-features = false }
 clm-orchestrator = { workspace = true, default-features = false }
 serde.workspace = true
 serde_json.workspace = true

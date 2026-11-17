@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use clm_check::{Marker, Pending, pending};
+use clm_coverage::{Marker, Pending, pending};
 use clm_model::{BacklogKind, Graph};
 use clm_orchestrator::{ClaimRef, State, queue_from_refs};
 use serde::Serialize;
