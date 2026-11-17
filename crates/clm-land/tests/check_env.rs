@@ -63,8 +63,12 @@ fn a_record_under_other_variables() {
     assert!(out.lines[0].starts_with("landed "), "{:?}", out.lines);
     assert_eq!(f.lines("check.log").len(), 1, "the check ran once");
     assert_eq!(f.lines("check-a.log"), ["1"]);
+    // The fixture's record and the land's may share a second of `at`, so the ledger's
+    // order between them is their ids': find the land's record by the command it names.
     let named = f.checked_commands();
-    assert_eq!(named.last().unwrap(), &format!("A=1 {}", f.check_command()));
+    let fixture = f.check_command();
+    let landed: Vec<_> = named.iter().filter(|c| **c != fixture).collect();
+    assert_eq!(landed, [&format!("A=1 {fixture}")], "{named:?}");
 }
 
 #[test]
