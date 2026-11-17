@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use clm_check::STATE_NAMES;
+use clm_coverage::STATE_NAMES;
 use clm_model::{BACKLOG_KIND_TERMS, CHANGE_KEYS, CHANGE_STATUS_TERMS, STATUS_TERMS};
 
 /// The text of every code span (backticks around exactly that text) on the page.
