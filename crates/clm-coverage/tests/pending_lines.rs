@@ -98,7 +98,7 @@ fn in_test(s: &str) -> String {
 
 #[test]
 fn scenario_states() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo();
     let d = dir.path();
     let (x, y, z) = (version(d, "a/x"), version(d, "a/y"), version(d, "a/z"));
@@ -118,7 +118,7 @@ fn scenario_states() {
 
 #[test]
 fn scenario_blocked() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo();
     let d = dir.path();
     write(
@@ -133,7 +133,7 @@ fn scenario_blocked() {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = needs_repo();
     let d = dir.path();
     write(
@@ -148,7 +148,7 @@ fn scenario_blocked_by_a_need() {
 
 #[test]
 fn scenario_need_satisfied() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = needs_repo();
     let d = dir.path();
     write(
@@ -163,7 +163,7 @@ fn scenario_need_satisfied() {
 
 #[test]
 fn scenario_nothing_pending() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo();
     let d = dir.path();
     let cite = |id: &str| format!("// {REQ}{id}@{}\n", version(d, id));
@@ -179,7 +179,7 @@ fn scenario_nothing_pending() {
 
 #[test]
 fn every_node_without_an_argument() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo();
     let d = dir.path();
     write(

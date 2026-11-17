@@ -178,7 +178,7 @@ fn architecture_entries() {
 
 #[test]
 fn entries_that_are_never_pending() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo(&[arch("a", &["n/x"], false), arch("u", &[], true)]);
     write(
         dir.path(),
@@ -209,7 +209,7 @@ fn entries_that_are_never_pending() {
 
 #[test]
 fn entry_blocked_by_item() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(
         dir.path(),
@@ -235,7 +235,7 @@ const CAPABILITY_NODE: &str = "---\ntitle: Capabilities\nstatus: active\nowners:
 
 #[test]
 fn capabilities_pending_on_capability_node() {
-    // req:check.coverage/pending-report@4a6b0203
+    // req:check.coverage/pending-report@3501717c
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(dir.path(), "specs/capability/SPEC.md", CAPABILITY_NODE);
     let graph = graph(dir.path());
@@ -257,7 +257,7 @@ fn capabilities_pending_on_capability_node() {
 
 #[test]
 fn entries_on_the_roots_row() {
-    // req:check.coverage/status-report@ba0eb7f0
+    // req:check.coverage/status-report@e4102249
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -286,7 +286,7 @@ fn entries_on_the_roots_row() {
 
 #[test]
 fn capabilities_on_the_capability_nodes_row() {
-    // req:check.coverage/status-report@ba0eb7f0
+    // req:check.coverage/status-report@e4102249
     let dir = repo(&[arch("a", &["n/x"], false)]);
     write(dir.path(), "specs/capability/SPEC.md", CAPABILITY_NODE);
     let graph = graph(dir.path());

@@ -157,7 +157,7 @@ fn remote_ref(root: &Path, name: &str, hours: u64) {
 
 #[test]
 fn scenario_groups_in_order() {
-    // req:check.coverage/status-report@ba0eb7f0
+    // req:check.coverage/status-report@e4102249
     let dir = base();
     let d = dir.path();
     change(d, "20260101-a", "applied", &["x"]);
@@ -178,7 +178,6 @@ fn scenario_groups_in_order() {
 #[test]
 fn invalid_graph_prints_violations() {
     // req:view/status-report@538240fb
-    // req:check.coverage/status-report@ba0eb7f0
     let dir = base();
     write(dir.path(), "specs/b/SPEC.md", "---\ntitle: B\n---\n");
     let out = clm_status(dir.path());
