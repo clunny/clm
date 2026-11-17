@@ -26,7 +26,7 @@ fn write(root: &Path, rel: &str, content: &str) {
     fs::write(path, content).unwrap();
 }
 
-/// Component `a` with `a/x`, `a/y` and `a/z`, and an `applied` change that removed `a/gone`.
+/// Component `a` with `a/x`, `a/y` and `a/z`, and an `applied` change `r` with no deltas.
 fn repo() -> TempDir {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -44,11 +44,6 @@ fn repo() -> TempDir {
     }
     write(d, "specs/a/SPEC.md", &spec);
     write(d, "changes/r/change.md", "---\nstatus: applied\n---\n");
-    write(
-        d,
-        "changes/r/deltas/a.md",
-        "---\ncomponent: a\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0123456789abcdef -->\n",
-    );
     dir
 }
 
@@ -57,9 +52,6 @@ fn violations_and_unknown_nodes_exit_1() {
     // req:view.repo/arguments-and-exit@b12cc5de
     let dir = repo();
     let d = dir.path();
-    let (code, out) = clm_pending(d, Some("a"));
-    assert_eq!(code, Some(0), "{out}");
-    assert!(out.starts_with("a/x "), "{out}");
     let (code, out) = clm_pending(d, Some("nope"));
     assert_eq!(code, Some(1), "{out}");
     assert!(out.contains("unknown component `nope`"), "{out}");

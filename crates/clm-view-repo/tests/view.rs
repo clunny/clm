@@ -320,7 +320,13 @@ fn scenario_width() {
     let widest = text.lines().map(|l| l.chars().count()).max().unwrap();
     assert_eq!(widest, 100, "{text}");
     assert!(text.contains(&long) && !text.contains(&longer), "{text}");
-    assert!(text.contains(&format!("{}…", &longer[..10])), "{text}");
+    // The 120-character ID's line is the one cut, at 100 columns.
+    let cut = text
+        .lines()
+        .find(|l| l.contains(&longer[..10]))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert_eq!(cut.chars().count(), 100, "{cut:?}");
+    assert!(cut.ends_with('…'), "{cut:?}");
 }
 
 #[test]
@@ -357,8 +363,10 @@ fn violations_exit_1() {
     let text = stdout(&out);
     assert_eq!(out.status.code(), Some(1), "{text}");
     assert!(text.contains("model/valid-frontmatter"), "{text}");
-    // The violations stand in place of the chart: every line is one.
-    assert!(text.lines().all(|l| l.contains("specs/")), "{text}");
+    // The violations stand in place of the chart: they are all it prints.
+    let (_, violations) = clm_model::load(dir.path());
+    let expected: String = violations.iter().map(|v| format!("{v}\n")).collect();
+    assert_eq!(text, expected);
 }
 
 #[test]
