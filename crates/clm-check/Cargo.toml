@@ -90,10 +90,6 @@ required-features = ["commands"]
 name = "size_command"
 required-features = ["commands"]
 
-[[test]]
-name = "status"
-required-features = ["checkout"]
-
 [dependencies]
 clm-model.workspace = true
 clm-coverage = { workspace = true, default-features = false }
