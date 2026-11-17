@@ -343,15 +343,22 @@ fn the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to() {
 fn scenario_checkout_named() {
     // req:view.repo/reads-the-repository@8ad0cdee
     let dir = base();
-    claim_refs(dir.path(), &[]);
-    let text = status(dir.path());
+    let d = dir.path();
+    claim_refs(d, &[]);
+    git_env(
+        d,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://127.0.0.1:9/unreachable.git",
+        ],
+        &[],
+    );
+    let text = status(d);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[0], "CLM status", "{text}");
-    assert_eq!(
-        lines[1],
-        format!("  commit {}", head7(dir.path())),
-        "{text}"
-    );
+    assert_eq!(lines[1], format!("  commit {}", head7(d)), "{text}");
 }
 
 #[test]
@@ -389,6 +396,16 @@ fn scenario_no_origin() {
     git_env(d, &["init", "-q", "-b", "main"], &[]);
     git_env(d, &["add", "-A"], &[]);
     git_env(d, &["commit", "-qm", "base"], &[]);
+    git_env(
+        d,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://127.0.0.1:9/unreachable.git",
+        ],
+        &[],
+    );
     let text = status(d);
     let line = text.lines().nth(1).unwrap();
     assert!(line.starts_with("  commit "), "{text}");
@@ -399,7 +416,13 @@ fn scenario_no_origin() {
 fn no_repository_names_no_commit() {
     // req:view.repo/reads-the-repository@8ad0cdee
     let dir = base();
-    let text = status(dir.path());
+    let out = clm_status(dir.path());
+    // Outside a repository the sizes can't be measured: said on stderr, and nothing marked.
+    let stderr = String::from_utf8(out.stderr.clone()).unwrap();
+    assert!(stderr.starts_with("size not checked: "), "{stderr}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert_eq!(out.status.code(), Some(0), "{text}");
+    assert!(!text.contains("oversized"), "{text}");
     assert!(
         text.lines().nth(1).unwrap().starts_with("  components "),
         "{text}"
