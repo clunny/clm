@@ -22,35 +22,46 @@ work=$(mktemp -d)
 fixture_dirs=
 cleanup() {
   rm -rf "$work"
-  for d in $fixture_dirs; do rm -rf "${root:?}/$d/clm-mutate-fixture"; done
+  # The fixtures, and what StrykerJS's runs leave in each npm directory when a pass is ended.
+  for d in $fixture_dirs; do
+    rm -rf "${root:?}/$d/clm-mutate-fixture" "${root:?}/$d/node_modules/.clm-mutate" \
+      "${root:?}/$d"/.stryker-tmp-clm-*
+  done
 }
 trap cleanup EXIT
 
-# Every process this script started, at any depth: the blocks, and the tools they run.
+# Every process this script started, at any depth: the blocks, and the tools they run; not the
+# subshell that runs this function, nor the `ps` and `awk` it starts.
 descendants() {
-  ps -A -o pid= -o ppid= | awk -v root=$$ '
+  ps -A -o pid= -o ppid= | awk -v root=$$ -v self="$BASHPID" '
     { parent[$1] = $2 }
     END {
       for (p in parent) {
+        if (p == self || parent[p] == self) continue
         q = p
         while (q != root && (q in parent) && q > 1) q = parent[q]
         if (q == root && p != root) print p
       }
     }'
 }
-# Ended, as `clm verify` ends a pass at its limit or on a stop request: the blocks running and
-# whatever they run are ended, and the temporary directory removed, before the script exits.
-# The lines already written stay (`verify/mutation-pass`).
+# Ended, as `clm verify` ends a pass at its limit or on a stop request, or by a person's Ctrl-C:
+# the blocks running and whatever they run are ended, and gone, for at most ten seconds, before
+# the temporary directory is removed and the script exits. A process started while they are
+# signalled is found and signalled the next time round. The lines already written stay
+# (`verify/mutation-pass`).
 on_term() {
-  local pids
-  trap - TERM
-  pids=$(descendants || true)
-  # shellcheck disable=SC2086 # one pid per word
-  [ -z "$pids" ] || kill -TERM $pids 2>/dev/null || true
+  local pids i=0
+  trap - TERM INT
+  while pids=$(descendants || true) && [ -n "$pids" ] && [ "$i" -lt 100 ]; do
+    # shellcheck disable=SC2086 # one pid per word
+    kill -TERM $pids 2>/dev/null || true
+    sleep 0.1
+    i=$((i + 1))
+  done
   wait 2>/dev/null || true
   exit 143
 }
-trap on_term TERM
+trap on_term TERM INT
 
 # The blocks it may judge at once, and the slot and build directory of each job number.
 jobs_max=${CLM_MUTATE_JOBS:-1}
@@ -58,6 +69,12 @@ case $jobs_max in '' | *[!0-9]*) jobs_max=1 ;; esac
 jobs_max=$((10#$jobs_max))
 [ "$jobs_max" -gt 0 ] || jobs_max=1
 slot_base=${CLM_SLOT:-0}
+case $slot_base in *[!0-9]*)
+  echo "mutate.sh: CLM_SLOT is not a whole number: $slot_base" >&2
+  exit 1
+  ;;
+esac
+slot_base=$((10#$slot_base))
 target_base=${CARGO_TARGET_DIR:-target}
 case $target_base in /*) ;; *) target_base=$root/$target_base ;; esac
 : >"$result"
@@ -535,6 +552,7 @@ run_stryker() {
   "jsonReporter": { "fileName": "$work/$report/mutation.json" },
   "tsconfigFile": "$root/$dir/node_modules/.clm-mutate/no-tsconfig.json",
   "tempDirName": ".stryker-tmp-clm-$tag",
+  "ignorePatterns": [".stryker-tmp-clm-*"],
   "concurrency": 2,
   "mutate": [${ranges%,}]
 }
@@ -729,7 +747,7 @@ done
 # Judges block $1 as job $2, in a work directory of its own, with the job's `CLM_SLOT` and
 # `CARGO_TARGET_DIR`. Run in a subshell of its own: a tool that fails ends it alone.
 run_block() {
-  trap - EXIT TERM
+  trap - EXIT TERM INT
   work=$work/block-$1
   mkdir -p "$work"
   tag=$1

@@ -2168,7 +2168,7 @@ fn mutate_tree(plan_text: &str) -> Tree {
     executable(&scripts.join("mutate.sh"), &script("mutate.sh"));
     executable(
         &scripts.join("coverage.sh"),
-        "#!/usr/bin/env bash\necho coverage.sh >> \"$CI_LOG\"\n[ -z \"${COVERAGE_FAIL:-}\" ] || exit 1\nmkdir -p target\necho 'SF:x' > target/lcov.info\n",
+        "#!/usr/bin/env bash\necho coverage.sh >> \"$CI_LOG\"\necho \"${CLM_SLOT-unset}\" >> \"$CI_LOG.coverage-slot\"\n[ -z \"${COVERAGE_FAIL:-}\" ] || exit 1\nmkdir -p target\necho 'SF:x' > target/lcov.info\n",
     );
     tree.fake("cargo", CARGO_MUTANTS);
     tree.fake("npx", NPX_STRYKER);
@@ -2252,6 +2252,7 @@ impl Tree {
             "calls",
             "gate",
             "sleeper",
+            "coverage-slot",
         ] {
             let _ = fs::remove_file(self.dir.path().join(format!("log.{kept}")));
         }
@@ -3415,6 +3416,8 @@ fn blocks_run_at_once_up_to_the_jobs_each_with_a_slot_and_a_build_directory_of_i
         assert!(blocks.len() <= 2, "three blocks at once: {events:?}");
     }
     assert!(overlapped, "no two blocks ran at once: {events:?}");
+    // `coverage.sh` runs with the slot the script was given.
+    assert_eq!(tree.log_lines("coverage-slot"), ["5"]);
     for x in ["fixture", "a", "b", "c"] {
         assert!(
             calls.values().any(|c| c.block == x),
@@ -3447,13 +3450,46 @@ fn each_line_is_written_as_its_block_is_judged() {
             || child.try_wait().unwrap().is_some()
     });
     let early = fs::read_to_string(&result).unwrap_or_default();
-    let gated = !gate.exists();
+    // Still running: block b waits for the gate, which only this test opens.
+    let gated = child.try_wait().unwrap().is_none();
     fs::write(&gate, "").unwrap();
     let status = wait_exit(&mut child);
     assert_eq!(early, "a/a killed\n");
     assert!(gated);
     assert!(status.success());
     assert_eq!(tree.log_lines("result"), ["a/a killed", "a/b killed"]);
+}
+
+#[test]
+fn without_a_positive_count_of_jobs_it_judges_one_block_at_a_time() {
+    // req:ci/mutate-script@a7fff85e
+    let tree = mutate_tree(&letter_blocks(&["a", "b"]));
+    tree.report("further-caught", "1");
+    tree.report("gate-a", "");
+    let gate = tree.dir.path().join("log.gate");
+    for jobs in [None, Some("0"), Some("x")] {
+        let _ = fs::remove_file(&gate);
+        let extra: Vec<(&str, &str)> = jobs.map(|j| ("CLM_MUTATE_JOBS", j)).into_iter().collect();
+        let mut child = spawn_mutate(&tree, &extra);
+        let log = tree.dir.path().join("log");
+        // Block a's run of its mutants waits at the gate; block b must not start meanwhile.
+        wait_until("block a's mutants", || {
+            fs::read_to_string(&log)
+                .unwrap_or_default()
+                .lines()
+                .any(|l| l.contains("src/a.rs") && l.contains("--re "))
+        });
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let early = tree.log_lines("");
+        fs::write(&gate, "").unwrap();
+        let status = wait_exit(&mut child);
+        assert!(
+            !early.iter().any(|l| l.contains("src/b.rs")),
+            "{jobs:?}: {early:?}"
+        );
+        assert!(status.success(), "{jobs:?}");
+        assert_eq!(tree.log_lines("result"), ["a/a killed", "a/b killed"]);
+    }
 }
 
 #[test]
