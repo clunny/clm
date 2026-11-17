@@ -10,9 +10,7 @@ use std::process::Command;
 use serde_yaml::Value;
 use tempfile::TempDir;
 
-#[path = "../../clm-git/tests/exec/mod.rs"]
-mod exec;
-use exec::write_exec as executable;
+use crate::exec::write_exec as executable;
 
 /// The build matrix's targets.
 const TARGETS: [&str; 4] = [

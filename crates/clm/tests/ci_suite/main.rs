@@ -1,7 +1,12 @@
 //! `ci`'s own tests (specs/SPEC.md names this directory `ci`'s): how this repository runs its
 //! Rust tests, read from `.config/nextest.toml`, the files under `.github/`, and a run of
 //! `.github/scripts/release-prepare.sh` against a temporary repository whose `origin` is a
-//! local bare repository, with fake `gh` and `cargo` first on `PATH`.
+//! local bare repository, with fake `gh` and `cargo` first on `PATH`. The modules hold the
+//! tests of the check scripts, the release workflow and the community files.
+
+mod ci_check;
+mod community_files;
+mod release_workflow;
 
 use std::fs;
 use std::path::{Path, PathBuf};
