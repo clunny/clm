@@ -655,7 +655,7 @@ fn config_get_env_prints_a_line_per_variable() {
 
 #[test]
 fn this_repository_names_the_retired_terms_detector() {
-    // req:config/retired-terms-detector@afaa1f7a
+    // req:config/retired-terms-detector@1e881e15
     let out = clm_config_get(&repo_root(), "detectors");
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(
