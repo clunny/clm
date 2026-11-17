@@ -2953,6 +2953,32 @@ fn the_limit_counts_only_mutants_the_script_may_try() {
 }
 
 #[test]
+fn a_list_of_further_mutants_far_longer_than_the_limit_is_cut_to_it() {
+    // req:ci/mutate-script@a7fff85e
+    // Far more than a pipe holds, so a reader that stops at the limit would leave the writer
+    // to die of SIGPIPE and end the script.
+    let pad = "x".repeat(300);
+    let list: String = (0..600)
+        .map(|i| format!("1 1 crates/clm-check/src/lib.rs:1:5: replace m{i}_{pad} with ()\n"))
+        .collect();
+    let tree = mutate_tree(
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 2\n",
+    );
+    tree.report("list", &list);
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 2"]);
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert_eq!(tries[0].matches("--re ").count(), 2, "{}", tries[0]);
+    assert!(
+        tries[0].contains("replace m0_") && tries[0].contains("replace m1_"),
+        "{}",
+        tries[0]
+    );
+}
+
+#[test]
 fn tests_that_run_none_of_the_code_survive_untried() {
     // req:ci/mutate-script@28ff1a91
     let tree = lines_tree("");
