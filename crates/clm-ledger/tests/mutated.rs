@@ -20,13 +20,13 @@ fn plain(n: u32, commit: char, at: &str) -> String {
 }
 
 fn body(commit: char, unproven: &[&str]) -> Body {
-    Body::Mutated {
-        commit: id(commit),
-        since: None,
-        killed: vec![],
-        unproven: unproven.iter().map(|s| s.to_string()).collect(),
-        not_judged: vec![],
-    }
+    Body::mutated(
+        id(commit),
+        None,
+        vec![],
+        unproven.iter().map(|s| s.to_string()).collect(),
+        vec![],
+    )
 }
 
 #[test]
@@ -176,4 +176,39 @@ fn compacted() {
     assert_eq!(ids, want);
     assert!(!ids.contains(&&old_clean.id));
     assert_eq!(fold.mutations[&id('d')][0].id, other_commit.id);
+}
+
+#[test]
+fn the_same_record_as_a_literal() {
+    // req:ledger/mutated-constructor@4fb59d5a
+    let dir = tempfile::tempdir().unwrap();
+    let a = clone_with_origin(dir.path(), "a", "A");
+    let literal = Body::Mutated {
+        commit: id('c'),
+        since: Some(id('b')),
+        killed: vec!["a/x".into()],
+        unproven: vec!["b/y@0123abcd".into()],
+        not_judged: vec!["c/z".into()],
+    };
+    let built = Body::mutated(
+        id('c'),
+        Some(id('b')),
+        vec!["a/x".into()],
+        vec!["b/y@0123abcd".into()],
+        vec!["c/z".into()],
+    );
+    assert_eq!(built, literal);
+    let home = dir.path();
+    let from_built = clm_ledger::append(&a, built, &env(home, &[])).unwrap();
+    let from_literal = clm_ledger::append(&a, literal.clone(), &env(home, &[])).unwrap();
+    let fold = clm_ledger::fold(&a).unwrap();
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    let held = &fold.mutations[&id('c')];
+    assert_eq!(held.len(), 2);
+    let body_of = |rid: &str| &held.iter().find(|r| r.id == rid).unwrap().body;
+    assert_eq!(body_of(&from_built.record.id), &literal);
+    assert_eq!(
+        body_of(&from_built.record.id),
+        body_of(&from_literal.record.id)
+    );
 }
