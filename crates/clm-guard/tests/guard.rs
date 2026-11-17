@@ -1394,6 +1394,17 @@ fn the_call_prints_and_exits_as_the_hook_does() {
         String::from_utf8(out.stdout).unwrap(),
         clm_guard::ask_json(&asks_cmd("clm approve spec/x"))
     );
+    // The same ask for the agent harness the arguments name, which can't confirm: Codex's
+    // block, on the error stream, and exit 2.
+    let out = hook_args(&["guard", "--agent-harness", "codex"], &approve, &[]);
+    let rendered = guard_hook(clm_agent_harness::AgentHarness::Codex, &approve);
+    assert_eq!(out.status.code(), Some(2), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        format!("{}\n", rendered.stderr)
+    );
+    assert!(rendered.stderr.contains("own terminal"), "{rendered:?}");
     // An agent harness it doesn't know: exit 1, naming it, and nothing on the output stream.
     let out = hook_args(&["guard", "--agent-harness", "nope"], &approve, &[]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
