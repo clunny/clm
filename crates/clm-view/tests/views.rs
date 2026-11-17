@@ -64,7 +64,7 @@ fn spec_with(
 
 #[test]
 fn scenario_nested_nodes() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = nested();
     let v = json(&spec_view(&g, &markers, None));
     assert_eq!(v["view"], "spec");
@@ -93,7 +93,7 @@ fn scenario_nested_nodes() {
 
 #[test]
 fn spec_view_holds_every_node_once_in_tree_order() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = nested();
     let ids: Vec<String> = spec_view(&g, &markers, None)
         .nodes
@@ -105,7 +105,7 @@ fn spec_view_holds_every_node_once_in_tree_order() {
 
 #[test]
 fn scenario_tree_chart() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = nested();
     let out = text(&spec_chart(&g, &markers));
     let lines = lines(&out);
@@ -166,7 +166,7 @@ fn counted(
 
 #[test]
 fn scenario_a_node_behind_its_spec_is_not_full() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = counted(4, 3, 1);
     let out = text(&spec_chart(&g, &markers));
     let line = line_of(&out, "a");
@@ -177,7 +177,7 @@ fn scenario_a_node_behind_its_spec_is_not_full() {
 
 #[test]
 fn bar_gives_every_state_a_cell_and_ties_to_current_first() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     for (n, cur, behind, bar) in [
         (3, 1, 1, "████▓▓▓░░░ 1/3"),
         (100, 98, 1, "████████▓░ 98/100"),
@@ -192,7 +192,7 @@ fn bar_gives_every_state_a_cell_and_ties_to_current_first() {
 
 #[test]
 fn scenario_queue_states_on_the_chart() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -244,7 +244,7 @@ fn obsolete() -> (clm_model::Graph, Vec<clm_coverage::Marker>) {
 
 #[test]
 fn scenario_obsolete_markers() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = obsolete();
     let v = json(&spec_view(&g, &markers, None));
     let a = v["nodes"]
@@ -309,7 +309,7 @@ fn obsolete_by_node(
 
 #[test]
 fn scenario_a_removed_nodes_markers() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let g = removed_node();
     let markers = [current(&g, "a/x"), cite_in("gone/x", "src/a/t.rs", 3)];
     let v = json(&spec_view(&g, &markers, None));
@@ -328,7 +328,7 @@ fn scenario_a_removed_nodes_markers() {
 
 #[test]
 fn a_removed_nodes_requirement_counts_once_on_each_owner() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let g = removed_node();
     let markers = [
         cite_in("gone/x", "src/a/t.rs", 3),
@@ -345,7 +345,7 @@ fn a_removed_nodes_requirement_counts_once_on_each_owner() {
 
 #[test]
 fn a_removed_nodes_marker_no_node_owns_counts_on_the_root() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let g = removed_node();
     let markers = [cite_in("gone/x", "tests/t.rs", 3)];
     let counts = obsolete_by_node(&g, &markers);
@@ -360,7 +360,7 @@ fn a_removed_nodes_marker_no_node_owns_counts_on_the_root() {
 
 #[test]
 fn a_requirement_removed_from_a_node_that_no_longer_exists_counts_on_its_owner() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     // The delta removes `gone/old` without `remove: true`, and no node `gone` exists.
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
@@ -378,7 +378,7 @@ fn a_requirement_removed_from_a_node_that_no_longer_exists_counts_on_its_owner()
 
 #[test]
 fn scenario_oversized_without_sizes() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = nested();
     let v = json(&spec_view(&g, &markers, None));
     for n in v["nodes"].as_array().unwrap() {
@@ -410,7 +410,7 @@ fn oversized_view() -> (View, clm_view::SpecView) {
 
 #[test]
 fn oversized_marks_the_model_and_the_chart_line() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (view, model) = oversized_view();
     let v = json(&model);
     let find = |id: &str| {
@@ -438,7 +438,7 @@ fn oversized_marks_the_model_and_the_chart_line() {
 
 #[test]
 fn oversized_marks_the_svg_label_and_outline() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (view, _) = oversized_view();
     let out = render(&view, Format::Svg, 100, None);
     let rect = |id: &str| {
@@ -1301,7 +1301,7 @@ fn svg_escapes_text() {
 
 #[test]
 fn svg_draws_the_bar_and_outlines_a_pending_node_in_its_state() {
-    // req:view/spec-view@380d5f8a
+    // req:view/spec-view@39989db1
     let (g, markers) = nested();
     let out = render(
         &spec_with(&g, &markers, &[claim("check.drift", 1)]),
@@ -1589,7 +1589,7 @@ fn scenario_the_model_carries_no_checkout() {
 
 #[test]
 fn status_names_the_checkout_after_its_title() {
-    // req:view/status-report@538240fb
+    // req:view/status-report@b8fbd7b2
     let g = ordered();
     let status = |c: Option<&Checkout>| status_text(&g, &[], &[], &[], NOW, None, c);
     let behind = status(Some(&checkout(Some(2))));
@@ -1597,6 +1597,10 @@ fn status_names_the_checkout_after_its_title() {
     assert_eq!(lines[0], "CLM status");
     assert_eq!(lines[1], "  commit abc1234  ⚠ 2 behind origin/main");
     assert!(lines[2].starts_with("  components "), "{behind}");
+    assert_eq!(
+        status(Some(&checkout(Some(1)))).lines().nth(1),
+        Some("  commit abc1234  ⚠ 1 behind origin/main")
+    );
     assert_eq!(
         status(Some(&checkout(Some(0)))).lines().nth(1),
         Some("  commit abc1234")
