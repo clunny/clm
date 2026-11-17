@@ -7,10 +7,13 @@ publish.workspace = true
 
 [dependencies]
 clm-model.workspace = true
-clm-check = { workspace = true, default-features = false, features = ["checkout"] }
+clm-coverage.workspace = true
 clm-context.workspace = true
 clm-git.workspace = true
 clm-orchestrator.workspace = true
 clm-config.workspace = true
 clap.workspace = true
 tempfile.workspace = true
+
+[dev-dependencies]
+clm-check = { workspace = true, default-features = false, features = ["checkout"] }

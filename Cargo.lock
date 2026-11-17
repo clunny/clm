@@ -648,6 +648,7 @@ dependencies = [
  "clm-check",
  "clm-config",
  "clm-context",
+ "clm-coverage",
  "clm-git",
  "clm-model",
  "clm-orchestrator",
