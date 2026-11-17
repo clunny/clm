@@ -118,3 +118,78 @@ component: check.coverage
 - view.repo/arguments-and-exit
 - check/pending-narrows-on-a-graph
 
+### Requirement: status-report <!-- base: ba0eb7f0618c875c -->
+`clm status` SHALL hold, from the working tree only, two sections laid out as `view`'s `status-report` says: `components`, one row per component sorted by ID, with its ID, its status and `<current>/<total>` (requirements current / all requirements; the capabilities that don't hold `#### Untested`, current or not, are counted on the row of the component they are pending on when pending, `capability` or else the root, `pending-report`, and the architecture entries on no row, since their rules are counted on their own components); and `changes`, which groups the changes outside the archive by status, in the order `implementing`, `applied`, `approved`, `proposed`, then any other in sorted order, each group one row per change sorted by ID, with its ID and `<current>/<total> requirements` (requirements its deltas add or modify that are current / all of them), followed by `complete` when the change is complete: its status is `applied` or `implementing`, all of them are current, and no marker cites a requirement its deltas remove that the spec no longer holds, nor a capability it lists under `removes_capabilities` that `CAPABILITIES.md` no longer holds (`removed-capabilities`). For an `applied` or `implementing` change, a requirement the spec no longer holds SHALL be counted as each requirement a move took it to (`progress-follows-moves`): a change whose status is `applied`, `implementing` or `done`, inside or outside the archive, moves `<a>/<slug>` to `<b>/<slug>` when one of its deltas removes `<a>/<slug>` and another adds `<b>/<slug>` to a component other than `<a>`, as a rename does (`node-removal`); moves are followed again while the spec doesn't hold the ID they reach, each ID once. Both counts leave out the requirements that no move takes to one the spec holds, since a later change removed them; a `proposed` or `approved` change hasn't applied, so it counts all of them. A requirement a later change added back under the same ID is a new requirement, whose markers, at whatever version, don't hold the earlier change back (`archive-on-sync`). The spec and the markers are read from the same tree: the working tree for `clm status`, and whatever tree the caller of `complete_changes` loaded, such as `HEAD` for `clm rebase` and `origin/main` for `clm wrap-up`. A section with no rows has the single row `none`. The command's exit status is `view.repo/arguments-and-exit`'s, so `invalid_graph_prints_violations` in `crates/clm/tests/status.rs`, which asserts it, cites this requirement no longer (`commands-live-in-their-crates`).
+
+#### Scenario: entries on the root's row
+- GIVEN root `clm` with no requirements, `architecture/a` enforced by a current rule of another component, `capability/b` cited by nothing, `capability/c` cited at its current version, and `capability/u` holding `#### Untested`
+- WHEN `clm status` runs
+- THEN the `clm` row reads `1/2`
+
+#### Scenario: one pending change
+- GIVEN component `a` (active, requirements `a/x` current and `a/y` not), and change `20260101-c` with status `applied` whose delta adds `a/x` and `a/y`
+- WHEN `clm status` runs
+- THEN its `components` section has a row with the cells `a`, `active` and `1/2`, and its `changes` section has a row with the cells `20260101-c` and `1/2 requirements` in the `applied` group
+
+#### Scenario: requirement removed later
+- GIVEN an `applied` change `20260101-c` whose delta adds `a/x` and `a/y`, `a/x` current, and no component holding `a/y`
+- WHEN `clm status` runs
+- THEN the `changes` section has a row with the cells `20260101-c`, `1/1 requirements` and `complete`
+
+#### Scenario: component renamed later, not yet built
+- GIVEN an `applied` change `20260101-c` whose delta for `g` adds `g/x`, no component `g`, an `applied` change `20260102-r` whose delta for `g` has `remove: true` and lists `g/x` under `REMOVED Requirements` and whose `create: true` delta for `v` adds `v/x`, and `v/x` uncited
+- WHEN `clm status` runs
+- THEN the row for `20260101-c` has the cells `20260101-c` and `0/1 requirements`, and no `complete` cell
+
+#### Scenario: component renamed later, built
+- GIVEN the changes and components of "component renamed later, not yet built", with `20260102-r` archived as `done`, and `v/x` cited at its current version
+- WHEN `clm status` runs
+- THEN the `changes` section has a row with the cells `20260101-c`, `1/1 requirements` and `complete`
+
+#### Scenario: renamed twice
+- GIVEN an `applied` change `20260101-c` whose delta for `g` adds `g/x`, no components `g` or `v`, an `applied` change `20260102-r` that moves `g/x` to `v/x`, an `applied` change `20260103-s` that moves `v/x` to `w/x`, and `w/x` cited at its current version
+- WHEN `clm status` runs
+- THEN the `changes` section has a row with the cells `20260101-c`, `1/1 requirements` and `complete`
+
+#### Scenario: requirement added back later
+- GIVEN an `applied` change `20260101-c` whose delta removes `a/x`, and component `a` holding a requirement `a/x` that a test cites at its current version
+- WHEN `clm status` runs
+- THEN the `changes` section has a row with the cells `20260101-c`, `0/0 requirements` and `complete`
+
+#### Scenario: removed requirement still cited
+- GIVEN an `applied` change `20260101-c` whose delta removes `a/x`, no component holding `a/x`, and a test citing `a/x`
+- WHEN `clm status` runs
+- THEN the row for `20260101-c` has no `complete` cell
+
+#### Scenario: removed capability still cited
+- GIVEN an `applied` change `20260101-c` with no deltas and `removes_capabilities: [gone]`, a `CAPABILITIES.md` with no entry `gone`, and a test citing `capability/gone`
+- WHEN `clm status` runs
+- THEN the row for `20260101-c` has the cells `20260101-c` and `0/0 requirements`, and no `complete` cell; once the test is deleted, the row has a `complete` cell
+
+#### Scenario: groups in order
+- GIVEN change `20260101-a` with status `applied` and change `20260101-z` with status `implementing`
+- WHEN `clm status` runs
+- THEN the `implementing` group, holding `20260101-z`, comes before the `applied` group, holding `20260101-a`
+
+#### Scenario: unapplied change
+- GIVEN a `proposed` change `20260101-p` whose delta adds `a/z`, which no component holds yet
+- WHEN `clm status` runs
+- THEN the row for `20260101-p` has the cells `20260101-p` and `0/1 requirements`, and no `complete` cell
+
+#### Scenario: nothing in flight
+- GIVEN no changes outside the archive
+- WHEN `clm status` runs
+- THEN the `changes` section has the single row `none`
+
+#### Serves
+- capability/see-project-state
+- capability/watch-beside-chat
+- capability/wrap-up-session
+- architecture/component-reconciliation
+
+#### Needs
+- model/human-layers
+- model/reserved-ids
+- plugin.hooks/session-status
+- model/parse-changes
+- view.repo/arguments-and-exit

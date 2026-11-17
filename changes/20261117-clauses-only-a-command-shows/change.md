@@ -21,7 +21,7 @@ Reading the tests found what the items didn't say:
 
 - **`clm-view-repo` is handed the budgets.** It loads no settings, so a test in its files can show that a component over the budget it is passed is marked, and not that the budget is `clm.toml`'s. Only the binary shows that join.
 - **`view` has no test of its own that `clm status` marks a component oversized.** Its tests cover the `spec` view's mark; the status row's `oversized` cell is proven only from the root's file.
-- **`view/status-report` needs `check.coverage/status-report`**, so changing the latter here would have `check.coverage`'s build and `view`'s each wait on the other's tests.
+- **`view/status-report` needs `check.coverage/status-report`**, so `check.coverage`'s build comes first and `view`'s moves the one test both cite.
 
 ## Approaches
 
@@ -55,21 +55,22 @@ The commit line:
 - `arguments-and-exit`, five scenarios: the default width, the usage errors, exit 1 with the violations for an invalid graph from all three commands, `clm pending`'s refusal of a component the graph doesn't hold, and "command matches library", which only a crate above `clm-view` can show. "unknown view" and "command matches library" are `view`'s word for word.
 - `view-at-rev` says what the command reads for the line naming the commit and names `view/view-command` for its form. `pending-names-its-commit` takes its exit status from `arguments-and-exit`. Their scenarios are unchanged.
 
-**`view` keeps what its library draws for what it is handed.** `status-report`, `view-command`, `spec-view` and `view-library` say "handed" where they said read; four scenarios are restated on a checkout or a size report given to the library; `view-command` states the line naming a commit, with a scenario; `view-library` says no test of `view`'s is left in the root's `status.rs` or `view.rs`. So `view`'s build writes a test of the status row's `oversized` cell, re-cites `the_commit_line_heads_every_chart_at_a_commit` where it stands, moves `scenario_groups_in_order` into its own files citing `view/status-report`, and takes its other tests out of the root's two files, which then hold none. Each needs `view.repo`'s two requirements, so the tests are in `view.repo`'s files before they leave the root's.
+**`view` keeps what its library draws for what it is handed.** `status-report`, `view-command`, `spec-view` and `view-library` say "handed" where they said read; four scenarios are restated on a checkout or a size report given to the library; `view-command` states the line naming a commit, with a scenario; `view-library` says no test of `view`'s is left in the root's `status.rs` or `view.rs`. So `view`'s build writes a test of the status row's `oversized` cell, re-cites `the_commit_line_heads_every_chart_at_a_commit` where it stands, moves `scenario_groups_in_order` into its own files citing `view/status-report`, and takes its other tests out of the root's two files, which then hold none. With `view.rs` gone, `crates/clm` uses neither `clm-view` nor `roxmltree`, and `view`'s build removes both from `crates/clm/Cargo.toml`, which is wiring any build may change, or `clm check`'s unused-dependency detector fails. Each needs `view.repo`'s two requirements, so the tests are in `view.repo`'s files before they leave the root's.
 
 **`check/pending-narrows-on-a-graph`** states the violation a component the graph doesn't hold gets, a removed one included, with a scenario; `a_removed_node_is_an_unknown_node` is re-cited to it where it stands.
 
-**`check.coverage/pending-report`** no longer states an exit status, and says none of its tests is left in the root's `pending.rs` or in `check`'s files. It needs `view.repo/arguments-and-exit` and `check/pending-narrows-on-a-graph`.
+**`check.coverage/pending-report`** no longer states an exit status, and says none of its tests is left in the root's `pending.rs` or in `check`'s files. It needs `view.repo/arguments-and-exit` and `check/pending-narrows-on-a-graph`. **`check.coverage/status-report`** hands its exit status to `view.repo` too: its build takes its marker off `invalid_graph_prints_violations` and re-cites `scenario_groups_in_order` where it stands, and `view`'s build, which comes after, moves that test.
 
 **`clm/routes-only`** takes the scenario "the budgets a routed command is passed" and needs the requirements above, so it is built when the root's top-level files hold only the root's tests. `gate/own-files` needs it already.
 
-`moved-tests.txt` lists the 26 tests with where each goes.
+`moved-tests.txt` lists the 26 tests with the file each goes to; a moved test's file keeps its name, so the two tests named `sizes_that_cant_be_checked_mark_nothing` stay apart.
 
 **Builds, in the order the needs give:** `view.repo` (its two requirements) and `check`; `check.coverage`; `view`; `view.repo` again, to re-cite `view-at-rev` and `pending-names-its-commit`; then the root's `clm/routes-only`, which is step 4.
 
 ## What it leaves
 
-- **`check.coverage/status-report` still says `clm status` exits 0 or 1.** Its crate can't show that, and `view.repo/arguments-and-exit` now states it. The sentence stays for phase 5, because `view/status-report` needs that requirement.
+- **Needs that run against `depends_on`.** `view`'s four requirements and `check.coverage`'s two wait on `view.repo`'s, and `check.coverage/pending-report` on `check`'s, only so that each test is in the file it moves to before it leaves the root's. They are first-ordering needs (`requirement-needs`): the closing spec branch of phase 4's step 7 drops them once these builds have landed, or they would hold `view` and `check.coverage` back at every later edit of `view.repo`.
+- **`view.repo` will probably go over its budget.** It measures about 33,900 code tokens of 40,000, and the tests that move are some 7,000 to 8,000. The root loses the same. Nothing is done about it here: phase 5's cuts take the duplicates among them first (the plan lists ten of `view`'s), and a split or a budget is decided after.
 - **`scenario_list_reaches_clm_check`** stays in `check`'s `state_names.rs`, citing `check.coverage/state-names`. It tests the re-export, which goes with `20261115-check-passes-on-no-coverage`; `backlog/clm-check-still-re-exports-the-coverage-library` says what that change must do for it.
 - **`land.approval`'s 25 tests** (`land-approval-s-rules-for-clm-land-are-proven-only-by-landing`) go with step 5's designs, as the plan says.
 

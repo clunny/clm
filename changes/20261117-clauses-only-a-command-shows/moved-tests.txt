@@ -1,27 +1,27 @@
 # <file>::<test>	<requirement it cites today>	->	<file it goes to>	<requirement it cites there>
-crates/clm/tests/status.rs::invalid_graph_prints_violations	view/status-report, check.coverage/status-report	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
-crates/clm/tests/status.rs::status_and_view_never_fetch	view/status-report, view/view-command	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::scenario_oversized_node	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::scenario_budget_accepted	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::sizes_that_cant_be_checked_mark_nothing	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::status_has_no_review_section	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::scenario_checkout_named	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::scenario_checkout_behind	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::scenario_no_origin	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/status.rs::no_repository_names_no_commit	view/status-report	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
+crates/clm/tests/status.rs::invalid_graph_prints_violations	view/status-report, check.coverage/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/arguments-and-exit
+crates/clm/tests/status.rs::status_and_view_never_fetch	view/status-report, view/view-command	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::scenario_oversized_node	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::scenario_budget_accepted	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::sizes_that_cant_be_checked_mark_nothing	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::status_has_no_review_section	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::scenario_checkout_named	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::scenario_checkout_behind	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::scenario_no_origin	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
+crates/clm/tests/status.rs::no_repository_names_no_commit	view/status-report	->	crates/clm-view-repo/tests/status.rs	view.repo/reads-the-repository
 crates/clm/tests/status.rs::scenario_groups_in_order	check.coverage/status-report	->	crates/clm-view/tests/status.rs	view/status-report
-crates/clm/tests/view.rs::scenario_width	view/view-command	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
-crates/clm/tests/view.rs::scenario_offline	view/view-command	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/view.rs::scenario_unknown_view	view/view-command	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
-crates/clm/tests/view.rs::violations_exit_1	view/view-command	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
-crates/clm/tests/view.rs::scenario_oversized_on_the_chart	view/spec-view	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/view.rs::sizes_that_cant_be_checked_mark_nothing	view/spec-view	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/view.rs::scenario_claimed_node_and_command_matches_library	view/flight-view, view/view-library	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
-crates/clm/tests/view.rs::scenario_checkout_behind_on_the_chart	view/view-command	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/view.rs::scenario_checkout_current	view/view-command	->	crates/clm-view-repo/tests/	view.repo/reads-the-repository
-crates/clm/tests/pending.rs::violations_and_unknown_nodes_exit_1	check.coverage/pending-report	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
-crates/clm/tests/pending.rs::scenario_removed_node_from_the_cli	check.coverage/pending-report	->	crates/clm-view-repo/tests/	view.repo/arguments-and-exit
+crates/clm/tests/view.rs::scenario_width	view/view-command	->	crates/clm-view-repo/tests/view.rs	view.repo/arguments-and-exit
+crates/clm/tests/view.rs::scenario_offline	view/view-command	->	crates/clm-view-repo/tests/view.rs	view.repo/reads-the-repository
+crates/clm/tests/view.rs::scenario_unknown_view	view/view-command	->	crates/clm-view-repo/tests/view.rs	view.repo/arguments-and-exit
+crates/clm/tests/view.rs::violations_exit_1	view/view-command	->	crates/clm-view-repo/tests/view.rs	view.repo/arguments-and-exit
+crates/clm/tests/view.rs::scenario_oversized_on_the_chart	view/spec-view	->	crates/clm-view-repo/tests/view.rs	view.repo/reads-the-repository
+crates/clm/tests/view.rs::sizes_that_cant_be_checked_mark_nothing	view/spec-view	->	crates/clm-view-repo/tests/view.rs	view.repo/reads-the-repository
+crates/clm/tests/view.rs::scenario_claimed_node_and_command_matches_library	view/flight-view, view/view-library	->	crates/clm-view-repo/tests/view.rs	view.repo/arguments-and-exit
+crates/clm/tests/view.rs::scenario_checkout_behind_on_the_chart	view/view-command	->	crates/clm-view-repo/tests/view.rs	view.repo/reads-the-repository
+crates/clm/tests/view.rs::scenario_checkout_current	view/view-command	->	crates/clm-view-repo/tests/view.rs	view.repo/reads-the-repository
+crates/clm/tests/pending.rs::violations_and_unknown_nodes_exit_1	check.coverage/pending-report	->	crates/clm-view-repo/tests/pending.rs	view.repo/arguments-and-exit
+crates/clm/tests/pending.rs::scenario_removed_node_from_the_cli	check.coverage/pending-report	->	crates/clm-view-repo/tests/pending.rs	view.repo/arguments-and-exit
 crates/clm-check/tests/pending.rs::a_removed_node_is_an_unknown_node	check.coverage/pending-report	->	stays	check/pending-narrows-on-a-graph
 crates/clm-view/tests/views.rs::the_commit_line_heads_every_chart_at_a_commit	view.repo/view-at-rev	->	stays	view/view-command
 crates/clm-check/tests/state_names.rs::scenario_list_reaches_clm_check	check.coverage/state-names	->	stays	check.coverage/state-names (goes with the re-exports)

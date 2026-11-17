@@ -66,4 +66,4 @@ For every command a component offers as a call (`commands-in-crate`), `crates/cl
 - view/view-command
 - view/view-library
 - check.coverage/pending-report
-
+- check.coverage/status-report
