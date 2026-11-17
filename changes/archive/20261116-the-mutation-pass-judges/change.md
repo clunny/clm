@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-mutation-pass-judges-a-requirement-by-mutants-its-tests-never-reach]
 ---
 
