@@ -1,11 +1,11 @@
 ---
-title: "Nineteen of view's tests show what only the clm status and clm view commands do"
+title: "Twenty of view's tests show what only the clm status and clm view commands do"
 kind: deferred
 components: [view, view.repo, clm]
 blocks: [clm/routes-only, gate/own-files]
 ---
 
-`view`'s requirements state what `clm status` and `clm view` print, and `clm-view-repo`, which lies above `clm-view`, offers the commands (`commands-live-in-their-crates`). The fix of `some-tests-prove-a-component-from-another-component-s-files` moved the 30 tests of `view` whose assertions `clm-view` itself decides, given a graph, markers and claims, into `crates/clm-view/tests/status.rs` and `view.rs`. These 19 stayed in the root's top-level test files, each citing `view`, because what they assert is decided by the command's reading of the repository, its arguments, its exit status or its second stream, none of which `clm-view` holds:
+`view`'s requirements state what `clm status` and `clm view` print, and `clm-view-repo`, which lies above `clm-view`, offers the commands (`commands-live-in-their-crates`). The fix of `some-tests-prove-a-component-from-another-component-s-files` moved the 29 tests of `view` whose assertions `clm-view` itself decides, given a graph, markers and claims, into `crates/clm-view/tests/status.rs` and `view.rs`. These 20 stayed in the root's top-level test files, each citing `view`, because what they assert is decided by the command's reading of the repository, its arguments, its exit status or its second stream, none of which `clm-view` holds:
 
 - **In `crates/clm/tests/status.rs` (11), citing `view/status-report`:**
   - `invalid_graph_prints_violations`: an invalid graph exits 1 and prints the violations in place of the report. It also cites `check.coverage/status-report`.
@@ -14,7 +14,8 @@ blocks: [clm/routes-only, gate/own-files]
   - `sizes_that_cant_be_checked_mark_nothing`: settings that don't load print `size not checked:` on standard error and the command still exits 0.
   - `status_has_no_review_section`: a ledger on `origin` is not read, and nothing goes to standard error.
   - `the_commit_is_cut_to_seven_digits_whatever_git_abbreviates_to`, `scenario_checkout_named`, `scenario_checkout_behind`, `scenario_no_origin` and `no_repository_names_no_commit`: the checkout line as read from `HEAD` and `refs/remotes/origin/main`.
-- **In `crates/clm/tests/view.rs` (8):**
+- **In `crates/clm/tests/view.rs` (9):**
+  - `scenario_width` (`view/view-command`): with no `--width` the chart is cut at 100 columns, the command's own default.
   - `scenario_offline` (`view/view-command`): the view is printed with an `origin` that can't be reached.
   - `scenario_unknown_view` (`view/view-command`): an unknown view, format or width exits 2 naming the choices.
   - `violations_exit_1` (`view/view-command`): an invalid graph exits 1.

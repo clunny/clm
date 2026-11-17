@@ -119,36 +119,6 @@ fn scenario_coloured_chart() {
 }
 
 #[test]
-fn scenario_width() {
-    // req:view/view-command@0fb30947
-    let dir = TempDir::new().unwrap();
-    let long = "n".repeat(60);
-    write(dir.path(), "specs/SPEC.md", ROOT);
-    write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
-    write(
-        dir.path(),
-        &format!("specs/{long}/SPEC.md"),
-        &node("a", &["y"]),
-    );
-    let text = view_of(dir.path(), Name::Spec, Format::Text, 40, &[]);
-    for line in text.lines() {
-        assert!(line.chars().count() <= 40, "{line:?}");
-    }
-    assert!(text.contains('…'), "{text}");
-    // The default is 100 columns: a longer line is cut there.
-    let longer = "m".repeat(120);
-    write(
-        dir.path(),
-        &format!("specs/{longer}/SPEC.md"),
-        &node("a", &["y"]),
-    );
-    let text = view(dir.path(), Name::Spec, Format::Text);
-    let widest = text.lines().map(|l| l.chars().count()).max().unwrap();
-    assert_eq!(widest, 100, "{text}");
-    assert!(text.contains(&long) && !text.contains(&longer), "{text}");
-}
-
-#[test]
 fn scenario_svg() {
     // req:view/view-command@0fb30947
     let dir = two_nodes();
