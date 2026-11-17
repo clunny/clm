@@ -356,13 +356,20 @@ pub fn show(fold: &Fold) -> Vec<String> {
                     killed,
                     unproven,
                     not_judged,
+                    left,
                     ..
-                } => format!(
-                    "{commit} {} killed {} unproven {} not judged",
-                    killed.len(),
-                    unproven.len(),
-                    not_judged.len()
-                ),
+                } => {
+                    let mut what = format!(
+                        "{commit} {} killed {} unproven {} not judged",
+                        killed.len(),
+                        unproven.len(),
+                        not_judged.len()
+                    );
+                    if !left.is_empty() {
+                        what.push_str(&format!(" {} left", left.len()));
+                    }
+                    what
+                }
             };
             format!("{kind} {what} {writer} {at}")
         })

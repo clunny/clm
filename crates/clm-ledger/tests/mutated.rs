@@ -31,7 +31,7 @@ fn body(commit: char, unproven: &[&str]) -> Body {
 
 #[test]
 fn folded_and_shown() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let text = line(
         1,
         'c',
@@ -54,7 +54,7 @@ fn folded_and_shown() {
 
 #[test]
 fn shown_counts_each_list() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let text = line(
         1,
         'c',
@@ -74,7 +74,7 @@ fn shown_counts_each_list() {
 
 #[test]
 fn newest_first_by_commit() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let text = [
         plain(1, 'c', "2026-01-01T00:00:00.000Z"),
         plain(3, 'd', "2026-01-03T00:00:00.000Z"),
@@ -93,7 +93,7 @@ fn newest_first_by_commit() {
 
 #[test]
 fn bad_entry() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let at = "2026-01-01T00:00:00.000Z";
     let bad = [
         line(1, 'c', at, "[]", r#"["a/x"]"#, "[]"),
@@ -119,7 +119,7 @@ fn bad_entry() {
 
 #[test]
 fn since_may_be_a_commit() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let text = plain(1, 'c', "2026-01-01T00:00:00.000Z")
         .replace("\"since\":null", &format!("\"since\":\"{}\"", id('a')));
     let fold = fold_records(&[("one", &text)]);
@@ -129,7 +129,7 @@ fn since_may_be_a_commit() {
 
 #[test]
 fn appended_unsigned_even_in_a_signed_repository() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     std::fs::create_dir_all(a.join("docs")).unwrap();
@@ -152,7 +152,7 @@ fn appended_unsigned_even_in_a_signed_repository() {
 
 #[test]
 fn compacted() {
-    // req:ledger/mutated-record@23c5c318
+    // req:ledger/mutated-record@80b0aa07
     let dir = tempfile::tempdir().unwrap();
     let a = clone_with_origin(dir.path(), "a", "A");
     let b = clone_with_origin(dir.path(), "b", "B");
@@ -189,6 +189,7 @@ fn the_same_record_as_a_literal() {
         killed: vec!["a/x".into()],
         unproven: vec!["b/y@0123abcd".into()],
         not_judged: vec!["c/z".into()],
+        left: vec![],
     };
     let built = Body::mutated(
         id('c'),
@@ -211,4 +212,86 @@ fn the_same_record_as_a_literal() {
         body_of(&from_built.record.id),
         body_of(&from_literal.record.id)
     );
+}
+
+#[test]
+fn what_a_pass_left() {
+    // req:ledger/mutated-record@80b0aa07
+    let text = line(1, 'c', "2026-01-01T00:00:00.000Z", r#"["a/x"]"#, "[]", "[]")
+        .replace('}', r#","left":["a/y","a/z"]}"#);
+    let fold = fold_records(&[("one", &text)]);
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    let Body::Mutated { left, .. } = &fold.mutations[&id('c')][0].body else {
+        panic!()
+    };
+    assert_eq!(left, &["a/y".to_string(), "a/z".to_string()]);
+    assert_eq!(
+        show(&fold),
+        [format!(
+            "mutated {} 1 killed 0 unproven 0 not judged 2 left alice/1 2026-01-01T00:00:00.000Z",
+            id('c')
+        )]
+    );
+}
+
+#[test]
+fn an_older_record() {
+    // req:ledger/mutated-record@80b0aa07
+    let text = plain(1, 'c', "2026-01-01T00:00:00.000Z");
+    assert!(!text.contains("left"));
+    let fold = fold_records(&[("one", &text)]);
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    let Body::Mutated { left, .. } = &fold.mutations[&id('c')][0].body else {
+        panic!()
+    };
+    assert!(left.is_empty());
+}
+
+#[test]
+fn a_bad_left() {
+    // req:ledger/mutated-record@80b0aa07
+    let at = "2026-01-01T00:00:00.000Z";
+    let text = [
+        plain(1, 'c', at).replace('}', r#","left":"a/y"}"#),
+        plain(2, 'c', at).replace('}', r#","left":["nope"]}"#),
+        plain(3, 'c', at).replace('}', r#","left":["a/y@0123abcd"]}"#),
+        plain(4, 'c', at),
+    ]
+    .join("\n");
+    let fold = fold_records(&[("one", &text)]);
+    assert_eq!(fold.warnings.len(), 3, "{:?}", fold.warnings);
+    assert!(fold.warnings[0].contains("line 1"), "{:?}", fold.warnings);
+    let held: Vec<_> = fold.mutations[&id('c')].iter().map(|r| &r.id).collect();
+    assert_eq!(held, ["m4"]);
+}
+
+#[test]
+fn left_set_through_the_constructor() {
+    // req:ledger/mutated-record@80b0aa07
+    let dir = tempfile::tempdir().unwrap();
+    let a = clone_with_origin(dir.path(), "a", "A");
+    let home = dir.path();
+    let alone = Body::mutated(id('c'), None, vec!["a/x".into()], vec![], vec![]);
+    let with = alone.clone().with_left(vec!["a/y".into()]);
+    let done_alone = clm_ledger::append(&a, alone, &env(home, &[])).unwrap();
+    let done_with = clm_ledger::append(&a, with, &env(home, &[])).unwrap();
+    let fold = clm_ledger::fold(&a).unwrap();
+    assert!(fold.warnings.is_empty(), "{:?}", fold.warnings);
+    let left_of = |rid: &str| {
+        let held = fold.mutations[&id('c')]
+            .iter()
+            .find(|r| r.id == rid)
+            .unwrap();
+        let Body::Mutated { left, .. } = &held.body else {
+            panic!()
+        };
+        left.clone()
+    };
+    assert_eq!(left_of(&done_with.record.id), ["a/y".to_string()]);
+    assert!(left_of(&done_alone.record.id).is_empty());
+    // Any other body comes back unchanged.
+    let other = Body::Withdrawn {
+        proposal: "p".into(),
+    };
+    assert_eq!(other.clone().with_left(vec!["a/y".into()]), other);
 }

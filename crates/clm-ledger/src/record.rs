@@ -220,6 +220,14 @@ pub enum Body {
         /// Requirements the pass couldn't judge.
         #[serde(deserialize_with = "requirement_ids")]
         not_judged: Vec<String>,
+        /// Requirements the pass didn't reach; absent, as in records written before the
+        /// field, it is empty.
+        #[serde(
+            default,
+            deserialize_with = "requirement_ids",
+            skip_serializing_if = "Vec::is_empty"
+        )]
+        left: Vec<String>,
     },
 }
 
@@ -403,6 +411,30 @@ impl Body {
             killed,
             unproven,
             not_judged,
+            left: vec![],
+        }
+    }
+
+    /// A `mutated` body with `left` as its `left`, and any other body unchanged, so a caller
+    /// that built its body with `mutated` sets `left` without naming the variant's fields.
+    pub fn with_left(self, left: Vec<String>) -> Body {
+        match self {
+            Body::Mutated {
+                commit,
+                since,
+                killed,
+                unproven,
+                not_judged,
+                ..
+            } => Body::Mutated {
+                commit,
+                since,
+                killed,
+                unproven,
+                not_judged,
+                left,
+            },
+            other => other,
         }
     }
 
