@@ -38,6 +38,11 @@ pub fn install() -> Installed {
         let mut old: [libc::sigaction; 2] = std::mem::zeroed();
         for (signal, old) in SIGNALS.iter().zip(old.iter_mut()) {
             libc::sigaction(*signal, &action, old);
+            // A signal the caller set to be ignored, as `nohup` or a background job does,
+            // stays ignored.
+            if old.sa_sigaction == libc::SIG_IGN {
+                libc::sigaction(*signal, old, std::ptr::null_mut());
+            }
         }
         Installed(old)
     }

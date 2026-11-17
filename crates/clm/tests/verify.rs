@@ -264,11 +264,13 @@ fn stopped_by_hand() {
     let marks = TempDir::new().unwrap();
     let m = marks.path().display();
     // It gives up after about 20 seconds, so a `clm verify` that ignores the signal fails
-    // here rather than hanging.
+    // here rather than hanging. When the pass ends it, it marks `ended` and keeps the pass
+    // running half a second longer, so the further signal below reaches it.
     let (dir, _bin) = mutating(
         "true",
         &format!(
-            "echo $$ > '{m}/leader'\necho 'a/one killed' >> \"$CLM_MUTATE_RESULT\"\n\
+            "echo $$ > '{m}/leader'\ntrap \": > '{m}/ended'; sleep 0.5; exit 0\" TERM\n\
+             echo 'a/one killed' >> \"$CLM_MUTATE_RESULT\"\n\
              : > '{m}/written'\ni=0\nwhile [ $i -lt 400 ]; do sleep 0.05; i=$((i + 1)); done"
         ),
     );
@@ -279,6 +281,10 @@ fn stopped_by_hand() {
         "the line was never written"
     );
     kill(child.id(), "-TERM");
+    assert!(
+        wait_for(&marks.path().join("ended")),
+        "the pass never ended its command"
+    );
     // A further signal during the pass changes nothing.
     kill(child.id(), "-INT");
     let out = child.wait_with_output().unwrap();
@@ -316,7 +322,7 @@ fn a_signal_before_the_pass_ends_it_as_any_process() {
     let m = marks.path().display();
     let (dir, _bin) = mutating(
         &format!(
-            ": > '{m}/checking'\ni=0\nwhile [ $i -lt 400 ]; do sleep 0.05; i=$((i + 1)); done"
+            "echo $$ > '{m}/check'\n: > '{m}/checking'\ni=0\nwhile [ $i -lt 400 ]; do sleep 0.05; i=$((i + 1)); done"
         ),
         &format!(": > '{m}/mutated'"),
     );
@@ -327,6 +333,9 @@ fn a_signal_before_the_pass_ends_it_as_any_process() {
     );
     kill(child.id(), "-TERM");
     let out = child.wait_with_output().unwrap();
+    // The check outlives `clm` here, as it would after any process's death: end it.
+    let check = std::fs::read_to_string(marks.path().join("check")).unwrap();
+    kill(check.trim().parse().unwrap(), "-KILL");
     assert_eq!(out.status.signal(), Some(15), "{out:?}");
     assert!(!marks.path().join("mutated").exists());
 }

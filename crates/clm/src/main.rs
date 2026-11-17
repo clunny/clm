@@ -1229,7 +1229,12 @@ fn verify(root: &Path, request: &clm_verify::Request) -> ExitCode {
             eprintln!("clm verify: {note}");
         }
         shown = outcome.notes.len();
-        catching = Some(stop_signal::install());
+        // Only a run whose check passed goes on to the pass; `clm-verify` doesn't say whether
+        // this one does, nor when its pass ends before the filing that follows it
+        // (`backlog/clm-verify-can-t-tell-its-caller-when-the-mutation-pass-runs`).
+        if outcome.line.starts_with("verify passed ") {
+            catching = Some(stop_signal::install());
+        }
     };
     let call = clm_verify::Call::standard(&stop_signal::STOP);
     let result = clm_verify::verify_with(root, request, &clm_config::process_env, &call, announce);
