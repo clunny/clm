@@ -26,6 +26,8 @@ The Rust half of the same requirement already states that a test that asks git a
 
 Edge cases and workarounds known now: a test that reads a file of its own npm directory through the repository's top (`../web/...` from `web/`) reaches the unmutated checkout, not the sandbox; nothing does that today, and its land check reads the same file, so the link for the npm directory itself is left out rather than pointed at the sandbox.
 
+From the builder check, for the build: the links are made on every StrykerJS run and may already exist (the fixture's two runs and a block's two runs share a tag), so made so as to replace one; "each entry" takes dot entries and untracked ones (`.github`, `target/`), so a plain `*` glob is not enough; the temp directory is removed as soon as StrykerJS returns, since StrykerJS leaves a non-empty one and `coverage.sh` runs vitest in `plugin-panel/`, whose default include could find tests through the links; the fixture's noticing test reads the file with `fs` (an import would resolve the link to its real path), under `// @vitest-environment node` or with a plain string path, as `web/src/build-assets.test.ts` does under `web`'s `jsdom`; and the blind test reads nothing.
+
 ## What it removes
 
 Nothing.
