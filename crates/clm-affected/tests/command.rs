@@ -143,7 +143,7 @@ fn repo(clm_toml: &str) -> TempDir {
 
 #[test]
 fn the_call_writes_what_the_command_prints_and_returns_its_status() {
-    // req:check.affected/commands-in-crate@0caf309b
+    // req:check.affected/commands-in-crate@6731de32
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -167,7 +167,7 @@ fn the_call_writes_what_the_command_prints_and_returns_its_status() {
 
 #[test]
 fn the_root_found_is_used_unless_root_overrides_it() {
-    // req:check.affected/commands-in-crate@0caf309b
+    // req:check.affected/commands-in-crate@6731de32
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/d/src/lib.rs", "fn g() {}\n");
@@ -187,7 +187,7 @@ fn the_root_found_is_used_unless_root_overrides_it() {
 
 #[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
-    // req:check.affected/commands-in-crate@0caf309b
+    // req:check.affected/commands-in-crate@6731de32
     let dir = repo("");
     let out = call_in(dir.path(), &["--nope"]);
     assert_eq!(out.status.code(), Some(2), "{out:?}");
@@ -199,7 +199,7 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
 
 #[test]
 fn prints_the_changed_nodes_dependants_and_files() {
-    // req:check.affected/affected-components@161dede3
+    // req:check.affected/affected-components@ce7d5c08
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -214,7 +214,7 @@ fn prints_the_changed_nodes_dependants_and_files() {
 
 #[test]
 fn nothing_changed_prints_nothing() {
-    // req:check.affected/affected-components@161dede3
+    // req:check.affected/affected-components@ce7d5c08
     let dir = repo("");
     let out = clm_affected(dir.path(), "main");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -223,7 +223,7 @@ fn nothing_changed_prints_nothing() {
 
 #[test]
 fn uncommitted_untracked_and_deleted() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/old.rs", "fn o() {}\n");
@@ -287,7 +287,7 @@ fn a_deleted_file_no_node_holds_prints_all() {
 
 #[test]
 fn settings_that_cant_load_exit_1() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("[affected]\nall = 3\n");
     let root = dir.path();
     let given = settings(root, &|_| None).unwrap_err();
@@ -300,7 +300,7 @@ fn settings_that_cant_load_exit_1() {
 
 #[test]
 fn a_callers_settings_failure_is_written_as_given_whatever_the_question() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let root = dir.path();
     let path = root.to_str().unwrap();
@@ -340,7 +340,7 @@ fn a_callers_settings_failure_is_written_as_given_whatever_the_question() {
 
 #[test]
 fn doc_only_changes_print_nothing() {
-    // req:check.affected/doc-only-selects-nothing@d8831f2e
+    // req:check.affected/doc-only-selects-nothing@bb19731a
     let dir = repo("");
     let root = dir.path();
     write(root, "docs/decisions/x.md", DECISION);
@@ -358,7 +358,7 @@ fn doc_only_changes_print_nothing() {
 
 #[test]
 fn doc_only_changes_beside_code_print_what_the_code_does() {
-    // req:check.affected/doc-only-selects-nothing@d8831f2e
+    // req:check.affected/doc-only-selects-nothing@bb19731a
     let dir = repo("");
     let root = dir.path();
     write(root, "backlog/y.md", BACKLOG_ITEM);
@@ -371,7 +371,7 @@ fn doc_only_changes_beside_code_print_what_the_code_does() {
 
 #[test]
 fn compares_with_the_merge_base() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -389,7 +389,7 @@ fn compares_with_the_merge_base() {
 
 #[test]
 fn the_base_defaults_to_origin_main() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let root = dir.path();
     // `origin/main` is behind `main`, which already holds `b`'s change.
@@ -409,7 +409,7 @@ fn the_base_defaults_to_origin_main() {
 
 #[test]
 fn selects_through_the_markers_of_the_files_the_scan_reads() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let dir = repo("");
     let root = dir.path();
     // Cites `a`, so selected though `d` owns it.
@@ -441,7 +441,7 @@ fn selects_through_the_markers_of_the_files_the_scan_reads() {
 
 #[test]
 fn a_marker_outside_a_test_still_selects() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let dir = repo("");
     let root = dir.path();
     // The only marker is a file-header comment, on no line of a test.
@@ -468,32 +468,35 @@ fn a_marker_outside_a_test_still_selects() {
 
 #[test]
 fn a_git_failure_exits_2() {
-    // The Contract's exit 2, which no requirement states yet
-    // (backlog/affected-base-leaves-out-exits-its-design-states).
+    // req:check.affected/affected-base@ec64a600
+    // No git repository, but `specs/` loads as a graph: git itself fails.
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &spec("[]", "[]"));
     let out = clm_affected(root, "main");
     assert_eq!(out.status.code(), Some(2), "{out:?}");
     assert_eq!(stdout(&out), "");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: "), "{err}");
+    assert!(err.contains("git rev-parse"), "{err}");
 }
 
 #[test]
 fn an_unknown_base_exits_1_naming_it() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let out = clm_affected(dir.path(), "nope");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert_eq!(stdout(&out), "");
-    assert!(
-        String::from_utf8_lossy(&out.stderr).contains("nope"),
-        "{out:?}"
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "clm affected: unknown base nope\n"
     );
 }
 
 #[test]
 fn a_base_with_no_merge_base_exits_1_naming_it() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let root = dir.path();
     git(root, &["switch", "-q", "--orphan", "lonely"]);
@@ -501,15 +504,16 @@ fn a_base_with_no_merge_base_exits_1_naming_it() {
     git(root, &["switch", "-q", "work"]);
     let out = clm_affected(root, "lonely");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(
-        String::from_utf8_lossy(&out.stderr).contains("lonely"),
-        "{out:?}"
+    assert_eq!(stdout(&out), "");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "clm affected: no merge base between lonely and HEAD\n"
     );
 }
 
 #[test]
 fn an_invalid_graph_exits_1_with_the_error() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = repo("");
     let root = dir.path();
     write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[c]"));
@@ -561,7 +565,7 @@ fn readers_repo() -> TempDir {
 #[test]
 fn a_reader_of_a_doc_only_file_is_printed_alone() {
     // req:check.affected/affected-readers@e1298640
-    // req:check.affected/doc-only-selects-nothing@d8831f2e
+    // req:check.affected/doc-only-selects-nothing@bb19731a
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -615,9 +619,9 @@ fn a_deleted_reader_is_not_printed() {
 
 #[test]
 fn readers_alone_ignore_the_graph_and_the_settings() {
-    // The Design's rule, which no requirement states yet
-    // (backlog/affected-base-leaves-out-exits-its-design-states): the question is only which
-    // tests read what changed, so the graph isn't loaded either.
+    // req:check.affected/affected-base@ec64a600
+    // A dependency cycle and an `[affected] all` that is no list stop neither: the question
+    // is only which tests read what changed.
     let dir = readers_repo();
     let root = dir.path();
     write(root, "clm.toml", "[affected]\nall = 3\n");
@@ -634,7 +638,7 @@ fn readers_alone_ignore_the_graph_and_the_settings() {
 
 #[test]
 fn readers_alone_read_no_setting() {
-    // req:check.affected/affected-base@e2cc9038
+    // req:check.affected/affected-base@ec64a600
     let dir = readers_repo();
     let root = dir.path();
     write(root, "clm.toml", "[affected]\nall = 3\n");
@@ -717,7 +721,7 @@ fn an_untracked_reader_and_an_untracked_doc_count() {
 
 #[test]
 fn why_prints_the_chain_through_a_dependency() {
-    // req:check.affected/why-chain@bf835003
+    // req:check.affected/why-chain@c55b66f4
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -735,7 +739,7 @@ fn why_prints_the_chain_through_a_dependency() {
 
 #[test]
 fn why_says_not_selected_and_all() {
-    // req:check.affected/why-chain@bf835003
+    // req:check.affected/why-chain@c55b66f4
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -752,7 +756,7 @@ fn why_says_not_selected_and_all() {
 
 #[test]
 fn why_with_readers_exits_1_naming_both_flags() {
-    // req:check.affected/why-chain@bf835003
+    // req:check.affected/why-chain@c55b66f4
     let dir = repo("");
     let out = clm_affected_with(
         dir.path(),
@@ -767,7 +771,7 @@ fn why_with_readers_exits_1_naming_both_flags() {
 
 #[test]
 fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
-    // req:check.affected/why-chain@bf835003
+    // req:check.affected/why-chain@c55b66f4
     let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -781,7 +785,7 @@ fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
 
 #[test]
 fn why_reads_the_scan_for_readers_and_citations() {
-    // req:check.affected/why-chain@bf835003
+    // req:check.affected/why-chain@c55b66f4
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -841,8 +845,36 @@ fn touch(root: &Path, rel: &str) {
 }
 
 #[test]
+fn a_rename_on_one_side_counts_as_its_old_path_and_its_new_one() {
+    // req:check.affected/overlap-selection@f23b11bd
+    // `x` moves `b`'s file into `a`, unchanged, which git would read as a rename.
+    let dir = overlap_repo(
+        "",
+        "[]",
+        &|r| {
+            fs::rename(
+                r.join("crates/b/src/lib.rs"),
+                r.join("crates/a/src/lib2.rs"),
+            )
+            .unwrap()
+        },
+        &|r| {
+            touch(r, "crates/a/src/lib.rs");
+            touch(r, "crates/b/src/other.rs");
+        },
+    );
+    let out = clm_affected_args(dir.path(), &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    // The new path makes `x` affect `a`, and the old one `b`.
+    assert_eq!(
+        stdout(&out),
+        "node a\nnode b\nfile crates/a/src/lib.rs\nfile crates/a/tests/spec.rs\n"
+    );
+}
+
+#[test]
 fn independent_changes_overlap_in_nothing() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo("", "[]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -853,7 +885,7 @@ fn independent_changes_overlap_in_nothing() {
 
 #[test]
 fn a_dependant_of_both_is_what_they_share() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -867,7 +899,7 @@ fn a_dependant_of_both_is_what_they_share() {
 
 #[test]
 fn a_side_that_selects_everything_leaves_the_others_output() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo(
         "[affected]\nall = [\"Cargo.lock\"]\n",
         "[a, b]",
@@ -888,7 +920,7 @@ fn a_side_that_selects_everything_leaves_the_others_output() {
 
 #[test]
 fn a_reader_on_one_side_meets_its_owner_on_the_other() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo(
         "",
         "[]",
@@ -913,7 +945,7 @@ fn a_reader_on_one_side_meets_its_owner_on_the_other() {
 
 #[test]
 fn overlap_takes_no_working_tree_or_untracked_file() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -929,7 +961,7 @@ fn overlap_takes_no_working_tree_or_untracked_file() {
 
 #[test]
 fn overlap_refuses_flags_that_dont_combine() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     for flag in [&["--readers"][..], &["--why", "p"], &["--base", "main"]] {
         let mut args = vec!["--overlap", "x", "y"];
@@ -944,22 +976,30 @@ fn overlap_refuses_flags_that_dont_combine() {
 
 #[test]
 fn overlap_names_a_revision_that_is_no_commit_and_commits_with_no_base() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo("", "[]", &|_| {}, &|_| {});
     let root = dir.path();
     let out = clm_affected_args(root, &["--overlap", "x", "nope"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("unknown revision nope"));
+    assert_eq!(stdout(&out), "");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "clm affected: unknown revision nope\n"
+    );
     git(root, &["switch", "-q", "--orphan", "z"]);
     commit_all(root, "unrelated");
     let out = clm_affected_args(root, &["--overlap", "x", "z"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
-    assert!(String::from_utf8_lossy(&out.stderr).contains("no merge base between x and z"));
+    assert_eq!(stdout(&out), "");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "clm affected: no merge base between x and z\n"
+    );
 }
 
 #[test]
 fn overlap_has_no_file_line_for_a_deleted_file() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo(
         "",
         "[]",
@@ -973,7 +1013,7 @@ fn overlap_has_no_file_line_for_a_deleted_file() {
 
 #[test]
 fn overlap_with_shared_components_but_no_shared_file_prints_nothing() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo(
         "",
         "[]",
@@ -987,7 +1027,7 @@ fn overlap_with_shared_components_but_no_shared_file_prints_nothing() {
 
 #[test]
 fn overlap_reads_the_graph_whole_from_the_commits() {
-    // req:check.affected/overlap-selection@2171c658
+    // req:check.affected/overlap-selection@f23b11bd
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1018,8 +1058,8 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
 
 #[test]
 fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@e9fac7ef
-    // req:check.affected/why-chain@bf835003
+    // req:check.affected/affected-files@4fca296e
+    // req:check.affected/why-chain@c55b66f4
     let dir = repo("");
     let root = dir.path();
     // `d` depends on nothing the change reaches, but exempts a test from `undeclared-imports`.
