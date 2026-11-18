@@ -16,5 +16,4 @@ clm-verify.workspace = true
 serde_yaml.workspace = true
 
 [dev-dependencies]
-clm-check.workspace = true
 tempfile.workspace = true
