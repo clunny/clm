@@ -22,6 +22,7 @@ A draft for `backlog/clm-coverage-doc-still-says-clm-check-re-exports-it` met a 
 
 - `docs/decisions/code-fix-needs-a-written-rule.md` has an "Outside the rule: the wording of a code comment" paragraph. A comment wrong because its code is wrong stays under the rule: the code's bug needs a written rule.
 - `AGENTS.md`'s CLM-defects paragraph names the comment case beside prompt text.
+- `docs/guide/how-it-works.md`, which names test plumbing as the bug route's one exception, names prompt text and comments too, so the guide `clm guide` prints says it (`method-in-the-plugin`), as the architecture audit found.
 - The deferred item's two bullets now ask for the comment case beside the prompt-text one.
 - The bug's item is deleted.
 
@@ -35,4 +36,4 @@ None.
 
 ## Open questions
 
-None.
+- The test in `crates/clm-triage/tests/draft.rs` that reads the paragraph the deferred item rewrites: whether the build keeps its assertions or drops wording assertions is the build's to settle under `prompt-text-is-source`, as the item already says the test follows the paragraph.
