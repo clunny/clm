@@ -12,7 +12,7 @@ serves: [capability/land-safely]
 `clm affected [--base <ref>] [--root <dir>] [--readers | --why <path>]` prints what a change can break, read from the spec graph (`graph-test-selection`): the components it affects and the files whose tests a check should run, or that every test must run. It knows no test runner; the project's check command turns the files into its runner's arguments (`ci`), and `clm land` hands it the output (`land`).
 
 - The *changed files* are the paths that differ between the merge base of `<ref>` (default `origin/main`) and `HEAD`, and the working tree, with the untracked files git doesn't ignore, leaving out every path `ledger`'s `doc_only` names. A deleted file is a changed file.
-- When a changed file matches a glob of `config`'s `[affected] all`, or no component's `paths` hold it (`check`'s `owner` gives none), the output is one line, `all <file>`, naming the first such file in path order.
+- When a changed file matches a glob of `config`'s `[affected] all`, or no component's `paths` hold it (`check.coverage`'s `owner` gives none), the output is one line, `all <file>`, naming the first such file in path order.
 - Otherwise the *affected* components are the owners of the changed files, every component that depends on one of them, directly or indirectly (`depends_on`). The output is a *component line* for each affected component, the word `component-words` keeps for these lines followed by a space and the component's ID, which `ci`'s check script and `clm land` read, then `file <path>` for each selected file, each group sorted, and nothing when no file changed.
 - The *selected* files are the changed files that still exist, whatever their content, the files `check`'s coverage scan reads (tracked, or untracked and not ignored; UTF-8; Markdown left out) that hold a `req:` marker whose requirement ID names an affected component (the part before `/`, whether or not the requirement still exists), or that hold no `req:` marker and whose `owner` is affected, and the *readers*.
 - A *reader* is a file the coverage scan reads that holds a `clm:reads <glob>` marker (`doc-readers-marked`) whose glob matches a path that differs as the changed files do, doc-only paths included: a test that reads the repository's own files, such as its specs or `ARCHITECTURE.md`, names them so, since `code_key` leaves the doc-only ones out and nothing else connects the test to them. `--readers` prints the readers' `file` lines alone, with no component or `all` line, which `clm land` runs on a tree whose code was already checked.
@@ -23,9 +23,9 @@ It exits 0 with its output, 1 with the reason when `--readers` and `--why` are b
 `clm-affected` offers `clm affected` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes. As library calls it offers too `readers(differing, reads)` and `reads_in(text)`, the globs of the `clm:reads` markers in a file's text, which `verify` reads to name the files a requirement's tests read (`verify/mutation-pass`).
 
 ## Design
-Crate `clm-affected`. `select(graph, changed, markers, all) -> Selection` is pure: it takes the graph (`model`), the changed paths with whether each still exists, the markers of every scanned file (`check`'s `scan`, each with its path) and the `[affected] all` globs, and returns `All(path)` or `Selection::Nodes`, holding the affected components' IDs and the selected files. Owners and globs are matched with `check`'s `owner` and `path_matches`, so a file belongs to the same component as in `clm pending`; paths are disjoint across components, and `owner`'s deepest-first rule settles any overlap. A `clm:remove-by` marker isn't a `req:` marker: a file holding only those belongs to its owner, and neither is a `clm:reads` marker. Dependants are found by walking `depends_on` backwards from the changed components until no component is added. A file an exemption names for `undeclared-imports` is selected whenever any component is affected, since what it imports is outside the graph's view (`temporary-exemptions`). Doc-only paths come from `ledger`'s `doc_only`, the one list `code_key` uses, so a change whose code key is unchanged selects only readers.
+Crate `clm-affected`. `select(graph, changed, markers, all) -> Selection` is pure: it takes the graph (`model`), the changed paths with whether each still exists, the markers of every scanned file (`check.coverage`'s `scan`, each with its path) and the `[affected] all` globs, and returns `All(path)` or `Selection::Nodes`, holding the affected components' IDs and the selected files. Owners and globs are matched with `check.coverage`'s `owner` and `matches`, so a file belongs to the same component as in `clm pending`; paths are disjoint across components, and `owner`'s deepest-first rule settles any overlap. A `clm:remove-by` marker isn't a `req:` marker: a file holding only those belongs to its owner, and neither is a `clm:reads` marker. Dependants are found by walking `depends_on` backwards from the changed components until no component is added. A file an exemption names for `undeclared-imports` is selected whenever any component is affected, since what it imports is outside the graph's view (`temporary-exemptions`). Doc-only paths come from `ledger`'s `doc_only`, the one list `code_key` uses, so a change whose code key is unchanged selects only readers.
 
-**Readers.** `readers(differing, reads) -> Vec<path>` is pure too: it takes every differing path, doc-only ones included, with whether it still exists, and each scanned file's `clm:reads` globs, and returns the files, sorted, one of whose globs matches a differing path by `check`'s `path_matches`, so a glob reads as a component's `paths` do. A marker is the text `clm:reads ` and the glob after it, up to the next whitespace; a file may hold several, and a marker with no glob after it is ignored. A reader is selected whether or not its owner is affected, and a deleted reader isn't printed. The markers come from the files the coverage scan reads, so a Markdown file is never a reader. Every file of this component, source and doc comments as well as test fixtures, builds or writes the marker's text so the literal and a space never appear whole (`concat!("clm", ":reads specs/**")`), as fixtures do `req:` markers, or the file would be a reader of whatever follows; so does any other file that only mentions the marker. Without `--readers` the readers join the other `file` lines, sorted with them; with it, `affected` prints them alone and doesn't read `[affected] all` or the owners at all, since the question is only which tests read what changed.
+**Readers.** `readers(differing, reads) -> Vec<path>` is pure too: it takes every differing path, doc-only ones included, with whether it still exists, and each scanned file's `clm:reads` globs, and returns the files, sorted, one of whose globs matches a differing path by `check.coverage`'s `matches`, so a glob reads as a component's `paths` do. A marker is the text `clm:reads ` and the glob after it, up to the next whitespace; a file may hold several, and a marker with no glob after it is ignored. A reader is selected whether or not its owner is affected, and a deleted reader isn't printed. The markers come from the files the coverage scan reads, so a Markdown file is never a reader. Every file of this component, source and doc comments as well as test fixtures, builds or writes the marker's text so the literal and a space never appear whole (`concat!("clm", ":reads specs/**")`), as fixtures do `req:` markers, or the file would be a reader of whatever follows; so does any other file that only mentions the marker. Without `--readers` the readers join the other `file` lines, sorted with them; with it, `affected` prints them alone and doesn't read `[affected] all` or the owners at all, since the question is only which tests read what changed.
 
 `affected(root, base, all)` gathers the inputs through `git` (`git-plumbing-layer`): `git rev-parse --verify <base>^{commit}` (failing: exit 1, `unknown base <ref>`), `git merge-base <base> HEAD` (exit 1, `no merge base between <ref> and HEAD`, when it prints nothing with status 1), then `git diff --name-only --no-renames -z <merge base>` (the working tree against the merge base, so a rename counts as its old and new path) and `git ls-files --others --exclude-standard -z`. Any other git failure is exit 2. A changed path is matched as git lists it, relative to the repository root. A deleted file still selects through its path, its owner being affected, but has no `file` line; a deleted file no component holds selects everything.
 
@@ -59,7 +59,7 @@ Crate `clm-affected`. `select(graph, changed, markers, all) -> Selection` is pur
 #### Needs
 - check.coverage/test-spans
 - model/exemptions
-- check/path-ownership
+- check.coverage/owner
 
 ### Requirement: affected-all
 When a changed file matches a glob of the `[affected] all` setting, or lies in no component's `paths`, `clm affected` SHALL print exactly one line, `all <path>`, naming the first such file in path order, and exit 0.
@@ -80,7 +80,7 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - THEN it prints only `all tools/build.sh`
 
 #### Needs
-- check/path-ownership
+- check.coverage/owner
 - config/affected-setting
 
 ### Requirement: doc-only-selects-nothing
@@ -142,7 +142,6 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - THEN it prints nothing and exits 0
 
 #### Needs
-- check/path-ownership
 - check.coverage/owner
 
 ### Requirement: affected-readers
@@ -174,7 +173,7 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - THEN it prints nothing
 
 #### Needs
-- check/path-ownership
+- check.coverage/owner
 - ledger/doc-only
 
 ### Requirement: why-chain

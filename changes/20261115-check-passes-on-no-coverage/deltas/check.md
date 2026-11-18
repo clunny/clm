@@ -1,6 +1,6 @@
 ---
 component: check
-base: { contract: "7bf81c228a8b4d8c", design: "ca09acf7d2983c78" }
+base: { frontmatter: "62b74bf266d5a7e5", contract: "7bf81c228a8b4d8c", design: "ca09acf7d2983c78" }
 ---
 
 ## MODIFIED Frontmatter
