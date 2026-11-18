@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 from: backlog/push-in-the-browser-names-the-app-s-service-worker-sw-js
 ---
 
