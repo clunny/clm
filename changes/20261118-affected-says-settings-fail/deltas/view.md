@@ -1,0 +1,101 @@
+---
+component: view
+base: { frontmatter: "eefd92066c391cd6", design: "78fc5b39fefa317e" }
+---
+
+## MODIFIED Frontmatter
+
+```yaml
+depends_on: [model, check.coverage, orchestrator, context, vcs]
+```
+
+## MODIFIED Design
+
+Crate `clm-view`, with a model per view and a renderer per format. The commands are `view.repo`'s crate, `clm-view-repo`, which reads the repository and hands this crate's models and renderers what it read: `crates/clm` dispatches `clm view` and `clm status` to it, and the `clm-hooks` session-start hook prints its status. `clm_coverage` gives the `components` and `changes` rows of `clm status` as cells, and `clm_orchestrator` the `claims` rows, each proven by tests in its own crate; `clm-view` adds the summary and lays the sections out.
+
+**Models.** `spec_view`, `flight_view` and `blockers_view` take the graph and markers as `clm_coverage::report` does, and the component states and pending requirements from `clm_orchestrator::queue_from_refs`; `status` is built from all three. The `spec` model is a function of the graph and markers alone, so the `web` app stores it in a snapshot; the queue state its chart and SVG show is the `flight` model's, computed from the same refs and handed to the renderer beside the model (a component the `flight` model doesn't list is `converged`), so `clm view spec` and `clm view flight` never disagree about a component. JSON is the serde form of the model, with snake_case keys and a top-level `"view"` naming the view; fields may be added, never renamed or removed without a spec change, since the `web` app and the plugin's panel read them.
+
+**Checkout** (`views-name-their-commit`). `view.repo` reads the checkout through `clm-git` (`git-plumbing-layer`): `HEAD`'s hash is cut to 7 hex digits rather than taken from `--short`, which can lengthen. The line is cut to `--width` like the chart's own lines, its `⚠` part amber in `ansi` and the SVG (`colour-meanings`).
+
+**Oversized components** (`oversized-is-a-state`). `spec_view` and `status` take an optional size report, the IDs of the components `clm size` marks, which the command computes and hands in; when the command passes none (`view.repo/reads-the-repository`), nothing is marked. The web app's `replica` passes none until it can compute one (`replica/snapshot-size`).
+
+**Component detail** (`component-detail`). The inspector's fields ride on the `spec` model so the panel draws them from it rather than reading `specs/`, `changes/` or `backlog/` itself (`views-rendered-by-clm`). All three are functions of the graph and markers, so the model stays one the `web` app can store in a snapshot, at the cost of one more coverage pass in `spec_view`. The `web` Worker's shape check (`web.worker`'s `current_shape` in `crates/clm-web/src/snapshot.rs`) lists the fields, so it sees a snapshot stored before them as stale and rebuilds it; nothing deserialises the model, so they carry no serde default. The spec branches on `origin` that touch the component aren't here: `clm view` reads the working tree and the local refs, not each branch's tree.
+
+**Blockers** (`blockers-view`). A component's waits are the edges `queue_from_refs`'s `blocked { by }` gives it; `depends_on` gives none (`needs-alone-order`). A need's edge goes on to the needed requirement's own blockers when that requirement is blocked, so the root is never a `ready` component whose session would leave the needed requirement out. A component waiting on several things appears under each root its waits reach. The `flight` model's components carry no `paths` and no `waiting_on`, and the view shows no `waiting` state.
+
+**Charts.** Long names are cut with `…`. The spec chart is an indented tree drawn with `├─ └─ │`, each component's line holding, in order, its ID, status, queue state, `⚠ oversized`, bar and `n/m`, owners, and `→` with its dependencies. The bar is ten cells shared in proportion among the component's current (`█`), behind (`▓`) and unbuilt (`░`) requirements, each non-zero count getting at least one cell and the rest going by largest remainder, ties in the order current, behind, unbuilt. `spec_view` takes the obsolete counts from `clm_coverage::pending` rather than from the requirement's ID, so the spec chart, the `flight` view and `clm next` agree on which component holds a removed requirement (`node-removal`). The flight chart draws each component's pending requirements as a bar of behind, unbuilt and obsolete, and each change's requirements as a bar with `complete` where it applies. The pinned line shapes (`flight-component-lines`, `spec-component-lines`, `blockers-root-lines`) exist because the `clm-panel` plugin finds a component's line by its prefix to add its own rows beneath and presses lines by position, the nth such line being the model's nth component or root (`plugin.panel`'s `component-inspector` and `blocker-chains`); they change only with this spec. Colours, in `ansi` and SVG, are `colour-meanings`, shared with the `web` app. The SVG lays components out in layers, dependents above their dependencies, with children inside their parent's box; it embeds its own styles and fonts fall back to the system's. Each box holds its label, its bar as coloured segments and `n/m`; a `converged` component keeps the outline of its status.
+
+**Size budget** (`slim-components`, `node-size-budgets`). The code budget is 55000 tokens, over the default 40000, because the three views and `clm status` share one chart and SVG shell (`chart.rs`, `svg.rs` and the head line every form begins with), which a split by view would leave in the parent while each child held a third of its callers.
+
+**Queue** (`queue-view`). The `queue` model is a plain type this crate defines, with no git and no dependency on `orchestrator.loop`, which computes it (`plan`); `view.repo` hands it to the renderers, so imports run one way, `view` below `orchestrator.loop` below `view.repo`, and the crate still builds for `wasm32-unknown-unknown`. Its chart has no layout of its own beyond sections of lines, so it has no `svg` form: the web app shows no loop, which is one clone's.
+
+## MODIFIED Requirements
+
+### Requirement: status-report <!-- base: 1507b00c8e091da7 -->
+`clm status` SHALL print, for the graph, markers, claim refs, checkout and size report it is handed, which `view.repo` reads from the repository (`view.repo/reads-the-repository`), a summary and then its sections: `components` and `changes` (`check.coverage/status-report`), each `components` row gaining the cell `oversized` when the component is oversized (`oversized-is-a-state`), then `claims` (`orchestrator`'s `status-claims`). It SHALL hold no review section: nothing is reviewed after it lands (`yes-no-review`). The summary is the line `CLM status` followed by these lines, each indented two spaces:
+- the checkout line, when it is handed a checkout: `commit <hash>`, the checkout's commit, followed by two spaces and `⚠ <n> behind origin/main` when the checkout's count `n` of commits behind `origin/main` is given and non-zero (`views-name-their-commit`);
+- `components <n>: <a> active, <s> unbuilt; <current>/<total> requirements current`, counting the capabilities that don't hold `#### Untested` with the requirements (`model/human-layers`), followed by `, architecture <e>/<t> enforced` when `ARCHITECTURE.md` holds entries, `<t>` the entries holding an `#### Enforced by` block and `<e>` those of them `check.coverage`'s `coverage-report` gives as current, then `, <u> untested` when any entry of either layer holds `#### Untested`, an entry holding both blocks counting in `<t>` and in `<u>`, then `, <k> oversized` when any component is oversized (`human-layer-proof`);
+- `changes <n> live`, followed by `: ` and `<count> <status>` for each status that has changes outside the archive, in the order `implementing`, `applied`, `approved`, `proposed`, separated by `, `, then `, <count> complete` when any live change is complete;
+- `pending <n> components`, followed by `: ` and `<count> <state>` for each of `claimed`, `ready` and `blocked` that has components, separated by `, `, counting the components `queue_from_refs` gives with the default expiry;
+- `waiting on you <n>`, followed by `: ` and what waits on the human: every `question` and `human-task` backlog item as `backlog/<slug>`, whether or not it blocks a requirement, and the `proposed` and `approved` changes outside the archive as `changes/<id>`, sorted, separated by `, `, when there are any;
+- `backlog <n>`, followed by `: ` and `<count> <kind>` for each kind that has items, in the order bug, deferred, idea, question, human-task, then any other, separated by `, `;
+- `claims <n> live`, followed by `, <count> lapsed` and `, <count> merged` when there are any.
+
+A blank line follows the summary and each section. A section is its name on a line, then its rows, each indented two spaces, or four under a group's name, which is itself indented two. The cells of a section's rows are separated by at least two spaces, each column starting at the same position on every row of the section. The command's exit status is `view.repo/arguments-and-exit`'s.
+
+#### Scenario: entries in the summary
+- GIVEN component `a` with requirement `a/x` current, `capability/b` cited by nothing, `capability/u` holding `#### Untested`, `architecture/e` enforced by `a/x`, and `architecture/f` holding only `#### Untested`
+- WHEN `clm status` runs
+- THEN its summary contains `1/2 requirements current, architecture 1/1 enforced, 2 untested`
+
+#### Scenario: summary
+- GIVEN the root `clm` (active, no requirements) and component `a` (active, requirements `a/x` current and `a/y` not), change `20260101-c` with status `applied` whose delta adds both, and two `idea` backlog items
+- WHEN `clm status` runs, and then again with no change outside the archive, no backlog item, no claim ref and `a/y` current
+- THEN its first line is `CLM status`, and its summary contains `components 2: 2 active, 0 unbuilt; 1/2 requirements current`, `changes 1 live: 1 applied`, `pending 1 components: 1 ready` and `backlog 2: 2 idea`; the second summary contains `changes 0 live`, `pending 0 components`, `backlog 0` and `claims 0 live`
+
+#### Scenario: aligned columns
+- GIVEN components `a` and `check`, `a` with 10 requirements and `check` with 2
+- WHEN `clm status` runs
+- THEN the `components` rows start `  a      ` and `  check  `, their status cells starting in the same column
+
+#### Scenario: changes grouped
+- GIVEN change `20260101-c` with status `implementing` whose deltas add three requirements, one current
+- WHEN `clm status` runs
+- THEN the `changes` section has the line `  implementing` followed by `    20260101-c  1/3 requirements`
+
+#### Scenario: waiting on you
+- GIVEN backlog items `q` of kind `question` and `h` of kind `human-task`
+- WHEN `clm status` runs
+- THEN its summary contains `waiting on you 2: backlog/h, backlog/q`
+
+#### Scenario: claims counted
+- GIVEN remote-tracking refs `origin/impl/b` committed 1 hour ago and `origin/impl/d` committed 5 hours ago
+- WHEN `clm status` runs
+- THEN its summary contains `claims 1 live, 1 lapsed`
+
+#### Scenario: oversized node
+- GIVEN a size report in which component `a` is oversized and components `b` and `c` are not
+- WHEN the status is built with it
+- THEN its `components` summary line ends `, 1 oversized`, `a`'s row holds the cell `oversized`, and neither `b`'s row nor `c`'s holds such a cell
+
+#### Scenario: checkout line
+- GIVEN a checkout two commits behind `origin/main`
+- WHEN the status is built with it, then with a checkout whose count is 0, then with one that has no count, and then with no checkout
+- THEN the first's line after `CLM status` is `  commit `, the checkout's commit and `  ⚠ 2 behind origin/main`, the second's is `  commit ` and the commit and nothing more, the third's starts `  commit ` and holds no `behind`, and the last's starts `  components `
+
+#### Scenario: pending states
+- GIVEN component `a` with an uncited requirement, component `b` with an uncited requirement claimed by a branch pushed an hour ago, and component `x` whose only pending requirement is in the `blocks` of `backlog/q`
+- WHEN `clm status` runs
+- THEN its summary contains `pending 3 components: 1 claimed, 1 ready, 1 blocked`, and no line of the summary names a `waiting` state
+
+#### Serves
+- capability/see-project-state
+- architecture/slim-components
+
+#### Needs
+- check.coverage/coverage-report
+- check.coverage/status-report
+- plugin.panel/component-inspector
+- model/parse-backlog
+- check.coverage/state-names
+- plugin.hooks/session-status

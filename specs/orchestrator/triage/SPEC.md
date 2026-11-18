@@ -2,7 +2,7 @@
 title: Triage
 status: active
 owners: ["@clunny"]
-depends_on: [orchestrator, model, check, vcs, land, host, ledger, verify]
+depends_on: [orchestrator, model, vcs, land, host, ledger, verify]
 paths: ["crates/clm-triage/**"]
 successor: ""
 serves: [capability/triage-unattended]
