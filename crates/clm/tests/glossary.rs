@@ -60,15 +60,26 @@ fn words<'a>(items: impl Iterator<Item = &'a str>) -> Vec<String> {
 
 #[test]
 fn a_command_without_an_entry_is_reported() {
-    // req:clm/glossary-covers-terms@0cecca49
-    let glossary = "Seeing: `clm status`, `clm check`.\nA `clm syncs` and clm sync bare.";
-    let terms = words(["clm status", "clm sync", "clm check"].into_iter());
-    assert_eq!(missing(glossary, &terms), ["clm sync"]);
+    // req:clm/glossary-covers-terms@5ad5c273
+    let glossary = "Seeing: `clm status`, `clm check`, `unbuilt`, `applied`, `bug`.\n\
+                    A `clm rebases` and clm rebase bare.";
+    let terms = words(
+        [
+            "clm status",
+            "clm rebase",
+            "clm check",
+            "unbuilt",
+            "applied",
+            "bug",
+        ]
+        .into_iter(),
+    );
+    assert_eq!(missing(glossary, &terms), ["clm rebase"]);
 }
 
 #[test]
 fn a_span_must_hold_exactly_the_term() {
-    // req:clm/glossary-covers-terms@0cecca49
+    // req:clm/glossary-covers-terms@5ad5c273
     let glossary = "`clm sync --force` and `unbuilt node` and `human_burden`";
     let terms = words(["clm sync", "unbuilt", "human_burdens"].into_iter());
     assert_eq!(
@@ -79,14 +90,14 @@ fn a_span_must_hold_exactly_the_term() {
 
 #[test]
 fn commands_come_from_the_help() {
-    // req:clm/glossary-covers-terms@0cecca49
+    // req:clm/glossary-covers-terms@5ad5c273
     let help = "Usage: clm\n\nCommands:\n  status  Show state\n          more words\n  help    Print\n\nOptions:\n  -h\n";
     assert_eq!(commands(help), ["clm status"]);
 }
 
 #[test]
 fn the_glossary_defines_every_term() {
-    // req:clm/glossary-covers-terms@0cecca49
+    // req:clm/glossary-covers-terms@5ad5c273
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let glossary = fs::read_to_string(root.join("docs/guide/glossary.md")).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_clm"))
