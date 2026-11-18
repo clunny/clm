@@ -255,8 +255,13 @@ fn not_invited_login_gets_the_page_and_no_session() {
         cookie_pair(&res, "__Host-clm-state"),
         Some("__Host-clm-state=")
     );
-    // Whatever cookie the browser has left, the API stays shut.
-    assert_eq!(fake.handle(get("/api/repos", "")).status, 401);
+    // With every cookie the callback set, the API stays shut.
+    let jar = set_cookies(&res)
+        .into_iter()
+        .filter_map(|c| c.split(';').next())
+        .collect::<Vec<_>>()
+        .join("; ");
+    assert_eq!(fake.handle(get("/api/repos", &jar)).status, 401);
     // Nothing of the token was kept.
     for value in fake.stored.borrow().iter() {
         assert!(!value.contains("tok-someone-else"), "stored: {value}");
@@ -290,6 +295,11 @@ fn session_of_a_login_no_longer_invited_is_401() {
     let fake = Fake::default();
     let cookie = fake.cookie_as("t", "someone-else");
     assert_eq!(fake.handle(get("/api/repos", &cookie)).status, 401);
+    // Every API route, not only the list, reads the same session check.
+    assert_eq!(
+        fake.handle(get("/api/repos/o/r/snapshot", &cookie)).status,
+        401
+    );
     fake.assets.borrow_mut().insert(
         "/_clm/invited.json".into(),
         (
