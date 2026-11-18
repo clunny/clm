@@ -51,6 +51,43 @@ fn repository(dir: &Path) -> PathBuf {
     clone
 }
 
+/// Waits until the wall clock, as a record's `at` reads it, is later than `at`.
+fn wait_past(at: &str) {
+    let start = std::time::Instant::now();
+    while at_now().as_str() <= at {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(30),
+            "the clock stayed before {at}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+/// The wall clock as a record's `at`, `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+fn at_now() -> String {
+    let since = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap();
+    let secs = since.as_secs();
+    // Howard Hinnant's `civil_from_days`.
+    let z = (secs / 86_400) as i64 + 719_468;
+    let (era, doe) = (z.div_euclid(146_097), z.rem_euclid(146_097));
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    let rem = secs % 86_400;
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60,
+        since.subsec_millis()
+    )
+}
+
 fn ledger_tip(clone: &Path) -> String {
     sh(
         clone,
@@ -148,6 +185,12 @@ fn more_work_appends_again() {
     );
     let env = env(dir.path(), &[]);
     clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap();
+    // The fold keeps the latest `at` (`ledger/effort-records`), so the second record must be
+    // written later than the first, however far the host's clock stepped back between them.
+    let first = clm_ledger::fold(&clone).unwrap().efforts[&clm_ledger::effort_id("s1", "impl/a")]
+        .at
+        .clone();
+    wait_past(&first);
     transcript(
         dir.path(),
         &clone,
