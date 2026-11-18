@@ -9,7 +9,7 @@ The build loop keeps the task IDs of every run of a name it has finished with, h
 
 ## Problem
 
-`launched-refuses-an-earlier-task` keeps a run's earlier task IDs with the run of that name, and only when the loop clears a run's task ID or replaces a listed run with a new one of its name. Three paths remove a run outright and keep nothing: `clm build start` drops every `returned` run, `clm build release` forgets the released build's run, and a step drops a fold or archive orphan (and a run whose relaunch was refused) for the plan to compute again. When the plan later starts a run of the same name, the new run has no earlier IDs, so `clm build launched <name> <old-task>` is accepted and a late `clm build returned <name> --task <old-task>` is recorded for the new run. The common case: `build:a` lands with task `t-1`, a new session runs `clm build start`, and `build:a` is launched again. No requirement states what a deletion keeps, so the fix is a requirement of this change (`code-fix-needs-a-written-rule`).
+`launched-refuses-an-earlier-task` keeps a run's earlier task IDs with the run of that name, and only when the loop clears a run's task ID or replaces a listed run with a new one of its name. Three paths remove a run outright and keep nothing: `clm build start` drops every `returned` run, `clm build release` forgets the released build's run, and a step drops a fold or archive orphan for the plan to compute again. When the plan later starts a run of the same name, the new run has no earlier IDs, so `clm build launched <name> <old-task>` is accepted and a late `clm build returned <name> --task <old-task>` is recorded for the new run. The common case: `build:a` lands with task `t-1`, a new session runs `clm build start`, and `build:a` is launched again. No requirement states what a deletion keeps, so the fix is a requirement of this change (`code-fix-needs-a-written-rule`).
 
 The design is wrong, not only the code: keeping the IDs on the run ties them to a record the loop deletes on several paths, and each new path that deletes a run would have to remember to hand them on.
 
@@ -26,8 +26,10 @@ Nothing since 2026-11-10 fixes it: `20261117-clm-build-step-prints` and `2026111
 
 - `orchestrator.loop/launched-refuses-an-earlier-task` (modified): the loop file keeps finished runs' task IDs by run name, whatever path removed the run, a loop file an earlier `clm` wrote has the IDs it kept with a run kept under that run's name, and no step removes one. New scenarios: a landed build dropped by a new session's `clm build start`, and a released build's task.
 - `orchestrator.loop/returned-ignores-an-earlier-task` (modified): a return from a task kept under its name is ignored also when no run of the name is listed, where `return-rules` would refuse it. New scenario for that case.
+- `orchestrator.loop/loop-file` (modified) lists the kept task IDs among what the file holds, and the Design lists them among what a damaged file loses (the architecture audit's finding, `spec-is-current`). The plan item already blocks `loop-file` for the freeze, which this change leaves as it is: the code is `launched-refuses-an-earlier-task`'s to build.
 - `backlog/the-fix-for-a-deleted-run-s-task-ids-is-outside-the-freeze` (`kind: question`) blocks the two requirements until the human answers.
-- No capability test sees a difference: `capability/build-from-spec` already reports a distinct task ID for each run.
+- No capability test sees a difference: `capability/build-from-spec` already reports a distinct task ID for each run and reuses none across a start, a release or a dropped run, so `launched-refuses-an-earlier-task` no longer asks its build to update that test.
+- The per-run list an earlier `clm` wrote is read for as long as the requirement says so; it is the loop's own state file, read by no other component, so it takes no `clm:remove-by` step (`expand-contract`).
 
 ## Constraints
 
