@@ -37,7 +37,7 @@ pub fn violations(graph: &Graph, markers: &[Marker]) -> Vec<Violation> {
                 path: PathBuf::from(m.to_string()),
                 rule: "check/tests-cite-their-owner",
                 message: format!(
-                    "cites {} of `{cited}`, but the file is `{}`'s test; move the test to `{cited}`'s tests",
+                    "cites {} of `{cited}`, but the file is `{}`'s; move the test to `{cited}`'s files",
                     m.id, mine.id
                 ),
             })
