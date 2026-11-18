@@ -89,7 +89,9 @@ fn cite(id: &str, body: &str) -> String {
     format!("// {}{id}@00000000\n{body}", concat!("req", ":"))
 }
 
-fn foreign(d: &Path, component: &str) -> Vec<(String, String)> {
+type Found = Vec<(String, String)>;
+
+fn foreign(d: &Path, component: &str) -> Found {
     foreign_files(d, "main", "HEAD", component)
         .unwrap()
         .into_iter()
@@ -101,7 +103,7 @@ fn pair(path: &str, owner: &str) -> (String, String) {
     (path.to_string(), owner.to_string())
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn another_components_source_is_foreign_and_the_gate_ignores_it() {
     let dir = base(Some("[]"));
@@ -120,7 +122,7 @@ fn another_components_source_is_foreign_and_the_gate_ignores_it() {
     assert_eq!(out.lines().next(), Some("code"), "{out}");
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn a_requirement_without_serves_of_its_own_serves_what_its_component_does() {
     let dir = base(Some("[]"));
@@ -147,7 +149,7 @@ fn a_requirement_without_serves_of_its_own_serves_what_its_component_does() {
     assert_eq!(foreign(d, "b"), Vec::new());
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn wiring_and_unowned_files_are_the_builds_to_change() {
     let dir = base(Some("[\"Cargo.lock\"]"));
@@ -159,7 +161,7 @@ fn wiring_and_unowned_files_are_the_builds_to_change() {
     assert_eq!(foreign(d, "a"), Vec::new());
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn a_root_file_no_wiring_glob_matches_is_foreign() {
     let dir = base(Some("[]"));
@@ -169,7 +171,7 @@ fn a_root_file_no_wiring_glob_matches_is_foreign() {
     assert_eq!(foreign(d, "a"), vec![pair("Cargo.lock", "clm")]);
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn a_test_that_cites_the_component_in_anothers_file_is_foreign() {
     let dir = base(Some("[]"));
@@ -186,7 +188,7 @@ fn a_test_that_cites_the_component_in_anothers_file_is_foreign() {
     );
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn a_capability_test_may_be_edited_never_deleted_by_a_serving_build() {
     let dir = base(Some("[]"));
@@ -212,7 +214,7 @@ fn a_capability_test_may_be_edited_never_deleted_by_a_serving_build() {
     );
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn a_capability_test_citing_a_longer_slug_is_foreign() {
     let dir = base(Some("[]"));
@@ -238,7 +240,43 @@ fn a_capability_test_citing_a_longer_slug_is_foreign() {
     );
 }
 
-// req:gate/own-files@37282f7d
+/// Cites `marker` on `main`, mid-line in a string after the code it observes, merges that
+/// into `impl/a`, edits the file there, and returns the foreign files for `a` and for `b`,
+/// which serves nothing.
+fn edit_a_capability_test_citing(marker: &str) -> [Found; 2] {
+    let dir = base(Some("[]"));
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    let text = format!(
+        "fn see() {{}}\nconst NOTE: &str = \"proves {}{marker} here\";\n",
+        concat!("req", ":")
+    );
+    write(d, "tests/capability/see.rs", &text);
+    commit(d, "cite elsewhere");
+    git(d, &["checkout", "-q", "impl/a"]);
+    git(d, &["merge", "-q", "main"]);
+    write(d, "tests/capability/see.rs", &format!("{text}// moved\n"));
+    commit(d, "edit");
+    [foreign(d, "a"), foreign(d, "b")]
+}
+
+// req:gate/own-files@343514b7
+#[test]
+fn a_capability_marker_with_no_version_counts_wherever_it_sits() {
+    let [a, b] = edit_a_capability_test_citing("capability/see");
+    assert_eq!(a, Vec::new());
+    assert_eq!(b, vec![pair("tests/capability/see.rs", "capability")]);
+}
+
+// req:gate/own-files@343514b7
+#[test]
+fn a_capability_marker_at_any_version_counts_wherever_it_sits() {
+    let [a, b] = edit_a_capability_test_citing("capability/see@1234abcd");
+    assert_eq!(a, Vec::new());
+    assert_eq!(b, vec![pair("tests/capability/see.rs", "capability")]);
+}
+
+// req:gate/own-files@343514b7
 #[test]
 fn a_capability_citation_is_read_at_the_merge_base() {
     let dir = base(Some("[]"));
@@ -248,7 +286,7 @@ fn a_capability_citation_is_read_at_the_merge_base() {
     assert_eq!(foreign(d, "a"), Vec::new());
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn a_capability_test_is_never_added_by_a_serving_build() {
     let dir = base(Some("[]"));
@@ -265,7 +303,7 @@ fn a_capability_test_is_never_added_by_a_serving_build() {
     );
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn nothing_is_foreign_until_the_root_sets_wiring() {
     let dir = base(None);
@@ -275,7 +313,7 @@ fn nothing_is_foreign_until_the_root_sets_wiring() {
     assert_eq!(foreign(d, "a"), Vec::new());
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn nothing_is_foreign_to_an_unknown_component() {
     let dir = base(Some("[]"));
@@ -285,7 +323,7 @@ fn nothing_is_foreign_to_an_unknown_component() {
     assert_eq!(foreign(d, "z"), Vec::new());
 }
 
-// req:gate/own-files@37282f7d
+// req:gate/own-files@343514b7
 #[test]
 fn results_are_sorted_by_path_and_read_from_the_revision_not_the_checkout() {
     let dir = base(Some("[]"));
