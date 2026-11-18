@@ -1090,11 +1090,6 @@ pub fn foreign_files(
     )
     .map_err(|e| e.to_string())?;
     let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
-    let at = At {
-        repo,
-        merge_base: &merge_base,
-        head: &head,
-    };
     let graph = load_specs_at(repo, &merge_base)?;
     let Some(wiring) = graph.wiring() else {
         return Ok(Vec::new());
@@ -1111,18 +1106,17 @@ pub fn foreign_files(
         .filter_map(|s| s.strip_prefix("capability/"))
         .map(|slug| format!("req:capability/{slug}"))
         .collect();
-    let cites = |text: &[u8], marker: &str, whole: bool| {
+    // `req:capability/see` cites `see`, not `seeing`: the slug must end where the marker does.
+    let cites = |text: &[u8], marker: &str| {
         text.windows(marker.len())
             .enumerate()
             .filter(|(_, w)| *w == marker.as_bytes())
             .any(|(i, _)| {
-                !whole
-                    || !text
-                        .get(i + marker.len())
-                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
+                !text
+                    .get(i + marker.len())
+                    .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
             })
     };
-    let own_marker = format!("req:{component}/");
     let mut found = Vec::new();
     for (status, file) in changed_files(repo, &format!("{merge_base}...{head}"))? {
         if is_spec_path(&file) {
@@ -1134,13 +1128,11 @@ pub fn foreign_files(
         if owner == component || wiring.iter().any(|g| clm_coverage::matches(g, &file)) {
             continue;
         }
-        let text_at = |rev: &str| show_bytes(repo, &format!("{rev}:{file}")).unwrap_or_default();
-        let (before, after) = (text_at(at.merge_base), text_at(at.head));
-        if cites(&before, &own_marker, false) || cites(&after, &own_marker, false) {
-            continue;
-        }
-        if status == 'M' && served.iter().any(|m| cites(&before, m, true)) {
-            continue;
+        if status == 'M' {
+            let before = show_bytes(repo, &format!("{merge_base}:{file}")).unwrap_or_default();
+            if served.iter().any(|m| cites(&before, m)) {
+                continue;
+            }
         }
         found.push(ForeignFile {
             path: file,
