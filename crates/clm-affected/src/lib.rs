@@ -269,7 +269,7 @@ mod cited_ids_tests {
 
     #[test]
     fn a_marker_outside_a_test_is_cited_like_one_inside() {
-        // req:check.affected/affected-files@e9fac7ef
+        // req:check.affected/affected-files@4fca296e
         let marker = |id: &str| format!("// {}{id}", concat!("req", ":"));
         let text = format!(
             "{}\nfn helper() {{}}\n\n#[test]\nfn t() {{\n    {}\n}}\n",

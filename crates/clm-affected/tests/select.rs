@@ -66,7 +66,7 @@ fn files(selection: &Selection) -> Vec<&str> {
 
 #[test]
 fn owners_and_their_dependants() {
-    // req:check.affected/affected-components@161dede3
+    // req:check.affected/affected-components@ce7d5c08
     let s = select(
         &graph(),
         &changed(&["crates/a/src/lib.rs"]),
@@ -78,7 +78,7 @@ fn owners_and_their_dependants() {
 
 #[test]
 fn a_dependant_alone_affects_no_dependency() {
-    // req:check.affected/affected-components@161dede3
+    // req:check.affected/affected-components@ce7d5c08
     let s = select(
         &graph(),
         &changed(&["crates/b/src/lib.rs"]),
@@ -90,7 +90,7 @@ fn a_dependant_alone_affects_no_dependency() {
 
 #[test]
 fn nothing_changed_selects_nothing() {
-    // req:check.affected/affected-components@161dede3
+    // req:check.affected/affected-components@ce7d5c08
     let s = select(&graph(), &[], &scanned(&[("crates/a/x.rs", &[])]), &[]);
     assert_eq!(
         s,
@@ -103,7 +103,7 @@ fn nothing_changed_selects_nothing() {
 
 #[test]
 fn cited_owned_and_changed_files() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let files_scanned = scanned(&[
         ("crates/a/src/lib.rs", &[]),
         ("crates/a/src/util.rs", &[]),
@@ -132,7 +132,7 @@ fn cited_owned_and_changed_files() {
 
 #[test]
 fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let s = select(
         &graph(),
         &changed(&["crates/b/src/lib.rs"]),
@@ -144,7 +144,7 @@ fn a_marker_naming_a_removed_requirement_selects_by_its_node() {
 
 #[test]
 fn a_deleted_file_affects_its_owner_without_a_file_line() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let gone = Changed {
         path: "crates/a/src/old.rs".into(),
         exists: false,
@@ -203,7 +203,7 @@ fn a_deleted_file_no_node_holds_selects_everything() {
 
 #[test]
 fn doc_only_paths_select_nothing() {
-    // req:check.affected/doc-only-selects-nothing@d8831f2e
+    // req:check.affected/doc-only-selects-nothing@bb19731a
     let s = select(
         &graph(),
         &changed(&["docs/decisions/x.md", "backlog/y.md", "specs/a/SPEC.md"]),
@@ -221,7 +221,7 @@ fn doc_only_paths_select_nothing() {
 
 #[test]
 fn doc_only_paths_beside_code_select_what_the_code_does() {
-    // req:check.affected/doc-only-selects-nothing@d8831f2e
+    // req:check.affected/doc-only-selects-nothing@bb19731a
     let s = select(
         &graph(),
         &changed(&["backlog/y.md", "crates/d/src/lib.rs"]),
@@ -234,7 +234,7 @@ fn doc_only_paths_beside_code_select_what_the_code_does() {
 
 #[test]
 fn a_file_an_exemption_names_is_selected_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@e9fac7ef
+    // req:check.affected/affected-files@4fca296e
     let doc = |paths: &str, extra: &str| {
         format!("---\ntitle: N\nstatus: active\nowners: []\npaths: {paths}\ndepends_on: []\n{extra}---\n")
             .into_bytes()
