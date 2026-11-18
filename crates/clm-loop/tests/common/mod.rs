@@ -207,6 +207,7 @@ pub fn run(name: &str, kind: Kind, model: &str, state: RunState, task: Option<&s
         model: model.to_string(),
         state,
         task_id: task.map(str::to_string),
+        earlier_tasks: Vec::new(),
         started: clm_git::now(),
         round: 1,
         stops: BTreeMap::new(),

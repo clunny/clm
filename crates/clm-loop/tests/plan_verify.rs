@@ -66,7 +66,7 @@ fn after_a_landed_run_while_others_still_go() {
     step(&fx.options()).unwrap();
     assert_eq!(fx.ran("verify --due --dry-run"), 0);
     fx.set("finish-a", "landed impl/a\n");
-    let actions = returned(&fx.options(), "build:a", "landed 1a2b3c4", None, None).unwrap();
+    let actions = returned(&fx.options(), "build:a", None, "landed 1a2b3c4", None, None).unwrap();
     assert_eq!(line(&actions, "run verify "), "run verify clm verify --due");
     assert_eq!(fx.ran("verify --due --dry-run"), 1, "no event: not idle");
 }
@@ -90,6 +90,7 @@ fn a_red_result_in_sight() {
     returned(
         &fx.options(),
         "verify",
+        None,
         "verify failed 1a2b3c4 culprit 9f8e7d6 components a",
         None,
         None,

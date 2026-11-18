@@ -55,6 +55,10 @@ pub struct Run {
     pub model: String,
     pub state: RunState,
     pub task_id: Option<String>,
+    /// The task IDs of the earlier runs of this name, whose late reports change nothing
+    /// (`launched-refuses-an-earlier-task`).
+    #[serde(default)]
+    pub earlier_tasks: Vec<String>,
     /// Unix seconds.
     pub started: u64,
     pub round: u32,
@@ -97,6 +101,29 @@ pub struct Run {
     /// An orphan whose branch moved lately, held by a session taken over.
     #[serde(default)]
     pub hold: Option<Hold>,
+}
+
+impl Run {
+    /// Clears the run's task ID, keeping it among the earlier runs' of its name.
+    pub(crate) fn forget_task(&mut self) {
+        if let Some(task) = self.task_id.take()
+            && !self.earlier_tasks.contains(&task)
+        {
+            self.earlier_tasks.push(task);
+        }
+    }
+
+    /// Makes this run the successor of `old`, a listed run of its name it replaces: it keeps
+    /// the task IDs `old` reported and kept.
+    pub(crate) fn succeed(&mut self, old: &Run) {
+        let mut old = old.clone();
+        old.forget_task();
+        for task in old.earlier_tasks {
+            if !self.earlier_tasks.contains(&task) && self.task_id.as_ref() != Some(&task) {
+                self.earlier_tasks.push(task);
+            }
+        }
+    }
 }
 
 /// A run stopped for a cause that clears.
@@ -250,6 +277,21 @@ impl LoopFile {
 
     pub(crate) fn run_mut(&mut self, name: &str) -> Option<&mut Run> {
         self.runs.iter_mut().find(|r| r.name == name)
+    }
+
+    /// The run whose task `task` is, or was for an earlier run of its name (`true` then).
+    pub(crate) fn task_owner(&self, task: &str) -> Option<(&Run, bool)> {
+        let task = task.to_string();
+        self.runs
+            .iter()
+            .find(|r| r.task_id.as_ref() == Some(&task))
+            .map(|r| (r, false))
+            .or_else(|| {
+                self.runs
+                    .iter()
+                    .find(|r| r.earlier_tasks.contains(&task))
+                    .map(|r| (r, true))
+            })
     }
 }
 

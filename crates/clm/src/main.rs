@@ -241,6 +241,9 @@ enum BuildAction {
     /// Record a run's return and print the actions to take now.
     Returned {
         name: String,
+        /// The task the return came from, as reported with `launched`.
+        #[arg(long)]
+        task: Option<String>,
         /// The run's last line, as it stands.
         #[arg(long, allow_hyphen_values = true)]
         result: String,
@@ -1090,10 +1093,18 @@ fn build(root: PathBuf, cwd: PathBuf, action: BuildAction) -> ExitCode {
         }
         BuildAction::Returned {
             name,
+            task,
             result,
             cause,
             until,
-        } => clm_loop::returned(&options, &name, &result, cause.as_deref(), until.as_deref()),
+        } => clm_loop::returned(
+            &options,
+            &name,
+            task.as_deref(),
+            &result,
+            cause.as_deref(),
+            until.as_deref(),
+        ),
         BuildAction::Approved { batch } => clm_loop::approved(&options, &batch),
         BuildAction::Cleared { condition } => clm_loop::cleared(&options, &condition),
         BuildAction::Release { component } => clm_loop::release(&options, &component),

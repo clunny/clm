@@ -18,7 +18,7 @@ fn running(fx: &Fixture, name: &str, task: &str) {
 }
 
 fn stop(fx: &Fixture, name: &str, result: &str, cause: &str, until: Option<&str>) -> Vec<String> {
-    returned(&fx.options(), name, result, Some(cause), until).unwrap()
+    returned(&fx.options(), name, None, result, Some(cause), until).unwrap()
 }
 
 #[test]
@@ -204,11 +204,11 @@ fn a_recurring_limit_resumes_one_run_at_a_time() {
         "{again:?}"
     );
     fx.set("finish-a", "landed impl/a\n");
-    let after = returned(&fx.options(), "build:a", "landed 1a2b3c4", None, None).unwrap();
+    let after = returned(&fx.options(), "build:a", None, "landed 1a2b3c4", None, None).unwrap();
     line(&after, "resume build:b t-2 ");
     assert!(!after.iter().any(|l| l.starts_with("launch ")), "{after:?}");
     fx.set("finish-b", "landed impl/b\n");
-    let last = returned(&fx.options(), "build:b", "landed 5d6e7f8", None, None).unwrap();
+    let last = returned(&fx.options(), "build:b", None, "landed 5d6e7f8", None, None).unwrap();
     line(&last, "launch build:c ");
 }
 
@@ -217,11 +217,22 @@ fn an_unknown_cause_or_until_is_refused() {
     // req:orchestrator.loop/stop-causes@ceb78f17
     let fx = Fixture::new();
     running(&fx, "build:a", "t-1");
-    assert!(returned(&fx.options(), "build:a", "none", Some("weather"), None).is_err());
     assert!(
         returned(
             &fx.options(),
             "build:a",
+            None,
+            "none",
+            Some("weather"),
+            None
+        )
+        .is_err()
+    );
+    assert!(
+        returned(
+            &fx.options(),
+            "build:a",
+            None,
             "none",
             Some("limit"),
             Some("soon")
@@ -232,6 +243,7 @@ fn an_unknown_cause_or_until_is_refused() {
         returned(
             &fx.options(),
             "build:a",
+            None,
             "none",
             Some("work"),
             Some(&rfc3339(1))

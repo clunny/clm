@@ -31,6 +31,7 @@ fn escalated() {
     let actions = returned(
         &fx.options(),
         "build:a",
+        None,
         "stopped: check fails",
         Some("work"),
         None,
@@ -72,7 +73,15 @@ fn a_second_context_stop_escalates() {
     );
     a.stops.insert("context".to_string(), 1);
     fx.add_run(a);
-    returned(&fx.options(), "build:a", "none", Some("context"), None).unwrap();
+    returned(
+        &fx.options(),
+        "build:a",
+        None,
+        "none",
+        Some("context"),
+        None,
+    )
+    .unwrap();
     assert!(fx.on_main("backlog/a-stops-on-context.md").is_some());
 }
 
@@ -92,7 +101,15 @@ fn stops_the_loop_made_never_escalate() {
     a.rebuilt_for = Some("work".to_string());
     fx.add_run(a);
     for _ in 0..2 {
-        returned(&fx.options(), "build:a", "none", Some("stopped"), None).unwrap();
+        returned(
+            &fx.options(),
+            "build:a",
+            None,
+            "none",
+            Some("stopped"),
+            None,
+        )
+        .unwrap();
     }
     for cause in ["limit", "disk", "blocked", "running"] {
         let mut b = run(
@@ -109,6 +126,7 @@ fn stops_the_loop_made_never_escalate() {
         returned(
             &fx.options(),
             &format!("build:{cause}"),
+            None,
             "none",
             Some(cause),
             None,
@@ -135,6 +153,7 @@ fn a_failed_land_is_kept_and_tried_again() {
     returned(
         &fx.options(),
         "build:a",
+        None,
         "stopped: check fails",
         Some("work"),
         None,

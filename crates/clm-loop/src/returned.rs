@@ -169,11 +169,13 @@ pub(crate) fn message_file(
     Ok(path)
 }
 
-/// `clm build returned <name> --result <line> [--cause <cause> [--until <time>]]`: records a
-/// run's return by the run's last line as it stands and prints the actions to take now.
+/// `clm build returned <name> [--task <task-id>] --result <line> [--cause <cause> [--until
+/// <time>]]`: records a run's return by the run's last line as it stands and prints the actions
+/// to take now. `task` names the task the return came from.
 pub fn returned(
     options: &Options,
     name: &str,
+    task: Option<&str>,
     result: &str,
     cause: Option<&str>,
     until: Option<&str>,
@@ -198,6 +200,21 @@ pub fn returned(
                 Failure::Refused(format!("--until `{text}` isn't an RFC 3339 time"))
             })?),
         };
+    // A return from a task the loop keeps as an earlier run's of the name changes nothing
+    // (`returned-ignores-an-earlier-task`).
+    if let Some(task) = task
+        && state::read(&options.root)
+            .and_then(|f| f.run(name).cloned())
+            .is_some_and(|r| {
+                r.task_id.as_deref() != Some(task) && r.earlier_tasks.iter().any(|t| t == task)
+            })
+    {
+        eprintln!(
+            "clm build: the return from task {task} is a late report of an earlier run of \
+             {name}, which the loop has finished; it changed nothing"
+        );
+        return crate::step::next_actions(options);
+    }
     clm_git::fetch(&options.root)?;
     // The late report of an earlier run of that name changes nothing but the lease.
     let known = state::update(&options.root, |f| {
@@ -377,7 +394,7 @@ pub fn returned(
                     r.round += 1;
                     r.model = session_model;
                     r.rebuilt_for = Some(c.clone());
-                    r.task_id = None;
+                    r.forget_task();
                     r.resume = None;
                 }
             }

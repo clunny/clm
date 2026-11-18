@@ -117,7 +117,12 @@ fn drain_the_queue() {
         assert!(repo.root.join(format!(".clm/prompts/{node}.md")).exists());
         loop_command(
             &repo,
-            &["build", "launched", &format!("build:{node}"), "t-1"],
+            &[
+                "build",
+                "launched",
+                &format!("build:{node}"),
+                &format!("t-{node}"),
+            ],
         );
     }
     repo.git(&["fetch", "-q", "origin"]);
@@ -160,7 +165,12 @@ fn resume_in_a_new_session() {
     for node in ["a", "b"] {
         loop_command(
             &repo,
-            &["build", "launched", &format!("build:{node}"), "t-1"],
+            &[
+                "build",
+                "launched",
+                &format!("build:{node}"),
+                &format!("t-{node}"),
+            ],
         );
     }
     build(&repo, &worktrees.join("build-b"), "b", "lib/tests", &b);
@@ -197,7 +207,7 @@ fn resume_in_a_new_session() {
         launch_prompt(&started, "b").is_none(),
         "`b` had landed: {started:?}"
     );
-    loop_command(&repo, &["build", "launched", "build:a", "t-2"]);
+    loop_command(&repo, &["build", "launched", "build:a", "t-a2"]);
 
     // The relaunched build lands, with nothing redone: `main` gained only `a`'s land.
     build(&repo, &worktrees.join("build-a"), "a", "tests", &a);

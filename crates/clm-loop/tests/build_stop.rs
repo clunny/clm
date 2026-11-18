@@ -34,8 +34,24 @@ fn stop_now() {
         ["stop build:a t-1", "stop draft:c t-2"],
         "a stop prints a stop for every running run, and launches nothing"
     );
-    returned(&fx.options(), "build:a", "none", Some("stopped"), None).unwrap();
-    let last = returned(&fx.options(), "draft:c", "none", Some("stopped"), None).unwrap();
+    returned(
+        &fx.options(),
+        "build:a",
+        None,
+        "none",
+        Some("stopped"),
+        None,
+    )
+    .unwrap();
+    let last = returned(
+        &fx.options(),
+        "draft:c",
+        None,
+        "none",
+        Some("stopped"),
+        None,
+    )
+    .unwrap();
 
     assert_eq!(last.len(), 2, "{last:?}");
     assert!(last[0].starts_with("say "), "{last:?}");
@@ -72,7 +88,7 @@ fn a_drain_launches_nothing_new_and_lets_runs_finish() {
     assert_eq!(actions, ["wait"], "no launch, and a run is still going");
 
     fx.set("finish-a", "landed impl/a\n");
-    let actions = returned(&fx.options(), "build:a", "landed 1a2b3c4", None, None).unwrap();
+    let actions = returned(&fx.options(), "build:a", None, "landed 1a2b3c4", None, None).unwrap();
     assert_eq!(actions.len(), 2, "{actions:?}");
     assert!(actions[0].starts_with("say "));
     assert_eq!(actions[1], "end");
@@ -91,7 +107,15 @@ fn the_summary_lists_only_landed_runs_as_landed() {
     let fx = Fixture::new();
     running(&fx, "build:a", Kind::Build, "t-1");
     stop(&fx.options(), StopMode::Drain).unwrap();
-    let actions = returned(&fx.options(), "build:a", "stopped: check fails", None, None).unwrap();
+    let actions = returned(
+        &fx.options(),
+        "build:a",
+        None,
+        "stopped: check fails",
+        None,
+        None,
+    )
+    .unwrap();
     let text = said(line(&actions, "say "));
     assert!(
         text.contains("Landed since the loop started:\n  nothing"),
@@ -120,7 +144,7 @@ fn summary_with_a_workaround() {
     fx.set("finish-a", "landed impl/a\n");
     stop(&fx.options(), StopMode::Drain).unwrap();
 
-    let actions = returned(&fx.options(), "build:a", "landed 1a2b3c4", None, None).unwrap();
+    let actions = returned(&fx.options(), "build:a", None, "landed 1a2b3c4", None, None).unwrap();
 
     let text = said(line(&actions, "say "));
     assert!(text.contains("build:a"), "{text}");
