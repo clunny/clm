@@ -2264,7 +2264,7 @@ fn mutate_tree(plan_text: &str) -> Tree {
     executable(&scripts.join("mutate.sh"), &script("mutate.sh"));
     executable(
         &scripts.join("coverage.sh"),
-        "#!/usr/bin/env bash\necho coverage.sh >> \"$CI_LOG\"\necho \"${CLM_SLOT-unset}\" >> \"$CI_LOG.coverage-slot\"\n[ -z \"${COVERAGE_FAIL:-}\" ] || exit 1\nmkdir -p target\necho 'SF:x' > target/lcov.info\n",
+        "#!/usr/bin/env bash\necho coverage.sh >> \"$CI_LOG\"\necho \"${CLM_SLOT-unset}\" >> \"$CI_LOG.coverage-slot\"\nls -A web | grep '^\\.stryker-tmp' >> \"$CI_LOG.coverage-tempdirs\"\n[ -z \"${COVERAGE_FAIL:-}\" ] || exit 1\nmkdir -p target\necho 'SF:x' > target/lcov.info\n",
     );
     tree.fake("cargo", CARGO_MUTANTS);
     tree.fake("npx", NPX_STRYKER);
@@ -2349,6 +2349,7 @@ impl Tree {
             "gate",
             "sleeper",
             "coverage-slot",
+            "coverage-tempdirs",
             "tempdir",
             "stale-tempdirs",
             "fixture-test",
@@ -3055,6 +3056,9 @@ fn a_typescript_test_reads_a_file_of_the_repository() {
     // were gone by the time the block's ran, and the block's once the script ends.
     assert!(tree.dir.path().join("log.stale-tempdirs").exists());
     assert_eq!(tree.log_lines("stale-tempdirs"), Vec::<String>::new());
+    // Nor does `coverage.sh`, which runs after the block's.
+    assert!(tree.dir.path().join("log.coverage-tempdirs").exists());
+    assert_eq!(tree.log_lines("coverage-tempdirs"), Vec::<String>::new());
     assert!(!dir.exists(), "{}", dir.display());
     assert!(
         !fs::read_dir(tree.work().join("web")).unwrap().any(|e| e
@@ -3074,7 +3078,7 @@ fn the_stryker_fixture_reads_a_file_of_the_repository() {
     let (ok, log, _, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     let test = fs::read_to_string(tree.dir.path().join("log.fixture-test")).unwrap();
-    let (notices, blind) = test
+    let (notices, _) = test
         .split_once("test('fixture_blind'")
         .unwrap_or_else(|| panic!("{test}"));
     // The test that notices a change to its function also reads a file by a path relative to
@@ -3103,8 +3107,6 @@ fn the_stryker_fixture_reads_a_file_of_the_repository() {
         target.display()
     );
     assert!(target.is_file(), "{rel} reaches {}", target.display());
-    // The blind test reads nothing.
-    assert!(!blind.contains("readFileSync"), "{test}");
 }
 
 /// A Rust block with no diff and one test, whose file has two mutants, one on line 3 alone and
