@@ -180,13 +180,20 @@ fn exempt_until_split() {
 
 /// Gives the repository's root spec `wiring: []`, naming its wiring.
 fn wire(root: &Path) {
+    wire_with(root, "[]", "[]");
+}
+
+/// Gives the repository's root spec the `paths` and `wiring` given.
+fn wire_with(root: &Path, paths: &str, wiring: &str) {
     let spec = root.join("specs/SPEC.md");
     let text = fs::read_to_string(&spec).unwrap();
-    fs::write(
-        spec,
-        text.replacen("paths: []\n", "paths: []\nwiring: []\n", 1),
-    )
-    .unwrap();
+    let wired = text.replacen(
+        "paths: []\n",
+        &format!("paths: {paths}\nwiring: {wiring}\n"),
+        1,
+    );
+    assert_ne!(wired, text, "the root's frontmatter changed shape");
+    fs::write(spec, wired).unwrap();
 }
 
 #[test]
@@ -233,17 +240,7 @@ fn a_wiring_file() {
     // req:check/tests-cite-their-owner@97a93dfa
     // Every build may edit a wiring file, but a test there is still its owner's, the root's.
     let dir = repo(None, &[("src/main.rs", cite("b/y"))]);
-    let spec = dir.path().join("specs/SPEC.md");
-    let text = fs::read_to_string(&spec).unwrap();
-    fs::write(
-        spec,
-        text.replacen(
-            "paths: []\n",
-            "paths: [\"src/main.rs\"]\nwiring: [\"src/main.rs\"]\n",
-            1,
-        ),
-    )
-    .unwrap();
+    wire_with(dir.path(), "[\"src/main.rs\"]", "[\"src/main.rs\"]");
     assert_eq!(
         found(dir.path()),
         [
