@@ -202,13 +202,12 @@ pub fn returned(
         };
     clm_git::fetch(&options.root)?;
     // The late report of an earlier run of that name changes nothing but the lease: a return
-    // from a task the loop keeps as an earlier run's of the name
+    // from a task the loop keeps under the name, whether or not a run of it is listed
     // (`returned-ignores-an-earlier-task`), or a `landed` line older than the run (`return-rules`).
     let (known, earlier) = state::update(&options.root, |f| {
         f.lease = Some(now());
-        let known = f.run(name).cloned();
-        let earlier = task.filter(|t| known.as_ref().is_some_and(|r| r.kept_earlier(t)));
-        Ok((known, earlier))
+        let earlier = task.filter(|t| f.kept_earlier(name, t));
+        Ok((f.run(name).cloned(), earlier))
     })?;
     if let Some(task) = earlier {
         eprintln!(
@@ -390,7 +389,7 @@ pub fn returned(
                     r.round += 1;
                     r.model = session_model;
                     r.rebuilt_for = Some(c.clone());
-                    r.forget_task();
+                    r.task_id = None;
                     r.resume = None;
                 }
             }

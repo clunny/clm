@@ -55,10 +55,6 @@ pub struct Run {
     pub model: String,
     pub state: RunState,
     pub task_id: Option<String>,
-    /// The task IDs of the earlier runs of this name, whose late reports change nothing
-    /// (`launched-refuses-an-earlier-task`).
-    #[serde(default)]
-    pub earlier_tasks: Vec<String>,
     /// Unix seconds.
     pub started: u64,
     pub round: u32,
@@ -101,33 +97,6 @@ pub struct Run {
     /// An orphan whose branch moved lately, held by a session taken over.
     #[serde(default)]
     pub hold: Option<Hold>,
-}
-
-impl Run {
-    /// Clears the run's task ID, keeping it among the earlier runs' of its name.
-    pub(crate) fn forget_task(&mut self) {
-        if let Some(task) = self.task_id.take()
-            && !self.earlier_tasks.contains(&task)
-        {
-            self.earlier_tasks.push(task);
-        }
-    }
-
-    /// Makes this run the successor of `old`, a listed run of its name it replaces: it keeps
-    /// the task IDs `old` reported and kept.
-    pub(crate) fn succeed(&mut self, old: &Run) {
-        for task in old.task_id.iter().chain(&old.earlier_tasks) {
-            if !self.earlier_tasks.contains(task) && self.task_id.as_ref() != Some(task) {
-                self.earlier_tasks.push(task.clone());
-            }
-        }
-    }
-
-    /// Whether `task` is one the loop keeps as an earlier run's of this run's name, and not this
-    /// run's own.
-    pub(crate) fn kept_earlier(&self, task: &str) -> bool {
-        self.task_id.as_deref() != Some(task) && self.earlier_tasks.iter().any(|t| t == task)
-    }
 }
 
 /// A run stopped for a cause that clears.
@@ -244,6 +213,11 @@ pub struct LoopFile {
     /// A run of the loop landed since the last verify run.
     #[serde(default)]
     pub landed_since_verify: bool,
+    /// The task IDs of the runs the loop has finished with, by run name, a task reported over
+    /// another included, whose late reports change nothing (`launched-refuses-an-earlier-task`). They outlast the runs, and `update`
+    /// keeps them, so no change removes one.
+    #[serde(default)]
+    pub kept_tasks: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for LoopFile {
@@ -264,6 +238,7 @@ impl Default for LoopFile {
             plan: None,
             said: Vec::new(),
             landed_since_verify: false,
+            kept_tasks: BTreeMap::new(),
         }
     }
 }
@@ -283,21 +258,69 @@ impl LoopFile {
         self.runs.iter_mut().find(|r| r.name == name)
     }
 
-    /// The run whose task `task` is, or was for an earlier run of its name (`true` then).
-    pub(crate) fn task_owner(&self, task: &str) -> Option<(&Run, bool)> {
-        let task = task.to_string();
+    /// The name of the run whose task `task` is, or was for an earlier run of the name (`true`
+    /// then).
+    pub(crate) fn task_owner(&self, task: &str) -> Option<(&str, bool)> {
         self.runs
             .iter()
-            .find(|r| r.task_id.as_ref() == Some(&task))
-            .map(|r| (r, false))
+            .find(|r| r.task_id.as_deref() == Some(task))
+            .map(|r| (r.name.as_str(), false))
             .or_else(|| {
-                self.runs
+                self.kept_tasks
                     .iter()
-                    .find(|r| r.earlier_tasks.contains(&task))
-                    .map(|r| (r, true))
+                    .find(|(_, tasks)| tasks.iter().any(|t| t == task))
+                    .map(|(name, _)| (name.as_str(), true))
             })
     }
+
+    /// Whether `task` is kept under `name` and isn't the task of the run now listed as `name`.
+    pub(crate) fn kept_earlier(&self, name: &str, task: &str) -> bool {
+        self.run(name).and_then(|r| r.task_id.as_deref()) != Some(task)
+            && self
+                .kept_tasks
+                .get(name)
+                .is_some_and(|tasks| tasks.iter().any(|t| t == task))
+    }
+
+    fn keep(&mut self, name: &str, task: &str) {
+        let tasks = self.kept_tasks.entry(name.to_string()).or_default();
+        if !tasks.iter().any(|t| t == task) {
+            tasks.push(task.to_string());
+        }
+    }
+
+    /// The kept IDs and each listed run's task ID, for `keep_tasks` after a change.
+    fn tasks(&self) -> Tasks {
+        let reported = self
+            .runs
+            .iter()
+            .filter_map(|r| Some((r.name.clone(), r.task_id.clone()?)))
+            .collect();
+        (self.kept_tasks.clone(), reported)
+    }
+
+    /// Keeps, after a change from a file whose `tasks` were `before`, every ID it kept, and the
+    /// task ID of each of its runs that the run now listed under that name, if any, no longer
+    /// holds: the change cleared it, replaced the run or removed it.
+    fn keep_tasks(&mut self, before: Tasks) {
+        let (kept, reported) = before;
+        if self.kept_tasks != kept {
+            for (name, tasks) in &kept {
+                for task in tasks {
+                    self.keep(name, task);
+                }
+            }
+        }
+        for (name, task) in &reported {
+            if self.run(name).and_then(|r| r.task_id.as_ref()) != Some(task) {
+                self.keep(name, task);
+            }
+        }
+    }
 }
+
+/// The kept task IDs by run name, and each listed run's name and task ID.
+type Tasks = (BTreeMap<String, Vec<String>>, Vec<(String, String)>);
 
 /// Where the loop file and its lock live: `<git common dir>/clm/`, not created.
 fn dir_path(root: &Path) -> Result<PathBuf, Failure> {
@@ -312,7 +335,26 @@ fn dir(root: &Path) -> Result<PathBuf, Failure> {
 }
 
 fn parse(bytes: &[u8]) -> Result<LoopFile, String> {
-    let file: LoopFile = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    // An earlier `clm` kept the task IDs with each run: they are kept under the run's name.
+    let mut earlier = Vec::new();
+    if let Some(runs) = value.get_mut("runs").and_then(|r| r.as_array_mut()) {
+        for run in runs.iter_mut().filter_map(|r| r.as_object_mut()) {
+            if let (Some(name), Some(tasks)) = (
+                run.get("name").and_then(|n| n.as_str()).map(str::to_string),
+                run.remove("earlier_tasks"),
+            ) {
+                earlier.push((name, tasks));
+            }
+        }
+    }
+    let mut file: LoopFile = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    for (name, tasks) in earlier {
+        let tasks: Vec<String> = serde_json::from_value(tasks).map_err(|e| e.to_string())?;
+        for task in tasks {
+            file.keep(&name, &task);
+        }
+    }
     if file.version == VERSION {
         Ok(file)
     } else {
@@ -362,7 +404,9 @@ pub fn update<T>(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => LoopFile::default(),
         Err(e) => return Err(io(&path, e)),
     };
+    let before = file.tasks();
     let out = change(&mut file)?;
+    file.keep_tasks(before);
     let tmp = dir.join("loop.tmp");
     let mut tmp_file = File::create(&tmp).map_err(|e| io(&tmp, e))?;
     let text = serde_json::to_vec_pretty(&file).map_err(|e| Failure::Git(e.to_string()))?;
