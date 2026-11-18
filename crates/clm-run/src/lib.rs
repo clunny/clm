@@ -138,8 +138,12 @@ pub struct Item {
     /// the current text, or `None` when the earlier text wasn't found.
     pub diffs: Vec<(String, Option<String>)>,
     /// Obsolete: the markers' locations. Behind: the locations of the markers that cite it
-    /// at another version or without one (`stale-markers-keep-behind`).
+    /// at another version or without one (`stale-markers-keep-behind`), except those of
+    /// `foreign`.
     pub markers: Vec<String>,
+    /// Behind, once the root sets `wiring`: the stale markers in a file another component
+    /// owns, each with that owner, which this build may not change (`pending-prompt`).
+    pub foreign: Vec<(String, String)>,
 }
 
 /// The job a run gives its session.
@@ -639,6 +643,22 @@ pub fn prompt(job: &Job) -> String {
                  to another requirement or removed it, take its marker off instead of re-citing \
                  it; the requirement that now states it is cited by its own build.\n",
                 item.markers.join(", ")
+            ));
+        }
+        if item.state == "behind" && !item.foreign.is_empty() {
+            let each: Vec<String> = item
+                .foreign
+                .iter()
+                .map(|(at, owner)| format!("`{at}` in `{owner}`'s file"))
+                .collect();
+            p.push_str(&format!(
+                "  Leave each marker that cites it at another version or without one in a file \
+                 another component owns: {}. `clm land` refuses this build's edit to such a \
+                 file (`land/build-holds-own-files`), and `clm check` reports the marker unless \
+                 an exemption covers its file (`check/tests-cite-their-owner`); add a \
+                 `question` item whose `blocks` names `{}`.\n",
+                listing_owned(&each, "and", false),
+                item.id
             ));
         }
     }
@@ -1285,6 +1305,7 @@ fn job(
                 .filter(|m| p.state != ReqState::Behind || m.version != p.version)
                 .map(ToString::to_string)
                 .collect(),
+            foreign: Vec::new(),
         });
     }
     let bundle = clm_context::bundle(graph, tree, node);
