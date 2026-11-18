@@ -1,5 +1,5 @@
 ---
-title: "`check` is split by carving coverage out as `check.coverage`, which `clm-check` re-exports"
+title: "`check` is split by carving coverage out as `check.coverage`, which each reader imports itself"
 date: 2026-10-27
 status: accepted
 ---
