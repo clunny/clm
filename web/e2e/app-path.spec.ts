@@ -1,3 +1,4 @@
+// clm:reads specs/web/SPEC.md
 // The app under /app/ (web/app-at-app-path), its scoped install
 // (web/installable) and the retirement of the old root service worker
 // (web/retire-root-service-worker). The tests that need the built tree read `dist/` as the
@@ -105,7 +106,7 @@ test.describe('app at /app/', () => {
   });
 });
 
-// req:web/invited-users@cfd18219
+// req:web/invited-users@0406720d
 test('the build holds the invited list under _clm/, beside the app', () => {
   expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(['clunny']);
 });

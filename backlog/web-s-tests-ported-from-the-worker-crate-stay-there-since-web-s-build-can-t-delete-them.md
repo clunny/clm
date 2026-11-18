@@ -2,7 +2,7 @@
 title: "Web's tests ported from the Worker's crate stay there, since web's build can't delete them"
 kind: question
 components: [web, web.worker]
-blocks: [web/no-install-scripts]
+blocks: [web/no-install-scripts, web/invited-users, web/site-served-directly]
 choices:
   - "web.worker's build deletes them"
   - "Exempt web's build to delete them"
