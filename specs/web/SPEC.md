@@ -56,7 +56,7 @@ The move from one Worker to two happens once on the live zone, in an order that 
 
 To rotate a credential, generate a new private key or client secret in the App's settings and `wrangler secret put` it. `web/README.md` gives these commands. `web/README.md` also carries the App's manifest, which must be the one in `web.worker`'s Design; a test under `web/` holds a copy of that manifest and checks the README against it, since no test reads `specs/`. Both list `push` and `pull_request` under `default_events`.
 
-**Tests** (`commands-live-in-their-crates`, `components-own-their-tests`). The browser tests under `web/e2e/` run the built app, with this component's entry file, stylesheet, routes and service worker, so what they show is this component's to state: they cite only its requirements, the `-in-the-browser` ones for what a view or the live modules draw. A view's own behaviour, drawn with the Worker faked, is `web.views`' and `web.client-live`'s to prove in their files. The tests of `web/wrangler.toml` and `web/.npmrc` sit under `web/src/`, none in the Worker's crate. Until those requirements are built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names each test that cited another component from this component's files, or this component from another's, with where it goes and what it cites from then on.
+**Tests** (`commands-live-in-their-crates`, `components-own-their-tests`). The browser tests under `web/e2e/` run the built app, with this component's entry file, stylesheet, routes and service worker, so what they show is this component's to state: they cite only its requirements, the `-in-the-browser` ones for what a view or the live modules draw. A view's own behaviour, drawn with the Worker faked, is `web.views`' and `web.client-live`'s to prove in their files. The tests that prove what `web/wrangler.toml` and `web/.npmrc` hold sit under `web/src/`: this component's build ports the three the Worker's crate held (`deploy.rs`, `npmrc.rs`) and deletes them there, after `web.worker`'s and `web.views`' builds have re-cited their own, and it then deletes `backlog/web-tests-prove-one-web-component-from-another-s-files`. Until those requirements are built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names each test that cited another component from this component's files, or this component from another's, with where it goes and what it cites from then on.
 
 ## Requirements
 
@@ -131,8 +131,8 @@ The app's build SHALL write the GitHub logins of this component's Contract's inv
 
 #### Scenario: list from the spec
 - GIVEN a build of the app
-- WHEN a test reads `_clm/invited.json` in the built files
-- THEN its logins are exactly those listed in `specs/web/SPEC.md`'s Contract
+- WHEN a test reads its invited logins
+- THEN they are exactly the logins listed in `specs/web/SPEC.md`'s Contract
 
 #### Scenario: the list reaches only the Worker
 - GIVEN the repository
@@ -141,6 +141,9 @@ The app's build SHALL write the GitHub logins of this component's Contract's inv
 
 #### Serves
 - architecture/invite-only-web
+
+#### Needs
+- web.worker/invited-sign-in
 
 ### Requirement: live-refresh
 While the page is visible, the app SHALL ask the Worker again, about every 60 seconds and whenever the page becomes visible, for the endpoints the view on screen was drawn from, and SHALL make no such requests while it is hidden. When the answers differ from what is shown, ignoring the implementation state's `now`, it SHALL redraw the view in place, keeping what the user set in it: the graph's pan, zoom and selected component, the page's scroll position, its tabs, switches and filters, an open bottom sheet and the full document's current change. When they don't, it SHALL leave the view as it is. A refresh that fails SHALL leave the view as it is, except that a 401 shows the sign-in page.
@@ -198,6 +201,8 @@ Approve SHALL post `{"fingerprint": <f>}`, where `<f>` is the fingerprint of the
 - architecture/git-is-truth
 
 #### Needs
+- web.views/worker-requests
+- web.views/approve-button
 - web.worker.review/approve
 
 ### Requirement: live-binding
@@ -276,6 +281,7 @@ While the page is visible and online, the app SHALL give `web.client-live`'s soc
 - capability/follow-from-browser
 
 #### Needs
+- web.views/worker-requests
 - web.client-live/live-updates
 - web.worker/fresh-live-state
 
@@ -428,7 +434,7 @@ A view on screen whose refreshes have failed for 3 minutes SHALL stay on screen 
 - capability/follow-from-browser
 
 ### Requirement: site-served-directly
-`web/wrangler.toml` SHALL route to this Worker, on `clm-app.dev`, exactly the app's paths, `/app`, `/app/*`, `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/sw.js`, with no Custom Domain, so every other path reaches the site's Worker (`web.site/site-worker`); its `run_worker_first` SHALL send to the script exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so its assets answer the app's files and `/sw.js` with no script run, and `not_found_handling` SHALL be `"none"`. Changing the routing moves the test fixtures that repeat it (`capabilities/web/harness.ts`'s `run_worker_first` and `not_found_handling`): this build makes that fix, to a capability test it serves, and names it in its pull request (`path-ownership`).
+`web/wrangler.toml` SHALL route to this Worker, on `clm-app.dev`, exactly the app's paths, `/app`, `/app/*`, `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/sw.js`, with no Custom Domain, so every other path reaches the site's Worker (`web.site/site-worker`); its `run_worker_first` SHALL send to the script exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so its assets answer the app's files and `/sw.js` with no script run, and `not_found_handling` SHALL be `"none"`.
 
 #### Scenario: who answers what
 - GIVEN the repository
@@ -443,6 +449,9 @@ A view on screen whose refreshes have failed for 3 minutes SHALL stay on screen 
 #### Serves
 - capability/learn-clm
 - architecture/invite-only-web
+
+#### Needs
+- web.worker/invited-sign-in
 
 ### Requirement: links-to-site
 The sidebar's `◆ CLM` logo SHALL be a link to `/`, the site's homepage, and the sidebar's foot SHALL hold a Guide link to `/guide/` beside Add repos. Below 900 px wide, the top bar SHALL begin with a `◆` link to `/`, labelled for assistive technology as the CLM homepage, before the repo switcher. These links SHALL be plain links that load the site, never routes of the app's hash router.
@@ -539,7 +548,7 @@ The app SHALL give Home and a backlog item's page the answer buttons' `Answering
 - web.worker/answers
 
 ### Requirement: cost-views-in-the-browser
-The built app, opened in a browser with the Worker's API answered, SHALL show the Capabilities and Architecture views and their pages as `web.views` draws them (`web.views/capabilities-list`, `architecture-list`, `decide-buttons`, `architecture-decide-buttons`), under this component's stylesheet and routes: at 900 px and wider each list is a table and no card shows; a proof `held <c>/<n>` with `c` less than `n` is drawn in the theme's amber; Architecture is the sidebar's last view, after Capabilities; a row opens its page at `#/<owner>/<repo>/capabilities/<slug>` or `#/<owner>/<repo>/architecture/<slug>`, with the view's sidebar entry marked; and a decision posts once however often it is tapped while in flight, after which the report is asked for again with `fresh` and the page shows what the Worker then answers, never an older report whose request began before the decision.
+The built app, opened in a browser with the Worker's API answered, SHALL show the Capabilities and Architecture views and their pages as `web.views` draws them (`web.views/capabilities-list`, `architecture-list`, `decide-buttons`, `architecture-decide-buttons`), under this component's stylesheet and routes: in a 1280 px wide window each list is a table and no card shows; a proof `held <c>/<n>` with `c` less than `n` is drawn in the theme's amber; Architecture is the sidebar's last view, after Capabilities; a row opens its page at `#/<owner>/<repo>/capabilities/<slug>` or `#/<owner>/<repo>/architecture/<slug>`, with the view's sidebar entry marked; and a decision posts once however often it is tapped while in flight, after which the report is asked for again with `fresh` and the page shows what the Worker then answers, never an older report whose request began before the decision.
 
 #### Scenario: the capabilities table
 - GIVEN a 1280 px wide window, and a report listing `b` then `a`, with `a` flagged
@@ -548,8 +557,8 @@ The built app, opened in a browser with the Worker's API answered, SHALL show th
 
 #### Scenario: the architecture table
 - GIVEN a 1280 px wide window, and a report listing `e` (flagged, one of its two enforcing rules current, with `#### Untested`) then `g` (holding only `#### Untested`)
-- WHEN Architecture is chosen in the sidebar, "⚑ only" is turned on, and `e`'s row is chosen
-- THEN Architecture is listed last, after Capabilities, and opens `#/o/a/architecture`; `e` comes first and reads `held 1/2 + untested` in the theme's amber, `g` reads `untested`; then only `e` is listed; and the page at `#/o/a/architecture/e` shows `e`'s entry
+- WHEN Architecture is chosen in the sidebar from the graph; and when `#/o/a/architecture` is opened, "⚑ only" is turned on, and `e`'s row is chosen
+- THEN in the first Architecture is listed last, after Capabilities, and opens `#/o/a/architecture`; in the second `e` comes first and reads `held 1/2 + untested` in the theme's amber, `g` reads `untested`; then only `e` is listed; and the page at `#/o/a/architecture/e` shows `e`'s entry
 
 #### Scenario: indexing
 - GIVEN an architecture report whose `indexing` is true
@@ -574,14 +583,14 @@ The built app, opened in a browser with the Worker's API answered, SHALL show th
 #### Scenario: moved, and signed
 - GIVEN a Worker that answers a decision with 409 and the report with the entry reworded at a new version; and, apart, one that answers 422 with `error` `signed` and a `command`; and a report whose `signed` is true
 - WHEN a decision is tapped on a capability's and on a constraint's page for the first, and on a capability's page for the second, and a constraint's page is shown for the third
-- THEN the first says the entry changed since it was shown, draws it as reworded, and the next tap posts the new version; the second shows the Worker's `command` with the buttons disabled; and the third shows the buttons disabled with `clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept`
+- THEN the first says the entry changed since it was shown and draws it as reworded, and on the capability's page the next tap posts the new version; the second shows the Worker's `command` with the buttons disabled; and the third shows the buttons disabled with `clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept`
 
 #### Serves
 - capability/review-capability-cost
 - capability/follow-from-browser
 
 ### Requirement: review-in-the-browser
-The built app, opened in a browser with the Worker's API answered, SHALL show the PR list and a spec branch's review as `web.views` draws them (`web.views/spec-branch-review`, `full-document`, `signed-approvals`, `approve-button`, `comment-on-review`, `request-changes`), under this component's stylesheet and routes: a branch opens at `#/<owner>/<repo>/prs/<branch>` with its review loaded from the Worker's branch route, and no request goes to a `/pulls` route from any view; a file opened in full is scrolled so its first change is in the window, and `j` brings the next into it; on a phone the signed note, Request changes and its form sit in the Approve bar, wholly in the window, above the tab bar, and the page never scrolls sideways; and Approve, Comment and Request changes each post once however often they are tapped while in flight, after which the review is asked for again.
+The built app, opened in a browser with the Worker's API answered, SHALL show the PR list and a spec branch's review as `web.views` draws them (`web.views/spec-branch-review`, `full-document`, `signed-approvals`, `approve-button`, `comment-on-review`, `request-changes`), under this component's stylesheet and routes: a branch opens at `#/<owner>/<repo>/prs/<branch>` with its review loaded from the Worker's branch route, and no request goes to a `/pulls` route from the review, the graph or Build; a file opened in full is scrolled so its first change is in the window, and `j` brings the next into it; on a phone the signed note sits in the Approve bar, in the window and above the tab bar, Request changes, Approve and the request's form are wholly in the window, and the page never scrolls sideways; Approve and Request changes each post once however often they are tapped while in flight; and after a request for changes or a comment is taken, the review is asked for again.
 
 #### Scenario: a branch without a page
 - GIVEN a branch list holding `spec/c` with page #7 "Change b" and `spec/d` with no page
@@ -661,7 +670,7 @@ The built app, opened in a browser with the Worker's API answered, SHALL show th
 - THEN only `b` is marked as touched, with its edge to `a`; and on `#/o/a/graph` the inspector of `b` lists `spec/c` and that of `a` says no open PR changes it
 
 #### Scenario: oversized
-- GIVEN a snapshot whose component `a` is oversized, and an implementation state, not yet answered, in which `a` is blocked
+- GIVEN a snapshot whose child components, `a` among them, are oversized, and an implementation state, not yet answered, in which `a` is blocked
 - WHEN the graph is opened, and then the implementation state arrives
 - THEN `a` is first outlined in the theme's amber with the legend reading `behind · claimed · oversized`, and then keeps its `⚠` and is outlined in the theme's rose
 
@@ -713,7 +722,7 @@ The built app, opened in a browser with the Worker's API answered, SHALL show th
 - capability/follow-from-browser
 
 ### Requirement: push-in-the-browser
-The built app, opened in a browser, SHALL wire `web.client-live`'s Notify me switch and push handlers into the page and its service worker (`web.client-live/notify-switch`, `push-shown`): the switch sits in the sidebar under the repo picker once the Worker answers a push key, and is hidden when it answers 404; and the service worker the app registers, `/sw.js`, shows a push and handles a click on it through the handlers it imports.
+The built app, opened in a browser, SHALL wire `web.client-live`'s Notify me switch and push handlers into the page and its service worker (`web.client-live/notify-switch`, `push-shown`): the switch shows in the sidebar once the Worker answers a push key, and is hidden when it answers 404; and the service worker the app registers, `/sw.js`, shows a push and handles a click on it through the handlers it imports.
 
 #### Scenario: no key
 - GIVEN a 1280 px wide window, and a Worker answering 404 for the push key
