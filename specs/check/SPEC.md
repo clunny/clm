@@ -173,7 +173,7 @@ The `clm-check` crate SHALL build for `wasm32-unknown-unknown` with its default 
 - architecture/web-optional
 
 ### Requirement: detectors
-`clm check` SHALL run each detector in the repository's `clm.toml` from the repository root, copying its stdout and stderr to its own stderr as they arrive, and report a violation `clm.toml: check/detectors: <name> failed (exit <code>)` for each that exits non-zero. A detector still running when its `timeout` has passed SHALL be stopped, together with the processes it started, and reported as `clm.toml: check/detectors: <name> timed out after <n>s`, and `clm check` SHALL go on to the next detector. A detector whose command can't be started SHALL be reported as `clm.toml: check/detectors: <name> could not run: <error>`, followed by `; install with: <hint>` when it has a hint. `run` SHALL NOT run detectors. `clm check --no-detectors` SHALL run every other rule as `clm check` does, but run no detector and report no `check/detectors` violation, so it needs neither the detectors' tools nor loadable settings.
+`clm check` SHALL run each detector in the repository's `clm.toml` from the repository root, copying its stdout and stderr to its own stderr as they arrive, and report a violation `clm.toml: check/detectors: <name> failed (exit <code>)` for each that exits non-zero. A detector still running when its `timeout` has passed SHALL be stopped, together with the processes it started, and reported as `clm.toml: check/detectors: <name> timed out after <n>s`, and `clm check` SHALL go on to the next detector. A detector whose command can't be started SHALL be reported as `clm.toml: check/detectors: <name> could not run: <error>`, followed by `; install with: <hint>` when it has a hint. `run` SHALL NOT run detectors. `clm check --no-detectors` SHALL run every other rule as `clm check` does, but run no detector and report no `check/detectors` violation, so it needs neither the detectors' tools nor loadable settings. When its caller can't load the settings, `clm check` SHALL report the violation the caller gives for the failure, run no detector, and still report every other rule's violations.
 
 #### Scenario: failing detector
 - GIVEN a `clm.toml` with detectors `ok` (`["true"]`) and `bad` (`["sh", "-c", "echo unused-dep; exit 3"]`)
@@ -204,6 +204,11 @@ The `clm-check` crate SHALL build for `wasm32-unknown-unknown` with its default 
 - GIVEN a clean repository whose `clm.toml` has a detector `bad` (`["sh", "-c", "touch ran; exit 3"]`)
 - WHEN `clm check --no-detectors` runs
 - THEN it exits 0, prints no `check/detectors` line, and no file `ran` exists
+
+#### Scenario: settings that can't be loaded
+- GIVEN a repository with a component spec that doesn't parse and a `clm.toml` whose detector `bad` exits 3, and a caller whose loading of the settings fails with a violation
+- WHEN `clm-check`'s call for `clm check` runs
+- THEN it exits 1 and prints that violation and the spec's, one line each, and no `bad failed` line
 
 #### Serves
 - capability/no-dead-weight
