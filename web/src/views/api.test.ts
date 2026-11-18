@@ -1,5 +1,5 @@
-// Offline data with its age, and the retry on 401 that the Worker's
-// one-use refresh tokens need (changes/20261022-web-ui/tasks/web.md).
+// The views' one module for requests to the Worker: offline data with its age, and the
+// retry on 401 that the Worker's one-use refresh tokens need.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError, Offline, SignedOut, get, post, send } from './api';
 
@@ -35,7 +35,7 @@ afterEach(() => vi.unstubAllGlobals());
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 describe('api.get', () => {
-  // req:web/installable@e711892d
+  // req:web.views/worker-requests@936c9e88
   it('retries once on 401, since a parallel request may have refreshed the session', async () => {
     const fetch = vi
       .fn()
@@ -47,17 +47,17 @@ describe('api.get', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  // req:web/installable@e711892d
+  // req:web.views/worker-requests@936c9e88
   it('is signed out after two 401s, and forgets the kept data', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 1 })));
     await get('/api/repos/o/a/snapshot');
     expect(caches.store.size).toBe(1);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })));
-    await expect(get('/api/repos')).rejects.toBeInstanceOf(SignedOut);
+    await expect(get('/api/repos/o/a/snapshot')).rejects.toBeInstanceOf(SignedOut);
     expect(caches.store.size).toBe(0);
   });
 
-  // req:web/installable@e711892d
+  // req:web.views/worker-requests@936c9e88
   it('offline: returns the last response with the time it was fetched', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 'old' })));
     vi.setSystemTime(new Date(1_000_000));
@@ -68,20 +68,39 @@ describe('api.get', () => {
     expect(res).toEqual({ data: { v: 'old' }, cachedAt: 1_000_000 });
   });
 
-  // req:web/installable@e711892d
+  // req:web.views/worker-requests@936c9e88
   it('offline with nothing kept: says so', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     await expect(get('/api/repos/o/b/snapshot')).rejects.toBeInstanceOf(Offline);
   });
 
-  it('keeps no failed response', async () => {
+  // req:web.views/worker-requests@936c9e88
+  it('keeps no failed response, and the failure carries its status', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('', { status: 404 })));
-    await expect(get('/api/repos/o/c/snapshot')).rejects.toThrow('404');
+    const failed = await get('/api/repos/o/c/snapshot').catch((e: unknown) => e);
+    expect(failed).toBeInstanceOf(HttpError);
+    expect((failed as HttpError).status).toBe(404);
     expect(caches.store.size).toBe(0);
+  });
+
+  // req:web.views/worker-requests@936c9e88
+  it('keeps no answer its caller asked not to keep', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 1 })));
+    expect(await get('/api/repos/o/a/push?endpoint=e', { keep: false })).toEqual({ data: { v: 1 }, cachedAt: null });
+    expect(caches.store.size).toBe(0);
+  });
+
+  // req:web.views/worker-requests@936c9e88
+  it('a background refresh fails offline rather than return the kept answer', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(ok({ v: 'old' })));
+    await get('/api/repos/o/a/snapshot');
+    const down = new TypeError('Failed to fetch');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(down));
+    await expect(get('/api/repos/o/a/snapshot', { live: true })).rejects.toBe(down);
   });
 });
 
-// req:web/approve-by-branch@971e758a
+// req:web.views/worker-requests@936c9e88
 describe('api.post', () => {
   it('sends a body as JSON', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('', { status: 200 }));
@@ -95,7 +114,7 @@ describe('api.post', () => {
   });
 });
 
-// req:web/notice-refresh@4f65ff27
+// req:web.views/worker-requests@936c9e88
 describe('a refresh a notice asked for', () => {
   it('carries fresh, and keeps the offline copy under the path without it', async () => {
     const fetch = vi.fn().mockImplementation(async () => ok({ v: 1 }));
@@ -107,16 +126,14 @@ describe('a refresh a notice asked for', () => {
   });
 });
 
-// req:web.client-live/notify-switch@bc04aecc
+// req:web.views/worker-requests@936c9e88
 describe('api.send', () => {
-  // req:web/installable@e711892d
-  it('deletes with a JSON body, and a failed get carries its status', async () => {
-    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 })).mockResolvedValueOnce(new Response('', { status: 404 }));
+  it('deletes with a JSON body', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
     await send('DELETE', '/api/repos/o/a/push', { endpoint: 'e' });
-    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'DELETE', body: '{"endpoint":"e"}' });
-    const failed = await get('/api/push/key').catch((e: unknown) => e);
-    expect(failed).toBeInstanceOf(HttpError);
-    expect((failed as HttpError).status).toBe(404);
+    const [path, init] = fetch.mock.calls[0];
+    expect(path).toBe('/api/repos/o/a/push');
+    expect(init).toMatchObject({ method: 'DELETE', body: '{"endpoint":"e"}', headers: { 'content-type': 'application/json' } });
   });
 });
