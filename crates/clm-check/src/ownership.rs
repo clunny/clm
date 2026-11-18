@@ -9,6 +9,7 @@ use clm_coverage::matches;
 /// The components that own `file`, sorted by ID: those whose `tests` match it or, when no
 /// component's `tests` do, those whose `paths` match it (`components-own-their-tests`). More
 /// than one is what `paths-disjoint` reports.
+#[cfg(feature = "checkout")]
 pub(crate) fn owners<'g>(graph: &'g Graph, file: &str) -> Vec<&'g Node> {
     let by = |globs: fn(&Node) -> &Vec<String>| -> Vec<&Node> {
         graph
@@ -25,26 +26,15 @@ pub(crate) fn owners<'g>(graph: &'g Graph, file: &str) -> Vec<&'g Node> {
     }
 }
 
-/// The one component that owns `file`: the first of the components whose `tests` match it, or
-/// else the deepest whose `paths` match it, then the first by ID.
+/// The one component that owns `file`, as `clm-coverage`'s `owner` reads it: the first of
+/// the components whose `tests` match it, or else the deepest whose `paths` match it, then the
+/// first by ID.
 pub(crate) fn owner<'g>(graph: &'g Graph, file: &str) -> Option<&'g Node> {
-    let owners = owners(graph, file);
-    if owners.iter().any(|n| is_test_of(n, file)) {
-        return owners.into_iter().next();
-    }
-    let depth = |n: &Node| {
-        if n.id == clm_model::ROOT_ID {
-            0
-        } else {
-            n.id.split('.').count()
-        }
-    };
-    owners
-        .into_iter()
-        .min_by_key(|n| (std::cmp::Reverse(depth(n)), n.id.clone()))
+    clm_coverage::owner(graph, std::path::Path::new(file)).and_then(|id| graph.nodes.get(id))
 }
 
 /// Whether one of `node`'s `tests` globs matches `file`.
+#[cfg(feature = "checkout")]
 pub(crate) fn is_test_of(node: &Node, file: &str) -> bool {
     node.frontmatter.tests.iter().any(|g| matches(g, file))
 }
