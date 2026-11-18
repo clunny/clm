@@ -20,7 +20,7 @@ pub use policy::Policy;
 pub use sign::{APPROVE, LAND};
 
 use clm_git::REMOTE;
-use clm_ledger::{Fold, person};
+use clm_ledger::{Fold, person, slug};
 
 /// The environment `config` reads.
 pub type Env = dyn Fn(&str) -> Option<String>;
@@ -222,11 +222,11 @@ impl<'a> Repo<'a> {
     }
 
     /// Whether the fold holds an approval of `fingerprint` that counts, and, when none does,
-    /// why each one doesn't. With `other` (`approval = "other"` in the policy the land reads,
-    /// `approval-from-base`), an approval counts only when its writer's person is none of the
-    /// authors of the commits from the merge base to `head`. In a repository signed at
-    /// `signed` (`signed-land`), it counts only when its signature proves its writer, and,
-    /// with `other`, when its writer isn't the lander.
+    /// why each one doesn't (`approvals-counted`). With `other` (`approval = "other"` in the
+    /// policy the land reads, `policy-at-base`), an approval counts only when its writer's
+    /// person is none of the authors of the commits from the merge base to `head`, slugged
+    /// with `ledger`'s `slug`. In a repository signed at `signed`, it counts only when its
+    /// signature proves its writer, and, with `other`, when its writer isn't the lander.
     pub fn approval(
         &self,
         fold: &Fold,
@@ -290,28 +290,5 @@ impl<'a> Repo<'a> {
 
     fn append(&self, entry: impl Into<clm_ledger::Entry>) -> Result<clm_ledger::Appended, Error> {
         Ok(clm_ledger::append(&self.root, entry, self.env)?)
-    }
-}
-
-/// A name as the ledger's writer slugs git's `user.name`: lowercased, each run of anything
-/// but letters and digits replaced by `-`, with none at either end.
-fn slug(name: &str) -> String {
-    let mut out = String::new();
-    for c in name.chars().flat_map(char::to_lowercase) {
-        if c.is_alphanumeric() {
-            out.push(c);
-        } else if !out.ends_with('-') {
-            out.push('-');
-        }
-    }
-    out.trim_matches('-').to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn slugs_as_the_writer_does() {
-        assert_eq!(super::slug("Christopher Lunny"), "christopher-lunny");
-        assert_eq!(super::slug("  Dana_O'Neil "), "dana-o-neil");
     }
 }

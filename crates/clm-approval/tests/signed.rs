@@ -3,24 +3,9 @@
 mod common;
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use clm_ledger::{Body, Record};
-use common::{Fixture, refused};
-
-/// A fresh ed25519 key pair at `dir/<name>`: the private key's path and the public key.
-fn keygen(dir: &Path, name: &str) -> (PathBuf, String) {
-    let key = dir.join(name);
-    let ok = Command::new("ssh-keygen")
-        .args(["-q", "-t", "ed25519", "-N", "", "-C", name, "-f"])
-        .arg(&key)
-        .status()
-        .unwrap()
-        .success();
-    assert!(ok, "ssh-keygen -t ed25519");
-    let public = std::fs::read_to_string(key.with_extension("pub")).unwrap();
-    (key, public.trim().to_string())
-}
+use common::{Fixture, keygen, refused};
 
 /// `repo` signs with `key` from now on.
 fn use_key(f: &Fixture, repo: &Path, key: &Path) {
