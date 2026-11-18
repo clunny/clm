@@ -59,7 +59,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **Draft:** an unattended session that designs one change from backlog items (`clm draft`).
 - **Intake:** matching the host's open issues, pull requests and dependency alerts to the backlog, saying of each issue and alert whether it is new, taken in by an item (whose `issues` or `alerts` names it) or resolved (`clm intake`).
 - **Oversized:** a component whose spec or code is larger than its size budget (`clm size`).
-- **Wiring:** the files that wire every component into one product, such as a dispatch file and a workspace manifest, listed under `wiring` in the root component's frontmatter. Every build may edit them, and setting the key switches on the land's refusal of a build that changes another component's files.
+- **Wiring:** the files that wire every component into one product, such as a dispatch file and a workspace manifest, listed under `wiring` in the root component's frontmatter. Every build may edit them, and setting the key switches on the land's refusal of a build that changes another component's files, and `clm check`'s refusal of a test marker that cites a component other than the one that owns its file.
 - **Uncounted:** a `req:` marker that sits outside any test, so it proves nothing; `clm coverage` lists it.
 - **Mutation pass:** after a land, `clm verify` has the project's `[verify] mutate` command change the code and see whether the tests of each newly built requirement fail. *Usually:* mutation testing.
 - **Unproven:** a requirement whose tests noticed no change in a mutation pass. A `bug` item names it, and it reads `unbuilt` until a build resolves the item.

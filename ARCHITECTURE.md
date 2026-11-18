@@ -328,8 +328,10 @@ The land judges which files a build changes, not the edit: that a wiring edit ad
 - method
 
 #### Enforced by
-- land.approval/approval-policy
-- land.approval/approval-from-base
+- land/approval-policy
+- land/approval-from-base
+- land.approval/approvals-counted
+- land.approval/policy-at-base
 - land.approval/approve
 - land.approval/approve-refuses-unconfirming-agent-harness
 - config/approval-setting
@@ -358,7 +360,9 @@ The guard prevents accidents and is not a hard boundary: it rests on each harnes
 - THEN it refuses, names `clm approve`, and writes no record
 
 #### Enforced by
-- land.approval/signed-land
+- land/signed-land
+- land.approval/approvals-counted
+- land.approval/key-and-signing
 - land.approval/signed-approve
 - ledger/signature-check
 - ledger/record-signing
@@ -791,6 +795,7 @@ No program can list everything a person must be able to do.
 
 #### Enforced by
 - web/invited-users
+- web.worker/invited-sign-in
 - web/site-served-directly
 - web.worker/sign-in
 - web.worker/repo-access

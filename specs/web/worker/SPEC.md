@@ -65,6 +65,8 @@ The Worker reads its secrets as `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (a PKC
 
 **Size** (`slim-components`). This component's budget is 72,000 code tokens and 16,000 spec tokens, above the defaults, because what stays is the Worker's one shell: the router every route passes through, the session and sign-in, the view routes and their cache, proposals, decide, the webhook's dispatch and the live socket, and the Worker adapter, with the tests that drive them through `handle`.
 
+**Tests of `web`'s files.** `crates/clm-web/tests/` proves the Worker: what `handle` answers. A test of `web/wrangler.toml` or `web/.npmrc` is `web`'s and sits under `web/`; `deploy.rs` keeps only tests that cite nothing of `web`'s. Until `invited-sign-in` is built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests in `sign_in.rs` and `deploy.rs` that cited `web/invited-users` and cite it from then on.
+
 ## Requirements
 
 ### Requirement: sign-in
@@ -625,3 +627,34 @@ The Worker adapter's `fetch_asset` SHALL pass the request's method, path, query 
 - replica/validate-answers
 - replica/open-answers
 - web.worker.replica/writes-through-object
+
+### Requirement: invited-sign-in
+The Worker SHALL complete sign-in only for the GitHub logins in the invited-users list it reads through its `ASSETS` binding from `/_clm/invited.json`, which `web`'s build writes (`web/invited-users`), comparing logins without regard to case. For anyone else it SHALL show a "not invited" page and set no session cookie, and every API route SHALL answer 401 without a valid session: one whose login the list no longer holds, and one sealed before sessions kept a login, are not valid. With no list nobody SHALL get in. When GitHub doesn't name the user it SHALL answer 502 with a link back to `/auth/login` and no session cookie. A request for `/_clm/invited.json` SHALL answer 404, so the list is never served.
+
+#### Scenario: invited
+- GIVEN the list holds `clunny` and GitHub completes the authorization for `clunny`
+- WHEN the browser reaches the callback
+- THEN the response sets the session cookie
+
+#### Scenario: not invited
+- GIVEN GitHub completes the authorization for `someone-else`
+- WHEN the browser reaches the callback
+- THEN the response is the "not invited" page, sets no session cookie, and a following request for the repo list answers 401
+
+#### Scenario: no longer invited
+- GIVEN a session of `someone-else`, whom the list doesn't hold
+- WHEN it asks for the repo list, and again once the list holds `someone-else`
+- THEN the first answers 401 and the second 200
+
+#### Scenario: no list
+- GIVEN a Worker whose assets hold no `/_clm/invited.json`, and GitHub completing the authorization for `clunny`
+- WHEN the browser reaches the callback
+- THEN the response sets no session cookie
+
+#### Scenario: the list is never served
+- GIVEN a valid session
+- WHEN it requests `/_clm/invited.json`
+- THEN the answer is 404
+
+#### Serves
+- architecture/invite-only-web

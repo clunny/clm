@@ -6,6 +6,7 @@ depends_on: [model, apply, vcs, init, check.coverage]
 paths: ["crates/clm-check/**"]
 successor: "20261021-walking-skeleton"
 serves: [capability/catch-drift, architecture/no-silent-drift]
+exemptions: [{ rule: tests-cite-their-owner, files: ["crates/clm-check/tests/state_names.rs"], until: backlog/clm-check-still-re-exports-the-coverage-library, why: "the test of the re-export cites check.coverage until the re-export goes" }]
 ---
 
 ## Contract
@@ -819,7 +820,7 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 - architecture/incremental-adoption
 
 ### Requirement: tests-cite-their-owner
-`clm check` SHALL report each `req:` marker, in a file of its scan that a component's `tests` match, that cites a requirement of a component other than that file's owner (`paths-disjoint`), as `<file>:<line>: check/tests-cite-their-owner: cites <requirement> of `b`, but the file is `a`'s test; move the test to `b`'s tests`, and `run` SHALL report it too. A marker citing a capability (`capability/<slug>`) SHALL be read as citing the `capability` component's requirement, which proves it (`human-layer-proof`). A file that only `paths` match SHALL NOT be judged, so a project gives its tests to their components one `tests` glob at a time (`components-own-their-tests`), and a marker that names no existing requirement is left to `dangling-markers`. A marker in a file that an exemption of its owner names for `tests-cite-their-owner` (`model/exemptions`) SHALL NOT be reported.
+`clm check` SHALL report each `req:` marker, in a file of its scan that a component's `tests` match, or, once the root sets `wiring` (`model/wiring-globs`), in any file of its scan that a component owns, that cites a requirement of a component other than that file's owner (`paths-disjoint`), as `<file>:<line>: check/tests-cite-their-owner: cites <requirement> of `b`, but the file is `a`'s test; move the test to `b`'s tests`, and `run` SHALL report it too. A marker citing a capability (`capability/<slug>`) SHALL be read as citing the `capability` component's requirement, which proves it (`human-layer-proof`). While the root sets no `wiring`, a file that only `paths` match SHALL NOT be judged, so a project gives its tests to their components one `tests` glob at a time (`components-own-their-tests`) before it names its `wiring`; once it does, `clm land` refuses a build's edit to another component's file (`gate/own-files`), so a marker there could never be re-cited by the build of the component it cites. A file no component owns SHALL NOT be judged, and a marker that names no existing requirement is left to `dangling-markers`. A marker in a file that an exemption of its owner names for `tests-cite-their-owner` (`model/exemptions`) SHALL NOT be reported.
 
 #### Scenario: another component's requirement
 - GIVEN components `a` with tests `["tests/a/**"]` and `b` with requirement `y`, and `tests/a/t.rs` whose line 4 cites `b/y`
@@ -832,7 +833,17 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 - THEN it reports no `check/tests-cite-their-owner` violation
 
 #### Scenario: a file only paths own
-- GIVEN component `a` with paths `["tests/**"]` and no `tests`, and `tests/t.rs` citing `b/y`
+- GIVEN a root that sets no `wiring`, component `a` with paths `["tests/**"]` and no `tests`, and `tests/t.rs` citing `b/y`
+- WHEN `clm check` runs
+- THEN it reports no `check/tests-cite-their-owner` violation
+
+#### Scenario: a file only paths own, once the root names its wiring
+- GIVEN the same components and file, and a root with `wiring: []`
+- WHEN `clm check` runs
+- THEN it exits 1 with the line ``tests/t.rs:<line>: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests``
+
+#### Scenario: a capability test under wiring
+- GIVEN a root with `wiring: []`, a component `capability` owning `tests/capability/see.rs`, which cites `capability/see`, and no other marker
 - WHEN `clm check` runs
 - THEN it reports no `check/tests-cite-their-owner` violation
 
@@ -848,6 +859,12 @@ A detector command whose first word is a relative path holding a `/` SHALL be sp
 #### Needs
 - model/test-ownership-keys
 - model/exemptions
+- model/wiring-globs
+- land/approval-policy
+- land/approval-from-base
+- land/changes-requested-holds
+- land/signed-land
+- land.approval/request-refusal
 
 ### Requirement: coverage-lists
 `clm-check` SHALL re-export `clm-coverage`'s `tests_in`, `markers_outside_tests`, `uncounted`, `obsolete_tests` and `deleted_tests` (`check-coverage-split`). After the obsolete lines `clm coverage` SHALL print one line `<id> uncounted <file>:<line>[ <file>:<line>...]` for each entry `uncounted` returns for the checkout, so a build finds the markers to move. `clm coverage --obsolete-tests` SHALL print, in place of the coverage, the line `# tests to delete: <n>; tests that only lose a marker: <m>` and then one line per test `obsolete_tests` returns for the checkout, in its order: `DELETE <file>::<name>`, a tab and `cites only removed: <id>[, <id>...]` when every marker on the test's lines cites a removed requirement, and otherwise `UNCITE <file>::<name>`, a tab and `loses: <id>[, <id>...]`. `clm coverage --deleted-tests <base>` SHALL print `# tests deleted since <base>: <n>` and then one line `DELETED <file>::<name>`, a tab and the IDs it cited, per test `deleted_tests` returns for the files of the revision `<base>` against the working tree's. Each SHALL exit 0; `--deleted-tests` SHALL exit 1 naming the revision when `<base>` resolves to no commit; the two flags together SHALL exit 2 as a usage error; and a graph that doesn't load SHALL fail as `clm coverage` fails.

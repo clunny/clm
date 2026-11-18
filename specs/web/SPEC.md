@@ -56,6 +56,8 @@ The move from one Worker to two happens once on the live zone, in an order that 
 
 To rotate a credential, generate a new private key or client secret in the App's settings and `wrangler secret put` it. `web/README.md` gives these commands. `web/README.md` also carries the App's manifest, which must be the one in `web.worker`'s Design; a test under `web/` holds a copy of that manifest and checks the README against it, since no test reads `specs/`. Both list `push` and `pull_request` under `default_events`.
 
+**Tests** (`commands-live-in-their-crates`, `components-own-their-tests`). The browser tests under `web/e2e/` run the built app, with this component's entry file, stylesheet, routes and service worker, so what they show is this component's to state: they cite only its requirements, the `-in-the-browser` ones for what a view or the live modules draw. A view's own behaviour, drawn with the Worker faked, is `web.views`' and `web.client-live`'s to prove in their files. The tests of `web/wrangler.toml` and `web/.npmrc` sit under `web/src/`, none in the Worker's crate. Until those requirements are built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names each test that cited another component from this component's files, or this component from another's, with where it goes and what it cites from then on.
+
 ## Requirements
 
 ### Requirement: mobile-layout
@@ -109,33 +111,33 @@ The app SHALL be installable as a PWA whose manifest's `id`, `start_url` and `sc
 - capability/follow-from-browser
 
 ### Requirement: no-install-scripts
-`web/.npmrc` SHALL set `ignore-scripts=true`, so installing `web/`'s dependencies never runs a dependency's install script, whichever npm command installs them.
+`web/.npmrc` SHALL set `ignore-scripts=true`, on the last line that sets the key, so installing `web/`'s dependencies never runs a dependency's install script, whichever npm command installs them.
 
 #### Scenario: npmrc
 - GIVEN the repository
 - WHEN a test reads `web/.npmrc`
-- THEN it sets `ignore-scripts=true`
+- THEN the last line that sets `ignore-scripts` sets it to `true`
+
+#### Scenario: a later line turns scripts back on
+- GIVEN the texts `ignore-scripts=true`, an empty file, `ignore-scripts=false`, and `ignore-scripts=true` followed by `ignore-scripts=false`
+- WHEN the test's reading is applied to each
+- THEN only the first passes
 
 #### Serves
 - architecture/deterministic-enforcement
 
 ### Requirement: invited-users
-The Worker SHALL complete sign-in only for the GitHub logins in this component's Contract's invited-users list, read from `specs/web/SPEC.md` at build time. For anyone else it SHALL show a "not invited" page and set no session cookie, and every API route SHALL answer 401 without a valid session.
-
-#### Scenario: invited
-- GIVEN the list holds `clunny` and GitHub completes the authorization for `clunny`
-- WHEN the browser reaches the callback
-- THEN the response sets the session cookie
-
-#### Scenario: not invited
-- GIVEN GitHub completes the authorization for `someone-else`
-- WHEN the browser reaches the callback
-- THEN the response is the "not invited" page, sets no session cookie, and a following request for the repo list answers 401
+The app's build SHALL write the GitHub logins of this component's Contract's invited-users list, read from `specs/web/SPEC.md` at build time, to `_clm/invited.json` beside the built app, and `web/wrangler.toml` SHALL bind the built files to the Worker as `ASSETS` and send `/_clm/*` to its script, so the Worker completes sign-in only for those logins (`web.worker/invited-sign-in`) and the list is never served as a file.
 
 #### Scenario: list from the spec
-- GIVEN a build of the Worker
-- WHEN a test reads its invited logins
-- THEN they are exactly the logins listed in `specs/web/SPEC.md`'s Contract
+- GIVEN a build of the app
+- WHEN a test reads `_clm/invited.json` in the built files
+- THEN its logins are exactly those listed in `specs/web/SPEC.md`'s Contract
+
+#### Scenario: the list reaches only the Worker
+- GIVEN the repository
+- WHEN a test reads `web/wrangler.toml`
+- THEN its assets are bound as `ASSETS`, and its `run_worker_first` sends `/_clm/invited.json` to the script
 
 #### Serves
 - architecture/invite-only-web
@@ -177,17 +179,12 @@ While the page is visible, the app SHALL ask the Worker again, about every 60 se
 - capability/follow-from-browser
 
 ### Requirement: approve-by-branch
-Approve SHALL post `{"fingerprint": <f>}`, where `<f>` is the fingerprint of the review on screen, to the Worker's approve route for that branch, and on success SHALL load the review again and show the approval from its approvals, not from a label. On a 409 it SHALL say the branch changed since the review was shown, show no approval, and load the review again from the Worker, never from the copy kept for offline use, drawing it with that message still shown, so that the next Approve pins what is then on screen (`approve-pins-the-review`); on any other failure it SHALL say "Not approved" with the status. Approve SHALL be disabled offline, when the review has no fingerprint, and once the review lists an approval. It acts on the branch review `spec-branch-review` loads, so the two build together.
+Approve SHALL post `{"fingerprint": <f>}`, where `<f>` is the fingerprint of the review on screen, to the Worker's approve route for that branch, and on success SHALL load the review again and show the approval from its approvals, not from a label. On a 409 it SHALL say the branch changed since the review was shown, show no approval, and load the review again from the Worker, never from the copy kept for offline use, drawing it with that message still shown, so that the next Approve pins what is then on screen (`approve-pins-the-review`); on any other failure it SHALL say "Not approved" with the status. When Approve is disabled is `web.views/approve-button`'s to state. It acts on the branch review `spec-branch-review` loads, so the two build together.
 
 #### Scenario: approve
 - GIVEN `spec/x`'s review with fingerprint `f1` and no approvals, and a Worker that answers the approve with 200 and then the review with an approval by `clunny/web`
 - WHEN the reviewer taps Approve
 - THEN one request posts `{"fingerprint": "f1"}` to `/branches/spec/x/approve`, the review is requested again, the header names `clunny/web`, and Approve is disabled
-
-#### Scenario: no fingerprint
-- GIVEN a review with no fingerprint
-- WHEN it is shown
-- THEN Approve is disabled
 
 #### Scenario: branch moved
 - GIVEN `spec/x`'s review drawn with fingerprint `f1`, and a Worker that answers that approve with 409 and the review with fingerprint `f2`
@@ -263,7 +260,7 @@ The graph's canvas, on the spec graph and on a PR's Graph tab, SHALL extend from
 - capability/follow-from-browser
 
 ### Requirement: notice-refresh
-While the page is visible and online, the app SHALL give `web.client-live`'s socket the live route of the repo on screen, and none while the page is hidden, another repo is shown or the sign-in page is on screen. On each notice the socket hands over it SHALL refresh at once, as `live-refresh` refreshes, with every request carrying `fresh` set to the notice's `delivery`, running at most one refresh at a time and none during an approval. The 60-second refresh SHALL go on as before, and the copy kept for offline use SHALL be stored under each request's path without `fresh`.
+While the page is visible and online, the app SHALL give `web.client-live`'s socket the live route of the repo on screen, and none while the page is hidden, another repo is shown or the sign-in page is on screen. On each notice the socket hands over it SHALL refresh at once, as `live-refresh` refreshes, with every request carrying `fresh` set to the notice's `delivery`, running at most one refresh at a time and none during an approval. The 60-second refresh SHALL go on as before. Where the copy kept for offline use is stored is `web.views/worker-requests`' to state.
 
 #### Scenario: a claim shows within seconds
 - GIVEN Build on screen for `o/a` with its socket open, and the Worker starting to answer with component `b` claimed
@@ -274,11 +271,6 @@ While the page is visible and online, the app SHALL give `web.client-live`'s soc
 - GIVEN the spec graph on screen with its socket open
 - WHEN the page is hidden for 3 minutes and then shown
 - THEN the socket was closed while hidden, and a new one is opened when it is shown
-
-#### Scenario: offline copy
-- GIVEN a notice with delivery `d1`
-- WHEN the refresh it starts asks for `/api/repos/o/a/implementation`
-- THEN the request goes to `/api/repos/o/a/implementation?fresh=d1`, and the copy kept for offline use is stored under `/api/repos/o/a/implementation`
 
 #### Serves
 - capability/follow-from-browser
@@ -425,7 +417,7 @@ A view on screen whose refreshes have failed for 3 minutes SHALL stay on screen 
 - web.worker/replica-class-export
 
 ### Requirement: no-cron-trigger
-`web/wrangler.toml` SHALL hold `crons = []` under `[triggers]`, so that a deploy clears the Cron Trigger earlier deploys created and nothing calls the Worker on a schedule. The key SHALL stay, empty: `wrangler deploy` leaves the deployed triggers as they are when `crons` is absent. The test `binds_the_kv_namespace_and_runs_cron_every_minute` in `crates/clm-web/tests/deploy.rs` pins the old value, so this requirement's build SHALL drop that assertion and the cron from the test's name, as a fix its change forces, named in its pull request (`path-ownership`).
+`web/wrangler.toml` SHALL hold `crons = []` under `[triggers]`, so that a deploy clears the Cron Trigger earlier deploys created and nothing calls the Worker on a schedule. The key SHALL stay, empty: `wrangler deploy` leaves the deployed triggers as they are when `crons` is absent.
 
 #### Scenario: the trigger is cleared
 - GIVEN the repository
@@ -436,12 +428,12 @@ A view on screen whose refreshes have failed for 3 minutes SHALL stay on screen 
 - capability/follow-from-browser
 
 ### Requirement: site-served-directly
-`web/wrangler.toml` SHALL route to this Worker, on `clm-app.dev`, exactly the app's paths, `/app`, `/app/*`, `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/sw.js`, with no Custom Domain, so every other path reaches the site's Worker (`web.site/site-worker`); its `run_worker_first` SHALL send to the script exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so its assets answer the app's files and `/sw.js` with no script run, and `not_found_handling` SHALL be `"none"`. Changing the routing moves the test fixtures that repeat it (`capabilities/web/harness.ts`'s `run_worker_first` and `not_found_handling`, `crates/clm-web/tests/deploy.rs`): this build makes those fixes and names them in its pull request (`path-ownership`).
+`web/wrangler.toml` SHALL route to this Worker, on `clm-app.dev`, exactly the app's paths, `/app`, `/app/*`, `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/sw.js`, with no Custom Domain, so every other path reaches the site's Worker (`web.site/site-worker`); its `run_worker_first` SHALL send to the script exactly `/api/*`, `/auth/*`, `/webhook`, `/_clm/*` and `/app`, so its assets answer the app's files and `/sw.js` with no script run, and `not_found_handling` SHALL be `"none"`. Changing the routing moves the test fixtures that repeat it (`capabilities/web/harness.ts`'s `run_worker_first` and `not_found_handling`): this build makes that fix, to a capability test it serves, and names it in its pull request (`path-ownership`).
 
 #### Scenario: who answers what
 - GIVEN the repository
 - WHEN a test reads `web/wrangler.toml`
-- THEN its routes are exactly those seven patterns on `clm-app.dev`, none is a Custom Domain, its `run_worker_first` sends `/api/repos`, `/auth/login`, `/webhook`, `/_clm/invited.json` and `/app` to the script and not `/app/`, `/app/main.js` or `/sw.js`, and `not_found_handling` is `"none"`
+- THEN its routes are exactly those seven patterns on `clm-app.dev`, none is a Custom Domain, its `run_worker_first` sends `/api/repos`, `/auth/login`, `/webhook`, `/_clm/invited.json` and `/app` to the script and not `/app/`, `/app/main.js` or `/sw.js`, its assets are the directory `./dist`, the Worker's name is `clm`, and `not_found_handling` is `"none"`
 
 #### Scenario: the site isn't the app's
 - GIVEN the routes of `web/wrangler.toml`
@@ -545,3 +537,203 @@ The app SHALL give Home and a backlog item's page the answer buttons' `Answering
 - web.views/home-waiting-on-you
 - web.views/backlog-item-page
 - web.worker/answers
+
+### Requirement: cost-views-in-the-browser
+The built app, opened in a browser with the Worker's API answered, SHALL show the Capabilities and Architecture views and their pages as `web.views` draws them (`web.views/capabilities-list`, `architecture-list`, `decide-buttons`, `architecture-decide-buttons`), under this component's stylesheet and routes: at 900 px and wider each list is a table and no card shows; a proof `held <c>/<n>` with `c` less than `n` is drawn in the theme's amber; Architecture is the sidebar's last view, after Capabilities; a row opens its page at `#/<owner>/<repo>/capabilities/<slug>` or `#/<owner>/<repo>/architecture/<slug>`, with the view's sidebar entry marked; and a decision posts once however often it is tapped while in flight, after which the report is asked for again with `fresh` and the page shows what the Worker then answers, never an older report whose request began before the decision.
+
+#### Scenario: the capabilities table
+- GIVEN a 1280 px wide window, and a report listing `b` then `a`, with `a` flagged
+- WHEN `#/o/a/capabilities` is opened, "⚑ only" is turned on, and `a`'s row is chosen
+- THEN the table lists `b` first and no card is visible, then only `a` is listed, and the page at `#/o/a/capabilities/a` shows `a`'s entry with Capabilities marked in the sidebar
+
+#### Scenario: the architecture table
+- GIVEN a 1280 px wide window, and a report listing `e` (flagged, one of its two enforcing rules current, with `#### Untested`) then `g` (holding only `#### Untested`)
+- WHEN Architecture is chosen in the sidebar, "⚑ only" is turned on, and `e`'s row is chosen
+- THEN Architecture is listed last, after Capabilities, and opens `#/o/a/architecture`; `e` comes first and reads `held 1/2 + untested` in the theme's amber, `g` reads `untested`; then only `e` is listed; and the page at `#/o/a/architecture/e` shows `e`'s entry
+
+#### Scenario: indexing
+- GIVEN an architecture report whose `indexing` is true
+- WHEN `#/o/a/architecture` is opened
+- THEN `e`'s proof reads `? / 2 + untested` and the note says coverage is still indexing
+
+#### Scenario: a constraint decided
+- GIVEN `e`'s page with value medium chosen, and a Worker that holds its answer to the decision
+- WHEN Redesign is tapped twice
+- THEN Redesign is disabled while the request is out, one request posted `{"version", "value": "medium", "decision": "redesign"}` with the version shown, the report was asked for once more, with `fresh`, and the page shows `redesign (value medium)` by its writer
+
+#### Scenario: a capability decided
+- GIVEN `a`'s page with value low chosen, and a Worker that holds its answer to the decision
+- WHEN Cut is tapped twice, and again after another value is chosen
+- THEN one request posted `{"version", "value": "low", "decision": "cut"}` with the version shown, the report was asked for once more, with `fresh`, and the page shows `cut (value low)` by its writer
+
+#### Scenario: an older report arrives after a decision
+- GIVEN `a`'s page, and a refresh whose request is answered, with the report as it was before, only after a decision has been drawn
+- WHEN Cut is tapped and that answer arrives
+- THEN the page still shows the decision
+
+#### Scenario: moved, and signed
+- GIVEN a Worker that answers a decision with 409 and the report with the entry reworded at a new version; and, apart, one that answers 422 with `error` `signed` and a `command`; and a report whose `signed` is true
+- WHEN a decision is tapped on a capability's and on a constraint's page for the first, and on a capability's page for the second, and a constraint's page is shown for the third
+- THEN the first says the entry changed since it was shown, draws it as reworded, and the next tap posts the new version; the second shows the Worker's `command` with the buttons disabled; and the third shows the buttons disabled with `clm architecture decide e --value high|medium|low --decision keep|cut|redesign|accept`
+
+#### Serves
+- capability/review-capability-cost
+- capability/follow-from-browser
+
+### Requirement: review-in-the-browser
+The built app, opened in a browser with the Worker's API answered, SHALL show the PR list and a spec branch's review as `web.views` draws them (`web.views/spec-branch-review`, `full-document`, `signed-approvals`, `approve-button`, `comment-on-review`, `request-changes`), under this component's stylesheet and routes: a branch opens at `#/<owner>/<repo>/prs/<branch>` with its review loaded from the Worker's branch route, and no request goes to a `/pulls` route from any view; a file opened in full is scrolled so its first change is in the window, and `j` brings the next into it; on a phone the signed note, Request changes and its form sit in the Approve bar, wholly in the window, above the tab bar, and the page never scrolls sideways; and Approve, Comment and Request changes each post once however often they are tapped while in flight, after which the review is asked for again.
+
+#### Scenario: a branch without a page
+- GIVEN a branch list holding `spec/c` with page #7 "Change b" and `spec/d` with no page
+- WHEN `#/o/a/prs` is opened and `spec/d` is chosen
+- THEN both are listed, `spec/c` with #7 and its title, the address is `#/o/a/prs/spec%2Fd`, and the review, loaded from `/branches/spec/d/review`, shows no page link
+
+#### Scenario: approved by
+- GIVEN `spec/c`'s review listing an approval by `clunny/web` and saying `checked` false
+- WHEN its review, then the graph with a component selected, then Build are opened
+- THEN the header names `clunny/web` with the approval's time and says "not checked", and no request went to a `/pulls` route
+
+#### Scenario: a file in full
+- GIVEN a review whose document changes two lines far below its top
+- WHEN the file is opened in full and `j` is pressed
+- THEN the first change is in the window, marked `Change 1 of 2`, and then the second, marked `Change 2 of 2`
+
+#### Scenario: became signed
+- GIVEN `spec/c`'s review drawn with no signed note, and a Worker that answers the approve with 422 and `error` `signed`, and then the review with `signed` true
+- WHEN Approve is tapped
+- THEN the review is requested again, the note shows `clm approve spec/c`, and Approve is disabled and doesn't read "Approved"
+
+#### Scenario: the signed note on a phone
+- GIVEN a 390 px wide window, and `spec/c`'s review with `signed` true and one approval with `signed` false
+- WHEN the review is opened
+- THEN the note is in the window, inside the Approve bar and above the tab bar, the header marks the approval "unsigned, doesn't count", and the page is no wider than the window
+
+#### Scenario: one request, then approved
+- GIVEN `spec/c`'s review with a fingerprint and no approval, and a Worker that holds its answer to the approve
+- WHEN Approve is tapped twice
+- THEN exactly one approve request was sent, and the button reads Approved and is disabled
+
+#### Scenario: a comment on a requirement
+- GIVEN `spec/c`'s review with fingerprint `f1`, which modifies `n/r`, and a Worker that answers the comment with 200 and then the review with a comment on `n/r` by `alice/web`; and, apart, a Worker that answers a comment 422
+- WHEN "Name the rule" is sent from `n/r`'s card in the first, and a comment from the intent in the second
+- THEN the first posted `{"fingerprint": "f1", "target": "n/r", "text": "Name the rule"}` once, asked for the review again, closed the form and shows the comment by `alice` on the card; the second keeps the form with its text and says the Worker refused it
+
+#### Scenario: changes requested
+- GIVEN `spec/c`'s review with fingerprint `f1` and `signed` true, and a Worker that holds its answer to the request, then answers 200 and the review with a held request by `alice/web`
+- WHEN "Split it" is submitted twice from the Approve bar
+- THEN exactly one request posted `{"fingerprint": "f1", "text": "Split it"}`, the review was asked for again, and the header says changes requested by `alice` with "Split it"
+
+#### Scenario: a request the Worker doesn't take
+- GIVEN a Worker that answers the request with 409 and then the review with fingerprint `f2`; and, apart, one that answers 403
+- WHEN a request is submitted in each, and again in the first
+- THEN the first says the branch changed since the review was shown, draws the review with `f2`, keeps the text, and the next submit posts `f2`; the second says write access is needed and leaves the form usable
+
+#### Scenario: Request changes on a phone
+- GIVEN a 390 px wide touch window on `spec/c`'s review
+- WHEN Request changes is tapped
+- THEN Request changes and Approve were wholly in the window, in the Approve bar, the form's send button is wholly in the window, and the page is no wider than the window
+
+#### Serves
+- capability/follow-from-browser
+- capability/approve-intent
+
+### Requirement: graph-in-the-browser
+The built app, opened in a browser with the Worker's API answered, SHALL show the graph and its inspector as `web.views` draws them (`web.views/graph-view`, `oversized-component`, `inspector-overlay`), under this component's stylesheet and routes: a queue-state ring is a solid outline in the theme's colour for the state, and an oversized component's outline is the theme's amber until a ring colours it; the state word stays inside its card however long the component's ID is; a graph opened with the implementation state already loaded by another view is ringed at once; a PR's Graph tab, at `#/<owner>/<repo>/prs/<branch>/graph`, marks only the components the PR touches; and the inspector opens over the graph as a drawer from the window's right edge, at most 640 px wide and no taller than the window, leaving the canvas as wide as it was.
+
+#### Scenario: queue states
+- GIVEN an implementation state with `b` claimed and `a` blocked
+- WHEN `#/o/a/graph` is opened
+- THEN `b` names `claimed` and is outlined solid in the theme's amber, and `a` names `blocked` and is outlined solid in the theme's rose
+
+#### Scenario: a long ID
+- GIVEN the same with `b` renamed to an ID far too long for its card
+- WHEN the graph is opened
+- THEN the card's state word reads `claimed` and ends inside the card
+
+#### Scenario: ringed from a state already held
+- GIVEN Build opened for `o/a`, and a Worker that then answers no further implementation request
+- WHEN the address changes to `#/o/a/graph`
+- THEN `b` is ringed as claimed and `a` names `blocked`
+
+#### Scenario: a PR's graph
+- GIVEN a review that touches `b`, which depends on `a`
+- WHEN `#/o/a/prs/spec%2Fc/graph` is opened
+- THEN only `b` is marked as touched, with its edge to `a`; and on `#/o/a/graph` the inspector of `b` lists `spec/c` and that of `a` says no open PR changes it
+
+#### Scenario: oversized
+- GIVEN a snapshot whose component `a` is oversized, and an implementation state, not yet answered, in which `a` is blocked
+- WHEN the graph is opened, and then the implementation state arrives
+- THEN `a` is first outlined in the theme's amber with the legend reading `behind · claimed · oversized`, and then keeps its `⚠` and is outlined in the theme's rose
+
+#### Scenario: the inspector on desktop
+- GIVEN a 1280 px wide window on the graph
+- WHEN `b` is selected, and Escape is pressed
+- THEN the canvas is as wide as before, the inspector shows `b`'s contract in a drawer that ends at the window's right edge, overlaps the canvas, is at most 640 px wide and no taller than the window, and Escape closes it
+
+#### Scenario: closing the inspector
+- GIVEN the inspector open on `b`
+- WHEN its × is tapped, `b` is selected again, and then once more
+- THEN × closes it and clears the selection and its highlighted edges, the first tap opens it, and the second closes it
+
+#### Serves
+- capability/see-project-state
+- capability/follow-from-browser
+
+### Requirement: backlog-in-the-browser
+The built app, opened in a browser with the Worker's API answered, SHALL show the Backlog as `web.views` draws it (`web.views/backlog-view`, `backlog-taken`, `propose-from-backlog`), under this component's routes: the backlog is drawn from the snapshot before the implementation state arrives and takes its marks when it does; an item opens its page at `#/<owner>/<repo>/backlog/<slug>`, from the Backlog and from the inspector, and a slug the backlog doesn't hold says so with a link back; and New proposal posts once however often it is submitted while in flight, after which, and after a Withdraw, the implementation state is asked for again.
+
+#### Scenario: marks arrive
+- GIVEN an implementation state, not yet answered, whose `taken` holds change `x` on main naming `crash` and a bare claim on `later`
+- WHEN `#/o/a/backlog` is opened, and then the implementation state arrives
+- THEN `crash` is first drawn with no mark, and then `crash` reads `resolved by x`, `later` reads `claimed`, and `setup` has no mark
+
+#### Scenario: an item opens its page
+- GIVEN repo `o/a` whose backlog holds `later`, on component `b`
+- WHEN `later` is tapped in the Backlog, `#/o/a/backlog/gone` is opened and its link followed, and `later` is tapped in the inspector of `b`
+- THEN the page at `#/o/a/backlog/later` shows its title, `gone`'s page says it isn't in the backlog and leads back to `#/o/a/backlog`, and the inspector's link opens `#/o/a/backlog/later`
+
+#### Scenario: proposed
+- GIVEN the Backlog of `o/a`, and a Worker that holds its answer to the proposal, then answers 200 and lists it in `proposals` by `alice/web`
+- WHEN New proposal is opened, the title "Export CSV" and the intent "Let me export." are entered, and it is submitted twice
+- THEN exactly one request posted `{"title": "Export CSV", "body": "Let me export.", "nodes": []}`, the form closed, the implementation state was asked for again, and Proposed lists "Export CSV" with `alice` and the note that the next build files it
+
+#### Scenario: a proposal the Worker doesn't take
+- GIVEN a Worker that answers the proposal with 409, and, apart, one that answers 422 naming `nodes`
+- WHEN a proposal is submitted in each
+- THEN the first keeps the form with its title, saying the title is taken, and the second says the Worker refused the nodes
+
+#### Scenario: withdraw
+- GIVEN Proposed listing `p1` with `mine` true and `p2` with `mine` false
+- WHEN `p1`'s Withdraw is tapped
+- THEN `p2` shows no Withdraw, one `DELETE` went to `/api/repos/o/a/proposals/p1`, the implementation state was requested once more, and `p1` is gone
+
+#### Serves
+- capability/keep-a-backlog
+- capability/see-project-state
+- capability/follow-from-browser
+
+### Requirement: push-in-the-browser
+The built app, opened in a browser, SHALL wire `web.client-live`'s Notify me switch and push handlers into the page and its service worker (`web.client-live/notify-switch`, `push-shown`): the switch sits in the sidebar under the repo picker once the Worker answers a push key, and is hidden when it answers 404; and the service worker the app registers, `/sw.js`, shows a push and handles a click on it through the handlers it imports.
+
+#### Scenario: no key
+- GIVEN a 1280 px wide window, and a Worker answering 404 for the push key
+- WHEN `#/o/a/graph` is opened and the key has been asked for
+- THEN the sidebar shows no switch
+
+#### Scenario: a key and no subscription
+- GIVEN a Worker answering a push key, and a browser with no subscription
+- WHEN `#/o/a/graph` is opened
+- THEN the sidebar shows the switch, off and enabled, and no request went to the repo's push route
+
+#### Scenario: turn on
+- GIVEN a browser with notification permission granted, and a Worker answering the key `k` and `{"subscribed": false}` for `o/a`
+- WHEN the switch is turned on, and then another view is chosen
+- THEN the push manager was subscribed with `userVisibleOnly` and `applicationServerKey` `k`, one `POST /api/repos/o/a/push` carried that subscription, the switch reads on, and the redraw asked the push route for the subscription's endpoint and still reads on
+
+#### Scenario: the service worker shows a push
+- GIVEN the app opened at `/app/`, its service worker `/sw.js` active, and no app window known to it
+- WHEN the worker receives a push `{"title": "o/a: waiting on you", "body": "Which region?", "url": "/app/#/o/a/backlog"}`, and then a click on its notification
+- THEN a notification with that title and body, tagged `/app/#/o/a/backlog`, with the icon `/app/icon-192.png`, was shown, and a window was opened at `/app/#/o/a/backlog` on the worker's origin
+
+#### Serves
+- capability/follow-from-browser

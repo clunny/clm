@@ -31,6 +31,8 @@ The modules import nothing of `web`'s outside `web/src/views/`, since an import 
 
 **Markdown** (`repo-markdown`). Every text the app shows from the repository (a component's contract, an intent, a requirement, a backlog item's body, a capability's or a constraint's statement and entry, a decision) goes through `markdown.ts`, which renders it with `marked` and sanitises it with DOMPurify, since anyone who can open a PR writes it and it is shown where the session cookie can approve. Only IDs, slugs and titles are drawn as plain text.
 
+**Tests.** This component's tests draw a view, or call `api.ts`, with the Worker faked, under `web/src/views/`, and cite only its requirements. What the built app shows in a browser, under `web`'s stylesheet and routes, is `web`'s to state and its browser tests' to prove (`web/cost-views-in-the-browser` and its neighbours). Until `worker-requests` is built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests in `api.test.ts` and `pr.test.ts` that cited `web` or `web.client-live` and the requirement each cites from then on.
+
 ## Requirements
 
 ### Requirement: full-document
@@ -699,3 +701,39 @@ Every text the app shows from the repository that the Worker gives as Markdown (
 #### Serves
 - capability/follow-from-browser
 - capability/see-project-state
+
+### Requirement: worker-requests
+The views' requests to the Worker SHALL go through one module that: asks again once when a request is answered 401, since a parallel request may have refreshed the session, and after a second 401 reports the person signed out and forgets every answer kept for offline use; keeps each successful `GET`'s answer for offline use and no failed one; when the network fails, returns the answer kept for that path with the time it was fetched, or reports offline when none is kept; appends `fresh=<delivery>` to the query of a request made with `fresh`, keeping its answer under the path without it; sends a body as JSON with `content-type: application/json` under the method given; and reports any other failure with its HTTP status.
+
+#### Scenario: one 401, then answered
+- GIVEN a Worker that answers a request 401 and then 200
+- WHEN the request is made
+- THEN it was sent twice and returns the second answer, with no fetch time
+
+#### Scenario: signed out
+- GIVEN an answer kept for `/api/repos/o/a/snapshot`, and a Worker that answers every request 401
+- WHEN a request is made
+- THEN it reports signed out, and no answer is kept
+
+#### Scenario: offline
+- GIVEN an answer for `/api/repos/o/a/snapshot` fetched at time `t`, and a network that then fails
+- WHEN `/api/repos/o/a/snapshot` and `/api/repos/o/b/snapshot` are asked
+- THEN the first returns the kept answer with `t`, and the second reports offline
+
+#### Scenario: offline copy
+- GIVEN a notice with delivery `d1`
+- WHEN the refresh it starts asks for `/api/repos/o/a/implementation`
+- THEN the request goes to `/api/repos/o/a/implementation?fresh=d1`, and the copy kept for offline use is stored under `/api/repos/o/a/implementation`
+
+#### Scenario: a body
+- GIVEN the fingerprint `f1`
+- WHEN it is posted to `/api/repos/o/a/branches/spec/x/approve`, and an endpoint is sent with `DELETE` to `/api/repos/o/a/push`
+- THEN each request carries its method and its body as JSON, the post with `content-type: application/json`
+
+#### Scenario: a failure
+- GIVEN a Worker that answers 404
+- WHEN a request is made
+- THEN it fails carrying the status 404, and nothing is kept
+
+#### Serves
+- capability/follow-from-browser
