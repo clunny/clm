@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/clm-check-still-re-exports-the-coverage-library
 ---
 
