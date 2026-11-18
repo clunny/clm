@@ -61,20 +61,20 @@ fn found(root: &Path) -> Vec<String> {
 
 #[test]
 fn another_components_requirement() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let text = format!("// x\n// y\n// z\n{}", cite("b/y"));
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", text)]);
     assert_eq!(
         found(dir.path()),
         [
-            "tests/a/t.rs:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests"
+            "tests/a/t.rs:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s; move the test to `b`'s files"
         ]
     );
 }
 
 #[test]
 fn its_own_requirement() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", cite("a/y"))]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
@@ -93,14 +93,14 @@ fn paths_only() -> TempDir {
 
 #[test]
 fn a_file_only_paths_own() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = paths_only();
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn a_marker_naming_nothing_is_left_to_dangling_markers() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = repo(
         Some("[\"tests/a/**\"]"),
         &[("tests/a/t.rs", cite("b/nope"))],
@@ -110,7 +110,7 @@ fn a_marker_naming_nothing_is_left_to_dangling_markers() {
 
 #[test]
 fn a_capability_is_the_capability_components() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = repo(
         Some("[\"tests/a/**\"]"),
         &[("tests/a/t.rs", cite("capability/c"))],
@@ -128,14 +128,14 @@ fn a_capability_is_the_capability_components() {
     assert_eq!(
         found(dir.path()),
         [
-            "tests/a/t.rs:1: check/tests-cite-their-owner: cites capability/c of `capability`, but the file is `a`'s test; move the test to `capability`'s tests"
+            "tests/a/t.rs:1: check/tests-cite-their-owner: cites capability/c of `capability`, but the file is `a`'s; move the test to `capability`'s files"
         ]
     );
 }
 
 #[test]
 fn run_listed_reports_it_too() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = repo(Some("[\"tests/a/**\"]"), &[("tests/a/t.rs", cite("b/y"))]);
     let files = ["specs/SPEC.md", "tests/a/t.rs"].map(std::path::PathBuf::from);
     let found: Vec<_> = clm_check::run_listed(dir.path(), &files)
@@ -147,7 +147,7 @@ fn run_listed_reports_it_too() {
 
 #[test]
 fn exempt_until_split() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let text = format!("// x\n// y\n// z\n{}", cite("b/y"));
     let dir = repo(
         Some("[\"tests/a/**\"]"),
@@ -165,7 +165,7 @@ fn exempt_until_split() {
     };
     let line = |f: &str| {
         format!(
-            "{f}:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests"
+            "{f}:4: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s; move the test to `b`'s files"
         )
     };
     assert_eq!(
@@ -191,20 +191,20 @@ fn wire(root: &Path) {
 
 #[test]
 fn a_file_only_paths_own_once_the_root_names_its_wiring() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = paths_only();
     wire(dir.path());
     assert_eq!(
         found(dir.path()),
         [
-            "tests/t.rs:1: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests"
+            "tests/t.rs:1: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s; move the test to `b`'s files"
         ]
     );
 }
 
 #[test]
 fn a_file_no_component_owns_is_not_judged_under_wiring() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = repo(None, &[("elsewhere/t.rs", cite("b/y"))]);
     wire(dir.path());
     assert_eq!(found(dir.path()), Vec::<String>::new());
@@ -212,7 +212,7 @@ fn a_file_no_component_owns_is_not_judged_under_wiring() {
 
 #[test]
 fn a_capability_test_under_wiring() {
-    // req:check/tests-cite-their-owner@55d31d1a
+    // req:check/tests-cite-their-owner@97a93dfa
     let dir = repo(None, &[("tests/capability/see.rs", cite("capability/see"))]);
     wire(dir.path());
     fs::write(
@@ -226,4 +226,28 @@ fn a_capability_test_under_wiring() {
         &component("[\"tests/capability/**\"]", None),
     );
     assert_eq!(found(dir.path()), Vec::<String>::new());
+}
+
+#[test]
+fn a_wiring_file() {
+    // req:check/tests-cite-their-owner@97a93dfa
+    // Every build may edit a wiring file, but a test there is still its owner's, the root's.
+    let dir = repo(None, &[("src/main.rs", cite("b/y"))]);
+    let spec = dir.path().join("specs/SPEC.md");
+    let text = fs::read_to_string(&spec).unwrap();
+    fs::write(
+        spec,
+        text.replacen(
+            "paths: []\n",
+            "paths: [\"src/main.rs\"]\nwiring: [\"src/main.rs\"]\n",
+            1,
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        found(dir.path()),
+        [
+            "src/main.rs:1: check/tests-cite-their-owner: cites b/y of `b`, but the file is `clm`'s; move the test to `b`'s files"
+        ]
+    );
 }
