@@ -1096,7 +1096,7 @@ The workspace SHALL hold no crate `clm-runner`, and `clm` SHALL have no `runner`
 - capability/no-dead-weight
 
 ### Requirement: routes-only
-For every command a component offers as a call (`commands-in-crate`), `crates/clm` SHALL only parse the command line with the crate's own argument definitions, apply what holds for every command (`upgrade-blocks-commands`, `none-remote-before-commands`, `root-from-cwd`, `closed-stdout`), load the settings the crate is passed, and call the crate with the process's standard output, standard error and environment: it SHALL print nothing of its own for such a command and SHALL exit with the status the call returns, but for what only the process holds: when it can't read its standard input or its current directory, which a call is handed and can't read for itself, it SHALL print one line `clm <command>: <what>: <error>` on standard error and exit non-zero before any call. The top-level test files under `crates/clm/tests/` SHALL hold tests of the root's own requirements only, and the helpers no test there uses are removed with the tests that moved (`commands-live-in-their-crates`).
+For every command a component offers as a call (`commands-in-crate`), `crates/clm` SHALL only parse the command line with the crate's own argument definitions, apply what holds for every command (`upgrade-blocks-commands`, `none-remote-before-commands`, `root-from-cwd`, `closed-stdout`), load the settings the crate is passed, and call the crate with the process's standard output, standard error and environment: it SHALL print nothing of its own for such a command and SHALL exit with the status the call returns, but for an error reading what only the process holds and a call can't read for itself: `clm defect`, when its standard input can't be read, and `clm defect` and `clm config`, when the current directory can't be read, SHALL each print one line `clm <command>: <what>: <error>` on standard error and exit 1 before any call. `clm hook` SHALL call its crate whatever reading its standard input gave, since a hook never breaks a session. The top-level test files under `crates/clm/tests/` SHALL hold tests of the root's own requirements only, and the helpers no test there uses are removed with the tests that moved (`commands-live-in-their-crates`).
 
 #### Scenario: a routed command
 - GIVEN a fixture repository
@@ -1117,6 +1117,11 @@ For every command a component offers as a call (`commands-in-crate`), `crates/cl
 - GIVEN a fixture repository whose `clm.toml` sets `[component_size]` `code_tokens = 100`, with component `a` owning a tracked file of 200 tokens and component `b` within its budgets
 - WHEN `clm status` runs as a process
 - THEN `a`'s row holds the cell `oversized` and `b`'s doesn't
+
+#### Scenario: a report that can't be read
+- GIVEN a standard input that isn't UTF-8
+- WHEN `clm defect --title t` runs as a process
+- THEN it exits 1 with one line on standard error starting `clm defect: reading the report:`, and files nothing
 
 #### Scenario: every command routes
 - GIVEN the commands `clm --help` lists, but the parser's own `help`, which takes command names and no `--help`
@@ -1153,11 +1158,6 @@ For every command a component offers as a call (`commands-in-crate`), `crates/cl
 - view.repo/commands-in-crate
 - view.repo/reads-the-repository
 - view.repo/arguments-and-exit
-- view/status-report
-- view/view-command
-- view/view-library
-- check.coverage/pending-report
-- check.coverage/status-report
 
 ### Requirement: rebase-settings
 For `clm rebase`, the root SHALL hand `clm-sync` the settings `config` loads from the CLM root `clm-sync` gives it, `health` among them, so the repository's `[health] reconsider` is the threshold at which `clm rebase` files a reconsider item (`sync/file-reconsider-item`). When they don't load, the root SHALL hand it the error as `clm check` prints a violation of `check.health/health-report`: `<source>: check.health/health-report: <error>`, the source being the file that failed to load, or `settings` when the error names none (`sync/judged-by-check`). Each scenario SHALL be proven by running the `clm` binary, with no user `config.toml` and no `clm.local.toml` for it to load.
