@@ -414,7 +414,9 @@ fn scenario_settings_that_cannot_be_loaded() {
     write(dir.path(), "specs/a/SPEC.md", "no frontmatter\n");
     // The caller can't load the settings: it passes the violation that says why.
     let user_file = dir.path().join("config.toml");
-    let unloadable = |_: &Path| {
+    let unloadable = |root: &Path| {
+        // The settings asked for are the checked repository's.
+        assert_eq!(root, dir.path());
         Err(Violation {
             path: user_file.clone(),
             rule: "check/detectors",
