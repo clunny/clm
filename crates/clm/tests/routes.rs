@@ -3,15 +3,17 @@
 //! (`routes-only`).
 
 use std::fs;
+use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use tempfile::TempDir;
 
 /// `clm` with a user config dir holding no `config.toml` and no CLM variables, so the
 /// developer's own settings never leak in.
-fn clm(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_clm"))
+fn clm_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_clm"));
+    command
         .env(
             "XDG_CONFIG_HOME",
             Path::new(env!("CARGO_TARGET_TMPDIR")).join("no-user-config"),
@@ -19,11 +21,56 @@ fn clm(dir: &Path, args: &[&str]) -> Output {
         .env_remove("CLM_AUTOSYNC")
         .env_remove("CLM_DEFECTS")
         .env_remove("CLM_MAX_BUILDS")
-        .env_remove("CLM_WRITER")
+        .env_remove("CLM_WRITER");
+    command
+}
+
+fn clm(dir: &Path, args: &[&str]) -> Output {
+    clm_command().args(args).current_dir(dir).output().unwrap()
+}
+
+/// `clm` run as [`clm`] is, with `stdin` on its standard input.
+fn clm_with_stdin(dir: &Path, args: &[&str], stdin: &[u8]) -> Output {
+    let mut child = clm_command()
         .args(args)
         .current_dir(dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // A process that exits before reading its input shows why in its output, not here.
+    let _ = child.stdin.take().unwrap().write_all(stdin);
+    child.wait_with_output().unwrap()
+}
+
+/// `clm`, set up as [`clm_command`] sets it, run by a shell that enters `gone` and removes it
+/// first, so `clm` starts in a directory that no longer exists; its arguments follow.
+fn clm_in_removed_dir(gone: &Path) -> Command {
+    let command = clm_command();
+    let mut sh = Command::new("sh");
+    sh.arg("-c")
+        .arg("cd \"$1\" && rmdir \"$1\" && shift && exec \"$@\"")
+        .arg("sh")
+        .arg(gone)
+        .arg(env!("CARGO_BIN_EXE_clm"))
+        .current_dir(gone.parent().unwrap());
+    for (key, value) in command.get_envs() {
+        match value {
+            Some(value) => sh.env(key, value),
+            None => sh.env_remove(key),
+        };
+    }
+    sh
+}
+
+fn rev_parse(dir: &Path) -> String {
+    let out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(dir)
         .output()
-        .unwrap()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
 /// What a crate's call wrote and returned, given two buffers.
@@ -107,7 +154,7 @@ fn fixture() -> TempDir {
 
 #[test]
 fn a_routed_command() {
-    // req:clm/routes-only@4567a066
+    // req:clm/routes-only@ecf8e0d0
     let dir = fixture();
     let root = dir.path().to_str().unwrap();
     let run = |component: &str| {
@@ -134,7 +181,7 @@ fn a_routed_command() {
 
 #[test]
 fn a_status_the_call_returns() {
-    // req:clm/routes-only@4567a066
+    // req:clm/routes-only@ecf8e0d0
     let dir = fixture();
     let marker = concat!("req", ":a/gone@00000000");
     write(dir.path(), "tests/t.rs", &format!("// {marker}\n"));
@@ -180,7 +227,7 @@ fn affected_fixture(clm_toml: &str) -> TempDir {
 
 #[test]
 fn the_settings_a_routed_command_is_passed() {
-    // req:clm/routes-only@4567a066
+    // req:clm/routes-only@ecf8e0d0
     let set = affected_fixture("[affected]\nall = [\"Cargo.lock\"]\n");
     let out = clm(set.path(), &["affected", "--base", "main"]);
     assert_eq!(String::from_utf8_lossy(&out.stdout), "all Cargo.lock\n");
@@ -209,7 +256,7 @@ fn the_settings_a_routed_command_is_passed() {
 
 #[test]
 fn the_budgets_a_routed_command_is_passed() {
-    // req:clm/routes-only@4567a066
+    // req:clm/routes-only@ecf8e0d0
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT_SPEC);
@@ -243,6 +290,76 @@ fn the_budgets_a_routed_command_is_passed() {
     assert!(!row("b").contains("oversized"), "{text}");
 }
 
+#[test]
+fn a_report_that_cant_be_read() {
+    // req:clm/routes-only@ecf8e0d0
+    let dir = fixture();
+    write(dir.path(), "clm.toml", "defects = \"backlog\"\n");
+    commit_all(dir.path(), "defects to the backlog");
+    let head = rev_parse(dir.path());
+    // Bytes that aren't UTF-8.
+    let out = clm_with_stdin(
+        dir.path(),
+        &["defect", "--title", "t"],
+        b"a report \xff\xfe\n",
+    );
+    assert_eq!(out.status.code(), Some(1), "{out:?}");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "", "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(err.lines().count(), 1, "{err}");
+    assert!(err.starts_with("clm defect: reading the report:"), "{err}");
+    // Files nothing: no backlog item, no commit, and the tree is as committed.
+    assert!(!dir.path().join("backlog").exists(), "{err}");
+    assert_eq!(rev_parse(dir.path()), head);
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&status.stdout), "");
+}
+
+#[test]
+fn a_current_directory_that_cant_be_read() {
+    // req:clm/routes-only@ecf8e0d0
+    for (command, args) in [("defect", &["--title", "t"][..]), ("config", &["list"][..])] {
+        let dir = TempDir::new().unwrap();
+        let gone = dir.path().join("gone");
+        fs::create_dir(&gone).unwrap();
+        // The shell enters the directory and removes it, so `clm` starts in a directory that
+        // no longer exists.
+        let out = clm_in_removed_dir(&gone)
+            .arg(command)
+            .args(args)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(1), "clm {command}: {out:?}");
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "", "clm {command}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(err.lines().count(), 1, "clm {command}: {err}");
+        assert!(
+            err.starts_with(&format!("clm {command}: current directory: ")),
+            "clm {command}: {err}"
+        );
+    }
+}
+
+#[test]
+fn a_hook_whose_event_cant_be_read() {
+    // req:clm/routes-only@ecf8e0d0
+    // An event that can't be read is an empty one: the hook still runs and still exits as it
+    // does for an empty event, so it never breaks a session.
+    let dir = fixture();
+    for hook in ["guard", "session-start", "autosync"] {
+        let unread = clm_with_stdin(dir.path(), &["hook", hook], b"{\"cwd\": \"\xff\"}");
+        let empty = clm_with_stdin(dir.path(), &["hook", hook], b"");
+        assert_eq!(unread.status.code(), Some(0), "clm hook {hook}: {unread:?}");
+        assert_eq!(unread.stdout, empty.stdout, "clm hook {hook}");
+        assert_eq!(unread.stderr, empty.stderr, "clm hook {hook}");
+    }
+}
+
 /// The command names `clm --help` lists under `Commands:`.
 fn listed_commands(help: &str) -> Vec<String> {
     help.split("Commands:\n")
@@ -258,7 +375,7 @@ fn listed_commands(help: &str) -> Vec<String> {
 
 #[test]
 fn every_command_routes() {
-    // req:clm/routes-only@4567a066
+    // req:clm/routes-only@ecf8e0d0
     let dir = TempDir::new().unwrap();
     let help = clm(dir.path(), &["--help"]);
     assert_eq!(help.status.code(), Some(0), "{help:?}");
