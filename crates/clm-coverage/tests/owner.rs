@@ -131,6 +131,7 @@ fn scenario_globs_as_git_reads_them() {
     let d = dir.path();
     let files = [
         "a.rs",
+        "a/b.rs",
         "ab.rs",
         "abc.rs",
         "README.md",
@@ -164,6 +165,7 @@ fn scenario_globs_as_git_reads_them() {
         "**/*.md",
         "docs/**/z.md",
         "a?.rs",
+        "a?b.rs",
         "?.rs",
         "tests/t?.py",
         "crates/a?/**",
