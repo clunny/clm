@@ -30,7 +30,10 @@ beforeEach(() => {
   caches = fakeCaches();
   vi.stubGlobal('caches', caches);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
@@ -75,7 +78,7 @@ describe('api.get', () => {
   });
 
   // req:web.views/worker-requests@936c9e88
-  it('keeps no failed response, and the failure carries its status', async () => {
+  it('keeps no failed response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('', { status: 404 })));
     const failed = await get('/api/repos/o/c/snapshot').catch((e: unknown) => e);
     expect(failed).toBeInstanceOf(HttpError);
@@ -120,20 +123,24 @@ describe('a refresh a notice asked for', () => {
     const fetch = vi.fn().mockImplementation(async () => ok({ v: 1 }));
     vi.stubGlobal('fetch', fetch);
     await get('/api/repos/o/a/implementation', { live: true, fresh: 'd1' });
-    await get('/api/repos/o/a/push?endpoint=e', { live: true, fresh: 'd1' });
-    expect(fetch.mock.calls.map(([p]) => p)).toEqual(['/api/repos/o/a/implementation?fresh=d1', '/api/repos/o/a/push?endpoint=e&fresh=d1']);
-    expect([...caches.store.keys()].sort()).toEqual(['/api/repos/o/a/implementation', '/api/repos/o/a/push?endpoint=e']);
+    await get('/api/repos/o/a/branches/spec/x/review?x=1', { live: true, fresh: 'd1' });
+    expect(fetch.mock.calls.map(([p]) => p)).toEqual(['/api/repos/o/a/implementation?fresh=d1', '/api/repos/o/a/branches/spec/x/review?x=1&fresh=d1']);
+    expect([...caches.store.keys()].sort()).toEqual(['/api/repos/o/a/branches/spec/x/review?x=1', '/api/repos/o/a/implementation']);
   });
 });
 
 // req:web.views/worker-requests@936c9e88
 describe('api.send', () => {
-  it('deletes with a JSON body', async () => {
+  it('deletes with a JSON body, and a failed get carries its status', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
     await send('DELETE', '/api/repos/o/a/push', { endpoint: 'e' });
     const [path, init] = fetch.mock.calls[0];
     expect(path).toBe('/api/repos/o/a/push');
     expect(init).toMatchObject({ method: 'DELETE', body: '{"endpoint":"e"}', headers: { 'content-type': 'application/json' } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('', { status: 404 })));
+    const failed = await get('/api/push/key').catch((e: unknown) => e);
+    expect(failed).toBeInstanceOf(HttpError);
+    expect((failed as HttpError).status).toBe(404);
   });
 });

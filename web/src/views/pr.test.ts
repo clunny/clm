@@ -168,6 +168,14 @@ describe('Approve intent', () => {
     expect(offline.textContent).toBe('Approve intent');
     expect(approve(review(), opts()).disabled).toBe(false);
   });
+});
+
+// req:web.views/approve-button@17d4c422
+describe('what Approve may send', () => {
+  it('no fingerprint: Approve is disabled', () => {
+    expect(cannotAct(review({ fingerprint: null }), false, false)).not.toBeNull();
+    expect(renderReview(review({ fingerprint: null }), opts()).querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(true);
+  });
 
   it('an approval on screen comes from the review, not from a label', () => {
     expect(cannotAct(review(), false, false)).toBeNull();
