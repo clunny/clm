@@ -570,11 +570,15 @@ run_stryker() {
   "mutate": [${ranges%,}]
 }
 EOF
-  stryker_links "$dir" ".stryker-tmp-clm-$tag"
-  (
-    cd "$root/$dir"
-    npx stryker run "$scfg"
-  ) || status=$?
+  # A link it can't make fails the run, as StrykerJS failing would.
+  if stryker_links "$dir" ".stryker-tmp-clm-$tag"; then
+    (
+      cd "$root/$dir"
+      npx stryker run "$scfg"
+    ) || status=$?
+  else
+    status=1
+  fi
   # Gone as soon as StrykerJS returns, so no later run, such as `coverage.sh`'s vitest, finds
   # the links.
   rm -rf "${root:?}/$dir/.stryker-tmp-clm-$tag"
@@ -606,12 +610,12 @@ EOF
 stryker_links() {
   local dir=$1 tmp=$root/$1/$2 e n
   rm -rf "${tmp:?}"
-  mkdir -p "$tmp"
+  mkdir -p "$tmp" || return 1
   for e in "$root"/* "$root"/.*; do
     n=${e##*/}
     case $n in . | .. | .git | "${dir%%/*}") continue ;; esac
     [ -e "$e" ] || [ -L "$e" ] || continue
-    ln -s "$e" "$tmp/$n"
+    ln -s "$e" "$tmp/$n" || return 1
   done
 }
 

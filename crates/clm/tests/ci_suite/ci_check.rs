@@ -2226,7 +2226,10 @@ else
   # The sandbox's directory, then each entry it holds and where it links, `-` for none.
   {
     echo "$PWD/$tmp"
-    for e in $(ls -A "$tmp" 2>/dev/null); do echo "$e $(readlink "$tmp/$e" || echo -)"; done
+    for e in "$tmp"/* "$tmp"/.*; do
+      case ${e##*/} in . | .. | '*' | '.*') continue ;; esac
+      echo "${e##*/} $(readlink "$e" || echo -)"
+    done
   } > "$CI_LOG.tempdir"
   # Any other run's sandbox directory still in the npm directory.
   ls -A | grep '^\.stryker-tmp' | grep -vx -- "$tmp" > "$CI_LOG.stale-tempdirs" || true
