@@ -81,24 +81,34 @@ where
     let root = args.root.as_deref().unwrap_or(root);
     match run(root, &args, env, settings, out) {
         Ok(()) => 0,
-        Err((code, message)) => {
-            line(err, message);
+        Err(Failed::Own(code, message)) => {
+            line(err, format!("clm affected: {message}"));
             code
+        }
+        Err(Failed::Settings(given)) => {
+            line(err, given);
+            1
         }
     }
 }
 
-/// The command's lines on `out`, or its exit status with the line for the error stream: the
-/// command's own message, or the settings' failure as the caller words it (`affected-base`).
+/// Why the command failed: its own exit status and message, or the line the caller gave for
+/// settings it couldn't load, which the command writes as given (`affected-base`).
+enum Failed {
+    Own(u8, String),
+    Settings(String),
+}
+
+/// The command's lines on `out`, or why it failed.
 fn run(
     root: &Path,
     args: &Args,
     env: &dyn Fn(&str) -> Option<String>,
     settings: Settings,
     out: &mut dyn Write,
-) -> Result<(), (u8, String)> {
-    let refused = |message: String| (1, format!("clm affected: {message}"));
-    let failed = |e: clm_git::Failure| (e.exit_code(), format!("clm affected: {e}"));
+) -> Result<(), Failed> {
+    let refused = |message: String| Failed::Own(1, message);
+    let failed = |e: clm_git::Failure| Failed::Own(e.exit_code(), e.to_string());
     if args.overlap.is_some() {
         for (given, flag) in [
             (args.base.is_some(), "--base"),
@@ -124,7 +134,7 @@ fn run(
         }
         return Ok(());
     }
-    let all = settings(root, env).map_err(|given| (1, given))?;
+    let all = settings(root, env).map_err(Failed::Settings)?;
     if let Some(path) = &args.why {
         for chain in why(root, base, path, &all).map_err(failed)? {
             line(out, chain);
