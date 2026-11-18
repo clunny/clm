@@ -1111,7 +1111,7 @@ For every command a component offers as a call (`commands-in-crate`), `crates/cl
 #### Scenario: the settings a routed command is passed
 - GIVEN a fixture repository whose `clm.toml` sets `[affected]` `all = ["Cargo.lock"]`, on a branch that changes only `Cargo.lock`, and the same repository with `all = 3`
 - WHEN `clm affected --base main` runs as a process in each
-- THEN the first prints only `all Cargo.lock`, and the second exits non-zero with a line naming `clm.toml` and `check.affected/affected-all`, as `clm check` prints a violation
+- THEN the first prints only `all Cargo.lock`, and the second exits non-zero with a line naming `clm.toml` and `check.affected/affected-base`, the requirement that states that exit, as `clm check` prints a violation
 
 #### Scenario: the budgets a routed command is passed
 - GIVEN a fixture repository whose `clm.toml` sets `[component_size]` `code_tokens = 100`, with component `a` owning a tracked file of 200 tokens and component `b` within its budgets
