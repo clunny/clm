@@ -174,3 +174,64 @@ fn an_earlier_loop_file_loads_unchanged() {
     assert_eq!(file.version, 1);
     assert!(file.run("build:a").unwrap().earlier_tasks.is_empty());
 }
+
+#[test]
+fn an_earlier_task_of_a_command_run() {
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@10580e69
+    let fx = Fixture::new();
+    let mut verify = run("verify", Kind::Build, "", RunState::Planned, None);
+    verify.kind = None;
+    verify.command = Some("clm verify --due".to_string());
+    verify.earlier_tasks = vec!["t-1".to_string()];
+    fx.add_run(verify);
+
+    let why = refusal(launched(&fx.options(), "verify", "t-1"));
+    assert!(why.contains("finished"), "{why}");
+    assert!(why.contains("late `landed` report"), "{why}");
+    assert!(why.contains("changes nothing"), "{why}");
+    assert!(why.contains("new command"), "{why}");
+}
+
+#[test]
+fn a_task_kept_for_an_earlier_run_of_another_name() {
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@10580e69
+    let fx = Fixture::new();
+    let mut b = run(
+        "build:b",
+        Kind::Build,
+        "sonnet",
+        RunState::Running,
+        Some("t-2"),
+    );
+    b.earlier_tasks = vec!["t-1".to_string()];
+    fx.add_run(b);
+    fx.add_run(run(
+        "build:a",
+        Kind::Build,
+        "sonnet",
+        RunState::Planned,
+        None,
+    ));
+
+    let before = loop_bytes(&fx);
+    let why = refusal(launched(&fx.options(), "build:a", "t-1"));
+    assert!(why.contains("build:b"), "{why}");
+    assert_eq!(loop_bytes(&fx), before, "the loop file is unchanged");
+}
+
+#[test]
+fn a_task_reported_over_another_keeps_the_other() {
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@10580e69
+    let fx = Fixture::new();
+    fx.add_run(run(
+        "build:a",
+        Kind::Build,
+        "sonnet",
+        RunState::Running,
+        Some("t-1"),
+    ));
+    launched(&fx.options(), "build:a", "t-2").unwrap();
+    let a = fx.file().run("build:a").unwrap().clone();
+    assert_eq!(a.task_id.as_deref(), Some("t-2"));
+    assert_eq!(a.earlier_tasks, ["t-1"]);
+}

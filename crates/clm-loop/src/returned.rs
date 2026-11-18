@@ -200,27 +200,23 @@ pub fn returned(
                 Failure::Refused(format!("--until `{text}` isn't an RFC 3339 time"))
             })?),
         };
-    // A return from a task the loop keeps as an earlier run's of the name changes nothing
-    // (`returned-ignores-an-earlier-task`).
-    if let Some(task) = task
-        && state::read(&options.root)
-            .and_then(|f| f.run(name).cloned())
-            .is_some_and(|r| {
-                r.task_id.as_deref() != Some(task) && r.earlier_tasks.iter().any(|t| t == task)
-            })
-    {
+    clm_git::fetch(&options.root)?;
+    // The late report of an earlier run of that name changes nothing but the lease: a return
+    // from a task the loop keeps as an earlier run's of the name
+    // (`returned-ignores-an-earlier-task`), or a `landed` line older than the run (`return-rules`).
+    let (known, earlier) = state::update(&options.root, |f| {
+        f.lease = Some(now());
+        let known = f.run(name).cloned();
+        let earlier = task.filter(|t| known.as_ref().is_some_and(|r| r.kept_earlier(t)));
+        Ok((known, earlier))
+    })?;
+    if let Some(task) = earlier {
         eprintln!(
             "clm build: the return from task {task} is a late report of an earlier run of \
              {name}, which the loop has finished; it changed nothing"
         );
         return crate::step::next_actions(options);
     }
-    clm_git::fetch(&options.root)?;
-    // The late report of an earlier run of that name changes nothing but the lease.
-    let known = state::update(&options.root, |f| {
-        f.lease = Some(now());
-        Ok(f.run(name).cloned())
-    })?;
     if let Some(known) = &known
         && late_report(options, known, result.trim())
     {

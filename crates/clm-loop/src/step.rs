@@ -941,6 +941,10 @@ pub fn launched(options: &Options, name: &str, task_id: &str) -> Result<(), Fail
         f.lease = Some(now());
         let run = f.run_mut(name).expect("listed above");
         run.state = RunState::Running;
+        // A task reported over another keeps the other among the earlier ones.
+        if run.task_id.as_deref() != Some(task_id) {
+            run.forget_task();
+        }
         run.task_id = Some(task_id.to_string());
         Ok(())
     })

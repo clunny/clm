@@ -159,3 +159,44 @@ fn an_invalid_cause_is_still_refused() {
         .is_err()
     );
 }
+
+#[test]
+fn an_invalid_until_is_still_refused() {
+    // req:orchestrator.loop/returned-ignores-an-earlier-task@15f5b840
+    let fx = Fixture::new();
+    build_a(&fx, RunState::Running, Some("t-2"));
+    assert!(
+        returned(
+            &fx.options(),
+            "build:a",
+            Some("t-1"),
+            "none",
+            Some("limit"),
+            Some("not a time"),
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn whatever_the_cause() {
+    // req:orchestrator.loop/returned-ignores-an-earlier-task@15f5b840
+    let fx = Fixture::new();
+    build_a(&fx, RunState::Running, Some("t-2"));
+    for (result, cause) in [
+        ("landed 1a2b3c4", None),
+        ("landed 1a2b3c4", Some("running")),
+        ("none", Some("stopped")),
+    ] {
+        let actions = returned(&fx.options(), "build:a", Some("t-1"), result, cause, None).unwrap();
+        assert!(
+            !actions.iter().any(|l| l.contains("build:a")),
+            "{cause:?}: {actions:?}"
+        );
+    }
+    assert_eq!(fx.ran("run --finish a"), 0);
+    let a = fx.file().run("build:a").unwrap().clone();
+    assert_eq!(a.state, RunState::Running);
+    assert_eq!(a.task_id.as_deref(), Some("t-2"));
+    assert!(a.stops.is_empty(), "{:?}", a.stops);
+}

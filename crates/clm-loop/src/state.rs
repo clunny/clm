@@ -116,13 +116,17 @@ impl Run {
     /// Makes this run the successor of `old`, a listed run of its name it replaces: it keeps
     /// the task IDs `old` reported and kept.
     pub(crate) fn succeed(&mut self, old: &Run) {
-        let mut old = old.clone();
-        old.forget_task();
-        for task in old.earlier_tasks {
-            if !self.earlier_tasks.contains(&task) && self.task_id.as_ref() != Some(&task) {
-                self.earlier_tasks.push(task);
+        for task in old.task_id.iter().chain(&old.earlier_tasks) {
+            if !self.earlier_tasks.contains(task) && self.task_id.as_ref() != Some(task) {
+                self.earlier_tasks.push(task.clone());
             }
         }
+    }
+
+    /// Whether `task` is one the loop keeps as an earlier run's of this run's name, and not this
+    /// run's own.
+    pub(crate) fn kept_earlier(&self, task: &str) -> bool {
+        self.task_id.as_deref() != Some(task) && self.earlier_tasks.iter().any(|t| t == task)
     }
 }
 
