@@ -182,6 +182,32 @@ fn a_capability_test_may_be_edited_never_deleted_by_a_serving_build() {
 
 // req:gate/own-files@37282f7d
 #[test]
+fn a_capability_test_citing_a_longer_slug_is_foreign() {
+    let dir = base(Some("[]"));
+    let d = dir.path();
+    write(
+        d,
+        "tests/capability/seeing.rs",
+        &cite("capability/seeing", "fn seeing() {}\n"),
+    );
+    commit(d, "add");
+    git(d, &["checkout", "-q", "main"]);
+    git(d, &["merge", "-q", "impl/a"]);
+    git(d, &["checkout", "-q", "impl/a"]);
+    write(
+        d,
+        "tests/capability/seeing.rs",
+        &cite("capability/seeing", "fn seeing() { /* moved */ }\n"),
+    );
+    commit(d, "edit");
+    assert_eq!(
+        foreign(d, "a"),
+        vec![pair("tests/capability/seeing.rs", "capability")]
+    );
+}
+
+// req:gate/own-files@37282f7d
+#[test]
 fn a_capability_citation_is_read_at_the_merge_base() {
     let dir = base(Some("[]"));
     let d = dir.path();
