@@ -1090,11 +1090,6 @@ pub fn foreign_files(
     )
     .map_err(|e| e.to_string())?;
     let merge_base = clm_git::git(repo, &["merge-base", base, &head]).map_err(|e| e.to_string())?;
-    let at = At {
-        repo,
-        merge_base: &merge_base,
-        head: &head,
-    };
     let graph = load_specs_at(repo, &merge_base)?;
     let Some(wiring) = graph.wiring() else {
         return Ok(Vec::new());
@@ -1102,27 +1097,14 @@ pub fn foreign_files(
     if !graph.nodes.contains_key(component) {
         return Ok(Vec::new());
     }
-    let served: Vec<String> = graph
+    let served: BTreeSet<&String> = graph
         .nodes
         .get(component)
         .into_iter()
         .flat_map(|n| &n.requirements)
         .flat_map(|r| graph.effective_serves(&r.id))
-        .filter_map(|s| s.strip_prefix("capability/"))
-        .map(|slug| format!("req:capability/{slug}"))
+        .filter(|s| s.starts_with("capability/"))
         .collect();
-    let cites = |text: &[u8], marker: &str, whole: bool| {
-        text.windows(marker.len())
-            .enumerate()
-            .filter(|(_, w)| *w == marker.as_bytes())
-            .any(|(i, _)| {
-                !whole
-                    || !text
-                        .get(i + marker.len())
-                        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
-            })
-    };
-    let own_marker = format!("req:{component}/");
     let mut found = Vec::new();
     for (status, file) in changed_files(repo, &format!("{merge_base}...{head}"))? {
         if is_spec_path(&file) {
@@ -1134,13 +1116,15 @@ pub fn foreign_files(
         if owner == component || wiring.iter().any(|g| clm_coverage::matches(g, &file)) {
             continue;
         }
-        let text_at = |rev: &str| show_bytes(repo, &format!("{rev}:{file}")).unwrap_or_default();
-        let (before, after) = (text_at(at.merge_base), text_at(at.head));
-        if cites(&before, &own_marker, false) || cites(&after, &own_marker, false) {
-            continue;
-        }
-        if status == 'M' && served.iter().any(|m| cites(&before, m, true)) {
-            continue;
+        if status == 'M' {
+            let before = show_bytes(repo, &format!("{merge_base}:{file}")).unwrap_or_default();
+            let before = String::from_utf8_lossy(&before);
+            if clm_coverage::marker_spans(&before)
+                .iter()
+                .any(|m| served.contains(&m.id))
+            {
+                continue;
+            }
         }
         found.push(ForeignFile {
             path: file,
