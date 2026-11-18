@@ -61,9 +61,20 @@ fn words<'a>(items: impl Iterator<Item = &'a str>) -> Vec<String> {
 #[test]
 fn a_command_without_an_entry_is_reported() {
     // req:clm/glossary-covers-terms@5ad5c273
-    let glossary = "Seeing: `clm status`, `clm check`.\nA `clm syncs` and clm sync bare.";
-    let terms = words(["clm status", "clm sync", "clm check"].into_iter());
-    assert_eq!(missing(glossary, &terms), ["clm sync"]);
+    let glossary = "Seeing: `clm status`, `clm check`, `unbuilt`, `applied`, `bug`.\n\
+                    A `clm rebases` and clm rebase bare.";
+    let terms = words(
+        [
+            "clm status",
+            "clm rebase",
+            "clm check",
+            "unbuilt",
+            "applied",
+            "bug",
+        ]
+        .into_iter(),
+    );
+    assert_eq!(missing(glossary, &terms), ["clm rebase"]);
 }
 
 #[test]
