@@ -1,6 +1,7 @@
 //! How far the code has caught up with the spec: markers, each requirement's coverage
 //! state, the pending list, `clm status`'s sections and each live change's progress
-//! (specs/check/coverage/SPEC.md). `clm-check` re-exports this library unchanged.
+//! (specs/check/coverage/SPEC.md). Callers import it directly; `clm-check` re-exports
+//! none of it (`check-coverage-split`).
 //!
 //! Without the default feature `checkout`, only what works on files already in memory is
 //! built, so the crate builds for `wasm32-unknown-unknown` (`coverage-builds-for-wasm`).
