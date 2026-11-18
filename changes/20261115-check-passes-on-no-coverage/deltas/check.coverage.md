@@ -5,7 +5,7 @@ base: { contract: "81649e9551adda97" }
 
 ## MODIFIED Contract
 
-How far the code has caught up with the spec, for `check` and for every component that reads it (`check-coverage-split`). A component whose code calls this library names `check.coverage` in its `depends_on` and imports `clm-coverage`, so its build is given this Contract. `clm-check` passes none of this library on. The states it computes, *current*, *behind*, *unbuilt* and *obsolete*, and a change's being *complete*, are defined in `check`'s Contract, which every build of this component reads among its ancestors.
+How far the code has caught up with the spec, for `check` and for every component that reads it (`check-coverage-split`). A component whose code calls this library names `check.coverage` in its `depends_on` and imports `clm-coverage`, so its build is given this Contract. `clm-check` re-exports none of it. The states it computes, *current*, *behind*, *unbuilt* and *obsolete*, and a change's being *complete*, are defined in `check`'s Contract, which every build of this component reads among its ancestors.
 
 Crate `clm-coverage`. Its library:
 - `tests_in(path, text)`: the tests and named groups of tests in one file, each with its name and its lines, and `markers_outside_tests(path, text)`: the `req:` markers on none of those lines (`test-spans`).
@@ -40,6 +40,11 @@ The crate builds for `wasm32-unknown-unknown` with its default features disabled
 - GIVEN the pattern `crates/*/tests/**`
 - WHEN `matches` runs on `crates/a/tests/t.rs` and `crates/a/src/t.rs`
 - THEN it returns true and false
+
+#### Scenario: globs as git reads them
+- GIVEN a repository's tracked files and a `paths` glob that uses `*`, `**` or `?`
+- WHEN `matches` runs on the glob and each tracked file
+- THEN it returns true for exactly the files `git ls-files ':(glob)<glob>'` lists
 
 #### Serves
 - capability/work-concurrently

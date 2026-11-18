@@ -28,7 +28,10 @@ For the helper: move the two fixtures to their one caller as code (taken); state
 - So do the sentences that named the old route elsewhere, which the architecture audit found (`spec-is-current`): the Designs of `view`, `view.repo`, `replica` and `check.health` name `clm_coverage::` for the calls their code already imports from it, and `clm/glossary-covers-terms` no longer says the states come "through `clm-check`". The first four build nothing; the root re-cites one requirement.
 - **`check` loses its one exemption** from `tests-cite-their-owner`, for `crates/clm-check/tests/state_names.rs`: the file is gone.
 - `check`'s Design no longer gives `crates/clm/tests/run.rs`, which holds only the root's tests now, as its example of a test file counted toward the component it cites.
-- The builds: `check` removes the two `pub use clm_coverage::` blocks with their `clm:remove-by` markers and the four tests that cite `check/path-ownership`, and re-cites `coverage-lists`; `check.coverage` re-cites `owner` and `state-names`, adding a test of `matches` if `one glob` has none; `check.affected` re-cites four requirements.
+- **The builds, in the order the needs give.**
+  - `check.coverage` first: it re-cites `owner` and `state-names`, and writes two tests of `matches` in `crates/clm-coverage/tests/` citing `check.coverage/owner`: one for `one glob`, which has none there, and one for `globs as git reads them`, written from `paths_match_as_git_glob_pathspecs_do` in `crates/clm-check/tests/pending.rs`, the only test that compares the matcher with `git ls-files ':(glob)...'`.
+  - `check` next, since `check/coverage-lists` needs `check.coverage/owner` so that test exists before `check` deletes its own: it removes the two `pub use clm_coverage::` blocks with their `clm:remove-by` markers, imports what its own modules use from `clm_coverage` privately, and rewrites the crate's doc comment, which still says the library is re-exported. It deletes the four tests that cite `check/path-ownership` (three in `ownership.rs`, and `paths_match_as_git_glob_pathspecs_do`) and `clm_check_re_exports_the_test_lists` in `coverage.rs`, which proves only the sentence `coverage-lists` loses; the tests in `coverage_lists.rs` are re-cited. Its other tests import `clm_coverage` for `scan` and `Pending`.
+  - `check.affected` and the root re-cite.
 
 ## What it removes
 
