@@ -36,7 +36,7 @@ async function liveSocket(page: Page, o: { silent?: boolean } = {}) {
   return { sockets, closed };
 }
 
-// req:web/notice-refresh@4f65ff27
+// req:web/notice-refresh@1ead25d5
 test.describe('live updates', () => {
   test('a claim shows within seconds: a notice refreshes Build at once, with fresh', async ({ page, context }) => {
     await page.clock.install();

@@ -518,7 +518,7 @@ test.describe('spec branches', () => {
   });
 });
 
-// req:web/approve-by-branch@971e758a
+// req:web/approve-by-branch@9a6b3322
 test.describe('Approve by branch', () => {
   test('approve: one post of the fingerprint to the branch, the review asked again, clunny/web named and Approve disabled', async ({ page, context }) => {
     const mock = await mockApi(context);
