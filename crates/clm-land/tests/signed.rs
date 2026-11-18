@@ -232,7 +232,7 @@ fn signing_fails_pushes_nothing() {
 
 #[test]
 fn unsigned_request_holds_in_a_signed_repository() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let s = signed_repo("", true);
     let f = &s.f;
     use_key(f, &f.work(), &s.christopher);

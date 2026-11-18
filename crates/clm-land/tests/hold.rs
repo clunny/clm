@@ -50,7 +50,7 @@ fn held(settings: &str) -> (Fixture, String) {
 
 #[test]
 fn held_branch_refused() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let (f, _) = held("");
     let old = f.remote("main");
     let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
@@ -74,7 +74,7 @@ fn held_branch_refused() {
 
 #[test]
 fn comment_on_the_change_as_a_whole() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let (f, fp) = held("");
     f.web_ledger("carol/web", &[commented("carol/web", &fp, None)]);
     let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
@@ -86,7 +86,7 @@ fn comment_on_the_change_as_a_whole() {
 
 #[test]
 fn cleared_by_a_push() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let (f, old_fp) = held("");
     let work = f.work();
     f.git(&work, &["checkout", "-q", "spec/x"]);
@@ -105,7 +105,7 @@ fn cleared_by_a_push() {
 
 #[test]
 fn cleared_by_the_requester() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let (f, fp) = held("");
     f.web_ledger(
         "alice/1a2b3c4d",
@@ -122,7 +122,7 @@ fn cleared_by_the_requester() {
 
 #[test]
 fn an_earlier_approval_by_the_requester_doesnt_clear_it() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let (f, fp) = held("");
     // Times compare as strings, as the ledger orders them: an earlier one, an equal one,
     // and one whose instant is later (11:30 UTC) but whose text sorts first don't clear it.
@@ -142,7 +142,7 @@ fn an_earlier_approval_by_the_requester_doesnt_clear_it() {
 
 #[test]
 fn another_persons_approval_doesnt_clear_it() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let (f, fp) = held("approval = \"any\"");
     f.web_ledger(
         "dana/9f9f9f9f",
@@ -159,7 +159,7 @@ fn another_persons_approval_doesnt_clear_it() {
 
 #[test]
 fn a_request_on_another_branch_doesnt_hold() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land/changes-requested-holds@3c6b79d5
     let f = Fixture::new("");
     f.branch("impl/a", &[("b.txt", "b\n")]);
     let fp = f.fingerprint("impl/a");
