@@ -87,17 +87,9 @@ fn pass(mutate: bool, old_test: bool) -> Pass {
     Pass { f, version }
 }
 
-/// The `mutated` records the clone's ledger holds, oldest first.
+/// The `mutated` records the clone's ledger holds, in the order they were appended.
 fn mutated(f: &Fixture) -> Vec<Body> {
-    f.git(&f.work(), &["fetch", "-q", "origin"]);
-    let mut all: Vec<_> = clm_ledger::fold(&f.work())
-        .unwrap()
-        .mutations
-        .into_values()
-        .flatten()
-        .collect();
-    all.sort_by(|a, b| a.at.cmp(&b.at));
-    all.into_iter().map(|r| r.body).collect()
+    f.records_of(|b| matches!(b, Body::Mutated { .. }))
 }
 
 /// Lands a new test of `a/thing` beside a changed `crates/a/src/lib.rs`.
