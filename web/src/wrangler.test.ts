@@ -43,7 +43,7 @@ describe('wrangler.toml', () => {
     return rules.some((r) => !r.startsWith('!') && matches(r)) && !rules.some((r) => r.startsWith('!') && matches(r.slice(1)));
   };
 
-  it('sends only the API, sign-in, webhook, invited list and /app to the script (req:web/site-served-directly@13328342)', () => {
+  it('sends only the API, sign-in, webhook, invited list and /app to the script (req:web/site-served-directly@3c4d374a)', () => {
     for (const path of ['/api/repos', '/auth/login', '/webhook', '/_clm/invited.json', '/app']) {
       expect(toWorker(path), path).toBe(true);
     }
@@ -54,12 +54,22 @@ describe('wrangler.toml', () => {
     expect(rawConfig.assets?.not_found_handling).toBe('none');
   });
 
+  it('deploys the assets in ./dist as the Worker clm (req:web/site-served-directly@3c4d374a)', () => {
+    expect(rawConfig.assets?.directory).toBe('./dist');
+    expect(rawConfig.name).toBe('clm');
+  });
+
+  it('binds the built files as ASSETS and sends the invited list to the script (req:web/invited-users@0406720d)', () => {
+    expect(rawConfig.assets?.binding).toBe('ASSETS');
+    expect(toWorker('/_clm/invited.json')).toBe(true);
+  });
+
   const routes: { pattern: string; zone_name?: string; custom_domain?: boolean }[] = rawConfig.routes ?? [];
   // A route pattern matches a request URL's host and path, `*` standing for any run of characters.
   const routed = (path: string): number =>
     routes.filter((r) => new RegExp(`^${r.pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`).test(`clm-app.dev${path}`)).length;
 
-  it('routes exactly the app\'s seven paths on clm-app.dev, with no Custom Domain (req:web/site-served-directly@13328342)', () => {
+  it('routes exactly the app\'s seven paths on clm-app.dev, with no Custom Domain (req:web/site-served-directly@3c4d374a)', () => {
     expect(routes.map((r) => r.pattern).sort()).toEqual(
       ['/app', '/app/*', '/api/*', '/auth/*', '/webhook', '/_clm/*', '/sw.js'].map((p) => `clm-app.dev${p}`).sort(),
     );
@@ -69,7 +79,7 @@ describe('wrangler.toml', () => {
     }
   });
 
-  it('leaves the site\'s paths to the site\'s Worker (req:web/site-served-directly@13328342)', () => {
+  it('leaves the site\'s paths to the site\'s Worker (req:web/site-served-directly@3c4d374a)', () => {
     for (const path of ['/', '/guide/quickstart', '/blog/', '/blog/feed.xml', '/privacy', '/404.html']) {
       expect(routed(path), path).toBe(0);
     }
