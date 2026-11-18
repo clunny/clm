@@ -108,6 +108,20 @@ impl Fixture {
         move |key: &str| map.get(key).cloned()
     }
 
+    /// `env`, with git's global config isolated from the user's own.
+    pub fn isolated_env(&self) -> impl Fn(&str) -> Option<String> + use<> {
+        let global = self.path("gitconfig").display().to_string();
+        self.env(&[("GIT_CONFIG_GLOBAL", &global)])
+    }
+
+    /// Runs `call` with the work clone's `Repo`, its settings loaded under `isolated_env`.
+    pub fn with_repo<T>(&self, call: impl FnOnce(&clm_approval::Repo) -> T) -> T {
+        let env = self.isolated_env();
+        let root = fs::canonicalize(self.work()).unwrap();
+        let settings = clm_config::load(Some(&root), &env).unwrap();
+        call(&clm_approval::Repo::new(&root, &env, &settings))
+    }
+
     /// The fingerprint of `branch`'s diff against `origin/main`.
     pub fn fingerprint(&self, branch: &str) -> String {
         let work = self.work();
@@ -186,7 +200,7 @@ pub fn fold(lines: &[String]) -> clm_ledger::Fold {
 }
 
 /// The message of a refusal.
-pub fn refused(result: Result<clm_approval::Output, clm_approval::Error>) -> String {
+pub fn refused<T: std::fmt::Debug>(result: Result<T, clm_approval::Error>) -> String {
     match result {
         Err(clm_approval::Error::Refused(why)) => why,
         other => panic!("expected a refusal, got {other:?}"),

@@ -46,10 +46,17 @@ fn held_fold(more: &[String]) -> clm_ledger::Fold {
 #[test]
 fn held() {
     // req:land.approval/request-refusal@62c49c32
-    let fold = held_fold(&[comment("c2", None)]);
+    // A comment on an earlier diff isn't shown.
+    let stale = Body::Commented {
+        branch: "spec/x".into(),
+        fingerprint: "g".into(),
+        target: None,
+        text: "Stale".into(),
+    };
+    let fold = held_fold(&[comment("c2", None), line("c3", "bob/web", AT, stale, None)]);
     let why = clm_approval::held(&fold, "spec/x", "f").expect("held");
     let lines: Vec<&str> = why.lines().collect();
-    assert!(lines.len() >= 5, "{why}");
+    assert_eq!(lines.len(), 5, "{why}");
     assert!(!lines[0].contains("spec/x:"), "a heading first: {why}");
     assert_eq!(
         lines[1],

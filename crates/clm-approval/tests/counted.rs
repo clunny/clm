@@ -10,12 +10,6 @@ use common::{Fixture, fold, keygen, line};
 
 const AT: &str = "2026-11-17T10:00:00.000Z";
 
-/// The env every call gets: the fixture's, with git's global config isolated.
-fn env(f: &Fixture) -> impl Fn(&str) -> Option<String> + use<> {
-    let global = f.path("gitconfig").display().to_string();
-    f.env(&[("GIT_CONFIG_GLOBAL", &global)])
-}
-
 /// A branch `spec/x` with one commit authored as `author`; its head and fingerprint.
 fn branch(f: &Fixture, author: &str) -> (String, String) {
     let work = f.work();
@@ -54,18 +48,14 @@ fn approved(fingerprint: &str) -> Body {
 /// The approvals of `fingerprint` in `fold` counted in the work clone: `(accepted, refused)`.
 fn count(
     f: &Fixture,
-    fold: &Fold,
+    records: &Fold,
     fingerprint: &str,
     head: &str,
     signed: Option<&str>,
     other: bool,
 ) -> (bool, Vec<String>) {
-    let env = env(f);
-    let root = std::fs::canonicalize(f.work()).unwrap();
-    let settings = clm_config::load(Some(&root), &env).unwrap();
-    let repo = clm_approval::Repo::new(&root, &env, &settings);
-    let approvals = repo
-        .approval(fold, fingerprint, head, signed, other)
+    let approvals = f
+        .with_repo(|repo| repo.approval(records, fingerprint, head, signed, other))
         .unwrap();
     (approvals.accepted, approvals.refused)
 }
@@ -75,14 +65,14 @@ fn an_authors_own_approval() {
     // req:land.approval/approvals-counted@ebdf5eea
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
-    let fold = fold(&[line(
+    let records = fold(&[line(
         "a1",
         "christopher-lunny/1a2b3c4d",
         AT,
         approved(&fp),
         None,
     )]);
-    let (accepted, refused) = count(&f, &fold, &fp, &head, None, true);
+    let (accepted, refused) = count(&f, &records, &fp, &head, None, true);
     assert!(!accepted);
     let [why] = &refused[..] else {
         panic!("not one reason: {refused:?}")
@@ -91,7 +81,7 @@ fn an_authors_own_approval() {
     assert!(why.contains(AT), "the record's time: {why}");
     assert!(why.contains("approval = \"other\""), "{why}");
     assert!(why.contains("authors"), "{why}");
-    let (accepted, refused) = count(&f, &fold, &fp, &head, None, false);
+    let (accepted, refused) = count(&f, &records, &fp, &head, None, false);
     assert!(accepted && refused.is_empty(), "{refused:?}");
 }
 
@@ -100,8 +90,8 @@ fn another_person() {
     // req:land.approval/approvals-counted@ebdf5eea
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
-    let fold = fold(&[line("a1", "dana/9f9f9f9f", AT, approved(&fp), None)]);
-    let (accepted, refused) = count(&f, &fold, &fp, &head, None, true);
+    let records = fold(&[line("a1", "dana/9f9f9f9f", AT, approved(&fp), None)]);
+    let (accepted, refused) = count(&f, &records, &fp, &head, None, true);
     assert!(accepted && refused.is_empty(), "{refused:?}");
 }
 
@@ -111,8 +101,8 @@ fn unsigned_in_a_signed_repository() {
     let f = Fixture::new("");
     let (base, _) = signed_base(&f);
     let (head, fp) = branch(&f, "Christopher Lunny");
-    let fold = fold(&[line("a1", "dana/9f9f9f9f", AT, approved(&fp), None)]);
-    let (accepted, refused) = count(&f, &fold, &fp, &head, Some(&base), false);
+    let records = fold(&[line("a1", "dana/9f9f9f9f", AT, approved(&fp), None)]);
+    let (accepted, refused) = count(&f, &records, &fp, &head, Some(&base), false);
     assert!(!accepted);
     let [why] = &refused[..] else {
         panic!("not one reason: {refused:?}")
@@ -128,8 +118,8 @@ fn a_forged_name() {
     let (base, christopher) = signed_base(&f);
     let (head, fp) = branch(&f, "Zed");
     let key = Some((christopher.as_path(), "clm-approve"));
-    let fold = fold(&[line("a1", "dana/1a2b3c4d", AT, approved(&fp), key)]);
-    let (accepted, refused) = count(&f, &fold, &fp, &head, Some(&base), false);
+    let records = fold(&[line("a1", "dana/1a2b3c4d", AT, approved(&fp), key)]);
+    let (accepted, refused) = count(&f, &records, &fp, &head, Some(&base), false);
     assert!(!accepted);
     assert!(
         refused
@@ -138,14 +128,14 @@ fn a_forged_name() {
         "{refused:?}"
     );
     // The same record signed by its writer's own key counts: the key, not the line, failed.
-    let fold = common::fold(&[line(
+    let records = fold(&[line(
         "a1",
         "christopher-lunny/1a2b3c4d",
         AT,
         approved(&fp),
         key,
     )]);
-    let (accepted, _) = count(&f, &fold, &fp, &head, Some(&base), false);
+    let (accepted, _) = count(&f, &records, &fp, &head, Some(&base), false);
     assert!(accepted);
 }
 
@@ -156,14 +146,14 @@ fn the_landers_own_approval() {
     let (base, christopher) = signed_base(&f);
     let (head, fp) = branch(&f, "Zed");
     let key = Some((christopher.as_path(), "clm-approve"));
-    let fold = fold(&[line(
+    let records = fold(&[line(
         "a1",
         "christopher-lunny/1a2b3c4d",
         AT,
         approved(&fp),
         key,
     )]);
-    let (accepted, refused) = count(&f, &fold, &fp, &head, Some(&base), true);
+    let (accepted, refused) = count(&f, &records, &fp, &head, Some(&base), true);
     assert!(!accepted);
     let [why] = &refused[..] else {
         panic!("not one reason: {refused:?}")
@@ -176,9 +166,9 @@ fn no_approval() {
     // req:land.approval/approvals-counted@ebdf5eea
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
-    let fold = fold(&[line("a1", "dana/9f9f9f9f", AT, approved("another"), None)]);
+    let records = fold(&[line("a1", "dana/9f9f9f9f", AT, approved("another"), None)]);
     for other in [false, true] {
-        let (accepted, refused) = count(&f, &fold, &fp, &head, None, other);
+        let (accepted, refused) = count(&f, &records, &fp, &head, None, other);
         assert!(!accepted && refused.is_empty(), "{refused:?}");
     }
 }

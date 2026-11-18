@@ -4,28 +4,7 @@
 mod common;
 
 use clm_ledger::{Body, LandKind};
-use common::{Fixture, keygen};
-
-/// The env every call gets: the fixture's, with git's global config isolated.
-fn env(f: &Fixture) -> impl Fn(&str) -> Option<String> + use<> {
-    let global = f.path("gitconfig").display().to_string();
-    f.env(&[("GIT_CONFIG_GLOBAL", &global)])
-}
-
-/// Runs `call` with the work clone's `Repo`.
-fn with_repo<T>(f: &Fixture, call: impl FnOnce(&clm_approval::Repo) -> T) -> T {
-    let env = env(f);
-    let root = std::fs::canonicalize(f.work()).unwrap();
-    let settings = clm_config::load(Some(&root), &env).unwrap();
-    call(&clm_approval::Repo::new(&root, &env, &settings))
-}
-
-fn refused(result: Result<(), clm_approval::Error>) -> String {
-    match result {
-        Err(clm_approval::Error::Refused(why)) => why,
-        other => panic!("expected a refusal, got {other:?}"),
-    }
-}
+use common::{Fixture, keygen, refused};
 
 #[test]
 fn signed_and_not() {
@@ -39,7 +18,7 @@ fn signed_and_not() {
     );
     f.git(&work, &["fetch", "-q", "origin"]);
     let signed = f.git(&work, &["rev-parse", "origin/main"]);
-    with_repo(&f, |repo| {
+    f.with_repo(|repo| {
         assert!(repo.signed(&signed).unwrap());
         assert!(!repo.signed(&unsigned).unwrap());
     });
@@ -52,17 +31,17 @@ fn no_key() {
     let work = f.work();
     // SSH signing, but no user.signingkey.
     f.git(&work, &["config", "gpg.format", "ssh"]);
-    let why = refused(with_repo(&f, |repo| repo.require_key()));
+    let why = refused(f.with_repo(|repo| repo.require_key()));
     assert!(why.contains("user.signingkey"), "{why}");
     assert!(f.records().is_empty());
     // A key set, but not for SSH, is refused alike.
     f.git(&work, &["config", "--unset", "gpg.format"]);
     let (key, _) = keygen(&f.path("keys"), "christopher");
     f.git(&work, &["config", "user.signingkey", key.to_str().unwrap()]);
-    let why = refused(with_repo(&f, |repo| repo.require_key()));
+    let why = refused(f.with_repo(|repo| repo.require_key()));
     assert!(why.contains("user.signingkey"), "{why}");
     f.git(&work, &["config", "gpg.format", "ssh"]);
-    with_repo(&f, |repo| repo.require_key()).unwrap();
+    f.with_repo(|repo| repo.require_key()).unwrap();
 }
 
 #[test]
@@ -76,14 +55,13 @@ fn a_key_that_cant_be_read() {
         &work,
         &["config", "user.signingkey", missing.to_str().unwrap()],
     );
-    let why = refused(with_repo(&f, |repo| repo.require_key()));
+    let why = refused(f.with_repo(|repo| repo.require_key()));
     assert!(why.contains("user.signingkey"), "{why}");
     assert!(why.contains("keys/gone"), "{why}");
     // A relative path is taken from the top of the repository.
-    std::fs::create_dir_all(work.join("k")).unwrap();
-    std::fs::write(work.join("k/key"), "x").unwrap();
+    keygen(&work.join("k"), "key");
     f.git(&work, &["config", "user.signingkey", "k/key"]);
-    with_repo(&f, |repo| repo.require_key()).unwrap();
+    f.with_repo(|repo| repo.require_key()).unwrap();
 }
 
 #[test]
@@ -113,7 +91,9 @@ fn a_lands_record() {
         recheck: None,
         recheck_files: None,
     };
-    let signed = with_repo(&f, |repo| repo.sign(landed, clm_approval::LAND)).unwrap();
+    let signed = f
+        .with_repo(|repo| repo.sign(landed, clm_approval::LAND))
+        .unwrap();
     let line = signed.line();
     assert!(clm_ledger::signed_by(&work, &base, &line, "clm-land").unwrap());
     assert!(!clm_ledger::signed_by(&work, &base, &line, "clm-approve").unwrap());
@@ -132,10 +112,6 @@ fn signing_without_a_usable_key() {
         branch: "spec/x".into(),
         change: None,
     };
-    match with_repo(&f, |repo| repo.sign(body, clm_approval::APPROVE)) {
-        Err(clm_approval::Error::Refused(why)) => {
-            assert!(why.contains("user.signingkey"), "{why}")
-        }
-        other => panic!("expected a refusal, got {other:?}"),
-    }
+    let why = refused(f.with_repo(|repo| repo.sign(body, clm_approval::APPROVE)));
+    assert!(why.contains("user.signingkey"), "{why}");
 }
