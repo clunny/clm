@@ -26,6 +26,12 @@ describe('invited logins', () => {
   });
 
   // req:web/invited-users@0406720d
+  it('reads the Invited users paragraph of the Contract, not one elsewhere in the spec', () => {
+    const spec = '# W\n\n## Overview\n\n**Invited users** (old).\n\n- `x`\n\n## Contract\n\n**Invited users** (`y`).\n\n- `a`\n\n## Design\n';
+    expect(invitedLogins(spec)).toEqual(['a']);
+  });
+
+  // req:web/invited-users@0406720d
   it('reads a checkout with CRLF line endings', () => {
     const spec = '## Contract\r\n\r\n**Invited users** (`x`).\r\n\r\n- `a`\r\n- `b`\r\n\r\n## Design\r\n';
     expect(invitedLogins(spec)).toEqual(['a', 'b']);
