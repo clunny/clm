@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [affected-base-leaves-out-exits-its-design-states]
 ---
 
