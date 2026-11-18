@@ -1,8 +1,40 @@
 ---
-status: proposed
-resolves: [nothing-holds-the-root-s-test-files-to-the-root-s-requirements, routes-only-states-help-for-clap-s-own-help-and-no-exception-for-unreadable-input, own-files-does-not-say-how-a-capability-citation-is-read, tests-cite-their-owner-judges-wiring-and-source-files-as-tests]
+status: applied
+resolves: [routes-only-states-help-for-clap-s-own-help-and-no-exception-for-unreadable-input, own-files-does-not-say-how-a-capability-citation-is-read, tests-cite-their-owner-judges-wiring-and-source-files-as-tests]
 ---
 
 ## Intent
 
-Phase 4 of the plan, step 7, the first closing branch. Being designed.
+Phase 4 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims.md`, step 7, the first closing branch. `gate/own-files` is built without the clause "a file that cites the component", so the move of every test into its component's files is over. This change takes out of the specs and the guide what still describes the move as under way, and rewords three requirements where their builds found the text and the code apart. The human answered each of the three on 2026-11-17. No behaviour changes.
+
+## Problem
+
+- **Three requirements say other than the code does**, each found by a build's review. `clm/routes-only` asks `--help` of the parser's own `help` and allows the root no error of its own. `gate/own-files` doesn't say that a capability test's citation is read as a marker. `check/tests-cite-their-owner` judges the root's wiring files, which every build may edit, and its message calls every file a test.
+- **The specs and the guide still describe the move.** The root's Design has two paragraphs on how a build moves a test; five Designs name a `moved-tests.txt` of a change that is archived; the guide keeps the exception "A test that cites the component", which no longer exists; and four Designs name files that have moved.
+- **Six requirements of `view` and `check.coverage` need requirements of `view.repo` and `check`** only because `20261117-clauses-only-a-command-shows` had to order its move.
+
+## Approaches
+
+For each reword, the text follows the code (taken) or the code follows the text. The decisions `commands-live-in-their-crates` and `own-files-at-the-gate` say why the text moves in each case.
+
+The item that asked for this branch also asked for a `tests` glob on the root's test files and on the four suite directories. Not taken: the suites are already in their components' `paths`, and since `check/tests-cite-their-owner` judges every owned file once the root names its `wiring`, a glob would add nothing.
+
+## Outcome
+
+- `clm/routes-only`: the root prints an error of its own only for a standard input or a current directory the process can't read; "every command routes" leaves out the parser's `help`.
+- `gate/own-files`: a capability test's citation is read as a marker, by its whole ID.
+- `check/tests-cite-their-owner`: a file the root's `wiring` globs match isn't judged unless a `tests` glob owns it; the message reads "the file is `a`'s; move the test to `b`'s files".
+- `view`'s `status-report`, `view-command`, `spec-view` and `view-library`, and `check.coverage`'s `pending-report` and `status-report`, lose the needs that ordered the move. Their text is otherwise unchanged.
+- Designs: the root's two paragraphs become one, **Where tests sit**; `land`, `land.approval`, `web`, `web.views` and `web.worker` lose their sentence on `moved-tests.txt`; `ci`, `check` and `config` name files as they are.
+- The guide loses the exception "A test that cites the component" and says a project gives its tests to their components before it names its `wiring`.
+
+## Constraints
+
+- **Each reworded requirement goes `behind`** and is brought up by a build that re-cites its tests: `clm`, `gate`, `check`, `view` and `check.coverage`. Only `check`'s has code to change, the wiring files and the message.
+- **Left for phase 5's regrouping**, since each reword would cost a build for no change in behaviour: the 23 `commands-in-crate` requirements, and requirements of `check.coverage`, `view`, `view.repo`, `init` and `upgrade`, which say where a test "sat" or "is no longer left".
+- **Left as a code fix:** one sentence of the propose skill, `backlog/the-propose-skill-still-says-a-test-may-sit-in-another-component-s-files`, which is what remains of the item that asked for this branch.
+- The message's wording changes for a project that sets `tests` globs too. It is a violation line a person reads, and no file or format a project holds, so it ships no migration.
+
+## Open questions
+
+None.

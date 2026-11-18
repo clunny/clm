@@ -109,8 +109,6 @@ A blank line follows the summary and each section. A section is its name on a li
 - model/parse-backlog
 - check.coverage/state-names
 - plugin.hooks/session-status
-- view.repo/reads-the-repository
-- view.repo/arguments-and-exit
 
 ### Requirement: view-command
 `clm view <name>` SHALL print the `spec`, `flight`, `blockers` or `queue` view of the graph, markers, claim refs and checkout it is handed, which `view.repo` reads from the repository (`view.repo/reads-the-repository`). `--format` SHALL select the form: `text` (the default), a chart in box-drawing characters with no escape sequences; `ansi`, the same characters with ANSI colour escapes added; `svg`, a standalone SVG document; and `json`, the view's model. In `text` and `ansi`, no line SHALL be wider than the columns `--width` gives it, and every state the chart shows SHALL be written as a word or symbol, not only as a colour. When it is handed a checkout, the `text` and `ansi` charts SHALL begin with the checkout line as `status-report` defines it, the `svg` document SHALL hold the same words, and the `json` model SHALL carry a top-level `checkout` with the line's `commit` and, when the checkout's count is given, that count as `behind`, 0 included (`views-name-their-commit`). When it is handed a commit in place of a checkout, as `clm view <name> --at <rev>` hands it (`view.repo/view-at-rev`), the `text` and `ansi` charts SHALL begin instead with `<rev> <commit>`, then ` · fetched <age> ago` when the time of a fetch is given, `<age>` the time since it as `<n>m` under an hour and `<n>h` from then on, then ` · checkout <branch>`, or ` · checkout detached` when no branch is given, and no `⚠`; the `svg` document SHALL hold the same words, and the `json` model SHALL carry a top-level `at` with `rev`, `commit`, and `fetched` and `branch` when given, and no `checkout`. The command's default width, its usage errors and its exit status are `view.repo/arguments-and-exit`'s.
@@ -145,8 +143,6 @@ A blank line follows the summary and each section. A section is its name on a li
 
 #### Needs
 - plugin.panel/views-panel
-- view.repo/reads-the-repository
-- view.repo/arguments-and-exit
 
 ### Requirement: spec-view
 The `spec` view SHALL hold every component exactly once, nested under its parent by ID, with its title, status, owners, `depends_on`, and its requirements counted by coverage state: `current`, `behind`, `unbuilt` and `total` for the requirements the component holds, the counts of the component the capabilities are pending on, which `spec_view` takes from the model's `Graph::capability_tests_node` (`model/capability-tests-component`) rather than deciding itself, including the capabilities that don't hold `#### Untested` (`check.coverage/pending-report`), and no component's counting the architecture entries, and `obsolete` for those a live change removed from it that a marker still cites, together with each requirement removed with its component that a marker in a file the component's `paths` own still cites, or, for a marker in a file no component's `paths` own, the root (`node-removal`). Its chart SHALL show each component below its parent, indented one level further, and its SVG inside its parent's box, each with those facts, its requirements as a bar segmented by state with `<current>/<total>` and `✕<obsolete>` when there are any, and, when the component isn't `converged`, the queue state the `flight` model gives it, coloured as the `flight` chart colours it. When a size report is given, each component SHALL carry `oversized`, true when the report says so, and the chart SHALL show `⚠ oversized` on such a component's line and the SVG `⚠` in its label with an amber outline unless a queue state colours the outline; without a report, `oversized` SHALL be absent and nothing marked (`oversized-is-a-state`).
@@ -199,7 +195,6 @@ The `spec` view SHALL hold every component exactly once, nested under its parent
 #### Needs
 - check.coverage/pending-report
 - check.coverage/state-names
-- view.repo/reads-the-repository
 
 ### Requirement: flight-view
 The `flight` view SHALL hold every component that isn't `converged`, sorted by effective priority, highest first, then by ID, each with the state `queue_from_refs` gives it, for a claimed component the hours since its claim's last push and the hours until the claim lapses, and its pending requirements with their states; and every change outside the archive whose status isn't `done` or `abandoned`, grouped by status in the order `implementing`, `applied`, `approved`, `proposed`, each group sorted by priority, highest first, then by ID, each with its requirements current out of the requirements its deltas add or modify, the markers still citing requirements it removed, and whether it is complete, each exactly as `check.coverage/change-progress` gives it for that change: an `applied` or `implementing` change leaves out requirements the spec no longer holds, and the markers it lists cite only removed requirements the spec no longer holds. It SHALL also hold totals: pending components by state, live changes, and requirements still to make current.
@@ -281,10 +276,6 @@ The `spec`, `flight` and `blockers` models SHALL be library calls of the `clm-vi
 #### Serves
 - capability/watch-beside-chat
 - capability/follow-from-browser
-
-#### Needs
-- view.repo/reads-the-repository
-- view.repo/arguments-and-exit
 
 ### Requirement: blockers-root-lines
 In `text` and `ansi`, the blockers chart SHALL hold a line whose text is `blockers`, followed by the single line `nothing is blocked` when there is no root, or else, for each root in the view's order, the root's line and then the lines of its tree. A root's line SHALL start at the first column with the root's name (a component ID or `backlog/<slug>`) followed by a space or by the end of the line, or a non-empty prefix of it followed by `…` when it doesn't fit; every line of its tree SHALL start with `├`, `└`, `│` or a space. No other line SHALL follow the heading. With ANSI escapes removed, the `ansi` form SHALL have the same lines.
