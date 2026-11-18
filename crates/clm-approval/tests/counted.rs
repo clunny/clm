@@ -75,7 +75,13 @@ fn an_authors_own_approval() {
     // req:land.approval/approvals-counted@ebdf5eea
     let f = Fixture::new("");
     let (head, fp) = branch(&f, "Christopher Lunny");
-    let fold = fold(&[line("a1", "christopher-lunny/1a2b3c4d", AT, approved(&fp), None)]);
+    let fold = fold(&[line(
+        "a1",
+        "christopher-lunny/1a2b3c4d",
+        AT,
+        approved(&fp),
+        None,
+    )]);
     let (accepted, refused) = count(&f, &fold, &fp, &head, None, true);
     assert!(!accepted);
     let [why] = &refused[..] else {
@@ -125,11 +131,19 @@ fn a_forged_name() {
     let (accepted, refused) = count(&f, &fold, &fp, &head, Some(&base), false);
     assert!(!accepted);
     assert!(
-        refused.iter().all(|w| w.contains("not signed by its writer")),
+        refused
+            .iter()
+            .all(|w| w.contains("not signed by its writer")),
         "{refused:?}"
     );
     // The same record signed by its writer's own key counts: the key, not the line, failed.
-    let fold = common::fold(&[line("a1", "christopher-lunny/1a2b3c4d", AT, approved(&fp), key)]);
+    let fold = common::fold(&[line(
+        "a1",
+        "christopher-lunny/1a2b3c4d",
+        AT,
+        approved(&fp),
+        key,
+    )]);
     let (accepted, _) = count(&f, &fold, &fp, &head, Some(&base), false);
     assert!(accepted);
 }
@@ -141,7 +155,13 @@ fn the_landers_own_approval() {
     let (base, christopher) = signed_base(&f);
     let (head, fp) = branch(&f, "Zed");
     let key = Some((christopher.as_path(), "clm-approve"));
-    let fold = fold(&[line("a1", "christopher-lunny/1a2b3c4d", AT, approved(&fp), key)]);
+    let fold = fold(&[line(
+        "a1",
+        "christopher-lunny/1a2b3c4d",
+        AT,
+        approved(&fp),
+        key,
+    )]);
     let (accepted, refused) = count(&f, &fold, &fp, &head, Some(&base), true);
     assert!(!accepted);
     let [why] = &refused[..] else {

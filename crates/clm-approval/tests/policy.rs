@@ -44,11 +44,7 @@ fn no_key_at_the_base() {
 #[test]
 fn the_clones_local_file_wins() {
     // req:land.approval/policy-at-base@6dc55892
-    let got = policy(
-        "approval = \"other\"\n",
-        "",
-        Some("approval = \"any\"\n"),
-    );
+    let got = policy("approval = \"other\"\n", "", Some("approval = \"any\"\n"));
     assert_eq!(got, Ok((false, "clm.local.toml".into())));
     // And it tightens as well as loosens.
     let got = policy("# no approval\n", "", Some("approval = \"other\"\n"));
@@ -59,8 +55,14 @@ fn the_clones_local_file_wins() {
 fn unreadable_policy_at_the_base() {
     // req:land.approval/policy-at-base@6dc55892
     let why = policy("approval = \"everyone\"\n", "", None).unwrap_err();
-    assert!(why.starts_with("approval from origin/main:clm.toml:"), "{why}");
+    assert!(
+        why.starts_with("approval from origin/main:clm.toml:"),
+        "{why}"
+    );
     assert!(why.contains("everyone"), "{why}");
     let why = policy("approval = [\n", "", None).unwrap_err();
-    assert!(why.starts_with("approval from origin/main:clm.toml:"), "{why}");
+    assert!(
+        why.starts_with("approval from origin/main:clm.toml:"),
+        "{why}"
+    );
 }
