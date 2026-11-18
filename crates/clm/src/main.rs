@@ -834,7 +834,7 @@ fn dispatch() -> ExitCode {
                 clm_config::load(Some(root), env)
                     .map(|s| s.affected.value.map(|a| a.all).unwrap_or_default())
                     .map_err(|e| {
-                        clm_check::format(&settings_violation(e, "check.affected/affected-all"))
+                        clm_check::format(&settings_violation(e, "check.affected/affected-base"))
                     })
             },
             &mut Printed::Out,
