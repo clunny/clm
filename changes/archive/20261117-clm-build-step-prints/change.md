@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-build-step-prints-a-launch-for-a-run-that-is-still-running]
 ---
 
