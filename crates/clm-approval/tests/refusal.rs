@@ -97,11 +97,23 @@ fn another_persons_approval_doesnt_clear_it() {
 #[test]
 fn a_text_over_several_lines() {
     // req:land.approval/request-refusal@62c49c32
-    let fold = fold(&[request("a\n  b")]);
+    let comment = line(
+        "c1",
+        "bob/web",
+        AT,
+        Body::Commented {
+            branch: "spec/x".into(),
+            fingerprint: "f".into(),
+            target: None,
+            text: "c\n  d".into(),
+        },
+        None,
+    );
+    let fold = fold(&[request("a\n  b"), comment]);
     let why = clm_approval::held(&fold, "spec/x", "f").expect("held");
-    let line = why
-        .lines()
-        .find(|l| l.contains("land/changes-requested"))
-        .unwrap();
-    assert!(line.ends_with(": a b"), "{line}");
+    let find = |kind: &str| why.lines().find(|l| l.contains(kind)).unwrap().to_string();
+    let request = find("land/changes-requested");
+    assert!(request.ends_with(": a b"), "{request}");
+    let comment = find("land/comment");
+    assert!(comment.ends_with(": c d"), "{comment}");
 }

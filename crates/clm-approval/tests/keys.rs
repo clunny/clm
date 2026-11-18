@@ -49,11 +49,14 @@ fn signed_and_not() {
 fn no_key() {
     // req:land.approval/key-and-signing@3487dc91
     let f = Fixture::new("");
+    let work = f.work();
+    // SSH signing, but no user.signingkey.
+    f.git(&work, &["config", "gpg.format", "ssh"]);
     let why = refused(with_repo(&f, |repo| repo.require_key()));
     assert!(why.contains("user.signingkey"), "{why}");
     assert!(f.records().is_empty());
     // A key set, but not for SSH, is refused alike.
-    let work = f.work();
+    f.git(&work, &["config", "--unset", "gpg.format"]);
     let (key, _) = keygen(&f.path("keys"), "christopher");
     f.git(&work, &["config", "user.signingkey", key.to_str().unwrap()]);
     let why = refused(with_repo(&f, |repo| repo.require_key()));

@@ -88,6 +88,7 @@ fn an_authors_own_approval() {
         panic!("not one reason: {refused:?}")
     };
     assert!(why.contains("christopher-lunny/1a2b3c4d"), "{why}");
+    assert!(why.contains(AT), "the record's time: {why}");
     assert!(why.contains("approval = \"other\""), "{why}");
     assert!(why.contains("authors"), "{why}");
     let (accepted, refused) = count(&f, &fold, &fp, &head, None, false);
