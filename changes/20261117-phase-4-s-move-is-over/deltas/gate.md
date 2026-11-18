@@ -9,7 +9,7 @@ component: gate
 - a file `component` owns, by `check.coverage/owner` over the specs at the merge base;
 - a file no component owns, which `check/unowned-files` judges;
 - a file one of the root's `wiring` globs matches;
-- a file `head` modifies, without adding or deleting it, whose text at the merge base holds a marker citing `capability/<slug>`, read as `check.coverage` reads a marker, by its whole ID and whatever version it cites, so `capability/seeing` is not `capability/see`, for a capability that the effective `serves` of one of `component`'s requirements names (its own `#### Serves` block when it holds one, its component's `serves` otherwise);
+- a file `head` modifies, without adding or deleting it, whose text at the merge base holds a marker citing `capability/<slug>` anywhere in it, matched by the marker's whole ID whatever version it cites, so `capability/seeing` is not `capability/see`, for a capability that the effective `serves` of one of `component`'s requirements names (its own `#### Serves` block when it holds one, its component's `serves` otherwise);
 
 each with the component that owns it, sorted by path. It SHALL return nothing when the root sets no `wiring` or the specs at the merge base hold no such component. It SHALL read `head` only as a revision, as `evaluate-at` does, and `clm gate`'s output and exit status SHALL NOT change with it.
 
@@ -49,6 +49,4 @@ each with the component that owns it, sorted by path. It SHALL return nothing wh
 
 #### Needs
 - model/wiring-globs
-- clm/routes-only
-- check/tests-cite-their-owner
 - orchestrator.run/pending-prompt

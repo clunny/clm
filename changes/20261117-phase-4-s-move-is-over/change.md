@@ -5,7 +5,7 @@ resolves: [routes-only-states-help-for-clap-s-own-help-and-no-exception-for-unre
 
 ## Intent
 
-Phase 4 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims.md`, step 7, the first closing branch. `gate/own-files` is built without the clause "a file that cites the component", so the move of every test into its component's files is over. This change takes out of the specs and the guide what still describes the move as under way, and rewords three requirements where their builds found the text and the code apart. The human answered each of the three on 2026-11-17. No behaviour changes.
+Phase 4 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims.md`, step 7, the first closing branch. `gate/own-files` is built without the clause "a file that cites the component", so the move of every test into its component's files is over. This change takes out of the specs and the guide what still describes the move as under way, and rewords three requirements where their builds found the text and the code apart. The human answered each of the three on 2026-11-17. One behaviour changes, in `clm check`: the wording of one violation line.
 
 ## Problem
 
@@ -25,14 +25,15 @@ The item that asked for this branch also asked for a `tests` glob on the root's 
 - `gate/own-files`: a capability test's citation is read as a marker, by its whole ID.
 - `check/tests-cite-their-owner`: a file the root's `wiring` globs match isn't judged unless a `tests` glob owns it; the message reads "the file is `a`'s; move the test to `b`'s files".
 - `view`'s `status-report`, `view-command`, `spec-view` and `view-library`, and `check.coverage`'s `pending-report` and `status-report`, lose the needs that ordered the move. Their text is otherwise unchanged.
-- Designs: the root's two paragraphs become one, **Where tests sit**; `land`, `land.approval`, `web`, `web.views` and `web.worker` lose their sentence on `moved-tests.txt`; `ci` and `config` name files as they are. `check`'s Design still gives `crates/clm/tests/run.rs` as its example of a test file that counts toward the component it cites; it is left for `20261115-check-passes-on-no-coverage`, whose delta is written against that Design.
+- Designs: the root's two paragraphs become one, **Where tests sit**; `land`, `land.approval`, `web`, `web.views` and `web.worker` lose their sentence on `moved-tests.txt`; `ci`, `config`, `plugin.agents` and `check.unreferenced` name files as they are. `check`'s Design still gives `crates/clm/tests/run.rs` as its example of a test file that counts toward the component it cites; it is left for `20261115-check-passes-on-no-coverage`, whose delta is written against that Design.
 - The guide loses the exception "A test that cites the component" and says a project gives its tests to their components before it names its `wiring`.
 
 ## Constraints
 
 - **Each reworded requirement goes `behind`** and is brought up by a build that re-cites its tests: `clm`, `gate`, `check`, `view` and `check.coverage`. Only `check`'s has code to change, the wiring files and the message.
 - **Left for phase 5's regrouping**, since each reword would cost a build for no change in behaviour: the 23 `commands-in-crate` requirements, and requirements of `check.coverage`, `view`, `view.repo`, `init` and `upgrade`, which say where a test "sat" or "is no longer left".
-- **Left as a code fix:** one sentence of the propose skill, `backlog/the-propose-skill-still-says-a-test-may-sit-in-another-component-s-files`, which is what remains of the item that asked for this branch.
+- **Left as code fixes**, in `backlog/the-propose-skill-and-the-run-prompt-still-say-a-test-may-sit-in-another-component-s-files`, which is what remains of the item that asked for this branch: one sentence of the propose skill and one of the run prompt's fixed text. The plan item's phase 5 holds the list of what is left for the regrouping.
+- `clm/routes-only` drops its needs on `view` and `check.coverage`, and `gate/own-files` its needs on `clm/routes-only` and `check/tests-cite-their-owner`: each only ordered the move, and each would now chain four builds that only re-cite.
 - The message's wording changes for a project that sets `tests` globs too. It is a violation line a person reads, and no file or format a project holds, so it ships no migration.
 
 ## Open questions
