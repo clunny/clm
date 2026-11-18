@@ -658,7 +658,7 @@ test("an oversized node's card is outlined amber, unless a queue ring colours it
   await expect.poll(() => outline('a')).toBe(await colour('--rose'));
 });
 
-// req:web/push-in-the-browser@b9d56673
+// req:web/push-in-the-browser@bf36ad5a
 test.describe('Notify me', () => {
   test('no key: a Worker answering 404 for the push key shows no switch', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -716,7 +716,7 @@ test.describe('Notify me', () => {
   });
 });
 
-// req:web/push-in-the-browser@b9d56673
+// req:web/push-in-the-browser@bf36ad5a
 test('the service worker imports the push handlers and shows a push', async ({ page, context, baseURL }) => {
   await mockApi(context);
   // The worker, not a view: drawing one (the graph's layout above all) is the slowest step of a
@@ -724,10 +724,11 @@ test('the service worker imports the push handlers and shows a push', async ({ p
   await page.goto('/app/');
   const sw = await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.ready;
-    return reg.active?.scriptURL ?? null;
+    return { script: reg.active?.scriptURL ?? null, scope: reg.scope };
   });
-  expect(sw).toMatch(/\/sw\.js$/);
-  const worker = context.serviceWorkers().find((w) => w.url().endsWith('/sw.js')) ?? (await context.waitForEvent('serviceworker'));
+  expect(new URL(sw.script!).pathname).toBe('/app/sw.js');
+  expect(new URL(sw.scope).pathname).toBe('/app/');
+  const worker = context.serviceWorkers().find((w) => w.url().endsWith('/app/sw.js')) ?? (await context.waitForEvent('serviceworker'));
   // Shows the push in the real service worker, through the module it imports.
   const shown = await worker.evaluate(async () => {
     const event = new Event('push') as Event & { data: unknown; waitUntil(p: Promise<unknown>): void };

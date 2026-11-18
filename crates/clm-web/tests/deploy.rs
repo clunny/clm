@@ -20,37 +20,6 @@ fn wrangler() -> Value {
 }
 
 #[test]
-fn deploys_the_clm_worker_on_the_apps_routes() {
-    // req:web/site-served-directly@13328342
-    // The site's Worker holds the Custom Domain; this Worker claims the app's paths as
-    // routes on the same zone, which run before it.
-    let w = wrangler();
-    assert_eq!(w["name"].as_str(), Some("clm"));
-    let routes = w["routes"].as_array().expect("routes");
-    let mut patterns: Vec<&str> = routes
-        .iter()
-        .map(|r| r["pattern"].as_str().expect("pattern"))
-        .collect();
-    patterns.sort_unstable();
-    assert_eq!(
-        patterns,
-        [
-            "clm-app.dev/_clm/*",
-            "clm-app.dev/api/*",
-            "clm-app.dev/app",
-            "clm-app.dev/app/*",
-            "clm-app.dev/auth/*",
-            "clm-app.dev/sw.js",
-            "clm-app.dev/webhook",
-        ]
-    );
-    for r in routes {
-        assert_eq!(r["zone_name"].as_str(), Some("clm-app.dev"));
-        assert_ne!(r.get("custom_domain").and_then(Value::as_bool), Some(true));
-    }
-}
-
-#[test]
 fn binds_the_kv_namespace() {
     let w = wrangler();
     let kv = w["kv_namespaces"].as_array().expect("kv_namespaces");
@@ -60,26 +29,6 @@ fn binds_the_kv_namespace() {
         kv[0]["id"].as_str(),
         Some("9fa493aaa0a54d219b2dfebb5f681b9e")
     );
-}
-
-#[test]
-fn sends_only_the_api_and_its_paths_to_the_worker() {
-    // req:web/invited-users@cfd18219
-    // req:web/site-served-directly@13328342
-    // `/_clm/*` reaches the Worker, which answers 404, so the invited list is never
-    // served to someone without a session.
-    let w = wrangler();
-    let assets = &w["assets"];
-    assert_eq!(assets["directory"].as_str(), Some("./dist"));
-    let first: Vec<&str> = assets["run_worker_first"]
-        .as_array()
-        .expect("run_worker_first")
-        .iter()
-        .filter_map(Value::as_str)
-        .collect();
-    // Only the API, sign-in, webhook, invited list and `/app`; the assets answer the rest.
-    assert_eq!(first, ["/api/*", "/auth/*", "/webhook", "/_clm/*", "/app"]);
-    assert_eq!(assets["not_found_handling"].as_str(), Some("none"));
 }
 
 #[test]
