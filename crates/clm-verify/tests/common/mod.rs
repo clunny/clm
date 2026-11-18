@@ -309,9 +309,15 @@ impl Fixture {
     }
 
     /// The `verified` records the work clone sees, in the order they were appended, as their
-    /// bodies. Not by `at`: the wall clock may step back between two appends, and the later
-    /// record would then sort first.
+    /// bodies.
     pub fn records(&self) -> Vec<Body> {
+        self.records_of(|b| matches!(b, Body::Verified { .. }))
+    }
+
+    /// The records the work clone sees whose body `keep` takes, in the order they were
+    /// appended, as their bodies. Not by `at`: the wall clock may step back between two
+    /// appends, and the later record would then sort first.
+    pub fn records_of(&self, keep: impl Fn(&Body) -> bool) -> Vec<Body> {
         let work = self.work();
         self.git(&work, &["fetch", "-q", "origin"]);
         let refs = self.git(
@@ -330,9 +336,7 @@ impl Fixture {
             for line in text.lines() {
                 let fold = clm_ledger::fold_records(&[(name, line)]);
                 for record in fold.records {
-                    if matches!(record.body, Body::Verified { .. })
-                        && seen.insert(record.id.clone())
-                    {
+                    if keep(&record.body) && seen.insert(record.id.clone()) {
                         all.push(record.body);
                     }
                 }
