@@ -1,4 +1,5 @@
-//! A test a component's `tests` own cites only that component (`tests-cite-their-owner`).
+//! A test a component's `tests` own, or any file a component owns once the root names its
+//! `wiring`, cites only its owner (`tests-cite-their-owner`).
 
 use std::fs;
 use std::path::Path;
@@ -78,10 +79,22 @@ fn its_own_requirement() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
+/// The scenarios' repository: `a` with paths `["tests/**"]` and no `tests`, and `tests/t.rs`
+/// citing `b/y`.
+fn paths_only() -> TempDir {
+    let dir = repo(None, &[("tests/t.rs", cite("b/y"))]);
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &component("[\"tests/**\"]", None),
+    );
+    dir
+}
+
 #[test]
 fn a_file_only_paths_own() {
     // req:check/tests-cite-their-owner@55d31d1a
-    let dir = repo(None, &[("src/a/t.rs", cite("b/y"))]);
+    let dir = paths_only();
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
@@ -179,12 +192,12 @@ fn wire(root: &Path) {
 #[test]
 fn a_file_only_paths_own_once_the_root_names_its_wiring() {
     // req:check/tests-cite-their-owner@55d31d1a
-    let dir = repo(None, &[("src/a/t.rs", cite("b/y"))]);
+    let dir = paths_only();
     wire(dir.path());
     assert_eq!(
         found(dir.path()),
         [
-            "src/a/t.rs:1: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests"
+            "tests/t.rs:1: check/tests-cite-their-owner: cites b/y of `b`, but the file is `a`'s test; move the test to `b`'s tests"
         ]
     );
 }
