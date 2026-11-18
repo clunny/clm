@@ -10,7 +10,7 @@ Phase 4 of the plan in `backlog/a-passing-check-proves-less-than-the-spec-claims
 ## Problem
 
 - **Three requirements say other than the code does**, each found by a build's review. `clm/routes-only` asks `--help` of the parser's own `help` and allows the root no error of its own. `gate/own-files` doesn't say that a capability test's citation is read as a marker. `check/tests-cite-their-owner` judges the root's wiring files, which every build may edit, and its message calls every file a test.
-- **The specs and the guide still describe the move.** The root's Design has two paragraphs on how a build moves a test; five Designs name a `moved-tests.txt` of a change that is archived; the guide keeps the exception "A test that cites the component", which no longer exists; and four Designs name files that have moved.
+- **The specs and the guide still describe the move.** The root's Design has two paragraphs on how a build moves a test; five Designs name a `moved-tests.txt` of a change that is archived; the guide keeps the exception "A test that cites the component", which no longer exists; and three Designs name files that have moved.
 - **Six requirements of `view` and `check.coverage` need requirements of `view.repo` and `check`** only because `20261117-clauses-only-a-command-shows` had to order its move.
 
 ## Approaches
@@ -25,7 +25,7 @@ The item that asked for this branch also asked for a `tests` glob on the root's 
 - `gate/own-files`: a capability test's citation is read as a marker, by its whole ID.
 - `check/tests-cite-their-owner`: a file the root's `wiring` globs match isn't judged unless a `tests` glob owns it; the message reads "the file is `a`'s; move the test to `b`'s files".
 - `view`'s `status-report`, `view-command`, `spec-view` and `view-library`, and `check.coverage`'s `pending-report` and `status-report`, lose the needs that ordered the move. Their text is otherwise unchanged.
-- Designs: the root's two paragraphs become one, **Where tests sit**; `land`, `land.approval`, `web`, `web.views` and `web.worker` lose their sentence on `moved-tests.txt`; `ci`, `check` and `config` name files as they are.
+- Designs: the root's two paragraphs become one, **Where tests sit**; `land`, `land.approval`, `web`, `web.views` and `web.worker` lose their sentence on `moved-tests.txt`; `ci` and `config` name files as they are. `check`'s Design still gives `crates/clm/tests/run.rs` as its example of a test file that counts toward the component it cites; it is left for `20261115-check-passes-on-no-coverage`, whose delta is written against that Design.
 - The guide loses the exception "A test that cites the component" and says a project gives its tests to their components before it names its `wiring`.
 
 ## Constraints
