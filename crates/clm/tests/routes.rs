@@ -251,7 +251,10 @@ fn the_settings_a_routed_command_is_passed() {
     let (_, violation) = line
         .split_once("clm.toml: check.affected/affected-base: ")
         .unwrap_or_else(|| panic!("not a violation of clm.toml: {line}"));
-    assert!(violation.contains("all"), "{line}");
+    assert!(
+        violation.contains("`affected`") && violation.contains("`all`"),
+        "{line}"
+    );
     assert!(!printed.contains("affected-all"), "{printed}");
 }
 
