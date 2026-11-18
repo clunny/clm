@@ -180,6 +180,9 @@ pub struct Job {
     pub slot: u64,
     /// The repository's `[build] setup`, the command `clm setup` runs (`prompt-setup`).
     pub setup: Option<String>,
+    /// Whether the root sets `wiring`, so a build changes only its own component's files
+    /// and its stale markers in another's are listed apart (`pending-prompt`).
+    pub wiring: bool,
 }
 
 /// The prompt for `job`.
@@ -635,10 +638,15 @@ pub fn prompt(job: &Job) -> String {
                 item.markers.join(", ")
             ));
         } else if item.state == "behind" && !item.markers.is_empty() {
+            // Only while the root sets no `wiring` may a build edit another component's file.
+            let wherever = if job.wiring {
+                ""
+            } else {
+                ", wherever its file sits, another component's `paths` included,"
+            };
             p.push_str(&format!(
-                "  Re-cite each marker that cites it at another version or without one, wherever \
-                 its file sits, another component's `paths` included, after checking that its \
-                 test proves the current text (`path-ownership`): {}. When a test proves what \
+                "  Re-cite each marker that cites it at another version or without one{wherever} \
+                 after checking that its test proves the current text (`path-ownership`): {}. When a test proves what \
                  the current text no longer states, because the diff above moved its scenario \
                  to another requirement or removed it, take its marker off instead of re-citing \
                  it; the requirement that now states it is cited by its own build.\n",
@@ -1272,6 +1280,15 @@ fn job(
     let mut history = History::new(root, rev, &spec);
     let mut items = Vec::new();
     let mut blocked = Vec::new();
+    // Once the root sets `wiring`, the component that owns a marker's file when that isn't
+    // `node` and no `wiring` glob lets every build edit it: the files `clm land` refuses
+    // this build's edit to (`land/build-holds-own-files`).
+    let foreign_owner = |m: &clm_coverage::Marker| {
+        let wiring = graph.wiring()?;
+        let file = m.path.to_string_lossy();
+        let owner = clm_coverage::owner(graph, &m.path)?;
+        (owner != node && !wiring.iter().any(|g| clm_coverage::matches(g, &file))).then_some(owner)
+    };
     for p in pending {
         let by = blockers(p);
         if !by.is_empty() {
@@ -1303,9 +1320,15 @@ fn job(
                 .markers
                 .iter()
                 .filter(|m| p.state != ReqState::Behind || m.version != p.version)
+                .filter(|m| foreign_owner(m).is_none())
                 .map(ToString::to_string)
                 .collect(),
-            foreign: Vec::new(),
+            foreign: p
+                .markers
+                .iter()
+                .filter(|m| p.state == ReqState::Behind && m.version != p.version)
+                .filter_map(|m| Some((m.to_string(), foreign_owner(m)?.to_string())))
+                .collect(),
         });
     }
     let bundle = clm_context::bundle(graph, tree, node);
@@ -1323,6 +1346,7 @@ fn job(
         read_from_main: false,
         slot: 0,
         setup: None,
+        wiring: graph.wiring().is_some(),
     })
 }
 

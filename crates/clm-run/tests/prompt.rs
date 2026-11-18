@@ -51,6 +51,7 @@ fn job() -> Job {
         read_from_main: false,
         slot: 2,
         setup: None,
+        wiring: false,
     }
 }
 
@@ -142,7 +143,7 @@ fn names_no_target_directory() {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let p = prompt(&job());
     let pending = p.find("## Pending requirements").unwrap();
     let list = &p[pending..];
@@ -170,6 +171,7 @@ fn scenario_behind_and_obsolete() {
 fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
     // req:orchestrator.run/pending-prompt@209c6f80
     let mut j = job();
+    j.wiring = true;
     let x = &mut j.pending[0];
     x.markers.clear();
     x.foreign = vec![("crates/c/t.rs:8".into(), "c".into())];
@@ -193,7 +195,7 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 
 #[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let p = prompt(&job());
     let list = &p[p.find("## Pending requirements").unwrap()..];
     assert!(!list.contains("- `b/z` unbuilt"), "{list}");
