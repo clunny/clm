@@ -83,7 +83,7 @@ fn sends_only_the_api_and_its_paths_to_the_worker() {
 
 #[test]
 fn the_worker_reads_the_build_time_assets_through_its_binding() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     // `_clm/` holds the invited list. The Worker reads it through the binding, and the
     // run_worker_first entry above keeps it from being served directly.
     let w = wrangler();

@@ -203,7 +203,7 @@ fn sign_in_as(fake: &Fake, login: &str) -> Response {
 
 #[test]
 fn invited_login_gets_the_session_cookie() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     let fake = Fake::default();
     let res = sign_in_as(&fake, "clunny");
     assert_eq!(res.status, 302, "{res:?}");
@@ -232,7 +232,7 @@ fn callback_redirects_to_the_app() {
 
 #[test]
 fn logins_compare_without_case() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     // GitHub logins are case-insensitive, and `/user` gives the account's own casing.
     let fake = Fake::default();
     let res = sign_in_as(&fake, "Clunny");
@@ -241,7 +241,7 @@ fn logins_compare_without_case() {
 
 #[test]
 fn not_invited_login_gets_the_page_and_no_session() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     let fake = Fake::default();
     let res = sign_in_as(&fake, "someone-else");
     assert_eq!(res.status, 403);
@@ -285,7 +285,7 @@ fn not_invited_page_points_to_quickstart_and_early_access() {
 
 #[test]
 fn session_of_a_login_no_longer_invited_is_401() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     // Removing a login from the Contract revokes access at the next deploy.
     let fake = Fake::default();
     let cookie = fake.cookie_as("t", "someone-else");
@@ -302,7 +302,7 @@ fn session_of_a_login_no_longer_invited_is_401() {
 
 #[test]
 fn github_failing_to_name_the_user_leaves_a_way_back() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     let fake = Fake::default();
     let res = sign_in_as(&fake, "");
     assert_eq!(res.status, 502);
@@ -313,7 +313,7 @@ fn github_failing_to_name_the_user_leaves_a_way_back() {
 
 #[test]
 fn without_the_invited_list_nobody_gets_in() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     let fake = Fake::default();
     fake.assets.borrow_mut().remove("/_clm/invited.json");
     let res = sign_in_as(&fake, "clunny");
@@ -326,7 +326,7 @@ fn without_the_invited_list_nobody_gets_in() {
 
 #[test]
 fn cookie_from_before_logins_is_401() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     // Sessions sealed before the login was kept must sign in again, and be checked.
     use aes_gcm::aead::{Aead, KeyInit};
     use aes_gcm::{Aes256Gcm, Nonce};
@@ -348,7 +348,7 @@ fn cookie_from_before_logins_is_401() {
 
 #[test]
 fn the_build_assets_are_never_served_directly() {
-    // req:web/invited-users@cfd18219
+    // req:web.worker/invited-sign-in@6950d0c1
     let fake = Fake::default();
     let cookie = fake.cookie("t");
     assert_eq!(fake.handle(get("/_clm/invited.json", &cookie)).status, 404);
