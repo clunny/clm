@@ -89,7 +89,9 @@ fn cite(id: &str, body: &str) -> String {
     format!("// {}{id}@00000000\n{body}", concat!("req", ":"))
 }
 
-fn foreign(d: &Path, component: &str) -> Vec<(String, String)> {
+type Found = Vec<(String, String)>;
+
+fn foreign(d: &Path, component: &str) -> Found {
     foreign_files(d, "main", "HEAD", component)
         .unwrap()
         .into_iter()
@@ -238,26 +240,40 @@ fn a_capability_test_citing_a_longer_slug_is_foreign() {
     );
 }
 
+/// Cites `marker` on `main`, mid-line in a string after the code it observes, merges that
+/// into `impl/a`, edits the file there, and returns the foreign files for `a` and for `b`,
+/// which serves nothing.
+fn edit_a_capability_test_citing(marker: &str) -> [Found; 2] {
+    let dir = base(Some("[]"));
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    let text = format!(
+        "fn see() {{}}\nconst NOTE: &str = \"proves {}{marker} here\";\n",
+        concat!("req", ":")
+    );
+    write(d, "tests/capability/see.rs", &text);
+    commit(d, "cite elsewhere");
+    git(d, &["checkout", "-q", "impl/a"]);
+    git(d, &["merge", "-q", "main"]);
+    write(d, "tests/capability/see.rs", &format!("{text}// moved\n"));
+    commit(d, "edit");
+    [foreign(d, "a"), foreign(d, "b")]
+}
+
 // req:gate/own-files@343514b7
 #[test]
-fn a_capability_marker_counts_whatever_version_it_cites_and_wherever_it_sits() {
-    for marker in ["capability/see", "capability/see@1234abcd"] {
-        let dir = base(Some("[]"));
-        let d = dir.path();
-        git(d, &["checkout", "-q", "main"]);
-        // Mid-line, in a string, after the code it observes.
-        let text = format!(
-            "fn see() {{}}\nconst NOTE: &str = \"proves {}{marker} here\";\n",
-            concat!("req", ":")
-        );
-        write(d, "tests/capability/see.rs", &text);
-        commit(d, "cite elsewhere");
-        git(d, &["checkout", "-q", "impl/a"]);
-        git(d, &["merge", "-q", "main"]);
-        write(d, "tests/capability/see.rs", &format!("{text}// moved\n"));
-        commit(d, "edit");
-        assert_eq!(foreign(d, "a"), Vec::new(), "{marker}");
-    }
+fn a_capability_marker_with_no_version_counts_wherever_it_sits() {
+    let [a, b] = edit_a_capability_test_citing("capability/see");
+    assert_eq!(a, Vec::new());
+    assert_eq!(b, vec![pair("tests/capability/see.rs", "capability")]);
+}
+
+// req:gate/own-files@343514b7
+#[test]
+fn a_capability_marker_at_any_version_counts_wherever_it_sits() {
+    let [a, b] = edit_a_capability_test_citing("capability/see@1234abcd");
+    assert_eq!(a, Vec::new());
+    assert_eq!(b, vec![pair("tests/capability/see.rs", "capability")]);
 }
 
 // req:gate/own-files@343514b7
