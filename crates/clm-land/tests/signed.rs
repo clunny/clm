@@ -249,6 +249,7 @@ fn unsigned_request_holds_in_a_signed_repository() {
     let why = refused(clm_land::land(&f.work(), Some("spec/x"), &env(f)));
     assert!(why.contains("land/changes-requested: alice/web"), "{why}");
     assert_eq!(f.remote("main"), old);
+    assert!(f.lines("check.log").is_empty(), "the check ran");
     // Without the request, Dana's approval counts and it lands.
     f.web_ledger("alice/web", &[]);
     clm_land::land(&f.work(), Some("spec/x"), &env(f)).unwrap();

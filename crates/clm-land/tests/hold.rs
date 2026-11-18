@@ -53,6 +53,13 @@ fn held_branch_refused() {
     // req:land/changes-requested-holds@3c6b79d5
     let (f, _) = held("");
     let old = f.remote("main");
+    let refs = |f: &Fixture| {
+        let origin = f.git(&f.path("origin.git"), &["for-each-ref"]);
+        // The work clone's own branches: the fetch moves its `refs/remotes`.
+        let local = f.git(&f.work(), &["for-each-ref", "refs/heads"]);
+        format!("{origin}\n{local}")
+    };
+    let before = refs(&f);
     let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
     let lines: Vec<&str> = why.lines().collect();
     let request =
@@ -64,12 +71,70 @@ fn held_branch_refused() {
         panic!("{why}")
     };
     assert!(r < c, "{why}");
+    assert!(why.contains("push a change to `spec/x`"), "{why}");
     assert!(why.contains("clm approve spec/x"), "{why}");
     // Nothing ran: not the gate, not the check.
     assert!(f.lines("gate.log").is_empty(), "{why}");
     assert!(f.lines("check.log").is_empty());
     assert_eq!(f.remote("main"), old);
     assert!(f.landed().is_empty());
+    // Nothing pushed or appended: no ref moved, here or on `origin`, ledgers included.
+    assert_eq!(refs(&f), before);
+}
+
+#[test]
+fn a_request_at_another_fingerprint_doesnt_hold() {
+    // req:land/changes-requested-holds@3c6b79d5
+    let (f, fp) = held("");
+    let other = "0".repeat(fp.len());
+    f.web_ledger(
+        "alice/web",
+        &[requested("alice/web", REQUESTED_AT, &other, "stale")],
+    );
+    clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&f.path("origin.git"), "main").len(), 2);
+}
+
+#[test]
+fn cleared_by_an_approval_the_policy_doesnt_count() {
+    // req:land/changes-requested-holds@3c6b79d5
+    // The branch's author asked for changes; their own later approval doesn't count under
+    // `approval = "other"`, yet it clears their request.
+    let (f, fp) = held("approval = \"other\"");
+    f.web_ledger(
+        "alice/web",
+        &[requested(
+            "christopher-lunny/web",
+            REQUESTED_AT,
+            &fp,
+            "Name the rule",
+        )],
+    );
+    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
+    assert!(
+        why.contains("land/changes-requested: christopher-lunny/web"),
+        "{why}"
+    );
+    f.web_ledger(
+        "christopher-lunny/web",
+        &[approved(
+            "a2",
+            "christopher-lunny/web",
+            "2026-10-28T11:30:00.000Z",
+            &fp,
+        )],
+    );
+    // Bob's approval is the one the policy counts; without it the author's own does not.
+    f.web_ledger("bob/web", &[]);
+    let why = refused(clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])));
+    assert!(!why.contains("land/changes-requested"), "{why}");
+    assert!(why.contains("one of the branch's authors"), "{why}");
+    f.web_ledger(
+        "bob/web",
+        &[approved("a1", "bob/web", "2026-10-28T10:00:00.000Z", &fp)],
+    );
+    clm_land::land(&f.work(), Some("spec/x"), &f.env(&[])).unwrap();
+    assert_eq!(f.parents(&f.path("origin.git"), "main").len(), 2);
 }
 
 #[test]
