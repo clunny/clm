@@ -724,9 +724,10 @@ test('the service worker imports the push handlers and shows a push', async ({ p
   await page.goto('/app/');
   const sw = await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.ready;
-    return reg.active?.scriptURL ?? null;
+    return { script: reg.active?.scriptURL ?? null, scope: reg.scope };
   });
-  expect(new URL(sw!).pathname).toBe('/app/sw.js');
+  expect(new URL(sw.script!).pathname).toBe('/app/sw.js');
+  expect(new URL(sw.scope).pathname).toBe('/app/');
   const worker = context.serviceWorkers().find((w) => w.url().endsWith('/app/sw.js')) ?? (await context.waitForEvent('serviceworker'));
   // Shows the push in the real service worker, through the module it imports.
   const shown = await worker.evaluate(async () => {
