@@ -1,5 +1,6 @@
-// The Worker's API. The last good response for each URL is kept in Cache Storage, so the
-// app can show it, with its age, when it's offline (web/installable).
+// The views' one module for requests to the Worker (web.views/worker-requests). The last good
+// response for each path is kept in Cache Storage, so the app can show it, with its age, when
+// it's offline.
 
 const CACHE = 'clm-api';
 const AT = 'x-clm-at';
