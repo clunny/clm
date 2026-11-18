@@ -1589,7 +1589,7 @@ fn scenario_the_model_carries_no_checkout() {
 
 #[test]
 fn status_names_the_checkout_after_its_title() {
-    // req:view/status-report@1507b00c
+    // req:view/status-report@cddca121
     let g = ordered();
     let status = |c: Option<&Checkout>| status_text(&g, &[], &[], &[], NOW, None, c);
     let behind = status(Some(&checkout(Some(2))));

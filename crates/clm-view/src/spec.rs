@@ -126,8 +126,8 @@ fn node_backlog(graph: &Graph) -> BTreeMap<&str, Vec<NodeItem>> {
 }
 
 /// The `spec` view of `graph` with the markers of its code. `oversized` is the size
-/// report: the IDs of the nodes `clm_check::size` says are over their budgets, or `None`
-/// when sizes weren't checked, which leaves every node's `oversized` unset.
+/// report: the IDs of the components `clm size` marks, which the command computes and
+/// hands in, or `None` when it passes none, which leaves every node's `oversized` unset.
 pub fn spec_view(
     graph: &Graph,
     markers: &[Marker],
