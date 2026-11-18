@@ -1,14 +1,15 @@
 mod common;
 
 use std::path::Path;
+use std::process::Command;
 
-use clm_coverage::{owner, pending};
+use clm_coverage::{matches, owner, pending};
 use common::{ROOT, graph, marker, spec, write};
 use tempfile::TempDir;
 
 #[test]
 fn scenario_owned_and_unowned() {
-    // req:check.coverage/owner@50c03c13
+    // req:check.coverage/owner@732fc105
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -22,7 +23,7 @@ fn scenario_owned_and_unowned() {
 
 #[test]
 fn the_deepest_node_then_the_first_by_id() {
-    // req:check.coverage/owner@50c03c13
+    // req:check.coverage/owner@732fc105
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -36,7 +37,7 @@ fn the_deepest_node_then_the_first_by_id() {
 
 #[test]
 fn pending_puts_an_unowned_file_on_the_root() {
-    // req:check.coverage/owner@50c03c13
+    // req:check.coverage/owner@732fc105
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -70,7 +71,7 @@ fn pending_puts_an_unowned_file_on_the_root() {
 
 #[test]
 fn two_components_tests_match_the_first_by_id() {
-    // req:check.coverage/owner@50c03c13
+    // req:check.coverage/owner@732fc105
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -87,7 +88,7 @@ fn two_components_tests_match_the_first_by_id() {
 
 #[test]
 fn scenario_tests_inside_another_components_paths() {
-    // req:check.coverage/owner@50c03c13
+    // req:check.coverage/owner@732fc105
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -103,4 +104,81 @@ fn scenario_tests_inside_another_components_paths() {
     let g = graph(d);
     assert_eq!(owner(&g, Path::new("tests/a/conftest.py")), Some("a"));
     assert_eq!(owner(&g, Path::new("tests/helpers.py")), Some("harness"));
+}
+
+#[test]
+fn scenario_one_glob() {
+    // req:check.coverage/owner@732fc105
+    assert!(matches("crates/*/tests/**", "crates/a/tests/t.rs"));
+    assert!(!matches("crates/*/tests/**", "crates/a/src/t.rs"));
+}
+
+/// Runs `git` in `dir`, failing the test when it fails, and returns its standard output.
+fn git(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+#[test]
+fn scenario_globs_as_git_reads_them() {
+    // req:check.coverage/owner@732fc105
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    let files = [
+        "a.rs",
+        "ab.rs",
+        "abc.rs",
+        "README.md",
+        "crates/a/src/lib.rs",
+        "crates/a/tests/t.rs",
+        "crates/a/tests/deep/u.rs",
+        "crates/ab/tests/t.rs",
+        "crates/b/Cargo.toml",
+        "crates/lib.rs",
+        "docs/x/y/z.md",
+        "docs/z.md",
+        "tests/t1.py",
+        "tests/t12.py",
+    ];
+    for f in files {
+        write(d, f, "x\n");
+    }
+    git(d, &["init", "-q"]);
+    git(d, &["add", "."]);
+    let tracked: Vec<String> = git(d, &["ls-files"]).lines().map(String::from).collect();
+    assert_eq!(tracked.len(), files.len());
+    for glob in [
+        "*.rs",
+        "*",
+        "crates/*",
+        "crates/*/tests/**",
+        "crates/*/*.toml",
+        "crates/**",
+        "crates/**/*.rs",
+        "**/t.rs",
+        "**/*.md",
+        "docs/**/z.md",
+        "a?.rs",
+        "?.rs",
+        "tests/t?.py",
+        "crates/a?/**",
+        "crates/a",
+        "**",
+    ] {
+        let listed: Vec<String> = git(d, &["ls-files", &format!(":(glob){glob}")])
+            .lines()
+            .map(String::from)
+            .collect();
+        let matched: Vec<String> = tracked
+            .iter()
+            .filter(|f| matches(glob, f))
+            .cloned()
+            .collect();
+        assert_eq!(matched, listed, "glob {glob}");
+    }
 }
