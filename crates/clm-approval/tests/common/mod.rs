@@ -108,6 +108,20 @@ impl Fixture {
         move |key: &str| map.get(key).cloned()
     }
 
+    /// `env`, with git's global config isolated from the user's own.
+    pub fn isolated_env(&self) -> impl Fn(&str) -> Option<String> + use<> {
+        let global = self.path("gitconfig").display().to_string();
+        self.env(&[("GIT_CONFIG_GLOBAL", &global)])
+    }
+
+    /// Runs `call` with the work clone's `Repo`, its settings loaded under `isolated_env`.
+    pub fn with_repo<T>(&self, call: impl FnOnce(&clm_approval::Repo) -> T) -> T {
+        let env = self.isolated_env();
+        let root = fs::canonicalize(self.work()).unwrap();
+        let settings = clm_config::load(Some(&root), &env).unwrap();
+        call(&clm_approval::Repo::new(&root, &env, &settings))
+    }
+
     /// The fingerprint of `branch`'s diff against `origin/main`.
     pub fn fingerprint(&self, branch: &str) -> String {
         let work = self.work();
@@ -124,8 +138,69 @@ impl Fixture {
     }
 }
 
+/// A fresh ed25519 key pair at `dir/<name>`: the private key's path and the public key.
+pub fn keygen(dir: &Path, name: &str) -> (PathBuf, String) {
+    fs::create_dir_all(dir).unwrap();
+    let key = dir.join(name);
+    let ok = Command::new("ssh-keygen")
+        .args(["-q", "-t", "ed25519", "-N", "", "-C", name, "-f"])
+        .arg(&key)
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok, "ssh-keygen -t ed25519");
+    let public = fs::read_to_string(key.with_extension("pub")).unwrap();
+    (key, public.trim().to_string())
+}
+
+/// A record's line: `id`, `writer`, `at` and `body`'s fields, signed under the namespace
+/// with the private key given, when one is.
+pub fn line(
+    id: &str,
+    writer: &str,
+    at: &str,
+    body: clm_ledger::Body,
+    key: Option<(&Path, &str)>,
+) -> String {
+    let record = Record {
+        id: id.into(),
+        writer: writer.into(),
+        at: at.into(),
+        body,
+    };
+    let serde_json::Value::Object(mut object) = serde_json::to_value(&record).unwrap() else {
+        unreachable!("a record is an object")
+    };
+    if let Some((key, namespace)) = key {
+        use std::io::Write as _;
+        let message = clm_ledger::signed_message(&object);
+        let mut child = Command::new("ssh-keygen")
+            .args(["-Y", "sign", "-n", namespace, "-f"])
+            .arg(key)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        stdin.write_all(message.as_bytes()).unwrap();
+        drop(stdin);
+        let out = child.wait_with_output().unwrap();
+        assert!(out.status.success(), "ssh-keygen -Y sign");
+        let sig = String::from_utf8(out.stdout).unwrap().trim().to_string();
+        object.insert("sig".into(), serde_json::Value::String(sig));
+    }
+    serde_json::Value::Object(object).to_string()
+}
+
+/// The fold over `lines`, as one ledger's `records.jsonl`.
+pub fn fold(lines: &[String]) -> clm_ledger::Fold {
+    let text = lines.join("\n");
+    clm_ledger::fold_records(&[("test", &text)])
+}
+
 /// The message of a refusal.
-pub fn refused(result: Result<clm_approval::Output, clm_approval::Error>) -> String {
+pub fn refused<T: std::fmt::Debug>(result: Result<T, clm_approval::Error>) -> String {
     match result {
         Err(clm_approval::Error::Refused(why)) => why,
         other => panic!("expected a refusal, got {other:?}"),

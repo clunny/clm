@@ -1,4 +1,4 @@
-//! A reviewer's request for changes holds a branch (`changes-requested-holds`,
+//! A reviewer's request for changes holds a branch (`request-refusal`,
 //! `web-review-feedback-as-ledger-records`): while a `changes_requested` record for the
 //! branch names its fingerprint and its writer's person hasn't approved that fingerprint
 //! since, `clm land` refuses it, printing what the reviewers asked.
@@ -85,7 +85,7 @@ mod tests {
 
     #[test]
     fn text_flattened() {
-        // req:land.approval/changes-requested-holds@27e6c16b
+        // req:land.approval/request-refusal@62c49c32
         assert_eq!(flat("  a\n  b\r\n\tc  d\t e \n"), "a b c  d\t e");
         assert_eq!(flat("one"), "one");
     }

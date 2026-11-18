@@ -1,9 +1,9 @@
 //! A request for changes is decided through `clm-ledger`, with no copy of its rules
-//! (land.approval/changes-requested-holds).
+//! (land.approval/request-refusal).
 
 #[test]
 fn decided_through_ledger_with_no_copy() {
-    // req:land.approval/changes-requested-holds@27e6c16b
+    // req:land.approval/request-refusal@62c49c32
     let krate = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let src = krate.join("src");
     // Built from parts, so this file never holds the spellings it looks for: a function

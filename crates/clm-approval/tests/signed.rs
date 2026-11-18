@@ -3,24 +3,9 @@
 mod common;
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use clm_ledger::{Body, Record};
-use common::{Fixture, refused};
-
-/// A fresh ed25519 key pair at `dir/<name>`: the private key's path and the public key.
-fn keygen(dir: &Path, name: &str) -> (PathBuf, String) {
-    let key = dir.join(name);
-    let ok = Command::new("ssh-keygen")
-        .args(["-q", "-t", "ed25519", "-N", "", "-C", name, "-f"])
-        .arg(&key)
-        .status()
-        .unwrap()
-        .success();
-    assert!(ok, "ssh-keygen -t ed25519");
-    let public = std::fs::read_to_string(key.with_extension("pub")).unwrap();
-    (key, public.trim().to_string())
-}
+use common::{Fixture, keygen, refused};
 
 /// `repo` signs with `key` from now on.
 fn use_key(f: &Fixture, repo: &Path, key: &Path) {
@@ -28,19 +13,11 @@ fn use_key(f: &Fixture, repo: &Path, key: &Path) {
     f.git(repo, &["config", "user.signingkey", key.to_str().unwrap()]);
 }
 
-/// The env every call gets: the fixture's, with git's global config isolated from the
-/// user's own.
-fn env(f: &Fixture) -> impl Fn(&str) -> Option<String> + use<> {
-    let global = f.path("gitconfig").display().to_string();
-    f.env(&[("GIT_CONFIG_GLOBAL", &global)])
-}
-
 /// A fixture whose `origin/main` holds `docs/allowed_signers` listing `christopher-lunny`, unless
 /// `signers` is false; the work clone is at that `main`. Returns it with `christopher`'s key.
 fn signed_repo(signers: bool) -> (Fixture, PathBuf) {
     let f = Fixture::new("");
     let keys = f.path("keys");
-    std::fs::create_dir_all(&keys).unwrap();
     let (christopher, christopher_pub) = keygen(&keys, "christopher");
     if signers {
         f.advance_main(
@@ -74,7 +51,7 @@ fn signed_approval() {
     let f = &f;
     use_key(f, &f.work(), &christopher);
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
-    let out = clm_approval::approve(&f.work(), Some("spec/x"), &env(f)).unwrap();
+    let out = clm_approval::approve(&f.work(), Some("spec/x"), &f.isolated_env()).unwrap();
     let fingerprint = f.fingerprint("spec/x");
     assert_eq!(out.lines, [format!("approved {fingerprint} spec/x")]);
     let [record] = &approvals(f)[..] else {
@@ -95,7 +72,11 @@ fn approve_with_no_key() {
     let (f, _) = signed_repo(true);
     let f = &f;
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
-    let why = refused(clm_approval::approve(&f.work(), Some("spec/x"), &env(f)));
+    let why = refused(clm_approval::approve(
+        &f.work(),
+        Some("spec/x"),
+        &f.isolated_env(),
+    ));
     assert!(why.contains("user.signingkey"), "{why}");
     assert!(f.records().is_empty(), "{:?}", f.records());
 }
@@ -106,7 +87,7 @@ fn unsigned_repository() {
     let (f, _) = signed_repo(false);
     let f = &f;
     f.branch("spec/x", &[("changes/x/change.md", "x\n")]);
-    clm_approval::approve(&f.work(), Some("spec/x"), &env(f)).unwrap();
+    clm_approval::approve(&f.work(), Some("spec/x"), &f.isolated_env()).unwrap();
     let [record] = &approvals(f)[..] else {
         panic!("not one approval")
     };
