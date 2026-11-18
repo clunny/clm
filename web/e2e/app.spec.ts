@@ -162,7 +162,7 @@ test.describe('phone', () => {
   });
 });
 
-// req:web.views/capabilities-list@fde4e68b
+// req:web/cost-views-in-the-browser@34e19461
 test('capabilities from 900 px: a table in the report order, ⚑ only filters, and a row opens its page', async ({ page, context }) => {
   await mockApi(context);
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -178,7 +178,7 @@ test('capabilities from 900 px: a table in the report order, ⚑ only filters, a
   await expect(page.locator('.sidebar .nv[data-view=capabilities]')).toHaveClass(/on/);
 });
 
-// req:web.views/architecture-list@d644a9d4
+// req:web/cost-views-in-the-browser@34e19461
 test.describe('architecture list', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -231,7 +231,7 @@ test.describe('architecture list', () => {
   });
 });
 
-// req:web.views/architecture-decide-buttons@41e20cf5
+// req:web/cost-views-in-the-browser@34e19461
 test.describe('deciding an architectural constraint', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -281,7 +281,7 @@ test.describe('deciding an architectural constraint', () => {
   });
 });
 
-// req:web.views/decide-buttons@c1039d9e
+// req:web/cost-views-in-the-browser@34e19461
 test.describe('deciding a capability', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
@@ -387,7 +387,7 @@ test('wide screens get the sidebar and no tab bar', async ({ page, context }) =>
   await expect(page.locator('.sidebar .nv[data-view=backlog] .c')).toHaveText('1');
 });
 
-// req:web.views/full-document@fcfa5b34
+// req:web/review-in-the-browser@7df79f16
 test('opening a file in full scrolls to its first change, and j steps to the next', async ({ page, context }) => {
   const requirements = Array.from({ length: 40 }, (_, i) => `### Requirement: r${i}\nIt SHALL do ${i}.`).join('\n\n');
   const before = `# N\n\n### Design\n\nThe design.\n\n### Requirements\n\n${requirements}\n`;
@@ -405,7 +405,7 @@ test('opening a file in full scrolls to its first change, and j steps to the nex
   await expect(page.locator('.chg.focus')).toBeInViewport();
 });
 
-// req:web.views/graph-view@7bdf4eb6
+// req:web/graph-in-the-browser@1d6b4828
 test.describe('graph', () => {
   test('queue states: once the implementation state arrives, b is ringed amber and named claimed, a rose and blocked', async ({ page, context }) => {
     await mockApi(context);
@@ -483,7 +483,7 @@ test.describe('graph', () => {
   });
 });
 
-// req:web.views/spec-branch-review@a7d7ac89
+// req:web/review-in-the-browser@7df79f16
 test.describe('spec branches', () => {
   test("branch without a page: both listed, and spec/d's review loads from its branch route with no page link", async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -510,6 +510,8 @@ test.describe('spec branches', () => {
     await expect(head).toContainText('not checked');
     await page.goto('/app/#/o/a/graph');
     await page.locator('.n[data-node=a]').click();
+    // The inspector has drawn the open PRs it loaded before Build is opened.
+    await expect(page.locator('.insp .inpr')).toBeVisible();
     await page.goto('/app/#/o/a/build');
     await expect(page.locator('.impl')).toBeVisible();
     expect(mock.requests.filter((r) => r.includes('/pulls'))).toEqual([]);
@@ -563,7 +565,7 @@ test.describe('Approve by branch', () => {
   });
 });
 
-// req:web.views/signed-approvals@9bdf6473
+// req:web/review-in-the-browser@7df79f16
 test.describe('signed repositories', () => {
   test('became signed: a 422 signed loads the review again, and the note shows clm approve', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -593,7 +595,7 @@ test.describe('signed repositories', () => {
   });
 });
 
-// req:web.views/approve-button@ff59f9d1
+// req:web/review-in-the-browser@7df79f16
 test('one request, then approved: two quick taps send one approve, and the button reads Approved, disabled', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.hold(APPROVE);
@@ -607,7 +609,7 @@ test('one request, then approved: two quick taps send one approve, and the butto
   expect(mock.posts).toHaveLength(1);
 });
 
-// req:web.views/backlog-taken@7225a6a8
+// req:web/backlog-in-the-browser@5eb37285
 test('the backlog is drawn before the implementation state, and takes its marks when it arrives', async ({ page, context }) => {
   const mock = await mockApi(context);
   mock.routes['GET /api/repos/o/a/implementation'] = implementation({ taken: { changes: [{ id: 'x', state: 'main', items: ['crash'], nodes: ['a'] }], claims: [{ item: 'later', nodes: [] }] } });
@@ -621,7 +623,7 @@ test('the backlog is drawn before the implementation state, and takes its marks 
   await expect(page.locator('.bi[data-slug=setup] .taken')).toHaveCount(0);
 });
 
-// req:web.views/oversized-component@550a1fc1
+// req:web/graph-in-the-browser@1d6b4828
 test("an oversized node's card is outlined amber, unless a queue ring colours it", async ({ page, context }) => {
   const snap = snapshot();
   snap.spec.nodes = snap.spec.nodes.map((n) => (n.parent ? { ...n, oversized: true } : n));
@@ -647,7 +649,7 @@ test("an oversized node's card is outlined amber, unless a queue ring colours it
   await expect.poll(() => outline('a')).toBe(await colour('--rose'));
 });
 
-// req:web.client-live/notify-switch@bc04aecc
+// req:web/push-in-the-browser@b9d56673
 test.describe('Notify me', () => {
   test('no key: a Worker answering 404 for the push key shows no switch', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -705,7 +707,7 @@ test.describe('Notify me', () => {
   });
 });
 
-// req:web.client-live/push-shown@c8f12d9c
+// req:web/push-in-the-browser@b9d56673
 test('the service worker imports the push handlers and shows a push', async ({ page, context, baseURL }) => {
   await mockApi(context);
   // The worker, not a view: drawing one (the graph's layout above all) is the slowest step of a
@@ -811,7 +813,7 @@ test.describe('PWA', () => {
   });
 });
 
-// req:web.views/comment-on-review@1279617c
+// req:web/review-in-the-browser@7df79f16
 test.describe('comments', () => {
   test('comment on a requirement: one post of the fingerprint, target and text, the review asked again, and the card shows the comment by alice', async ({ page, context }) => {
     const mock = await mockApi(context);
@@ -841,7 +843,7 @@ test.describe('comments', () => {
   });
 });
 
-// req:web.views/request-changes@8ce19ec8
+// req:web/review-in-the-browser@7df79f16
 test.describe('Request changes', () => {
   const requested = { id: 'q1', writer: 'alice/web', at: '2026-10-27T12:00:00Z', fingerprint: 'f1', text: 'Split it', current: true, held: true };
 
@@ -909,7 +911,7 @@ test.describe('Request changes', () => {
   });
 });
 
-// req:web.views/propose-from-backlog@9531d23b
+// req:web/backlog-in-the-browser@5eb37285
 test.describe('proposals', () => {
   const IMPL = 'GET /api/repos/o/a/implementation';
   const proposal = (over = {}) => ({ id: 'p1', writer: 'alice/web', at: '2026-10-27T10:00:00Z', slug: 'export-csv', title: 'Export CSV', body: 'Let me export.', nodes: ['a'], mine: true, ...over });
@@ -1047,7 +1049,7 @@ test('the sign-in page says CLM works without the web app and links to early acc
   await expect(card.locator('a', { hasText: 'Install the GitHub App' })).toHaveAttribute('href', 'https://github.com/apps/clm-spec-review/installations/new');
 });
 
-// req:web.views/backlog-view@c6475681
+// req:web/backlog-in-the-browser@5eb37285
 test.describe('a backlog item opens its page', () => {
   test('tapping an item in the Backlog and in the inspector shows its page', async ({ page, context }) => {
     await mockApi(context);

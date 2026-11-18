@@ -30,7 +30,7 @@ describe('wrangler.toml', () => {
     expect(replica).toBeGreaterThan(live);
   });
 
-  it('keeps an empty crons list, so a deploy clears the Cron Trigger (req:web/no-cron-trigger@b75cdebf)', () => {
+  it('keeps an empty crons list, so a deploy clears the Cron Trigger (req:web/no-cron-trigger@6ab19e2c)', () => {
     expect(rawConfig.triggers?.crons).toEqual([]);
   });
 

@@ -168,7 +168,7 @@ test.describe('the graph fills the height', () => {
   });
 });
 
-// req:web.views/inspector-overlay@ca741eb0
+// req:web/graph-in-the-browser@1d6b4828
 test.describe('the inspector is an overlay', () => {
   test('desktop: the canvas keeps its width, the drawer overlaps it from the right edge, at most 640 px wide, and Escape closes it', async ({ page, context }) => {
     await mockApi(context);
