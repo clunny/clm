@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [web-tests-prove-one-web-component-from-another-s-files, a-build-is-told-to-re-cite-a-marker-in-a-file-it-may-not-change, land-approval-s-rules-for-clm-land-are-proven-only-by-landing]
 ---
 
