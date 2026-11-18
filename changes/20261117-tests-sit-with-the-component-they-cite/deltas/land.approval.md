@@ -4,7 +4,7 @@ base: { design: "dfaf509cda9cb4f5" }
 ---
 
 ## MODIFIED Design
-Crate `clm-approval` (`land-approval-split`) can't depend on `clm-land`, which calls it (`undeclared-imports`, and a cycle), so it takes the CLM root, the environment lookup, the loaded settings and the pinned base commit as arguments, runs git through `clm-git` with the remote's name from `REMOTE` (`git-plumbing-layer`), and has an error type of its own, which `clm-land`'s `Error` converts from with the same exit codes and messages. What `clm land` does with these answers is `land`'s to state and to prove by landing a branch (`land/approval-policy`, `land/approval-from-base`, `land/changes-requested-holds`, `land/signed-land`), since this crate can land nothing (`commands-live-in-their-crates`). This component states what its calls answer (`approvals-counted`, `policy-at-base`, `request-refusal`, `key-and-signing`), and its tests call `clm-approval` and live in `crates/clm-approval/tests`. Until those four are built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests that cite this component from `land`'s files and from this crate's, with the requirement each cites from then on.
+Crate `clm-approval` (`land-approval-split`) can't depend on `clm-land`, which calls it (`undeclared-imports`, and a cycle), so it takes the CLM root, the environment lookup, the loaded settings and the pinned base commit as arguments, runs git through `clm-git` with the remote's name from `REMOTE` (`git-plumbing-layer`), and has an error type of its own, which `clm-land`'s `Error` converts from with the same exit codes and messages. What `clm land` does with these answers is `land`'s to state and to prove by landing a branch (`land/approval-policy`, `land/approval-from-base`, `land/changes-requested-holds`, `land/signed-land`), since this crate can land nothing (`commands-live-in-their-crates`). This component states what its calls answer (`approvals-counted`, `policy-at-base`, `request-refusal`, `key-and-signing`), and its tests call `clm-approval` and live in `crates/clm-approval/tests`. Until those four are built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests that cite this component from `land`'s files and from this crate's, with the requirement each cites from then on. The two in this crate that cite `changes-requested-holds`, in `src/hold.rs` and `tests/hold_rules.rs`, are re-cited to `request-refusal` by the build that builds it: they are never removed as an obsolete requirement's.
 
 **The branch.** The head of `<branch>` is `origin/<branch>` when it exists and the local branch isn't ahead of it, else the local branch; for a land, a local `spec/*` or `impl/*` branch with commits `origin` lacks is refused, since those are pushed deliberately. The fingerprint is `clm-gate`'s `fingerprint_of` over the `git ls-tree -r -z` listings of the head's merge base with the base and of the head, so it needs no worktree. The change IDs are those of the live `changes/<id>/change.md` the head adds or modifies relative to that merge base, sorted.
 
@@ -37,7 +37,7 @@ Without `docs/allowed_signers` at the base, nothing is signed or checked. `clm l
 ## ADDED Requirements
 
 ### Requirement: approvals-counted
-`clm-approval` SHALL tell its caller whether a fingerprint's approvals count under a policy, and for each `approved` record that doesn't, the record's writer and time and why. Under `any` it SHALL count any `approved` record for the fingerprint. Under `other` it SHALL count a record only when its writer's person differs from the slugged author name of every commit between the merge base and the head, saying of one that doesn't that its writer is one of the branch's authors and naming `approval = "other"`. In a repository signed at the base it SHALL count a record only when `ledger`'s `signed_by` accepts it under `clm-approve` against that base's `docs/allowed_signers`, saying of one that doesn't that it isn't signed by its writer and naming `clm approve`, and, under `other`, only when its writer's person also differs from the caller's own writer person, saying of one that doesn't that its writer is the lander. A fingerprint no `approved` record names SHALL NOT count, with no reason.
+`clm-approval` SHALL tell its caller whether a fingerprint's approvals count under a policy, and, when none counts, for each `approved` record its writer and time and why it doesn't. Under `any` it SHALL count any `approved` record for the fingerprint. Under `other` it SHALL count a record only when its writer's person differs from the slugged author name of every commit between the merge base and the head, saying of one that doesn't that its writer is one of the branch's authors and naming `approval = "other"`. In a repository signed at the base it SHALL count a record only when `ledger`'s `signed_by` accepts it under `clm-approve` against that base's `docs/allowed_signers`, saying of one that doesn't that it isn't signed by its writer and naming `clm approve`, and, under `other`, only when its writer's person also differs from the writer person of the clone it runs in, the lander's, saying of one that doesn't that its writer is the lander. A fingerprint no `approved` record names SHALL NOT count, with no reason.
 
 #### Scenario: an author's own approval
 - GIVEN a branch whose commits are authored by `Christopher Lunny`, and an `approved` record for its fingerprint by writer `christopher-lunny/1a2b3c4d`
@@ -60,7 +60,7 @@ Without `docs/allowed_signers` at the base, nothing is signed or checked. `clm l
 - THEN they don't count
 
 #### Scenario: the lander's own approval
-- GIVEN the same base, a branch whose commits are authored as `Zed`, a caller whose writer person is `christopher-lunny`, and an `approved` record signed by `christopher-lunny`
+- GIVEN the same base, a branch whose commits are authored as `Zed`, a clone whose writer person is `christopher-lunny`, and an `approved` record signed by `christopher-lunny`
 - WHEN the approvals are counted under `other`
 - THEN they don't count, and the reason says its writer is the lander
 
@@ -79,7 +79,7 @@ Without `docs/allowed_signers` at the base, nothing is signed or checked. `clm l
 - ledger/signature-check
 
 ### Requirement: policy-at-base
-`clm-approval` SHALL give its caller the `approval` policy for a land onto a base commit, with where it came from: the value the clone's `clm.local.toml` sets, from `clm.local.toml`, when the loaded setting's layer is that file; otherwise the top-level `approval` string of the `clm.toml` committed at the top of the base's tree, from `<base>:clm.toml`, `any` when that file or the key is missing. It SHALL never read the `clm.toml` of the root it runs in. When the base's `clm.toml` doesn't parse, or sets a value other than `any` and `other`, it SHALL return an error whose exit code is 2 and whose message starts `approval from <base>:clm.toml:`.
+`clm-approval` SHALL give its caller the `approval` policy for a land onto a base commit, with where it came from: the value the clone's `clm.local.toml` sets, from `clm.local.toml`, when the loaded setting's layer is that file; otherwise the top-level `approval` string of the `clm.toml` committed at the top of the base's tree, from `<base>:clm.toml`, `any` when that file or the key is missing. It SHALL never read the `clm.toml` of the root it runs in. When the base's `clm.toml` doesn't parse, or sets a value other than `any` and `other`, it SHALL return the error `clm land` exits 2 on (`land/approval-from-base`), whose message starts `approval from <base>:clm.toml:`.
 
 #### Scenario: the base's policy, not the checkout's
 - GIVEN a base commit whose `clm.toml` sets `approval = "other"`, a root whose own `clm.toml` sets `approval = "any"`, and no `clm.local.toml`
@@ -99,7 +99,7 @@ Without `docs/allowed_signers` at the base, nothing is signed or checked. `clm l
 #### Scenario: unreadable policy at the base
 - GIVEN a base commit whose `clm.toml` sets `approval = "everyone"`
 - WHEN the policy for that base is asked
-- THEN it is an error with exit code 2 whose message names `origin/main:clm.toml` and `approval`
+- THEN it is an error whose message starts `approval from origin/main:clm.toml:` and names the value
 
 #### Serves
 - capability/approve-intent
@@ -143,7 +143,7 @@ Without `docs/allowed_signers` at the base, nothing is signed or checked. `clm l
 - ledger/request-cleared
 
 ### Requirement: key-and-signing
-`clm-approval` SHALL tell its caller whether the repository is signed at a base commit, which is whether that commit's tree holds `docs/allowed_signers`. It SHALL offer a key check that signs nothing and refuses, naming `user.signingkey`, unless git's `gpg.format` is `ssh` and `user.signingkey` is set, to a file that can be read when it is a path, taken from the top of the repository when relative. It SHALL sign a record's body under a namespace through `ledger`, `clm-approve` for an approval and `clm-land` for a land, and refuse, naming `user.signingkey`, when it can't.
+`clm-approval` SHALL tell its caller whether the repository is signed at a base commit, which is whether that commit's tree holds `docs/allowed_signers`. It SHALL offer a key check that signs nothing and refuses, naming `user.signingkey`, unless git's `gpg.format` is `ssh` and `user.signingkey` is set, to a file that can be read when it is a path, taken from the top of the repository when relative. It SHALL sign a record's body under a namespace through `ledger`, `clm-approve` for an approval and `clm-land` for a land, and refuse, naming `user.signingkey`, when the key can't sign.
 
 #### Scenario: signed and not
 - GIVEN a base commit whose tree holds `docs/allowed_signers`, and another whose tree doesn't

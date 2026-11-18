@@ -29,7 +29,7 @@ The human agreed each part on 2026-11-17, with a yes to deleting two duplicate t
 ## Outcome
 
 - **`web`** gains `cost-views-in-the-browser`, `review-in-the-browser`, `graph-in-the-browser`, `backlog-in-the-browser` and `push-in-the-browser`, each scenario written from a browser test that exists. `invited-users` keeps what the build and `wrangler.toml` do; `approve-by-branch` and `notice-refresh` each lose one scenario that `web.views` states; `site-served-directly` and `no-cron-trigger` lose a sentence telling the build to edit the Worker's `deploy.rs`; `no-install-scripts` states the reading its test already makes.
-- **`web.views`** gains `worker-requests`, what its request module does, which eight tests proved under `web`'s and `web.client-live`'s names.
+- **`web.views`** gains `worker-requests`, what its request module does, which eight tests proved under `web`'s and `web.client-live`'s names. `approve-button` says the approval it shows is read from the review, which its test under `web`'s name proved, and no longer points back at `web/approve-by-branch`.
 - **`web.worker`** gains `invited-sign-in`, the Worker's half of `web/invited-users`, with its two scenarios word for word.
 - **`land`** gains `approval-policy`, `approval-from-base`, `signed-land` and `changes-requested-holds`, word for word but one sentence of the last, the scan for a copy of `ledger`'s rules, which stays with `land.approval`.
 - **`land.approval`** loses those four and gains `approvals-counted`, `policy-at-base`, `request-refusal` and `key-and-signing`.
@@ -47,15 +47,21 @@ Nothing that states behaviour. Listed so the human sees every removal:
 - Two tests are deleted, with the human's yes: `deploys_the_clm_worker_on_the_apps_routes` and `sends_only_the_api_and_its_paths_to_the_worker` in `crates/clm-web/tests/deploy.rs`. `web/src/wrangler.test.ts` makes each of their assertions but two, the Worker's name and the assets directory, which join its tests and `web/site-served-directly`'s scenario.
 - `crates/clm-web/tests/npmrc.rs` is deleted once its two tests are ported to `web/src/npmrc.test.ts`.
 - `web/approve-by-branch`'s scenario "no fingerprint" folds into `web.views/approve-button`'s "disabled", which states it. `web/notice-refresh`'s scenario "offline copy" moves to `web.views/worker-requests`, word for word.
-- Two sentences that told `web`'s build to edit the Worker's test file go: one in `site-served-directly`, and one in `no-cron-trigger` that was carried out long ago.
+- Two sentences that told `web`'s build to edit files it may not go. `site-served-directly`'s named the Worker's `deploy.rs` and `capabilities/web/harness.ts`, which holds no marker, so the land refuses that edit today whatever the clause; `no-cron-trigger`'s was carried out long ago. Neither states behaviour.
 
 ## Constraints
 
-- **Order.** `land.approval`'s removed requirements wait for `land`'s (`moved-markers-wait`). `check/tests-cite-their-owner` needs `land`'s four and `land.approval/request-refusal`. The web components are optional, so it can't need theirs: `backlog/web-tests-prove-one-web-component-from-another-s-files` is kept, rewritten, to block it until the last of the three web builds deletes it. `gate/own-files` needs `check/tests-cite-their-owner` and `orchestrator.run/pending-prompt`.
+- **Order.** `land.approval`'s removed requirements wait for `land`'s (`moved-markers-wait`). `web`'s modified requirements need `web.views/worker-requests` and `web.worker/invited-sign-in`, so those two builds re-cite their own tests first and `web`'s ports the Worker crate's three, deletes them there and deletes the backlog item. `check/tests-cite-their-owner` needs `land`'s four and `land.approval/request-refusal`. The web components are optional, so it can't need theirs: `backlog/web-tests-prove-one-web-component-from-another-s-files` is kept, rewritten, to block it until the last of the three web builds deletes it. `gate/own-files` needs `check/tests-cite-their-owner` and `orchestrator.run/pending-prompt`.
 - **Sizes.** `web`'s spec goes over its budget of 12,000 tokens and `land`, far over already, takes four more requirements; `land.approval` shrinks. The requirements this adds are candidates for phase 5's regrouping with the others phase 4 added.
 - **No migration.** Neither `wiring` nor the widened rule has been in a release.
 - **The Designs name `moved-tests.txt`** in `land`, `land.approval`, `web`, `web.views` and `web.worker`, as the root's does for the first move; phase 4's closing branches take those sentences out.
 
 ## Open questions
 
-None.
+From the architecture audit, left as they are:
+
+- **`slim-components`.** `web`'s spec goes over its budget and `land`'s, at 40,000 tokens of 12,000 already, grows by four requirements. The change neither splits them nor raises a budget: the split of `land` is what moved these requirements out in the first place, and the plan's phase 5 regroups and cuts what phase 4 added before any budget is judged. Nothing fails for it today.
+- **A required component waits on optional builds.** `check/tests-cite-their-owner`, and `gate/own-files` behind it, wait on a backlog item that `web`'s build deletes. `own-files-at-the-gate` says why that is taken here.
+- **The guide runs ahead of the code** by the two sentences on `clm check`'s widened rule, until `check`'s build; a code branch can't carry a guide edit.
+
+From the builder check, for later work and not this change's: `clm-approval` slugs author names with a copy of `ledger`'s `slug`; `web/e2e/live.spec.ts` holds a test of `web.client-live`'s socket under a `web/notice-refresh` marker; the unreleased upgrade note on `wiring` is `backlog/the-proof-is-real-upgrade-note-doesn-t-say-wiring-switches-on-a-check-too`.

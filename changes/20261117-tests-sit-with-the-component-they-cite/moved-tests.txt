@@ -1,5 +1,6 @@
 # <file>::<test or describe>	<requirement it cites today>	->	<file it goes to>	<requirement it cites there>
-# A marker on a describe covers every test in it. No test is dropped but the two of deploy.rs named below, whose every assertion web/src/wrangler.test.ts makes.
+# A marker on a describe covers every test in it. No test is dropped but the two of deploy.rs named below: web/src/wrangler.test.ts makes each of their assertions but the Worker's name and the assets directory, which web's build adds there before it deletes them.
+# web's build ports and deletes; web.views' and web.worker's builds, which come first, re-cite their own lines and leave web's alone.
 crates/clm-approval/src/hold.rs::text_flattened	land.approval/changes-requested-holds	->	crates/clm-approval/src/hold.rs	land.approval/request-refusal
 crates/clm-approval/tests/hold_rules.rs::decided_through_ledger_with_no_copy	land.approval/changes-requested-holds	->	crates/clm-approval/tests/hold_rules.rs	land.approval/request-refusal
 crates/clm-land/tests/approval.rs::self_approval_refused	land.approval/approval-policy	->	crates/clm-land/tests/approval.rs	land/approval-policy
@@ -30,7 +31,7 @@ crates/clm-land/tests/signed.rs::unsigned_request_holds_in_a_signed_repository	l
 crates/clm-web/tests/deploy.rs::deploys_the_clm_worker_on_the_apps_routes	web/site-served-directly	->	web/src/wrangler.test.ts	web/site-served-directly (every assertion joins the test there that reads the same keys; the Rust test is deleted, with the human's yes of 2026-11-17)
 crates/clm-web/tests/deploy.rs::sends_only_the_api_and_its_paths_to_the_worker	web/invited-users	->	web/src/wrangler.test.ts	web/invited-users (every assertion joins the test there that reads the same keys; the Rust test is deleted, with the human's yes of 2026-11-17)
 crates/clm-web/tests/deploy.rs::sends_only_the_api_and_its_paths_to_the_worker	web/site-served-directly	->	web/src/wrangler.test.ts	web/site-served-directly (every assertion joins the test there that reads the same keys; the Rust test is deleted, with the human's yes of 2026-11-17)
-crates/clm-web/tests/deploy.rs::the_worker_reads_the_build_time_assets_through_its_binding	web/invited-users	->	crates/clm-web/tests/deploy.rs	web.worker/invited-sign-in (stays; its `ASSETS` binding assertion is also made in web/src/wrangler.test.ts under web/invited-users)
+crates/clm-web/tests/deploy.rs::the_worker_reads_the_build_time_assets_through_its_binding	web/invited-users	->	crates/clm-web/tests/deploy.rs	web.worker/invited-sign-in (stays; web's build also asserts the `ASSETS` binding in web/src/wrangler.test.ts under web/invited-users)
 crates/clm-web/tests/npmrc.rs::npmrc	web/no-install-scripts	->	web/src/npmrc.test.ts	web/no-install-scripts (ported with `a_later_line_can_turn_scripts_back_on`; npmrc.rs is deleted)
 crates/clm-web/tests/sign_in.rs::invited_login_gets_the_session_cookie	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
 crates/clm-web/tests/sign_in.rs::logins_compare_without_case	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
@@ -67,3 +68,4 @@ web/src/views/api.test.ts::a refresh a notice asked for	web/notice-refresh	->	we
 web/src/views/api.test.ts::api.send	web.client-live/notify-switch	->	web/src/views/api.test.ts	web.views/worker-requests
 web/src/views/api.test.ts::deletes with a JSON body, and a failed get carries its status	web/installable	->	web/src/views/api.test.ts	web.views/worker-requests
 web/src/views/pr.test.ts::what Approve may send	web/approve-by-branch	->	web/src/views/pr.test.ts	web.views/approve-button
+web/src/views/api.test.ts::keeps no failed response	(cites nothing)	->	web/src/views/api.test.ts	web.views/worker-requests
