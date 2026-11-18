@@ -186,6 +186,29 @@ fn the_root_found_is_used_unless_root_overrides_it() {
 }
 
 #[test]
+fn the_settings_are_loaded_with_the_environment_given() {
+    // req:check.affected/commands-in-crate@6731de32
+    let dir = repo("");
+    let root = dir.path();
+    write(root, "Cargo.lock", "lock 2\n");
+    commit_all(root, "lock");
+    let from_env = |_: &Path, env: &dyn Fn(&str) -> Option<String>| {
+        Ok(env("CLM_AFFECTED_ALL").into_iter().collect::<Vec<_>>())
+    };
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let status = clm_affected::command(
+        ["--base", "main"],
+        root,
+        &|name| (name == "CLM_AFFECTED_ALL").then(|| "Cargo.lock".to_string()),
+        &from_env,
+        &mut out,
+        &mut err,
+    );
+    assert_eq!(status, 0, "{}", String::from_utf8_lossy(&err));
+    assert_eq!(String::from_utf8_lossy(&out), "all Cargo.lock\n");
+}
+
+#[test]
 fn arguments_it_cant_parse_return_2_with_the_usage_error() {
     // req:check.affected/commands-in-crate@6731de32
     let dir = repo("");
@@ -473,12 +496,20 @@ fn a_git_failure_exits_2() {
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &spec("[]", "[]"));
-    let out = clm_affected(root, "main");
-    assert_eq!(out.status.code(), Some(2), "{out:?}");
-    assert_eq!(stdout(&out), "");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(err.starts_with("clm affected: "), "{err}");
-    assert!(err.contains("git rev-parse"), "{err}");
+    // Git looks no higher than the directory, wherever the system's temporary directory is.
+    // SAFETY: the tests run one per process (`ci/nextest-runner`), so no other thread reads
+    // the environment meanwhile.
+    unsafe { std::env::set_var("GIT_CEILING_DIRECTORIES", root.parent().unwrap()) };
+    for args in [&["--base", "main"][..], &["--overlap", "x", "y"]] {
+        let out = clm_affected_args(root, args);
+        assert_eq!(out.status.code(), Some(2), "{args:?}: {out:?}");
+        assert_eq!(stdout(&out), "", "{args:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.starts_with("clm affected: "), "{err}");
+        // The command that failed, and git's own error.
+        assert!(err.contains("git rev-parse"), "{err}");
+        assert!(err.contains("not a git repository"), "{err}");
+    }
 }
 
 #[test]
@@ -522,10 +553,9 @@ fn an_invalid_graph_exits_1_with_the_error() {
     let out = clm_affected(root, "main");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert_eq!(stdout(&out), "");
-    assert!(
-        String::from_utf8_lossy(&out.stderr).contains("cycle"),
-        "{out:?}"
-    );
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.starts_with("clm affected: "), "{err}");
+    assert!(err.contains("cycle"), "{err}");
 }
 
 /// The marker's text, built so this file isn't itself a reader.
@@ -766,6 +796,8 @@ fn why_with_readers_exits_1_naming_both_flags() {
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     let err = String::from_utf8(out.stderr.clone()).unwrap();
     assert!(err.contains("--readers") && err.contains("--why"), "{err}");
+    // req:check.affected/affected-base@ec64a600
+    assert!(err.starts_with("clm affected: "), "{err}");
     assert_eq!(stdout(&out), "");
 }
 
@@ -781,6 +813,12 @@ fn why_follows_the_settings_glob_and_the_errors_of_the_selection() {
     assert_eq!(stdout(&out), "all: Cargo.lock\n");
     let out = clm_affected_with(root, "nope", &["--why", "crates/b/src/lib.rs"]);
     assert_eq!(out.status.code(), Some(1), "{out:?}");
+    // req:check.affected/affected-base@ec64a600
+    assert_eq!(stdout(&out), "");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "clm affected: unknown base nope\n"
+    );
 }
 
 #[test]
@@ -970,6 +1008,7 @@ fn overlap_refuses_flags_that_dont_combine() {
         assert_eq!(out.status.code(), Some(1), "{flag:?}: {out:?}");
         let err = String::from_utf8_lossy(&out.stderr);
         assert!(err.contains("--overlap") && err.contains(flag[0]), "{err}");
+        assert!(err.starts_with("clm affected: "), "{err}");
         assert_eq!(stdout(&out), "");
     }
 }
