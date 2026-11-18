@@ -5,7 +5,7 @@ resolves: [affected-base-leaves-out-exits-its-design-states]
 
 ## Intent
 
-`check.affected` is brought to the one rule for a requirement in a single pass: each of its requirements states what someone outside the component can observe, and every exit, message and refusal its Contract or Design states is stated by a requirement. It is the pilot of phase 5 of `backlog/a-passing-check-proves-less-than-the-spec-claims`, written by hand to learn what one pass costs before the tooling and the other 50 components. It removes no requirement, no scenario and no test, so nothing in it needs the human's reading.
+`check.affected` is brought to the one rule for a requirement in a single pass: each of its requirements states what someone outside the component can observe, and every exit, message and refusal its Contract or Design states is stated by a requirement. It is the pilot of phase 5 of `backlog/a-passing-check-proves-less-than-the-spec-claims`, written by hand to learn what one pass costs before the tooling and the other 50 components. It removes no requirement, no scenario and no test. One sentence that states no behaviour leaves a requirement, and is named under What the requirements no longer state.
 
 ## Problem
 
@@ -32,12 +32,31 @@ The first two are `backlog/affected-base-leaves-out-exits-its-design-states`, a 
 
 - `affected-base` states exit 2 for any other git failure, that `--readers` loads no graph, and the two messages. The two uncited tests cite it.
 - `affected-components` and `affected-files` give the lines as printed: `node <id>` and `file <path>`.
-- `why-chain` and `overlap-selection` state the command; the calls are the Contract's. `commands-in-crate` states what the call does and nothing of where tests sit.
+- `why-chain` and `overlap-selection` state the command first and name the calls as the Contract's. `commands-in-crate` states what the call does and nothing of where tests sit.
+- Every reason the command words itself starts `clm affected: `, which the Contract said of none and tests asserted of some.
 - `doc-only-selects-nothing` names the paths by `ledger/doc-only`.
-- The Contract's synopsis holds `--overlap`, and its calls are the ones other crates use.
+- The Contract's synopsis holds `--overlap`, gives `why` its four arguments, and names the types other crates read (`Args`, `Selection`, `Changed`).
 - `backlog/affected-base-leaves-out-exits-its-design-states` is answered and deleted.
 
 ## Constraints
 
-- No behaviour changes: every statement added is what the code does today and a test in `crates/clm-affected/tests/` already asserts. The build re-cites the tests of the seven reworded requirements, moves the two uncited tests' markers on, and changes no source file unless a test it must now cite fails.
+- No behaviour changes: every statement added is what the code does today, as the builder check confirmed clause by clause. The build is expected to change tests only, and the marker of the unit test in `crates/clm-affected/src/lib.rs`.
 - No scenario is renamed or removed.
+
+## What the requirements no longer state
+
+- `commands-in-crate` loses "Every test of `check.affected`'s requirements that sat in the top-level test files of `crates/clm/tests/` SHALL sit in `check.affected`'s own files and call `clm-affected` itself ... none runs the `clm` binary", and its first scenario the words "a test in `check.affected`'s own files". It states where tests sit, which the rule keeps out of a requirement and the human agreed on 2026-11-18 for all 23 such requirements. What it guarded is checked: `check/tests-cite-their-owner` fails a test in another component's file and `gate/own-files` refuses a build that changes one.
+
+Nothing else goes. The library calls `why`, `overlap` and `affected_between` stay stated, by the requirement that held each.
+
+## What the build does
+
+- It re-cites the tests of the seven requirements. A test may reach the behaviour through any public call of the crate, as `tests/select.rs` and `tests/why.rs` do: the rule is about a requirement's wording, not about how a test reaches the code.
+- It gives `a_git_failure_exits_2` and `readers_alone_ignore_the_graph_and_the_settings` the marker of `affected-base` and rewrites their comments, which name the deleted item.
+- It writes or strengthens the assertions no test makes today, each for a clause the code already does: the whole line `clm affected: unknown base nope` in a test that cites `affected-base`; the whole line `clm affected: no merge base between lonely and HEAD`, with empty standard output; the prefix and the git command on standard error when git fails; the prefix on `unknown revision <rev>` and `no merge base between <a> and <b>` for `--overlap`, with empty standard output; and a rename on one side of `--overlap` counting as both its paths.
+
+## Open questions
+
+- **Three library calls nothing outside the crate calls**, for the human, as proposed cuts in the wave that holds `land`: `why`, `overlap` and `affected_between`. `clm.toml`'s allow list keeps the last because `land` "may call it directly", and it doesn't. Cutting them loses no behaviour a command shows and narrows three public items; it is not done here because the allow list is not this component's file and `clm/affected-why-command` names `why`.
+- **`clm/affected-why-command` says the root passes `--why` to `clm-affected`'s `why`**, which stopped being true when the command moved into the crate. It is the root's to mend in its pass; the architecture audit raised it against `spec-is-current`.
+- **The audit's `yagni` point**, that the Contract lists calls nothing uses, is the first question above: they were a requirement's on `main` and are kept until the human reads the cut.
