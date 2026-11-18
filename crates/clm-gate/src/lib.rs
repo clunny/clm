@@ -1106,7 +1106,7 @@ pub fn foreign_files(
         .filter_map(|s| s.strip_prefix("capability/"))
         .map(|slug| format!("req:capability/{slug}"))
         .collect();
-    // `req:capability/see` cites `see`, not `seeing`: the slug must end where the marker does.
+    // A capability marker cites `see`, not `seeing`: the slug must end where the marker does.
     let cites = |text: &[u8], marker: &str| {
         text.windows(marker.len())
             .enumerate()
