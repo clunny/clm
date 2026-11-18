@@ -207,7 +207,6 @@ pub fn run(name: &str, kind: Kind, model: &str, state: RunState, task: Option<&s
         model: model.to_string(),
         state,
         task_id: task.map(str::to_string),
-        earlier_tasks: Vec::new(),
         started: clm_git::now(),
         round: 1,
         stops: BTreeMap::new(),
@@ -266,6 +265,18 @@ impl Fixture {
     pub fn change_run(&self, name: &str, change: impl FnOnce(&mut Run)) {
         clm_loop::update(&self.work, |f| {
             change(f.runs.iter_mut().find(|r| r.name == name).unwrap());
+            Ok(())
+        })
+        .unwrap();
+    }
+
+    /// Keeps `task` under the run name `name`, as the task of an earlier run of it.
+    pub fn keep(&self, name: &str, task: &str) {
+        clm_loop::update(&self.work, |f| {
+            f.kept_tasks
+                .entry(name.to_string())
+                .or_default()
+                .push(task.to_string());
             Ok(())
         })
         .unwrap();
