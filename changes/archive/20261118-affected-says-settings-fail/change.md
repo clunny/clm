@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 from: backlog/affected-settings-load-failure-has-no-requirement
 ---
 
