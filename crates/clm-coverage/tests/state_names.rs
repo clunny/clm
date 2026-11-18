@@ -12,7 +12,7 @@ fn index(state: State) -> usize {
 
 #[test]
 fn scenario_list_matches_the_type() {
-    // req:check.coverage/state-names@63dc5b5d
+    // req:check.coverage/state-names@100dfb43
     let mut seen = [0; 4];
     for (state, word) in STATE_NAMES {
         seen[index(state)] += 1;

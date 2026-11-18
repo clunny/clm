@@ -5,12 +5,19 @@
 /// `wildmatch` with `WM_PATHNAME`, so `*`, `?` and `[...]` never match `/`, and `**`
 /// crosses directories only as a whole segment (`**/`, `/**/`, `/**`); and, as git compares
 /// every pathspec literally first, a pattern read literally also matches every path below
-/// it.
+/// it. As git does, the pattern's literal prefix, up to its first wildcard, is compared first
+/// and stripped before `wildmatch`, so a `**` right after it starts a segment (`a**` matches
+/// `a/b.rs`).
 pub fn matches(pattern: &str, path: &str) -> bool {
     let dir = pattern.trim_end_matches('/');
+    let (p, t) = (pattern.as_bytes(), path.as_bytes());
+    let literal = p
+        .iter()
+        .position(|b| matches!(b, b'*' | b'?' | b'[' | b'\\'))
+        .unwrap_or(p.len());
     path == pattern
         || path.strip_prefix(dir).is_some_and(|r| r.starts_with('/'))
-        || wildmatch(pattern.as_bytes(), 0, path.as_bytes())
+        || (t.starts_with(&p[..literal]) && wildmatch(&p[literal..], 0, &t[literal..]))
 }
 
 /// Whether `t` matches `p[i..]`; `p[..i]` is what came before, to tell a whole-segment
@@ -21,15 +28,19 @@ fn wildmatch(p: &[u8], i: usize, t: &[u8]) -> bool {
     };
     let rest = |n: usize| &t[n..];
     match c {
-        b'*' if p.get(i + 1) == Some(&b'*') && (i == 0 || p[i - 1] == b'/') => match p.get(i + 2) {
-            None => true,
-            // `**/`: zero or more whole directories.
-            Some(b'/') => {
-                wildmatch(p, i + 3, t)
-                    || (0..t.len()).any(|n| t[n] == b'/' && wildmatch(p, i + 3, rest(n + 1)))
+        // Two or more stars, as git reads a run of them.
+        b'*' if p.get(i + 1) == Some(&b'*') && (i == 0 || p[i - 1] == b'/') => {
+            let end = i + p[i..].iter().take_while(|&&b| b == b'*').count();
+            match p.get(end) {
+                None => true,
+                // `**/`: zero or more whole directories.
+                Some(b'/') => {
+                    wildmatch(p, end + 1, t)
+                        || (0..t.len()).any(|n| t[n] == b'/' && wildmatch(p, end + 1, rest(n + 1)))
+                }
+                Some(_) => star(p, i, t),
             }
-            Some(_) => star(p, i, t),
-        },
+        }
         b'*' => star(p, i, t),
         b'?' => t.first().is_some_and(|&b| b != b'/') && wildmatch(p, i + 1, rest(1)),
         // An unclosed `[` matches nothing, as git aborts on it.
