@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Violation};
 
-use crate::matches;
+use clm_coverage::matches;
 
 /// The spec paths, which no node owns: the same ones `gate` names.
 const SPEC_DIRS: [&str; 4] = ["specs/", "changes/", "backlog/", "docs/"];

@@ -5,8 +5,8 @@ use std::path::PathBuf;
 
 use clm_model::{ExemptRule, Graph, Layer, Violation};
 
-use crate::Marker;
 use crate::ownership::{exempt, is_test_of, owner};
+use clm_coverage::Marker;
 
 pub fn violations(graph: &Graph, markers: &[Marker]) -> Vec<Violation> {
     // Once the root names its `wiring`, every owned file is judged, since the land refuses a

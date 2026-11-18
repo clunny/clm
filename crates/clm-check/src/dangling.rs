@@ -6,9 +6,9 @@ use std::path::PathBuf;
 
 use clm_model::{Graph, Layer, Violation};
 
-use crate::Marker;
+use clm_coverage::Marker;
 #[cfg(feature = "checkout")]
-use crate::Scan;
+use clm_coverage::Scan;
 
 /// Every `req:` marker of a scan, those outside a test included (`Scan::outside`), each once
 /// by its file, line and ID: a marker that proves nothing still can't name what doesn't exist.

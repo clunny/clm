@@ -1,11 +1,11 @@
 //! Deterministic checks. Each violation's rule is the ID of the requirement it enforces.
 //!
 //! Without the default feature `checkout`, only what works on files already in memory is
-//! built (`markers_in`, `report`, `pending`, `status_report`, `format`), so the crate builds
+//! built (such as `pending_for`, `format` and `undeclared_imports`), so the crate builds
 //! for `wasm32-unknown-unknown`.
 //!
-//! The coverage library is `check.coverage`'s crate `clm-coverage`, re-exported here
-//! unchanged so callers keep their `clm_check::` imports (`check-coverage-split`).
+//! The coverage library is `check.coverage`'s crate `clm-coverage`, which callers import
+//! themselves: this crate re-exports none of it (`check-coverage-split`).
 
 #[cfg(feature = "checkout")]
 mod assets;
@@ -47,17 +47,11 @@ mod untraced;
 #[cfg(feature = "checkout")]
 use std::path::Path;
 
-pub use attributes::linguist_excluded;
-// clm:remove-by 20261115-check-passes-on-no-coverage: every reader imports `clm-coverage`.
-pub use clm_coverage::{
-    ChangeProgress, Coverage, DeletedTest, Marker, ObsoleteTest, Pending, Row, STATE_NAMES, State,
-    StatusReport, TestSpan, Uncounted, change_progress, complete_changes, deleted_tests,
-    markers_in, markers_outside_tests, matches, obsolete_tests, owner, pending, removed, report,
-    status_report, tests_in, uncounted,
-};
-// clm:remove-by 20261115-check-passes-on-no-coverage
 #[cfg(feature = "checkout")]
-pub use clm_coverage::{Scan, scan};
+use clm_coverage::{Coverage, StatusReport, removed, report, scan, status_report};
+use clm_coverage::{Marker, Pending, pending};
+
+pub use attributes::linguist_excluded;
 pub use clm_model::Violation;
 #[cfg(feature = "commands")]
 pub use commands::{
