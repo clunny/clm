@@ -400,6 +400,17 @@ fn scenario_detectors_skipped_on_request() {
     assert_eq!(out.status.code(), Some(0), "{stdout}");
     assert!(!stdout.contains("check/detectors"), "{stdout}");
     assert!(!dir.path().join("ran").exists(), "the detector ran");
+    // It needs no loadable settings either.
+    let unloadable = |_: &Path| {
+        Err(Violation {
+            path: dir.path().join("config.toml"),
+            rule: "check/detectors",
+            message: "unknown field `detectors`".into(),
+        })
+    };
+    let out = call_check(Path::new("."), &words, &unloadable);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
     // Without the flag the same repository fails on the detector.
     let out = clm_check(dir.path());
     assert_eq!(out.status.code(), Some(1));
