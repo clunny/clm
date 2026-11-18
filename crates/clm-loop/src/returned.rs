@@ -169,11 +169,13 @@ pub(crate) fn message_file(
     Ok(path)
 }
 
-/// `clm build returned <name> --result <line> [--cause <cause> [--until <time>]]`: records a
-/// run's return by the run's last line as it stands and prints the actions to take now.
+/// `clm build returned <name> [--task <task-id>] --result <line> [--cause <cause> [--until
+/// <time>]]`: records a run's return by the run's last line as it stands and prints the actions
+/// to take now. `task` names the task the return came from.
 pub fn returned(
     options: &Options,
     name: &str,
+    task: Option<&str>,
     result: &str,
     cause: Option<&str>,
     until: Option<&str>,
@@ -199,11 +201,22 @@ pub fn returned(
             })?),
         };
     clm_git::fetch(&options.root)?;
-    // The late report of an earlier run of that name changes nothing but the lease.
-    let known = state::update(&options.root, |f| {
+    // The late report of an earlier run of that name changes nothing but the lease: a return
+    // from a task the loop keeps as an earlier run's of the name
+    // (`returned-ignores-an-earlier-task`), or a `landed` line older than the run (`return-rules`).
+    let (known, earlier) = state::update(&options.root, |f| {
         f.lease = Some(now());
-        Ok(f.run(name).cloned())
+        let known = f.run(name).cloned();
+        let earlier = task.filter(|t| known.as_ref().is_some_and(|r| r.kept_earlier(t)));
+        Ok((known, earlier))
     })?;
+    if let Some(task) = earlier {
+        eprintln!(
+            "clm build: the return from task {task} is a late report of an earlier run of \
+             {name}, which the loop has finished; it changed nothing"
+        );
+        return crate::step::next_actions(options);
+    }
     if let Some(known) = &known
         && late_report(options, known, result.trim())
     {
@@ -377,7 +390,7 @@ pub fn returned(
                     r.round += 1;
                     r.model = session_model;
                     r.rebuilt_for = Some(c.clone());
-                    r.task_id = None;
+                    r.forget_task();
                     r.resume = None;
                 }
             }

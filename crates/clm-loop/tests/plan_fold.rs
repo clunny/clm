@@ -81,6 +81,7 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
     returned(
         &fx.options(),
         "fold:x",
+        None,
         "proposed b review https://example.com/pr/2",
         None,
         None,
@@ -102,6 +103,7 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
     returned(
         &fx.options(),
         "land:b",
+        None,
         "clm land: refused: gate/approval: needs a human",
         None,
         None,
@@ -112,7 +114,15 @@ fn a_batch_goes_to_the_human_and_is_landed_once_approved() {
 
     // Approved again, it lands, and each folded draft is finished.
     approved(&fx.options(), "b").unwrap();
-    returned(&fx.options(), "land:b", "landed 1a2b3c4 spec", None, None).unwrap();
+    returned(
+        &fx.options(),
+        "land:b",
+        None,
+        "landed 1a2b3c4 spec",
+        None,
+        None,
+    )
+    .unwrap();
     assert_eq!(fx.ran("draft --finish x"), 1);
     assert_eq!(fx.ran("draft --finish y"), 1);
     assert!(fx.file().batches.is_empty());
@@ -127,6 +137,7 @@ fn a_fold_that_proposes_nothing_is_told_to_the_session() {
     let actions = returned(
         &fx.options(),
         "fold:x",
+        None,
         "stopped: conflicts",
         Some("blocked"),
         None,

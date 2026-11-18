@@ -313,6 +313,7 @@ fn planned(name: &str, kind: Option<Kind>, model: &str, prompt: Option<String>) 
         model: model.to_string(),
         state: RunState::Planned,
         task_id: None,
+        earlier_tasks: Vec::new(),
         started: now(),
         round: 1,
         stops: BTreeMap::new(),
@@ -433,7 +434,7 @@ fn prepare(options: &Options, file: &LoopFile, launch: &Launch) -> Result<Prepar
             let mut run = orphan.clone();
             run.state = RunState::Planned;
             run.orphan = false;
-            run.task_id = None;
+            run.forget_task();
             match (run.kind, &run.command) {
                 (Some(Kind::Build), _) => {
                     let component = name.strip_prefix("build:").unwrap_or(name);
@@ -729,9 +730,13 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
                         // The changes the fold takes leave the fold list.
                         f.review.retain(|id| !run.items.contains(id));
                     }
+                    let mut run = *run;
                     match f.run_mut(&run.name) {
-                        Some(existing) => *existing = *run,
-                        None => f.runs.push(*run),
+                        Some(existing) => {
+                            run.succeed(existing);
+                            *existing = run;
+                        }
+                        None => f.runs.push(run),
                     }
                 }
                 Prepared::Drop(name) => f.runs.retain(|r| r.name != name),
@@ -908,11 +913,38 @@ pub fn start(
 /// `clm build launched <name> <task-id>`: records the task ID of a run the session launched.
 pub fn launched(options: &Options, name: &str, task_id: &str) -> Result<(), Failure> {
     state::update(&options.root, |f| {
-        f.lease = Some(now());
-        let run = f
-            .run_mut(name)
+        let listed = f
+            .run(name)
             .ok_or_else(|| Failure::Refused(format!("the loop has no run {name}")))?;
+        if listed.task_id.as_deref() != Some(task_id)
+            && let Some((owner, earlier)) = f.task_owner(task_id)
+        {
+            let new_run = match listed.kind {
+                Some(_) => "to be started as a new subagent",
+                None => "to be run as a new command",
+            };
+            let whose = if earlier && owner.name == name {
+                format!(
+                    "task {task_id} was an earlier run of {name}'s, which the loop has finished; \
+                     a late `landed` report of it changes nothing"
+                )
+            } else if earlier {
+                format!("task {task_id} was an earlier run of {}'s", owner.name)
+            } else {
+                format!("task {task_id} is the task of {}", owner.name)
+            };
+            return Err(Failure::Refused(format!(
+                "{whose}. The action printed for {name} is a new run, {new_run} and reported \
+                 with its own task ID"
+            )));
+        }
+        f.lease = Some(now());
+        let run = f.run_mut(name).expect("listed above");
         run.state = RunState::Running;
+        // A task reported over another keeps the other among the earlier ones.
+        if run.task_id.as_deref() != Some(task_id) {
+            run.forget_task();
+        }
         run.task_id = Some(task_id.to_string());
         Ok(())
     })

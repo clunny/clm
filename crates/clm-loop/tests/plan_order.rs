@@ -230,7 +230,7 @@ fn a_disk_stop_holds_new_builds() {
         RunState::Running,
         Some("t-b"),
     ));
-    clm_loop::returned(&options, "build:b", "none", Some("disk"), None).unwrap();
+    clm_loop::returned(&options, "build:b", None, "none", Some("disk"), None).unwrap();
     assert_eq!(fx.file().run("build:b").unwrap().state, RunState::Stopped);
     let actions = step(&options).unwrap();
     assert!(
