@@ -555,6 +555,15 @@ test.describe('Approve by branch', () => {
     await expect(page.locator('.review')).toContainText('could not be loaded. Reload before approving.');
   });
 
+  test('a 409 whose reload fails at the network never draws the copy kept for offline use', async ({ page, context }) => {
+    const mock = await mockApi(context);
+    mock.fail(APPROVE, 409);
+    mock.onPost = () => mock.fail(REVIEW, 'abort');
+    await page.goto('/app/#/o/a/prs/spec%2Fc');
+    await page.locator('button.approve').click();
+    await expect(page.locator('.review')).toContainText('could not be loaded. Reload before approving.');
+  });
+
   test('any other failure says Not approved with the status', async ({ page, context }) => {
     const mock = await mockApi(context);
     mock.fail(APPROVE, 422);
