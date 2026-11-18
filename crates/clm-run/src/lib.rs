@@ -284,6 +284,15 @@ pub fn prompt(job: &Job) -> String {
     };
     // Only the component that builds the capability tests is told what its capabilities are to
     // it (`prompt-serves`).
+    // Only while the root names no `wiring` may a build edit another component's file.
+    let recite = if job.wiring {
+        "Re-cite a marker of your own requirement in your own files; one in another \
+         component's file is listed apart under its requirement \
+         (`architecture/path-ownership`)."
+    } else {
+        "Re-citing a marker of your own requirement, wherever its file sits, is allowed \
+         (`architecture/path-ownership`)."
+    };
     let capability_tests = if job.capability_tests {
         " This component builds the capability tests: each capability under that heading is one \
          its tests prove at the project's public boundary, whether or not a rule serves it; \
@@ -458,7 +467,7 @@ pub fn prompt(job: &Job) -> String {
          `#### Enforced by` names and is never cited by a test (`human-layer-proof`); one \
          that says only `#### Untested` needs no proof. \
          For an `obsolete` requirement, remove the \
-         code and tests its markers mark (`no-dead-code`). Re-citing a marker of your own requirement, wherever its file sits, is allowed (`architecture/path-ownership`). \
+         code and tests its markers mark (`no-dead-code`). {recite} \
          Your build changes only your own component's files: those your component's `tests` match, \
          wherever they sit, and those its `paths` match that no other component's `tests` match \
          (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \

@@ -194,6 +194,24 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 }
 
 #[test]
+fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wiring() {
+    // req:orchestrator.run/pending-prompt@209c6f80
+    let without = prompt(&job());
+    assert!(
+        without.contains("wherever its file sits, is allowed"),
+        "{without}"
+    );
+    let mut j = job();
+    j.wiring = true;
+    let with = prompt(&j);
+    assert!(!with.contains("wherever its file sits"), "{with}");
+    assert!(
+        with.contains("Re-cite a marker of your own requirement in your own files"),
+        "{with}"
+    );
+}
+
+#[test]
 fn scenario_blocked_requirement_left_out() {
     // req:orchestrator.run/pending-prompt@209c6f80
     let p = prompt(&job());
