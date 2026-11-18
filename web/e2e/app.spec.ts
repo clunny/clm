@@ -510,6 +510,8 @@ test.describe('spec branches', () => {
     await expect(head).toContainText('not checked');
     await page.goto('/app/#/o/a/graph');
     await page.locator('.n[data-node=a]').click();
+    // The inspector has drawn the open PRs it loaded before Build is opened.
+    await expect(page.locator('.insp .inpr')).toBeVisible();
     await page.goto('/app/#/o/a/build');
     await expect(page.locator('.impl')).toBeVisible();
     expect(mock.requests.filter((r) => r.includes('/pulls'))).toEqual([]);
