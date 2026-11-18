@@ -21,16 +21,21 @@ fn moved(f: &Fixture) -> (String, String, Basis, String) {
     (head, base, basis, merge_base)
 }
 
+/// The `landed` record of `main`'s tip on `origin`: picked by its commit, not by its place in
+/// the fold, which orders by `at` and so can put a land that finished first after it.
 fn landed(f: &Fixture) -> (Option<String>, Option<Recheck>, Option<u64>) {
-    match f.landed().pop().expect("a landed record") {
+    let main = f.remote("main");
+    let found = f.landed().into_iter().find_map(|r| match r {
         Body::Landed {
+            commit,
             code_key,
             recheck,
             recheck_files,
             ..
-        } => (code_key, recheck, recheck_files),
-        other => panic!("{other:?}"),
-    }
+        } if commit == main => Some((code_key, recheck, recheck_files)),
+        _ => None,
+    });
+    found.expect("a landed record for main's tip")
 }
 
 /// The `basis` of the `checked` record for `key`, if it has one.
