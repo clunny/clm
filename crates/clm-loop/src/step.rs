@@ -696,6 +696,13 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
             Prepared::Nothing => {}
             Prepared::Refused(name, reason) => {
                 let (landed, says) = crate::returned::finish_unclosed(options, &name)?;
+                // Its task is an earlier run's now, which `update` keeps under its name.
+                state::update(&options.root, |f| {
+                    if let Some(r) = f.run_mut(&name) {
+                        r.task_id = None;
+                    }
+                    Ok(())
+                })?;
                 say_lines.extend(says);
                 if !landed {
                     say_lines.push(say(

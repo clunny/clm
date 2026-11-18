@@ -43,6 +43,8 @@ fn a_landed_builds_task_reported_for_its_successor() {
     assert!(why.contains("t-1"), "{why}");
     assert!(why.contains("build:a"), "{why}");
     assert!(why.contains("finished"), "{why}");
+    assert!(why.contains("late `landed` report"), "{why}");
+    assert!(why.contains("changes nothing"), "{why}");
     assert!(why.contains("new run"), "{why}");
     assert!(why.contains("new subagent"), "{why}");
     assert_eq!(loop_bytes(&fx), before, "the loop file is unchanged");
@@ -305,6 +307,33 @@ fn a_released_builds_task() {
     fx.set("next", "a\n");
     let actions = step(&fx.options()).unwrap();
     line(&actions, "launch build:a ");
+
+    let before = loop_bytes(&fx);
+    refusal(launched(&fx.options(), "build:a", "t-1"));
+    assert_eq!(loop_bytes(&fx), before, "the loop file is unchanged");
+}
+
+#[test]
+fn a_refused_relaunchs_task() {
+    // req:orchestrator.loop/launched-refuses-an-earlier-task@6d7a4d4c
+    let fx = Fixture::new();
+    fx.add_run(run(
+        "build:a",
+        Kind::Build,
+        "sonnet",
+        RunState::Running,
+        Some("t-1"),
+    ));
+    fx.set_lease(20);
+    fx.set("run-exit-a", "1");
+
+    let actions = start(&fx.options(), "opus", false).unwrap();
+    assert!(!actions.iter().any(|a| a.starts_with("launch build:a")));
+    let file = fx.file();
+    let a = file.run("build:a").unwrap();
+    assert_eq!(a.state, RunState::Returned);
+    assert_eq!(a.task_id, None);
+    assert_eq!(file.kept_tasks["build:a"], ["t-1"]);
 
     let before = loop_bytes(&fx);
     refusal(launched(&fx.options(), "build:a", "t-1"));

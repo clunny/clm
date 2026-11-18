@@ -213,8 +213,8 @@ pub struct LoopFile {
     /// A run of the loop landed since the last verify run.
     #[serde(default)]
     pub landed_since_verify: bool,
-    /// The task IDs of the runs the loop has finished with, by run name, whose late reports
-    /// change nothing (`launched-refuses-an-earlier-task`). They outlast the runs, and `update`
+    /// The task IDs of the runs the loop has finished with, by run name, a task reported over
+    /// another included, whose late reports change nothing (`launched-refuses-an-earlier-task`). They outlast the runs, and `update`
     /// keeps them, so no change removes one.
     #[serde(default)]
     pub kept_tasks: BTreeMap<String, Vec<String>>,
@@ -289,23 +289,38 @@ impl LoopFile {
         }
     }
 
-    /// Keeps, after a change from `before`, every ID `before` kept, and the task ID of each run
-    /// of `before` that the run now listed under its name, if any, no longer holds: the change
-    /// cleared it, replaced the run or removed it.
-    fn keep_tasks(&mut self, before: &LoopFile) {
-        for (name, tasks) in &before.kept_tasks {
-            for task in tasks {
-                self.keep(name, task);
+    /// The kept IDs and each listed run's task ID, for `keep_tasks` after a change.
+    fn tasks(&self) -> Tasks {
+        let reported = self
+            .runs
+            .iter()
+            .filter_map(|r| Some((r.name.clone(), r.task_id.clone()?)))
+            .collect();
+        (self.kept_tasks.clone(), reported)
+    }
+
+    /// Keeps, after a change from a file whose `tasks` were `before`, every ID it kept, and the
+    /// task ID of each of its runs that the run now listed under that name, if any, no longer
+    /// holds: the change cleared it, replaced the run or removed it.
+    fn keep_tasks(&mut self, before: Tasks) {
+        let (kept, reported) = before;
+        if self.kept_tasks != kept {
+            for (name, tasks) in &kept {
+                for task in tasks {
+                    self.keep(name, task);
+                }
             }
         }
-        for run in &before.runs {
-            let Some(task) = &run.task_id else { continue };
-            if self.run(&run.name).and_then(|r| r.task_id.as_ref()) != Some(task) {
-                self.keep(&run.name, task);
+        for (name, task) in &reported {
+            if self.run(name).and_then(|r| r.task_id.as_ref()) != Some(task) {
+                self.keep(name, task);
             }
         }
     }
 }
+
+/// The kept task IDs by run name, and each listed run's name and task ID.
+type Tasks = (BTreeMap<String, Vec<String>>, Vec<(String, String)>);
 
 /// Where the loop file and its lock live: `<git common dir>/clm/`, not created.
 fn dir_path(root: &Path) -> Result<PathBuf, Failure> {
@@ -389,9 +404,9 @@ pub fn update<T>(
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => LoopFile::default(),
         Err(e) => return Err(io(&path, e)),
     };
-    let before = file.clone();
+    let before = file.tasks();
     let out = change(&mut file)?;
-    file.keep_tasks(&before);
+    file.keep_tasks(before);
     let tmp = dir.join("loop.tmp");
     let mut tmp_file = File::create(&tmp).map_err(|e| io(&tmp, e))?;
     let text = serde_json::to_vec_pretty(&file).map_err(|e| Failure::Git(e.to_string()))?;

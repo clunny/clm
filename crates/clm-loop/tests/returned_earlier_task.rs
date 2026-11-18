@@ -6,7 +6,7 @@ mod common;
 use std::process::Command;
 
 use clm_loop::{Kind, RunState, release, returned, step};
-use common::{Fixture, line, run};
+use common::{Fixture, line, rfc3339, run};
 
 /// A `build:a` in `state` with task `task`, whose loop file keeps `t-1` as an earlier run's.
 fn build_a(fx: &Fixture, state: RunState, task: Option<&str>) {
@@ -194,11 +194,54 @@ fn whatever_the_cause() {
             "{cause:?}: {actions:?}"
         );
     }
+    // A late stop for a cause that clears records no condition and no resume.
+    let until = rfc3339(clm_git::now() + 3600);
+    for (cause, until) in [("limit", Some(until.as_str())), ("disk", None)] {
+        let actions = returned(
+            &fx.options(),
+            "build:a",
+            Some("t-1"),
+            "none",
+            Some(cause),
+            until,
+        )
+        .unwrap();
+        assert!(
+            !actions.iter().any(|l| l.contains("build:a")),
+            "{cause}: {actions:?}"
+        );
+    }
     assert_eq!(fx.ran("run --finish a"), 0);
-    let a = fx.file().run("build:a").unwrap().clone();
+    let file = fx.file();
+    assert!(!file.conditions.disk);
+    assert_eq!(file.conditions.limit_until, None);
+    let a = file.run("build:a").unwrap().clone();
     assert_eq!(a.state, RunState::Running);
     assert_eq!(a.task_id.as_deref(), Some("t-2"));
     assert!(a.stops.is_empty(), "{:?}", a.stops);
+    assert_eq!(a.resume, None);
+    assert!(!a.resumed);
+}
+
+#[test]
+fn the_runs_own_task_also_kept() {
+    // req:orchestrator.loop/returned-ignores-an-earlier-task@6132c1ae
+    let fx = Fixture::new();
+    build_a(&fx, RunState::Running, Some("t-2"));
+    fx.keep("build:a", "t-2");
+
+    let actions = returned(
+        &fx.options(),
+        "build:a",
+        Some("t-2"),
+        "none",
+        Some("work"),
+        None,
+    )
+    .unwrap();
+
+    line(&actions, "resume build:a t-2 ");
+    assert_eq!(fx.file().run("build:a").unwrap().stops["work"], 1);
 }
 
 #[test]
