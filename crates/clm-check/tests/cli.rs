@@ -308,7 +308,7 @@ const FAILING_DETECTORS: &str = "[[detectors]]\nname = \"ok\"\ncommand = [\"true
 
 #[test]
 fn check_reports_failing_detectors() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = detector_repo(Some(FAILING_DETECTORS));
     let out = clm_check(dir.path());
     let stdout = String::from_utf8(out.stdout).unwrap();
@@ -321,7 +321,7 @@ fn check_reports_failing_detectors() {
 #[cfg(unix)]
 #[test]
 fn check_stops_a_hanging_detector() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"hang\"\ncommand = [\"sh\", \"-c\", \"echo started; sleep 30 & echo $! > child.pid; wait\"]\ntimeout = 1\n\n[[detectors]]\nname = \"bad\"\ncommand = [\"sh\", \"-c\", \"exit 3\"]\n",
     ));
@@ -346,7 +346,7 @@ fn check_stops_a_hanging_detector() {
 
 #[test]
 fn check_reports_a_detector_that_cannot_run() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"machete\"\ncommand = [\"no-such-tool-xyz\"]\nhint = \"cargo install cargo-machete\"\n",
     ));
@@ -366,7 +366,7 @@ fn check_reports_a_detector_that_cannot_run() {
 
 #[test]
 fn check_runs_detectors_from_the_repository_root() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"root\"\ncommand = [\"test\", \"-f\", \"specs/SPEC.md\"]\n",
     ));
@@ -379,7 +379,7 @@ fn check_runs_detectors_from_the_repository_root() {
 
 #[test]
 fn check_without_detectors_passes() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     for clm_toml in [None, Some("defects = \"backlog\"\n")] {
         let dir = detector_repo(clm_toml);
         let out = clm_check(dir.path());
@@ -389,7 +389,7 @@ fn check_without_detectors_passes() {
 
 #[test]
 fn scenario_detectors_skipped_on_request() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = detector_repo(Some(
         "[[detectors]]\nname = \"bad\"\ncommand = [\"sh\", \"-c\", \"touch ran; exit 3\"]\n",
     ));
@@ -400,6 +400,17 @@ fn scenario_detectors_skipped_on_request() {
     assert_eq!(out.status.code(), Some(0), "{stdout}");
     assert!(!stdout.contains("check/detectors"), "{stdout}");
     assert!(!dir.path().join("ran").exists(), "the detector ran");
+    // It needs no loadable settings either.
+    let unloadable = |_: &Path| {
+        Err(Violation {
+            path: dir.path().join("config.toml"),
+            rule: "check/detectors",
+            message: "unknown field `detectors`".into(),
+        })
+    };
+    let out = call_check(Path::new("."), &words, &unloadable);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(out.stdout.is_empty(), "{out:?}");
     // Without the flag the same repository fails on the detector.
     let out = clm_check(dir.path());
     assert_eq!(out.status.code(), Some(1));
@@ -407,19 +418,20 @@ fn scenario_detectors_skipped_on_request() {
 }
 
 #[test]
-fn check_reports_settings_errors_and_still_runs_rules() {
-    // req:check/detectors@8bf99b6d
+fn scenario_settings_that_cannot_be_loaded() {
+    // req:check/detectors@4851be31
     let dir = detector_repo(Some(FAILING_DETECTORS));
     // A spec violation `run` finds: an unparseable node.
     write(dir.path(), "specs/a/SPEC.md", "no frontmatter\n");
-    let config = TempDir::new().unwrap();
-    let user_file = config.path().join("clm/config.toml");
-    // The settings `crates/clm` loads with this user file can't be loaded: it passes why.
-    let unloadable = |_: &Path| {
+    // The caller can't load the settings: it passes the violation that says why.
+    let user_file = dir.path().join("config.toml");
+    let unloadable = |root: &Path| {
+        // The settings asked for are the checked repository's.
+        assert_eq!(root, dir.path());
         Err(Violation {
             path: user_file.clone(),
             rule: "check/detectors",
-            message: "TOML parse error at line 1, column 3: unknown field `detectors`, expected one of `autosync`, `defects`, `max_builds`, `writer`".into(),
+            message: "unknown field `detectors`".into(),
         })
     };
     let mut words = args(&["--root"]);
@@ -427,18 +439,18 @@ fn check_reports_settings_errors_and_still_runs_rules() {
     let out = call_check(Path::new("."), &words, &unloadable);
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert_eq!(out.status.code(), Some(1), "{stdout}");
-    let settings_line = stdout
-        .lines()
-        .find(|l| l.contains("check/detectors"))
-        .unwrap_or_else(|| panic!("{stdout}"));
-    let error = settings_line
-        .strip_prefix(&format!("{}: check/detectors: ", user_file.display()))
-        .unwrap_or_else(|| panic!("{stdout}"));
-    assert!(error.contains("detectors"), "{stdout}");
-    assert!(!error.contains('^'), "no source snippet: {stdout}");
-    // The detectors were skipped, `run`'s violations still print, one line each.
+    // That violation, as the caller gave it.
+    let settings_line = format!(
+        "{}: check/detectors: unknown field `detectors`",
+        user_file.display()
+    );
+    assert!(stdout.lines().any(|l| l == settings_line), "{stdout}");
+    // The detectors were skipped, and `run`'s violation still prints, one line each.
     assert!(!stdout.contains("bad failed"), "{stdout}");
-    assert!(stdout.contains("specs/a/SPEC.md: "), "{stdout}");
+    assert!(
+        stdout.lines().any(|l| l.starts_with("specs/a/SPEC.md: ")),
+        "{stdout}"
+    );
     assert_eq!(stdout.lines().count(), 2, "{stdout}");
 }
 

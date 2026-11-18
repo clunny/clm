@@ -32,7 +32,7 @@ fn running(pid: &str) -> bool {
 #[cfg(unix)]
 #[test]
 fn a_hanging_detector_is_stopped_with_its_children() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     let mut hang = detector(
         "hang",
@@ -76,7 +76,7 @@ fn failing() -> Vec<Detector> {
 
 #[test]
 fn reports_each_failing_detector() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     assert_eq!(
         found(dir.path(), &failing()),
@@ -90,7 +90,7 @@ fn reports_each_failing_detector() {
 
 #[test]
 fn reports_a_tool_that_cannot_run_with_its_hint() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     let list = [
         detector(
@@ -115,7 +115,7 @@ fn reports_a_tool_that_cannot_run_with_its_hint() {
 
 #[test]
 fn an_empty_command_cannot_run() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     let found = found(dir.path(), &[detector("empty", &[], None)]);
     assert_eq!(found.len(), 1, "{found:?}");
@@ -124,7 +124,7 @@ fn an_empty_command_cannot_run() {
 
 #[test]
 fn reports_a_detector_killed_by_a_signal() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     let list = [detector("killed", &["sh", "-c", "kill -9 $$"], None)];
     assert_eq!(
@@ -135,7 +135,7 @@ fn reports_a_detector_killed_by_a_signal() {
 
 #[test]
 fn runs_from_the_repository_root() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join("here"), "").unwrap();
     let list = [detector("cwd", &["test", "-f", "here"], None)];
@@ -144,7 +144,7 @@ fn runs_from_the_repository_root() {
 
 #[test]
 fn runs_detectors_in_order_one_after_another() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     // `second` fails unless `first` has finished writing its file.
     let list = [
@@ -164,14 +164,14 @@ fn runs_detectors_in_order_one_after_another() {
 
 #[test]
 fn no_detectors_no_violations() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     assert_eq!(found(dir.path(), &[]), []);
 }
 
 #[test]
 fn run_skips_detectors() {
-    // req:check/detectors@8bf99b6d
+    // req:check/detectors@4851be31
     let dir = TempDir::new().unwrap();
     fs::create_dir_all(dir.path().join("specs")).unwrap();
     fs::write(
