@@ -138,8 +138,12 @@ pub struct Item {
     /// the current text, or `None` when the earlier text wasn't found.
     pub diffs: Vec<(String, Option<String>)>,
     /// Obsolete: the markers' locations. Behind: the locations of the markers that cite it
-    /// at another version or without one (`stale-markers-keep-behind`).
+    /// at another version or without one (`stale-markers-keep-behind`), except those of
+    /// `foreign`.
     pub markers: Vec<String>,
+    /// Behind, once the root sets `wiring`: the stale markers in a file another component
+    /// owns, each with that owner, which this build may not change (`pending-prompt`).
+    pub foreign: Vec<(String, String)>,
 }
 
 /// The job a run gives its session.
@@ -176,6 +180,9 @@ pub struct Job {
     pub slot: u64,
     /// The repository's `[build] setup`, the command `clm setup` runs (`prompt-setup`).
     pub setup: Option<String>,
+    /// Whether the root sets `wiring`, so a build changes only its own component's files
+    /// and its stale markers in another's are listed apart (`pending-prompt`).
+    pub wiring: bool,
 }
 
 /// The prompt for `job`.
@@ -631,14 +638,35 @@ pub fn prompt(job: &Job) -> String {
                 item.markers.join(", ")
             ));
         } else if item.state == "behind" && !item.markers.is_empty() {
+            // Only while the root sets no `wiring` may a build edit another component's file.
+            let wherever = if job.wiring {
+                ""
+            } else {
+                ", wherever its file sits, another component's `paths` included,"
+            };
             p.push_str(&format!(
-                "  Re-cite each marker that cites it at another version or without one, wherever \
-                 its file sits, another component's `paths` included, after checking that its \
-                 test proves the current text (`path-ownership`): {}. When a test proves what \
+                "  Re-cite each marker that cites it at another version or without one{wherever} \
+                 after checking that its test proves the current text (`path-ownership`): {}. When a test proves what \
                  the current text no longer states, because the diff above moved its scenario \
                  to another requirement or removed it, take its marker off instead of re-citing \
                  it; the requirement that now states it is cited by its own build.\n",
                 item.markers.join(", ")
+            ));
+        }
+        if item.state == "behind" && !item.foreign.is_empty() {
+            let each: Vec<String> = item
+                .foreign
+                .iter()
+                .map(|(at, owner)| format!("`{at}` in `{owner}`'s file"))
+                .collect();
+            p.push_str(&format!(
+                "  Leave each marker that cites it at another version or without one in a file \
+                 another component owns: {}. `clm land` refuses this build's edit to such a \
+                 file (`land/build-holds-own-files`), and `clm check` reports the marker unless \
+                 an exemption covers its file (`check/tests-cite-their-owner`); add a \
+                 `question` item whose `blocks` names `{}`.\n",
+                listing_owned(&each, "and", false),
+                item.id
             ));
         }
     }
@@ -1252,6 +1280,15 @@ fn job(
     let mut history = History::new(root, rev, &spec);
     let mut items = Vec::new();
     let mut blocked = Vec::new();
+    // Once the root sets `wiring`, the component that owns a marker's file when that isn't
+    // `node` and no `wiring` glob lets every build edit it: the files `clm land` refuses
+    // this build's edit to (`land/build-holds-own-files`).
+    let foreign_owner = |m: &clm_coverage::Marker| {
+        let wiring = graph.wiring()?;
+        let file = m.path.to_string_lossy();
+        let owner = clm_coverage::owner(graph, &m.path)?;
+        (owner != node && !wiring.iter().any(|g| clm_coverage::matches(g, &file))).then_some(owner)
+    };
     for p in pending {
         let by = blockers(p);
         if !by.is_empty() {
@@ -1274,17 +1311,25 @@ fn job(
         } else {
             Vec::new()
         };
+        // Obsolete: every marker. Behind: those at another version or none, a foreign one apart.
+        let (mut markers, mut foreign) = (Vec::new(), Vec::new());
+        for m in &p.markers {
+            if p.state != ReqState::Behind {
+                markers.push(m.to_string());
+            } else if m.version != p.version {
+                match foreign_owner(m) {
+                    Some(owner) => foreign.push((m.to_string(), owner.to_string())),
+                    None => markers.push(m.to_string()),
+                }
+            }
+        }
         items.push(Item {
             id: p.id.clone(),
             version: p.version.clone(),
             state: p.state.to_string(),
             diffs,
-            markers: p
-                .markers
-                .iter()
-                .filter(|m| p.state != ReqState::Behind || m.version != p.version)
-                .map(ToString::to_string)
-                .collect(),
+            markers,
+            foreign,
         });
     }
     let bundle = clm_context::bundle(graph, tree, node);
@@ -1302,6 +1347,7 @@ fn job(
         read_from_main: false,
         slot: 0,
         setup: None,
+        wiring: graph.wiring().is_some(),
     })
 }
 

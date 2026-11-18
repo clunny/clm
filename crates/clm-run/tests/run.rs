@@ -272,7 +272,7 @@ fn behind_and_obsolete() -> Repo {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let (r, f) = (behind_and_obsolete(), fake());
     let p = prompt(&r, &f, "b", &[]);
     let current = load(&r.work)
@@ -294,9 +294,101 @@ fn scenario_behind_and_obsolete() {
     assert!(!p.contains("crates/b/t.rs:1"), "{p}");
 }
 
+/// Component `b` owning `crates/b/**`, whose `b/x` moved from an earlier commit's text, cited
+/// at that text at `crates/b/t.rs:2` and `crates/c/t.rs:2` and at the current one at
+/// `crates/b/now.rs:1`, and whose `b/gone`, which a live change removed, `crates/c/gone.rs:1`
+/// cites; `c` owning `crates/c/**`, and the root carrying `root_extra` frontmatter.
+fn stale_marker_in_c(root_extra: &str) -> Repo {
+    let r = repo();
+    let w = &r.work;
+    write(w, "specs/SPEC.md", &node_with("", root_extra, &[]));
+    let b = |text| node_with("", "paths: [\"crates/b/**\"]\n", &[("x", text)]);
+    write(w, "specs/b/SPEC.md", &b("It SHALL x."));
+    write(
+        w,
+        "specs/c/SPEC.md",
+        &node_with("", "paths: [\"crates/c/**\"]\n", &[("s", "It SHALL.")]),
+    );
+    push_main(w, "b at first");
+    let first = load(w).requirement("b/x").unwrap().version().to_string();
+    write(w, "specs/b/SPEC.md", &b("It SHALL x, more."));
+    let stale = format!("//\n// {}:b/x@{first}\n#[test]\nfn t() {{}}\n", "req");
+    write(w, "crates/b/t.rs", &stale);
+    write(w, "crates/c/t.rs", &stale);
+    let now = load(w).requirement("b/x").unwrap().version().to_string();
+    write(
+        w,
+        "crates/b/now.rs",
+        &format!("// {}:b/x@{now}\n#[test]\nfn t() {{}}\n", "req"),
+    );
+    write(w, "changes/g/change.md", "---\nstatus: applied\n---\n");
+    write(
+        w,
+        "changes/g/deltas/b.md",
+        "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0000000000000000 -->\n",
+    );
+    write(
+        w,
+        "crates/c/gone.rs",
+        &format!("// {}:b/gone\n#[test]\nfn t() {{}}\n", "req"),
+    );
+    push_main(w, "b moved, gone removed");
+    r
+}
+
+#[test]
+fn scenario_stale_marker_in_another_components_files() {
+    // req:orchestrator.run/pending-prompt@209c6f80
+    let (r, f) = (stale_marker_in_c(""), fake());
+    let p = prompt(&r, &f, "b", &[]);
+    assert!(p.contains("-It SHALL x.\n+It SHALL x, more."), "{p}");
+    assert!(p.contains("crates/b/t.rs:2, crates/c/t.rs:2"), "{p}");
+    assert!(!p.contains("crates/b/now.rs"), "{p}");
+    assert!(!p.contains("in `c`'s file"), "{p}");
+}
+
+#[test]
+fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
+    // req:orchestrator.run/pending-prompt@209c6f80
+    let (r, f) = (stale_marker_in_c("wiring: []\n"), fake());
+    let p = prompt(&r, &f, "b", &[]);
+    let list = &p[p.find("## Pending requirements").unwrap()..];
+    assert!(list.contains("`b/x` behind"), "{list}");
+    assert!(
+        list.contains("Re-cite each marker") && list.contains(": crates/b/t.rs:2."),
+        "{list}"
+    );
+    assert!(list.contains("`crates/c/t.rs:2` in `c`'s file"), "{list}");
+    assert!(
+        list.contains("add a `question` item whose `blocks` names `b/x`"),
+        "{list}"
+    );
+    assert!(!list.contains("crates/b/t.rs:2, crates/c/t.rs:2"), "{list}");
+    assert!(!list.contains("crates/b/now.rs"), "{list}");
+    // An obsolete requirement's markers are all listed for removal, `c`'s file included.
+    assert!(
+        list.contains("remove the code and tests marked at crates/c/gone.rs:1."),
+        "{list}"
+    );
+    assert!(
+        !list.contains("another component's `paths` included"),
+        "{list}"
+    );
+}
+
+#[test]
+fn a_stale_marker_in_a_wiring_file_is_re_cited() {
+    // req:orchestrator.run/pending-prompt@209c6f80
+    // Every build may edit a file a `wiring` glob matches (`model/wiring-globs`).
+    let (r, f) = (stale_marker_in_c("wiring: [\"crates/c/t.rs\"]\n"), fake());
+    let p = prompt(&r, &f, "b", &[]);
+    assert!(p.contains(": crates/b/t.rs:2, crates/c/t.rs:2."), "{p}");
+    assert!(!p.contains("in `c`'s file"), "{p}");
+}
+
 #[test]
 fn pending_requirements_are_listed_most_urgent_first() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let (r, f) = (repo(), fake());
     // `b/r` comes from `x` at no priority; `u` adds `b/u` at P1 and `t` adds `b/t` at P3.
     write(&r.work, "specs/b/SPEC.md", &node("", &["r", "t", "u"]));
@@ -323,7 +415,7 @@ fn pending_requirements_are_listed_most_urgent_first() {
 
 #[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let (r, f) = (repo(), fake());
     write(
         &r.work,
@@ -344,7 +436,7 @@ fn scenario_blocked_requirement_left_out() {
 
 #[test]
 fn scenario_needing_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let (r, f) = (repo(), fake());
     write(
         &r.work,
@@ -692,7 +784,7 @@ fn resumed_behind_main(r: &Repo, f: &Fake, conflict: bool) {
 
 #[test]
 fn scenario_resumed_branch_behind_main() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let (r, f) = (repo(), fake());
     resumed_behind_main(&r, &f, false);
     let p = prompt(&r, &f, "b", &[]);
@@ -705,7 +797,7 @@ fn scenario_resumed_branch_behind_main() {
 
 #[test]
 fn scenario_resumed_branch_that_conflicts_with_main() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let (r, f) = (repo(), fake());
     resumed_behind_main(&r, &f, true);
     // The branch and `origin/main` change the same line, so their merge conflicts.

@@ -20,6 +20,7 @@ fn job() -> Job {
                     ("none".into(), None),
                 ],
                 markers: vec!["crates/c/t.rs:8".into()],
+                foreign: vec![],
             },
             Item {
                 id: "b/y".into(),
@@ -27,6 +28,7 @@ fn job() -> Job {
                 state: "unbuilt".into(),
                 diffs: vec![],
                 markers: vec![],
+                foreign: vec![],
             },
             Item {
                 id: "b/gone".into(),
@@ -34,6 +36,7 @@ fn job() -> Job {
                 state: "obsolete".into(),
                 diffs: vec![],
                 markers: vec!["t.rs:9".into()],
+                foreign: vec![],
             },
         ],
         blocked: vec![
@@ -48,6 +51,7 @@ fn job() -> Job {
         read_from_main: false,
         slot: 2,
         setup: None,
+        wiring: false,
     }
 }
 
@@ -139,7 +143,7 @@ fn names_no_target_directory() {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let p = prompt(&job());
     let pending = p.find("## Pending requirements").unwrap();
     let list = &p[pending..];
@@ -164,8 +168,34 @@ fn scenario_behind_and_obsolete() {
 }
 
 #[test]
+fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
+    // req:orchestrator.run/pending-prompt@209c6f80
+    let mut j = job();
+    j.wiring = true;
+    let x = &mut j.pending[0];
+    x.markers.clear();
+    x.foreign = vec![("crates/c/t.rs:8".into(), "c".into())];
+    let p = prompt(&j);
+    let list = &p[p.find("## Pending requirements").unwrap()..];
+    let x = &list[list.find("`b/x` behind `22222222`").expect("b/x behind")
+        ..list.find("`b/y` unbuilt").unwrap()];
+    for needle in [
+        "`crates/c/t.rs:8` in `c`'s file",
+        "`clm land` refuses this build's edit",
+        "`land/build-holds-own-files`",
+        "`clm check` reports",
+        "unless an exemption covers its file",
+        "`check/tests-cite-their-owner`",
+        "add a `question` item whose `blocks` names `b/x`",
+    ] {
+        assert!(x.contains(needle), "{needle} missing from {x}");
+    }
+    assert!(!x.contains("Re-cite"), "{x}");
+}
+
+#[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@79aeec74
+    // req:orchestrator.run/pending-prompt@209c6f80
     let p = prompt(&job());
     let list = &p[p.find("## Pending requirements").unwrap()..];
     assert!(!list.contains("- `b/z` unbuilt"), "{list}");
