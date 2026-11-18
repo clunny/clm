@@ -154,7 +154,7 @@ fn fixture() -> TempDir {
 
 #[test]
 fn a_routed_command() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     let dir = fixture();
     let root = dir.path().to_str().unwrap();
     let run = |component: &str| {
@@ -181,7 +181,7 @@ fn a_routed_command() {
 
 #[test]
 fn a_status_the_call_returns() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     let dir = fixture();
     let marker = concat!("req", ":a/gone@00000000");
     write(dir.path(), "tests/t.rs", &format!("// {marker}\n"));
@@ -227,7 +227,7 @@ fn affected_fixture(clm_toml: &str) -> TempDir {
 
 #[test]
 fn the_settings_a_routed_command_is_passed() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     let set = affected_fixture("[affected]\nall = [\"Cargo.lock\"]\n");
     let out = clm(set.path(), &["affected", "--base", "main"]);
     assert_eq!(String::from_utf8_lossy(&out.stdout), "all Cargo.lock\n");
@@ -244,19 +244,23 @@ fn the_settings_a_routed_command_is_passed() {
     );
     let line = printed
         .lines()
-        .find(|l| l.contains("check.affected/affected-all"))
+        .find(|l| l.contains("check.affected/affected-base"))
         .unwrap_or_else(|| panic!("no violation line: {printed}"));
     // The violation as `clm check` prints one, `<path>: <rule>: <message>`, the path
     // `clm.toml`'s, and the message naming the setting.
     let (_, violation) = line
-        .split_once("clm.toml: check.affected/affected-all: ")
+        .split_once("clm.toml: check.affected/affected-base: ")
         .unwrap_or_else(|| panic!("not a violation of clm.toml: {line}"));
-    assert!(violation.contains("all"), "{line}");
+    assert!(
+        violation.contains("`affected`") && violation.contains("`all`"),
+        "{line}"
+    );
+    assert!(!printed.contains("affected-all"), "{printed}");
 }
 
 #[test]
 fn the_budgets_a_routed_command_is_passed() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT_SPEC);
@@ -292,7 +296,7 @@ fn the_budgets_a_routed_command_is_passed() {
 
 #[test]
 fn a_report_that_cant_be_read() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     let dir = fixture();
     write(dir.path(), "clm.toml", "defects = \"backlog\"\n");
     commit_all(dir.path(), "defects to the backlog");
@@ -321,7 +325,7 @@ fn a_report_that_cant_be_read() {
 
 #[test]
 fn a_current_directory_that_cant_be_read() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     for (command, args) in [("defect", &["--title", "t"][..]), ("config", &["list"][..])] {
         let dir = TempDir::new().unwrap();
         let gone = dir.path().join("gone");
@@ -347,7 +351,7 @@ fn a_current_directory_that_cant_be_read() {
 
 #[test]
 fn a_hook_whose_event_cant_be_read() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     // An event that can't be read is an empty one: the hook still runs and still exits as it
     // does for an empty event, so it never breaks a session.
     let dir = fixture();
@@ -375,7 +379,7 @@ fn listed_commands(help: &str) -> Vec<String> {
 
 #[test]
 fn every_command_routes() {
-    // req:clm/routes-only@ecf8e0d0
+    // req:clm/routes-only@0958d204
     let dir = TempDir::new().unwrap();
     let help = clm(dir.path(), &["--help"]);
     assert_eq!(help.status.code(), Some(0), "{help:?}");
