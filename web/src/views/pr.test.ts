@@ -143,7 +143,7 @@ describe('spec branches', () => {
   });
 });
 
-// req:web.views/approve-button@ff59f9d1
+// req:web.views/approve-button@17d4c422
 describe('Approve intent', () => {
   it('one request, then approved: a second tap while the first is in flight sends nothing', () => {
     const o = opts();
@@ -157,23 +157,16 @@ describe('Approve intent', () => {
     expect(after.disabled).toBe(true);
   });
 
-  it('disabled: without a fingerprint, once an approval shows, and offline', () => {
-    for (const [r, o] of [
-      [review({ fingerprint: null }), opts()],
-      [review({ approvals: [{ writer: 'a/web', at: '2026-10-27T10:00:00Z' }] }), opts()],
-      [review(), opts({ offline: true })],
-    ] as const) {
-      expect(renderReview(r, o).querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(true);
-    }
-    expect(renderReview(review(), opts()).querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(false);
-  });
-});
-
-// req:web/approve-by-branch@971e758a
-describe('what Approve may send', () => {
-  it('no fingerprint: Approve is disabled', () => {
-    expect(cannotAct(review({ fingerprint: null }), false, false)).not.toBeNull();
-    expect(renderReview(review({ fingerprint: null }), opts()).querySelector<HTMLButtonElement>('button.approve')!.disabled).toBe(true);
+  it('disabled: without a fingerprint, once an approval shows, and offline; the approved one reads Approved', () => {
+    const approve = (r: BranchReview, o: ReturnType<typeof opts>) => renderReview(r, o).querySelector<HTMLButtonElement>('button.approve')!;
+    const noFingerprint = approve(review({ fingerprint: null }), opts());
+    const approved = approve(review({ approvals: [{ writer: 'a/web', at: '2026-10-27T10:00:00Z' }] }), opts());
+    const offline = approve(review(), opts({ offline: true }));
+    expect([noFingerprint, approved, offline].map((b) => b.disabled)).toEqual([true, true, true]);
+    expect(approved.textContent).toBe('Approved');
+    expect(noFingerprint.textContent).toBe('Approve intent');
+    expect(offline.textContent).toBe('Approve intent');
+    expect(approve(review(), opts()).disabled).toBe(false);
   });
 
   it('an approval on screen comes from the review, not from a label', () => {
