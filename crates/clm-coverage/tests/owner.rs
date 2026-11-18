@@ -114,10 +114,17 @@ fn scenario_one_glob() {
 }
 
 /// Runs `git` in `dir`, failing the test when it fails, and returns its standard output.
+/// Hermetic: no outer repository's variables and no user or system config, so no
+/// excludes file hides a fixture.
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .args(args)
         .current_dir(dir)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .output()
         .unwrap();
     assert!(out.status.success(), "git {args:?}: {out:?}");
@@ -151,7 +158,11 @@ fn scenario_globs_as_git_reads_them() {
     }
     git(d, &["init", "-q"]);
     git(d, &["add", "."]);
-    let tracked: Vec<String> = git(d, &["ls-files"]).lines().map(String::from).collect();
+    let ls = |pathspec: &[&str]| -> Vec<String> {
+        let out = git(d, &[&["ls-files", "-z", "--"], pathspec].concat());
+        out.split_terminator('\0').map(String::from).collect()
+    };
+    let tracked = ls(&[]);
     assert_eq!(tracked.len(), files.len());
     for glob in [
         "*.rs",
@@ -171,11 +182,25 @@ fn scenario_globs_as_git_reads_them() {
         "crates/a?/**",
         "crates/a",
         "**",
+        // `**` that isn't a whole segment is one `*`.
+        "**.rs",
+        "crates/**.rs",
+        "a**.rs",
+        // ...except right after the literal prefix, which git strips before matching.
+        "a**",
+        "a***",
+        "crates/a**",
+        "a/b**s",
+        // A trailing slash, brackets and escapes.
+        "crates/a/",
+        "crates/*/",
+        "[ab].rs",
+        "[!a]*.rs",
+        "crates/[a-b]/**",
+        "tests/t[[:digit:]].py",
+        "a\\?.rs",
     ] {
-        let listed: Vec<String> = git(d, &["ls-files", &format!(":(glob){glob}")])
-            .lines()
-            .map(String::from)
-            .collect();
+        let listed = ls(&[&format!(":(glob){glob}")]);
         let matched: Vec<String> = tracked
             .iter()
             .filter(|f| matches(glob, f))
