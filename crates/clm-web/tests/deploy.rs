@@ -1,5 +1,6 @@
 //! `web/wrangler.toml` deploys the Worker the setup made, and `web/README.md` records that
-//! setup, as the web Design's Deploy, GitHub App and Setup paragraphs declare them.
+//! setup, as the web Design's Deploy, GitHub App and Setup paragraphs declare them, and
+//! the Worker reads its assets through the binding they name (web.worker/invited-sign-in).
 
 use std::fs;
 use std::path::Path;
@@ -83,15 +84,14 @@ fn sends_only_the_api_and_its_paths_to_the_worker() {
 
 #[test]
 fn the_worker_reads_the_build_time_assets_through_its_binding() {
-    // req:web/invited-users@cfd18219
-    // `_clm/` holds the invited list. The Worker reads it through the binding, and the
-    // run_worker_first entry above keeps it from being served directly.
+    // req:web.worker/invited-sign-in@6950d0c1
+    // `_clm/` holds the invited list, which the Worker reads through the binding;
+    // the Worker answers `/_clm/*` 404 itself (sign_in.rs).
     let w = wrangler();
     assert_eq!(w["assets"]["binding"].as_str(), Some("ASSETS"));
-    assert!(
-        repo_file("crates/clm-web/src/worker.rs")
-            .contains("const ASSETS_BINDING: &str = \"ASSETS\";")
-    );
+    let worker = repo_file("crates/clm-web/src/worker.rs");
+    assert!(worker.contains("const ASSETS_BINDING: &str = \"ASSETS\";"));
+    assert!(worker.contains("self.env.assets(ASSETS_BINDING)"));
 }
 
 #[test]

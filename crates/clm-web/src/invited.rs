@@ -1,5 +1,6 @@
 //! Who may sign in: the logins in the web Contract's invited-users list, which the build
-//! writes to `/_clm/invited.json` (web/invited-users).
+//! writes to `/_clm/invited.json` (web/invited-users), and the Worker enforces
+//! (web.worker/invited-sign-in).
 
 use clm_web_platform::platform::Assets;
 
