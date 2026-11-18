@@ -199,7 +199,7 @@ fn arguments_it_cant_parse_return_2_with_the_usage_error() {
 
 #[test]
 fn prints_the_changed_nodes_dependants_and_files() {
-    // req:check.affected/affected-components@b287ecd8
+    // req:check.affected/affected-components@161dede3
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -214,7 +214,7 @@ fn prints_the_changed_nodes_dependants_and_files() {
 
 #[test]
 fn nothing_changed_prints_nothing() {
-    // req:check.affected/affected-components@b287ecd8
+    // req:check.affected/affected-components@161dede3
     let dir = repo("");
     let out = clm_affected(dir.path(), "main");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
@@ -223,7 +223,7 @@ fn nothing_changed_prints_nothing() {
 
 #[test]
 fn uncommitted_untracked_and_deleted() {
-    // req:check.affected/affected-files@6074ba2c
+    // req:check.affected/affected-files@e9fac7ef
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/old.rs", "fn o() {}\n");
@@ -250,7 +250,7 @@ fn uncommitted_untracked_and_deleted() {
 
 #[test]
 fn a_file_no_node_holds_prints_all() {
-    // req:check.affected/affected-all@c4a42acf
+    // req:check.affected/affected-all@a55dd83e
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -263,7 +263,7 @@ fn a_file_no_node_holds_prints_all() {
 
 #[test]
 fn the_settings_glob_prints_all() {
-    // req:check.affected/affected-all@c4a42acf
+    // req:check.affected/affected-all@a55dd83e
     let dir = repo("[affected]\nall = [\"Cargo.lock\"]\n");
     let root = dir.path();
     write(root, "Cargo.lock", "lock 2\n");
@@ -275,7 +275,7 @@ fn the_settings_glob_prints_all() {
 
 #[test]
 fn a_deleted_file_no_node_holds_prints_all() {
-    // req:check.affected/affected-all@c4a42acf
+    // req:check.affected/affected-all@a55dd83e
     let dir = repo("");
     let root = dir.path();
     git(root, &["rm", "-q", "tools/build.sh"]);
@@ -287,7 +287,8 @@ fn a_deleted_file_no_node_holds_prints_all() {
 
 #[test]
 fn settings_that_cant_load_exit_1() {
-    // req:check.affected/affected-all@c4a42acf
+    // The Contract's exit 1 for settings that can't be loaded, which no requirement states yet
+    // (backlog/affected-settings-load-failure-has-no-requirement).
     let dir = repo("[affected]\nall = 3\n");
     let out = clm_affected(dir.path(), "main");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -370,7 +371,7 @@ fn the_base_defaults_to_origin_main() {
 
 #[test]
 fn selects_through_the_markers_of_the_files_the_scan_reads() {
-    // req:check.affected/affected-files@6074ba2c
+    // req:check.affected/affected-files@e9fac7ef
     let dir = repo("");
     let root = dir.path();
     // Cites `a`, so selected though `d` owns it.
@@ -402,7 +403,7 @@ fn selects_through_the_markers_of_the_files_the_scan_reads() {
 
 #[test]
 fn a_marker_outside_a_test_still_selects() {
-    // req:check.affected/affected-files@6074ba2c
+    // req:check.affected/affected-files@e9fac7ef
     let dir = repo("");
     let root = dir.path();
     // The only marker is a file-header comment, on no line of a test.
@@ -520,7 +521,7 @@ fn readers_repo() -> TempDir {
 
 #[test]
 fn a_reader_of_a_doc_only_file_is_printed_alone() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     // req:check.affected/doc-only-selects-nothing@d8831f2e
     let dir = readers_repo();
     let root = dir.path();
@@ -533,7 +534,7 @@ fn a_reader_of_a_doc_only_file_is_printed_alone() {
 
 #[test]
 fn readers_join_the_lines_of_a_code_change() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -549,7 +550,7 @@ fn readers_join_the_lines_of_a_code_change() {
 
 #[test]
 fn readers_alone_print_no_node_or_all_line() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     let dir = readers_repo();
     let root = dir.path();
     write(root, "ARCHITECTURE.md", "# B\n");
@@ -558,6 +559,19 @@ fn readers_alone_print_no_node_or_all_line() {
     let out = clm_affected_with(root, "main", &["--readers"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(stdout(&out), "file crates/e/tests/r.rs\n");
+}
+
+#[test]
+fn a_deleted_reader_is_not_printed() {
+    // req:check.affected/affected-readers@e1298640
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "ARCHITECTURE.md", "# B\n");
+    commit_all(root, "doc");
+    std::fs::remove_file(root.join("crates/e/tests/r.rs")).unwrap();
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
 }
 
 #[test]
@@ -579,7 +593,7 @@ fn readers_alone_ignore_the_graph_and_the_settings() {
 
 #[test]
 fn readers_alone_with_owned_code_changed_and_a_reader_in_an_affected_component() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     let dir = readers_repo();
     let root = dir.path();
     // `a`'s reader sorts before the selected `crates/a/src/lib.rs`, and `a` is affected.
@@ -606,7 +620,7 @@ fn readers_alone_with_owned_code_changed_and_a_reader_in_an_affected_component()
 
 #[test]
 fn no_reader_matches() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     let dir = readers_repo();
     let root = dir.path();
     write(root, "backlog/y.md", BACKLOG_ITEM);
@@ -619,7 +633,7 @@ fn no_reader_matches() {
 
 #[test]
 fn a_marker_in_markdown_reads_nothing() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     let dir = repo("");
     let root = dir.path();
     write(root, "docs/notes.md", &format!("{READS}ARCHITECTURE.md\n"));
@@ -632,7 +646,7 @@ fn a_marker_in_markdown_reads_nothing() {
 
 #[test]
 fn an_untracked_reader_and_an_untracked_doc_count() {
-    // req:check.affected/affected-readers@94edd10f
+    // req:check.affected/affected-readers@e1298640
     let dir = readers_repo();
     let root = dir.path();
     write(
@@ -949,7 +963,7 @@ fn overlap_reads_the_graph_whole_from_the_commits() {
 
 #[test]
 fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
-    // req:check.affected/affected-files@6074ba2c
+    // req:check.affected/affected-files@e9fac7ef
     // req:check.affected/why-chain@bf835003
     let dir = repo("");
     let root = dir.path();

@@ -165,7 +165,7 @@ fn cited_ids(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// The files `check`'s coverage scan reads, tracked or untracked and not ignored, UTF-8 and
+/// The files `check.coverage`'s scan reads, tracked or untracked and not ignored, UTF-8 and
 /// not Markdown.
 fn scanned(root: &Path) -> Result<Scan, Failure> {
     let listed = git(
@@ -269,7 +269,7 @@ mod cited_ids_tests {
 
     #[test]
     fn a_marker_outside_a_test_is_cited_like_one_inside() {
-        // req:check.affected/affected-files@6074ba2c
+        // req:check.affected/affected-files@e9fac7ef
         let marker = |id: &str| format!("// {}{id}", concat!("req", ":"));
         let text = format!(
             "{}\nfn helper() {{}}\n\n#[test]\nfn t() {{\n    {}\n}}\n",
