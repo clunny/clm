@@ -1311,24 +1311,25 @@ fn job(
         } else {
             Vec::new()
         };
+        // Obsolete: every marker. Behind: those at another version or none, a foreign one apart.
+        let (mut markers, mut foreign) = (Vec::new(), Vec::new());
+        for m in &p.markers {
+            if p.state != ReqState::Behind {
+                markers.push(m.to_string());
+            } else if m.version != p.version {
+                match foreign_owner(m) {
+                    Some(owner) => foreign.push((m.to_string(), owner.to_string())),
+                    None => markers.push(m.to_string()),
+                }
+            }
+        }
         items.push(Item {
             id: p.id.clone(),
             version: p.version.clone(),
             state: p.state.to_string(),
             diffs,
-            markers: p
-                .markers
-                .iter()
-                .filter(|m| p.state != ReqState::Behind || m.version != p.version)
-                .filter(|m| foreign_owner(m).is_none())
-                .map(ToString::to_string)
-                .collect(),
-            foreign: p
-                .markers
-                .iter()
-                .filter(|m| p.state == ReqState::Behind && m.version != p.version)
-                .filter_map(|m| Some((m.to_string(), foreign_owner(m)?.to_string())))
-                .collect(),
+            markers,
+            foreign,
         });
     }
     let bundle = clm_context::bundle(graph, tree, node);
