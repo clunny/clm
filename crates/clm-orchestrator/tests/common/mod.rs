@@ -6,7 +6,6 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use clm_check::Marker;
 use clm_model::{Files, Graph};
 use tempfile::TempDir;
 
@@ -101,21 +100,6 @@ pub fn graph(files: &[(&str, &str)]) -> Graph {
     let (graph, violations) = clm_model::load_files(&files);
     assert!(violations.is_empty(), "{violations:?}");
     graph
-}
-
-/// A marker citing `id` at `version` (`None` for a bare one) at `t.rs:<line>`.
-pub fn marker(id: &str, version: Option<&str>, line: usize) -> Marker {
-    Marker {
-        id: id.into(),
-        version: version.map(String::from),
-        path: PathBuf::from("t.rs"),
-        line,
-    }
-}
-
-/// A marker citing `id` at its current version in `graph`.
-pub fn current(graph: &Graph, id: &str) -> Marker {
-    marker(id, Some(graph.requirement(id).unwrap().version()), 1)
 }
 
 /// A clone of a bare `origin` whose `main` has `a` (depends on `b`), `b` and `c`, and an

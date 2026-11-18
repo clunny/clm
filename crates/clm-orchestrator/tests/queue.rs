@@ -12,6 +12,21 @@ const ROOT: (&str, &str) = (
     "---\ntitle: R\nstatus: active\nowners: []\n---\n\n## Contract\nr\n",
 );
 
+/// A marker citing `id` at `version` (`None` for a bare one) at `t.rs:<line>`.
+fn marker(id: &str, version: Option<&str>, line: usize) -> Marker {
+    Marker {
+        id: id.into(),
+        version: version.map(String::from),
+        path: std::path::PathBuf::from("t.rs"),
+        line,
+    }
+}
+
+/// A marker citing `id` at its current version in `graph`.
+fn current(graph: &Graph, id: &str) -> Marker {
+    marker(id, Some(graph.requirement(id).unwrap().version()), 1)
+}
+
 fn queue(graph: &Graph, markers: &[Marker], refs: &[ClaimRef]) -> Queue {
     queue_from_refs(graph, markers, refs, 1_000_000, 4)
 }
