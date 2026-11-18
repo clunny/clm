@@ -8,8 +8,7 @@ use crate::{Error, Repo};
 /// `impl/archive/<id>`.
 fn component_of(branch: &str) -> Option<&str> {
     let component = branch.strip_prefix("impl/")?;
-    (!component.is_empty() && component != "archive" && !component.starts_with("archive/"))
-        .then_some(component)
+    (!component.is_empty() && !component.starts_with("archive/")).then_some(component)
 }
 
 /// Refuses when `branch` is `impl/<component>` and `head`, against `base`, changes a file

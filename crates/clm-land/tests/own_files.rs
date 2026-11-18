@@ -163,6 +163,61 @@ fn the_refusal_names_the_owner_and_what_to_do() {
         "{why}"
     );
     assert!(
-        why.contains("impl/a changes its own files, the wiring and a capability test it serves.")
+        why.contains("impl/a changes its own files, the wiring and a capability test it serves."),
+        "{why}"
+    );
+}
+
+#[test]
+fn each_foreign_file_gets_its_own_line() {
+    // req:land/build-holds-own-files@f67d768f
+    let f = with_specs();
+    f.branch(
+        "impl/a",
+        &[
+            ("crates/b/src/lib.rs", "b2\n"),
+            ("crates/b/src/more.rs", "m\n"),
+        ],
+    );
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
+    let lines: Vec<&str> = why.lines().collect();
+    assert_eq!(lines.len(), 2, "{why}");
+    for (line, file) in lines
+        .iter()
+        .zip(["crates/b/src/lib.rs", "crates/b/src/more.rs"])
+    {
+        assert_eq!(
+            *line,
+            format!(
+                "{file}: land/build-holds-own-files: owned by `b`; impl/a changes its own files, \
+                 the wiring and a capability test it serves. Build this in `b`, or leave the \
+                 requirement unbuilt and add a question item that blocks it"
+            )
+        );
+    }
+}
+
+#[test]
+fn a_component_named_archive_is_held_on_its_own_branch() {
+    // req:land/build-holds-own-files@f67d768f
+    let f = Fixture::new("");
+    push_specs(
+        &f,
+        &[
+            ("specs/SPEC.md", &root()),
+            (
+                "specs/archive/SPEC.md",
+                &component("Archive", "crates/archive/**"),
+            ),
+            ("specs/b/SPEC.md", &component("B", "crates/b/**")),
+            ("crates/archive/src/lib.rs", "a\n"),
+            ("crates/b/src/lib.rs", "b\n"),
+        ],
+    );
+    f.branch("impl/archive", &[("crates/b/src/lib.rs", "b2\n")]);
+    let why = refused(clm_land::land(&f.work(), Some("impl/archive"), &f.env(&[])));
+    assert!(
+        why.starts_with("crates/b/src/lib.rs: land/build-holds-own-files: owned by `b`;"),
+        "{why}"
     );
 }
