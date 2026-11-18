@@ -1,8 +1,8 @@
 //! Deterministic checks. Each violation's rule is the ID of the requirement it enforces.
 //!
 //! Without the default feature `checkout`, only what works on files already in memory is
-//! built (`pending_for`, `format`, `undeclared_imports`), so the crate builds for
-//! `wasm32-unknown-unknown`.
+//! built (such as `pending_for`, `format` and `undeclared_imports`), so the crate builds
+//! for `wasm32-unknown-unknown`.
 //!
 //! The coverage library is `check.coverage`'s crate `clm-coverage`, which callers import
 //! themselves: this crate re-exports none of it (`check-coverage-split`).

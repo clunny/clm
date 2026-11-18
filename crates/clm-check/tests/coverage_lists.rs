@@ -230,8 +230,13 @@ fn a_graph_that_doesnt_load_fails_each_list() {
     write(d, "specs/a/SPEC.md", "not a spec");
     git(d, &["add", "-A"]);
     git(d, &["commit", "-q", "-m", "b"]);
+    let plain = clm(d, &[]);
+    assert_eq!(plain.status.code(), Some(1));
+    assert!(out(&plain).contains("specs/a/SPEC.md"), "{}", out(&plain));
     for args in [&["--obsolete-tests"][..], &["--deleted-tests", "HEAD"]] {
-        assert_eq!(clm(d, args).status.code(), Some(1), "{args:?}");
+        let o = clm(d, args);
+        assert_eq!(o.status.code(), Some(1), "{args:?}");
+        assert_eq!(out(&o), out(&plain), "{args:?}");
     }
 }
 
