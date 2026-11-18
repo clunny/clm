@@ -2197,7 +2197,8 @@ for i in $(seq 1 "$missed"); do echo "missed $i" >> "$out/mutants.out/missed.txt
 /// and keeps copies of the configuration file
 /// and of the vitest configuration it names in `$CI_LOG.stryker` and `$CI_LOG.vitest`, and in
 /// `$CI_LOG.tempdir` the path of the `tempDirName` it names, then a `<entry> <link target>` line
-/// for each entry that directory holds (`-` for one that is no link). It keeps the fixture's
+/// for each entry that directory holds (`-` for one that is no link), and in
+/// `$CI_LOG.stale-tempdirs` any other `.stryker-tmp*` directory beside it. It keeps the fixture's
 /// test file in `$CI_LOG.fixture-test`. A run on
 /// the script's fixture reports its first function's mutant killed and its second's survived,
 /// unless `bin/stryker-fixture-kills-all` exists, or reports another of the second's `NoCoverage` when
@@ -2227,6 +2228,8 @@ else
     echo "$PWD/$tmp"
     for e in $(ls -A "$tmp" 2>/dev/null); do echo "$e $(readlink "$tmp/$e" || echo -)"; done
   } > "$CI_LOG.tempdir"
+  # Any other run's sandbox directory still in the npm directory.
+  ls -A | grep '^\.stryker-tmp' | grep -vx -- "$tmp" > "$CI_LOG.stale-tempdirs" || true
   cp "$cfg" "$CI_LOG.stryker"
   cp "$(grep -o '"configFile": "[^"]*"' "$cfg" | sed -e 's/^"configFile": "//' -e 's/"$//')" "$CI_LOG.vitest"
   [ ! -e "$bin/stryker-exit" ] || exit "$(cat "$bin/stryker-exit")"
@@ -2347,6 +2350,7 @@ impl Tree {
             "sleeper",
             "coverage-slot",
             "tempdir",
+            "stale-tempdirs",
             "fixture-test",
         ] {
             let _ = fs::remove_file(self.dir.path().join(format!("log.{kept}")));
@@ -3047,7 +3051,10 @@ fn a_typescript_test_reads_a_file_of_the_repository() {
     want.sort();
     assert!(want.iter().any(|(n, _)| n == ".github"), "{want:?}");
     assert_eq!(got, want);
-    // Gone once StrykerJS has returned, so no later run finds the links.
+    // Gone once StrykerJS has returned, so no later run finds the links: the fixture's runs'
+    // were gone by the time the block's ran, and the block's once the script ends.
+    assert!(tree.dir.path().join("log.stale-tempdirs").exists());
+    assert_eq!(tree.log_lines("stale-tempdirs"), Vec::<String>::new());
     assert!(!dir.exists(), "{}", dir.display());
     assert!(
         !fs::read_dir(tree.work().join("web")).unwrap().any(|e| e
