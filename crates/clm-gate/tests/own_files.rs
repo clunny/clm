@@ -113,6 +113,38 @@ fn another_components_source_is_foreign_and_the_gate_ignores_it() {
     let outcome = evaluate_at(d, "main", "HEAD", false).unwrap();
     assert_eq!(outcome.kind, Kind::Code);
     assert!(outcome.violations.is_empty());
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let status = clm_gate::command(["--base", "main"], d, &|_| None, &mut out, &mut err);
+    assert_eq!(status, 0, "{}", String::from_utf8_lossy(&err));
+    let out = String::from_utf8(out).unwrap();
+    assert_eq!(out.lines().next(), Some("code"), "{out}");
+}
+
+// req:gate/own-files@37282f7d
+#[test]
+fn a_requirement_without_serves_of_its_own_serves_what_its_component_does() {
+    let dir = base(Some("[]"));
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(
+        d,
+        "specs/b/SPEC.md",
+        &component(
+            "B",
+            "paths: [\"crates/b/**\"]\nserves: [\"capability/see\"]\n",
+            X,
+        ),
+    );
+    commit(d, "b serves see");
+    git(d, &["checkout", "-q", "impl/a"]);
+    git(d, &["merge", "-q", "main"]);
+    write(
+        d,
+        "tests/capability/see.rs",
+        &cite("capability/see", "fn see() { /* moved */ }\n"),
+    );
+    commit(d, "edit");
+    assert_eq!(foreign(d, "b"), Vec::new());
 }
 
 // req:gate/own-files@37282f7d

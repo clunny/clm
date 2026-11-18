@@ -1097,26 +1097,14 @@ pub fn foreign_files(
     if !graph.nodes.contains_key(component) {
         return Ok(Vec::new());
     }
-    let served: Vec<String> = graph
+    let served: BTreeSet<&String> = graph
         .nodes
         .get(component)
         .into_iter()
         .flat_map(|n| &n.requirements)
         .flat_map(|r| graph.effective_serves(&r.id))
-        .filter_map(|s| s.strip_prefix("capability/"))
-        .map(|slug| format!("req:capability/{slug}"))
+        .filter(|s| s.starts_with("capability/"))
         .collect();
-    // A capability marker cites `see`, not `seeing`: the slug must end where the marker does.
-    let cites = |text: &[u8], marker: &str| {
-        text.windows(marker.len())
-            .enumerate()
-            .filter(|(_, w)| *w == marker.as_bytes())
-            .any(|(i, _)| {
-                !text
-                    .get(i + marker.len())
-                    .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'-' || *b == b'_')
-            })
-    };
     let mut found = Vec::new();
     for (status, file) in changed_files(repo, &format!("{merge_base}...{head}"))? {
         if is_spec_path(&file) {
@@ -1130,7 +1118,11 @@ pub fn foreign_files(
         }
         if status == 'M' {
             let before = show_bytes(repo, &format!("{merge_base}:{file}")).unwrap_or_default();
-            if served.iter().any(|m| cites(&before, m)) {
+            let before = String::from_utf8_lossy(&before);
+            if clm_coverage::marker_spans(&before)
+                .iter()
+                .any(|m| served.contains(&m.id))
+            {
                 continue;
             }
         }
