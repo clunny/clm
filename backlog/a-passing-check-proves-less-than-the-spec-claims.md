@@ -148,11 +148,11 @@ What was proposed on 2026-11-15, to carry forward:
 
 **Phase 4, how it ended** (2026-11-18, `main` at `015dd894`):
 - **Built.** Steps 1 to 8 below are done. The second closing branch's builds ran on 2026-11-18: `check.coverage`, `check`, `check.affected` and the root, with `check` and `check.coverage` each built twice because `check`'s obsolete markers were ready before `check.coverage/owner`. The glob test was not lost: `crates/clm-coverage/tests/owner.rs` holds `scenario_globs_as_git_reads_them`.
-- **What that run filed.** `affected-settings-load-failure-has-no-requirement`, a `question`: `clm affected` exits 1 when its settings can't be loaded and no requirement says so; the test lost its marker. It waits on the human.
+- **What that run filed.** `affected-settings-load-failure-has-no-requirement`, a `question`: `clm affected` exits 1 when its settings can't be loaded and no requirement says so; the test lost its marker. Answered the same day, as below.
 
 **Next, after phase 4** (2026-11-18, in this order):
 - Phase 5, in a fresh session, starting from its paragraph under Plan and the lines marked "for phase 5" in this one.
-- Any time, each its own small spec change: the answer to `affected-settings-load-failure-has-no-requirement`; and `check` out of the `depends_on` of `orchestrator.triage`, `orchestrator.run`, `land` and `view`, whose crates no longer depend on `clm-check`.
+- Done on 2026-11-18, as `20261118-affected-says-settings-fail`, by the human's word: `check.affected/affected-base` states the exit when the settings can't be loaded, and `orchestrator.triage`, `orchestrator.run` and `view` lost `check` from `depends_on`. `land` keeps it, though its crate has no `clm-check` dependency: it runs `clm check` as a process and its spec relies on that command line. `/clm:build` builds `check.affected` and `view`, each a re-cite.
 - Still open from "Next, after phase 3": the two measurements under Open questions, a read of the five narrowly killed tests, and the human's use checklist (the panel, Azure DevOps, Codex).
 - **A trap met on the first closing branch.** `clm rebase` on a branch that edits a Design which a `proposed` change's delta is written against rewrites that change's base to the edited Design, and says `rebase ok`. Taking the edit back then leaves the other change stale; `git checkout origin/main -- changes/<id>` restores it.
 - **Measured on 2026-11-17, before the last builds:** the root's code is 99,495 tokens against the 60,000 this phase expected and a budget of 40,000, and its spec 30,019 against 12,000; the top-level files of `crates/clm/tests/` are 41, holding 222 tests, all the root's. The share of builds that filed an item is not counted yet: read it from the ledger and the backlog's history.
