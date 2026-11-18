@@ -40,7 +40,7 @@ const BOTH: [(&str, &str); 2] = [
 
 #[test]
 fn another_components_source_refuses_the_land() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     let old = f.remote("main");
@@ -58,7 +58,7 @@ fn another_components_source_refuses_the_land() {
 
 #[test]
 fn the_builds_pre_check_prints_the_same_line() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     f.git(&f.work(), &["checkout", "-q", "impl/a"]);
@@ -73,7 +73,7 @@ fn the_builds_pre_check_prints_the_same_line() {
 
 #[test]
 fn its_own_files_land() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = with_specs();
     f.branch("impl/a", &BOTH[..1]);
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
@@ -82,7 +82,7 @@ fn its_own_files_land() {
 
 #[test]
 fn a_branch_of_another_name_is_not_refused() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = with_specs();
     f.branch("tidy-b", &BOTH);
     clm_land::land(&f.work(), Some("tidy-b"), &f.env(&[])).unwrap();
@@ -100,7 +100,7 @@ fn push_specs(f: &Fixture, files: &[(&str, &str)]) {
 
 #[test]
 fn a_root_with_no_wiring_refuses_nothing() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = Fixture::new("");
     push_specs(
         &f,
@@ -119,7 +119,7 @@ fn a_root_with_no_wiring_refuses_nothing() {
 
 #[test]
 fn an_archive_branch_is_not_held_even_when_a_component_is_named_archive() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = Fixture::new("");
     push_specs(
         &f,
@@ -141,7 +141,7 @@ fn an_archive_branch_is_not_held_even_when_a_component_is_named_archive() {
 
 #[test]
 fn a_detached_head_is_checked_as_before() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     f.git(&f.work(), &["checkout", "-q", "--detach", "impl/a"]);
@@ -152,7 +152,7 @@ fn a_detached_head_is_checked_as_before() {
 
 #[test]
 fn the_refusal_names_the_owner_and_what_to_do() {
-    // req:land/build-holds-own-files@848d8f4b
+    // req:land/build-holds-own-files@f67d768f
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
@@ -162,7 +162,62 @@ fn the_refusal_names_the_owner_and_what_to_do() {
         ),
         "{why}"
     );
-    assert!(why.contains(
-        "impl/a changes its own files, the wiring, a test that cites it and a capability test it serves."
-    ));
+    assert!(
+        why.contains("impl/a changes its own files, the wiring and a capability test it serves."),
+        "{why}"
+    );
+}
+
+#[test]
+fn each_foreign_file_gets_its_own_line() {
+    // req:land/build-holds-own-files@f67d768f
+    let f = with_specs();
+    f.branch(
+        "impl/a",
+        &[
+            ("crates/b/src/lib.rs", "b2\n"),
+            ("crates/b/src/more.rs", "m\n"),
+        ],
+    );
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
+    let lines: Vec<&str> = why.lines().collect();
+    assert_eq!(lines.len(), 2, "{why}");
+    for (line, file) in lines
+        .iter()
+        .zip(["crates/b/src/lib.rs", "crates/b/src/more.rs"])
+    {
+        assert_eq!(
+            *line,
+            format!(
+                "{file}: land/build-holds-own-files: owned by `b`; impl/a changes its own files, \
+                 the wiring and a capability test it serves. Build this in `b`, or leave the \
+                 requirement unbuilt and add a question item that blocks it"
+            )
+        );
+    }
+}
+
+#[test]
+fn a_component_named_archive_is_held_on_its_own_branch() {
+    // req:land/build-holds-own-files@f67d768f
+    let f = Fixture::new("");
+    push_specs(
+        &f,
+        &[
+            ("specs/SPEC.md", &root()),
+            (
+                "specs/archive/SPEC.md",
+                &component("Archive", "crates/archive/**"),
+            ),
+            ("specs/b/SPEC.md", &component("B", "crates/b/**")),
+            ("crates/archive/src/lib.rs", "a\n"),
+            ("crates/b/src/lib.rs", "b\n"),
+        ],
+    );
+    f.branch("impl/archive", &[("crates/b/src/lib.rs", "b2\n")]);
+    let why = refused(clm_land::land(&f.work(), Some("impl/archive"), &f.env(&[])));
+    assert!(
+        why.starts_with("crates/b/src/lib.rs: land/build-holds-own-files: owned by `b`;"),
+        "{why}"
+    );
 }

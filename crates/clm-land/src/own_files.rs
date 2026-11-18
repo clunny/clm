@@ -8,8 +8,7 @@ use crate::{Error, Repo};
 /// `impl/archive/<id>`.
 fn component_of(branch: &str) -> Option<&str> {
     let component = branch.strip_prefix("impl/")?;
-    (!component.is_empty() && component != "archive" && !component.starts_with("archive/"))
-        .then_some(component)
+    (!component.is_empty() && !component.starts_with("archive/")).then_some(component)
 }
 
 /// Refuses when `branch` is `impl/<component>` and `head`, against `base`, changes a file
@@ -28,9 +27,8 @@ pub(crate) fn check(repo: &Repo, branch: &str, base: &str, head: &str) -> Result
         .map(|f| {
             format!(
                 "{}: land/build-holds-own-files: owned by `{}`; impl/{component} changes its own \
-                 files, the wiring, a test that cites it and a capability test it serves. Build \
-                 this in `{}`, or leave the requirement unbuilt and add a question item that \
-                 blocks it",
+                 files, the wiring and a capability test it serves. Build this in `{}`, or leave \
+                 the requirement unbuilt and add a question item that blocks it",
                 f.path, f.owner, f.owner
             )
         })
