@@ -87,7 +87,7 @@ fn in_test(s: &str) -> String {
 
 #[test]
 fn scenario_plain_chart() {
-    // req:view/view-command@632cf6f3
+    // req:view/view-command@9fec4d39
     let dir = two_nodes();
     let text = view(dir.path(), Name::Spec, Format::Text);
     assert!(text.contains(" a ") && text.contains(" b "), "{text}");
@@ -97,7 +97,7 @@ fn scenario_plain_chart() {
 
 #[test]
 fn scenario_coloured_chart() {
-    // req:view/view-command@632cf6f3
+    // req:view/view-command@9fec4d39
     let dir = two_nodes();
     let plain = view(dir.path(), Name::Spec, Format::Text);
     let ansi = view(dir.path(), Name::Spec, Format::Ansi);
@@ -120,7 +120,7 @@ fn scenario_coloured_chart() {
 
 #[test]
 fn scenario_svg() {
-    // req:view/view-command@632cf6f3
+    // req:view/view-command@9fec4d39
     let dir = two_nodes();
     let text = view(dir.path(), Name::Spec, Format::Svg);
     let doc = roxmltree::Document::parse(&text).unwrap_or_else(|e| panic!("{e}: {text}"));
@@ -142,7 +142,7 @@ fn scenario_svg() {
 
 #[test]
 fn scenario_nested_nodes() {
-    // req:view/spec-view@39989db1
+    // req:view/spec-view@2904c6a2
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/check/SPEC.md", &node("", &["c"]));
@@ -247,7 +247,7 @@ fn scenario_node_detail_from_the_command() {
 
 #[test]
 fn scenario_a_removed_nodes_markers() {
-    // req:view/spec-view@39989db1
+    // req:view/spec-view@2904c6a2
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -282,7 +282,7 @@ fn scenario_a_removed_nodes_markers() {
 
 #[test]
 fn spec_chart_shows_the_queue_state_from_the_claim_refs() {
-    // req:view/spec-view@39989db1
+    // req:view/spec-view@2904c6a2
     let dir = two_nodes();
     let refs = [claim("a", 1)];
     let text = view_of(dir.path(), Name::Spec, Format::Text, DEFAULT_WIDTH, &refs);
