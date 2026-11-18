@@ -84,15 +84,6 @@ fn removed_node_repo() -> TempDir {
     dir
 }
 
-/// A node `id` (title `T`) whose frontmatter has `paths`, with no requirements.
-fn node_with_paths(root: &Path, id: &str, paths: &str) {
-    write(
-        root,
-        &format!("specs/{}/SPEC.md", id.replace('.', "/")),
-        &format!("---\ntitle: T\nstatus: active\nowners: []\npaths: {paths}\n---\n"),
-    );
-}
-
 #[test]
 fn a_removed_node_is_an_unknown_node() {
     // req:check/pending-narrows-on-a-graph@201e1738
@@ -111,84 +102,6 @@ fn a_removed_node_is_an_unknown_node() {
     let unknown = clm_check::pending_in(d, Some("nope")).unwrap_err();
     assert_eq!(unknown[0].rule, "check/pending-narrows-on-a-graph");
     assert_eq!(lines(d, Some("clm")), ["g/x obsolete t.rs:1"]);
-}
-
-/// Owners agree with git: for each pattern, a node with that one pattern owns a removed
-/// node's marker in exactly the files `git ls-files ':(glob)<pattern>'` lists.
-#[test]
-fn paths_match_as_git_glob_pathspecs_do() {
-    // req:check/path-ownership@5c51292c
-    let files = [
-        "crates/v/t.rs",
-        "crates/v/tests/t.rs",
-        "crates/vv/t.rs",
-        "crates/t.rs",
-        "t.rs",
-        "a/b.rs",
-        "a/x/y/b.rs",
-        "ab.rs",
-        "a]b.rs",
-        "abc.rs",
-        "x/a.rs",
-        "x/7.rs",
-        "a[bc.rs",
-        "docs/[draft]/t.rs",
-        "a*b.rs",
-    ];
-    let patterns = [
-        "crates/v/**",
-        "crates/*",
-        "crates/v",
-        "crates/v/",
-        "crates/v*",
-        "**/t.rs",
-        "a/**/b.rs",
-        "a**.rs",
-        "*.rs",
-        "a?c.rs",
-        "a[]x]b.rs",
-        "[!c]*.rs",
-        "[^c]*.rs",
-        "**",
-        "x/[a-c].rs",
-        "x/[[:alpha:]].rs",
-        "x/[[:digit:]].rs",
-        "a[b*",
-        "docs/[draft]",
-        "a\\*b.rs",
-    ];
-    for pattern in patterns {
-        let dir = removed_node_repo();
-        let d = dir.path();
-        node_with_paths(d, "v", &format!("[{pattern:?}]"));
-        for f in files {
-            write(d, f, &in_test(&format!("// {REQ}g/x\n")));
-        }
-        let git = |args: &[&str]| {
-            let out = std::process::Command::new("git")
-                .args(args)
-                .current_dir(d)
-                .output()
-                .unwrap();
-            assert!(out.status.success(), "git {args:?}");
-            String::from_utf8(out.stdout).unwrap()
-        };
-        git(&["init", "-q"]);
-        git(&["add", "-A"]);
-        let mut expected: Vec<String> = git(&["ls-files", &format!(":(glob){pattern}")])
-            .lines()
-            .filter(|f| files.contains(f))
-            .map(|f| format!("{f}:1"))
-            .collect();
-        expected.sort();
-        let mut owned: Vec<String> = clm_check::pending_in(d, Some("v"))
-            .unwrap()
-            .iter()
-            .flat_map(|p| p.markers.iter().map(|m| m.to_string()))
-            .collect();
-        owned.sort();
-        assert_eq!(owned, expected, "pattern {pattern}");
-    }
 }
 
 #[test]

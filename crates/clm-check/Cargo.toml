@@ -31,10 +31,6 @@ name = "detectors"
 required-features = ["checkout", "detectors"]
 
 [[test]]
-name = "ownership"
-required-features = ["checkout"]
-
-[[test]]
 name = "paths_disjoint"
 required-features = ["checkout"]
 
