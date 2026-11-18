@@ -30,7 +30,7 @@ fn settings(root: &Path, _env: &dyn Fn(&str) -> Option<String>) -> Result<Vec<St
     let Ok(text) = fs::read_to_string(root.join("clm.toml")) else {
         return Ok(Vec::new());
     };
-    let bad = |why: &str| format!("clm.toml: check.affected/affected-all: affected.all: {why}");
+    let bad = |why: &str| format!("clm.toml: check.affected/affected-base: affected.all: {why}");
     let table: toml::Table = text.parse().map_err(|e| bad(&format!("{e}")))?;
     let Some(affected) = table.get("affected") else {
         return Ok(Vec::new());
@@ -287,17 +287,15 @@ fn a_deleted_file_no_node_holds_prints_all() {
 
 #[test]
 fn settings_that_cant_load_exit_1() {
-    // The Contract's exit 1 for settings that can't be loaded, which no requirement states yet
-    // (backlog/affected-settings-load-failure-has-no-requirement).
+    // req:check.affected/affected-base@e2cc9038
     let dir = repo("[affected]\nall = 3\n");
-    let out = clm_affected(dir.path(), "main");
+    let root = dir.path();
+    let given = settings(root, &|_| None).unwrap_err();
+    let out = clm_affected(root, "main");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
     assert_eq!(stdout(&out), "");
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        err.contains("clm.toml") && err.contains("affected"),
-        "{err}"
-    );
+    // The caller's line, as it gave it, and nothing else.
+    assert_eq!(String::from_utf8_lossy(&out.stderr), format!("{given}\n"));
 }
 
 #[test]
@@ -333,7 +331,7 @@ fn doc_only_changes_beside_code_print_what_the_code_does() {
 
 #[test]
 fn compares_with_the_merge_base() {
-    // req:check.affected/affected-base@3d9c4e19
+    // req:check.affected/affected-base@e2cc9038
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -351,7 +349,7 @@ fn compares_with_the_merge_base() {
 
 #[test]
 fn the_base_defaults_to_origin_main() {
-    // req:check.affected/affected-base@3d9c4e19
+    // req:check.affected/affected-base@e2cc9038
     let dir = repo("");
     let root = dir.path();
     // `origin/main` is behind `main`, which already holds `b`'s change.
@@ -430,7 +428,7 @@ fn a_marker_outside_a_test_still_selects() {
 
 #[test]
 fn a_git_failure_exits_2() {
-    // req:check.affected/affected-base@3d9c4e19
+    // req:check.affected/affected-base@e2cc9038
     let dir = TempDir::new().unwrap();
     let root = dir.path();
     write(root, "specs/SPEC.md", &spec("[]", "[]"));
@@ -441,7 +439,7 @@ fn a_git_failure_exits_2() {
 
 #[test]
 fn an_unknown_base_exits_1_naming_it() {
-    // req:check.affected/affected-base@3d9c4e19
+    // req:check.affected/affected-base@e2cc9038
     let dir = repo("");
     let out = clm_affected(dir.path(), "nope");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -454,7 +452,7 @@ fn an_unknown_base_exits_1_naming_it() {
 
 #[test]
 fn a_base_with_no_merge_base_exits_1_naming_it() {
-    // req:check.affected/affected-base@3d9c4e19
+    // req:check.affected/affected-base@e2cc9038
     let dir = repo("");
     let root = dir.path();
     git(root, &["switch", "-q", "--orphan", "lonely"]);
@@ -470,7 +468,7 @@ fn a_base_with_no_merge_base_exits_1_naming_it() {
 
 #[test]
 fn an_invalid_graph_exits_1_with_the_error() {
-    // req:check.affected/affected-base@3d9c4e19
+    // req:check.affected/affected-base@e2cc9038
     let dir = repo("");
     let root = dir.path();
     write(root, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[c]"));
@@ -576,7 +574,8 @@ fn a_deleted_reader_is_not_printed() {
 
 #[test]
 fn readers_alone_ignore_the_graph_and_the_settings() {
-    // The Design's rule: the question is only which tests read what changed.
+    // req:check.affected/affected-base@e2cc9038
+    // `--readers` reads no setting: the question is only which tests read what changed.
     let dir = readers_repo();
     let root = dir.path();
     write(root, "clm.toml", "[affected]\nall = 3\n");

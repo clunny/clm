@@ -82,13 +82,14 @@ where
     match run(root, &args, env, settings, out) {
         Ok(()) => 0,
         Err((code, message)) => {
-            line(err, format!("clm affected: {message}"));
+            line(err, message);
             code
         }
     }
 }
 
-/// The command's lines on `out`, or its exit status with the message for the error stream.
+/// The command's lines on `out`, or its exit status with the line for the error stream: the
+/// command's own message, or the settings' failure as the caller words it (`affected-base`).
 fn run(
     root: &Path,
     args: &Args,
@@ -96,8 +97,8 @@ fn run(
     settings: Settings,
     out: &mut dyn Write,
 ) -> Result<(), (u8, String)> {
-    let refused = |message: String| (1, message);
-    let failed = |e: clm_git::Failure| (e.exit_code(), e.to_string());
+    let refused = |message: String| (1, format!("clm affected: {message}"));
+    let failed = |e: clm_git::Failure| (e.exit_code(), format!("clm affected: {e}"));
     if args.overlap.is_some() {
         for (given, flag) in [
             (args.base.is_some(), "--base"),
@@ -123,7 +124,7 @@ fn run(
         }
         return Ok(());
     }
-    let all = settings(root, env).map_err(refused)?;
+    let all = settings(root, env).map_err(|given| (1, given))?;
     if let Some(path) = &args.why {
         for chain in why(root, base, path, &all).map_err(failed)? {
             line(out, chain);
