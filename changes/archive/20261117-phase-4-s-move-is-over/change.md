@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [routes-only-states-help-for-clap-s-own-help-and-no-exception-for-unreadable-input, own-files-does-not-say-how-a-capability-citation-is-read, tests-cite-their-owner-judges-wiring-and-source-files-as-tests]
 ---
 
