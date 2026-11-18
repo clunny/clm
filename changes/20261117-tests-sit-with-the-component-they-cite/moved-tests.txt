@@ -1,0 +1,71 @@
+# <file>::<test or describe>	<requirement it cites today>	->	<file it goes to>	<requirement it cites there>
+# A marker on a describe covers every test in it. No test is dropped but the two of deploy.rs named below: web/src/wrangler.test.ts makes each of their assertions but the Worker's name and the assets directory, which web's build adds there before it deletes them.
+# web's build ports and deletes; web.views' and web.worker's builds, which come first, re-cite their own lines and leave web's alone.
+crates/clm-approval/src/hold.rs::text_flattened	land.approval/changes-requested-holds	->	crates/clm-approval/src/hold.rs	land.approval/request-refusal
+crates/clm-approval/tests/hold_rules.rs::decided_through_ledger_with_no_copy	land.approval/changes-requested-holds	->	crates/clm-approval/tests/hold_rules.rs	land.approval/request-refusal
+crates/clm-land/tests/approval.rs::self_approval_refused	land.approval/approval-policy	->	crates/clm-land/tests/approval.rs	land/approval-policy
+crates/clm-land/tests/approval.rs::another_person_approves	land.approval/approval-policy	->	crates/clm-land/tests/approval.rs	land/approval-policy
+crates/clm-land/tests/approval.rs::any	land.approval/approval-policy	->	crates/clm-land/tests/approval.rs	land/approval-policy
+crates/clm-land/tests/approval.rs::a_branch_that_weakens_the_policy_is_judged_by_the_base	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/approval.rs::a_host_none_clone_is_judged_by_origin_main	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/approval.rs::a_branch_that_tightens_the_policy_is_judged_by_the_base	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/approval.rs::the_clones_local_file_wins	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/approval.rs::the_clones_local_file_can_tighten	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/approval.rs::unreadable_policy_at_the_base	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/approval.rs::unparseable_policy_at_the_base	land.approval/approval-from-base	->	crates/clm-land/tests/approval.rs	land/approval-from-base
+crates/clm-land/tests/hold.rs::held_branch_refused	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/hold.rs::comment_on_the_change_as_a_whole	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/hold.rs::cleared_by_a_push	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/hold.rs::cleared_by_the_requester	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/hold.rs::an_earlier_approval_by_the_requester_doesnt_clear_it	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/hold.rs::another_persons_approval_doesnt_clear_it	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/hold.rs::a_request_on_another_branch_doesnt_hold	land.approval/changes-requested-holds	->	crates/clm-land/tests/hold.rs	land/changes-requested-holds
+crates/clm-land/tests/signed.rs::unsigned_approval_refused	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::forged_name_refused	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::lander_approved_it_themselves	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::signed_land	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::lander_cant_sign	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::unsigned_repository_lands_as_before	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::signing_fails_pushes_nothing	land.approval/signed-land	->	crates/clm-land/tests/signed.rs	land/signed-land
+crates/clm-land/tests/signed.rs::unsigned_request_holds_in_a_signed_repository	land.approval/changes-requested-holds	->	crates/clm-land/tests/signed.rs	land/changes-requested-holds
+crates/clm-web/tests/deploy.rs::deploys_the_clm_worker_on_the_apps_routes	web/site-served-directly	->	web/src/wrangler.test.ts	web/site-served-directly (every assertion joins the test there that reads the same keys; the Rust test is deleted, with the human's yes of 2026-11-17)
+crates/clm-web/tests/deploy.rs::sends_only_the_api_and_its_paths_to_the_worker	web/invited-users	->	web/src/wrangler.test.ts	web/invited-users (every assertion joins the test there that reads the same keys; the Rust test is deleted, with the human's yes of 2026-11-17)
+crates/clm-web/tests/deploy.rs::sends_only_the_api_and_its_paths_to_the_worker	web/site-served-directly	->	web/src/wrangler.test.ts	web/site-served-directly (every assertion joins the test there that reads the same keys; the Rust test is deleted, with the human's yes of 2026-11-17)
+crates/clm-web/tests/deploy.rs::the_worker_reads_the_build_time_assets_through_its_binding	web/invited-users	->	crates/clm-web/tests/deploy.rs	web.worker/invited-sign-in (stays; web's build also asserts the `ASSETS` binding in web/src/wrangler.test.ts under web/invited-users)
+crates/clm-web/tests/npmrc.rs::npmrc	web/no-install-scripts	->	web/src/npmrc.test.ts	web/no-install-scripts (ported with `a_later_line_can_turn_scripts_back_on`; npmrc.rs is deleted)
+crates/clm-web/tests/sign_in.rs::invited_login_gets_the_session_cookie	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::logins_compare_without_case	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::not_invited_login_gets_the_page_and_no_session	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::session_of_a_login_no_longer_invited_is_401	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::github_failing_to_name_the_user_leaves_a_way_back	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::without_the_invited_list_nobody_gets_in	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::cookie_from_before_logins_is_401	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+crates/clm-web/tests/sign_in.rs::the_build_assets_are_never_served_directly	web/invited-users	->	crates/clm-web/tests/sign_in.rs	web.worker/invited-sign-in
+web/e2e/app.spec.ts::capabilities from 900 px: a table in the report order, ⚑ only filters, and a row opens its page	web.views/capabilities-list	->	web/e2e/app.spec.ts	web/cost-views-in-the-browser
+web/e2e/app.spec.ts::architecture list	web.views/architecture-list	->	web/e2e/app.spec.ts	web/cost-views-in-the-browser
+web/e2e/app.spec.ts::deciding an architectural constraint	web.views/architecture-decide-buttons	->	web/e2e/app.spec.ts	web/cost-views-in-the-browser
+web/e2e/app.spec.ts::deciding a capability	web.views/decide-buttons	->	web/e2e/app.spec.ts	web/cost-views-in-the-browser
+web/e2e/app.spec.ts::opening a file in full scrolls to its first change, and j steps to the next	web.views/full-document	->	web/e2e/app.spec.ts	web/review-in-the-browser
+web/e2e/app.spec.ts::graph	web.views/graph-view	->	web/e2e/app.spec.ts	web/graph-in-the-browser
+web/e2e/app.spec.ts::spec branches	web.views/spec-branch-review	->	web/e2e/app.spec.ts	web/review-in-the-browser
+web/e2e/app.spec.ts::signed repositories	web.views/signed-approvals	->	web/e2e/app.spec.ts	web/review-in-the-browser
+web/e2e/app.spec.ts::one request, then approved: two quick taps send one approve, and the button reads Approved, disabled	web.views/approve-button	->	web/e2e/app.spec.ts	web/review-in-the-browser
+web/e2e/app.spec.ts::the backlog is drawn before the implementation state, and takes its marks when it arrives	web.views/backlog-taken	->	web/e2e/app.spec.ts	web/backlog-in-the-browser
+web/e2e/app.spec.ts::an oversized node's card is outlined amber, unless a queue ring colours it	web.views/oversized-component	->	web/e2e/app.spec.ts	web/graph-in-the-browser
+web/e2e/app.spec.ts::Notify me	web.client-live/notify-switch	->	web/e2e/app.spec.ts	web/push-in-the-browser
+web/e2e/app.spec.ts::the service worker imports the push handlers and shows a push	web.client-live/push-shown	->	web/e2e/app.spec.ts	web/push-in-the-browser
+web/e2e/app.spec.ts::comments	web.views/comment-on-review	->	web/e2e/app.spec.ts	web/review-in-the-browser
+web/e2e/app.spec.ts::Request changes	web.views/request-changes	->	web/e2e/app.spec.ts	web/review-in-the-browser
+web/e2e/app.spec.ts::proposals	web.views/propose-from-backlog	->	web/e2e/app.spec.ts	web/backlog-in-the-browser
+web/e2e/app.spec.ts::a backlog item opens its page	web.views/backlog-view	->	web/e2e/app.spec.ts	web/backlog-in-the-browser
+web/e2e/layout.spec.ts::the inspector is an overlay	web.views/inspector-overlay	->	web/e2e/layout.spec.ts	web/graph-in-the-browser
+web/src/views/api.test.ts::retries once on 401, since a parallel request may have refreshed the session	web/installable	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::is signed out after two 401s, and forgets the kept data	web/installable	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::offline: returns the last response with the time it was fetched	web/installable	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::offline with nothing kept: says so	web/installable	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::api.post	web/approve-by-branch	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::a refresh a notice asked for	web/notice-refresh	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::api.send	web.client-live/notify-switch	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/api.test.ts::deletes with a JSON body, and a failed get carries its status	web/installable	->	web/src/views/api.test.ts	web.views/worker-requests
+web/src/views/pr.test.ts::what Approve may send	web/approve-by-branch	->	web/src/views/pr.test.ts	web.views/approve-button
+web/src/views/api.test.ts::keeps no failed response	(cites nothing)	->	web/src/views/api.test.ts	web.views/worker-requests

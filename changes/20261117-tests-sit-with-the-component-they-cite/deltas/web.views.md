@@ -1,0 +1,80 @@
+---
+component: web.views
+base: { design: "7eb1f2473c2efc2f" }
+---
+
+## MODIFIED Design
+The modules import nothing of `web`'s outside `web/src/views/`, since an import of `web`'s code from here would need `depends_on: [web]`, a cycle with `web`'s dependency on this component (`check/undeclared-imports`). What a page needs of the app (the responses on screen, what the user set, posting and loading again) comes in through its parameters. `web/src/styles.css`, which styles every page, stays `web`'s: a stylesheet is no import. The build that makes this component moves the modules from `web/src/` and `web/test/fixtures.ts` here, keeping their tests, and re-points the tests' markers at this component's requirement IDs, `web`'s end-to-end tests among them. Graph layout uses ELK (`elkjs`, layered, edges from dependent to dependency) and word-level diffs use `diff` (jsdiff). The mockups in `web`'s `assets/mockups/` are the reference for layout, colour, type and interaction, as `web`'s Design says.
+
+**Views.**
+- *Home* (`home-waiting-on-you`): what waits on the person, where a repo opens: the spec branches whose review needs it and has no approval of the branch's fingerprint, from the spec-branch list and each branch's review; the `question` items with `choices` and the `human-task` items, each with its answer buttons (`answer-buttons`); the capabilities and architectural constraints the reports flag; and the other `question` items, each marked to be answered in a session. Each entry links to its page. A section with nothing in it is left out, and a Home with nothing says nothing waits.
+- *Spec graph*: an SVG of components and `depends_on` edges, each component drawn inside its parent's box, the root's children inside the root. Each component card shows its status (active or unbuilt), its requirements as a bar segmented by coverage state (current green, behind amber, unbuilt sky) with `n/m` current of total and `✕n` obsolete markers when there are any, and its owners; once the implementation state has arrived, a component that isn't `converged` is ringed in its queue state's colour and names the state. A component the `spec` model marks `oversized` carries `⚠` in its card's label and an amber outline, unless a queue-state ring colours it, as `view`'s SVG draws it (`oversized-is-a-state`, `oversized-component`); a component whose `oversized` is absent or `false` carries neither. The legend has one entry per colour the graph uses, naming its meanings on the graph. A selected PR rings its touched components and highlights their edges. Selecting a component draws the edges from the components that depend on it in one colour and the edges to the components it depends on in another, two colours that mean nothing else, and dims the other edges (`edge-direction`); the legend names both. It also opens the inspector over the graph, never beside it: a drawer from the right edge on desktop, as wide as 640 px or 90% of the window, whichever is less, and a bottom sheet on phones, closed by its × button, by Escape or by selecting the component again (`inspector-overlay`). The inspector holds the component's contract, dependencies, changes in open PRs, work in flight and backlog items, each item linking to its page.
+- *Spec PRs*: a spec branch's review, which this component's requirements call a PR and its views label "PR" whether or not the host has a page for it (`spec-branch-review`). The list is the Worker's spec-branch list (`GET .../branches`): each `spec/*` branch by name, with its page's number and title, linking out to the page, when it has one. Each entry opens the branch's review, routed by the branch name as one encoded segment (`#/<owner>/<repo>/prs/spec%2Fx`, so `spec/x/graph` and `.../full/<path>` stay unambiguous), while requests to the Worker keep its slashes (`/branches/spec/x/review`), loaded from `GET .../branches/{branch}/review`, with Document and Graph tabs and Approve intent. Its header shows "needs review" (`gate/needs-review`), who approved it (each `approved` record's writer and time from the review's `approvals`, or "not approved"), "checked" or "not checked" from `checked`, and a link to the page when there is one (`spec-branch-review`). Approve posts to `POST .../branches/{branch}/approve` (`approve-by-branch`, `approve-button`); on success it loads the review again, so the approval shown is the ledger's, and a 409 is the Worker's answer when the branch's fingerprint isn't the one sent. In a signed repository, the review's `signed` (`signed-approvals`, `web-approve-off-when-signed`), the note beside Approve, in the Approve bar (pinned above the tab bar on phones), shows the command `clm approve <branch>` with a copy button. The header's approvals are drawn neutral rather than green, each marked "signed" (sky: `clm land` will check it) or "unsigned, doesn't count" (rose) from its `signed`. A signed approval is one `clm land` checks, so the app never calls it counted. A 422 `signed` means the repository became signed after the review was drawn, so the note appears once the review is loaded again. The note shows offline too. **Request changes** (`request-changes`, `web-review-feedback-as-ledger-records`) sits beside Approve, in the Approve bar on phones: it opens a one-field form for the request's text and posts to `POST .../branches/{branch}/request-changes`. It works in a signed repository, where Approve doesn't, since a request withholds a land rather than granting one. The header draws each held request in rose, naming the person part of the writer as the activity feed names actors; a request that isn't held is drawn with the comments under the intent, dimmed. Request changes isn't disabled by an approval or by an earlier request: a second request by the same person is another text. A 403, a reader without write access, says so and leaves the button enabled. **Comments** (`comment-on-review`): the Document tab's intent and each requirement card carry a Comment control that opens a one-field form and posts to `POST .../branches/{branch}/comments`. A 422 shows the Worker's `error` under the form and keeps it. The Document tab shows the intent, then per component each changed element as a card with a couple of dimmed lines of context and word marks, then an impact summary, decisions and backlog edits. **Open in full** shows a changed file whole, as it reads at the head, with unchanged text dimmed, long unchanged runs folded, every change marked and numbered, and an outline marking where they are. It opens scrolled to the first change. ↑/↓ and `j`/`k` step through the changes, and a switch shows changes inline, after or before.
+- *Implementation* (Build): counts (pending components by state: claimed, ready and blocked; live changes; requirements still to make current), then a switch between **In flight** and **Blockers**. In flight shows the `flight` view (`implementation-view`); a branch's pull request shows "checked" or "not checked" from `pages`, and nothing while the response's `pages` doesn't yet say. Blockers shows the `blockers` view (`blockers-view`) with the chain to each held-up component. An activity feed (`activity-feed`) names the branch of a land or an approval.
+- *Backlog*: each item opens its page (`backlog-item-page`) at `#/<owner>/<repo>/backlog/<slug>`: its title, kind, priority, components, origin, the requirements it blocks, what holds it, the answers given and its answer buttons, then its body. A **Waiting on you** row first (`backlog-view`, `requirement-blocks`), then columns by kind (bug, question, deferred, idea). An item something holds (`propose-claims`, `backlog-taken`) carries a mark from the implementation state's `taken`; a bare claim is a live `propose/<slug>` claim. The backlog is drawn from the snapshot first and takes the marks when the implementation state arrives, as the graph takes its rings. The sidebar and tab bar badge the number of items waiting. **New proposal** (`propose-from-backlog`, `web-proposals-as-ledger-records`): a button above the columns opens a form with a title and an intent (plain text or Markdown), posting `/nodes` `[]` to `POST .../proposals`: the draft that takes the item up decides its components, as a session filing an item does; a 422 shows which field the Worker's `error` names and keeps the form. A row **Proposed** sits between Waiting on you and the columns; **Withdraw** sends `DELETE .../proposals/{id}`.
+- *Capabilities* (`review-capability-cost`): every capability's cost and its review, drawn from the Worker's `GET .../capabilities` (`web.worker/capabilities`), which has no history, so commits, questions answered, blocking and sizes are absent and the views say to run `clm capabilities <slug>` for them. The list (`capabilities-list`) keeps the report's order, by cost, highest first; narrower than 900 px each capability is a card with a bar for its share of the costliest. A capability opens its page (`capability-page`) at `#/<owner>/<repo>/capabilities/<slug>`, with its entry in full from the report's `text`, then the sections in `clm capabilities <slug>`'s order, then the decision buttons (`decide-buttons`). A decision is posted to `POST .../capabilities/<slug>/decide` (`web.worker/decide`) with the capability's version as shown (a page drawn again meanwhile keeps the buttons off), and the report is loaded again from the Worker with `?fresh=` and a random delivery, so the Worker reads the ledgers anew rather than its minute-old copy. On another 422 (the capability left the tip, or its specs don't load) the page shows the tip as it is now. A 401 shows the sign-in page. When the report's `signed` is true, a note says this repository counts only records signed with the reviewer's SSH key and gives `clm capabilities decide <slug> --value high|medium|low --decision keep|cut|redesign|accept`.
+- *Architecture* (`review-capability-cost`, `docs/decisions/architecture-review.md`): every architectural constraint, whether it is held and what it costs, with its review, drawn from the Worker's `GET .../architecture` (`web.worker/architecture`). It is a view of its own, after Capabilities in the sidebar and the tab bar, not a tab inside Capabilities. Its cost is a second split, apart from the capabilities', and the view says so. The list (`architecture-list`) keeps the report's order, by cost, highest first; narrower than 900 px each entry is a card. An entry opens its page (`architecture-page`) at `#/<owner>/<repo>/architecture/<slug>`, with its entry in full from the report's `text`, then the decision buttons (`architecture-decide-buttons`), which post to `POST .../architecture/<slug>/decide` (`web.worker/architecture-decide`) and load the report again as a capability's buttons do. While the report's `indexing` is true, each enforcing rule's state is drawn as unknown, and the view says coverage is still indexing.
+
+**Size** (`slim-components`). This component's code budget is 90,000 tokens, above the default, because every page of the one app draws from the same types, DOM helpers and fixtures, which a split into pages would leave in a shared layer as large as any page.
+
+**Markdown** (`repo-markdown`). Every text the app shows from the repository (a component's contract, an intent, a requirement, a backlog item's body, a capability's or a constraint's statement and entry, a decision) goes through `markdown.ts`, which renders it with `marked` and sanitises it with DOMPurify, since anyone who can open a PR writes it and it is shown where the session cookie can approve. Only IDs, slugs and titles are drawn as plain text.
+
+**Tests.** This component's tests draw a view, or call `api.ts`, with the Worker faked, under `web/src/views/`, and cite only its requirements. What the built app shows in a browser, under `web`'s stylesheet and routes, is `web`'s to state and its browser tests' to prove (`web/cost-views-in-the-browser` and its neighbours). Until `worker-requests` is built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests in `api.test.ts` and `pr.test.ts` that cited `web` or `web.client-live` and the requirement each cites from then on; this component's build re-cites them, before `web`'s.
+
+## ADDED Requirements
+
+### Requirement: worker-requests
+The views' requests to the Worker SHALL go through one module. A request answered 401 SHALL be sent once more, since a parallel request may have refreshed the session, and a second 401 SHALL report the person signed out; a `GET` that ends so SHALL also forget every answer kept for offline use. A successful `GET`'s answer SHALL be kept for offline use, unless its caller asks for it not to be, and no failed one. When the network fails, a `GET` that isn't a background refresh SHALL return the answer kept for that path with the time it was fetched, or report offline when none is kept. A `GET` made with `fresh` SHALL append `fresh=<delivery>` to its query and keep its answer under the path without it. A `GET` the Worker refuses SHALL fail carrying the HTTP status. A `POST` or `DELETE` SHALL send its body as JSON with `content-type: application/json`.
+
+#### Scenario: one 401, then answered
+- GIVEN a Worker that answers a `GET` 401 and then 200
+- WHEN the request is made
+- THEN it was sent twice and returns the second answer, with no fetch time
+
+#### Scenario: signed out
+- GIVEN an answer kept for `/api/repos/o/a/snapshot`, and a Worker that answers every request 401
+- WHEN a `GET` is made
+- THEN it reports signed out, and no answer is kept
+
+#### Scenario: offline
+- GIVEN an answer for `/api/repos/o/a/snapshot` fetched at time `t`, and a network that then fails
+- WHEN `/api/repos/o/a/snapshot` is asked, and, with nothing kept for it, `/api/repos/o/b/snapshot`
+- THEN the first returns the kept answer with `t`, and the second reports offline
+
+#### Scenario: offline copy
+- GIVEN a notice with delivery `d1`
+- WHEN the refresh it starts asks for `/api/repos/o/a/implementation`
+- THEN the request goes to `/api/repos/o/a/implementation?fresh=d1`, and the copy kept for offline use is stored under `/api/repos/o/a/implementation`
+
+#### Scenario: a body
+- GIVEN the fingerprint `f1`
+- WHEN it is posted to `/api/repos/o/a/branches/spec/x/approve`, and an endpoint is sent with `DELETE` to `/api/repos/o/a/push`
+- THEN each request carries its method and its body as JSON, the post with `content-type: application/json`
+
+#### Scenario: a failure
+- GIVEN a Worker that answers a `GET` 404
+- WHEN the request is made
+- THEN it fails carrying the status 404, and nothing is kept
+
+#### Serves
+- capability/follow-from-browser
+
+## MODIFIED Requirements
+
+### Requirement: approve-button <!-- base: ff59f9d19460ff6d -->
+Approve intent SHALL send one approve request per tap and none while one is in flight, and once the Worker accepts it SHALL read Approved and stay disabled. It SHALL be disabled offline, for a review without a fingerprint, and for a review that already shows an approval, which it SHALL read from the review's approvals, never from a label.
+
+#### Scenario: one request, then approved
+- GIVEN a spec branch's review, online, with a fingerprint and no approval
+- WHEN Approve is tapped twice in quick succession and the Worker accepts the first request
+- THEN exactly one approve request was sent, and the button reads Approved and is disabled
+
+#### Scenario: disabled
+- GIVEN a review with no fingerprint, a review that already shows an approval, and a review with a fingerprint shown offline
+- WHEN each is shown
+- THEN Approve is disabled in all three, and the one whose review lists an approval reads Approved
+
+#### Serves
+- capability/follow-from-browser
+- capability/approve-intent
+- architecture/approval-policy

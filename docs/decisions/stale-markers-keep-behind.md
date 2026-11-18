@@ -18,3 +18,5 @@ Known edge cases:
 Rejected:
 - **Counting a stale marker as pending on the component whose `paths` hold its file**, as an obsolete marker of a removed component is. That build's context doesn't hold the cited requirement's text (`ancestor-scoped-context`), so it could re-cite the test but not judge whether the test proves the new text. It would also need a new pending line shape and state for the views to count.
 - **A `clm check` rule failing a stale marker beside a current one.** That would fail every tree between a reword and the build that re-cites, including the spec branch that rewords. It would also say nothing about which build fixes it.
+
+**Only where the build may change the file (2026-11-17, `20261117-tests-sit-with-the-component-they-cite`).** The prompt tells a build to re-cite a stale marker wherever it sits only while the root names no `wiring`. Once it does, the land refuses a build's edit to another component's file and `clm check` reports a marker there, so the prompt names such a marker apart as its file owner's (`own-files-at-the-gate`).

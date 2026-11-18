@@ -62,6 +62,8 @@ Crate `clm-land`, called from `crates/clm`'s `land`, `approve` (re-exported from
 
 **Finishing an unrecorded land** (`unrecorded-land-finished`). Step 1, before the gate, the lock and the merge, looks for a commit on `origin/main`'s first-parent chain whose second parent is the head. A head on that chain itself, or one whose merge a `landed` record names, is not this rule's and lands as before. With no `landed` record for the commit, it is covered by its own code key's `checked` record, or by the `checked` record for the key its `Checked:` line names when that key is the code key of the last commit of the run of first-parent commits holding the same line; the other commits of that run are the push's other lands, their branches read from their `Merge <branch> into main` subjects. A forged `Checked:` line proves nothing, since the run's last commit must carry its own checked key. The fingerprint is recomputed from the commit's parents as `ledger`'s verify recomputes it, the gate runs in a temporary worktree on the commit with its first parent as base, and the records are signed by the clone's writer and the `effort` read as for any land.
 
+**Approval at a land** (`approval-policy`, `approval-from-base`, `changes-requested-holds`, `signed-land`). `clm-approval` answers whether the fingerprint's approvals count, under which policy, whether a request for changes holds the branch, and whether the repository signs (`land.approval`); what `clm land` then does, landing or refusing with `main` unchanged, is stated here and proven by landing a branch on a fixture repository, in `crates/clm-land/tests/approval.rs`, `hold.rs` and `signed.rs`. Until the four are built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names those tests, which cited `land.approval` before (`commands-live-in-their-crates`).
+
 ## Requirements
 
 ### Requirement: land
@@ -1353,3 +1355,132 @@ Each waiting `clm land` SHALL then end as `batched-lands` says. The lands taken 
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
+
+### Requirement: approval-policy
+With `approval = "other"`, `clm land` SHALL count an `approved` record only when its writer's person differs from the slugged author name of every commit between the merge base and the head, and SHALL exit 1 naming the policy when the only approvals are the authors' own. With `approval = "any"` it SHALL count any `approved` record for the fingerprint.
+
+#### Scenario: self-approval refused
+- GIVEN `approval = "other"`, a branch that needs review whose commits are authored by `Christopher Lunny`, and an `approved` record by writer `christopher-lunny/1a2b3c4d`
+- WHEN `clm land` runs
+- THEN it exits 1 naming `approval = "other"` and `main` is unchanged
+
+#### Scenario: another person approves
+- GIVEN the same, with an `approved` record by writer `dana/9f9f9f9f`
+- WHEN `clm land` runs
+- THEN it lands
+
+#### Scenario: any
+- GIVEN `approval = "any"` and the self-approval of the first scenario
+- WHEN `clm land` runs
+- THEN it lands
+
+#### Serves
+- capability/approve-intent
+- architecture/approval-policy
+
+#### Needs
+- ledger/person-slug
+
+### Requirement: approval-from-base
+`clm land` SHALL count approvals under the `approval` policy that the top-level `clm.toml` committed at the base it lands on sets (the `origin/main` it fetched, on every host), `any` when that file or its `approval` key is missing, unless the clone's `clm.local.toml` sets `approval`, whose value SHALL be the policy for that clone's lands; it SHALL never take the policy from the `clm.toml` of the root it runs in, of the head or of the merged tree. When the base's `clm.toml` doesn't parse, or sets a value other than `any` and `other`, it SHALL exit 2 naming `<base>:clm.toml` and `approval`, before running any check or pushing or appending anything.
+
+#### Scenario: a branch that weakens the policy is judged by the base
+- GIVEN `origin/main` whose `clm.toml` sets `approval = "other"`, a `spec/x` that needs review authored by `Christopher Lunny` whose head sets `approval = "any"`, an `approved` record by writer `christopher-lunny/1a2b3c4d`, and no `clm.local.toml`
+- WHEN `clm land spec/x` runs from a checkout of `spec/x`
+- THEN it exits 1 naming `approval = "other"` from `origin/main:clm.toml`, and `main` is unchanged
+
+#### Scenario: a branch that tightens the policy is judged by the base
+- GIVEN `origin/main` whose `clm.toml` sets no `approval`, the same `spec/x` whose head sets `approval = "other"`, and the same `approved` record
+- WHEN `clm land spec/x` runs from a checkout of `spec/x`
+- THEN it lands
+
+#### Scenario: the clone's local file wins
+- GIVEN `origin/main` whose `clm.toml` sets `approval = "other"`, the clone's `clm.local.toml` setting `approval = "any"`, and the self-approval of the first scenario
+- WHEN `clm land spec/x` runs
+- THEN it lands
+
+#### Scenario: unreadable policy at the base
+- GIVEN `origin/main` whose `clm.toml` sets `approval = "everyone"`, and a `spec/x` whose `clm.toml` sets `approval = "any"`, with an `approved` record
+- WHEN `clm land spec/x` runs from a checkout of `spec/x`
+- THEN it exits 2 naming `origin/main:clm.toml` and `approval`, runs no check, and `main` and the ledger are unchanged
+
+#### Needs
+- gate/files-outside-spec-paths
+
+#### Serves
+- capability/approve-intent
+- architecture/approval-policy
+
+### Requirement: signed-land
+When `origin/main`'s tree holds `docs/allowed_signers`, `clm land` SHALL count an `approved` record only when `ledger`'s `signed_by` accepts it under `clm-approve` against that file, and, with `approval = "other"`, only when its writer's person also differs from the lander's writer person; it SHALL exit 1, before running any check or pushing, naming `user.signingkey` when no signing key is configured; and it SHALL append a `landed` record signed under `clm-land`, signed before the push, pushing nothing when signing fails. Without that file it SHALL count, sign and append as it did before.
+
+#### Scenario: unsigned approval refused
+- GIVEN a signed repository, a `spec/x` that needs review, a lander who can sign, and only an `approved` record for its fingerprint with no `sig`
+- WHEN `clm land spec/x` runs
+- THEN it exits 1 with `gate/approval` saying the approval isn't signed, and `main` is unchanged
+
+#### Scenario: forged name refused
+- GIVEN a signed repository whose `docs/allowed_signers` lists keys for `christopher-lunny` and `dana`, `approval = "other"`, a `spec/x` that needs review authored by `Christopher Lunny`, a lander `christopher-lunny` who can sign, and an `approved` record by writer `dana/1a2b3c4d` signed with `christopher-lunny`'s key
+- WHEN `clm land spec/x` runs
+- THEN it exits 1 and `main` is unchanged
+
+#### Scenario: lander approved it themselves
+- GIVEN the same file and policy, a `spec/x` that needs review whose commits are authored as `Zed`, a lander whose writer person is `christopher-lunny`, and an `approved` record signed by `christopher-lunny`
+- WHEN `clm land spec/x` runs
+- THEN it exits 1 naming `approval = "other"` and `main` is unchanged
+
+#### Scenario: signed land
+- GIVEN the `spec/x` that needs review of *forged name refused*, with an `approved` record by `dana` signed with `dana`'s key, landed by `christopher-lunny` who can sign
+- WHEN `clm land spec/x` runs
+- THEN it lands, and its `landed` record's `sig` is accepted by `signed_by` under `clm-land`
+
+#### Scenario: lander can't sign
+- GIVEN a signed repository, a code branch `impl/a`, and a lander with no `user.signingkey`
+- WHEN `clm land impl/a` runs
+- THEN it exits 1 naming `user.signingkey` before running the check command, and `main` and the ledger are unchanged
+
+#### Serves
+- capability/approve-intent
+- architecture/signed-ledger-records
+
+#### Needs
+- ledger/record-signing
+- ledger/signature-check
+
+### Requirement: changes-requested-holds
+`clm land` SHALL exit 1, pushing nothing, appending nothing and running no gate or check, when a `changes_requested` record in the fold for the branch names the head's fingerprint and `ledger`'s `Fold::cleared` is false for it (no `approved` record for that fingerprint by the same writer's person has a later `at`, compared as strings, whether or not that approval is one the policy counts), printing one `land/changes-requested` line per such request with its writer, time and text, then the branch's `commented` records at that fingerprint as `land/comment` lines, and saying the author pushes a change or the requester runs `clm approve <branch>`. It SHALL count such a request whether or not the repository is signed or the record is. Whether a request holds, and the lines, are `land.approval/request-refusal`'s. It SHALL land as before when every request for the branch names another fingerprint, or its writer's person approved the fingerprint after it.
+
+#### Scenario: held
+- GIVEN a branch `spec/x` whose fingerprint is `f`, an `approved` record for `f` by `bob/web`, a `changes_requested` record for `spec/x` at `f` by `alice/web` with the text "Name the rule", and a `commented` record on `spec/x` at `f` with target `n/r`
+- WHEN `clm land spec/x` runs
+- THEN it exits 1 printing `land/changes-requested` naming `alice/web` and `Name the rule`, then `land/comment` naming `n/r`, and `clm approve spec/x`; no check ran, and `main` on `origin` is unchanged
+
+#### Scenario: cleared by a push
+- GIVEN the same, after the author pushed a commit that changes a spec file, so the fingerprint is `g`, and an `approved` record for `g`
+- WHEN `clm land spec/x` runs
+- THEN it lands
+
+#### Scenario: cleared by the requester
+- GIVEN the held branch, and an `approved` record for `f` by `alice/1a2b3c4d` with a later `at` than the request
+- WHEN `clm land spec/x` runs
+- THEN it lands
+
+#### Scenario: another person's approval doesn't clear it
+- GIVEN the held branch with `approval = "any"`, and a later `approved` record for `f` by `dana/9f9f9f9f`
+- WHEN `clm land spec/x` runs
+- THEN it exits 1 printing `land/changes-requested`
+
+#### Scenario: unsigned request in a signed repository
+- GIVEN a `main` whose tip holds `docs/allowed_signers`, a branch `spec/x` at fingerprint `f` with a signed `approved` record by `dana/9f9f9f9f` that counts, and an unsigned `changes_requested` record for `spec/x` at `f` by `alice/web`
+- WHEN `clm land spec/x` runs
+- THEN it exits 1 printing `land/changes-requested` naming `alice/web`
+
+#### Serves
+- capability/follow-from-browser
+- capability/approve-intent
+- architecture/humans-review-intent
+
+#### Needs
+- ledger/feedback-records
+- ledger/request-cleared
+- land.approval/request-refusal
