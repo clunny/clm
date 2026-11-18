@@ -43,7 +43,7 @@ describe('wrangler.toml', () => {
     return rules.some((r) => !r.startsWith('!') && matches(r)) && !rules.some((r) => r.startsWith('!') && matches(r.slice(1)));
   };
 
-  it('sends only the API, sign-in, webhook, invited list and /app to the script, from ./dist as the Worker clm (req:web/site-served-directly@3c4d374a)', () => {
+  it('sends only the API, sign-in, webhook, invited list and /app to the script (req:web/site-served-directly@3c4d374a)', () => {
     for (const path of ['/api/repos', '/auth/login', '/webhook', '/_clm/invited.json', '/app']) {
       expect(toWorker(path), path).toBe(true);
     }
@@ -52,6 +52,9 @@ describe('wrangler.toml', () => {
     }
     expect(rawConfig.assets?.run_worker_first).toEqual(['/api/*', '/auth/*', '/webhook', '/_clm/*', '/app']);
     expect(rawConfig.assets?.not_found_handling).toBe('none');
+  });
+
+  it('deploys the assets in ./dist as the Worker clm (req:web/site-served-directly@3c4d374a)', () => {
     expect(rawConfig.assets?.directory).toBe('./dist');
     expect(rawConfig.name).toBe('clm');
   });

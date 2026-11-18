@@ -15,8 +15,8 @@ describe('invited logins', () => {
     // A separate, simpler parse: every `- \`login\`` line in the Contract section.
     const contract = spec.split('\n## Contract\n')[1].split('\n## ')[0];
     const simple = [...contract.matchAll(/^- `([^`]+)`$/gm)].map((m) => m[1]);
+    expect(simple.length).toBeGreaterThan(0);
     expect(invitedLogins(spec)).toEqual(simple);
-    expect(invitedLogins(spec)).toEqual(['clunny']);
   });
 
   // req:web/invited-users@0406720d
@@ -52,7 +52,7 @@ describe('the build plugin', () => {
       (plugin.writeBundle as unknown as (o: { dir: string }) => void)({ dir: join(dist, 'app') });
       expect(readdirSync(dist)).toEqual(['_clm']);
       expect(readdirSync(join(dist, '_clm'))).toEqual(['invited.json']);
-      expect(JSON.parse(readFileSync(join(dist, '_clm/invited.json'), 'utf8'))).toEqual(['clunny']);
+      expect(JSON.parse(readFileSync(join(dist, '_clm/invited.json'), 'utf8'))).toEqual(invitedLogins(readFileSync(SPEC, 'utf8')));
     } finally {
       rmSync(dist, { recursive: true, force: true });
     }

@@ -107,8 +107,12 @@ test.describe('app at /app/', () => {
 });
 
 // req:web/invited-users@0406720d
-test('the build holds the invited list under _clm/, beside the app', () => {
-  expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(['clunny']);
+test('the build holds the invited list under _clm/, beside the app: the logins of the spec\'s Contract', () => {
+  const spec = readFileSync(fileURLToPath(new URL('../../specs/web/SPEC.md', import.meta.url)), 'utf8');
+  const contract = spec.split('\n## Contract\n')[1].split('\n## ')[0];
+  const logins = [...contract.matchAll(/^- `([^`]+)`$/gm)].map((m) => m[1]);
+  expect(logins.length).toBeGreaterThan(0);
+  expect(JSON.parse(readFileSync(join(DIST, '_clm/invited.json'), 'utf8'))).toEqual(logins);
 });
 
 // req:web/installable@e711892d
