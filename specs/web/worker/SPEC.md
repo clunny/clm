@@ -65,7 +65,7 @@ The Worker reads its secrets as `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY` (a PKC
 
 **Size** (`slim-components`). This component's budget is 72,000 code tokens and 16,000 spec tokens, above the defaults, because what stays is the Worker's one shell: the router every route passes through, the session and sign-in, the view routes and their cache, proposals, decide, the webhook's dispatch and the live socket, and the Worker adapter, with the tests that drive them through `handle`.
 
-**Tests of `web`'s files.** `crates/clm-web/tests/` proves the Worker: what `handle` answers. The tests that cited `web`'s requirements for what `web/wrangler.toml` and `web/.npmrc` hold are `web`'s: its build ports them under `web/` and deletes them here, so this component's build leaves them alone. `deploy.rs` keeps its tests that cite nothing and the one showing that the Worker reads its assets through the `ASSETS` binding, which this component's build re-cites. Until `invited-sign-in` is built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests in `sign_in.rs` and `deploy.rs` that cited `web/invited-users` and cite it from then on.
+**Tests of `web`'s files.** `crates/clm-web/tests/` proves the Worker: what `handle` answers. The tests that prove `web`'s requirements for what `web/wrangler.toml` and `web/.npmrc` hold are `web`'s and sit under `web/src/`. `deploy.rs` holds tests that cite nothing, of the Worker's deploy settings and `web/README.md`'s record of the setup, and the one showing that the Worker reads its assets through the `ASSETS` binding.
 
 ## Requirements
 

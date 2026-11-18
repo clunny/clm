@@ -31,7 +31,7 @@ The modules import nothing of `web`'s outside `web/src/views/`, since an import 
 
 **Markdown** (`repo-markdown`). Every text the app shows from the repository (a component's contract, an intent, a requirement, a backlog item's body, a capability's or a constraint's statement and entry, a decision) goes through `markdown.ts`, which renders it with `marked` and sanitises it with DOMPurify, since anyone who can open a PR writes it and it is shown where the session cookie can approve. Only IDs, slugs and titles are drawn as plain text.
 
-**Tests.** This component's tests draw a view, or call `api.ts`, with the Worker faked, under `web/src/views/`, and cite only its requirements. What the built app shows in a browser, under `web`'s stylesheet and routes, is `web`'s to state and its browser tests' to prove (`web/cost-views-in-the-browser` and its neighbours). Until `worker-requests` is built, `changes/20261117-tests-sit-with-the-component-they-cite/moved-tests.txt` names the tests in `api.test.ts` and `pr.test.ts` that cited `web` or `web.client-live` and the requirement each cites from then on; this component's build re-cites them, before `web`'s.
+**Tests.** This component's tests draw a view, or call `api.ts`, with the Worker faked, under `web/src/views/`, and cite only its requirements. What the built app shows in a browser, under `web`'s stylesheet and routes, is `web`'s to state and its browser tests' to prove (`web/cost-views-in-the-browser` and its neighbours).
 
 ## Requirements
 

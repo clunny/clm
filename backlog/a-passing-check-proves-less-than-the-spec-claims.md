@@ -181,6 +181,7 @@ Beside these: the mutation pass's own change, as "where it stands" says, which o
 - One rule for a requirement: observable behaviour at its component's Contract, with no function names, field names or scans of source text.
 - The spec-slimmer runs on every component against it.
 - The eight routes onto `main` collapse to about three, the light route for one scenario among them.
+- Left by phase 4's closing branch (`20261117-phase-4-s-move-is-over`), since each reword costs a build and changes no behaviour: the 23 `commands-in-crate` requirements, which say where a component's tests "sat"; requirements of `check.coverage`, `view`, `view.repo` and `init` that say no test "is left" in a root file that is gone; three of `upgrade` that name `crates/clm/tests/hooks.rs`, whose test now sits in `crates/clm-hooks/tests/`; `check`'s Design, which gives `crates/clm/tests/run.rs` as its example of a test counted toward the component it cites; and the comment on `[affected] all` in `clm.toml`, which says every test in `crates/clm/tests/` runs through the dispatch.
 
 **6. Add evals**, as Settled states them: the method first, then selection, then CLM's own evals as its first user, then the one judge audit.
 
