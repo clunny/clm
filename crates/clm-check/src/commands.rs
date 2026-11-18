@@ -190,7 +190,7 @@ where
             out,
         );
     }
-    match crate::size(root, &graph, &crate::scan(root).req, defaults) {
+    match crate::size(root, &graph, &clm_coverage::scan(root).req, defaults) {
         Ok(sizes) => {
             for s in sizes.iter().filter(|s| node.is_none_or(|n| s.node == n)) {
                 let _ = writeln!(out, "{s}");

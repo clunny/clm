@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::Graph;
 
-use crate::Marker;
+use clm_coverage::Marker;
 
 /// The budgets of a node whose `size_budget` doesn't set them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,7 +138,7 @@ pub fn size_of(
     }
     let owners: BTreeMap<&Path, Option<&str>> = files
         .keys()
-        .map(|f| (f.as_path(), crate::owner(graph, f)))
+        .map(|f| (f.as_path(), clm_coverage::owner(graph, f)))
         .collect();
     graph
         .nodes
@@ -201,7 +201,7 @@ mod tree {
     use clm_model::Graph;
 
     use super::{Budgets, Length, Size, size_of};
-    use crate::Marker;
+    use clm_coverage::Marker;
 
     /// Bytes git treats as the start of a file when deciding it is binary.
     const BINARY_PROBE: u64 = 8000;

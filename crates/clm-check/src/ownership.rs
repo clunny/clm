@@ -4,7 +4,7 @@
 
 use clm_model::{ExemptRule, Graph, Node};
 
-use crate::matches;
+use clm_coverage::matches;
 
 /// The components that own `file`, sorted by ID: those whose `tests` match it or, when no
 /// component's `tests` do, those whose `paths` match it (`components-own-their-tests`). More

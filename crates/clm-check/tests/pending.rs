@@ -94,7 +94,7 @@ fn a_removed_node_is_an_unknown_node() {
     assert_eq!(removed[0].rule, "check/pending-narrows-on-a-graph");
     assert_eq!(removed[0].message, "unknown component `g`");
     assert_eq!(removed[0].path, Path::new("specs/g/SPEC.md"));
-    let on_graph = clm_check::pending_for(&graph(d), &clm_check::scan(d).req, Some("g"));
+    let on_graph = clm_check::pending_for(&graph(d), &clm_coverage::scan(d).req, Some("g"));
     assert_eq!(
         clm_check::format(&on_graph.unwrap_err()[0]),
         clm_check::format(&removed[0])
@@ -113,10 +113,10 @@ fn pending_for_narrows_a_loaded_graph_as_pending_in_does() {
     write(d, "specs/a/SPEC.md", &spec(&["x"]));
     write(d, "specs/b/SPEC.md", &spec(&["y"]));
     let g = graph(d);
-    let markers = clm_check::scan(d).req;
+    let markers = clm_coverage::scan(d).req;
     let from_root = clm_check::pending_in(d, Some("a")).unwrap();
     let from_graph = clm_check::pending_for(&g, &markers, Some("a")).unwrap();
-    let ids = |l: &[clm_check::Pending]| l.iter().map(|p| p.to_string()).collect::<Vec<_>>();
+    let ids = |l: &[clm_coverage::Pending]| l.iter().map(|p| p.to_string()).collect::<Vec<_>>();
     assert_eq!(ids(&from_root), ids(&from_graph));
     assert_eq!(
         clm_check::pending_for(&g, &markers, None).unwrap().len(),

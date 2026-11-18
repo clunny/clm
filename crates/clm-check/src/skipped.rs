@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{ExemptRule, Graph, Violation};
 
-use crate::Marker;
 use crate::ownership::{exempt, owner};
+use clm_coverage::Marker;
 
 /// Each line that skips a test, in each file holding one of `markers` that no exemption of its
 /// owner names for `skipped-tests` (`model/exemptions`).

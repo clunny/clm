@@ -65,7 +65,7 @@ fn repo(extra: &str, files: &[(&str, &[u8])]) -> TempDir {
 fn sizes(root: &Path) -> Vec<Size> {
     let (graph, violations) = clm_model::load(root);
     assert!(violations.is_empty(), "{violations:?}");
-    size(root, &graph, &clm_check::scan(root).req, DEFAULTS).unwrap()
+    size(root, &graph, &clm_coverage::scan(root).req, DEFAULTS).unwrap()
 }
 
 /// The line for `node`.
@@ -609,7 +609,7 @@ fn size_of_a_listing_matches_the_working_tree() {
     git(root, &["add", "specs"]);
     let (graph, violations) = clm_model::load(root);
     assert!(violations.is_empty(), "{violations:?}");
-    let markers = clm_check::scan(root).req;
+    let markers = clm_coverage::scan(root).req;
     let files: BTreeMap<PathBuf, clm_check::Length> = [
         "specs/SPEC.md",
         "specs/a/SPEC.md",
@@ -639,7 +639,7 @@ fn size_of_a_listing_with_inline_tests_matches_the_working_tree() {
     let root = dir.path();
     git(root, &["add", "specs"]);
     let (graph, _) = clm_model::load(root);
-    let markers = clm_check::scan(root).req;
+    let markers = clm_coverage::scan(root).req;
     let mut files: BTreeMap<PathBuf, clm_check::Length> =
         ["specs/SPEC.md", "specs/a/SPEC.md", "specs/b/SPEC.md"]
             .into_iter()

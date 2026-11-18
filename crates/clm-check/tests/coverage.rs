@@ -3,7 +3,6 @@ use std::path::Path;
 use std::process::Command;
 
 use clm_check::run;
-use clm_model::Graph;
 use tempfile::TempDir;
 
 // Markers are assembled so this file doesn't itself cite (or dangle) them.
@@ -67,12 +66,6 @@ fn repo(status: &str) -> TempDir {
         "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: x\nX.\n\n#### Scenario: s\n- ok\n",
     );
     dir
-}
-
-fn graph(root: &Path) -> Graph {
-    let (graph, violations) = clm_model::load(root);
-    assert!(violations.is_empty(), "{violations:?}");
-    graph
 }
 
 fn rules(root: &Path) -> Vec<(String, &'static str, String)> {
@@ -392,21 +385,4 @@ fn capability_removed_by_a_live_change_is_not_dangling() {
             assert!(found.is_empty(), "{found:?}");
         }
     }
-}
-
-#[test]
-fn clm_check_re_exports_the_test_lists() {
-    // req:check/coverage-lists@58f414a9
-    let dir = repo("applied");
-    let g = graph(dir.path());
-    let text = format!("fn f() {{\n    // {X}\n}}\n#[test]\nfn t() {{\n    // {X}\n}}\n");
-    let path = Path::new("src/lib.rs");
-    assert_eq!(clm_check::tests_in(path, &text).len(), 1);
-    let outside = clm_check::markers_outside_tests(path, &text);
-    assert_eq!(outside.len(), 1);
-    assert_eq!(clm_check::uncounted(&g, &outside)[0].id, "a/x");
-    let files = vec![(path.to_path_buf(), text)];
-    assert!(clm_check::obsolete_tests(&g, &files).is_empty());
-    let deleted = clm_check::deleted_tests(&files, &[]);
-    assert_eq!(deleted[0].test, "src/lib.rs::t");
 }

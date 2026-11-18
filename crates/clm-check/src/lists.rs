@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use clm_model::{Graph, Violation};
 
-use crate::{deleted_tests, obsolete_tests, scan, uncounted};
+use clm_coverage::{deleted_tests, obsolete_tests, scan, uncounted};
 
 const RULE: &str = "check/coverage-lists";
 

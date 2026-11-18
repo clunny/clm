@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clm_model::{ChangeStatus, Graph, Violation};
 
-use crate::Marker;
+use clm_coverage::Marker;
 
 /// `remove-by-markers` violations: each marker whose change is archived, missing, done
 /// or abandoned.
