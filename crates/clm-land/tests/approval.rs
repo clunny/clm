@@ -164,6 +164,7 @@ fn unparseable_policy_at_the_base() {
     let f = Fixture::new("approval = = =");
     branch_sets(&f, "approval = = =", "approval = \"any\"");
     let old = f.remote("main");
+    let records = f.records().len();
     let why = match clm_land::land(&f.work(), None, &f.env(&[])) {
         Err(clm_land::Error::Git(why)) => why,
         other => panic!("expected exit 2, got {other:?}"),
@@ -171,5 +172,7 @@ fn unparseable_policy_at_the_base() {
     assert!(why.contains("origin/main:clm.toml"), "{why}");
     assert!(why.contains("approval"), "{why}");
     assert!(f.lines("check.log").is_empty());
+    assert!(f.lines("gate.log").is_empty());
     assert_eq!(f.remote("main"), old);
+    assert_eq!(f.records().len(), records);
 }
