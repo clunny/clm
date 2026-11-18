@@ -287,7 +287,8 @@ fn a_deleted_file_no_node_holds_prints_all() {
 
 #[test]
 fn settings_that_cant_load_exit_1() {
-    // req:check.affected/affected-all@a55dd83e
+    // The Contract's exit 1 for settings that can't be loaded, which no requirement states yet
+    // (backlog/affected-settings-load-failure-has-no-requirement).
     let dir = repo("[affected]\nall = 3\n");
     let out = clm_affected(dir.path(), "main");
     assert_eq!(out.status.code(), Some(1), "{out:?}");
@@ -558,6 +559,19 @@ fn readers_alone_print_no_node_or_all_line() {
     let out = clm_affected_with(root, "main", &["--readers"]);
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(stdout(&out), "file crates/e/tests/r.rs\n");
+}
+
+#[test]
+fn a_deleted_reader_is_not_printed() {
+    // req:check.affected/affected-readers@e1298640
+    let dir = readers_repo();
+    let root = dir.path();
+    write(root, "ARCHITECTURE.md", "# B\n");
+    commit_all(root, "doc");
+    std::fs::remove_file(root.join("crates/e/tests/r.rs")).unwrap();
+    let out = clm_affected_with(root, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
 }
 
 #[test]

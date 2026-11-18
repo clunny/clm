@@ -165,7 +165,7 @@ fn cited_ids(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// The files `check`'s coverage scan reads, tracked or untracked and not ignored, UTF-8 and
+/// The files `check.coverage`'s scan reads, tracked or untracked and not ignored, UTF-8 and
 /// not Markdown.
 fn scanned(root: &Path) -> Result<Scan, Failure> {
     let listed = git(
