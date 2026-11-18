@@ -455,19 +455,27 @@ ts_tools() {
 # second's missed. The files sit inside the directory, which a vitest configuration reaches, and
 # are removed afterwards.
 ts_fixture() {
-  local dir=$1 fix=clm-mutate-fixture saved=("${ts_tests[@]+"${ts_tests[@]}"}")
+  local dir=$1 fix=clm-mutate-fixture saved=("${ts_tests[@]+"${ts_tests[@]}"}") up
   fixture_dirs="$fixture_dirs $dir"
   rm -rf "${root:?}/$dir/$fix"
   mkdir -p "$root/$dir/$fix"
+  # The repository's top, relative to the fixture's test file.
+  up=$(printf '%s' "$dir/$fix" | sed 's#[^/][^/]*#..#g')
   cat >"$root/$dir/$fix/fixture.ts" <<'EOF'
 export const double = (x: number): number => x * 2;
 export const triple = (x: number): number => x * 3;
 EOF
-  cat >"$root/$dir/$fix/fixture.test.ts" <<'EOF'
+  # The test that notices also reads this script, a file of the repository outside the npm
+  # directory, by a path relative to its own file, so a sandbox from which the repository's
+  # files can't be reached fails the fixture. It reads it with `fs`, in node's environment.
+  cat >"$root/$dir/$fix/fixture.test.ts" <<EOF
+// @vitest-environment node
+import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { double, triple } from './fixture';
 
 test('fixture_notices', () => {
+  expect(readFileSync(new URL('$up/.github/scripts/mutate.sh', import.meta.url), 'utf8')).toContain('mutate');
   expect(double(3)).toBe(6);
 });
 
@@ -562,10 +570,18 @@ run_stryker() {
   "mutate": [${ranges%,}]
 }
 EOF
-  (
-    cd "$root/$dir"
-    npx stryker run "$scfg"
-  ) || status=$?
+  # A link it can't make fails the run, as StrykerJS failing would.
+  if stryker_links "$dir" ".stryker-tmp-clm-$tag"; then
+    (
+      cd "$root/$dir"
+      npx stryker run "$scfg"
+    ) || status=$?
+  else
+    status=1
+  fi
+  # Gone as soon as StrykerJS returns, so no later run, such as `coverage.sh`'s vitest, finds
+  # the links.
+  rm -rf "${root:?}/$dir/.stryker-tmp-clm-$tag"
   rm -f "$vcfg" "$scfg"
   json=$work/$report/mutation.json
   if [ "$status" -ne 0 ] || ! [ -f "$json" ]; then return 1; fi
@@ -584,6 +600,23 @@ EOF
   caught=$((caught + k))
   missed=$((missed + s))
   untested=$((untested + u))
+}
+
+# Makes $2, the directory under the npm directory $1 that StrykerJS makes its sandbox in, afresh,
+# holding a link for each entry of the repository's top but `.git` and $1, to that entry, dot
+# entries and untracked ones too: the sandbox then stands where $1 does among the repository's
+# other files, so a path a test resolves from its own file to a file outside $1, as
+# `../../specs/web/SPEC.md` from `web/src/`, reaches it there as in the checkout.
+stryker_links() {
+  local dir=$1 tmp=$root/$1/$2 e n
+  rm -rf "${tmp:?}"
+  mkdir -p "$tmp" || return 1
+  for e in "$root"/* "$root"/.*; do
+    n=${e##*/}
+    case $n in . | .. | .git | "${dir%%/*}") continue ;; esac
+    [ -e "$e" ] || [ -L "$e" ] || continue
+    ln -s "$e" "$tmp/$n" || return 1
+  done
 }
 
 # Sets `k`, `s`, `u` and `all` to the mutants of the reports' lines $@ caught (killed or timed

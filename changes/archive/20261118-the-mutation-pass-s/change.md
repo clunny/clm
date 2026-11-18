@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-mutation-pass-s-strykerjs-sandbox-can-t-see-repository-files]
 ---
 
