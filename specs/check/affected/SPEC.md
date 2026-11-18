@@ -100,7 +100,7 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - ledger/doc-only
 
 ### Requirement: affected-base
-`clm affected` SHALL compare the working tree, untracked files included, with the merge base of `--base <ref>` and `HEAD`, defaulting `<ref>` to `origin/main`. It SHALL exit 1 naming the ref when `<ref>` doesn't resolve to a commit or has no merge base with `HEAD`, 1 with the error when the graph can't be loaded, and 1 naming the file and the key when the `[affected]` settings (`config/affected-setting`) can't be loaded, printing no component, `file` or `all` line.
+`clm affected` SHALL compare the working tree, untracked files included, with the merge base of `--base <ref>` and `HEAD`, defaulting `<ref>` to `origin/main`. It SHALL exit 1 naming the ref when `<ref>` doesn't resolve to a commit or has no merge base with `HEAD`, 1 with the error when the graph can't be loaded, and, except with `--readers`, which reads no setting, 1 when its caller can't load the `[affected]` settings (`config/affected-setting`), writing the line the caller gives for the failure to standard error and nothing to standard output; the line names the file and the key, which is the root's to print (`clm/routes-only`).
 
 #### Scenario: main moved on
 - GIVEN a branch that changes `crates/a/src/lib.rs`, and `main` that has since changed `crates/d/src/lib.rs`
@@ -118,9 +118,9 @@ When a changed file matches a glob of the `[affected] all` setting, or lies in n
 - THEN it exits 1 with the error and prints no component, `file` or `all` line
 
 #### Scenario: settings that can't be loaded
-- GIVEN a repository `clm.toml` with `[affected]` and `all = 3`
-- WHEN `clm affected --base main` runs
-- THEN it exits 1 with a line on standard error naming `clm.toml` and `affected`, and prints nothing on standard output
+- GIVEN a caller whose loading of the settings fails with a line
+- WHEN `clm-affected`'s call for `clm affected --base main` runs
+- THEN it returns 1, writes that line to standard error and nothing to standard output
 
 ### Requirement: git-through-layer
 `clm-affected` SHALL list `clm-git` among its dependencies and SHALL run no `git` or `gh` process itself: every call goes through `clm-git`'s `git`, `run` or repo queries (`git-plumbing-layer`).
