@@ -650,17 +650,21 @@ fn truncated_listing_needs_review() {
 #[test]
 fn comparison_cached_before_review_moved() {
     // req:web.worker.review/pr-review@574ed19f
-    // A comparison kept under the previous key, with the change's own `review`, isn't
-    // served: the branch's `review` is computed anew.
+    // A comparison kept under an earlier key isn't served, even one of today's shape: the
+    // branch's `review`, which now counts what it cuts, is computed anew.
     let fake = Fake::default();
     fake.gh.add_repo(
         "o/a",
-        branch_with(&[("ARCHITECTURE.md", "# Arch\n\nMore.\n")]),
+        branch_from(
+            &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
+            &[],
+            &[("specs/n/SPEC.md", &node("", &["s"], "active"))],
+        ),
     );
     let cookie = fake.user("u", &["o/a"]);
     let old = json!({"change": null, "nodes": [], "decisions": [], "backlog": [],
                      "documents": [], "fingerprint": "f0f0", "code_key": null,
-                     "review": false});
+                     "review": false, "cuts": []});
     block_on(async {
         use clm_web_platform::platform::Cache;
         for key in ["compare3:o/a@111:222", "compare4:o/a@111:222"] {
@@ -670,7 +674,11 @@ fn comparison_cached_before_review_moved() {
     let v = body_json(&fake.handle(get(URL, &cookie)));
     assert_eq!(v["review"], true, "{v}");
     assert_ne!(v["fingerprint"], "f0f0");
-    assert_eq!(v["cuts"], json!([]), "{v}");
+    assert_eq!(
+        v["cuts"],
+        json!(["specs/n/SPEC.md: gate/cut: requirement n/r is gone"]),
+        "{v}"
+    );
 }
 
 #[test]
