@@ -63,6 +63,14 @@ pub fn sessions(
     // With a branch named plainly, a line that doesn't hold it can't be its entry, and isn't
     // parsed.
     let needle = branch.filter(|b| !b.contains(['"', '\\']));
+    // A subagent's line counts for `branch` when it holds the branch or ran in a worktree
+    // that has the branch checked out, so it must name one or the other; with a path JSON
+    // would escape, every subagent line is parsed.
+    let worktrees: Option<Vec<&str>> = counted
+        .iter()
+        .filter(|(_, b)| b.is_some() && b.as_deref() == branch)
+        .map(|(dir, _)| dir.to_str().filter(|d| !d.contains(['"', '\\'])))
+        .collect();
     for file in files {
         let Ok(bytes) = std::fs::read(&file) else {
             continue;
@@ -72,13 +80,19 @@ pub fn sessions(
         let subagent = file
             .strip_prefix(transcripts)
             .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == "subagents"));
-        let needle = needle.filter(|_| !subagent);
+        let paths: &[&str] = match (&worktrees, subagent) {
+            (_, false) => &[],
+            (Some(paths), true) => paths,
+            // The empty string, which every line holds.
+            (None, true) => &[""],
+        };
         for line in bytes.split(|b| *b == b'\n') {
             let Ok(line) = std::str::from_utf8(line) else {
                 bad += 1;
                 continue;
             };
-            if line.trim().is_empty() || needle.is_some_and(|b| !line.contains(b)) {
+            let named = |b: &str| line.contains(b) || paths.iter().any(|p| line.contains(p));
+            if line.trim().is_empty() || needle.is_some_and(|b| !named(b)) {
                 continue;
             }
             match serde_json::from_str::<Value>(line) {

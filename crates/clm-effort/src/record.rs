@@ -182,7 +182,15 @@ fn grown(
         .enumerate()
         .map(|(n, w)| (w.path, w.branch.filter(|_| n > 0)))
         .collect();
-    counted.extend(options.cwds.iter().map(|dir| (dir.clone(), None)));
+    // A `--cwd` inside a linked worktree is that worktree's, so it hides no branch.
+    let worktrees = counted.clone();
+    counted.extend(options.cwds.iter().map(|dir| {
+        let held = worktrees
+            .iter()
+            .filter(|(path, _)| dir.starts_with(path))
+            .max_by_key(|(path, _)| path.components().count());
+        (dir.clone(), held.and_then(|(_, branch)| branch.clone()))
+    }));
     let mut warnings = Vec::new();
     let work = match options.transcripts.clone().or_else(|| transcripts_dir(env)) {
         Some(dir) => {
