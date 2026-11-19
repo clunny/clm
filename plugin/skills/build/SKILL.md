@@ -17,12 +17,12 @@ Start the loop with `clm build start --session-model <alias>`, `<alias>` the ali
 - `launch`: start a background subagent with the Agent tool, as a `general-purpose` agent with `isolation: "worktree"` and the line's model, its prompt the named file's text unchanged. Then run `clm build launched <name> <task-id>`. When the line says to run it in the session, do its work here instead.
 - `resume`: send the file's text with `SendMessage`. When it can't be delivered, report it with `clm build returned <name> --result none --cause tool`.
 - `stop`: stop the run with `TaskStop`. Where the agent harness can't stop a subagent, wait for it to return and report it with `--cause stopped`.
-- `run`: run the command as a background Bash command. Then run `clm build launched <name> <task-id>` with that command's task ID, so that no later step prints the action again while it runs. Report its last line with `clm build returned`, with no `--cause`, however the command ended: `clm build` reads the command's outcome from that line itself.
+- `run`: run the command as a background Bash command. Then run `clm build launched <name> <task-id>` with that command's task ID, so that no later step prints the action again while it runs. Report it with `clm build returned`, with no `--cause`, however the command ended: `clm build` reads the command's outcome from the line itself. For `verify`, report its outcome line, the last line of its output that starts `verify `, or `none` when no line does: a failed `clm verify` prints notes after that line, and reporting a note loses the red result. For any other run, report its last line.
 - `wait`: run `clm build wait` as a background Bash command.
 - `say`: show the file's text to the human once.
 - `end`: end the loop.
 
-Report every subagent's or background command's return with `clm build returned <name> --result <last line>`, the last line as it stands. When `clm build wait` exits, run `clm build step`.
+Report every subagent's or background command's return with `clm build returned <name> --result <last line>`, the last line as it stands, except for a `verify` run, whose result is its outcome line as the `run` action says. When `clm build wait` exits, run `clm build step`.
 
 For a subagent's return that isn't `landed <sha>`, `proposed <id> review <url>` or `waiting: <command>`, pass with `--cause` your reading of why the run ended. It is your one judgement; `clm build` keeps the counts and decides what follows from it:
 
