@@ -28,6 +28,8 @@ A caller never runs `gh` or `az` itself; everything host-specific is here, and a
 
 `clm-host` offers each of `clm pr`, `clm issue` and `clm branch` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
 
+On every host, `clm pr` and `clm issue` exit 2 when the host's tool, `gh` or `az`, fails or gives an answer the adapter can't read, and 1 when the command itself refuses, such as for a blank body file or a branch with no pull request (`host-tool-failure`), so a caller reads a host's failure the same way on `github` and on `azure`.
+
 ## Design
 Crate `clm-host`. One trait, `Host`, with these operations, and an implementation per setting. `github` runs `gh pr create --base main --head <branch> --title --body-file`, `gh pr view --json number,state,headRefName` and `gh api -X PATCH repos/{owner}/{repo}/pulls/<n> -F body=@<file>` (the REST call, since `gh pr edit` fails on `gh` versions that query the retired Projects (classic) API), and `gh issue create`. `branch delete` is `git push --force-with-lease=refs/heads/<branch>:<sha> origin :refs/heads/<branch>` for every host, `<sha>` being `--lease` or, without it, the tip of `refs/remotes/origin/<branch>`.
 
@@ -434,7 +436,7 @@ The `Azure` adapter's operations other than `pr open`, `pr body`, `branch push` 
 - config/host-setting
 
 ### Requirement: azure-selected
-With `host = "azure"`, `clm-host`'s `adapter` SHALL give the `Azure` adapter (`azure-pull-requests`, `azure-other-operations`), so `clm pr open` and `clm pr body` run `az` as those requirements say, `clm issue` and the contribution operations behave as on `git`, and a failure of `az` makes the command exit 1 printing `az`'s message. `adapter`'s arm for the `azure` value gives it, and this requirement's tests prove it through the commands. `capability/git-host`'s Azure DevOps scenario, which drives `clm pr open` with a stubbed `az`, sees the adapter once this requirement holds.
+With `host = "azure"`, `clm-host`'s `adapter` SHALL give the `Azure` adapter (`azure-pull-requests`, `azure-other-operations`), so `clm pr open` and `clm pr body` run `az` as those requirements say, `clm issue` and the contribution operations behave as on `git`, and a failure of `az` makes the command exit 2 printing `az`'s message (`host-tool-failure`). `adapter`'s arm for the `azure` value gives it, and this requirement's tests prove it through the commands. `capability/git-host`'s Azure DevOps scenario, which drives `clm pr open` with a stubbed `az`, sees the adapter once this requirement holds.
 
 #### Scenario: pull request through the setting
 - GIVEN a repository `clm.toml` with `host = "azure"` and a fake `az` that records its calls, lists no active pull request for `spec/x`, and answers `pr create` with `pullRequestId` 12 and `repository.webUrl` `https://dev.azure.com/o/p/_git/r`
@@ -444,7 +446,7 @@ With `host = "azure"`, `clm-host`'s `adapter` SHALL give the `Azure` adapter (`a
 #### Scenario: az not signed in
 - GIVEN `host = "azure"` and a fake `az` that exits 1 printing `Please run 'az login'`
 - WHEN `clm pr open spec/x --title "x" --body-file body.md` runs
-- THEN it exits 1 and its output holds `az login`
+- THEN it exits 2 and its output holds `az login`
 
 #### Scenario: issue through the setting
 - GIVEN `host = "azure"` and fake `az` and `gh` that record their calls
@@ -583,17 +585,17 @@ When `az repos pr create` succeeds with JSON that lacks `pullRequestId` or `repo
 - architecture/host-adapters
 
 ### Requirement: keep-unopened-body
-When the host's `pr open` fails after `clm pr open`'s own checks have passed, on `github` or `azure`, `clm-host`'s `pr_open` SHALL first write the body it was opening with (the `--body-file`'s contents, or the body drawn from the branch, in either case with the `## Cuts` section `pr-open` puts first for a branch that cuts anything) to `<common git dir>/clm/pr-bodies/<branch>.md`, `<common git dir>` being `clm-git`'s `common_dir` and each `/` of the branch's name written as `-`, creating the directories and replacing an earlier copy, and its error SHALL end `; the body is kept at <path>` with that file's absolute path, so `clm pr open` exits 1 naming it. The `Azure` adapter SHALL write the whole body to the same path when it cuts one (`azure-body-limit`). When the gate can't be evaluated (`pr-open`) no body SHALL be kept, since none was made. Nothing else SHALL be written there: a pull request that opens with its whole body leaves no copy.
+When the host's `pr open` fails after `clm pr open`'s own checks have passed, on `github` or `azure`, `clm-host`'s `pr_open` SHALL first write the body it was opening with (the `--body-file`'s contents, or the body drawn from the branch, in either case with the `## Cuts` section `pr-open` puts first for a branch that cuts anything) to `<common git dir>/clm/pr-bodies/<branch>.md`, `<common git dir>` being `clm-git`'s `common_dir` and each `/` of the branch's name written as `-`, creating the directories and replacing an earlier copy, and its error SHALL end `; the body is kept at <path>` with that file's absolute path, so `clm pr open` exits with the status `host-tool-failure` gives a failing host's tool, 2, naming it. The `Azure` adapter SHALL write the whole body to the same path when it cuts one (`azure-body-limit`). When the gate can't be evaluated (`pr-open`) no body SHALL be kept, since none was made. Nothing else SHALL be written there: a pull request that opens with its whole body leaves no copy.
 
 #### Scenario: the host refuses
 - GIVEN `host = "azure"`, a fake `az` that lists no active pull request for `impl/a` and exits 1 on `pr create` printing `TF401398`, and `.clm/pr-body.md` holding `## Review`
 - WHEN `clm pr open impl/a --title x --body-file .clm/pr-body.md` runs
-- THEN it exits 1, its output holds `TF401398` and the path of `<common git dir>/clm/pr-bodies/impl-a.md`, and that file holds `## Review`
+- THEN it exits 2, its output holds `TF401398` and the path of `<common git dir>/clm/pr-bodies/impl-a.md`, and that file holds `## Review`
 
 #### Scenario: a kept body holds its cuts
 - GIVEN `host = "github"`, a fake `gh` whose `pr create` exits 1, and a branch `spec/x` that removes requirement `a/x`
 - WHEN `clm pr open spec/x --title x --body-file body.md` runs
-- THEN the kept file starts `## Cuts` and `- specs/a/SPEC.md: gate/cut: requirement a/x is gone`, followed by the contents of `body.md`
+- THEN it exits 2, and the kept file starts `## Cuts` and `- specs/a/SPEC.md: gate/cut: requirement a/x is gone`, followed by the contents of `body.md`
 
 #### Scenario: from a linked worktree
 - GIVEN the same, run in a linked worktree of the clone
@@ -625,3 +627,26 @@ When the host's `pr open` fails after `clm pr open`'s own checks have passed, on
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
+
+### Requirement: host-tool-failure
+When the host's tool, `gh` on `github` or `az` on `azure`, can't be run, exits non-zero, or gives an answer the adapter can't read, `clm pr open`, `clm pr body` and `clm issue` SHALL exit 2, with a message that holds what the tool printed on its error output, or why its answer can't be read, on every host that has the tool. They SHALL exit 1 only when the command refuses by its own checks, such as a body file that is missing or blank, a branch with no pull request, or a host with nowhere to file an issue, so a caller tells a host's failure from a refusal the same way whichever host the project uses.
+
+#### Scenario: gh fails to open a pull request
+- GIVEN `host = "github"` and a fake `gh` whose `pr view` finds no pull request and whose `pr create` exits 1 printing `create failed`
+- WHEN `clm pr open spec/x --title x --body-file body.md` runs
+- THEN it exits 2 and its error output holds `create failed`
+
+#### Scenario: gh fails to file an issue
+- GIVEN `host = "github"` and a fake `gh` whose `issue create` exits 1 printing `create failed`
+- WHEN `clm issue --title x --body-file r.md --repo o/r` runs
+- THEN it exits 2 and its error output holds `create failed`
+
+#### Scenario: az fails to set a body
+- GIVEN `host = "azure"`, the current branch `spec/x`, a file `body.md` holding `## Intent`, and a fake `az` that exits 1 printing `Please run 'az login'`
+- WHEN `clm pr body body.md` runs
+- THEN it exits 2 and its error output holds `az login`
+
+#### Scenario: an answer that can't be read
+- GIVEN `host = "github"`, the current branch `spec/x`, a file `body.md` holding `## Intent`, and a fake `gh` whose `pr view` prints `not json`
+- WHEN `clm pr body body.md` runs
+- THEN it exits 2 and its error output holds `bad JSON`
