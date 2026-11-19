@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-cited-test-stripped-beside-a-deleted-unmarked-namesake-and-a]
 ---
 
