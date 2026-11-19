@@ -78,6 +78,7 @@ Every term CLM uses, in plain words. Where the wider software world has a usual 
 - **`CLM_LAND_DIR`:** the directory, lasting from run to run, that `clm land` gives a check it runs in the clone's land tree (`.clm/land`), and `clm verify` gives `[verify] check` (`.clm/verify-build`), for the check's build output.
 - **Rebase:** `clm rebase`: rebase a branch onto `origin/main`, regenerate `specs/` from its changes and run the checks.
 - **Wrap-up:** `clm wrap-up`: clean up landed work and say whether the session can end.
+- **Gate's rules version:** which version of its rules the gate judged a land by, `clm-gate`'s `RULES`, written by `clm land` into each merge commit as the trailer `Gate-Rules: <n>`. `clm ledger verify --review` recomputes a land under the version in force when it landed, so a rule that asks review for more never accuses an earlier land. *Usually:* a policy version.
 - **Ledger:** the record of approvals, checks and lands, kept on one branch per writer (`clm ledger`); `clm ledger verify` audits `main` against it, checking every commit on `main` is a recorded land. *Usually:* an audit log.
 - **Writer:** the name your ledger records are made under.
 - **Fingerprint:** a hash of a branch's diff, which an approval is tied to (`clm fingerprint`).
