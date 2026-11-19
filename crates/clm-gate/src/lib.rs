@@ -76,6 +76,28 @@ pub fn is_spec_path(path: &str) -> bool {
 /// ledger holds an approval of this diff that the policy accepts, as `clm land` decides.
 /// `Err` means git itself failed (not a gate violation).
 pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Result<Outcome, String> {
+    evaluate_by(repo, base, head, approved, RULES)
+}
+
+/// The version of the rules by which `evaluate_at` decides a branch's kind and whether it
+/// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 since.
+pub const RULES: u32 = 2;
+
+/// `evaluate_at` as the gate decided under the rules of version `rules` (`rules-version`):
+/// only the review, and with it `gate/approval`, depends on the version. `Err` for a version
+/// this gate doesn't know, as for git failing.
+pub fn evaluate_by(
+    repo: &Path,
+    base: &str,
+    head: &str,
+    approved: bool,
+    rules: u32,
+) -> Result<Outcome, String> {
+    if !(1..=RULES).contains(&rules) {
+        return Err(format!(
+            "the gate knows no rules version {rules}: it knows 1 to RULES ({RULES})"
+        ));
+    }
     let here = PathBuf::from(format!("{base}..{head}"));
     let mut violations = Vec::new();
     let build_branch = is_build_branch(repo, head);
@@ -235,6 +257,7 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
         let (listed, widened) = read_cuts(&at, &entries, &mut violations)?;
         cut = listed;
+        let added = added_exemptions(&at, &entries)?;
         review = match &replayed {
             // Its replayed edits to the human layers change no intent (`needs-review`).
             Some(text) => {
@@ -243,13 +266,16 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
                         .iter()
                         .any(|fm| fm.as_ref().is_none_or(change_needs_review))
             }
+            // Version 1, before a cut needed review: the exemptions as read from the text.
+            None if rules == 1 => {
+                needs_review_of(&paths, setting_changed, &changes) || !added.is_empty()
+            }
             // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
             None => {
                 needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty()
             }
         };
         violations.extend(undeclared_burdens(&at, &entries, &changes));
-        let added = added_exemptions(&at, &entries)?;
         violations.extend(exemptions_name_their_items(&at, &added)?);
     }
 
