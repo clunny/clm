@@ -309,6 +309,12 @@ fn gone_unmarked_tests_are_counted_per_file_and_name() {
     let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("quiet", false);
     let found = deleted_tests(&files(&[(TESTS, base2)]), &files(&[(TESTS, head)]));
     assert_eq!(names(&found), ["tests/t.rs::two"]);
+    // Two new tests and one gone unmarked test leave room for one rename: of `two` and
+    // `three`, both fitting either new test, the earlier is renamed and `three` is gone.
+    let base3 = base() + &rust_test("three", true);
+    let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("third", true);
+    let found = deleted_tests(&files(&[(TESTS, base3)]), &files(&[(TESTS, head)]));
+    assert_eq!(names(&found), ["tests/t.rs::three"]);
 }
 
 #[test]
