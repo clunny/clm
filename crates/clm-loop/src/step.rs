@@ -490,6 +490,84 @@ fn finish_gone_builds(options: &Options) -> Result<Vec<String>, Failure> {
     Ok(says)
 }
 
+/// The drafts of the loop file no session holds (planned, or orphans) that name items, none of
+/// which `origin/main`'s backlog holds, and that pushed no `spec/<change-id>`, as change IDs
+/// (`draft-of-gone-items-dropped`).
+fn gone_drafts(options: &Options, file: &LoopFile) -> Result<Vec<String>, Failure> {
+    let candidates: Vec<&Run> = file
+        .runs
+        .iter()
+        .filter(|r| r.kind == Some(Kind::Draft) && !r.items.is_empty())
+        .filter(|r| r.state == RunState::Planned || r.orphan)
+        .collect();
+    if candidates.is_empty() {
+        return Ok(Vec::new());
+    }
+    let backlog = clm_git::git(
+        &options.root,
+        &[
+            "ls-tree",
+            "-r",
+            "--name-only",
+            "refs/remotes/origin/main",
+            "--",
+            "backlog/",
+        ],
+    )?;
+    let held: Vec<&str> = backlog.lines().collect();
+    let mut gone = Vec::new();
+    for r in candidates {
+        let items_gone = r
+            .items
+            .iter()
+            .all(|slug| !held.contains(&format!("backlog/{slug}.md").as_str()));
+        let Some(id) = r.name.strip_prefix("draft:").filter(|_| items_gone) else {
+            continue;
+        };
+        // Asked of `origin` itself: the fetch doesn't prune, so a remote-tracking ref may name a
+        // branch since deleted. A failure to ask keeps the draft.
+        let spec = format!("refs/heads/spec/{id}");
+        if clm_git::git(&options.root, &["ls-remote", "--heads", "origin", &spec])?.is_empty() {
+            gone.push(id.to_string());
+        }
+    }
+    Ok(gone)
+}
+
+/// Finishes each draft whose items are gone with `clm draft --finish` and takes it off the loop
+/// file's list, recording none of its items as left; the `say` actions for the `left <path>`
+/// lines its finish prints (`draft-of-gone-items-dropped`).
+fn finish_gone_drafts(options: &Options) -> Result<Vec<String>, Failure> {
+    let Some(file) = state::read(&options.root) else {
+        return Ok(Vec::new());
+    };
+    let mut says = Vec::new();
+    for id in gone_drafts(options, &file)? {
+        let ran = clm(options, &["draft", "--finish", &id])?;
+        if ran.code == 2 {
+            return Err(Failure::Git(format!(
+                "clm draft --finish {id}: {}",
+                ran.reason()
+            )));
+        }
+        for left in ran.stdout.lines().map(str::trim) {
+            // A path, never an item: `left <slug>:` lines name items, which aren't recorded.
+            if let Some(rest) = left.strip_prefix("left ")
+                && rest.split(':').next().is_some_and(|p| p.contains('/'))
+            {
+                says.push(say(options, left)?);
+            }
+        }
+        let name = format!("draft:{id}");
+        // `update` keeps the run's task ID under its name.
+        state::update(&options.root, |f| {
+            f.runs.retain(|r| r.name != name);
+            Ok(())
+        })?;
+    }
+    Ok(says)
+}
+
 /// Runs the housekeeping and reads the snapshot, after a fetch the caller made.
 pub(crate) fn fresh_snapshot(options: &Options) -> Result<Snapshot, Failure> {
     // `clm wrap-up` removes landed worktrees and branches and frees the places that don't
@@ -676,6 +754,7 @@ fn actions(options: &Options) -> Result<Vec<String>, Failure> {
     refresh_holds(options)?;
     // Before the housekeeping, which removes a landed build's local branch.
     let mut say_lines = finish_gone_builds(options)?;
+    say_lines.extend(finish_gone_drafts(options)?);
     let snapshot = fresh_snapshot(options)?;
     let plan = plan_of(&snapshot);
     // Each `left` line of the wrap-up is said once.

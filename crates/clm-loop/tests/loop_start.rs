@@ -10,7 +10,7 @@ use common::{Fixture, line, run};
 
 #[test]
 fn a_live_loop() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     fx.set_lease(2);
     let before = fs::read(fx.loop_dir().join("loop")).unwrap();
@@ -24,7 +24,7 @@ fn a_live_loop() {
 
 #[test]
 fn taking_over_a_live_loop() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     fx.set_lease(2);
     start(&fx.options(), "opus", true).unwrap();
@@ -33,7 +33,7 @@ fn taking_over_a_live_loop() {
 
 #[test]
 fn adopting_a_lapsed_loop() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     fx.add_run(run(
         "build:a",
@@ -95,7 +95,7 @@ fn orphan(fx: &Fixture, name: &str, kind: Kind) {
 
 #[test]
 fn a_refused_relaunch() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "1");
@@ -128,7 +128,7 @@ fn a_refused_relaunch() {
 
 #[test]
 fn a_refused_relaunch_of_a_build_that_landed_says_nothing() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "1");
@@ -146,7 +146,7 @@ fn a_refused_relaunch_of_a_build_that_landed_says_nothing() {
 
 #[test]
 fn a_draft_with_nothing_to_resume() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     orphan(&fx, "draft:d", Kind::Draft);
     fx.set("resume-exit-d", "1");
@@ -166,7 +166,7 @@ fn a_draft_with_nothing_to_resume() {
 
 #[test]
 fn a_relaunch_for_want_of_a_place_stays_an_orphan() {
-    // req:orchestrator.loop/loop-start@4c2c558d
+    // req:orchestrator.loop/loop-start@7540e54b
     let fx = Fixture::new();
     orphan(&fx, "build:a", Kind::Build);
     fx.set("run-exit-a", "3");

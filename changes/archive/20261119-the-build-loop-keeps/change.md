@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-build-loop-keeps-printing-a-draft-launch-whose-only-item-a]
 ---
 
