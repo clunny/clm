@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [an-obsolete-marker-in-another-component-s-file-is-nobody-s-to-remove]
 ---
 
