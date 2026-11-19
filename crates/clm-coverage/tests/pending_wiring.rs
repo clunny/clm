@@ -255,6 +255,28 @@ fn a_move_target_on_another_component_still_blocks() {
     );
 }
 
+#[test]
+fn a_move_target_that_waits_on_a_need_stays_on_the_line() {
+    // req:check.coverage/pending-report@362c927d
+    let dir = moved_into_c();
+    let d = dir.path();
+    write(
+        d,
+        "specs/c/SPEC.md",
+        &spec("[\"crates/c/**\"]", &["x"]).replace("x.\n", "x.\n\n#### Needs\n- e/z\n"),
+    );
+    write(d, "specs/e/SPEC.md", &spec("[\"crates/e/**\"]", &["z"]));
+    let g = graph(d);
+    let markers = [marker("g/x", None, "crates/c/t.rs", 8)];
+    assert_eq!(
+        on(&g, &markers, "c")
+            .into_iter()
+            .filter(|l| l.starts_with("g/x "))
+            .collect::<Vec<_>>(),
+        ["g/x obsolete crates/c/t.rs:8 blocked c/x"]
+    );
+}
+
 // --- wait-lines ---
 
 /// The lines of `lines` that `line` waits on, as `(component, id)`.
