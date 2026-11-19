@@ -155,8 +155,8 @@ pub fn bare_name(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     let mut from = 0;
     for m in parse_markers(name) {
-        // A marker can start inside the one before it (`req:a/req:b/c`): that text is
-        // already left out.
+        // A marker can start inside the one before it, when a slug ends at the next
+        // marker's colon: that text is already left out.
         let start = m.range.start.max(from);
         let kept = &name[from..start];
         out.push_str(kept.strip_suffix(' ').unwrap_or(kept));
