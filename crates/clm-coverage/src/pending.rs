@@ -33,8 +33,11 @@ pub struct Pending {
     pub blocked_by: Vec<String>,
     /// Every other requirement it waits on, as `<node>/<slug>`, sorted: the pending ones its
     /// `Needs` name (`requirement-needs`); for an obsolete requirement, the pending
-    /// requirements a move took it to (`moved-markers-wait`); for a capability, the `unbuilt`
-    /// rules that serve it (`serving-rules-order-capabilities`).
+    /// requirements a move took it to (`moved-markers-wait`), less an unblocked one pending on
+    /// this line's own node, and, on its own node's line, its own ID while it has lines on
+    /// other nodes; for a capability, the rules that serve it and hold it back
+    /// (`serving-rules-order-capabilities`). `waits` resolves each to the lines it stands for
+    /// (`wait-lines`), since an ID alone names no line.
     pub waits_on: Vec<String>,
 }
 
@@ -163,10 +166,17 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
         needs.into_iter().collect::<Vec<_>>()
     };
 
+    let states: BTreeMap<String, State> =
+        coverage.iter().map(|c| (c.id.clone(), c.state)).collect();
+    // Whether nothing blocks pending requirement `id`: no item names it and it waits on nothing.
+    let free = |id: &str| {
+        !blocks.contains_key(id) && states.get(id).is_none_or(|s| waits_on(id, *s).is_empty())
+    };
+
     let mut out: Vec<Pending> = coverage
         .into_iter()
         .flat_map(|c| by_owner(graph, c))
-        .map(|(node, c)| {
+        .map(|(node, c, own_wait)| {
             let mut cited = Vec::new();
             if c.state == State::Behind {
                 cited.extend(
@@ -178,12 +188,22 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
             }
             let mut blocked_by = blocks.get(c.id.as_str()).cloned().unwrap_or_default();
             blocked_by.sort();
+            let mut waits = waits_on(&c.id, c.state);
+            if c.state == State::Obsolete {
+                // A move target pending on this line's own component that nothing blocks is made
+                // current by this component's one build (`moved-markers-wait`).
+                waits.retain(|t| node_of(t) != node || !free(t));
+                if own_wait {
+                    waits.push(c.id.clone());
+                    waits.sort();
+                }
+            }
             Pending {
                 node,
                 cited,
                 priority: priorities.get(&c.id).copied().unwrap_or_default(),
                 blocked_by,
-                waits_on: waits_on(&c.id, c.state),
+                waits_on: waits,
                 id: c.id,
                 version: c.version,
                 state: c.state,
@@ -195,28 +215,42 @@ pub fn pending(graph: &Graph, markers: &[Marker]) -> Vec<Pending> {
     out
 }
 
-/// The node each requirement's line is pending on: `entries_node` for a capability that
-/// still exists (no other entry is ever pending); the node its ID names; or, for an obsolete requirement whose node
-/// no longer exists (`node-removal`), the node owning each marker's file, one entry per
-/// owner holding only that owner's markers.
-fn by_owner(graph: &Graph, c: Coverage) -> Vec<(String, Coverage)> {
+/// The node each requirement's line is pending on, with whether that line waits on the
+/// requirement's lines on other nodes: `entries_node` for a capability that still exists (no
+/// other entry is ever pending); the node its ID names; or, for an obsolete requirement, one
+/// entry per node owning a file that cites it, each holding only that node's markers. When
+/// its node no longer exists (`node-removal`), every marker goes to its file's owner, or the
+/// root. When its node exists, it does so only once the root sets `wiring`, a file a `wiring`
+/// glob matches or that no node owns going to its own node, whose line then waits on the
+/// others (`pending-report`).
+fn by_owner(graph: &Graph, c: Coverage) -> Vec<(String, Coverage, bool)> {
     if Layer::of(&c.id).is_some() && c.state != State::Obsolete {
-        return vec![(entries_node(graph).to_string(), c)];
+        return vec![(entries_node(graph).to_string(), c, false)];
     }
-    let node = c.id.split_once('/').map_or("", |(n, _)| n);
-    if c.state != State::Obsolete || graph.nodes.contains_key(node) {
-        return vec![(node.to_string(), c)];
+    let node = node_of(&c.id);
+    let held = graph.nodes.contains_key(node);
+    let wiring = graph.wiring();
+    if c.state != State::Obsolete || (held && wiring.is_none()) {
+        return vec![(node.to_string(), c, false)];
     }
+    let wiring = wiring.unwrap_or_default();
     let mut owned: BTreeMap<&str, Vec<Marker>> = BTreeMap::new();
     for m in c.markers {
-        owned
-            .entry(owner(graph, &m.path).unwrap_or(ROOT_ID))
-            .or_default()
-            .push(m);
+        let path = m.path.to_string_lossy();
+        let found = owner(graph, &m.path);
+        let to = if !held {
+            found.unwrap_or(ROOT_ID)
+        } else if wiring.iter().any(|w| glob::matches(w, &path)) {
+            node
+        } else {
+            found.unwrap_or(node)
+        };
+        owned.entry(to).or_default().push(m);
     }
+    let others = owned.keys().any(|n| *n != node);
     owned
         .into_iter()
-        .map(|(node, markers)| {
+        .map(|(to, markers)| {
             let part = Coverage {
                 id: c.id.clone(),
                 state: c.state,
@@ -224,9 +258,14 @@ fn by_owner(graph: &Graph, c: Coverage) -> Vec<(String, Coverage)> {
                 markers,
                 proof: None,
             };
-            (node.to_string(), part)
+            (to.to_string(), part, held && to == node && others)
         })
         .collect()
+}
+
+/// The node a requirement ID names: the part before its first `/`.
+fn node_of(id: &str) -> &str {
+    id.split_once('/').map_or("", |(n, _)| n)
 }
 
 /// The node the capabilities are pending on, which builds their tests: the model's
@@ -257,4 +296,18 @@ pub fn owner<'g>(graph: &'g Graph, path: &Path) -> Option<&'g str> {
     holding(|n| &n.frontmatter.tests).min().or_else(|| {
         holding(|n| &n.frontmatter.paths).min_by_key(|id| (std::cmp::Reverse(depth(id)), *id))
     })
+}
+
+/// The lines of `lines`, the whole list `pending` returned, that `line` waits on: for each ID
+/// of its `waits_on` in order, every line holding that ID in the order `lines` holds them,
+/// other than `line` itself, the line of the same ID on the same node (`wait-lines`).
+pub fn waits<'a>(lines: &'a [Pending], line: &Pending) -> Vec<&'a Pending> {
+    line.waits_on
+        .iter()
+        .flat_map(|id| {
+            lines
+                .iter()
+                .filter(move |p| p.id == *id && !(p.id == line.id && p.node == line.node))
+        })
+        .collect()
 }
