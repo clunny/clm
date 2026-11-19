@@ -485,6 +485,21 @@ fn scenario_a_cited_test_deleted_beside_an_uncited_test_of_its_name() {
 }
 
 #[test]
+fn an_uncited_test_deleted_beside_its_cited_namesake_and_a_new_test() {
+    // req:check.coverage/test-lists@b02100ac
+    // The head keeps one cited `two` and adds `second`: the unmarked `two` may have gained a
+    // marker, so the cited one is taken, and `second`, new and fitting, with `two` held one
+    // fewer time, counts it renamed.
+    let base = ts_test("two", true) + &ts_test("two", false);
+    let head = ts_test("two", true) + &ts_test("second", true);
+    let found = deleted_tests(
+        &files(&[("a.test.ts", base)]),
+        &files(&[("a.test.ts", head)]),
+    );
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
 fn scenario_one_of_two_tests_of_a_name_renamed() {
     // req:check.coverage/test-lists@b02100ac
     let base = ts_test("two", true) + &ts_test("two", true);
