@@ -756,6 +756,38 @@ fn an_archived_list_github_withholds_at_the_merge_base() {
 }
 
 #[test]
+fn withheld_lists_follow_the_gates_lines() {
+    // req:web.worker.review/pr-review@751149f9
+    // One line per withheld list, after the gate's own lines.
+    let change = "---\nstatus: applied\n---\n\n## Intent\nc\n";
+    let mut repo = branch_from(
+        &[
+            ("specs/n/SPEC.md", &node("", &["r", "s"], "active")),
+            ("changes/a/change.md", change),
+            ("changes/b/change.md", change),
+        ],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["s"], "active"))],
+    );
+    let head = repo.commits.get_mut("222").unwrap();
+    for id in ["a", "b"] {
+        head.insert(
+            format!("changes/{id}/deleted-tests.txt"),
+            b"\xff\n".to_vec(),
+        );
+    }
+    let v = review_of(repo);
+    assert_eq!(
+        cuts(&v),
+        [
+            "specs/n/SPEC.md: gate/cut: requirement n/r is gone",
+            "changes/a/deleted-tests.txt: gate/cut: GitHub withholds its text at 222, so the tests it lists aren't listed",
+            "changes/b/deleted-tests.txt: gate/cut: GitHub withholds its text at 222, so the tests it lists aren't listed",
+        ]
+    );
+}
+
+#[test]
 fn a_withheld_list_in_a_truncated_listing() {
     // req:web.worker.review/pr-review@751149f9
     // A truncated listing lists no cuts, a withheld list's line included.
