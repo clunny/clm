@@ -263,6 +263,9 @@ A `spec` branch SHALL need review exactly when its diff adds, modifies or delete
 - WHEN `evaluate_at(repo, p, m, false)` runs
 - THEN it returns kind `spec` needing review, with `gate/approval` among its violations
 
+#### Needs
+- check.coverage/test-lists
+
 #### Serves
 - capability/land-safely
 - architecture/git-is-truth
