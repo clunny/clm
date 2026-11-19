@@ -701,6 +701,8 @@ pub fn prompt(job: &Job) -> String {
                     item.markers.join(", ")
                 ));
             }
+            // clm:remove-by 20261119-an-obsolete-marker-moves-in-three-steps: once `pending` gives such a marker to its file's
+            // owner (`check.coverage/pending-report`), no obsolete line holds one.
             if !item.foreign.is_empty() {
                 let each: Vec<String> = item
                     .foreign
@@ -1485,6 +1487,7 @@ fn job(
                 elsewhere = Some(e);
                 (delete, Vec::new())
             };
+            // clm:remove-by 20261119-an-obsolete-marker-moves-in-three-steps, with `Item::foreign_tests`.
             let foreign_tests = obsolete_tests_in(graph, tree, &p.id, &foreign_markers)
                 .into_iter()
                 .filter_map(|test| {
