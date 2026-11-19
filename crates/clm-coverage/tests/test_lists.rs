@@ -130,6 +130,11 @@ fn obsolete_tests_ignore_groups_and_files_without_removals() {
     assert!(found.is_empty(), "{found:?}");
 }
 
+/// The base files of *a deleted test*: `one` and `two`, each citing `a/x`.
+fn pair_base() -> String {
+    rust_test("one", true) + &rust_test("two", true)
+}
+
 fn base() -> String {
     format!(
         "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn two() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn quiet() {{}}\n"
@@ -140,7 +145,7 @@ fn base() -> String {
 fn scenario_a_deleted_test() {
     // req:check.coverage/test-lists@d258ae73
     let head = format!("#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n");
-    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &files(&[(TESTS, head)]));
     let shown: Vec<_> = found
         .iter()
         .map(|t| (t.test.as_str(), t.ids.clone()))
@@ -187,7 +192,7 @@ fn scenario_a_test_renamed_into_another_file() {
         (TESTS, rust_test("one", true)),
         ("tests/u.rs", rust_test("second", true)),
     ]);
-    let found = deleted_tests(&files(&[(TESTS, base())]), &head);
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &head);
     assert_eq!(names(&found), ["tests/t.rs::two"]);
 }
 
@@ -315,6 +320,24 @@ fn gone_unmarked_tests_are_counted_per_file_and_name() {
     let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("third", true);
     let found = deleted_tests(&files(&[(TESTS, base3)]), &files(&[(TESTS, head)]));
     assert_eq!(names(&found), ["tests/t.rs::three"]);
+    // An unmarked test that keeps its name and gains a marker is not gone, so it takes no
+    // new test: `two` is renamed `second`.
+    let head = rust_test("one", true) + &rust_test("quiet", true) + &rust_test("second", true);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+fn a_rename_fits_only_a_new_test_of_its_own_file() {
+    // req:check.coverage/test-lists@d258ae73
+    // `tests/t.rs` has room for a rename (an unmarked new test), and the test `two` fits is
+    // new in `tests/u.rs`: renamed and moved at once, `two` is gone.
+    let head = files(&[
+        (TESTS, rust_test("one", true) + &rust_test("helper", false)),
+        ("tests/u.rs", rust_test("second", true)),
+    ]);
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &head);
+    assert_eq!(names(&found), ["tests/t.rs::two"]);
 }
 
 #[test]
@@ -381,7 +404,7 @@ fn scenario_a_moved_test() {
         (TESTS, rust_test("one", true)),
         ("tests/u.rs", rust_test("two", true)),
     ]);
-    let found = deleted_tests(&files(&[(TESTS, base())]), &head);
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &head);
     assert!(found.is_empty(), "{found:?}");
 }
 
@@ -406,7 +429,7 @@ fn scenario_a_name_two_files_share() {
 fn scenario_a_test_that_loses_its_marker() {
     // req:check.coverage/test-lists@d258ae73
     let head = rust_test("one", true) + &rust_test("two", false);
-    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &files(&[(TESTS, head)]));
     assert_eq!(names(&found), ["tests/t.rs::two"]);
 }
 
