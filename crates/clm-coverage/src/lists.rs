@@ -170,12 +170,13 @@ pub fn bare_name(name: &str) -> String {
 /// line. Tests holding a marker are counted by bare name: where the head holds `m` of a
 /// name the base holds `n` of, `m < n`, `n - m` are gone, taken from the files in sorted
 /// order, each giving its tests of that name, last first, as many as it holds fewer of at
-/// the head. A test so taken is *renamed*, and not returned, when its file at the head holds
-/// a citing test of a bare name no citing test of the base carries, whose markers cite every
-/// ID it cited: taken in the order returned, each is matched with the first such test of its
-/// file, in line order, not matched before. So a test moved to another file is not gone, nor
-/// one renamed in its file that cites at least what it cited; one renamed and moved at once,
-/// renamed citing less, deleted or uncited is.
+/// the head. A test so taken *fits* a citing test of its file at the head whose bare name no
+/// test of the base carries, cited or not, and whose markers cite every ID it cited. Taken in
+/// the order returned, each is *renamed*, and not returned, when it and every earlier renamed
+/// one can each be paired with a different test it fits, so as many are renamed as can be and
+/// the earlier wins a tie. So a test moved to another file is not gone, nor one renamed in its
+/// file that cites at least what it cited; one renamed and moved at once, renamed citing less,
+/// replaced by a base test that gains a marker, deleted or uncited is.
 pub fn deleted_tests(
     base_files: &[(PathBuf, String)],
     head_files: &[(PathBuf, String)],
@@ -202,7 +203,12 @@ pub fn deleted_tests(
                 .push(c);
         }
     }
-    let base_names: BTreeSet<String> = base.keys().cloned().collect();
+    // Every bare name a base test carries, cited or not: a head test of one is no rename.
+    let base_names: BTreeSet<String> = base_files
+        .iter()
+        .flat_map(|(path, text)| file_tests(path, text))
+        .map(|c| bare_name(&c.name))
+        .collect();
     let none = BTreeMap::new();
     let mut out = Vec::new();
     for (name, by_file) in base {
@@ -226,31 +232,62 @@ pub fn deleted_tests(
             }
         }
     }
-    let mut gone = by_file_and_line(out);
-    // The head's citing tests of a new name, by file in line order, each until matched.
-    let mut fresh: BTreeMap<&Path, Vec<Option<BTreeSet<String>>>> = BTreeMap::new();
+    let gone = by_file_and_line(out);
+    // The head's citing tests of a new name, by file in line order, each with its IDs.
+    let mut fresh: BTreeMap<&Path, Vec<BTreeSet<String>>> = BTreeMap::new();
     for (path, text) in head_files {
         for c in citing_tests(path, text) {
             if !base_names.contains(&bare_name(&c.name)) {
-                let ids = Some(c.ids.into_iter().collect());
+                let ids = c.ids.into_iter().collect();
                 fresh.entry(path.as_path()).or_default().push(ids);
             }
         }
     }
-    gone.retain(|(path, test)| {
-        let Some(new) = fresh.get_mut(path) else {
-            return true;
-        };
-        let cites_all = |ids: &BTreeSet<String>| test.ids.iter().all(|id| ids.contains(id));
-        match new.iter_mut().find(|n| n.as_ref().is_some_and(cites_all)) {
-            Some(n) => {
-                *n = None;
-                false
-            }
-            None => true,
+    // For each taken test in order, the indexes of the fresh tests of its file it fits.
+    let fits: Vec<Vec<usize>> = gone
+        .iter()
+        .map(|(path, test)| {
+            fresh.get(path).map_or_else(Vec::new, |new| {
+                (0..new.len())
+                    .filter(|&i| test.ids.iter().all(|id| new[i].contains(id)))
+                    .collect()
+            })
+        })
+        .collect();
+    // Which taken test each fresh test stands for, by file; a taken test is renamed when an
+    // augmenting path pairs it without unpairing an earlier one (`pair`).
+    let mut held: BTreeMap<&Path, Vec<Option<usize>>> = fresh
+        .iter()
+        .map(|(path, new)| (*path, vec![None; new.len()]))
+        .collect();
+    let mut out = Vec::new();
+    for (k, (path, test)) in gone.into_iter().enumerate() {
+        let renamed = held.get_mut(path).is_some_and(|holders| {
+            let mut seen = vec![false; holders.len()];
+            pair(k, &fits, holders, &mut seen)
+        });
+        if !renamed {
+            out.push(test);
         }
-    });
-    gone.into_iter().map(|(_, t)| t).collect()
+    }
+    out
+}
+
+/// Pair taken test `k` with a fresh test it fits, moving an earlier pairing to another test
+/// it fits when that frees one (Kuhn's augmenting path). Every taken test `holders` names is
+/// of the same file as `k`, so `fits` indexes the same fresh tests for each.
+fn pair(k: usize, fits: &[Vec<usize>], holders: &mut [Option<usize>], seen: &mut [bool]) -> bool {
+    for &i in &fits[k] {
+        if seen[i] {
+            continue;
+        }
+        seen[i] = true;
+        if holders[i].is_none_or(|j| pair(j, fits, holders, seen)) {
+            holders[i] = Some(k);
+            return true;
+        }
+    }
+    false
 }
 
 /// Each test, groups left out, with no marker on its lines, sorted by file and then by line.
