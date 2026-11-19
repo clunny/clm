@@ -52,8 +52,8 @@ pub(crate) fn obsolete_tests_lines(root: &Path) -> Result<Vec<String>, Vec<Viola
 }
 
 /// `clm coverage --deleted-tests <base>`: a count line, then a `DELETED` line per citing test
-/// of the revision `base` that the working tree holds no test of that name for. `Err` names
-/// `base` when it resolves to no commit.
+/// of the revision `base` that `clm_coverage::deleted_tests` finds gone from the working tree,
+/// counted by bare name across files. `Err` names `base` when it resolves to no commit.
 pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>, Vec<Violation>> {
     load(root)?;
     let fail = |why: String| {
