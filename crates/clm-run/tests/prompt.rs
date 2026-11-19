@@ -250,12 +250,15 @@ fn scenario_an_obsolete_test_in_a_file_the_build_may_not_change() {
         "`crates/c/t.rs::old_rule` in `c`'s file",
         "`clm land` refuses this build's edit",
         "`land/build-holds-own-files`",
-        "add a `question` item that names the file and blocks nothing",
+        "add a `question` item that names each such file and blocks nothing",
     ] {
         assert!(list.contains(needle), "{needle} missing from {list}");
     }
     // Its own markers are still listed for removal.
-    assert!(list.contains("its markers are at t.rs:9."), "{list}");
+    assert!(
+        list.contains("its markers in your files are at t.rs:9."),
+        "{list}"
+    );
     // With only foreign markers, nothing is listed for removal.
     j.pending[2].markers.clear();
     let p = prompt(&j);

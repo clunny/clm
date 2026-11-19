@@ -550,11 +550,23 @@ fn scenario_an_obsolete_test_in_a_file_the_build_may_not_change() {
         "{list}"
     );
     assert!(
-        list.contains("its markers are at crates/b/t.rs:3."),
+        list.contains("its markers in your files are at crates/b/t.rs:3."),
         "{list}"
     );
     // Without `wiring`, the build may change `c`'s file, and the list's line approves it.
     let p = prompt(&obsolete_test_in_c(""), &fake(), "b", &[]);
+    assert!(
+        p.contains("(`land/deleted-tests-approved`): `crates/c/t.rs::old_rule`."),
+        "{p}"
+    );
+    assert!(!p.contains("in `c`'s file"), "{p}");
+    // A `wiring` glob lets every build edit the file, so its test is approved for deletion.
+    let p = prompt(
+        &obsolete_test_in_c("wiring: [\"crates/c/t.rs\"]\n"),
+        &fake(),
+        "b",
+        &[],
+    );
     assert!(
         p.contains("(`land/deleted-tests-approved`): `crates/c/t.rs::old_rule`."),
         "{p}"
