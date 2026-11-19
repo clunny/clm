@@ -35,25 +35,24 @@ pub fn violations(
     let listed = approved_lists(root);
     let mut out = Vec::new();
     for test in obsolete_tests(graph, &files) {
-        // Every marker cites a removed ID; none of them a capability.
-        if !test.every || test.ids.iter().any(|id| Layer::of(id).is_some()) {
+        // Every marker cites a removed requirement or capability.
+        if !test.every {
             continue;
         }
         let (file, name) = test.test.split_once("::").unwrap_or((&test.test, ""));
         let Some(mine) = owner(graph, Path::new(file)) else {
             continue;
         };
-        let component = |id: &str| id.split_once('/').map_or("", |(c, _)| c).to_string();
         // A removed requirement of the owner's own is its build's to take out.
-        if test.ids.iter().any(|id| component(id) == mine) {
+        if test.ids.iter().any(|id| component(graph, id) == mine) {
             continue;
         }
         // One moved to the owner is the owner's build's to re-cite.
-        if test
-            .ids
-            .iter()
-            .any(|id| moved_to(graph, id).iter().any(|to| component(to) == mine))
-        {
+        if test.ids.iter().any(|id| {
+            moved_to(graph, id)
+                .iter()
+                .any(|to| component(graph, to) == mine)
+        }) {
             continue;
         }
         let bare = bare_name(name);
@@ -77,6 +76,15 @@ pub fn violations(
         });
     }
     out
+}
+
+/// The component a requirement's or capability's ID names: for a capability, the one that
+/// builds the capability tests (`model/capability-tests-component`).
+fn component<'a>(graph: &'a Graph, id: &'a str) -> &'a str {
+    match Layer::of(id) {
+        Some(Layer::Capability) => graph.capability_tests_node(),
+        _ => id.split_once('/').map_or("", |(c, _)| c),
+    }
 }
 
 /// The list lines of every `changes/<id>/deleted-tests.txt` and

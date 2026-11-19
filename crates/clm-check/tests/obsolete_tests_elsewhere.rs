@@ -136,14 +136,14 @@ const UNLISTED_LINE: &str = "crates/c/t.rs:8: check/obsolete-tests-elsewhere: te
 
 #[test]
 fn a_test_nobody_listed() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = unlisted();
     assert_eq!(found(dir.path()), [UNLISTED_LINE]);
 }
 
 #[test]
 fn the_command_exits_1_with_the_line() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = unlisted();
     let mut out = Vec::new();
     let mut err = Vec::new();
@@ -166,7 +166,7 @@ fn the_command_exits_1_with_the_line() {
 
 #[test]
 fn a_listed_test() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     for list in [
         format!("changes/{CHANGE}/deleted-tests.txt"),
         "changes/archive/20250101-old/deleted-tests.txt".to_string(),
@@ -179,7 +179,7 @@ fn a_listed_test() {
 
 #[test]
 fn a_list_naming_another_test_or_file_lists_nothing() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     for line in [
         "DELETE crates/c/t.rs::other",
         "DELETE crates/c/u.rs::old_rule",
@@ -196,7 +196,7 @@ fn a_list_naming_another_test_or_file_lists_nothing() {
 
 #[test]
 fn a_list_names_a_test_by_its_bare_name() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = unlisted();
     write(
         dir.path(),
@@ -228,7 +228,7 @@ fn removed_component(adds: &[(&str, &str)], c_slugs: &[&str]) -> TempDir {
 
 #[test]
 fn a_removed_components_test() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = removed_component(&[], &["y"]);
     assert_eq!(
         found(dir.path()),
@@ -240,14 +240,14 @@ fn a_removed_components_test() {
 
 #[test]
 fn moved_into_the_files_owner() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = removed_component(&[("c", "x")], &["y", "x"]);
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn its_own_components_file_and_a_test_citing_a_live_requirement_too() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = repo(
         Some("[]"),
         &[
@@ -258,9 +258,11 @@ fn its_own_components_file_and_a_test_citing_a_live_requirement_too() {
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
+const CAPABILITIES: &str = "# Capabilities\n\n## Capabilities\n\n### Capability: c\nA person can.\n\n#### Why\nBecause.\n\n#### Scenario: s\n- GIVEN g\n- WHEN w\n- THEN t\n";
+
 #[test]
-fn a_test_citing_a_capability_too() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+fn a_test_citing_a_capability_the_layer_holds_too() {
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = repo(
         Some("[]"),
         &[(
@@ -268,12 +270,76 @@ fn a_test_citing_a_capability_too() {
             test_file("old_rule", &["b/gone", "capability/c"]),
         )],
     );
+    write(dir.path(), "CAPABILITIES.md", CAPABILITIES);
+    assert_eq!(found(dir.path()), Vec::<String>::new());
+}
+
+/// The removed-capability scenario's repository: components `capability` and `c`, a change
+/// removing the capability `gone`, and a test citing it alone in each of `files`.
+fn removed_capability(files: &[(&str, &str)]) -> TempDir {
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(root, "specs/SPEC.md", &root_spec(Some("[]")));
+    write(
+        root,
+        "specs/capability/SPEC.md",
+        &component("[\"crates/clm/tests/capability/**\"]", "", &[]),
+    );
+    write(
+        root,
+        "specs/c/SPEC.md",
+        &component("[\"crates/c/**\"]", "", &["y"]),
+    );
+    write(root, "CAPABILITIES.md", CAPABILITIES);
+    removes_gone(root);
+    for (path, name) in files {
+        write(root, path, &test_file(name, &["capability/gone"]));
+    }
+    git(root);
+    dir
+}
+
+/// `CHANGE`'s `change.md`, removing the capability `gone`.
+fn removes_gone(root: &Path) {
+    write(
+        root,
+        &format!("changes/{CHANGE}/change.md"),
+        "---\nstatus: applied\nremoves_capabilities: [gone]\n---\n",
+    );
+}
+
+#[test]
+fn a_removed_capabilitys_test() {
+    // req:check/obsolete-tests-elsewhere@ad5010b7
+    let dir = removed_capability(&[
+        ("crates/c/t.rs", "old_cap"),
+        ("crates/clm/tests/capability/gone.rs", "old_cap"),
+    ]);
+    assert_eq!(
+        found(dir.path()),
+        [
+            "crates/c/t.rs:8: check/obsolete-tests-elsewhere: test old_cap cites capability/gone, which 20260101-x removed, from `c`'s file; list it in that change's deleted-tests.txt, and prove what stays in the files of the component that states it"
+        ]
+    );
+}
+
+#[test]
+fn a_removed_capability_is_the_capability_tests_owners_own() {
+    // req:check/obsolete-tests-elsewhere@ad5010b7
+    let dir = removed_capability(&[]);
+    change(dir.path(), &[("c", "gone")], &[]);
+    removes_gone(dir.path());
+    write(
+        dir.path(),
+        "crates/clm/tests/capability/gone.rs",
+        &test_file("old_cap", &["capability/gone", "c/gone"]),
+    );
     assert_eq!(found(dir.path()), Vec::<String>::new());
 }
 
 #[test]
 fn a_test_citing_the_owners_own_removed_requirement_too() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = repo(
         Some("[]"),
         &[(
@@ -287,7 +353,7 @@ fn a_test_citing_the_owners_own_removed_requirement_too() {
 
 #[test]
 fn a_marker_outside_a_test() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = repo(
         Some("[]"),
         &[(
@@ -300,7 +366,7 @@ fn a_marker_outside_a_test() {
 
 #[test]
 fn a_wiring_file_and_an_unowned_file() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = repo(
         Some("[\"crates/c/shared.rs\"]"),
         &[
@@ -313,7 +379,7 @@ fn a_wiring_file_and_an_unowned_file() {
 
 #[test]
 fn not_switched_on() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = repo(
         None,
         &[("crates/c/t.rs", test_file("old_rule", &["b/gone"]))],
@@ -323,7 +389,7 @@ fn not_switched_on() {
 
 #[test]
 fn no_exemption_excuses_it() {
-    // req:check/obsolete-tests-elsewhere@c840a483
+    // req:check/obsolete-tests-elsewhere@ad5010b7
     let dir = unlisted();
     write(
         dir.path(),
