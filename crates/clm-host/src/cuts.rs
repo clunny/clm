@@ -14,6 +14,8 @@ use crate::keep::TempFile;
 pub(crate) enum Sent {
     /// The body went out with its section: this is the text to keep.
     Body(String),
+    /// The body went out as given, the branch cutting nothing.
+    AsGiven,
     /// The gate couldn't be evaluated, so nothing was sent and nothing is kept.
     Unevaluated,
 }
@@ -35,28 +37,47 @@ pub(crate) fn with_cuts(
     branch: &str,
     file: &Path,
 ) -> Result<(PathBuf, Option<TempFile>), Error> {
+    let Some(cuts) = cuts(root, branch).inspect_err(|_| leave(Sent::Unevaluated))? else {
+        leave(Sent::AsGiven);
+        return Ok((file.to_path_buf(), None));
+    };
+    let body = std::fs::read_to_string(root.join(file))
+        .or_else(|_| std::fs::read_to_string(file))
+        .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
+    let text = format!("{cuts}{body}");
+    let temp = TempFile::write(&text)?;
+    leave(Sent::Body(text));
+    Ok((temp.0.clone(), Some(temp)))
+}
+
+/// `body` as [`with_cuts`] would send it for `branch`, for a host that failed before it sent
+/// anything; `None` when the gate can't be evaluated.
+pub(crate) fn as_sent(root: &Path, branch: &str, body: String) -> Option<String> {
+    match cuts(root, branch) {
+        Ok(Some(cuts)) => Some(format!("{cuts}{body}")),
+        Ok(None) => Some(body),
+        Err(_) => None,
+    }
+}
+
+/// The `## Cuts` section for `branch`, ending in its blank line, when `gate`'s `evaluate_at`
+/// against `origin/main` gives kind `spec` and a cut.
+fn cuts(root: &Path, branch: &str) -> Result<Option<String>, Error> {
     let base = format!("{REMOTE}/main");
     let outcome = clm_gate::evaluate_at(root, &base, branch, false).map_err(|why| {
-        leave(Sent::Unevaluated);
         Error::Refused(format!(
             "can't evaluate the gate for `{branch}` against {base}: {why}"
         ))
     })?;
     if outcome.kind != clm_gate::Kind::Spec || outcome.cuts.is_empty() {
-        return Ok((file.to_path_buf(), None));
+        return Ok(None);
     }
-    let body = std::fs::read_to_string(root.join(file))
-        .or_else(|_| std::fs::read_to_string(file))
-        .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
     let mut text = String::from("## Cuts\n");
     for cut in &outcome.cuts {
         text.push_str(&format!("- {cut}\n"));
     }
     text.push('\n');
-    text.push_str(&body);
-    let temp = TempFile::write(&text)?;
-    leave(Sent::Body(text));
-    Ok((temp.0.clone(), Some(temp)))
+    Ok(Some(text))
 }
 
 /// What the last [`with_cuts`] since the previous call left, taken.

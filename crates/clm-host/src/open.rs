@@ -5,7 +5,7 @@ use std::path::Path;
 
 use clm_git::{REMOTE, current_branch, git};
 
-use crate::cuts::{Sent, take_sent};
+use crate::cuts::{Sent, as_sent, take_sent};
 use crate::keep::{TempFile, keep_body};
 use crate::{Error, adapter};
 
@@ -59,11 +59,13 @@ pub fn pr_open(
         .page_open(root, &branch, &title, file)
         .map_err(|e| {
             // The body as sent, with its `## Cuts` section when it had one; none when the
-            // gate refused before anything was sent.
+            // gate refused before anything was sent; the body as it would have gone out when
+            // the host failed before the gate was asked.
             let text = match take_sent() {
                 Some(Sent::Unevaluated) => None,
                 Some(Sent::Body(sent)) => Some(sent),
-                None => text,
+                Some(Sent::AsGiven) => text,
+                None => text.and_then(|text| as_sent(root, &branch, text)),
             };
             match text.filter(|t| !t.trim().is_empty()) {
                 Some(text) => keeping(root, &branch, &text, e),
@@ -72,8 +74,8 @@ pub fn pr_open(
         })
 }
 
-/// `error`, ending `; the body is kept at <path>` once `text` is written there; unchanged
-/// when it can't be written.
+/// `error`, ending `; the body is kept at <path>` once `text` is written there, as a refusal
+/// so `clm pr open` exits 1 naming it; unchanged when it can't be written.
 fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
     if matches!(error, Error::Nowhere(_)) {
         return error;
@@ -83,8 +85,7 @@ fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
     };
     let note = |why: String| format!("{why}; the body is kept at {}", path.display());
     match error {
-        Error::Refused(why) => Error::Refused(note(why)),
-        Error::Git(why) => Error::Git(note(why)),
+        Error::Refused(why) | Error::Git(why) => Error::Refused(note(why)),
         Error::Nowhere(report) => Error::Nowhere(report),
     }
 }
