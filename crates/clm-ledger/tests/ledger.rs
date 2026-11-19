@@ -1530,7 +1530,7 @@ fn review_the_highest_whole_trailer_counts() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
-    let (merge, fingerprint) = requirement_removed(root, "Gate-Rules: 2\nGate-Rules: 1");
+    let (merge, fingerprint) = requirement_removed(root, "Gate-Rules: 1\nGate-Rules: 2");
     let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
     append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
     let (code, findings, out) = findings(root, &["--review"]);

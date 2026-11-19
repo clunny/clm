@@ -110,8 +110,9 @@ pub fn verify(
                     ),
                 });
             }
-            // A commit of the audited range is on the whole chain, so it has its rules.
-            let rules = review.then(|| rules.get(sha).copied().unwrap_or(1));
+            // A commit of the audited range is on the whole chain, so it has its rules; were
+            // one missing, the strictest rules this gate knows, never laxer ones.
+            let rules = review.then(|| rules.get(sha).copied().unwrap_or(clm_gate::RULES));
             findings.extend(audit_signed(root, &fold, sha, parents, lands, rules)?);
         } else if !subject.starts_with(RELEASE) {
             findings.push(Finding {
@@ -135,13 +136,16 @@ pub fn verify(
 /// laxer rules by writing a lower trailer than `main` has already landed under, and one land
 /// above `RULES` is one unrated land, not every land after it.
 fn rules_in_force(root: &Path, fold: &Fold, tip: &str) -> Result<HashMap<String, u32>, Error> {
-    let format =
-        format!("--format=%H%x1f%P%x1f%(trailers:key={GATE_RULES},valueonly,separator=%x1e)");
-    let log = clm_git::git(root, &["log", "--first-parent", &format, tip])?;
+    // One NUL-ended entry per commit, its trailers unfolded, so no message text can split an
+    // entry or forge another.
+    let format = format!(
+        "--format=%H%x1f%P%x1f%(trailers:key={GATE_RULES},valueonly,unfold,separator=%x1e)"
+    );
+    let log = clm_git::git(root, &["log", "-z", "--first-parent", &format, tip])?;
     let mut rules = HashMap::new();
     let mut floor = 1;
-    for line in log.lines().collect::<Vec<_>>().into_iter().rev() {
-        let mut fields = line.splitn(3, '\x1f');
+    for entry in log.split('\0').collect::<Vec<_>>().into_iter().rev() {
+        let mut fields = entry.trim_start_matches('\n').splitn(3, '\x1f');
         let (Some(sha), Some(parents)) = (fields.next(), fields.next()) else {
             continue;
         };
@@ -321,9 +325,9 @@ impl std::fmt::Display for Rated {
 /// record naming it signed under `clm-land` is `ledger/unsigned-land`. The highest-ranked
 /// signed record (the first in the fold's order among equals) is the recorded one; with
 /// `review`, the rules in force when it landed, the gate's kind and review under them ranking
-/// above it is `ledger/understated-land`. A
-/// land recorded or recomputed as needing review whose diff, recomputed from the parents, no counted approval
-/// names is `ledger/unapproved-land`. A land whose first parent isn't signed is judged as
+/// above it is `ledger/understated-land`. A land recorded or recomputed as needing review
+/// whose diff, recomputed from the parents, no counted approval names is
+/// `ledger/unapproved-land`. A land whose first parent isn't signed is judged as
 /// before.
 fn audit_signed(
     root: &Path,
