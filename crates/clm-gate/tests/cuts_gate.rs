@@ -435,3 +435,66 @@ fn evaluate_at_returns_the_cuts() {
     );
     assert!(out.violations.is_empty(), "{:?}", out.violations);
 }
+
+const ARCH: &str = "# Arch\n\n## Constraints\n\n### Constraint: law\n**Principle.** A law SHALL hold.\n\n#### Scenario: s\n- ok\n\n#### Untested\nA judgement.\n";
+
+#[test]
+fn the_graphs_hold_the_human_layers() {
+    // req:gate/cuts@e97edf05
+    // A rule that serves an architectural constraint loads only beside `ARCHITECTURE.md`.
+    let serving =
+        |reqs: &str| component("a", reqs).replace("paths:", "serves: [architecture/law]\npaths:");
+    let dir = repo(&[]);
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "ARCHITECTURE.md", ARCH);
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &serving(&requirement("x", X, &["first", "second"])),
+    );
+    commit(d, "a serving rule");
+    git(d, &["checkout", "-q", "-B", "pr"]);
+    edit(
+        d,
+        &[(
+            "specs/a/SPEC.md",
+            Some(&serving(&requirement("x", X, &["first"]))),
+        )],
+    );
+    let (_, stdout) = gate(d, &[]);
+    assert_eq!(
+        cut_lines(&stdout),
+        ["specs/a/SPEC.md: gate/cut: scenario \"second\" of a/x is gone"],
+        "{stdout}"
+    );
+}
+
+#[test]
+fn specs_that_dont_load_at_the_merge_base_need_review() {
+    // req:gate/cuts@e97edf05
+    let broken = format!(
+        "{}{}",
+        requirement("x", X, &["s"]),
+        requirement("y", X, &[])
+    );
+    let dir = repo(&[("a", broken)]);
+    let d = dir.path();
+    let base = git(d, &["rev-parse", "main"]);
+    edit(
+        d,
+        &[(
+            "specs/a/SPEC.md",
+            Some(&component("a", &requirement("x", X, &["s"]))),
+        )],
+    );
+    let (status, stdout) = gate(d, &[]);
+    assert_eq!(
+        cut_lines(&stdout),
+        [format!(
+            "specs: gate/cut: the specs at {base} don't load, so what the branch cuts isn't listed"
+        )],
+        "{stdout}"
+    );
+    assert_eq!((stdout.lines().next(), status), (Some("spec review"), 1));
+}

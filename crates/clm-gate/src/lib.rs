@@ -1,6 +1,6 @@
 //! Merge gate: decides whether `HEAD` may merge into a base ref (see specs/gate/SPEC.md).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -258,6 +258,9 @@ pub fn evaluate_by(
         let (listed, widened) = read_cuts(&at, &entries, &mut violations)?;
         cut = listed;
         let added = added_exemptions(&at, &entries)?;
+        // Read from the two graphs, or from the text when they don't load, under every
+        // version, so the versions differ only by the cuts.
+        let widened = widened.unwrap_or(!added.is_empty());
         review = match &replayed {
             // Its replayed edits to the human layers change no intent (`needs-review`).
             Some(text) => {
@@ -266,10 +269,8 @@ pub fn evaluate_by(
                         .iter()
                         .any(|fm| fm.as_ref().is_none_or(change_needs_review))
             }
-            // Version 1, before a cut needed review: the exemptions as read from the text.
-            None if rules == 1 => {
-                needs_review_of(&paths, setting_changed, &changes) || !added.is_empty()
-            }
+            // Version 1, before a cut needed review.
+            None if rules == 1 => needs_review_of(&paths, setting_changed, &changes) || widened,
             // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
             None => {
                 needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty()
@@ -326,32 +327,34 @@ fn test_list(file: &str) -> Option<&str> {
 /// `needs-review-of`), read from the spec graphs at the merge base and the head, loaded only
 /// when the diff touches `specs/` or a `deleted-tests.txt`. Adds a `gate/deleted-tests`
 /// violation for each line a list gains that names no citing test at the head. When either
-/// side's specs don't load, the one cut says so.
+/// side's specs don't load, the one cut says so and whether an exemption widened is `None`.
 fn read_cuts(
     at: &At,
     entries: &[(char, &str)],
     violations: &mut Vec<Violation>,
-) -> Result<(Vec<Cut>, bool), String> {
+) -> Result<(Vec<Cut>, Option<bool>), String> {
     let lists: Vec<&str> = entries
         .iter()
         .filter(|(status, file)| matches!(status, 'A' | 'M') && test_list(file).is_some())
         .map(|&(_, file)| file)
         .collect();
     if lists.is_empty() && !entries.iter().any(|(_, f)| f.starts_with(SPECS)) {
-        return Ok((Vec::new(), false));
+        return Ok((Vec::new(), Some(false)));
     }
     let mut texts = Vec::new();
     for path in lists {
-        let head = show(at.repo, &format!("{}:{path}", at.head))?;
-        let mut base = show(at.repo, &format!("{}:{path}", at.merge_base)).ok();
+        let head = text_if_any(at.repo, at.head, path)?.unwrap_or_default();
+        let mut base = text_if_any(at.repo, at.merge_base, path)?;
+        // An archived list with no text of its own at the merge base takes the live one's.
         if base.is_none()
+            && path.starts_with(ARCHIVE)
             && let Some(id) = test_list(path)
         {
-            base = show(
+            base = text_if_any(
                 at.repo,
-                &format!("{}:{CHANGES}{id}/deleted-tests.txt", at.merge_base),
-            )
-            .ok();
+                at.merge_base,
+                &format!("{CHANGES}{id}/deleted-tests.txt"),
+            )?;
         }
         texts.push((path, head, base));
     }
@@ -363,6 +366,8 @@ fn read_cuts(
             base: base.as_deref(),
         })
         .collect();
+    // Each test file's text at the head, read once.
+    let mut files: BTreeMap<String, String> = BTreeMap::new();
     for list in &lists {
         for line in cuts::added_lines(list) {
             let message = match line {
@@ -370,8 +375,14 @@ fn read_cuts(
                     "`{line}` is no list line: write `DELETE <file>::<name>`, a `#` comment or a blank line"
                 ),
                 Ok(ListLine { file, name }) => {
-                    let text = show(at.repo, &format!("{}:{file}", at.head)).unwrap_or_default();
-                    if cuts::names_a_test(Path::new(&file), &text, &name) {
+                    let text = match files.get(&file) {
+                        Some(text) => text,
+                        None => {
+                            let text = text_if_any(at.repo, at.head, &file)?.unwrap_or_default();
+                            files.entry(file.clone()).or_insert(text)
+                        }
+                    };
+                    if cuts::names_a_test(Path::new(&file), text, &name) {
                         continue;
                     }
                     format!("`DELETE {file}::{name}` names no test with a marker in `{file}`")
@@ -399,10 +410,22 @@ fn read_cuts(
         // The tests the lists add are still listed: they need no graph.
         let none = clm_model::Graph::default();
         let tests = cuts(&none, &none, &lists);
-        return Ok((unloaded.into_iter().chain(tests).collect(), false));
+        return Ok((unloaded.into_iter().chain(tests).collect(), None));
     }
     let widened = !widened_exemptions(&base, &head).is_empty();
-    Ok((cuts(&base, &head, &lists), widened))
+    Ok((cuts(&base, &head, &lists), Some(widened)))
+}
+
+/// The text of `<rev>:<path>`, invalid UTF-8 replaced, or `None` when `rev` holds no such
+/// file; any other failure of git fails the gate.
+fn text_if_any(repo: &Path, rev: &str, path: &str) -> Result<Option<String>, String> {
+    match clm_git::git(repo, &["cat-file", "-e", &format!("{rev}:{path}")]) {
+        Ok(_) => {}
+        Err(clm_git::Error::Failed { .. }) => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    }
+    let bytes = show_bytes(repo, &format!("{rev}:{path}"))?;
+    Ok(Some(String::from_utf8_lossy(&bytes).into_owned()))
 }
 
 /// The files `head` changes against `base` from their merge base, as `classify` reads them,

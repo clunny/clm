@@ -138,7 +138,9 @@ pub(crate) fn added_lines<'a>(list: &TestList<'a>) -> Vec<Result<ListLine, &'a s
             Line::Delete(d) if !had.contains(&d) && !added.contains(&Ok(d.clone())) => {
                 added.push(Ok(d))
             }
-            Line::Other(o) if !had_other.contains(o) => added.push(Err(o)),
+            Line::Other(o) if !had_other.contains(o) && !added.contains(&Err(o)) => {
+                added.push(Err(o))
+            }
             _ => {}
         }
     }
