@@ -71,7 +71,7 @@ fn same_as_next() -> Graph {
 
 #[test]
 fn scenario_same_as_next() {
-    // req:orchestrator/queue-from-refs@6b299a50 req:orchestrator/next@fd7e1025
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@fd7e1025
     let g = same_as_next();
     let q = queue(&g, &[current(&g, "b/x")], &[claim("e", 1)]);
     assert_eq!(state(&q, "b"), &State::Converged);
@@ -220,7 +220,7 @@ fn a_change_whose_addition_a_later_change_removed_completes() {
 
 #[test]
 fn lapsed_and_merged_claims_are_released() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/queue-from-refs@6b299a50
+    // req:orchestrator/next@fd7e1025 req:orchestrator/queue-from-refs@cbcfd325
     let g = graph(&[
         ROOT,
         ("specs/b/SPEC.md", &node("", &["x"])),
@@ -236,7 +236,7 @@ fn lapsed_and_merged_claims_are_released() {
 
 #[test]
 fn nested_refs_claim_no_node() {
-    // req:orchestrator/queue-from-refs@6b299a50 req:orchestrator/nested-branches-not-claims@a7ec57b2
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/nested-branches-not-claims@a7ec57b2
     let g = graph(&[ROOT, ("specs/b/SPEC.md", &node("", &["x"]))]);
     let q = queue(&g, &[], &[claim("x/b", 1), claim("b/x", 1)]);
     assert_eq!(q.next(), ["b"]);
@@ -306,7 +306,7 @@ fn with_changes(nodes: &[(&str, &str)], changes: Vec<Vec<(String, String)>>) -> 
 
 #[test]
 fn scenario_higher_priority_first() {
-    // req:orchestrator/next@fd7e1025 req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/next@fd7e1025 req:orchestrator/priority-orders-components@147ea0bf
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -325,7 +325,7 @@ fn scenario_higher_priority_first() {
 
 #[test]
 fn scenario_urgent_work_pulls_the_node_it_needs_forward() {
-    // req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/priority-orders-components@147ea0bf
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -345,7 +345,7 @@ fn scenario_urgent_work_pulls_the_node_it_needs_forward() {
 
 #[test]
 fn scenario_passes_through_a_claimed_node() {
-    // req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/priority-orders-components@147ea0bf
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("", &["x"])),
@@ -373,7 +373,7 @@ fn scenario_passes_through_a_claimed_node() {
 
 #[test]
 fn scenario_dependency_lends_no_priority() {
-    // req:orchestrator/priority-orders-components@b239015b req:orchestrator/next@fd7e1025
+    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@fd7e1025
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &node("b", &["x"])),
@@ -393,7 +393,7 @@ fn scenario_dependency_lends_no_priority() {
 
 #[test]
 fn scenario_capability_pulls_its_serving_rules_forward() {
-    // req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/priority-orders-components@147ea0bf
     let capability_node = "---\ntitle: Capabilities\nstatus: active\nowners: []\npaths: [\"tests/capabilities/**\"]\n---\n\n## Contract\nThe tests.\n\n## Design\nThe harness.\n";
     let capabilities =
         "## Capabilities\n\n### Capability: c\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
@@ -424,7 +424,7 @@ fn scenario_capability_pulls_its_serving_rules_forward() {
 
 #[test]
 fn scenario_capability_pulls_a_changed_serving_rules_needs_forward() {
-    // req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/priority-orders-components@147ea0bf
     let capability_node = "---\ntitle: Capabilities\nstatus: active\nowners: []\npaths: [\"tests/capabilities/**\"]\n---\n\n## Contract\nThe tests.\n\n## Design\nThe harness.\n";
     let capabilities =
         "## Capabilities\n\n### Capability: c\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
@@ -463,7 +463,7 @@ fn scenario_capability_pulls_a_changed_serving_rules_needs_forward() {
 
 #[test]
 fn scenario_blocked_requirement_does_not_lend_its_priority() {
-    // req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/priority-orders-components@147ea0bf
     let mut files = vec![
         ("specs/b/SPEC.md".to_string(), node("", &["x", "y"])),
         ("specs/c/SPEC.md".to_string(), node("", &["x"])),
@@ -502,7 +502,7 @@ fn priority_never_makes_a_node_ready() {
 
 #[test]
 fn a_node_that_writes_a_protected_path_is_ready() {
-    // req:orchestrator/queue-from-refs@6b299a50 req:orchestrator/next@fd7e1025
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@fd7e1025
     let g = graph(&[
         ROOT,
         (
@@ -521,7 +521,7 @@ fn a_node_that_writes_a_protected_path_is_ready() {
 
 #[test]
 fn nodes_serialise_with_a_state_tag() {
-    // req:orchestrator/queue-from-refs@6b299a50
+    // req:orchestrator/queue-from-refs@cbcfd325
     let g = same_as_next();
     let q = queue(&g, &[current(&g, "b/x")], &[claim("e", 1)]);
     let json = serde_json::to_value(&q.nodes).unwrap();
@@ -544,7 +544,7 @@ fn nodes_serialise_with_a_state_tag() {
 
 #[test]
 fn priority_reaches_no_node_it_doesnt_need() {
-    // req:orchestrator/priority-orders-components@b239015b
+    // req:orchestrator/priority-orders-components@147ea0bf
     // `a` (P1) depends on `b`, whose only pending requirement is blocked by an item, and on
     // `c`, which is converged: it needs neither, so neither is pulled forward.
     let mut files = vec![
@@ -570,7 +570,7 @@ fn priority_reaches_no_node_it_doesnt_need() {
 
 #[test]
 fn a_need_blocked_requirements_path_does_not_count() {
-    // req:orchestrator/queue-from-refs@6b299a50
+    // req:orchestrator/queue-from-refs@cbcfd325
     let g = graph(&[
         ROOT,
         (
@@ -591,7 +591,7 @@ fn a_need_blocked_requirements_path_does_not_count() {
 
 #[test]
 fn a_needed_requirement_blocked_by_an_item_still_blocks() {
-    // req:orchestrator/queue-from-refs@6b299a50
+    // req:orchestrator/queue-from-refs@cbcfd325
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -620,7 +620,7 @@ fn needing(deps: &str, needs: &str, more: &[&str]) -> String {
 
 #[test]
 fn scenario_blocked_by_a_need() {
-    // req:orchestrator/queue-from-refs@6b299a50
+    // req:orchestrator/queue-from-refs@cbcfd325
     let g = graph(&[
         ROOT,
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -632,6 +632,7 @@ fn scenario_blocked_by_a_need() {
             assert_eq!(by.len(), 1);
             assert_eq!(by[0].item, None);
             assert_eq!(by[0].requirement.as_deref(), Some("b/y"));
+            assert_eq!(by[0].components.as_deref(), Some(&["b".into()][..]));
             assert_eq!(by[0].requirements, ["a/x"]);
         }
         other => panic!("{other:?}"),
@@ -646,6 +647,7 @@ fn scenario_blocked_by_a_need() {
         .unwrap();
     assert_eq!(a["by"][0]["requirement"], "b/y");
     assert_eq!(a["by"][0]["requirements"], serde_json::json!(["a/x"]));
+    assert_eq!(a["by"][0]["components"], serde_json::json!(["b"]));
     assert!(a["by"][0].get("item").is_none(), "{a}");
 }
 
@@ -696,7 +698,7 @@ fn scenario_blocked_node_holds_nothing_up() {
 
 #[test]
 fn scenario_need_pulls_priority() {
-    // req:orchestrator/queue-from-refs@6b299a50 req:orchestrator/next@fd7e1025
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@fd7e1025
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -715,7 +717,7 @@ fn scenario_need_pulls_priority() {
 
 #[test]
 fn a_need_blocked_by_an_item_too_still_seeds_and_lists_both() {
-    // req:orchestrator/queue-from-refs@6b299a50
+    // req:orchestrator/queue-from-refs@cbcfd325
     // `a/x` is blocked by `backlog/q` and needs `b/y`, which needs `d/z`, so the seeded
     // priority passes on along the needs.
     let b = node_with("", "", &[("y", "It SHALL.\n\n#### Needs\n- d/z")]);
@@ -792,6 +794,131 @@ fn scenario_waits_serialised() {
     assert!(x.get("needs_pending").is_none());
     assert_eq!(x["waits_on"], serde_json::json!(["b/y"]));
     assert_eq!(x["blocked_by"], serde_json::json!([]));
+}
+
+/// A marker citing `id` with no version at `crates/<component>/t.rs:1`.
+fn marker_in(component: &str, id: &str) -> Marker {
+    Marker {
+        id: id.into(),
+        version: None,
+        path: std::path::PathBuf::from(format!("crates/{component}/t.rs")),
+        line: 1,
+    }
+}
+
+/// A root with `wiring: []`, a component for each of `owned` with `paths`
+/// `["crates/<id>/**"]` and the requirements given, an `applied` change at `priority`
+/// removing `b/gone`, and `more` files.
+fn removed_gone(priority: &str, owned: &[(&str, &[&str])], more: &[(&str, &str)]) -> Graph {
+    let root = "---\ntitle: R\nstatus: active\nowners: []\nwiring: []\n---\n\n## Contract\nr\n";
+    let extra = if priority.is_empty() {
+        String::new()
+    } else {
+        format!("priority: {priority}\n")
+    };
+    let mut files: Vec<(String, String)> = vec![
+        ("specs/SPEC.md".into(), root.into()),
+        ("changes/s/change.md".into(), change_md("applied", &extra)),
+        (
+            "changes/s/deltas/b.md".into(),
+            "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0000000000000000 -->\n".into(),
+        ),
+    ];
+    for (id, reqs) in owned {
+        let reqs: Vec<(&str, &str)> = reqs.iter().map(|r| (*r, "It SHALL.")).collect();
+        files.push((
+            format!("specs/{id}/SPEC.md"),
+            node_with("", &format!("paths: [\"crates/{id}/**\"]\n"), &reqs),
+        ));
+    }
+    files.extend(more.iter().map(|(p, t)| (p.to_string(), t.to_string())));
+    let refs: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, t)| (p.as_str(), t.as_str()))
+        .collect();
+    graph(&refs)
+}
+
+#[test]
+fn scenario_an_obsolete_requirement_waiting_on_its_other_lines() {
+    // req:orchestrator/queue-from-refs@cbcfd325
+    let g = removed_gone("", &[("b", &[]), ("c", &[]), ("d", &[])], &[]);
+    let markers = [
+        marker_in("b", "b/gone"),
+        marker_in("c", "b/gone"),
+        marker_in("d", "b/gone"),
+    ];
+    let q = queue(&g, &markers, &[]);
+    match state(&q, "b") {
+        State::Blocked { by } => {
+            assert_eq!(by.len(), 1, "{by:?}");
+            assert_eq!(by[0].requirement.as_deref(), Some("b/gone"));
+            assert_eq!(
+                by[0].components.as_deref(),
+                Some(&["c".into(), "d".into()][..])
+            );
+            assert_eq!(by[0].requirements, ["b/gone"]);
+        }
+        other => panic!("{other:?}"),
+    }
+    assert!(matches!(state(&q, "c"), State::Ready { .. }), "{q:?}");
+    assert!(matches!(state(&q, "d"), State::Ready { .. }), "{q:?}");
+    let json = serde_json::to_value(&q.nodes).unwrap();
+    let b = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["node"] == "b")
+        .unwrap();
+    assert_eq!(b["by"][0]["components"], serde_json::json!(["c", "d"]));
+}
+
+#[test]
+fn scenario_an_item_blocker_names_no_components() {
+    // req:orchestrator/queue-from-refs@cbcfd325
+    let g = graph(&[
+        ROOT,
+        ("specs/a/SPEC.md", &node("", &["x"])),
+        (
+            "backlog/q.md",
+            "---\ntitle: Q\nkind: question\nblocks: [a/x]\n---\n",
+        ),
+    ]);
+    let q = queue(&g, &[], &[]);
+    match state(&q, "a") {
+        State::Blocked { by } => assert_eq!(by[0].components, None),
+        other => panic!("{other:?}"),
+    }
+    let json = serde_json::to_value(&q.nodes).unwrap();
+    let a = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["node"] == "a")
+        .unwrap();
+    assert_eq!(a["by"][0]["item"], "backlog/q");
+    assert!(a["by"][0].get("components").is_none(), "{a}");
+}
+
+#[test]
+fn scenario_an_obsolete_requirement_pulls_the_owner_of_its_other_markers_forward() {
+    // req:orchestrator/priority-orders-components@147ea0bf
+    let mut more: Vec<(String, String)> = vec![
+        (
+            "backlog/q.md".into(),
+            "---\ntitle: Q\nkind: question\nblocks: [b/gone]\n---\n".into(),
+        ),
+        ("specs/d/SPEC.md".into(), node("", &["x"])),
+    ];
+    more.extend(adds("20260101-c", "", "c", "y"));
+    more.extend(adds("20260101-d", "P3", "d", "x"));
+    let more: Vec<(&str, &str)> = more.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
+    let g = removed_gone("P1", &[("b", &[]), ("c", &["y"])], &more);
+    let markers = [marker_in("b", "b/gone"), marker_in("c", "b/gone")];
+    let q = queue(&g, &markers, &[]);
+    assert_eq!(q.next(), ["c", "d"]);
+    assert_eq!(priority(&q, "c"), Priority::P1);
+    assert_eq!(priority(&q, "b"), Priority::P5);
 }
 
 #[test]
