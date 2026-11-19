@@ -687,12 +687,12 @@ It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marke
 - capability/prove-by-tests
 
 ### Requirement: wait-lines
-`clm-coverage` SHALL offer `waits(lines, line)`, building without the `checkout` feature: for `line`, one of the lines `pending` returned as `lines`, the lines it waits on, which are, for each ID in its `waits_on` in that order, every line of `lines` whose `id` is that ID, in the order `lines` holds them, other than `line` itself, a line being itself when both its `id` and its component are `line`'s. So an obsolete requirement's line on its own component, which waits on its own ID (`pending-report`), waits on that requirement's lines on the other components, and a wait on a requirement pending on the line's own component is returned like any other. It SHALL return nothing for a line whose `waits_on` is empty, and nothing for an ID no line of `lines` holds.
+`clm-coverage` SHALL offer `waits(lines, line)`, building without the `checkout` feature: for `line`, one of the lines of `lines`, the whole list `pending` returned, the lines of `lines` it waits on, which are, for each ID in its `waits_on` in that order, every line of `lines` whose `id` is that ID, in the order `lines` holds them, other than `line` itself, a line being itself when both its `id` and its component are `line`'s. So an obsolete requirement's line on its own component, which waits on its own ID (`pending-report`), waits on that requirement's lines on the other components, and a wait on a requirement pending on the line's own component is returned like any other. It SHALL return nothing for a line whose `waits_on` is empty, and nothing for an ID no line of `lines` holds: it reads `lines` alone, so a caller that narrowed the list to one component passes the whole list, or gets no line of another component.
 
 #### Scenario: an obsolete requirement's other lines
 - GIVEN a root with `wiring: []`, components `b`, `c` and `d` with `paths` `["crates/b/**"]`, `["crates/c/**"]` and `["crates/d/**"]`, an `applied` change that removed `b/gone`, and markers citing `b/gone` in a file of each
-- WHEN `waits` runs for `b/gone`'s line on `b`, and for its line on `c`
-- THEN the first returns its lines on `c` and `d`, in that order, and the second returns nothing
+- WHEN `waits` runs for `b/gone`'s line on `b`, with the whole list and with the list narrowed to `b`'s lines
+- THEN the first returns its lines on `c` and `d`, in that order, and never its line on `b`, and the second returns nothing
 
 #### Scenario: a need
 - GIVEN `a/y` uncited with `#### Needs` naming `b/z`, and `b/z` uncited
