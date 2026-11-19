@@ -16,4 +16,8 @@ What the spec branch needs to do: a change whose `deleted-tests.txt` names the t
 
 The spec-auditor also found a caller gap the same spec branch should settle. Once an obsolete line is split, `pending` puts the requirement's own ID in its own component's line's `waits_on`. Two callers read that ID by its prefix or as a map key:
 - `effective_priorities` in `crates/clm-orchestrator/src/queue.rs` seeds the own component instead of the components that hold the other lines (`priority-orders-nodes`);
-- `crates/clm-view/src/blockers.rs` keys by ID, which folds an ID's several lines into one.
+- `crates/clm-view/src/blockers.rs` keys by ID, which folds an ID's several lines into one. When the own line sorts last, the view shows a blocked component with no root behind it.
+
+The code review of the reverted attempt found more for the same spec branch to state:
+- `clm run`'s `blockers()` would tell the own component's build that `b/gone` is blocked by `b/gone`. Every reader of `waits_on` sees the self-wait as a loop, and only its `seen` guard keeps it from following that loop forever. One answer is to carry the self-wait in a field of its own.
+- `pending-report` drops a move target from the line on that target's own component, whatever the target's own state. If the target is blocked by an item or a `Needs`, the obsolete line is left free, so the build could remove the moved markers before the target is built.
