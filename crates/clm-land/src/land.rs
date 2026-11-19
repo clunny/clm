@@ -412,6 +412,7 @@ pub(crate) fn land_to(
         if let (true, Some(id)) = (spec_land, changes.first()) {
             message.push_str(&format!("\n\nChange: {id}"));
         }
+        crate::end_with_gate_rules(&mut message);
         let merge = repo.git(&[
             "commit-tree",
             &tree,

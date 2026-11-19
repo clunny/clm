@@ -445,6 +445,7 @@ impl Batch<'_, '_, '_> {
                 message.push_str(if change.is_some() { "\n" } else { "\n\n" });
                 message.push_str(&format!("Checked: {key}"));
             }
+            crate::end_with_gate_rules(&mut message);
             commits.push(repo.git(&[
                 "commit-tree",
                 &m.tree,
