@@ -1,8 +1,7 @@
 //! Passes `clm --version` the commit the source was built from, as `CLM_VERSION`
-//! (clm/build-commit). The build script isn't the binary, so it runs `git` itself.
+//! (clm/build-commit). It runs `git` through `clm-git`, as the binary does.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 #[path = "src/version.rs"]
 mod version;
@@ -39,13 +38,5 @@ fn main() {
 
 /// `git <args>` in `dir`: its stdout, or `None` when it can't run or fails.
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8(out.stdout).ok())
-        .flatten()
+    clm_git::git(dir, args).ok()
 }
