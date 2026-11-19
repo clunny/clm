@@ -20,3 +20,5 @@ Rejected:
 - **A `clm check` rule failing a stale marker beside a current one.** That would fail every tree between a reword and the build that re-cites, including the spec branch that rewords. It would also say nothing about which build fixes it.
 
 **Only where the build may change the file (2026-11-17, `20261117-tests-sit-with-the-component-they-cite`).** The prompt tells a build to re-cite a stale marker wherever it sits only while the root names no `wiring`. Once it does, the land refuses a build's edit to another component's file and `clm check` reports a marker there, so the prompt names such a marker apart as its file owner's (`own-files-at-the-gate`).
+
+**Noted on 2026-11-19** (`a-removed-requirement-s-tests-elsewhere-are-listed`). An obsolete marker in another component's file does count as pending on the file's owner. The reason this decision rejected that for a stale marker doesn't hold there: the owner re-cites nothing and judges nothing, since `check/obsolete-tests-elsewhere` holds every such test to a list of deletions the human approved.

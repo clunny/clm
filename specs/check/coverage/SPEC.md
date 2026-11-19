@@ -101,7 +101,7 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - architecture/git-is-truth
 
 ### Requirement: pending-report
-`clm pending [<component>]` SHALL print one line per pending requirement of every component, or of `<component>`, sorted by component ID then requirement ID: `<id> <version> unbuilt`, `<id> <version> behind <cited>[,<cited>...]` with the versions its markers cite other than its current one (`none` for a marker without one), sorted, or `<id> obsolete <file>:<line>[ ...]`; each followed by ` blocked <blocker>[,<blocker>...]` when it is blocked, each blocker `backlog/<slug>` for a backlog item that names it in `blocks` or `<component>/<slug>` for a pending requirement its `Needs` name (`requirement-needs`), for an `obsolete` one a pending requirement a move took it to, or for a capability a requirement serving it that holds it back, items first, each group sorted. An `obsolete` requirement SHALL be blocked by each pending requirement that the moves `status-report` defines take it to, followed as `progress-follows-moves` follows them to the IDs the spec holds, on whatever component each is (`moved-markers-wait`): the build of that requirement writes its own tests in its own component's files, so the obsolete line waits for it, and the obsolete requirement's own component then removes its markers, tests and code (`coupled-changes-sequence`). A capability that is pending SHALL count as pending on the component that builds the capabilities' tests, which `pending` takes from the model's `Graph::capability_tests_node` (`model/capability-tests-component`) rather than deciding itself, and is blocked like any requirement by the items whose `blocks` name it. A pending capability, `unbuilt` or `behind`, SHALL also be blocked by each requirement whose effective serves (`model/serves`) names it, on whatever component, optional or not, that is `unbuilt`, or `behind` and itself blocked, by an item whose `blocks` names it or by any requirement in its own `waits_on`, whatever that requirement's state and whatever blocks it in turn; and by no current one, nor any `behind` one that nothing blocks (`serving-rules-order-capabilities`). So its test is built after the rules it exercises, and isn't offered while a changed rule it exercises waits on other work. A capability holding `#### Untested` is never pending, and neither is an architecture entry: the rules its `#### Enforced by` names are pending on their own components (`human-layer-proof`). It SHALL print nothing when nothing is pending. The command's exit status is `view.repo/arguments-and-exit`'s, and narrowing the list to `<component>`, with the refusal of one the spec graph doesn't hold, is `check/pending-narrows-on-a-graph`'s: no test of this requirement SHALL be left in `crates/clm/tests/pending.rs` or in `check`'s files (`commands-live-in-their-crates`). An `obsolete` marker whose ID names a component the spec graph doesn't hold SHALL count as pending on the component `owner` gives for the marker's file, or on the root `clm` when it gives none, however the component went: removed by a delta with `remove: true` (`node-removal`) or gone without one. A removed requirement cited in files of several components is pending on each of them, each line listing only that component's files. `pending(graph, markers)` SHALL return the same for a graph and markers loaded without a checkout, with each requirement's priority, the slugs of the items that block it in `blocked_by`, and its other blockers, as `<component>/<slug>` in the order `clm pending` prints them, in `waits_on`: the requirements its `Needs` name, those a move took an `obsolete` one to, and the rules a capability waits on, in one list (`priority-orders-nodes` seeds through each).
+`clm pending [<component>]` SHALL print one line per pending requirement of every component, or of `<component>`, sorted by component ID then requirement ID: `<id> <version> unbuilt`, `<id> <version> behind <cited>[,<cited>...]` with the versions its markers cite other than its current one (`none` for a marker without one), sorted, or `<id> obsolete <file>:<line>[ ...]`; each followed by ` blocked <blocker>[,<blocker>...]` when it is blocked, each blocker `backlog/<slug>` for a backlog item that names it in `blocks` or `<component>/<slug>` for a pending requirement its `Needs` name (`requirement-needs`), for an `obsolete` one a pending requirement a move took it to, or for a capability a requirement serving it that holds it back, items first, each group sorted. An `obsolete` requirement SHALL be blocked by each pending requirement that the moves `status-report` defines take it to, followed as `progress-follows-moves` follows them to the IDs the spec holds, on whatever component each is (`moved-markers-wait`): the build of that requirement writes its own tests in its own component's files, so the obsolete line waits for it, and the components the obsolete requirement is pending on then remove its markers and tests, and its own component its code (`coupled-changes-sequence`). A capability that is pending SHALL count as pending on the component that builds the capabilities' tests, which `pending` takes from the model's `Graph::capability_tests_node` (`model/capability-tests-component`) rather than deciding itself, and is blocked like any requirement by the items whose `blocks` name it. A pending capability, `unbuilt` or `behind`, SHALL also be blocked by each requirement whose effective serves (`model/serves`) names it, on whatever component, optional or not, that is `unbuilt`, or `behind` and itself blocked, by an item whose `blocks` names it or by any requirement in its own `waits_on`, whatever that requirement's state and whatever blocks it in turn; and by no current one, nor any `behind` one that nothing blocks (`serving-rules-order-capabilities`). So its test is built after the rules it exercises, and isn't offered while a changed rule it exercises waits on other work. A capability holding `#### Untested` is never pending, and neither is an architecture entry: the rules its `#### Enforced by` names are pending on their own components (`human-layer-proof`). It SHALL print nothing when nothing is pending. The command's exit status is `view.repo/arguments-and-exit`'s, and narrowing the list to `<component>`, with the refusal of one the spec graph doesn't hold, is `check/pending-narrows-on-a-graph`'s: no test of this requirement SHALL be left in `crates/clm/tests/pending.rs` or in `check`'s files (`commands-live-in-their-crates`). An `obsolete` marker whose ID names a component the spec graph doesn't hold SHALL count as pending on the component `owner` gives for the marker's file, or on the root `clm` when it gives none, however the component went: removed by a delta with `remove: true` (`node-removal`) or gone without one. A removed requirement cited in files of several components is pending on each of them, each line listing only that component's files. Once the root sets `wiring` (`model/wiring-globs`), an `obsolete` requirement whose component the spec graph holds SHALL also be pending on each other component that owns a file citing it, that component's line listing only its files, while a file a `wiring` glob matches and a file `owner` gives no component for count as the requirement's own component's. Its line on its own component, which lists those files and that component's, SHALL then be blocked by its own ID, standing for its lines on the other components, while any of them is left, `pending` returning that ID in the line's `waits_on` and in no other line's, so the build that deletes a test, which breaks nothing, comes before the build that removes the code the test ran; when its own component has no such file it has no line. A blocker that `moved-markers-wait` gives an obsolete line SHALL be left out of a line pending on that blocker's own component, since that component's one build makes it current. A removed capability is placed as `removed-capabilities` places it. While the root sets no `wiring`, an obsolete requirement whose component the graph holds SHALL stay pending on that component alone, every file listed. `pending(graph, markers)` SHALL return the same for a graph and markers loaded without a checkout, with each requirement's priority, the slugs of the items that block it in `blocked_by`, and its other blockers, as `<component>/<slug>` in the order `clm pending` prints them, in `waits_on`: the requirements its `Needs` name, those a move took an `obsolete` one to, and the rules a capability waits on, in one list (`priority-orders-nodes` seeds through each).
 
 #### Scenario: states
 - GIVEN component `a` with `a/x` at version `22222222` cited at `11111111`, `a/y` uncited at version `33333333`, `a/z` current, and a marker at `t.rs:9` citing `a/gone`, which an `applied` change removed
@@ -132,6 +132,31 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - GIVEN no component `g`, an `applied` change whose delta for `g` has `remove: true` and lists `g/x` under `REMOVED Requirements`, markers citing `g/x` at `crates/v/t.rs:4` and `crates/w/t.rs:7`, and components `v` and `w` with `paths` `["crates/v/**"]` and `["crates/w/**"]`
 - WHEN `clm pending` runs
 - THEN it prints `g/x obsolete crates/v/t.rs:4` for `v` and `g/x obsolete crates/w/t.rs:7` for `w`
+
+#### Scenario: an obsolete marker in another component's file
+- GIVEN a root with `wiring: []`, components `b` and `c` with `paths` `["crates/b/**"]` and `["crates/c/**"]`, an `applied` change that removed `b/gone`, and markers citing `b/gone` at `crates/b/t.rs:3` and `crates/c/t.rs:8`
+- WHEN `clm pending` runs, and again once the marker in `crates/c/t.rs` is gone
+- THEN the first prints `b/gone obsolete crates/b/t.rs:3 blocked b/gone` for `b` and `b/gone obsolete crates/c/t.rs:8` for `c`, and the second prints `b/gone obsolete crates/b/t.rs:3` for `b` alone
+
+#### Scenario: only another component's file cites it
+- GIVEN the same, with no marker in `crates/b/t.rs`
+- WHEN `clm pending` runs
+- THEN it prints `b/gone obsolete crates/c/t.rs:8` for `c` and no line for `b`
+
+#### Scenario: an obsolete marker in a wiring file
+- GIVEN the same root with `wiring: ["crates/c/shared.rs"]`, and markers citing `b/gone` at `crates/c/shared.rs:2` and `old/t.rs:4`, which no component owns
+- WHEN `clm pending` runs
+- THEN it prints `b/gone obsolete crates/c/shared.rs:2 old/t.rs:4` for `b`, not blocked, and no line for `c`
+
+#### Scenario: an obsolete marker with no wiring
+- GIVEN the first scenario's repository with a root that sets no `wiring`
+- WHEN `clm pending` runs
+- THEN it prints `b/gone obsolete crates/b/t.rs:3 crates/c/t.rs:8` for `b`, and no line for `c`
+
+#### Scenario: a move into the file's owner
+- GIVEN a root with `wiring: []`, no component `g`, an `applied` change that removed `g/x` and added `c/x` as its move, `c/x` uncited, and a marker citing `g/x` at `crates/c/t.rs:8`, `crates/c/**` being `c`'s
+- WHEN `clm pending c` runs
+- THEN it prints `g/x obsolete crates/c/t.rs:8` with no `blocked`, beside `c/x <version> unbuilt`
 
 #### Scenario: removed component, unowned file
 - GIVEN no component `g`, an `applied` change whose delta for `g` has `remove: true` and lists `g/x` under `REMOVED Requirements`, and a marker at `old/t.rs:4` citing `g/x` that no component's `paths` match
@@ -209,6 +234,7 @@ For any checkout, `report` over the union of `markers_in` applied to each tracke
 - architecture/component-reconciliation
 
 #### Needs
+- orchestrator.run/pending-prompt
 - model/human-layers
 - model/reserved-ids
 
@@ -600,3 +626,14 @@ It SHALL offer `markers_outside_tests(path, text)`, returning each marker `marke
 - GIVEN files whose `tests/t.rs` holds a test `one` citing `a/x` and, at line 9, a test `helper_rounds_up` with no marker, and whose `a.test.ts` holds a `describe` group with no marker around a test that cites `a/y`
 - WHEN `uncited_tests` runs
 - THEN it returns `tests/t.rs::helper_rounds_up` with line 9, and nothing else
+
+### Requirement: move-targets
+`clm-coverage` SHALL offer `moved_to(graph, id)`, building without the `checkout` feature: the IDs of the requirements the spec holds that the moves `status-report` defines take the removed requirement or capability `id` to, followed as `progress-follows-moves` follows them, sorted, and nothing for an ID no live change removed or that no move takes anywhere.
+
+#### Scenario: a moved requirement
+- GIVEN an `applied` change that removed `g/x` and added `c/x`, and another that removed `g/y` and added nothing
+- WHEN `moved_to` runs for `g/x`, for `g/y` and for `c/x`
+- THEN it returns `c/x`, nothing and nothing
+
+#### Serves
+- capability/prove-by-tests

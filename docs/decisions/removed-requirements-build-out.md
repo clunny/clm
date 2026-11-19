@@ -16,3 +16,5 @@ Rejected:
 - Letting the spec PR delete the tests. That makes spec PRs mixed.
 - Keeping the requirement with a `deprecated` mark. `spec-is-current` says removed requirements are deleted.
 - A `clm:remove-by` marker on each test. The spec author would have to edit the tests, which is the same mixed PR.
+
+**Changed on 2026-11-19** (`a-removed-requirement-s-tests-elsewhere-are-listed`). Once the root sets `wiring`, a test in a file another component owns that cites the removed requirement is removed by that owner's build, from the list the removing change declares; the removed requirement's own component removes the rest.

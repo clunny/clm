@@ -22,3 +22,5 @@ Rejected:
 - **Letting the build make the smallest edit in the dependant.** What the `orchestrator` build did; see above.
 - **Letting the build make only the compile-only and test-fixture fixes a removal or an addition forces in other nodes**, such as a `match` arm on a removed enum variant or a struct literal that must name an added field, named in its pull request body. Each such exception covered only the case that came up, and the next kind of tie stalled a build again (`coupled-changes-sequence`).
 - **Always two changes.** Two spec reviews and a later apply for what one change and the queue already order.
+
+**Noted on 2026-11-19** (`a-removed-requirement-s-tests-elsewhere-are-listed`). Once the root sets `wiring`, the obsolete requirement's own component removes its markers and tests only in its own files; a test in another component's file is that owner's to delete, before the own component's line appears.
