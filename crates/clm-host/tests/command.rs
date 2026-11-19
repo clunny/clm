@@ -972,6 +972,40 @@ fn pr_open_exits_1_when_the_gate_cant_be_evaluated() {
 }
 
 #[test]
+fn a_drawn_body_starts_with_the_cuts_too() {
+    // req:host/pr-open@bdaae01c
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open", "spec/x"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(body(&gh), format!("{CUTS}- edit a\n"));
+}
+
+#[test]
+fn the_gate_waits_for_the_checks_before_it() {
+    // req:host/pr-open@bdaae01c
+    // req:host/pr-body@a7b89523
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    // Already open: nothing is sent, so the gate isn't asked.
+    let view = r#"{"url":"https://github.com/o/r/pull/4","state":"OPEN","headRefName":"spec/x"}"#;
+    let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_PR_VIEW", view)]);
+    assert_eq!(
+        (code, out.as_str()),
+        (Some(0), "https://github.com/o/r/pull/4\n"),
+        "{err}"
+    );
+    // A blank body and a branch with no open pull request refuse for that, not the gate.
+    write(&r.work, "body.md", " \n");
+    let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(!err.contains("gate"), "{err}");
+    write(&r.work, "body.md", "The body\n");
+    let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("no open PR") && !err.contains("gate"), "{err}");
+}
+
+#[test]
 fn a_body_that_fails_to_open_is_kept_with_its_cuts() {
     // req:host/pr-open@bdaae01c
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
