@@ -325,6 +325,7 @@ dependencies = [
  "clap",
  "clm-apply",
  "clm-coverage",
+ "clm-gate",
  "clm-git",
  "clm-init",
  "clm-model",

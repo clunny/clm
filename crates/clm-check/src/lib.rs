@@ -27,6 +27,8 @@ mod entries;
 mod imports;
 #[cfg(feature = "commands")]
 mod lists;
+#[cfg(feature = "checkout")]
+mod obsolete_elsewhere;
 mod ownership;
 #[cfg(feature = "checkout")]
 mod remove_by;
@@ -119,6 +121,12 @@ fn run_with(
         &removed,
     ));
     violations.extend(cites::violations(&graph, &markers.req));
+    violations.extend(obsolete_elsewhere::violations(
+        root,
+        &graph,
+        &markers.req,
+        &removed,
+    ));
     violations.extend(remove_by::violations(&graph, &markers.remove_by));
     violations.extend(skipped::violations(root, &graph, &markers.req));
     violations
