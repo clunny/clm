@@ -2,7 +2,7 @@
 title: Health
 status: active
 owners: ["@clunny"]
-depends_on: [model, check, check.coverage, orchestrator, vcs, ledger, effort]
+depends_on: [model, check, check.coverage, orchestrator, vcs, ledger, effort, gate]
 paths: ["crates/clm-health/**"]
 successor: ""
 serves: [capability/know-health]
@@ -33,6 +33,10 @@ serves: [capability/know-health]
 | `many-scenarios` | requirement with more scenarios than the `scenarios` setting |
 | `many-exceptions` | requirement whose text holds more exception clauses than the `exceptions` setting |
 | `reconsider` | requirement whose score reaches the `reconsider` setting, with its breakdown and whether `backlog/reconsider-<component>-<slug>.md` exists |
+| `outside-contract` | code name in a requirement's statement that the component's Contract doesn't hold (`requirements-state-what-the-contract-shows`) |
+| `test-placement` | requirement whose statement says where a test sits |
+| `design-exit` | line of a Design that states an exit status |
+| `uncited-test` | test in a file a component owns that holds no marker |
 
 A requirement's *score* is defined by `reconsider-score`. Rewrites and counts alone never file anything: the report shows them, and a build's flag is what starts the count, so a long archive doesn't fill the human's queue. `clm rebase` files a `question` item for a requirement of the branch's component whose score reaches the threshold (`sync/file-reconsider-item`). Churn is reported and never scored: it is the same moves `rewritten` counts, seen from the code, so scoring both would count each built rewrite twice, and the score is computed without git, which `clm rebase` can't afford to read the whole history for (`churn-from-marker-history`).
 
@@ -76,6 +80,8 @@ unless, except, but not, other than, only when, in which case, whichever, so als
 ```
 
 - `reconsider`: the score (`reconsider-score`) is `f + r + s + e` with `f` the flags, `r` the archived rewrites, `s` one when the scenarios exceed `scenarios` and `e` one when the exception clauses exceed `exceptions`. `specs/<component path>/SPEC.md: health/reconsider: <component>/<slug> score <s> (workarounds <f>, rewritten <r>, scenarios <0|1>, exceptions <0|1>); filed as backlog/reconsider-<component>-<slug>.md`.
+
+- `outside-contract`, `test-placement`, `design-exit` and `uncited-test` (`rule-signals`) count what a program can see of the rule for a requirement. Each is a heuristic and none is a fault by itself: a helper's unit test rightly cites nothing, and a Contract may be what is missing a name. A *code name* is read from a code span of the statement, outside fenced blocks: the span with one trailing parenthesised list taken off is identifiers joined by `::`, and the span held the list, or holds `::`, or holds a lowercase letter directly followed by an uppercase one, so `foreign_files(repo, base, head, component)`, `clm_gate::fingerprint_of` and `RequirementSignals` are code names and `clm.toml`, `human_burdens`, `origin/main` and `Settings` are not. The Contract holds a name when its text contains it. The sentences and the placement phrases are `clm-gate`'s `stating_sentences` and `places_a_test`, so the signal and the gate's count of a cut agree, and this component depends on `gate` for them alone. The exit pattern is `exit`, `exits` or `exited`, then optionally `with`, then optionally `status` or `code`, then a number, at word boundaries and without regard to case. A Contract is never read for it: a dependant's build receives the Contract and not the requirements, so a Contract keeps its summary of exits.
 
 **Loading.** The graph can't be loaded only when `<root>/specs/SPEC.md` is missing, which exits 1; the violations `clm-model` reports for a tree it does load, a stale workaround flag among them, are findings under `check`, as `clm_check::run` returns them. The settings can't be loaded when `config`'s `load` rejects them, which the `clm` crate reports before calling the library, exit 1.
 
@@ -399,3 +405,43 @@ The field of `Settings` that holds the size budgets SHALL be `component_size`, n
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
+
+### Requirement: rule-signals
+After `reconsider`, `clm health` SHALL report four signals of the rule for a requirement (`requirements-state-what-the-contract-shows`), each advisory:
+- under `outside-contract`, for each requirement, each distinct code name in its statement, the text above its first `####` heading outside fenced blocks, that the component's Contract doesn't contain, as `specs/<component path>/SPEC.md: health/outside-contract: <component>/<slug> names <name>`, the summary counting `names`. A code name is the text of a code span with one trailing parenthesised list taken off, when that text is identifiers joined by `::` and the span held such a list, or holds `::`, or holds a lowercase letter directly followed by an uppercase one;
+- under `test-placement`, each requirement whose statement holds a sentence `gate`'s `places_a_test` accepts, as `specs/<component path>/SPEC.md: health/test-placement: <component>/<slug> <phrase>`, the phrase the first found, the summary counting `requirements`;
+- under `design-exit`, each line of a component's Design outside fenced blocks that holds `exit`, `exits` or `exited`, then optionally `with`, then optionally `status` or `code`, then a number, without regard to case, as `specs/<component path>/SPEC.md:<line>: health/design-exit: <the match>`, once per line, the summary counting `lines`. A Contract SHALL NOT be read for it;
+- under `uncited-test`, each test `check.coverage`'s `uncited_tests` returns for the checkout's files in a file some component owns (`check.coverage/owner`), as `<file>:<line>: health/uncited-test: <name>`, the summary counting `tests`.
+
+#### Scenario: a name the Contract doesn't hold
+- GIVEN component `a` whose Contract names `select(graph)`, and whose requirement `a/x` says its command SHALL print what `select(graph)` returns, as `walk_up(path)` finds it, in the file `clm.toml` names
+- WHEN `clm health` runs
+- THEN it prints `specs/a/SPEC.md: health/outside-contract: a/x names walk_up` and no `outside-contract` line naming `select` or `clm.toml`
+
+#### Scenario: a requirement that places a test
+- GIVEN requirement `a/y` whose statement ends `Every test of a's requirements SHALL sit in a's own files.`
+- WHEN `clm health` runs
+- THEN it prints `specs/a/SPEC.md: health/test-placement: a/y SHALL sit`
+
+#### Scenario: an exit in a Design
+- GIVEN component `a` whose Design line 12 says `A missing file exits 1 with the path`, and whose Contract says `it exits 2 when git fails`
+- WHEN `clm health` runs
+- THEN it prints exactly one `design-exit` line, `specs/a/SPEC.md:12: health/design-exit: exits 1`
+
+#### Scenario: a test that cites nothing
+- GIVEN component `a` owning `crates/a/tests/t.rs`, which holds a test citing `a/x` and, at line 9, a test `helper_rounds_up` with no marker, and `vendor/v.rs`, owned by no component, holding a test with no marker
+- WHEN `clm health` runs
+- THEN it prints `crates/a/tests/t.rs:9: health/uncited-test: helper_rounds_up`, its summary is `health/uncited-test: 1 tests`, and no line names `vendor/v.rs`
+
+#### Scenario: nothing found
+- GIVEN a repository with none of these
+- WHEN `clm health` runs
+- THEN it prints `health/outside-contract: 0 names`, `health/test-placement: 0 requirements`, `health/design-exit: 0 lines` and `health/uncited-test: 0 tests`, and exits 0
+
+#### Serves
+- capability/know-health
+- architecture/slim-components
+
+#### Needs
+- gate/cuts
+- check.coverage/test-lists

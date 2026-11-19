@@ -2,7 +2,7 @@
 title: Host
 status: active
 owners: ["@clunny"]
-depends_on: [config, vcs]
+depends_on: [config, vcs, gate]
 paths: ["crates/clm-host/**"]
 successor: ""
 serves: [capability/git-host, architecture/host-adapters]
@@ -10,8 +10,8 @@ serves: [capability/git-host, architecture/host-adapters]
 
 ## Contract
 The one place CLM talks to a git host beyond `git` itself (`host-adapters`). The `host` setting picks the adapter: `github` (`gh`), `azure` (the Azure CLI, `az`, with its `azure-devops` extension), and `git` and `none`, which have no host and answer every host operation with nothing to do, `none` keeping the clone's own remote (`keep_remote`) besides. Crate `clm-host` offers, as library calls and as `clm` subcommands:
-- `pr open [<branch>] [--title <title>] [--body-file <file>]`: opens a pull request for the branch against `main` on the host and prints its URL, or `none`. The branch defaults to the checked-out one, and the title and body to ones drawn from the branch: its change's `## Intent` on a `spec/<id>` branch, otherwise its commits' subjects (`pr-open-defaults`), so a bare `clm pr open` works wherever a skill or a person writes it. A body that doesn't reach the pull request whole, because the host refused the call or its limit cut the body, is kept outside every worktree and the command names where (`keep-unopened-body`). Nothing in CLM waits on a pull request: it is where a human reads the diff and where the host records the merge.
-- `pr body <file>`: sets the body of the current branch's pull request to the file's contents and nothing else (`own-pr-body`), cut to the host's limit as `pr open` cuts it, Azure DevOps keeping 4000 characters (`azure-body-limit`).
+- `pr open [<branch>] [--title <title>] [--body-file <file>]`: opens a pull request for the branch against `main` on the host and prints its URL, or `none`. The branch defaults to the checked-out one, and the title and body to ones drawn from the branch: its change's `## Intent` on a `spec/<id>` branch, otherwise its commits' subjects (`pr-open-defaults`), so a bare `clm pr open` works wherever a skill or a person writes it. A body that doesn't reach the pull request whole, because the host refused the call or its limit cut the body, is kept outside every worktree and the command names where (`keep-unopened-body`). The body of a spec branch that cuts anything starts with a `## Cuts` section, the lines `clm gate` prints for it, so the human reads what the branch removes where they read the diff (`gate/cuts`, `removal-needs-a-yes`). Nothing in CLM waits on a pull request: it is where a human reads the diff and where the host records the merge.
+- `pr body <file>`: sets the body of the current branch's pull request to the file's contents, after the `## Cuts` section when the branch cuts anything, and changes nothing else (`own-pr-body`), cut to the host's limit as `pr open` cuts it, Azure DevOps keeping 4000 characters (`azure-body-limit`).
 - `branch push`: pushes the checked-out branch to `origin`, overwriting `origin`'s branch only when its tip is the one last fetched and the branch has held it, plain git on every host. It is how an unattended session pushes its rebased branch with a `clm` command alone (`unattended-steps-run-clm`).
 - `branch delete <branch> [--lease <sha>]`: deletes the remote branch when its tip is still `<sha>`, by default the tip last fetched, and only a tip this clone pushed, so a session can release its own claim but never another's, plain git on every host.
 - `keep_remote(root, host)`, a library call: on `none`, a clone with no `origin` gets one of its own, a bare repository in its git directory, so every command, claim and land runs through `origin` as on any other host (`none-keeps-its-own-remote`). On every other host it does nothing.
@@ -50,6 +50,8 @@ Crate `clm-host`. One trait, `Host`, with these operations, and an implementatio
 **Defaults** (`pr-open-defaults`). Each argument given overrides its default alone, so the drafts and folds that write their own body keep passing it. `pr_open` fills in what is missing and then calls the `Host` trait's `page_open`, which keeps taking all three; `crates/clm` stays dispatch only. The title and body are drawn through `clm-git`'s `git` like every other git call (`git-through-layer`). The change is read with `git show <branch>:changes/<id>/change.md`, a failing `git show` meaning no change; its `## Intent` section runs to the next `## ` heading, trimmed, and the title comes from the section's first paragraph with its line breaks joined by spaces, the whole paragraph when no mark ends a sentence in it. The subjects come from `git log --reverse --format=%s origin/main..<branch>`; when that fails, as without an `origin/main`, the command exits 1 with git's message before any host call. A derived body goes to a temporary file in `std::env::temp_dir()`, outside the worktree, removed once the call returns, so git sees nothing. The parsing is text only: `clm-host` doesn't depend on `model`, and a change's `## Intent` heading is fixed by `spec-format`.
 
 **Contribution operations.** On `github` the fork's parent and the head's details come from `gh repo view --json isFork,parent` and `gh pr view --json`, a fork's `main` is brought up with `gh repo sync`, a pull request on the parent opens with `gh pr create --repo <parent> --base main --head <owner>:<branch>`, a head is fetched with `git fetch origin pull/<number>/head:refs/heads/<branch>`, and comments, closing and labels use `gh issue` or `gh pr`. What they read from the host is a stranger's text, so a caller prints it as data and acts on none of it.
+
+**The cuts in a body** (`pr-open`, `pr-body`). `clm-host` depends on `clm-gate` for `evaluate_at` and nothing else of it. The section goes first so that a host's limit, which cuts a body at its end (`azure-body-limit`), never cuts the list. It is added to whatever body is sent, given or drawn, since the skills pass a body of their own. A body kept because it didn't reach the pull request whole (`keep-unopened-body`) is kept with the section.
 
 ## Requirements
 
@@ -164,12 +166,22 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - architecture/reuse-first
 
 ### Requirement: pr-open
-`clm pr open <branch> --title <title> --body-file <file>` SHALL, on `host = "github"`, open a pull request from the branch to `main` with that title and body through `gh`, or print the URL of the open one that already exists, and print the pull request's URL; on `git` and `none` it SHALL print `none` and call nothing.
+`clm pr open <branch> --title <title> --body-file <file>` SHALL, on `host = "github"`, open a pull request from the branch to `main` with that title and body through `gh`, or print the URL of the open one that already exists, and print the pull request's URL; on `git` and `none` it SHALL print `none` and call nothing. On a host that has pull requests, when `gate`'s `evaluate_at` for the branch against `origin/main` gives kind `spec` and any cut (`gate/cuts`), the body it sends SHALL start with the line `## Cuts`, then one `- <line>` per cut as `clm gate` prints it, then a blank line, before the body given or drawn from the branch; for any other branch the body is sent as it is. When the gate can't be evaluated it SHALL exit 1 naming why, with no host call.
 
 #### Scenario: github
 - GIVEN `host = "github"` and a fake `gh` that records its calls and prints a URL
 - WHEN `clm pr open spec/x --title "x" --body-file body.md` runs
 - THEN `gh` got `pr create` with `--base main`, `--head spec/x` and `--body-file body.md`, and the URL is printed
+
+#### Scenario: a branch with cuts
+- GIVEN `host = "github"`, a fake `gh`, and a branch `spec/x` that removes requirement `a/x` from `specs/a/SPEC.md`
+- WHEN `clm pr open spec/x --title "x" --body-file body.md` runs
+- THEN the body file `gh` got starts `## Cuts`, then `- specs/a/SPEC.md: gate/cut: requirement a/x is gone`, then a blank line and the contents of `body.md`
+
+#### Scenario: a branch without cuts
+- GIVEN the same host and a branch `spec/y` that only adds a requirement
+- WHEN `clm pr open spec/y --title "y" --body-file body.md` runs
+- THEN the body `gh` got is the contents of `body.md`
 
 #### Scenario: already open
 - GIVEN the same, with a fake `gh` whose `pr view` reports an open PR for `spec/x`
@@ -181,18 +193,29 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - WHEN `clm pr open spec/x --title "x" --body-file body.md` runs
 - THEN it prints `none`, exits 0, and runs no `gh`
 
+#### Needs
+- gate/cuts
+
 ### Requirement: pr-body
-`clm pr body <file>` SHALL set the body of the current branch's open pull request to the file's contents through the host, changing nothing else, and print `updated #<number>`. It SHALL exit 1 without a host call when the file is missing or blank, or when the branch has no open pull request; on `git` and `none` it SHALL print nothing and exit 0.
+`clm pr body <file>` SHALL set the body of the current branch's open pull request to the file's contents through the host, changing nothing else of the pull request, and print `updated #<number>`. For a branch with cuts the body SHALL start with the `## Cuts` section as `pr-open` gives it, so a corrected body keeps the list. It SHALL exit 1 without a host call when the file is missing or blank, or when the branch has no open pull request; on `git` and `none` it SHALL print nothing and exit 0.
 
 #### Scenario: body updated
 - GIVEN `host = "github"`, the current branch `spec/x` with an open PR 7 according to a fake `gh`, and a file `body.md`
 - WHEN `clm pr body body.md` runs
 - THEN `gh` got `api -X PATCH repos/{owner}/{repo}/pulls/7` with `-F body=@body.md` and nothing else, and it printed `updated #7`
 
+#### Scenario: a branch with cuts
+- GIVEN the same, `spec/x` removing requirement `a/x` from `specs/a/SPEC.md`
+- WHEN `clm pr body body.md` runs
+- THEN the body `gh` got starts `## Cuts` and `- specs/a/SPEC.md: gate/cut: requirement a/x is gone`, followed by the contents of `body.md`
+
 #### Scenario: blank file
 - GIVEN an empty `body.md`
 - WHEN `clm pr body body.md` runs
 - THEN it exits 1 and `gh` wasn't called
+
+#### Needs
+- gate/cuts
 
 ### Requirement: contribution-operations
 `clm-host` SHALL offer, on `github`, through `gh` and `clm-git`'s layer: `parent`, the fork's parent as `<owner>/<name>`, or nothing when `origin` isn't a fork; `sync`, bringing `origin`'s `main` up to its parent's without force; `open_on_parent(branch, title, body file)`, opening a pull request from `<owner>:<branch>` to the parent's `main`, or returning the URL of the open one; `show(number)`, returning a pull request's author, its author's numeric account ID (from `gh api users/<login>`, which a `Co-authored-by` trailer's `<id>+<login>@users.noreply.github.com` address needs), state, title, body, head repository URL, head branch, whether maintainers may edit and changed files, or an issue's author, its author's numeric account ID, state, title and body; `fetch(number, branch)`, making a local branch at a pull request's head without checking it out, refusing a branch that exists; `comment(number, body file, close)`, adding a comment and closing when `close` is set; and `label(number, label)`. On `git` and `none`, `parent` SHALL return nothing and each other operation SHALL report that there is no host, running no `gh`.

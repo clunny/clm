@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [a-build-run-as-a-subagent-leaves-no-effort-record-for-its-branch]
 ---
 

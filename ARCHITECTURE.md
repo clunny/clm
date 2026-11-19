@@ -63,7 +63,7 @@ Who wrote a diff isn't visible to a program.
 - method
 
 #### Untested
-No program yet tells a removal of behaviour from a rewording, and such a change may still land on checks, so this yes is the human's answer in the session, not a `clm approve`: the session lists what a change removes and asks before going on.
+Programs check a part of it. The gate lists what a spec branch cuts and asks review for it: a requirement or a scenario that is gone, by name; a requirement that states fewer sentences; and each test a change lists to delete (`gate/cuts`, `gate/needs-review`). `clm land` refuses a code branch that loses a citing test no approved list names (`land/deleted-tests-approved`). No program tells a reworded sentence from one that states less in as many sentences, or whether a merged scenario states what two did, and a sentence that only places a test goes without a yes; for those the yes is the human's answer in the session, where the change names every sentence a requirement loses. A capability or an architectural constraint is removed by an edit that always needs review (`humans-review-intent`).
 
 ### Constraint: deterministic-enforcement
 **Principle.** Every rule SHALL be one of three kinds and say which: *checked*, decided by a program (the CLI, a hook or the land checks), preferred wherever a program can decide, model behaviour included; *measured*, by an eval against a threshold the human agreed, for behaviour that comes from a model or is statistical by nature; or *principle*, design judgement, which may be audited for advice. Only a checked rule is enforced, and only a program holds a land: an eval, an AI review or an audit never does (`three-kinds-of-rule`).
