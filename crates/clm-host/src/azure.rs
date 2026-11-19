@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use clm_git::{Options, current_branch, run};
 use serde_json::Value;
 
+use crate::cuts::with_cuts;
 use crate::keep::{TempFile, keep_body};
 use crate::{Error, Host, check_body, nowhere_to_file};
 
@@ -145,7 +146,8 @@ impl Host for Azure {
         if let Some(open) = active(root, branch)? {
             return web_url(&open).map(Some);
         }
-        let (file, _guard) = fitted(root, branch, &absolute(body_file)?)?;
+        let (body_file, _cuts) = with_cuts(root, branch, &absolute(body_file)?)?;
+        let (file, _guard) = fitted(root, branch, &body_file)?;
         let description = format!("@{}", file.display());
         let created = pr_raw(
             root,
@@ -186,6 +188,7 @@ impl Host for Azure {
             .and_then(|open| open["pullRequestId"].as_u64())
             .ok_or_else(|| Error::Refused(format!("`{branch}` has no active pull request")))?;
         let id = id.to_string();
+        let (file, _cuts) = with_cuts(root, &branch, &file)?;
         let (file, _guard) = fitted(root, &branch, &file)?;
         let description = format!("@{}", file.display());
         pr(

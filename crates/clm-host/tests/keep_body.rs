@@ -35,7 +35,7 @@ fn script(path: &Path, text: &str) {
 
 /// Runs `body` with a fake `az` (no active pull request; `pr create` exits 1 printing
 /// `TF401398`) and a fake `gh` (`pr view` finds nothing; `pr create` prints a URL) first on
-/// `PATH`, in a repository whose `.clm/pr-body.md` holds `## Review`.
+/// `PATH`, in a repository whose `.clm/pr-body.md` holds `## Review`, with a branch `impl/a`.
 fn with_fakes(body: impl FnOnce(&Path)) {
     let _one = PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let bin = TempDir::new().unwrap();
@@ -58,6 +58,12 @@ fn with_fakes(body: impl FnOnce(&Path)) {
         repo.path(),
         &["commit", "-q", "--allow-empty", "-m", "first"],
     );
+    // `origin/main` and `impl/a` at that commit, so the gate finds nothing cut.
+    git(
+        repo.path(),
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    git(repo.path(), &["branch", "impl/a"]);
     fs::create_dir(repo.path().join(".clm")).unwrap();
     fs::write(repo.path().join(".clm/pr-body.md"), "## Review").unwrap();
     body(repo.path());
@@ -145,8 +151,7 @@ fn from_a_linked_worktree() {
 fn the_body_drawn_from_the_branch_is_kept() {
     // req:host/keep-unopened-body@a8937350
     with_fakes(|root| {
-        git(root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
-        git(root, &["switch", "-q", "-c", "impl/a"]);
+        git(root, &["switch", "-q", "impl/a"]);
         git(
             root,
             &["commit", "-q", "--allow-empty", "-m", "Do the thing"],
