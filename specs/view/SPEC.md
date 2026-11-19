@@ -31,7 +31,7 @@ Crate `clm-view`, with a model per view and a renderer per format. The commands 
 
 **Component detail** (`component-detail`). The inspector's fields ride on the `spec` model so the panel draws them from it rather than reading `specs/`, `changes/` or `backlog/` itself (`views-rendered-by-clm`). All three are functions of the graph and markers, so the model stays one the `web` app can store in a snapshot, at the cost of one more coverage pass in `spec_view`. The `web` Worker's shape check (`web.worker`'s `current_shape` in `crates/clm-web/src/snapshot.rs`) lists the fields, so it sees a snapshot stored before them as stale and rebuilds it; nothing deserialises the model, so they carry no serde default. The spec branches on `origin` that touch the component aren't here: `clm view` reads the working tree and the local refs, not each branch's tree.
 
-**Blockers** (`blockers-view`). A component's waits are the edges `queue_from_refs`'s `blocked { by }` gives it; `depends_on` gives none (`needs-alone-order`). A need's edge goes on to the needed requirement's own blockers when that requirement is blocked, so the root is never a `ready` component whose session would leave the needed requirement out. A component waiting on several things appears under each root its waits reach. The `flight` model's components carry no `paths` and no `waiting_on`, and the view shows no `waiting` state.
+**Blockers** (`blockers-view`). A component's waits are the edges `queue_from_refs`'s `blocked { by }` gives it, each requirement edge followed to the lines `check.coverage`'s `waits` gives for the component's own lines, since an ID alone names no line (`a-wait-names-a-line`); `depends_on` gives none (`needs-alone-order`). A need's edge goes on to the needed requirement's own blockers when that requirement is blocked, so the root is never a `ready` component whose session would leave the needed requirement out. A component waiting on several things appears under each root its waits reach. The `flight` model's components carry no `paths` and no `waiting_on`, and the view shows no `waiting` state.
 
 **Charts.** Long names are cut with `…`. The spec chart is an indented tree drawn with `├─ └─ │`, each component's line holding, in order, its ID, status, queue state, `⚠ oversized`, bar and `n/m`, owners, and `→` with its dependencies. The bar is ten cells shared in proportion among the component's current (`█`), behind (`▓`) and unbuilt (`░`) requirements, each non-zero count getting at least one cell and the rest going by largest remainder, ties in the order current, behind, unbuilt. `spec_view` takes the obsolete counts from `clm_coverage::pending` rather than from the requirement's ID, so the spec chart, the `flight` view and `clm next` agree on which component holds a removed requirement (`node-removal`). The flight chart draws each component's pending requirements as a bar of behind, unbuilt and obsolete, and each change's requirements as a bar with `complete` where it applies. The pinned line shapes (`flight-component-lines`, `spec-component-lines`, `blockers-root-lines`) exist because the `clm-panel` plugin finds a component's line by its prefix to add its own rows beneath and presses lines by position, the nth such line being the model's nth component or root (`plugin.panel`'s `component-inspector` and `blocker-chains`); they change only with this spec. Colours, in `ansi` and SVG, are `colour-meanings`, shared with the `web` app. The SVG lays components out in layers, dependents above their dependencies, with children inside their parent's box; it embeds its own styles and fonts fall back to the system's. Each box holds its label, its bar as coloured segments and `n/m`; a `converged` component keeps the outline of its status.
 
@@ -229,7 +229,7 @@ The `flight` view SHALL hold every component that isn't `converged`, sorted by e
 - check.coverage/state-names
 
 ### Requirement: blockers-view
-The `blockers` view SHALL hold every component `queue_from_refs` reports as `blocked`, grouped under each root blocker its chain of waits reaches: a component that is `ready` or `claimed`, or a backlog item. A component blocked by a requirement it needs (`requirement-needs`) waits on that requirement's component when the requirement is unblocked, and on the requirement's own blockers when it is blocked, and the chain continues from there. A component blocked by an obsolete requirement of its own that is also pending on other components for the markers in their files (`check.coverage/pending-report`, which gives that line its own ID to wait on) waits on each of those components, taken from every line `pending` returns for the ID and not from one of them. For each root it SHALL hold its weight, the number of distinct components it holds up directly or through other components, and the components between it and each one. Roots that wait on the human (a `question` or `human-task` backlog item) SHALL come first, then the rest, each by weight, highest first, then by name.
+The `blockers` view SHALL hold every component `queue_from_refs` reports as `blocked`, grouped under each root blocker its chain of waits reaches: a component that is `ready` or `claimed`, or a backlog item. A component blocked by a requirement it needs (`requirement-needs`) waits on that requirement's component when the requirement is unblocked, and on the requirement's own blockers when it is blocked, and the chain continues from there. A component blocked by an obsolete requirement of its own that is also pending on other components for the markers in their files (`check.coverage/pending-report`, which gives that line its own ID to wait on) waits on each of those components, taken from the lines `check.coverage`'s `waits` gives for its line (`check.coverage/wait-lines`); and every wait is followed to the line it names by `waits`, never by a requirement's ID alone, which an obsolete requirement's several lines share. For each root it SHALL hold its weight, the number of distinct components it holds up directly or through other components, and the components between it and each one. Roots that wait on the human (a `question` or `human-task` backlog item) SHALL come first, then the rest, each by weight, highest first, then by name.
 
 #### Scenario: chain weight
 - GIVEN component `c` whose only pending requirement needs `b/y`, component `b` whose only pending requirement `b/y` needs `a/x`, and `a/x` uncited on claimed component `a`
@@ -237,9 +237,14 @@ The `blockers` view SHALL hold every component `queue_from_refs` reports as `blo
 - THEN the only root is `a`, with weight 2, holding up `b` and `c`
 
 #### Scenario: an obsolete requirement pending on two components
-- GIVEN a root with `wiring: []`, components `a` and `b`, a live change that removed `b/gone`, markers citing it in a file of `b` and in a file of `a`, and nothing else pending
+- GIVEN a root with `wiring: []`, components `a` and `b`, an `applied` change that removed `b/gone`, markers citing it in a file of `b` and in a file of `a`, and nothing else pending
 - WHEN `clm view blockers --format json` runs
 - THEN the only root is `a`, with weight 1, holding up `b`
+
+#### Scenario: an obsolete requirement pending on three components
+- GIVEN a root with `wiring: []`, components `a`, `b` and `c`, an `applied` change that removed `b/gone`, markers citing it in a file of each, and nothing else pending
+- WHEN `clm view blockers --format json` runs
+- THEN the roots are `a` and `c`, each with weight 1, holding up `b`
 
 #### Scenario: human first
 - GIVEN component `a` whose only pending requirement is in the `blocks` of `backlog/q` of kind `question`, and components `e`, `f`, `g` and `h`, each with one pending requirement, which needs `d/x`, uncited on claimed component `d`
@@ -263,6 +268,7 @@ The `blockers` view SHALL hold every component `queue_from_refs` reports as `blo
 
 #### Needs
 - check.coverage/pending-report
+- check.coverage/wait-lines
 - plugin.panel/component-inspector
 - model/parse-backlog
 
