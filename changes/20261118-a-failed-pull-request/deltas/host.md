@@ -24,12 +24,12 @@ A caller never runs `gh` or `az` itself; everything host-specific is here, and a
 
 `clm-host` offers each of `clm pr`, `clm issue` and `clm branch` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
 
-On every host, `clm pr` and `clm issue` exit 2 when the host's tool, `gh` or `az`, fails or gives an answer the adapter can't read, and 1 when the command itself refuses, such as for a blank body file or a branch with no pull request (`host-tool-failure`), so a caller reads a host's failure the same way on `github` and on `azure`.
+On every host, `clm pr` and `clm issue` exit 2 when the host's tool, `gh` or `az`, fails or gives an answer the adapter can't read, and 1 when the command itself refuses, as its requirements state, such as for a blank body file or a branch with no pull request (`host-tool-failure`), so a caller reads a host's failure the same way on `github` and on `azure`.
 
 ## ADDED Requirements
 
 ### Requirement: host-tool-failure
-When the host's tool, `gh` on `github` or `az` on `azure`, can't be run, exits non-zero, or gives an answer the adapter can't read, `clm pr open`, `clm pr body` and `clm issue` SHALL exit 2, with a message that holds what the tool printed on its error output, or why its answer can't be read, on every host that has the tool. They SHALL exit 1 only when the command refuses by its own checks, such as a body file that is missing or blank, a branch with no pull request, or a host with nowhere to file an issue, so a caller tells a host's failure from a refusal the same way whichever host the project uses.
+When the host's tool, `gh` on `github` or `az` on `azure`, can't be run, exits non-zero, or gives an answer the adapter can't read, `clm pr open`, `clm pr body` and `clm issue` SHALL exit 2, with a message that holds what the tool printed on its error output, or why its answer can't be read, on every host that has the tool. A refusal that a requirement of `host` states as exit 1, such as `pr-body`'s for a blank body file or a branch with no pull request, `pr-open`'s for a gate that can't be evaluated, or `issue`'s on a host with nowhere to file it, SHALL stay exit 1, so a caller tells a host's failure from the command's refusal the same way whichever host the project uses.
 
 #### Scenario: gh fails to open a pull request
 - GIVEN `host = "github"` and a fake `gh` whose `pr view` finds no pull request and whose `pr create` exits 1 printing `create failed`

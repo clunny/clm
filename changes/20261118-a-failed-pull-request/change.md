@@ -22,7 +22,7 @@ resolves: [a-failed-pull-request-open-exits-2-where-its-requirement-says-1]
 
 - `host`'s Contract states the rule, and a new requirement, `host-tool-failure`, states it for `clm pr open`, `clm pr body` and `clm issue`, with a scenario each for `gh` failing, `az` failing and an answer that can't be read.
 - `azure-selected` and `keep-unopened-body` say 2, and `keep-unopened-body`'s `github` scenario asserts the status too.
-- The build changes the `Azure` adapter's mapping of a failed `az` from a refusal to a tool failure, and the tests that assert 1 for a failing `az` (the `az not signed in` and `the host refuses` scenarios) to assert 2; the `github` test the item names re-cites `keep-unopened-body`.
+- The build changes the `Azure` adapter's mapping of a failed `az` from a refusal to a tool failure, with the comment beside it that calls it a refusal, and the tests that assert 1 for a failing `az` (the `az not signed in` and `the host refuses` scenarios) to assert 2; the `github` test the item names re-cites `keep-unopened-body`.
 
 ## Constraints
 
@@ -30,4 +30,8 @@ resolves: [a-failed-pull-request-open-exits-2-where-its-requirement-says-1]
 
 ## Edge cases and workarounds
 
-- None known.
+- A body file that is missing reaches `gh` or `az` on some paths of `clm pr open` and `clm issue`, which then exits 2, and is refused (exit 1) on others. No requirement states a check of the file for those two commands, so this change states none: `host-tool-failure` keeps exit 1 for the refusals `host`'s requirements already state, and a missing file there is the tool's failure.
+
+## Open questions
+
+- None. The architecture audit and the builder check both noted that `pr-open`'s exit 1 for a gate that can't be evaluated and `pr-open-defaults`' exit 1 for a failing `git log` are neither a host's failure nor plainly the command's own checks; `host-tool-failure` now keeps exit 1 for every refusal a requirement of `host` states, which covers both.
