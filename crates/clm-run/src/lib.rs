@@ -1557,16 +1557,24 @@ fn not_its_own(
         .into_iter()
         .find(|to| to.split_once('/').is_some_and(|(n, _)| n == node));
     let named = id.split_once('/').map_or(id, |(n, _)| n);
+    // A file of `named`'s, as `check.coverage/pending-report` counts them: one it owns, one
+    // a `wiring` glob matches, or one no component owns.
+    let of_named = |m: &Marker| {
+        let file = m.path.to_string_lossy();
+        let wired = graph
+            .wiring()
+            .is_some_and(|w| w.iter().any(|g| clm_coverage::matches(g, &file)));
+        wired || clm_coverage::owner(graph, &m.path).is_none_or(|o| o == named)
+    };
     let mut e = Elsewhere {
         removed_by: clm_coverage::removed(graph).remove(id).unwrap_or_default(),
         owner_code: (clm_model::Layer::of(id).is_none()
             && graph.nodes.contains_key(named)
-            && !scanned
-                .iter()
-                .any(|m| m.id == id && clm_coverage::owner(graph, &m.path) == Some(named)))
+            && !scanned.iter().any(|m| m.id == id && of_named(m)))
         .then(|| named.to_string()),
         ..Elsewhere::default()
     };
+    let mut take_out: Vec<&Marker> = Vec::new();
     let mut delete = Vec::new();
     let mut paths: Vec<&PathBuf> = own.iter().map(|m| &m.path).collect();
     paths.sort();
@@ -1578,18 +1586,18 @@ fn not_its_own(
             .filter(|t| !t.group)
             .collect();
         let held = clm_coverage::markers_in(path, &text);
-        let mine: Vec<&&Marker> = own.iter().filter(|m| &m.path == path).collect();
+        let mine: Vec<&Marker> = own.iter().copied().filter(|m| &m.path == path).collect();
         for m in &mine {
             if !tests.iter().any(|t| (t.first..=t.last).contains(&m.line)) {
-                e.take_out.push(m.to_string());
+                take_out.push(m);
             }
         }
         for t in &tests {
             let span = t.first..=t.last;
-            let at: Vec<String> = mine
+            let at: Vec<&Marker> = mine
                 .iter()
+                .copied()
                 .filter(|m| span.contains(&m.line))
-                .map(|m| m.to_string())
                 .collect();
             if at.is_empty() {
                 continue;
@@ -1603,12 +1611,14 @@ fn not_its_own(
             } else if let Some(to) = &moved {
                 e.recite.push((test, to.clone()));
             } else if cites_held {
-                e.take_out.extend(at);
+                take_out.extend(at);
             } else {
                 e.leave.push(test);
             }
         }
     }
+    take_out.sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
+    e.take_out = take_out.iter().map(|m| m.to_string()).collect();
     (delete, e)
 }
 
@@ -1970,7 +1980,7 @@ mod tests {
         // req:orchestrator.run/pending-prompt@54c39a40
         let gone = format!("// {}:b/gone\n", "req");
         let lib = format!("//\n//\n//\n{gone}pub fn f() {{}}\n");
-        let files = |b_cites: &str| {
+        let files = |at: &str, b_cites: &str| {
             vec![
                 ("ARCHITECTURE.md".to_string(), "# Arch\n".to_string()),
                 ("specs/SPEC.md".into(), spec("")),
@@ -1987,18 +1997,18 @@ mod tests {
                         .into(),
                 ),
                 ("crates/c/lib.rs".into(), lib.clone()),
-                ("crates/b/t.rs".into(), b_cites.to_string()),
+                (at.to_string(), b_cites.to_string()),
             ]
         };
-        let run = |b_cites: &str, markers: &[(&str, usize)]| {
-            let owned = files(b_cites);
+        let run = |at: &str, b_cites: &str, markers: &[(&str, usize)]| {
+            let owned = files(at, b_cites);
             let refs: Vec<(&str, &str)> = owned
                 .iter()
                 .map(|(a, b)| (a.as_str(), b.as_str()))
                 .collect();
             prompt_for_c(&refs, "b/gone", markers)
         };
-        let p = run("", &[("crates/c/lib.rs", 4)]);
+        let p = run("crates/b/t.rs", "", &[("crates/c/lib.rs", 4)]);
         assert!(
             p.contains("Take out its markers at crates/c/lib.rs:4,"),
             "{p}"
@@ -2013,8 +2023,14 @@ mod tests {
         assert!(!p.contains("Remove the code they mark"), "{p}");
         // A test of `b`'s own that still cites it leaves the code to `b`'s own build.
         let in_b = format!("#[test]\nfn t() {{\n    {gone}}}\n");
-        let p = run(&in_b, &[("crates/c/lib.rs", 4)]);
+        let p = run("crates/b/t.rs", &in_b, &[("crates/c/lib.rs", 4)]);
         assert!(!p.contains("`deferred` item naming"), "{p}");
+        // So does one in a file no component owns, which `pending` counts as `b`'s.
+        let p = run("old/t.rs", &in_b, &[("crates/c/lib.rs", 4)]);
+        assert!(!p.contains("`deferred` item naming"), "{p}");
+        // A test in `c`'s file is not `b`'s.
+        let p = run("crates/c/t.rs", &in_b, &[("crates/c/lib.rs", 4)]);
+        assert!(p.contains("`deferred` item naming"), "{p}");
     }
 
     #[test]

@@ -649,6 +649,10 @@ fn scenario_an_obsolete_test_in_a_file_the_build_may_not_change() {
         "{listed}"
     );
     assert!(
+        listed.contains("Its markers in your files are at crates/c/t.rs:3;"),
+        "{listed}"
+    );
+    assert!(
         listed.contains("(`land/deleted-tests-approved`): `crates/c/t.rs::old_rule`."),
         "{listed}"
     );
