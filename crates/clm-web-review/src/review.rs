@@ -383,10 +383,9 @@ pub async fn compare<P: Platform>(
         })
         .collect();
 
-    let withheld = withheld_lists(&trees, &base_files, &head_files);
-    let cuts = listed_cuts(&trees, &base_files, &head_files, &changed, &withheld);
+    // A list whose text GitHub withholds gives a cut line of its own, so it needs review.
+    let cuts = listed_cuts(&trees, &base_files, &head_files, &changed);
     let review = needs_review(&trees, setting, &head_files)
-        || !withheld.is_empty()
         || !cuts.is_empty()
         || !clm_gate::widened_exemptions(&base, &head).is_empty();
     let comparison = Comparison {
@@ -414,7 +413,6 @@ fn listed_cuts(
     base_files: &Files,
     head_files: &Files,
     changed: &BTreeSet<PathBuf>,
-    withheld: &[(String, &str)],
 ) -> Vec<String> {
     if trees.base.truncated || trees.head.truncated {
         return Vec::new();
@@ -424,14 +422,16 @@ fn listed_cuts(
         .changed_paths(&trees.base)
         .iter()
         .any(|p| p.starts_with("specs/") || (test_list_id(p).is_some() && trees.head.has(p)));
+    if !read {
+        return Vec::new();
+    }
+    // A withheld list is one the head holds among the changed paths, so `read` holds for it.
+    let withheld = withheld_lists(trees, base_files, head_files);
     let withheld_lines = withheld.iter().map(|(path, commit)| {
         format!(
             "{path}: gate/cut: GitHub withholds its text at {commit}, so the tests it lists aren't listed"
         )
     });
-    if !read {
-        return withheld_lines.collect();
-    }
     let (base, base_violations) = cut_graph(&trees.base, base_files);
     let (head, head_violations) = cut_graph(&trees.head, head_files);
     let lists: Vec<_> = test_lists(base_files, head_files, changed)
