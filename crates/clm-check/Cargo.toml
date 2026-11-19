@@ -8,7 +8,7 @@ publish.workspace = true
 [features]
 default = ["checkout", "detectors", "commands"]
 # Checking a checkout on disk (`run`, `status`, `coverage`, `backlog`); off for wasm builds.
-checkout = ["dep:clm-apply", "dep:clm-git", "clm-coverage/checkout"]
+checkout = ["dep:clm-apply", "dep:clm-gate", "dep:clm-git", "clm-coverage/checkout"]
 # Spawning detector commands; off for wasm builds.
 detectors = ["dep:clm-git", "dep:libc"]
 # `clm check`, `clm size`, `clm coverage` and `clm backlog` as calls (`commands-in-crate`).
@@ -83,6 +83,10 @@ name = "coverage_lists"
 required-features = ["commands"]
 
 [[test]]
+name = "obsolete_tests_elsewhere"
+required-features = ["commands"]
+
+[[test]]
 name = "size_command"
 required-features = ["commands"]
 
@@ -90,6 +94,7 @@ required-features = ["commands"]
 clm-model.workspace = true
 clm-coverage = { workspace = true, default-features = false }
 clm-apply = { workspace = true, optional = true }
+clm-gate = { workspace = true, optional = true }
 clm-git = { workspace = true, optional = true }
 clm-init = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
