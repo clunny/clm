@@ -28,7 +28,8 @@ No change or code fix since 2026-11-11 fixes it: `20261118-the-build-skill-gives
 
 - `orchestrator.loop/plan-verify` (modified): the session reports the run's outcome line, the last line of its output starting `verify `, or `none`; `clm build returned verify` exits 1, recording nothing, for any other line, after the late-return rule of `returned-ignores-an-earlier-task`.
 - `backlog/the-fix-for-a-red-verify-lost-to-a-note-is-outside-the-plan-s-freeze` (`kind: question`) blocks `plan-verify` until the human answers.
-- `backlog/the-build-skill-reports-a-verify-run-s-last-line-not-its-outcome` (`kind: deferred`, `plugin`) changes the build skill's `run` sentence, due as soon as this change is on `main`.
+- `backlog/the-build-skill-reports-a-verify-run-s-last-line-not-its-outcome` (`kind: deferred`, `plugin`) changes the build skill's `run` sentence, due as soon as this change is on `main`. It also blocks `plan-verify`, so the skill reports the outcome line before the loop refuses any other (`expand-contract`): the architecture audit found nothing else ordered the two.
+- `plan-verify`'s build folds in the stale "last line, as it stands" wording of `returned`'s doc comment (`crates/clm-loop/src/returned.rs`), and re-cites `crates/clm-loop/tests/plan_verify.rs`. No capability test sees a difference: none reports a `verify` return.
 
 ## Constraints
 
@@ -42,4 +43,4 @@ No change or code fix since 2026-11-11 fixes it: `20261118-the-build-skill-gives
 
 ## Open questions
 
-None.
+- The `--result` help text of `clm build returned` in `crates/clm/src/main.rs` ("The run's last line, as it stands.") lies outside `orchestrator.loop`'s `paths`, so the loop's build can't change it (`path-ownership`); it stays true for every run but `verify`, whose refusal names the right line on stderr. Left for the root component's next fix rather than a coupled step here.
