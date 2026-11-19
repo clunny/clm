@@ -40,6 +40,9 @@ clap.workspace = true
 libc = "0.2"
 serde_json.workspace = true
 
+[build-dependencies]
+clm-git.workspace = true
+
 [dev-dependencies]
 clm-coverage.workspace = true
 tempfile.workspace = true
