@@ -221,16 +221,27 @@ fn a_rename_takes_only_a_name_no_base_test_carries() {
     ]);
     let head = files(&[(TESTS, rust_test("kept", true) + &rust_test("fresh", false))]);
     assert_eq!(names(&deleted_tests(&base, &head)), ["tests/t.rs::two"]);
-    // In line order, the first new name that cites enough is the one matched.
-    let base = files(&[(TESTS, rust_test("two", true) + &rust_test("three", true))]);
+    // In line order, the first new name that cites enough is the one matched: `two`
+    // takes `second`, which cites more than it needs, and `three` finds none left.
+    let base = format!(
+        "{}#[test]\nfn three() {{\n    // {REQ}:a/x\n    // {REQ}:a/y\n}}\n",
+        rust_test("two", true)
+    );
     let head = format!(
-        "#[test]\nfn first() {{\n    // {REQ}:a/y\n}}\n{}",
-        rust_test("second", true)
+        "#[test]\nfn second() {{\n    // {REQ}:a/x\n    // {REQ}:a/y\n}}\n{}",
+        rust_test("third", true)
     );
     assert_eq!(
-        names(&deleted_tests(&base, &files(&[(TESTS, head)]))),
+        names(&deleted_tests(
+            &files(&[(TESTS, base)]),
+            &files(&[(TESTS, head)])
+        )),
         ["tests/t.rs::three"]
     );
+    // A base test of that name with no marker doesn't make it an old name.
+    let base = files(&[(TESTS, rust_test("two", true) + &rust_test("second", false))]);
+    let head = files(&[(TESTS, rust_test("second", true))]);
+    assert!(deleted_tests(&base, &head).is_empty());
 }
 
 fn names(found: &[DeletedTest]) -> Vec<&str> {
