@@ -887,7 +887,7 @@ fn scenario_nothing_pending() {
 
 #[test]
 fn scenario_chain_weight() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -911,6 +911,72 @@ fn scenario_chain_weight() {
     assert_eq!(a["holds"][1]["via"], json(&Vec::<String>::new()));
 }
 
+/// A root with `wiring: []`, and nodes `ids`, each owning `src/<id>/**` with no requirement,
+/// and an applied change that removed `b/gone`.
+fn removed_on(ids: &[&str]) -> clm_model::Graph {
+    let root = specd("", &[]).replace("depends_on: []\n", "depends_on: []\nwiring: []\n");
+    let specs: Vec<(String, String)> = ids
+        .iter()
+        .map(|id| {
+            (
+                format!("specs/{id}/SPEC.md"),
+                specd("", &[]).replace(
+                    "depends_on: []\n",
+                    &format!("depends_on: []\npaths: [\"src/{id}/**\"]\n"),
+                ),
+            )
+        })
+        .collect();
+    let mut files: Vec<(&str, &str)> = vec![
+        ("specs/SPEC.md", &root),
+        ("changes/d/change.md", "---\nstatus: applied\n---\n"),
+        (
+            "changes/d/deltas/b.md",
+            "---\ncomponent: b\n---\n## REMOVED Requirements\n### Requirement: gone\n",
+        ),
+    ];
+    files.extend(specs.iter().map(|(p, t)| (p.as_str(), t.as_str())));
+    graph(&files)
+}
+
+#[test]
+fn scenario_an_obsolete_requirement_pending_on_two_components() {
+    // req:view/blockers-view@274e56fe
+    let g = removed_on(&["a", "b"]);
+    let markers = [
+        cite_in("b/gone", "src/b/t.rs", 3),
+        cite_in("b/gone", "src/a/t.rs", 3),
+    ];
+    let view = blockers_view(&g, &markers, &[], NOW, EXPIRY);
+    assert_eq!(
+        roots_of(&view),
+        [("a".into(), 1, vec!["b".into()])],
+        "{:#}",
+        json(&view)
+    );
+}
+
+#[test]
+fn scenario_an_obsolete_requirement_pending_on_three_components() {
+    // req:view/blockers-view@274e56fe
+    let g = removed_on(&["a", "b", "c"]);
+    let markers = [
+        cite_in("b/gone", "src/a/t.rs", 3),
+        cite_in("b/gone", "src/b/t.rs", 3),
+        cite_in("b/gone", "src/c/t.rs", 3),
+    ];
+    let view = blockers_view(&g, &markers, &[], NOW, EXPIRY);
+    assert_eq!(
+        roots_of(&view),
+        [
+            ("a".into(), 1, vec!["b".into()]),
+            ("c".into(), 1, vec!["b".into()]),
+        ],
+        "{:#}",
+        json(&view)
+    );
+}
+
 /// `a`'s only pending requirement is blocked by `backlog/q` (a question); `e`..`h` each
 /// need `d/x`, uncited on claimed `d`.
 fn human_first() -> clm_model::Graph {
@@ -928,7 +994,7 @@ fn human_first() -> clm_model::Graph {
 
 #[test]
 fn scenario_human_first() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = human_first();
     let view = blockers_view(&g, &[], &[claim("d", 1)], NOW, EXPIRY);
     let v = json(&view);
@@ -950,7 +1016,7 @@ fn scenario_human_first() {
 
 #[test]
 fn scenario_dependency_holds_nothing() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -995,7 +1061,7 @@ fn scenario_nothing_blocked() {
 
 #[test]
 fn a_node_waiting_on_two_chains_is_under_each_root() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         (
@@ -1026,7 +1092,7 @@ fn a_node_waiting_on_two_chains_is_under_each_root() {
 
 #[test]
 fn roots_of_equal_weight_sort_by_name_after_weight() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),
@@ -1086,7 +1152,7 @@ fn roots_of(view: &clm_view::BlockersView) -> Vec<(String, usize, Vec<String>)> 
 
 #[test]
 fn scenario_need_reaches_its_node() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1099,7 +1165,7 @@ fn scenario_need_reaches_its_node() {
 
 #[test]
 fn scenario_need_reaches_the_needed_requirements_item() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1117,7 +1183,7 @@ fn scenario_need_reaches_the_needed_requirements_item() {
 
 #[test]
 fn a_need_on_a_node_with_an_unsettled_dependency_stops_at_that_node() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -1137,7 +1203,7 @@ fn a_need_on_a_node_with_an_unsettled_dependency_stops_at_that_node() {
 
 #[test]
 fn a_need_on_a_requirement_that_needs_another_reaches_the_last_ones_node() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/x", &[])),
@@ -1157,7 +1223,7 @@ fn a_need_on_a_requirement_that_needs_another_reaches_the_last_ones_node() {
 
 #[test]
 fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let files: clm_model::Files = [
         ("specs/SPEC.md", specd("", &[])),
         ("specs/a/SPEC.md", needing("", "b/x", &[])),
@@ -1174,7 +1240,7 @@ fn a_cycle_of_needs_in_a_graph_with_violations_terminates() {
 
 #[test]
 fn a_need_blocked_by_an_item_and_a_need_reaches_both() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &needing("", "b/x", &[])),
@@ -1945,7 +2011,7 @@ fn scenario_charts_unchanged() {
 
 #[test]
 fn a_human_task_item_waits_on_the_human_and_comes_first() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let g = graph(&[
         ("specs/SPEC.md", &specd("", &[])),
         ("specs/a/SPEC.md", &specd("", &["x"])),

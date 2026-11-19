@@ -443,7 +443,7 @@ fn scenario_order() {
 
 #[test]
 fn scenario_chain_weight() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
@@ -469,7 +469,7 @@ fn scenario_chain_weight() {
 
 #[test]
 fn scenario_human_first() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
@@ -515,7 +515,7 @@ fn scenario_human_first() {
 fn scenario_dependency_holds_nothing() {
     // `b` depends on `a`, but its own requirement is unblocked, so it is ready and held by
     // nothing.
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(dir.path(), "specs/a/SPEC.md", &node("", &["x"]));
@@ -546,7 +546,7 @@ fn scenario_dependency_holds_nothing() {
 
 #[test]
 fn scenario_need_reaches_the_needed_requirements_item() {
-    // req:view/blockers-view@3950c690
+    // req:view/blockers-view@274e56fe
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", ROOT);
     write(
