@@ -293,8 +293,10 @@ pub struct Comparison {
     pub fingerprint: Option<String>,
     /// The head's code key, `None` when GitHub truncated its tree.
     pub code_key: Option<String>,
-    /// The branch needs a human's review (`needs_review`).
+    /// The branch needs a human's review (`needs_review`, or a cut, or a widened exemption).
     pub review: bool,
+    /// The `gate/cut` lines `clm gate` prints for what the branch cuts, in its order.
+    pub cuts: Vec<String>,
 }
 
 /// A commit never changes, so a comparison stays good for as long as it is kept.
@@ -309,8 +311,8 @@ pub async fn compare<P: Platform>(
     let repo = access.full_name();
     let auth = access.auth();
     // Named anew when the comparison changes shape or meaning, so none cached before is
-    // served: `compare4:` since `review` became the branch's (`pr-review`).
-    let key = format!("compare4:{repo}@{base_sha}:{head_sha}");
+    // served: `compare5:` since `review` counts cuts and the review lists them (`pr-review`).
+    let key = format!("compare5:{repo}@{base_sha}:{head_sha}");
     if let Some(c) = p
         .cache_get(&key)
         .await
@@ -379,6 +381,17 @@ pub async fn compare<P: Platform>(
         })
         .collect();
 
+    let cuts: Vec<String> = clm_gate::cuts(
+        &base,
+        &head,
+        &test_lists(&base_files, &head_files, &changed),
+    )
+    .iter()
+    .map(ToString::to_string)
+    .collect();
+    let review = needs_review(&trees, setting, &head_files)
+        || !cuts.is_empty()
+        || !clm_gate::widened_exemptions(&base, &head).is_empty();
     let comparison = Comparison {
         change: change_info(&head, &changed),
         nodes,
@@ -387,10 +400,54 @@ pub async fn compare<P: Platform>(
         documents,
         fingerprint: trees.fingerprint(),
         code_key: trees.head.code_key(),
-        review: needs_review(&trees, setting, &head_files),
+        review,
+        cuts,
     };
     put_comparison(p, &key, &comparison).await;
     Some(comparison)
+}
+
+/// Each change's `deleted-tests.txt` among the changed files the head holds, live or
+/// archived (`changes/[archive/]<id>/deleted-tests.txt`), with its text at the head and at
+/// the base: for an archived list with no text of its own at the base, the live list's, as
+/// the gate reads them (`gate/cuts`).
+fn test_lists<'a>(
+    base: &'a Files,
+    head: &'a Files,
+    changed: &'a BTreeSet<PathBuf>,
+) -> Vec<clm_gate::TestList<'a>> {
+    let id = |path: &str| -> Option<String> {
+        let rest = path.strip_prefix("changes/")?;
+        let rest = rest.strip_prefix("archive/").unwrap_or(rest);
+        let (id, name) = rest.split_once('/')?;
+        (name == "deleted-tests.txt" && id != "archive").then(|| id.to_string())
+    };
+    let utf8 = |files: &'a Files, path: &Path| -> Option<&'a str> {
+        files.get(path).and_then(|b| std::str::from_utf8(b).ok())
+    };
+    changed
+        .iter()
+        .filter_map(|path| {
+            let name = path.to_str()?;
+            let id = id(name)?;
+            let head = utf8(head, path)?;
+            let base = utf8(base, path).or_else(|| {
+                name.starts_with("changes/archive/")
+                    .then(|| {
+                        utf8(
+                            base,
+                            &Path::new("changes").join(&id).join("deleted-tests.txt"),
+                        )
+                    })
+                    .flatten()
+            });
+            Some(clm_gate::TestList {
+                path: name,
+                head,
+                base,
+            })
+        })
+        .collect()
 }
 
 /// Whether the branch needs a human's review, by the gate's own rule
@@ -559,8 +616,11 @@ struct BranchReview {
     pub base: String,
     pub base_sha: String,
     pub head_sha: String,
-    /// The branch needs a human's review (`gate/needs-review-of`).
+    /// The branch needs a human's review (`gate/needs-review-of`), a cut or a widened
+    /// exemption included (`gate/cuts`).
     pub review: bool,
+    /// The `gate/cut` lines `clm gate` prints for what the branch cuts (`gate/cuts`).
+    pub cuts: Vec<String>,
     pub change: Option<ChangeInfo>,
     pub nodes: Vec<NodeChanges>,
     pub decisions: Vec<Record>,
@@ -672,6 +732,7 @@ pub async fn branch<P: Platform>(p: &P, access: &Access, branch: &str) -> Respon
         base_sha,
         head_sha,
         review: comparison.review,
+        cuts: comparison.cuts,
         change: comparison.change,
         nodes: comparison.nodes,
         decisions: comparison.decisions,
