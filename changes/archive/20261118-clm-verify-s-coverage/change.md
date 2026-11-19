@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-verify-s-coverage-step-fails-because-clm-verify-build-doesn]
 ---
 

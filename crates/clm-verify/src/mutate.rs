@@ -350,7 +350,7 @@ fn launch(
     plan: &Path,
     result: &Path,
 ) -> Result<Ended, Error> {
-    let build = tree::places(ctx)?.join("verify-build");
+    let build = tree::build_place(ctx)?;
     let output = std::io::stderr().as_fd().try_clone_to_owned()?;
     let jobs = jobs(call.memory, ctx.verify.mutate_jobs);
     let mut shell = Command::new("sh");
