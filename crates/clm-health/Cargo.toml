@@ -13,6 +13,7 @@ clm-orchestrator.workspace = true
 clm-git.workspace = true
 clm-effort.workspace = true
 clm-ledger.workspace = true
+clm-gate.workspace = true
 serde_json.workspace = true
 clap.workspace = true
 

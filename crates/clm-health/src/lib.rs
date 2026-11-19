@@ -8,6 +8,7 @@ mod flag;
 mod land_time;
 mod lcov;
 mod requirements;
+mod rules;
 mod spec;
 mod state;
 
@@ -167,6 +168,10 @@ pub fn report(root: &Path, settings: &Settings, expiry: u64) -> Result<Report, F
             requirements::many_scenarios(&graph, settings.scenarios),
             requirements::many_exceptions(&graph, settings.exceptions),
             requirements::reconsider_section(root, &graph, settings),
+            rules::outside_contract(&graph),
+            rules::test_placement(&graph),
+            rules::design_exit(&graph),
+            rules::uncited_test(root, &graph)?,
         ],
     })
 }

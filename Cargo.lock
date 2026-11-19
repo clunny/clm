@@ -446,6 +446,7 @@ dependencies = [
  "clm-check",
  "clm-coverage",
  "clm-effort",
+ "clm-gate",
  "clm-git",
  "clm-ledger",
  "clm-model",
