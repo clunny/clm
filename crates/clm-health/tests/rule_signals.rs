@@ -79,20 +79,28 @@ fn code_names_are_paths_lists_or_camel_case() {
             "[]",
             "Nothing named.",
             "Plain.",
-            &[(
-                "x",
-                "It SHALL call `clm_gate::fingerprint_of` and return `RequirementSignals`, \
+            &[
+                (
+                    "x",
+                    "It SHALL call `clm_gate::fingerprint_of` and return `RequirementSignals`, \
 reading `human_burdens`, `origin/main`, `Settings` and `a.b(c)`.",
-            )],
+                ),
+                (
+                    "y",
+                    "It SHALL print.\n\n```\n#### not a heading\n```\nIt SHALL call `after_fence(x)`.\n\n\
+#### Scenario: t\n- it calls `below_heading(x)`",
+                ),
+            ],
         ),
     );
     let out = report(d);
     assert_eq!(
         section(&out, "outside-contract"),
         [
-            "health/outside-contract: 2 names",
+            "health/outside-contract: 3 names",
             "specs/a/SPEC.md: health/outside-contract: a/x names clm_gate::fingerprint_of",
             "specs/a/SPEC.md: health/outside-contract: a/x names RequirementSignals",
+            "specs/a/SPEC.md: health/outside-contract: a/y names after_fence",
         ],
         "{out}"
     );
