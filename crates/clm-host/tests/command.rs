@@ -277,6 +277,7 @@ fn fake_gh() -> Gh {
         "#!/bin/sh\necho \"$*\" >> \"$FAKE_OUT/gh\"\n\
          if [ \"$2\" = create ] && [ -n \"$FAKE_CREATE_EXIT\" ]; then \
          echo 'create failed' >&2; exit \"$FAKE_CREATE_EXIT\"; fi\n\
+         if [ \"$2\" = create ] && [ -n \"$FAKE_CREATE_SILENT\" ]; then exit 0; fi\n\
          case \"$1 $2\" in\n\
          'pr view') [ -z \"$FAKE_VIEW_ERROR\" ] || { echo \"$FAKE_VIEW_ERROR\" >&2; exit 1; }; \
          [ -n \"$FAKE_PR_VIEW\" ] || { echo 'no pull requests found' >&2; exit 1; }; \
@@ -1146,6 +1147,41 @@ fn scenario_an_answer_that_cant_be_read() {
     let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", "not json")]);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains("bad JSON"), "{err}");
+}
+
+#[test]
+fn an_answer_without_a_url_exits_2() {
+    // req:host/host-tool-failure@5ca96db4
+    // `gh pr create` and `gh issue create` exit 0 printing nothing: no URL to read.
+    let (r, gh) = (checkout("github"), fake_gh());
+    write(&r.work, "r.md", "The report\n");
+    let env = [("FAKE_CREATE_SILENT", "1")];
+    for args in [&OPEN_ARGS[..], &ISSUE_ARGS[..]] {
+        let (code, out, err) = clm(&r.work, &gh, args, &env);
+        assert_eq!((code, out.as_str()), (Some(2), ""), "{args:?}: {err}");
+        assert!(err.contains("no URL"), "{err}");
+    }
+}
+
+#[test]
+fn a_body_holding_only_a_stale_section_is_refused() {
+    // req:host/pr-body@42b28fb0
+    // Once its section goes, nothing is left: blank, so nothing is called.
+    let (r, gh) = (checkout("github"), fake_gh());
+    write(&r.work, "body.md", "## Cuts\n- an older line\n");
+    let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(gh.calls().is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn a_section_with_no_blank_line_runs_to_the_bodys_end() {
+    // req:host/pr-open@f06b4b0e
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    write(&r.work, "body.md", "## Cuts\n- an older line\n- another");
+    let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(body(&gh), CUTS);
 }
 
 #[test]

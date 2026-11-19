@@ -70,7 +70,7 @@ pub(crate) fn as_sent(root: &Path, branch: &str, body: String) -> Option<String>
 /// after it up to and including the first that is empty or holds only whitespace, or to the
 /// body's end when none is. The section is the gate's to write, so a body read back from a
 /// pull request, or a kept copy, can be sent again without holding it twice.
-fn without_section(body: &str) -> &str {
+pub(crate) fn without_section(body: &str) -> &str {
     let mut lines = body.split_inclusive('\n');
     let Some(heading) = lines.next().filter(|l| l.trim_end() == "## Cuts") else {
         return body;
