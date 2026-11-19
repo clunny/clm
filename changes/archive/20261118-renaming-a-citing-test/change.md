@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [renaming-a-citing-test-reads-to-the-land-as-deleting-it-so-a]
 ---
 

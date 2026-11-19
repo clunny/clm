@@ -1,7 +1,9 @@
 //! A code branch loses no citing test no approved list names (`land/deleted-tests-approved`,
 //! `removal-needs-a-yes`): a land or a `--check-only` run refuses, before anything else, a
-//! branch not named `spec/*` whose head holds fewer citing tests of a name than its merge base
-//! with `base`, unless a change's `deleted-tests.txt` in `base`'s tree names each.
+//! branch not named `spec/*` that, against its merge base with `base`, loses a citing test as
+//! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, or renamed in its
+//! own file still citing all it cited, is not), unless a change's `deleted-tests.txt` in `base`'s
+//! tree names each.
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -77,8 +79,9 @@ pub(crate) fn check(
             (!named).then(|| {
                 format!(
                     "{file}: {RULE}: test {name}, which cited {}, is gone and no approved list \
-                     names it. Keep the test under its name, or leave the requirement unbuilt \
-                     and add a question item",
+                     names it. Keep the test under its name, or under a new name in its file \
+                     citing every requirement it cited, or leave the requirement unbuilt and \
+                     add a question item",
                     t.ids.join(", ")
                 )
             })
@@ -108,7 +111,7 @@ mod tests {
 
     #[test]
     fn lists_live_and_archived() {
-        // req:land/deleted-tests-approved@f6971347
+        // req:land/deleted-tests-approved@f9eddc3a
         assert!(is_list("changes/c/deleted-tests.txt"));
         assert!(is_list("changes/archive/c/deleted-tests.txt"));
         assert!(!is_list("changes/c/deltas/deleted-tests.txt"));
