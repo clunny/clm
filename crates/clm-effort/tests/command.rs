@@ -98,7 +98,7 @@ fn record_repo(dir: &Path) -> PathBuf {
 
 #[test]
 fn effort_record_cli() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     // req:effort/commands-in-crate@c08e640f
     let dir = tempfile::tempdir().unwrap();
     let root = record_repo(dir.path());

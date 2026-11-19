@@ -34,13 +34,26 @@ struct Group {
     times: Vec<i64>,
 }
 
+/// What a counted directory is to the repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Checkout {
+    /// Not a linked worktree: the main worktree, or a `--cwd` outside every linked one.
+    Unlinked,
+    /// A linked worktree with this branch checked out.
+    Branch(String),
+    /// A linked worktree with no branch checked out.
+    Detached,
+}
+
 /// The work in the transcripts under `transcripts` whose entries ran in a `counted`
 /// directory, one per session and branch (only `branch`'s when given), in branch and session
-/// order, and the warnings. Each counted directory comes with the branch checked out in it
-/// when it is a linked worktree that has one, which a subagent's entries run there count for.
+/// order, and the warnings. A subagent's entries count, under `<session>/<agent>`, for the
+/// branch `pinned` gives that session, else for the branch of the linked worktree they ran
+/// in, and for nothing while that worktree is detached.
 pub fn sessions(
     transcripts: &Path,
-    counted: &[(PathBuf, Option<String>)],
+    counted: &[(PathBuf, Checkout)],
+    pinned: &BTreeMap<String, String>,
     branch: Option<&str>,
 ) -> (Vec<SessionWork>, Vec<String>) {
     let Ok(projects) = std::fs::read_dir(transcripts) else {
@@ -68,7 +81,9 @@ pub fn sessions(
     // would escape, every subagent line is parsed.
     let worktrees: Option<Vec<&str>> = counted
         .iter()
-        .filter(|(_, b)| b.is_some() && b.as_deref() == branch)
+        .filter(
+            |(_, held)| matches!((held, branch), (Checkout::Branch(b), Some(only)) if b == only),
+        )
         .map(|(dir, _)| dir.to_str().filter(|d| !d.contains(['"', '\\'])))
         .collect();
     for file in files {
@@ -76,15 +91,23 @@ pub fn sessions(
             continue;
         };
         // A subagent's entries carry the launching session's branch, so they count for the
-        // branch of the worktree they ran in, which no line need name.
-        let subagent = file
+        // branch pinned for them or of the worktree they ran in, which no line need name.
+        let agent = file
             .strip_prefix(transcripts)
-            .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == "subagents"));
-        let paths: &[&str] = match (&worktrees, subagent) {
-            (_, false) => &[],
-            (Some(paths), true) => paths,
+            .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == "subagents"))
+            .then(|| file.file_stem().map(|s| s.to_string_lossy().into_owned()))
+            .flatten();
+        // A file a pin may name is read whole, since its worktree may be gone.
+        let pinned_file = agent.as_deref().is_some_and(|agent| {
+            pinned
+                .keys()
+                .any(|key| key.rsplit_once('/').is_some_and(|(_, a)| a == agent))
+        });
+        let paths: &[&str] = match (&worktrees, &agent) {
+            (_, None) => &[],
+            (Some(paths), Some(_)) if !pinned_file => paths,
             // The empty string, which every line holds.
-            (None, true) => &[""],
+            _ => &[""],
         };
         for line in bytes.split(|b| *b == b'\n') {
             let Ok(line) = std::str::from_utf8(line) else {
@@ -96,7 +119,14 @@ pub fn sessions(
                 continue;
             }
             match serde_json::from_str::<Value>(line) {
-                Ok(entry) => read_entry(&entry, counted, subagent, branch, &mut groups),
+                Ok(entry) => read_entry(
+                    &entry,
+                    counted,
+                    pinned,
+                    agent.as_deref(),
+                    branch,
+                    &mut groups,
+                ),
                 Err(_) => bad += 1,
             }
         }
@@ -130,18 +160,20 @@ pub fn sessions(
     (work, warnings)
 }
 
-/// Counts `entry` into its group when it ran in a counted directory: for the branch of the
-/// linked worktree it ran in when it is a `subagent`'s and that worktree has one, else for
-/// its `gitBranch`.
+/// Counts `entry` into its group when it ran in a counted directory. An entry of subagent
+/// `agent`'s file counts under `<sessionId>/<agent>` for its pinned branch, else for the
+/// branch of the linked worktree it ran in, and not at all while that worktree is detached;
+/// every other entry counts under its `sessionId` for its `gitBranch`.
 fn read_entry(
     entry: &Value,
-    counted: &[(PathBuf, Option<String>)],
-    subagent: bool,
+    counted: &[(PathBuf, Checkout)],
+    pinned: &BTreeMap<String, String>,
+    agent: Option<&str>,
     only: Option<&str>,
     groups: &mut BTreeMap<(String, String), Group>,
 ) {
     let field = |name: &str| entry.get(name).and_then(Value::as_str);
-    let (Some(session), Some(branch), Some(cwd), Some(time)) = (
+    let (Some(session), Some(git_branch), Some(cwd), Some(time)) = (
         field("sessionId"),
         field("gitBranch"),
         field("cwd"),
@@ -150,16 +182,24 @@ fn read_entry(
         return;
     };
     // The deepest counted directory holding `cwd` is the worktree it ran in.
-    let Some((_, checked_out)) = counted
+    let Some((_, checkout)) = counted
         .iter()
         .filter(|(dir, _)| Path::new(cwd).starts_with(dir))
         .max_by_key(|(dir, _)| dir.components().count())
     else {
         return;
     };
-    let branch = match checked_out {
-        Some(checked_out) if subagent => checked_out.as_str(),
-        _ => branch,
+    let (session, branch) = match agent {
+        Some(agent) => {
+            let key = format!("{session}/{agent}");
+            match (pinned.get(&key), checkout) {
+                (Some(pin), _) => (key, pin.as_str()),
+                (None, Checkout::Branch(b)) => (key, b.as_str()),
+                (None, Checkout::Detached) => return,
+                (None, Checkout::Unlinked) => (session.to_string(), git_branch),
+            }
+        }
+        None => (session.to_string(), git_branch),
     };
     if only.is_some_and(|b| b != branch) {
         return;
@@ -169,9 +209,7 @@ fn read_entry(
     if model == Some(SYNTHETIC) {
         return;
     }
-    let group = groups
-        .entry((branch.to_string(), session.to_string()))
-        .or_default();
+    let group = groups.entry((branch.to_string(), session)).or_default();
     group.times.push(time);
     let (Some(model), Some(usage)) = (model, message.and_then(|m| m.get("usage"))) else {
         return;

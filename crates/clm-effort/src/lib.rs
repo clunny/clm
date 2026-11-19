@@ -33,4 +33,4 @@ pub use report::{
 };
 pub use text::{architecture_text, constraint_text, list_text, page_text};
 #[cfg(feature = "git")]
-pub use transcripts::{SessionWork, sessions};
+pub use transcripts::{Checkout, SessionWork, sessions};

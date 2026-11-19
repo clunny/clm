@@ -101,7 +101,7 @@ fn ledger_tip(clone: &Path) -> String {
 
 #[test]
 fn record_appends_one_commit() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -155,7 +155,7 @@ fn record_appends_one_commit() {
 
 #[test]
 fn rerun_appends_nothing() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -174,7 +174,7 @@ fn rerun_appends_nothing() {
 
 #[test]
 fn more_work_appends_again() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -219,7 +219,7 @@ fn more_work_appends_again() {
 
 #[test]
 fn branch_filter() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     transcript(
@@ -254,7 +254,7 @@ fn branch_filter() {
 
 #[test]
 fn linked_worktree_counted() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let linked = dir.path().join("linked");
@@ -309,7 +309,7 @@ fn linked_worktree_counted() {
 
 #[test]
 fn subagent_recorded_for_its_worktree_branch() {
-    // req:effort/transcripts@3669b654
+    // req:effort/transcripts@39911632
     // A session in the main checkout, which has `main` checked out, on `spec/x`, launches
     // one subagent in a linked worktree on `impl/a` and one in the checkout itself.
     let dir = tempfile::tempdir().unwrap();
@@ -343,7 +343,7 @@ fn subagent_recorded_for_its_worktree_branch() {
     assert_eq!(
         out.lines,
         [
-            "effort impl/a s1 35 tokens 0s",
+            "effort impl/a s1/agent-x 35 tokens 0s",
             "effort spec/x s1 35 tokens 0s",
             "recorded 2 sessions on 2 branches"
         ],
@@ -354,7 +354,7 @@ fn subagent_recorded_for_its_worktree_branch() {
 
 #[test]
 fn a_cwd_inside_a_worktree_keeps_its_branch() {
-    // req:effort/transcripts@3669b654
+    // req:effort/transcripts@39911632
     // A `--cwd` inside the linked worktree is the deepest counted directory holding the
     // subagent's `cwd`, and is still that worktree.
     let dir = tempfile::tempdir().unwrap();
@@ -387,7 +387,101 @@ fn a_cwd_inside_a_worktree_keeps_its_branch() {
     assert_eq!(
         out.lines,
         [
-            "effort impl/a s1 35 tokens 0s",
+            "effort impl/a s1/agent-x 35 tokens 0s",
+            "recorded 1 sessions on 1 branches"
+        ],
+        "{:?}",
+        out.warnings
+    );
+}
+
+/// A linked worktree at `<clone>/.claude/worktrees/a` with `branch` checked out, inside the
+/// main checkout, so a removed worktree's entries are still under a counted directory.
+fn build_worktree(clone: &Path, branch: &str) -> PathBuf {
+    let linked = clone.join(".claude/worktrees/a");
+    let path = linked.to_str().unwrap();
+    sh(clone, &["worktree", "add", "-q", "-b", branch, path]);
+    linked
+}
+
+#[test]
+fn a_builds_worktree_removed_after_its_record() {
+    // req:effort/record-command@05b07a1d
+    let dir = tempfile::tempdir().unwrap();
+    let clone = repository(dir.path());
+    let linked = build_worktree(&clone, "impl/a");
+    transcript(
+        dir.path(),
+        &clone,
+        "s1/subagents/agent-x",
+        &[entry("s1", "main", &linked, 0, "m1")],
+    );
+    let env = env(dir.path(), &[]);
+    let out = clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap();
+    assert_eq!(
+        out.lines,
+        [
+            "effort impl/a s1/agent-x 35 tokens 0s",
+            "recorded 1 sessions on 1 branches"
+        ]
+    );
+    sh(
+        &clone,
+        &["worktree", "remove", "--force", linked.to_str().unwrap()],
+    );
+    let tip = ledger_tip(&clone);
+    let out = clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap();
+    assert_eq!(out.lines, ["nothing new to record"], "{:?}", out.warnings);
+    assert_eq!(ledger_tip(&clone), tip);
+    let fold = clm_ledger::fold(&clone).unwrap();
+    assert!(
+        !fold
+            .efforts
+            .contains_key(&clm_ledger::effort_id("s1", "main"))
+    );
+    // `unrecorded`, which `clm land` appends, reads the same pins.
+    let left = clm_effort::unrecorded(&clone, &clm_effort::Options::default(), &env).unwrap();
+    assert!(left.bodies.is_empty(), "{:?}", left.bodies);
+}
+
+/// An `effort` record of `session` on `branch` holding no work.
+fn held(session: &str, branch: &str) -> clm_ledger::Entry {
+    Body::Effort {
+        branch: branch.into(),
+        session: session.into(),
+        models: Default::default(),
+        active_seconds: 0,
+    }
+    .into()
+}
+
+#[test]
+fn the_earliest_record_pins_a_subagent() {
+    // req:effort/record-command@05b07a1d
+    // Two clones saw the subagent's worktree on different branches; the earlier record wins.
+    let dir = tempfile::tempdir().unwrap();
+    let clone = repository(dir.path());
+    let env = env(dir.path(), &[]);
+    clm_ledger::append_all(&clone, vec![held("s1/agent-x", "impl/b")], &env).unwrap();
+    let first = clm_ledger::fold(&clone).unwrap().efforts
+        [&clm_ledger::effort_id("s1/agent-x", "impl/b")]
+        .at
+        .clone();
+    wait_past(&first);
+    clm_ledger::append_all(&clone, vec![held("s1/agent-x", "impl/a")], &env).unwrap();
+    // The worktree is gone; its entries ran inside the main checkout.
+    let gone = clone.join(".claude/worktrees/a");
+    transcript(
+        dir.path(),
+        &clone,
+        "s1/subagents/agent-x",
+        &[entry("s1", "main", &gone, 0, "m1")],
+    );
+    let out = clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap();
+    assert_eq!(
+        out.lines,
+        [
+            "effort impl/b s1/agent-x 35 tokens 0s",
             "recorded 1 sessions on 1 branches"
         ],
         "{:?}",
@@ -396,8 +490,32 @@ fn a_cwd_inside_a_worktree_keeps_its_branch() {
 }
 
 #[test]
+fn a_cwd_inside_a_detached_worktree_is_detached() {
+    // req:effort/record-command@05b07a1d
+    let dir = tempfile::tempdir().unwrap();
+    let clone = repository(dir.path());
+    let linked = clone.join(".claude/worktrees/a");
+    let path = linked.to_str().unwrap();
+    sh(&clone, &["worktree", "add", "-q", "--detach", path]);
+    let inside = linked.join("crates");
+    transcript(
+        dir.path(),
+        &clone,
+        "s1/subagents/agent-x",
+        &[entry("s1", "main", &inside, 0, "m1")],
+    );
+    let env = env(dir.path(), &[]);
+    let options = clm_effort::Options {
+        cwds: vec![inside],
+        ..Default::default()
+    };
+    let out = clm_effort::record(&clone, &options, &env).unwrap();
+    assert_eq!(out.lines, ["nothing new to record"], "{:?}", out.warnings);
+}
+
+#[test]
 fn outside_a_clm_repository_refused() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = clone_with_origin(dir.path(), "a", "Ann");
     let env = env(dir.path(), &[]);
@@ -407,7 +525,7 @@ fn outside_a_clm_repository_refused() {
 
 #[test]
 fn less_seen_never_shrinks() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let elsewhere = dir.path().join("elsewhere");
@@ -444,7 +562,7 @@ fn less_seen_never_shrinks() {
 
 #[test]
 fn claude_config_dir_is_read_first() {
-    // req:effort/record-command@2365b153
+    // req:effort/record-command@05b07a1d
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let config = dir.path().join("config");
