@@ -141,8 +141,10 @@ describe('spec branches', () => {
     const cuts = view.querySelector<HTMLElement>('.cuts')!;
     expect(cuts.querySelector('h3')?.textContent).toBe('Cuts');
     expect([...cuts.querySelectorAll('.cut')].map((c) => c.textContent)).toEqual(lines);
-    // Right under the header, before Approve and the components.
-    expect(cuts.previousElementSibling?.classList.contains('head')).toBe(true);
+    // In the header, under its chips, so a tab that keeps the header keeps it; before Approve
+    // and the components.
+    expect(view.querySelector(':scope > .head')!.contains(cuts)).toBe(true);
+    expect(view.querySelector(':scope > .head .meta')!.compareDocumentPosition(cuts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (const later of ['.approve-bar', '.node-changes']) {
       expect(cuts.compareDocumentPosition(view.querySelector(later)!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
