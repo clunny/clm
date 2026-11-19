@@ -37,7 +37,9 @@ Three earlier answers failed, each for a reason this design takes in:
 - `check/obsolete-tests-elsewhere` (new): with `wiring` set, a test in a file another component owns that cites a removed requirement must be named by a `deleted-tests.txt`.
 - `check.coverage/pending-report`: such a requirement is pending on each owner of a file that cites it, and its line on its own component is blocked while one of those is left.
 - `orchestrator.run/pending-prompt`: the owner's prompt lists another component's obsolete requirement with the tests to delete, to re-cite after a move, and the markers to take out; the clause that listed it apart on the removing component's prompt goes.
-- `orchestrator`'s Design and five decisions say where an obsolete marker counts.
+- `check.coverage/move-targets` (new): the lookup of where a move took a removed requirement, which was private to the crate.
+- `view/blockers-view`: a component whose obsolete requirement waits on other components' lines is shown under those components.
+- `orchestrator`'s Design and six decisions say where an obsolete marker counts.
 
 ## Constraints
 
@@ -53,9 +55,11 @@ No requirement and no scenario is removed.
 
 ## What the builds do
 
-`check`, then `orchestrator.run`, then `check.coverage`, each by its `#### Needs`.
+`check.coverage` twice: first `move-targets`, which needs nothing and which the check and the prompt both read, then `check`, then `orchestrator.run`, then `check.coverage` again for `pending-report`, then `view`, each by its `#### Needs`.
 
 - `orchestrator.run`'s build rewrites, under their names, the two tests of the scenario "an obsolete test in a file the build may not change" (`crates/clm-run/tests/run.rs` and `prompt.rs`), and removes the code of the listing apart for an obsolete marker, which the requirement no longer states. No test is deleted.
+- The same build takes out of `scenario_stale_marker_in_a_file_the_build_may_not_change` and `a_stale_marker_in_a_wiring_file_is_re_cited`, in `crates/clm-run/tests/run.rs`, their assertions on `b/gone`'s marker in `crates/c/gone.rs`, or gives those fixtures no obsolete marker in `c`'s file: both tests are about a `behind` marker, and where that obsolete marker is listed changes again when `check.coverage` builds `pending-report`, in a file that build may not edit.
+- `check.coverage`'s second build puts the wait on the own ID into `waits_on` from the lines other components hold after the split by owner, never from the set of pending IDs, in which the line's own ID always is; and it drops a move blocker on a line's own component before it adds that wait.
 
 ## Open questions
 
