@@ -139,16 +139,20 @@ pub struct Item {
     /// the current text, or `None` when the earlier text wasn't found.
     pub diffs: Vec<(String, Option<String>)>,
     /// Obsolete: the markers' locations. Behind: the locations of the markers that cite it
-    /// at another version or without one (`stale-markers-keep-behind`), except those of
-    /// `foreign`.
+    /// at another version or without one (`stale-markers-keep-behind`). Either way, except
+    /// those of `foreign`.
     pub markers: Vec<String>,
-    /// Behind, once the root sets `wiring`: the stale markers in a file another component
-    /// owns, each with that owner, which this build may not change (`pending-prompt`).
+    /// Once the root sets `wiring`, the markers in a file another component owns, each with
+    /// that owner, which this build may not change (`pending-prompt`): behind, the stale
+    /// ones; obsolete, every one, none of which `markers` holds.
     pub foreign: Vec<(String, String)>,
-    /// Obsolete: the tests among its markers that an approved `deleted-tests.txt` names
+    /// Obsolete, once the root sets `wiring`: the tests that hold `foreign`'s markers, each
+    /// `<file>::<name>` with its file's owner, in neither `delete` nor `keep`.
+    pub foreign_tests: Vec<(String, String)>,
+    /// Obsolete: the tests among `markers` that an approved `deleted-tests.txt` names
     /// (`land/deleted-tests-approved`), each `<file>::<name>`, which the build deletes.
     pub delete: Vec<String>,
-    /// Obsolete: every other test among its markers, which `clm land` refuses the build to
+    /// Obsolete: every other test among `markers`, which `clm land` refuses the build to
     /// lose, each `<file>::<name>`.
     pub keep: Vec<String>,
 }
@@ -475,7 +479,8 @@ pub fn prompt(job: &Job) -> String {
          that says only `#### Untested` needs no proof. \
          For an `obsolete` requirement, remove the \
          code its markers mark that no other requirement needs (`no-dead-code`), and delete \
-         or keep each of its tests as its entry below says (`removal-needs-a-yes`). {recite} \
+         or keep each of its tests as its entry below says (`removal-needs-a-yes`), leaving \
+         those its entry lists apart in another component's file. {recite} \
          Your build changes only your own component's files: those your component's `tests` match, \
          wherever they sit, and those its `paths` match that no other component's `tests` match \
          (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \
@@ -496,7 +501,8 @@ pub fn prompt(job: &Job) -> String {
          component that an exemption names still holds every other rule, and you add nothing to \
          such a file that the exemption would excuse. For an `obsolete` requirement whose \
          code another component still uses, remove its markers and tests as usual, but keep that \
-         code, with no `clm:remove-by` marker, and add a `deferred` item without `blocks`, whose \
+         code, with no `clm:remove-by` marker (and leave any marker or test its entry lists \
+         apart), and add a `deferred` item without `blocks`, whose \
          `components` name both components and whose body names the kept code, the component \
          that uses it, and that the code goes once that component no longer uses it \
          (`contract-removal-needs`, `deferred-work-resolves-in-code`). Files the root's Design \
@@ -650,11 +656,35 @@ pub fn prompt(job: &Job) -> String {
             }
         }
         if item.state == "obsolete" {
-            p.push_str(&format!(
-                "  A live change removed it; its markers are at {}. Remove the code they mark \
-                 that no other requirement needs.",
-                item.markers.join(", ")
-            ));
+            if item.markers.is_empty() {
+                p.push_str("  A live change removed it.");
+            } else {
+                let yours = if item.foreign.is_empty() {
+                    ""
+                } else {
+                    " in your files"
+                };
+                p.push_str(&format!(
+                    "  A live change removed it; its markers{yours} are at {}. Remove the code \
+                     they mark that no other requirement needs.",
+                    item.markers.join(", ")
+                ));
+            }
+            if !item.foreign.is_empty() {
+                let each: Vec<String> = item
+                    .foreign
+                    .iter()
+                    .chain(&item.foreign_tests)
+                    .map(|(at, owner)| format!("`{at}` in `{owner}`'s file"))
+                    .collect();
+                p.push_str(&format!(
+                    " Leave each of its markers in a file another component owns, and the \
+                     test that holds it: {}. `clm land` refuses this build's edit to such a \
+                     file (`land/build-holds-own-files`); add a `question` item that names each \
+                     such file and blocks nothing, the requirement being gone.",
+                    listing_owned(&each, "and", false)
+                ));
+            }
             if !item.delete.is_empty() {
                 p.push_str(&format!(
                     " Delete the tests an approved list names (`land/deleted-tests-approved`): \
@@ -1347,23 +1377,38 @@ fn job(
         } else {
             Vec::new()
         };
-        // Obsolete: every marker. Behind: those at another version or none, a foreign one apart.
-        let (mut markers, mut foreign) = (Vec::new(), Vec::new());
+        // Obsolete: every marker. Behind: those at another version or none. A foreign one
+        // apart, either way.
+        let (mut own, mut foreign, mut foreign_markers) = (Vec::new(), Vec::new(), Vec::new());
         for m in &p.markers {
-            if p.state != ReqState::Behind {
-                markers.push(m.to_string());
-            } else if m.version != p.version {
-                match foreign_owner(m) {
-                    Some(owner) => foreign.push((m.to_string(), owner.to_string())),
-                    None => markers.push(m.to_string()),
+            if p.state == ReqState::Behind && m.version == p.version {
+                continue;
+            }
+            match foreign_owner(m) {
+                Some(owner) => {
+                    foreign.push((m.to_string(), owner.to_string()));
+                    foreign_markers.push(m);
                 }
+                None => own.push(m),
             }
         }
-        let (delete, keep) = if p.state == ReqState::Obsolete {
+        let markers = own.iter().map(|m| m.to_string()).collect();
+        let (delete, keep, foreign_tests) = if p.state == ReqState::Obsolete {
             let approved = approved.get_or_insert_with(|| approved_lists(tree));
-            obsolete_tests_split(graph, tree, p, approved)
+            let (delete, keep) = obsolete_tests_in(graph, tree, &p.id, &own)
+                .into_iter()
+                .partition(|test| approved_names(approved, test));
+            let foreign_tests = obsolete_tests_in(graph, tree, &p.id, &foreign_markers)
+                .into_iter()
+                .filter_map(|test| {
+                    let file = test.split_once("::").map_or(test.as_str(), |(f, _)| f);
+                    let owner = clm_coverage::owner(graph, Path::new(file))?.to_string();
+                    Some((test, owner))
+                })
+                .collect();
+            (delete, keep, foreign_tests)
         } else {
-            (Vec::new(), Vec::new())
+            (Vec::new(), Vec::new(), Vec::new())
         };
         items.push(Item {
             id: p.id.clone(),
@@ -1372,6 +1417,7 @@ fn job(
             diffs,
             markers,
             foreign,
+            foreign_tests,
             delete,
             keep,
         });
@@ -1415,16 +1461,25 @@ fn approved_lists(tree: &Path) -> Vec<ListLine> {
         .collect()
 }
 
-/// The tests among obsolete `p`'s markers in the tree at `tree`, each `<file>::<name>`: those
-/// an `approved` line names, compared by file and `bare_name` as `clm land` compares them, and
-/// every other one.
-fn obsolete_tests_split(
+/// Whether an `approved` line names `test`, `<file>::<name>`, compared by file and
+/// `bare_name` as `clm land` compares them.
+fn approved_names(approved: &[ListLine], test: &str) -> bool {
+    let (file, name) = test.split_once("::").unwrap_or(("", test));
+    let bare = clm_coverage::bare_name(name);
+    approved
+        .iter()
+        .any(|l| l.file == file && clm_coverage::bare_name(&l.name) == bare)
+}
+
+/// The tests in the tree at `tree` that hold `markers` and cite removed `id`, each
+/// `<file>::<name>`.
+fn obsolete_tests_in(
     graph: &Graph,
     tree: &Path,
-    p: &Pending,
-    approved: &[ListLine],
-) -> (Vec<String>, Vec<String>) {
-    let mut paths: Vec<&PathBuf> = p.markers.iter().map(|m| &m.path).collect();
+    id: &str,
+    markers: &[&clm_coverage::Marker],
+) -> Vec<String> {
+    let mut paths: Vec<&PathBuf> = markers.iter().map(|m| &m.path).collect();
     paths.sort();
     paths.dedup();
     let files: Vec<(PathBuf, String)> = paths
@@ -1433,15 +1488,9 @@ fn obsolete_tests_split(
         .collect();
     clm_coverage::obsolete_tests(graph, &files)
         .into_iter()
-        .filter(|t| t.ids.contains(&p.id))
+        .filter(|t| t.ids.iter().any(|i| i == id))
         .map(|t| t.test)
-        .partition(|test| {
-            let (file, name) = test.split_once("::").unwrap_or(("", test));
-            let bare = clm_coverage::bare_name(name);
-            approved
-                .iter()
-                .any(|l| l.file == file && clm_coverage::bare_name(&l.name) == bare)
-        })
+        .collect()
 }
 
 /// The history of a node's `SPEC.md` up to a revision: its commits, newest first, and each
