@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-subagent-s-pin-moves-when-its-first-record-is-re-recorded]
 ---
 
