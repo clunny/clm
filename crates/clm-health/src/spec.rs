@@ -127,22 +127,29 @@ fn body_offset(node: &Node) -> usize {
     })
 }
 
+/// Each line of `node`'s sections named in `sections`, outside fenced code, with its
+/// 1-based line in the node's spec file.
+pub(crate) fn section_lines<'n>(node: &'n Node, sections: &[&str]) -> Vec<(usize, &'n str)> {
+    let offset = body_offset(node);
+    let body: Vec<&str> = node.source.lines().skip(offset).collect();
+    let mask = fence_mask(&body);
+    section_spans(&body)
+        .iter()
+        .filter(|s| sections.contains(&s.name.as_str()))
+        .flat_map(|s| s.heading + 1..s.end)
+        .filter(|&i| !mask[i])
+        .map(|i| (offset + i + 1, body[i]))
+        .collect()
+}
+
 /// Each line of a node's Contract or Design, outside fenced code, that narrates history.
 pub(crate) fn history_words(graph: &Graph) -> Section {
     let mut lines = Vec::new();
     for node in graph.nodes.values() {
-        let offset = body_offset(node);
-        let body: Vec<&str> = node.source.lines().skip(offset).collect();
-        let mask = fence_mask(&body);
-        for s in section_spans(&body)
-            .iter()
-            .filter(|s| s.name == "Contract" || s.name == "Design")
-        {
-            for i in (s.heading + 1..s.end).filter(|&i| !mask[i]) {
-                if let Some(word) = history_word(body[i]) {
-                    let at = format!("{}:{}", node.path.display(), offset + i + 1);
-                    lines.push(finding(at, "history-words", word));
-                }
+        for (line, text) in section_lines(node, &["Contract", "Design"]) {
+            if let Some(word) = history_word(text) {
+                let at = format!("{}:{line}", node.path.display());
+                lines.push(finding(at, "history-words", word));
             }
         }
     }
