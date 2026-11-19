@@ -8,7 +8,7 @@ status: accepted
 
 It adds a fifth case to the four in which `yes-no-review` has a spec branch need review: the branch cuts something.
 
-**What the gate lists** (`gate/cuts`). From the requirements at a spec branch's merge base and at its head: a requirement that is gone, unless each of its scenarios is moved; a scenario whose name is gone from its requirement, unless it is moved; and a requirement whose statement has fewer sentences that hold `SHALL`. From the changes: each line the branch adds to a `changes/<id>/deleted-tests.txt`. A branch with any of these needs review, and the lines are in `clm gate`'s output, at the top of the pull request's body and in the web review.
+**What the gate lists** (`gate/cuts`). From the requirements at a spec branch's merge base and at its head: a requirement that is gone, unless each of its scenarios is moved; a scenario whose name is gone from its requirement, unless it is moved; a scenario whose outcome changes under its name, since `a-changed-outcome-is-a-cut`; and a requirement whose statement has fewer sentences that hold `SHALL`. From the changes: each line the branch adds to a `changes/<id>/deleted-tests.txt`. A branch with any of these needs review, and the lines are in `clm gate`'s output, at the top of the pull request's body and in the web review.
 
 **Moved, one for one and within the diff.** A gone scenario is moved when the head holds a scenario of that name under another requirement where the base held none, and each such place takes one. So a pass keeps a scenario's name when it rewords or moves it, a move across components sits in one branch, and of two same-named scenarios merged into one requirement, one is listed. Whether the merged scenario states what both did is the reader's question the line asks.
 
@@ -18,7 +18,7 @@ It adds a fifth case to the four in which `yes-no-review` has a spec branch need
 
 **What `clm land` refuses** (`land/deleted-tests-approved`). Any code branch, whatever its name, that leaves the tree with fewer citing tests of a name and no list naming the test. A moved test is not gone, nor, since `renamed-test-keeps-its-citations`, is a test renamed in its own file that cites every requirement it cited; any other renamed test is. A test of a name counts too where an uncited test of that name in its file may have gained a marker in its place (amended by `20261119-a-cited-test-deleted`); `renamed-test-keeps-its-citations` gives the exact counting.
 
-**What stays a reader's.** A reword that keeps the count of sentences; a sentence of behaviour worded like one that places a test; whether a merged scenario states what two did; and whether a test asserts what its requirement says, which is the judge audit's.
+**What stays a reader's.** A reword of a statement that keeps the count of sentences; a sentence of behaviour worded like one that places a test; whether a merged scenario states what two did; and whether a test asserts what its requirement says, which is the judge audit's.
 
 Considered:
 - **The gate reading names only.** Rejected: the first draft of `20261118-affected-by-the-rule` moved two library offerings out of their requirements with every scenario name kept.
