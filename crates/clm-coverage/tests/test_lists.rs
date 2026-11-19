@@ -221,8 +221,8 @@ fn a_rename_takes_only_a_name_no_base_test_carries() {
     ]);
     let head = files(&[(TESTS, rust_test("kept", true) + &rust_test("fresh", false))]);
     assert_eq!(names(&deleted_tests(&base, &head)), ["tests/t.rs::two"]);
-    // A base test of that name with no marker makes it an old name too, in another file
-    // as in its own.
+    // A base test of that name with no marker in another file makes it an old name too
+    // (in its own file: `scenario_a_test_that_gains_its_first_marker`).
     let base = files(&[
         (TESTS, rust_test("two", true)),
         ("tests/u.rs", rust_test("second", false)),

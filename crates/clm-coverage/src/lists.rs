@@ -192,23 +192,23 @@ pub fn deleted_tests(
                 .or_default() += 1;
         }
     }
-    // By bare name, then by file in sorted order, each file's tests in line order.
+    // The citing tests by bare name, then by file in sorted order, each file's tests in line
+    // order; and every bare name a base test carries, cited or not, which no rename takes.
     let mut base: BTreeMap<String, BTreeMap<&Path, Vec<FileTest>>> = BTreeMap::new();
+    let mut base_names: BTreeSet<String> = BTreeSet::new();
     for (path, text) in base_files {
-        for c in citing_tests(path, text) {
-            base.entry(bare_name(&c.name))
-                .or_default()
-                .entry(path.as_path())
-                .or_default()
-                .push(c);
+        for c in file_tests(path, text) {
+            let name = bare_name(&c.name);
+            base_names.insert(name.clone());
+            if !c.ids.is_empty() {
+                base.entry(name)
+                    .or_default()
+                    .entry(path.as_path())
+                    .or_default()
+                    .push(c);
+            }
         }
     }
-    // Every bare name a base test carries, cited or not: a head test of one is no rename.
-    let base_names: BTreeSet<String> = base_files
-        .iter()
-        .flat_map(|(path, text)| file_tests(path, text))
-        .map(|c| bare_name(&c.name))
-        .collect();
     let none = BTreeMap::new();
     let mut out = Vec::new();
     for (name, by_file) in base {
