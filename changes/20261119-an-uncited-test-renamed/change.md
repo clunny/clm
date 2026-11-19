@@ -21,18 +21,20 @@ A test the base held with no marker, renamed in its file as it gains one, can no
 
 ## Outcome
 
-- `check.coverage/test-lists` (modified): defines a *new* test of a file (bare name no base test carries, marker or not) and a gone *unmarked* test (no marker at the base, bare name no test of `head_files` carries), and caps the tests counted renamed in a file at its new tests less its gone unmarked tests. Three scenarios added: *an uncited test renamed as it gains its first marker* (the item's case, reported gone), *an uncited test renamed to a name it doesn't cite under* (nothing returned) and *an uncited test deleted beside a rename* (the rename reported gone).
+- `check.coverage/test-lists` (modified): defines a *new* test of a file (bare name no base test carries, marker or not) and a file's gone *unmarked* tests (per bare name, how many more unmarked tests of that name the file holds at the base than tests of it at the head, counted per file as citing tests are counted by name, so a name another file carries or two unmarked tests of one name hide nothing), leaves groups out on both sides, and caps the tests counted renamed in a file at its new tests less its gone unmarked tests. Three scenarios added: *an uncited test renamed as it gains its first marker* (the item's case, reported gone), *an uncited test renamed to a name it doesn't cite under* (nothing returned) and *an uncited test deleted beside a rename* (the rename reported gone).
 - `docs/decisions/renamed-test-keeps-its-citations.md` states the rule as amended.
 
 ## Constraints
 
 - `deleted_tests`' signature and return type stay as they are; `clm land`, `clm land --check-only` and `clm coverage --deleted-tests` change only through what it returns. `land/deleted-tests-approved`'s message ("under a new name in its file citing every requirement it cited") still reads right.
 - Every scenario of `test-lists` as it stands keeps its outcome: none has a gone unmarked test.
+- `check.coverage/test-lists` relies on no requirement that isn't current, and no capability test sees a difference (builder check).
 
 ## Edge cases and workarounds
 
 - A branch that deletes an unmarked test and renames a citing test in the same file is refused, though nothing was hidden (*an uncited test deleted beside a rename*). It errs toward refusing; the build deletes the unmarked test on a branch of its own, keeps the citing test's name, or the change lists it. An unmarked test is rarely deleted on a branch that renames its neighbour.
-- An unmarked test moved to another file under its name is not a gone unmarked test, since `head_files` carry its name; `clm land` passes only the files the branch touches, and a move touches both files.
+- An unmarked test moved to another file is a gone unmarked test of the file it left, since the count is per file: a branch that moves an unmarked test out of a file and renames a citing test in it is refused. It errs toward refusing; the build moves it on a branch of its own. Counting across files would let a name another touched file carries hide the item's case again.
+- `crates/clm-coverage/tests/test_lists.rs`'s shared `base()` fixture holds an unmarked `quiet`, so `scenario_a_renamed_test`, whose head drops it, would now see a gone unmarked test: the build gives that test the scenario's own base, with no `quiet`. The doc comment on `deleted_tests` follows the requirement.
 
 ## Open questions
 
