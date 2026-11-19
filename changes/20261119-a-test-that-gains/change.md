@@ -29,3 +29,6 @@ A test the base held with no marker can no longer stand for a deleted test by ga
 
 - `land/deleted-tests-approved` is unchanged: its message's "under a new name in its file citing every requirement it cited" still reads right, a new name being one the base never held.
 - Edge cases known: a test renamed to a name an unrelated test in another base file carries is now reported gone (errs toward refusing; the build picks another name or the change lists it).
+- Edge case known: a test renamed to the name of an unmarked base test that the same branch deletes is reported gone too, for the same reason.
+- Scope at the land: `clm land` passes `deleted_tests` only the files the branch touches, so "no base test carries" looks across those; a move from another file touches both, so the unmarked-test-moved-in case is still caught.
+- `docs/guide/how-it-works.md`'s sentence on renaming a test now says the new name must be one no test held before (`method-in-the-plugin`, from the architecture audit).
