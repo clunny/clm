@@ -311,8 +311,9 @@ pub async fn compare<P: Platform>(
     let repo = access.full_name();
     let auth = access.auth();
     // Named anew when the comparison changes shape or meaning, so none cached before is
-    // served: `compare5:` since `review` counts cuts and the review lists them (`pr-review`).
-    let key = format!("compare5:{repo}@{base_sha}:{head_sha}");
+    // served: `compare6:` since the cuts are read from the gate's files alone, and a side
+    // whose specs don't load gives the gate's one line (`pr-review`).
+    let key = format!("compare6:{repo}@{base_sha}:{head_sha}");
     if let Some(c) = p
         .cache_get(&key)
         .await
@@ -381,15 +382,9 @@ pub async fn compare<P: Platform>(
         })
         .collect();
 
-    let cuts: Vec<String> = clm_gate::cuts(
-        &base,
-        &head,
-        &test_lists(&base_files, &head_files, &changed),
-    )
-    .iter()
-    .map(ToString::to_string)
-    .collect();
+    let cuts = listed_cuts(&trees, &base_files, &head_files, &changed);
     let review = needs_review(&trees, setting, &head_files)
+        || withheld_list(&trees, &head_files)
         || !cuts.is_empty()
         || !clm_gate::widened_exemptions(&base, &head).is_empty();
     let comparison = Comparison {
@@ -407,6 +402,91 @@ pub async fn compare<P: Platform>(
     Some(comparison)
 }
 
+/// What `clm gate` lists of the branch's cuts (`gate/cuts`): `clm_gate::cuts_or_unloaded`
+/// over graphs loaded from only the files the gate loads, read only when a changed path is
+/// under `specs/` or is a list the head holds, as the gate reads them, and none when either
+/// listing is truncated, since they would be read from part of the files.
+fn listed_cuts(
+    trees: &Trees,
+    base_files: &Files,
+    head_files: &Files,
+    changed: &BTreeSet<PathBuf>,
+) -> Vec<String> {
+    if trees.base.truncated || trees.head.truncated {
+        return Vec::new();
+    }
+    let read = trees
+        .head
+        .changed_paths(&trees.base)
+        .iter()
+        .any(|p| p.starts_with("specs/") || (test_list_id(p).is_some() && trees.head.has(p)));
+    if !read {
+        return Vec::new();
+    }
+    let (base, base_violations) = cut_graph(base_files);
+    let (head, head_violations) = cut_graph(head_files);
+    clm_gate::cuts_or_unloaded(
+        &clm_gate::Side {
+            graph: &base,
+            violations: &base_violations,
+            revision: &trees.merge_base,
+        },
+        &clm_gate::Side {
+            graph: &head,
+            violations: &head_violations,
+            revision: &trees.head_sha,
+        },
+        &test_lists(base_files, head_files, changed),
+    )
+    .iter()
+    .map(ToString::to_string)
+    .collect()
+}
+
+/// The graph the gate reads cuts from, and the violations loading it gave: `specs/`, the
+/// two human layers and the live `changes/<id>/change.md` files, and no other file, so a
+/// backlog item or a decision the gate never sees doesn't keep the cuts from being read.
+fn cut_graph(files: &Files) -> (Graph, Vec<clm_model::Violation>) {
+    let gate_reads = |path: &Path| {
+        path.to_str().is_some_and(|path| {
+            path.starts_with("specs/")
+                || path == "ARCHITECTURE.md"
+                || path == "CAPABILITIES.md"
+                || path
+                    .strip_prefix("changes/")
+                    .and_then(|rest| rest.split_once('/'))
+                    .is_some_and(|(id, rest)| id != "archive" && rest == "change.md")
+        })
+    };
+    let files: Files = files
+        .iter()
+        .filter(|(path, _)| gate_reads(path))
+        .map(|(path, bytes)| (path.clone(), bytes.clone()))
+        .collect();
+    clm_model::load_files(&files)
+}
+
+/// A list the head holds, among the paths whose entries differ, whose text GitHub withholds
+/// (a binary blob, or one that isn't UTF-8): what it cuts can't be read, so the branch
+/// needs review.
+fn withheld_list(trees: &Trees, head_files: &Files) -> bool {
+    trees.head.changed_paths(&trees.base).iter().any(|p| {
+        test_list_id(p).is_some()
+            && trees.head.has(p)
+            && head_files
+                .get(Path::new(p))
+                .is_none_or(|b| std::str::from_utf8(b).is_err())
+    })
+}
+
+/// The change ID of a list's path, `changes/[archive/]<id>/deleted-tests.txt`.
+fn test_list_id(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix("changes/")?;
+    let rest = rest.strip_prefix("archive/").unwrap_or(rest);
+    let (id, name) = rest.split_once('/')?;
+    (name == "deleted-tests.txt" && id != "archive").then_some(id)
+}
+
 /// Each change's `deleted-tests.txt` among the changed files the head holds, live or
 /// archived (`changes/[archive/]<id>/deleted-tests.txt`), with its text at the head and at
 /// the base: for an archived list with no text of its own at the base, the live list's, as
@@ -416,12 +496,6 @@ fn test_lists<'a>(
     head: &'a Files,
     changed: &'a BTreeSet<PathBuf>,
 ) -> Vec<clm_gate::TestList<'a>> {
-    let id = |path: &str| -> Option<String> {
-        let rest = path.strip_prefix("changes/")?;
-        let rest = rest.strip_prefix("archive/").unwrap_or(rest);
-        let (id, name) = rest.split_once('/')?;
-        (name == "deleted-tests.txt" && id != "archive").then(|| id.to_string())
-    };
     let utf8 = |files: &'a Files, path: &Path| -> Option<&'a str> {
         files.get(path).and_then(|b| std::str::from_utf8(b).ok())
     };
@@ -429,14 +503,14 @@ fn test_lists<'a>(
         .iter()
         .filter_map(|path| {
             let name = path.to_str()?;
-            let id = id(name)?;
+            let id = test_list_id(name)?;
             let head = utf8(head, path)?;
             let base = utf8(base, path).or_else(|| {
                 name.starts_with("changes/archive/")
                     .then(|| {
                         utf8(
                             base,
-                            &Path::new("changes").join(&id).join("deleted-tests.txt"),
+                            &Path::new("changes").join(id).join("deleted-tests.txt"),
                         )
                     })
                     .flatten()
