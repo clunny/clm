@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 
 use clm_gate::{
-    Cut, TestList, cuts, list_lines, places_a_test, stating_sentences, widened_exemptions,
+    Cut, Side, TestList, cuts, cuts_or_unloaded, list_lines, places_a_test, stating_sentences,
+    widened_exemptions,
 };
 use clm_model::Graph;
 
@@ -51,7 +52,7 @@ const X: &str = "X SHALL hold.";
 
 #[test]
 fn scenario_from_two_graphs() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
     let found = cuts(&base, &head, &[]);
@@ -74,7 +75,7 @@ fn scenario_from_two_graphs() {
 
 #[test]
 fn a_gone_requirement_and_its_order() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let two = format!(
         "{}{}",
         requirement("x", X, &["first"]),
@@ -100,7 +101,7 @@ fn a_gone_requirement_and_its_order() {
 
 #[test]
 fn moved_to_another_component() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let base = graph(&[
         ("a", "", requirement("x", X, &["the chain"])),
         ("b", "", requirement("y", X, &["other"])),
@@ -114,7 +115,7 @@ fn moved_to_another_component() {
 
 #[test]
 fn two_requirements_merged() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let base = graph(&[(
         "a",
         "",
@@ -133,7 +134,7 @@ fn two_requirements_merged() {
 
 #[test]
 fn a_name_another_requirement_already_held() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let base = graph(&[
         ("a", "", requirement("x", X, &["s", "not switched on"])),
         ("b", "", requirement("y", X, &["not switched on"])),
@@ -150,7 +151,7 @@ fn a_name_another_requirement_already_held() {
 
 #[test]
 fn a_renamed_scenario_is_listed() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first", "the second one"]))]);
     assert_eq!(
@@ -161,7 +162,7 @@ fn a_renamed_scenario_is_listed() {
 
 #[test]
 fn sentences_that_state_and_sentences_that_place() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     assert_eq!(
         stating_sentences(
             "The command SHALL print the list. It SHALL exit 1 when the list is empty."
@@ -209,7 +210,7 @@ fn sentences_that_state_and_sentences_that_place() {
 
 #[test]
 fn a_lost_sentence_and_a_reworded_one() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let two = "The command SHALL print the list. It SHALL exit 1 when the list is empty.";
     let base = graph(&[("a", "", requirement("x", two, &["s"]))]);
     let head = graph(&[(
@@ -242,7 +243,7 @@ fn a_lost_sentence_and_a_reworded_one() {
 
 #[test]
 fn list_lines_read_file_and_name() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let text = "# tests to delete\n\nDELETE tests/t.rs::two\tmerged into a/y\r\nremove the old ones\nDELETE b.rs::mod::three\n";
     let found: Vec<(String, String)> = list_lines(text)
         .into_iter()
@@ -259,7 +260,7 @@ fn list_lines_read_file_and_name() {
 
 #[test]
 fn tests_a_list_adds() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let g = graph(&[("a", "", requirement("x", X, &["s"]))]);
     let lists = [
         TestList {
@@ -290,13 +291,64 @@ fn tests_a_list_adds() {
 
 #[test]
 fn the_unloaded_line() {
-    // req:gate/cuts@e97edf05
+    // req:gate/cuts@02dbf77f
     let cut = Cut::Unloaded {
         revision: "abc123".into(),
     };
     assert_eq!(
         cut.to_string(),
         "specs: gate/cut: the specs at abc123 don't load, so what the branch cuts isn't listed"
+    );
+}
+
+#[test]
+fn cuts_or_unloaded_lists_by_the_rule_for_specs_that_dont_load() {
+    // req:gate/cuts@02dbf77f
+    let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
+    let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
+    let broken = [clm_model::Violation {
+        path: PathBuf::from("specs/a/SPEC.md"),
+        rule: "model/scenario",
+        message: "a requirement holds no scenario".into(),
+    }];
+    let side = |graph, violations, revision| Side {
+        graph,
+        violations,
+        revision,
+    };
+    let list = [TestList {
+        path: "changes/c/deleted-tests.txt",
+        head: "DELETE tests/t.rs::two\n",
+        base: None,
+    }];
+    // both load: what `cuts` gives
+    assert_eq!(
+        cuts_or_unloaded(&side(&base, &[], "b1"), &side(&head, &[], "h1"), &list),
+        cuts(&base, &head, &list)
+    );
+    // the head doesn't load: the one line naming it, then the lists' tests
+    let none = Graph::default();
+    assert_eq!(
+        lines(&cuts_or_unloaded(
+            &side(&base, &[], "b1"),
+            &side(&none, &broken, "h1"),
+            &list
+        )),
+        [
+            "specs: gate/cut: the specs at h1 don't load, so what the branch cuts isn't listed",
+            "changes/c/deleted-tests.txt: gate/cut: test tests/t.rs::two is to be deleted",
+        ]
+    );
+    // both fail: the merge base is named, once
+    assert_eq!(
+        cuts_or_unloaded(
+            &side(&none, &broken, "b1"),
+            &side(&none, &broken, "h1"),
+            &[]
+        ),
+        [Cut::Unloaded {
+            revision: "b1".into()
+        }]
     );
 }
 

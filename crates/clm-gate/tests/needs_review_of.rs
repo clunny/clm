@@ -64,8 +64,8 @@ fn the_gate_decides_review_by_needs_review_of() {
     let lib: String = lib.split_whitespace().collect::<Vec<_>>().join(" ");
     for decides in [
         "=> { needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty() }",
-        "let widened = !widened_exemptions(&base, &head).is_empty();",
-        "Ok((cuts(&base, &head, &lists), Some(widened)))",
+        "loaded.then(|| !widened_exemptions(&base, &head).is_empty());",
+        "Ok((listed, widened))",
     ] {
         assert!(lib.contains(decides), "lib.rs doesn't hold {decides}");
     }

@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use clm_model::{Exemption, Graph, Node, Requirement};
+use clm_model::{Exemption, Graph, Node, Requirement, Violation};
 
 /// The phrases that mark a sentence as one that places a test, which a requirement may lose
 /// with no separate yes (`cuts-are-what-a-program-lists`). A constant, changed by a code PR.
@@ -37,7 +37,7 @@ pub enum Cut {
         file: String,
         name: String,
     },
-    /// The specs at `revision` don't load, so the cuts can't be read; `evaluate_at` adds it.
+    /// The specs at `revision` don't load, so the cuts can't be read; `cuts_or_unloaded` adds it.
     Unloaded { revision: String },
 }
 
@@ -332,6 +332,30 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
         .chain(shortened)
         .chain(tests)
         .collect()
+}
+
+/// One side of a branch, its merge base or its head: the spec graph loaded there, the
+/// violations its loading gave, and the revision as `clm gate` prints it.
+#[derive(Debug, Clone, Copy)]
+pub struct Side<'a> {
+    pub graph: &'a Graph,
+    pub violations: &'a [Violation],
+    pub revision: &'a str,
+}
+
+/// What `clm gate` lists of a branch's cuts (`cuts`): when a side's graph loaded with any
+/// violation, the one cut that says the specs there don't load, naming the merge base when
+/// both fail, then the tests the lists add, which need no graph; otherwise `cuts`' result.
+pub fn cuts_or_unloaded(base: &Side, head: &Side, lists: &[TestList]) -> Vec<Cut> {
+    let Some(unloaded) = [base, head].into_iter().find(|s| !s.violations.is_empty()) else {
+        return cuts(base.graph, head.graph, lists);
+    };
+    let none = Graph::default();
+    std::iter::once(Cut::Unloaded {
+        revision: unloaded.revision.to_string(),
+    })
+    .chain(cuts(&none, &none, lists))
+    .collect()
 }
 
 /// Each exemption a component of `head` holds whose `files` aren't all among the `files` of
