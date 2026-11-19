@@ -34,8 +34,18 @@ A test renamed in its own file that still cites every requirement it cited is no
 ## Edge cases and workarounds
 
 - Greedy matching in returned order can miss a pairing that exists (a gone test citing `a/x` takes the only new test citing `a/x` and `a/y`, leaving a gone test citing both unmatched). It errs toward refusing, which the build answers by keeping a name; a full matching isn't worth its code for a case not met.
+- `base_files` is what the caller passes: `clm land` passes only the files the branch touches, `clm coverage --deleted-tests` the whole tree. So a new name that only an untouched file's test carries at the base counts as new for the land and not for `clm coverage`. Accepted: the name is new in the file the rename happens in, which is what the land judges.
+- A test that held no marker at the base and gains one counts as a new name, so deleting a citing test and putting its marker on an uncited test in the same file passes. Intended: it is the same as rewriting the gone test's body under its name.
+- Until this is built, `clm land` runs `main`'s `clm`, which still refuses a rename, so the build renames no citing test of its own: it keeps `a_renamed_test_refuses_the_land` under its name, re-cited to *a renamed test that drops its citation*, where the name stays true, and adds a test for *a renamed test* landing. The fixture of `scenario_a_renamed_test` in `crates/clm-coverage/tests/test_lists.rs` becomes *a renamed test that cites less*, and the doc comment on `deleted_tests` follows the Contract.
 - The two tests the item names (`page_open_exits_2_when_gh_fails`, `a_failing_gh_pr_view_exits_2_and_opens_nothing`) need no follow-up item: `20261118-a-failed-pull-request`, applied, has `host`'s build make that failure exit 2 again, which makes their names true; that build owns the comment beside the first.
+
+## What the requirements no longer state
+
+- `check.coverage/test-lists`: that a renamed test is gone (the clause "and a renamed test, a deleted one, and one that loses its last marker each are" now lists only a rename that also moves the test or cites less), and its scenario *a renamed test*'s outcome "it returns `tests/t.rs::two`, since a program can't tell a rename from a removal", now "it returns nothing".
+- `land/deleted-tests-approved`: its scenario *a renamed test*'s outcome "it exits 1 naming `two` under `land/deleted-tests-approved`", now "it lands" for a rename that keeps its marker.
+- `cuts-are-what-a-program-lists`: "A renamed test is: a build keeps a test's name."
 
 ## Open questions
 
-- None.
+- **This relaxes a check `removal-needs-a-yes` cites, and the gate doesn't see it.** The scenarios keep their names and no `SHALL` sentence is dropped, so `clm gate` prints `spec` and lists no cut; the architecture audit found that whether the human said yes to dropping the refusal of a rename rests on the session. This draft ran unattended, so the human hasn't: it is left for review rather than landed on checks.
+- `plugin/skills/propose/SKILL.md` says the land refuses any renamed test; it is prompt text a spec branch can't edit, so `backlog/the-propose-skill-says-the-land-refuses-every-renamed-test` (`kind: deferred`, `plugin`) carries it. The guide pages `docs/spec-format.md` and `docs/guide/how-it-works.md` are reworded here.
