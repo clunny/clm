@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [gate-cuts-leaves-its-matching-rules-unwritten, obsolete-tests-in-another-components-file-are-listed-to-change, the-review-shows-no-cut-when-the-specs-dont-load, a-resent-pull-request-body-gains-a-second-cuts-section]
 ---
 
