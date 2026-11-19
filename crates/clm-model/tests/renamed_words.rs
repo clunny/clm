@@ -292,7 +292,7 @@ fn an_item_with_both_keys_is_rejected() {
 
 #[test]
 fn the_old_kind_names_load_and_print_as_the_new() {
-    // req:model/parse-backlog@acf8c931
+    // req:model/parse-backlog@18344ef2
     let flag = |kind: &str, requirement: String| {
         format!("---\ntitle: T\nkind: {kind}\n{requirement}---\n")
     };

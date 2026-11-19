@@ -6,8 +6,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::change::has_key;
+use crate::change::{ChangeStatus, has_key};
 use crate::files::{Files, children, text};
+use crate::layers::Layer;
 use crate::priority::Priority;
 use crate::{Graph, Violation, split_frontmatter, v};
 
@@ -424,12 +425,43 @@ pub(crate) fn blockable(graph: &Graph, id: &str) -> bool {
             .any(|d| d.added.iter().any(|r| r.slug == slug))
 }
 
+/// Whether a `blocks` entry may name `id`, which [`blockable`] doesn't allow, because a
+/// change outside the archive whose `status` is `applied` or `implementing` removes it: a
+/// loaded delta for its node removes requirement `<node>/<slug>` under
+/// `## REMOVED Requirements`, or the change lists `<slug>` of `capability/<slug>` under
+/// `removes_capabilities`. An `architecture/<slug>` entry gets no such allowance. So a
+/// build that can't delete or re-cite a test of an obsolete requirement files an item that
+/// holds its line until the change is archived (`requirement-blocks`).
+fn removed_by_an_applied_change(graph: &Graph, id: &str) -> bool {
+    let Some((node, slug)) = id.split_once('/') else {
+        return false;
+    };
+    let mut applied = graph.changes.values().filter(|c| {
+        !c.archived
+            && matches!(
+                c.frontmatter.status,
+                ChangeStatus::Applied | ChangeStatus::Implementing
+            )
+    });
+    match Layer::of(id) {
+        Some(Layer::Capability) => {
+            applied.any(|c| c.frontmatter.removes_capabilities.iter().any(|s| s == slug))
+        }
+        Some(Layer::Architecture) => false,
+        None => applied
+            .flat_map(|c| &c.deltas)
+            .filter(|d| d.node == node)
+            .any(|d| d.removed.iter().any(|r| r.slug == slug)),
+    }
+}
+
 /// Checks each backlog item's node, origin, `blocks` and `requirement` references against
 /// `graph`. A node may also be one that a `create: true` delta of a change outside the
 /// archive creates, so a spec PR can file items naming the node it adds
-/// (`backlog-nodes`). A `blocks` entry must name a requirement that exists or that a live
-/// change adds, so the spec PR that removes a requirement edits the items that block it
-/// (`requirement-blocks`). A workaround flag must name a requirement that exists at its
+/// (`backlog-nodes`). A `blocks` entry must name a requirement that exists, that a live
+/// change adds, or that a change outside the archive at `applied` or `implementing`
+/// removes (a capability by `removes_capabilities`), so the spec PR that removes a
+/// requirement edits the items that block it (`requirement-blocks`). A workaround flag must name a requirement that exists at its
 /// current version, so the spec change that removes or rewrites one deletes its flags or
 /// re-records them (`workaround-flags`).
 pub(crate) fn check_backlog(graph: &Graph, violations: &mut Vec<Violation>) {
@@ -450,12 +482,12 @@ pub(crate) fn check_backlog(graph: &Graph, violations: &mut Vec<Violation>) {
             ));
         }
         for id in &fm.blocks {
-            if !blockable(graph, id) {
+            if !blockable(graph, id) && !removed_by_an_applied_change(graph, id) {
                 violations.push(v(
                     path,
                     BACKLOG,
                     format!(
-                        "`blocks` names `{id}`, which isn't a requirement or one a live change adds"
+                        "`blocks` names `{id}`, which isn't a requirement, one a live change adds or one an applied change removes"
                     ),
                 ));
             }

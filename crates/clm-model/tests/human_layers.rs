@@ -450,7 +450,7 @@ fn need_on_entry_rejected() {
 
 #[test]
 fn blocks_may_name_an_entry() {
-    // req:model/parse-backlog@acf8c931
+    // req:model/parse-backlog@18344ef2
     let item = "---\ntitle: T\nkind: question\nblocks: [capability/approve, architecture/single-source]\n---\n";
     clean(&[
         ("ARCHITECTURE.md", &architecture(GIT_IS_TRUTH)),
@@ -468,6 +468,85 @@ fn blocks_may_name_an_entry() {
         "model/parse-backlog",
         "backlog/x.md",
         &["capability/nope"],
+    );
+}
+
+/// A change `c` at `status` that removes capability `gone` and constraint
+/// `single-source`, which neither layer file holds.
+fn removing_gone(status: &str) -> String {
+    format!("---\nstatus: {status}\nremoves_capabilities: [gone, single-source]\n---\n")
+}
+
+#[test]
+fn blocks_a_removed_capability() {
+    // req:model/parse-backlog@18344ef2
+    let item = "---\ntitle: T\nkind: question\nblocks: [capability/gone]\n---\n";
+    for status in ["applied", "implementing"] {
+        let graph = clean(&[
+            ("CAPABILITIES.md", &capabilities(APPROVE)),
+            ("backlog/q.md", item),
+            ("changes/c/change.md", &removing_gone(status)),
+        ]);
+        assert_eq!(graph.backlog["q"].frontmatter.blocks, ["capability/gone"]);
+    }
+    for status in ["proposed", "approved", "done", "abandoned"] {
+        one_violation(
+            &[
+                ("CAPABILITIES.md", &capabilities(APPROVE)),
+                ("backlog/q.md", item),
+                ("changes/c/change.md", &removing_gone(status)),
+            ],
+            "model/parse-backlog",
+            "backlog/q.md",
+            &["capability/gone"],
+        );
+    }
+    // Only a change outside the archive allows it.
+    one_violation(
+        &[
+            ("CAPABILITIES.md", &capabilities(APPROVE)),
+            ("backlog/q.md", item),
+            ("changes/archive/c/change.md", &removing_gone("applied")),
+        ],
+        "model/parse-backlog",
+        "backlog/q.md",
+        &["capability/gone"],
+    );
+}
+
+#[test]
+fn a_removed_entry_allows_no_architecture_block_or_enforcing_rule() {
+    // req:model/parse-backlog@18344ef2
+    // `architecture/<slug>` gains nothing from `removes_capabilities`.
+    one_violation(
+        &[
+            ("ARCHITECTURE.md", &architecture("")),
+            (
+                "backlog/q.md",
+                "---\ntitle: T\nkind: question\nblocks: [architecture/single-source]\n---\n",
+            ),
+            ("changes/c/change.md", &removing_gone("applied")),
+        ],
+        "model/parse-backlog",
+        "backlog/q.md",
+        &["architecture/single-source"],
+    );
+    // Nor does `#### Enforced by` name a requirement an applied change removed.
+    let a = "---\ntitle: A\nstatus: active\nowners: []\n---\n";
+    let removes = "---\ncomponent: a\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0123456789abcdef -->\n";
+    one_violation(
+        &[
+            (
+                "ARCHITECTURE.md",
+                &architecture(&ENFORCED.replace("- a/y\n- b/z\n", "- a/gone\n")),
+            ),
+            ("specs/a/SPEC.md", a),
+            ("changes/c/change.md", "---\nstatus: applied\n---\n"),
+            ("changes/c/deltas/a.md", removes),
+        ],
+        "model/human-layers",
+        "ARCHITECTURE.md",
+        &["a/gone"],
     );
 }
 
@@ -538,7 +617,7 @@ fn load_files_same_as_load() {
 
 #[test]
 fn friction_may_flag_an_entry() {
-    // req:model/parse-backlog@acf8c931
+    // req:model/parse-backlog@18344ef2
     let version = &content_hash(APPROVE)[..8];
     let flag = |v: &str| {
         format!("---\ntitle: T\nkind: friction\nrequirement: capability/approve@{v}\n---\n")
