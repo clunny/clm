@@ -72,8 +72,8 @@ pub fn pr_open(
         })
 }
 
-/// `error`, ending `; the body is kept at <path>` once `text` is written there; unchanged
-/// when it can't be written.
+/// `error`, ending `; the body is kept at <path>` once `text` is written there, as a refusal
+/// so `clm pr open` exits 1 naming it; unchanged when it can't be written.
 fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
     if matches!(error, Error::Nowhere(_)) {
         return error;
@@ -83,8 +83,7 @@ fn keeping(root: &Path, branch: &str, text: &str, error: Error) -> Error {
     };
     let note = |why: String| format!("{why}; the body is kept at {}", path.display());
     match error {
-        Error::Refused(why) => Error::Refused(note(why)),
-        Error::Git(why) => Error::Git(note(why)),
+        Error::Refused(why) | Error::Git(why) => Error::Refused(note(why)),
         Error::Nowhere(report) => Error::Nowhere(report),
     }
 }

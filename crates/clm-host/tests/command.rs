@@ -175,7 +175,7 @@ fn scenario_a_command_called_in_a_test() {
     );
     let env = [("FAKE_CREATE_EXIT", "1")];
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
-    assert_eq!((code, out.as_str()), (Some(2), ""), "{err}");
+    assert_eq!((code, out.as_str()), (Some(1), ""), "{err}");
     assert!(err.starts_with("clm pr open: "), "{err}");
     git(&r.work, &["checkout", "-q", "main"]);
     let (code, out, err) = clm(&r.work, &gh, &["branch", "push"], &[]);
@@ -862,12 +862,14 @@ fn page_open_after_a_merged_page_opens_another() {
 }
 
 #[test]
-fn page_open_exits_2_when_gh_fails() {
+fn page_open_exits_1_naming_the_kept_body_when_gh_fails() {
     // req:host/pr-open@bdaae01c
+    // req:host/keep-unopened-body@34bd03be
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
-    assert_eq!(code, Some(2), "{err}");
+    assert_eq!(code, Some(1), "{err}");
     assert!(err.contains("create failed"), "{err}");
+    assert!(err.trim_end().ends_with("pr-bodies/spec-x.md"), "{err}");
 }
 
 #[test]
@@ -955,6 +957,7 @@ fn scenario_pr_open_a_branch_without_cuts() {
 #[test]
 fn pr_open_exits_1_when_the_gate_cant_be_evaluated() {
     // req:host/pr-open@bdaae01c
+    // req:host/keep-unopened-body@34bd03be
     let (r, gh) = (checkout("github"), fake_gh());
     let args = [
         "pr",
@@ -1008,9 +1011,10 @@ fn the_gate_waits_for_the_checks_before_it() {
 #[test]
 fn a_body_that_fails_to_open_is_kept_with_its_cuts() {
     // req:host/pr-open@bdaae01c
+    // req:host/keep-unopened-body@34bd03be
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
-    assert_eq!(code, Some(2), "{err}");
+    assert_eq!(code, Some(1), "{err}");
     let (_, kept) = err.split_once("the body is kept at ").expect(&err);
     let kept = fs::read_to_string(kept.trim()).unwrap();
     assert_eq!(kept, format!("{CUTS}The body\n"));
@@ -1285,16 +1289,20 @@ fn page_body_without_an_open_page_exits_1() {
 }
 
 #[test]
-fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
+fn a_failing_gh_pr_view_opens_nothing() {
     // req:host/pr-body@a7b89523
     // req:host/pr-open@bdaae01c
+    // req:host/keep-unopened-body@34bd03be
     let (r, gh) = (checkout("github"), fake_gh());
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
     let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &env);
     assert_eq!(code, Some(2), "{err}");
     assert!(err.contains("Bad credentials"), "{err}");
+    // `pr open` keeps the body it couldn't send, and exits 1 naming the copy.
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
-    assert_eq!(code, Some(2), "{err}");
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("Bad credentials"), "{err}");
+    assert!(err.trim_end().ends_with("pr-bodies/spec-x.md"), "{err}");
     assert!(
         !gh.calls().iter().any(|c| !c.starts_with("pr view")),
         "{:?}",

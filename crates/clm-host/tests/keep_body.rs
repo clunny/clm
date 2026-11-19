@@ -92,7 +92,7 @@ fn message(e: Error) -> String {
 
 #[test]
 fn the_host_refuses() {
-    // req:host/keep-unopened-body@a8937350
+    // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
         let why = message(open(Host::Azure, root).unwrap_err());
         let path = kept(&root.join(".git").canonicalize().unwrap());
@@ -107,7 +107,7 @@ fn the_host_refuses() {
 
 #[test]
 fn a_later_failure_replaces_the_copy() {
-    // req:host/keep-unopened-body@a8937350
+    // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
         open(Host::Azure, root).unwrap_err();
         fs::write(root.join(".clm/pr-body.md"), "## Second").unwrap();
@@ -119,7 +119,7 @@ fn a_later_failure_replaces_the_copy() {
 
 #[test]
 fn from_a_linked_worktree() {
-    // req:host/keep-unopened-body@a8937350
+    // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
         let linked = TempDir::new().unwrap();
         let tree = linked.path().join("tree");
@@ -149,7 +149,7 @@ fn from_a_linked_worktree() {
 
 #[test]
 fn the_body_drawn_from_the_branch_is_kept() {
-    // req:host/keep-unopened-body@a8937350
+    // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
         git(root, &["switch", "-q", "impl/a"]);
         git(
@@ -168,7 +168,7 @@ fn the_body_drawn_from_the_branch_is_kept() {
 
 #[test]
 fn opened() {
-    // req:host/keep-unopened-body@a8937350
+    // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
         let got = open(Host::Github, root).unwrap();
         assert_eq!(got.as_deref(), Some("https://github.com/o/r/pull/9"));
@@ -178,7 +178,7 @@ fn opened() {
 
 #[test]
 fn refusals_before_the_host_keep_nothing() {
-    // req:host/keep-unopened-body@a8937350
+    // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
         // A detached HEAD, a missing file and a blank one reach no host.
         git(root, &["checkout", "-q", "--detach"]);
