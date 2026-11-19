@@ -13,6 +13,18 @@ pub(crate) fn places(ctx: &Ctx) -> Result<PathBuf, Error> {
     places_of(&ctx.root, &ctx.prefix)
 }
 
+/// `<places>/verify-build`, the place `[verify] check` and `[verify] mutate` build in
+/// (`verify-build-dir`), created when missing so a command may write into it before building
+/// anything there. A place that can't be created is said on stderr and the command runs all
+/// the same, finding it missing.
+pub(crate) fn build_place(ctx: &Ctx) -> Result<PathBuf, Error> {
+    let build = places(ctx)?.join("verify-build");
+    if let Err(e) = std::fs::create_dir_all(&build) {
+        say(&format!("clm verify: cannot create .clm/verify-build: {e}"));
+    }
+    Ok(build)
+}
+
 /// `places` for the CLM root `root`, whose place in its git repository is `prefix`. The main
 /// worktree is found from the common git directory, as `git worktree list` finds it, without
 /// listing the worktrees: a run that waits for the verify lock would otherwise read the entry

@@ -60,7 +60,7 @@ pub(crate) fn check(
     let selection = green.and_then(|green| selection(ctx, &tree.dir, green));
     // A place that lasts from run to run outside the verify tree, as `.clm/land` is a land's
     // (`verify-build-dir`); no toolchain's variables are set here.
-    let build = tree::places(ctx)?.join("verify-build");
+    let build = tree::build_place(ctx)?;
     let env = clm_land::CheckEnv {
         set: vars
             .into_iter()
