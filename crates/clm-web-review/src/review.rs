@@ -312,9 +312,9 @@ pub async fn compare<P: Platform>(
     let repo = access.full_name();
     let auth = access.auth();
     // Named anew when the comparison changes shape or meaning, so none cached before is
-    // served: `compare6:` since the cuts are read from the gate's files alone, and a side
-    // whose specs don't load gives the gate's one line (`pr-review`).
-    let key = format!("compare6:{repo}@{base_sha}:{head_sha}");
+    // served: `compare7:` since a list whose text GitHub withholds at either side is named
+    // in the cuts in place of its lines (`pr-review`).
+    let key = format!("compare7:{repo}@{base_sha}:{head_sha}");
     if let Some(c) = p
         .cache_get(&key)
         .await
@@ -383,9 +383,10 @@ pub async fn compare<P: Platform>(
         })
         .collect();
 
-    let cuts = listed_cuts(&trees, &base_files, &head_files, &changed);
+    let withheld = withheld_lists(&trees, &base_files, &head_files);
+    let cuts = listed_cuts(&trees, &base_files, &head_files, &changed, &withheld);
     let review = needs_review(&trees, setting, &head_files)
-        || withheld_list(&trees, &head_files)
+        || !withheld.is_empty()
         || !cuts.is_empty()
         || !clm_gate::widened_exemptions(&base, &head).is_empty();
     let comparison = Comparison {
@@ -405,13 +406,15 @@ pub async fn compare<P: Platform>(
 
 /// What `clm gate` lists of the branch's cuts (`gate/cuts`): `clm_gate::cuts_or_unloaded`
 /// over graphs loaded from only the files the gate loads, read only when a changed path is
-/// under `specs/` or is a list the head holds, as the gate reads them, and none when either
-/// listing is truncated, since they would be read from part of the files.
+/// under `specs/` or is a list the head holds, as the gate reads them, without the lists
+/// whose text GitHub withholds, then a line for each of those; none when either listing is
+/// truncated, since they would be read from part of the files.
 fn listed_cuts(
     trees: &Trees,
     base_files: &Files,
     head_files: &Files,
     changed: &BTreeSet<PathBuf>,
+    withheld: &[(String, &str)],
 ) -> Vec<String> {
     if trees.base.truncated || trees.head.truncated {
         return Vec::new();
@@ -421,11 +424,20 @@ fn listed_cuts(
         .changed_paths(&trees.base)
         .iter()
         .any(|p| p.starts_with("specs/") || (test_list_id(p).is_some() && trees.head.has(p)));
+    let withheld_lines = withheld.iter().map(|(path, commit)| {
+        format!(
+            "{path}: gate/cut: GitHub withholds its text at {commit}, so the tests it lists aren't listed"
+        )
+    });
     if !read {
-        return Vec::new();
+        return withheld_lines.collect();
     }
     let (base, base_violations) = cut_graph(&trees.base, base_files);
     let (head, head_violations) = cut_graph(&trees.head, head_files);
+    let lists: Vec<_> = test_lists(base_files, head_files, changed)
+        .into_iter()
+        .filter(|list| !withheld.iter().any(|(path, _)| path == list.path))
+        .collect();
     clm_gate::cuts_or_unloaded(
         &clm_gate::Side {
             graph: &base,
@@ -437,10 +449,11 @@ fn listed_cuts(
             violations: &head_violations,
             revision: &trees.head_sha,
         },
-        &test_lists(base_files, head_files, changed),
+        &lists,
     )
     .iter()
     .map(ToString::to_string)
+    .chain(withheld_lines)
     .collect()
 }
 
@@ -489,17 +502,49 @@ fn cut_graph(listing: &keys::Listing, files: &Files) -> (Graph, Vec<clm_model::V
     (graph, violations)
 }
 
-/// A list the head holds, among the paths whose entries differ, whose text GitHub withholds
-/// (a binary blob, or one that isn't UTF-8): what it cuts can't be read, so the branch
-/// needs review.
-fn withheld_list(trees: &Trees, head_files: &Files) -> bool {
-    trees.head.changed_paths(&trees.base).iter().any(|p| {
-        test_list_id(p).is_some()
-            && trees.head.has(p)
-            && head_files
-                .get(Path::new(p))
-                .is_none_or(|b| std::str::from_utf8(b).is_err())
-    })
+/// Each list the head holds, among the paths whose entries differ, whose text GitHub
+/// withholds (a binary blob, or one that isn't UTF-8) at the merge base or at the head,
+/// with the commit of the first side, merge base then head, that withholds it: what it
+/// cuts can't be read, so the branch needs review. Its text at the merge base is its own
+/// when the base listing holds the path and, for an archived list it doesn't, the live
+/// list's when the base listing holds that, as the gate reads it (`gate/cuts`).
+fn withheld_lists<'t>(
+    trees: &'t Trees,
+    base_files: &Files,
+    head_files: &Files,
+) -> Vec<(String, &'t str)> {
+    let withholds = |files: &Files, path: &str| {
+        files
+            .get(Path::new(path))
+            .is_none_or(|b| std::str::from_utf8(b).is_err())
+    };
+    trees
+        .head
+        .changed_paths(&trees.base)
+        .into_iter()
+        .filter_map(|path| {
+            let id = test_list_id(&path)?;
+            if !trees.head.has(&path) {
+                return None;
+            }
+            let live = format!("changes/{id}/deleted-tests.txt");
+            let base_path = if trees.base.has(&path) {
+                Some(path.as_str())
+            } else if path.starts_with("changes/archive/") && trees.base.has(&live) {
+                Some(live.as_str())
+            } else {
+                None
+            };
+            let commit = if base_path.is_some_and(|p| withholds(base_files, p)) {
+                &trees.merge_base
+            } else if withholds(head_files, &path) {
+                &trees.head_sha
+            } else {
+                return None;
+            };
+            Some((path, commit.as_str()))
+        })
+        .collect()
 }
 
 /// The change ID of a list's path, `changes/[archive/]<id>/deleted-tests.txt`.
