@@ -531,6 +531,34 @@ fn a_broken_backlog_item() {
 }
 
 #[test]
+fn a_broken_archived_change() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The gate loads only the live `change.md` files, so an archived one the model rejects
+    // doesn't make the specs fail to load either.
+    let repo = branch_from(
+        &[
+            ("specs/n/SPEC.md", &node("", &["r"], "active")),
+            ("changes/archive/x/change.md", "---\n: [\n---\n"),
+        ],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["r", "added"], "active"))],
+    );
+    let head: clm_model::Files = repo.commits["222"]
+        .iter()
+        .map(|(p, b)| (p.into(), b.clone()))
+        .collect();
+    let (_, violations) = clm_model::load_files(&head);
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.path.starts_with("changes/archive")),
+        "the model rejects the archived change: {violations:?}"
+    );
+    let v = review_of(repo);
+    assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
+}
+
+#[test]
 fn untouched_specs_list_no_cuts() {
     // req:web.worker.review/pr-review@dffddef1
     // The cuts are read only when a changed path is under `specs/` or a list: a branch that
