@@ -127,13 +127,13 @@ fn a_moved_test_lands() {
 #[test]
 fn a_renamed_test_refuses_the_land() {
     // req:land/deleted-tests-approved@f6971347
+    // The renamed test cites nothing, so the land refuses whether or not a rename that
+    // keeps its citations counts as a deletion.
     let f = with_tests();
+    let second = "#[test]\nfn second() {\n    assert!(true);\n}\n";
     f.branch(
         "tidy",
-        &[(
-            "tests/t.rs",
-            &format!("{}\n{}", test("one"), test("second")),
-        )],
+        &[("tests/t.rs", &format!("{}\n{second}", test("one")))],
     );
     let why = refused(clm_land::land(&f.work(), Some("tidy"), &f.env(&[])));
     assert_eq!(why, LINE);
