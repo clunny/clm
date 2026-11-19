@@ -232,6 +232,21 @@ fn a_rename_takes_only_a_name_no_base_test_carries() {
 }
 
 #[test]
+fn a_group_name_at_the_base_leaves_a_rename_fresh() {
+    // req:check.coverage/test-lists@1f461b0a
+    // A `describe` group named `second` at the base isn't a test: a head test `second` is
+    // still a new name, so `two` was renamed.
+    let base =
+        format!("test('two', () => {{\n  // {REQ}:a/x\n}});\ndescribe('second', () => {{\n}});\n");
+    let head = format!("test('second', () => {{\n  // {REQ}:a/x\n}});\n");
+    let found = deleted_tests(
+        &files(&[("a.test.ts", base)]),
+        &files(&[("a.test.ts", head)]),
+    );
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
 fn scenario_a_test_that_gains_its_first_marker() {
     // req:check.coverage/test-lists@1f461b0a
     let head = rust_test("one", true) + &rust_test("quiet", true);
