@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-land-and-clm-coverage-can-disagree-about-a-renamed-test]
 ---
 
