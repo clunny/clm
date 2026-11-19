@@ -206,6 +206,19 @@ pub(crate) fn moves(graph: &Graph) -> BTreeMap<String, BTreeSet<String>> {
     moves
 }
 
+/// The requirements the spec holds that the moves take `id` to, sorted (`move-targets`):
+/// `id` must be a requirement or capability a live change removed (`removed`), so a held
+/// ID, or one only an archived change removed, gives nothing. A removed capability gives
+/// nothing too, since only deltas' requirements make moves.
+pub fn moved_to(graph: &Graph, id: &str) -> Vec<String> {
+    if !crate::coverage::removed(graph).contains_key(id) {
+        return Vec::new();
+    }
+    let mut to = follow(graph, &moves(graph), id.to_string());
+    to.sort();
+    to
+}
+
 /// The IDs the spec holds that `id` counts as: itself when the spec holds it, else those its
 /// moves reach, followed breadth first through the IDs the spec doesn't hold, each once.
 /// None when no move takes it to one the spec holds, since a later change removed it.

@@ -6,7 +6,7 @@ mod common;
 use std::fs;
 use std::path::Path;
 
-use clm_coverage::{Marker, change_progress, complete_changes, pending, status_report};
+use clm_coverage::{Marker, change_progress, complete_changes, moved_to, pending, status_report};
 use clm_model::Graph;
 use common::{ROOT, current, graph, marker, spec, write};
 use tempfile::TempDir;
@@ -364,4 +364,49 @@ fn move_landed_marker_left_behind() {
         .map(|p| p.to_string())
         .collect();
     assert_eq!(a, ["a/x obsolete t.rs:4"]);
+}
+
+/// Change `20260101-m` moves `g/x` to `c/x`; `20260102-y` removes `g/y` and adds nothing.
+fn moved_and_removed(d: &Path) {
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/c/SPEC.md", &spec("[]", &["x"]));
+    change(d, "20260101-m", "applied");
+    moves(d, "20260101-m", "g", "c");
+    change(d, "20260102-y", "applied");
+    removes(d, "20260102-y", "g", "y");
+}
+
+#[test]
+fn scenario_a_moved_requirement() {
+    // req:check.coverage/move-targets@e597253d
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    moved_and_removed(d);
+    let g = graph(d);
+    assert_eq!(moved_to(&g, "g/x"), ["c/x"]);
+    assert!(moved_to(&g, "g/y").is_empty());
+    assert!(moved_to(&g, "c/x").is_empty());
+}
+
+#[test]
+fn moved_to_follows_a_split_and_a_rename_sorted_and_only_live_removals() {
+    // req:check.coverage/move-targets@e597253d
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/b/SPEC.md", &spec("[]", &["x"]));
+    write(d, "specs/a/SPEC.md", &spec("[]", &["x"]));
+    // `g/x` splits to `v/x` and `b/x`; `v` is renamed `a` later.
+    change(d, "20260101-s", "applied");
+    removes(d, "20260101-s", "g", "x");
+    adds(d, "20260101-s", "v", "x");
+    adds(d, "20260101-s", "b", "x");
+    change(d, "20260102-r", "applied");
+    moves(d, "20260102-r", "v", "a");
+    let g = graph(d);
+    assert_eq!(moved_to(&g, "g/x"), ["a/x", "b/x"]);
+    // Once the change that removed it is archived, no live change removed `g/x`.
+    archive(d, "20260101-s");
+    let g = graph(d);
+    assert!(moved_to(&g, "g/x").is_empty());
 }

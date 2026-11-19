@@ -27,5 +27,5 @@ pub use lists::{
 pub use pending::{Pending, owner, pending};
 pub use spans::{TestSpan, markers_outside_tests, tests_in};
 pub use status::{
-    ChangeProgress, Row, StatusReport, change_progress, complete_changes, status_report,
+    ChangeProgress, Row, StatusReport, change_progress, complete_changes, moved_to, status_report,
 };
