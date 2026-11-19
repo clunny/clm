@@ -53,7 +53,8 @@ pub(crate) fn obsolete_tests_lines(root: &Path) -> Result<Vec<String>, Vec<Viola
 
 /// `clm coverage --deleted-tests <base>`: a count line, then a `DELETED` line per citing test
 /// of the revision `base` that `clm_coverage::deleted_tests` finds gone from the working tree,
-/// counted by bare name across files. `Err` names `base` when it resolves to no commit.
+/// counted by bare name across files, both sides read under the CLM root and named from it.
+/// `Err` names `base` when it resolves to no commit.
 pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>, Vec<Violation>> {
     load(root)?;
     let fail = |why: String| {
@@ -73,11 +74,21 @@ pub(crate) fn deleted_tests_lines(root: &Path, base: &str) -> Result<Vec<String>
         ],
     )
     .map_err(|_| fail(format!("`{base}` is no commit")))?;
-    let blobs = clm_git::tree_blobs(root, &commit, &|p| !p.ends_with(".md"))
-        .map_err(|e| fail(format!("can't read `{base}`: {e}")))?;
+    // The revision's files under the CLM root, named from it as the working tree's are and as
+    // `clm land` names them (`land/deleted-tests-approved`).
+    let prefix = clm_git::git(root, &["rev-parse", "--show-prefix"])
+        .map_err(|e| fail(format!("can't place the CLM root in its repository: {e}")))?;
+    let blobs = clm_git::tree_blobs(root, &commit, &|p| {
+        p.strip_prefix(prefix.as_str())
+            .is_some_and(|p| !p.ends_with(".md"))
+    })
+    .map_err(|e| fail(format!("can't read `{base}`: {e}")))?;
     let before: Vec<(PathBuf, String)> = blobs
         .into_iter()
-        .filter_map(|(p, bytes)| Some((PathBuf::from(p), String::from_utf8(bytes).ok()?)))
+        .filter_map(|(p, bytes)| {
+            let p = p.strip_prefix(prefix.as_str())?;
+            Some((PathBuf::from(p), String::from_utf8(bytes).ok()?))
+        })
         .collect();
     let gone = deleted_tests(&before, &read_files(root));
     let mut lines = vec![format!("# tests deleted since {base}: {}", gone.len())];
