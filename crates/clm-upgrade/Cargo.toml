@@ -12,4 +12,5 @@ sha2.workspace = true
 toml.workspace = true
 
 [dev-dependencies]
+clm-git.workspace = true
 tempfile.workspace = true
