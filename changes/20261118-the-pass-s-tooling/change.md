@@ -23,8 +23,8 @@ Programs now list what a spec branch removes and refuse a code branch that delet
 - **Taken: a requirement that states fewer sentences is listed, a sentence that places a test left out of the count.** It is the one part of "a SHALL sentence a requirement loses needs the human's yes" a program can see, and it would have caught the pilot's first draft, which moved two library offerings out of their requirements. A sentence holding one of a fixed list of phrases that place a test isn't counted, since the human agreed on 2026-11-18 that such a sentence goes with no separate yes. What it leaves a reader: a reword that keeps the count, and a sentence of behaviour worded like one that places a test.
 - **Taken: the tests a change deletes are a list the change declares, `changes/<id>/deleted-tests.txt`.** The plan first named `clm coverage --obsolete-tests`. That list holds every test of a merged requirement, which a build re-cites, and misses a duplicate test whose requirement stays. A declared list errs safely both ways: a line too many is read by the human, and a line too few has `clm land` refuse the build, which then keeps the test.
 - **Taken: an approved list is one on the base the land lands on.** A list reaches `main` only through the gate, which asks review for each line a branch adds. `clm land` reads the lists of live and archived changes from the fetched base, never from the branch, so a build can't approve its own deletion; the archive is read because a change can be archived before a duplicate's test is deleted.
-- **Taken: every `code` land is held to the lists, not only `impl/*`.** A small code branch deleted a citing test in the replay too.
-- **Taken: a test is gone when the tree holds fewer citing tests of its name.** A test moved to another file under its name is not gone; 905 of the 924 tests `clm coverage --deleted-tests` listed in the replay were moves. A test that loses its last marker is gone, since it proves nothing any more. A marker's version in a test's title is left out of the name, so re-citing doesn't rename it.
+- **Taken: every land but a `spec/*` branch's is held to the lists, not only `impl/*`.** A small code branch deleted a citing test in the replay too. The check runs before the gate, so it goes by the branch's name as `spec-branch-holds-spec-paths` does, and reads no kind.
+- **Taken: a test is gone when the tree holds fewer citing tests of its name.** A test moved to another file under its name is not gone; 905 of the 924 tests `clm coverage --deleted-tests` listed in the replay were moves. A test that loses its last marker is gone, since it proves nothing any more. A marker in a test's title is left out of the name, so re-citing doesn't rename it.
 - **Taken: four health signals, a line per finding.** The plan said a count per component. A line per finding gives the count, as each line starts with the component's spec path, and gives a wave the rows it would otherwise measure by hand.
 - **Taken: the gate's exemption rule moves into a function of two graphs, `widened_exemptions`,** which the Worker calls beside `cuts`, so the two give one answer again.
 - **Taken: the effort of a subagent's transcript goes to the branch checked out where it ran.** The entries' `cwd` is the subagent's worktree, and `clm land` runs there with the build's branch checked out.
@@ -40,6 +40,7 @@ Programs now list what a spec branch removes and refuse a code branch that delet
 - The Worker's review carries the lines as `cuts`, and its `review` is true for a branch with a cut or a widened exemption.
 - `clm land` and `clm land --check-only` refuse a code branch that loses a citing test no approved list names.
 - The build prompt tells a build which of an obsolete requirement's tests an approved list names, to delete, and which to re-cite or leave.
+- The web review lists the cuts above the branch's components.
 - `clm health` reports `outside-contract`, `test-placement`, `design-exit` and `uncited-test`.
 - `clm coverage --deleted-tests` no longer lists a moved test.
 - `clm land` records a build subagent's work against the build's branch.
@@ -54,6 +55,7 @@ Programs now list what a spec branch removes and refuse a code branch that delet
 ## What the requirements no longer state
 
 - `gate/needs-review` loses "Nothing else SHALL make a branch need review" in its old reach: a cut now does, and the sentence is kept with the cut named before it. Its scenario "nothing else" no longer removes a requirement in its GIVEN; the name is kept.
+- `orchestrator.run/pending-prompt` no longer says to remove every test an obsolete requirement's markers mark: it lists the tests an approved list names, to delete, and the others, to keep. It still says to remove the code.
 - `host/pr-body` loses "changing nothing else" of the body it sets: on a spec branch with cuts the body ends with the section. It still changes nothing else of the pull request.
 - `check.coverage/test-lists` no longer has `deleted_tests` list a test moved to another file under its name.
 
@@ -61,9 +63,15 @@ No requirement and no scenario is removed.
 
 ## What the builds do, and their order
 
-`effort`, then `check.coverage`, then `gate`, then `check.health`, `host`, `land` and `web.worker.review`, then `orchestrator.run`, each by its `#### Needs`. `plugin.agents`' prompt is the `deferred` item's.
+`effort`, then `check.coverage`, then `gate`, then `check.health`, `host`, `land` and `web.worker.review`, then `orchestrator.run` and `web.views`, each by its `#### Needs`. `plugin.agents`' prompt and the propose and health skills' text are `deferred` items.
+
+- `gate`'s build rewrites `contract_change_needs_no_review` in `crates/clm-gate/tests/gate.rs`, whose fixture removes a requirement and expects `spec`.
+- `check.coverage`'s build rewrites `deleted_tests_notice_a_missing_file_and_a_moved_test`, which expects a moved test to be listed.
+- `orchestrator.run`'s build rewrites the fixed sentence of the build prompt that says to remove the tests of an `obsolete` requirement, beside the lists the requirement states.
+- `web.worker.review`'s build names the cache key anew, `compare5`.
 
 ## Open questions
 
-- **The web review doesn't draw the cuts.** The Worker returns them and `review` is true, but no view shows the list; the pull request, which the review links, holds it. `backlog/the-web-review-doesn-t-show-what-a-branch-cuts` is an `idea` for `web.views`.
-- **A subagent that worked on two branches in one worktree** has all its work counted for the one checked out when the record is made. No build does that today.
+- **The review audit judges earlier lands by the new rule.** `clm ledger verify --review` recomputes each signed land with the gate as it is, so in a signed repository a land that removed a requirement before this rule is reported as understated. This repository is unsigned. `backlog/the-review-audit-judges-earlier-lands-by-today-s-rule-for-review` is a `bug` on `ledger`, due before a release; it needs a design of its own, a land audited by the rule in force when it landed.
+- **A subagent that worked on two branches in one worktree** has all its work counted for the one checked out when the record is made, and a record made while a build's worktree is still detached counts those entries for both branches. No build does the first, and the second is a build's first minute.
+- **The skills don't yet show the cut lines when they ask for an approval.** The pull request and the web review do. `backlog/the-propose-and-health-skills-predate-the-gate-s-list-of-cuts` holds the text.

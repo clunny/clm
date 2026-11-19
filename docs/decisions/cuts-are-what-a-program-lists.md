@@ -6,6 +6,8 @@ status: accepted
 
 `removal-needs-a-yes` was kept by the session alone. Replayed over the last 150 spec lands before this decision, 26 removed a requirement, a scenario or a SHALL sentence, and nine of them were ordinary changes that dropped one scenario and landed on checks. Of the 163 `impl/*` lands since `8fe48394`, 14 lost a citing test by name, about half by a build renaming or replacing one.
 
+It adds a fifth case to the four in which `yes-no-review` has a spec branch need review: the branch cuts something.
+
 **What the gate lists** (`gate/cuts`). From the requirements at a spec branch's merge base and at its head: a requirement that is gone, unless each of its scenarios is moved; a scenario whose name is gone from its requirement, unless it is moved; and a requirement whose statement has fewer sentences that hold `SHALL`. From the changes: each line the branch adds to a `changes/<id>/deleted-tests.txt`. A branch with any of these needs review, and the lines are in `clm gate`'s output, at the top of the pull request's body and in the web review.
 
 **Moved, one for one and within the diff.** A gone scenario is moved when the head holds a scenario of that name under another requirement where the base held none, and each such place takes one. So a pass keeps a scenario's name when it rewords or moves it, a move across components sits in one branch, and of two same-named scenarios merged into one requirement, one is listed. Whether the merged scenario states what both did is the reader's question the line asks.

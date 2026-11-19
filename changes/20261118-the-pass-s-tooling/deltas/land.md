@@ -59,12 +59,12 @@ Crate `clm-land`, called from `crates/clm`'s `land`, `approve` (re-exported from
 
 **Approval at a land** (`approval-policy`, `approval-from-base`, `changes-requested-holds`, `signed-land`). `clm-approval` answers whether the fingerprint's approvals count, under which policy, whether a request for changes holds the branch, and whether the repository signs (`land.approval`); what `clm land` then does, landing or refusing with `main` unchanged, is stated here and proven by landing a branch on a fixture repository, in `crates/clm-land/tests/approval.rs`, `hold.rs` and `signed.rs`.
 
-**Deleted tests** (`deleted-tests-approved`, `cuts-are-what-a-program-lists`). The check runs where `build-holds-own-files` runs, before the lock, and for every branch the gate reads as `code`, whatever its name: a small code change can delete a test as a build can. It reads the texts, at the merge base and at the head, of the files the diff adds, changes or deletes, and no other, which is enough because a file the diff doesn't touch holds the same tests on both sides, and keeps the check to milliseconds. The lists are read from the fetched base with `git ls-tree` and `git show`, live changes and archived ones, never from the branch, which as a code branch can't hold one anyway. A rename branch is a `spec` branch and isn't judged.
+**Deleted tests** (`deleted-tests-approved`, `cuts-are-what-a-program-lists`). The check runs where `build-holds-own-files` runs, before the lock and before the gate, so it reads no kind: it judges every branch but one named `spec/*`, which holds only spec paths (`spec-branch-holds-spec-paths`) or a replayed rename, whose rewritten markers `rename/replay` vouches for. A small code change can delete a test as a build can. It reads the texts, at the merge base and at the head, of the files the diff adds, changes or deletes, and no other, which is enough because a file the diff doesn't touch holds the same tests on both sides, and keeps the check to milliseconds. The lists are read from the fetched base with `git ls-tree` and `git show`, live changes and archived ones, never from the branch, which as a code branch can't hold one anyway.
 
 ## ADDED Requirements
 
 ### Requirement: deleted-tests-approved
-`clm land <branch>`, for a branch the gate reads as `code` against the fetched base, SHALL exit 1 when `check.coverage`'s `deleted_tests`, over the texts at the merge base and at the head of the files the branch adds, changes or deletes, returns a test no approved list names, printing for each `<file>: land/deleted-tests-approved: test <name>, which cited <id>[, <id>...], is gone and no approved list names it. Keep the test under its name, or leave the requirement unbuilt and add a question item`. An *approved list* is a `changes/<id>/deleted-tests.txt` or `changes/archive/<id>/deleted-tests.txt` in the fetched base's tree, and it names a test by a list line `DELETE <file>::<name>` (`gate/cuts`) whose file and name are the gone test's. It SHALL do so before it takes the land's lock, merges or runs any check, and it SHALL push and append nothing. `clm land --check-only` SHALL print the same lines for `HEAD` against the local `origin/main`, whatever the branch, and exit 1 before it runs the check command. A branch the gate reads as `spec` or `mixed` SHALL NOT be judged by this rule.
+`clm land <branch>`, for a branch not named `spec/*`, SHALL exit 1 when `check.coverage`'s `deleted_tests`, over the texts at the merge base and at the head of the files the branch adds, changes or deletes, returns a test no approved list names, printing for each `<file>: land/deleted-tests-approved: test <name>, which cited <id>[, <id>...], is gone and no approved list names it. Keep the test under its name, or leave the requirement unbuilt and add a question item`. An *approved list* is a `changes/<id>/deleted-tests.txt` or `changes/archive/<id>/deleted-tests.txt` in the fetched base's tree, and it names a test by a list line (`gate/cuts`, read with its `list_lines`) whose file is the gone test's and whose name agrees with it as `bare_name` gives them. It SHALL do so before it takes the land's lock, merges or runs any check, and it SHALL push and append nothing. `clm land --check-only` SHALL print the same lines for `HEAD` against the local `origin/main`, on a branch not named `spec/*` and on a detached `HEAD`, and exit 1 before it runs the check command; with no local `origin/main` it SHALL judge nothing. A branch named `spec/*` SHALL NOT be judged by this rule.
 
 #### Scenario: a deleted test
 - GIVEN `main` holding `tests/t.rs` with tests `one` and `two`, each citing `a/x`, a branch `impl/a` whose `tests/t.rs` holds only `one`, and a check command that records that it ran
@@ -90,6 +90,11 @@ Crate `clm-land`, called from `crates/clm`'s `land`, `approve` (re-exported from
 - GIVEN the first scenario's `main`, and a branch `tidy` that renames `two` to `second`
 - WHEN `clm land tidy` runs
 - THEN it exits 1 naming `two` under `land/deleted-tests-approved`
+
+#### Scenario: a spec branch
+- GIVEN a branch `spec/r` holding only the committed result of `clm rename r`, which rewrote the marker in the title of a test in `a.test.ts`
+- WHEN `clm land spec/r` runs
+- THEN this rule refuses nothing
 
 #### Scenario: the pre-check
 - GIVEN the first scenario's branch checked out

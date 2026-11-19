@@ -10,7 +10,8 @@ So review is yes or no. A spec branch **needs review** exactly when:
 - its diff touches `ARCHITECTURE.md` or `CAPABILITIES.md`, the human layers, or `docs/allowed_signers`, the keys a signed repository trusts (`signed-ledger-records`);
 - it changes the `approval` setting in `clm.toml` (`approval-setting-is-spec`);
 - it adds or widens a component's exemption from a code rule; removing or narrowing one doesn't (`temporary-exemptions`);
-- a `change.md` it adds or modifies declares `human_burdens`, or can't be read: what the change spends of the human's money or time, or can't undo, one short line each.
+- a `change.md` it adds or modifies declares `human_burdens`, or can't be read: what the change spends of the human's money or time, or can't undo, one short line each;
+- it cuts something, as `cuts-are-what-a-program-lists` reads a cut: a requirement or a scenario that is gone, a requirement that states fewer sentences, or a test a change lists to delete (`removal-needs-a-yes`).
 
 `clm gate` prints `spec review` for such a branch, which lands only after a human's `clm approve` (`approval-policy`), and `spec` for any other spec branch, which lands on checks. Nothing is reviewed after it lands: there is no `clm review`, no `reviewed` record and no review queue. A spec branch that adds a `kind: human-task` backlog item and declares no burden is blocked (`gate/undeclared-burden`), since a step only the human can take spends their time; builds still file `question` and `human-task` items freely, and those block only their own requirements.
 
