@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-test-that-gains-its-first-marker-can-hide-a-deleted-test]
 ---
 
