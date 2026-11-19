@@ -68,6 +68,10 @@ fn run(args: &Args, root: &Path, out: &mut dyn Write, err: &mut dyn Write) -> io
     } else {
         writeln!(out, "{}", outcome.kind)?;
     }
+    // What the branch cuts, which changes no exit status (`cuts`).
+    for cut in &outcome.cuts {
+        writeln!(out, "{cut}")?;
+    }
     for v in &outcome.violations {
         writeln!(out, "{v}")?;
     }

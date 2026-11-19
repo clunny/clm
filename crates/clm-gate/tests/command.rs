@@ -106,7 +106,7 @@ fn gate_prints_kind_and_blocks_mixed_pr() {
 #[test]
 fn first_line() {
     // req:gate/approval@492f6a25
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     git(d, &["init", "-q", "-b", "main"]);

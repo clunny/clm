@@ -242,7 +242,7 @@ fn review_of(d: &Path) -> (Kind, bool) {
     (out.kind, out.review)
 }
 
-// req:gate/needs-review@48a7ac76
+// req:gate/needs-review@2373a9ad
 #[test]
 fn an_added_exemption_needs_review() {
     let dir = base();
@@ -253,7 +253,7 @@ fn an_added_exemption_needs_review() {
     assert_eq!(review_of(d), (Kind::Spec, true));
 }
 
-// req:gate/needs-review@48a7ac76
+// req:gate/needs-review@2373a9ad
 #[test]
 fn a_new_component_or_another_rule_needs_review() {
     let dir = base();
@@ -279,7 +279,7 @@ fn a_new_component_or_another_rule_needs_review() {
     assert_eq!(review_of(d), (Kind::Spec, true));
 }
 
-// req:gate/needs-review@48a7ac76
+// req:gate/needs-review@2373a9ad
 #[test]
 fn a_widened_exemption_needs_review_but_a_narrowed_or_removed_one_does_not() {
     let dir = base();

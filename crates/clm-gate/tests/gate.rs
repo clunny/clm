@@ -1395,6 +1395,11 @@ fn archived_changes_resolves_dont_count() {
 
 const NODE: &str = "---\ntitle: A\nstatus: specd\nowners: []\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n\n### Requirement: r\nR.\n\n#### Scenario: s\n- ok\n";
 const ADDED_REQ: &str = "\n### Requirement: r2\nR2.\n\n#### Scenario: s\n- ok\n";
+/// The root spec, so the specs at both sides load and their cuts can be read (`cuts`).
+const ROOT_SPEC: (&str, &str) = (
+    "specs/SPEC.md",
+    "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nroot\n\n## Design\nroot design\n\n## Requirements\n",
+);
 
 /// `main` holds `files` plus some code; HEAD is on a fresh branch `pr`.
 fn tier_repo(files: &[(&str, &str)]) -> TempDir {
@@ -1434,7 +1439,7 @@ fn verdict(out: &clm_gate::Outcome) -> (Kind, bool, bool) {
 #[test]
 fn spec_pr_that_needs_no_review_needs_no_approval() {
     // req:gate/approval@492f6a25
-    let dir = tier_repo(&[("specs/a/SPEC.md", NODE)]);
+    let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", NODE)]);
     let edited = NODE.replace("\nc\n", "\nnew contract\n");
     let out = tier_after(&dir, &[("specs/a/SPEC.md", Some(&edited))], false);
     assert_eq!(
@@ -1565,8 +1570,8 @@ fn rev_parse(dir: &Path, rev: &str) -> String {
 
 #[test]
 fn scenario_another_commit() {
-    // req:gate/evaluate-at@0bfe14a1
-    let dir = tier_repo(&[("specs/a/SPEC.md", NODE)]);
+    // req:gate/evaluate-at@86fdcdf3
+    let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", NODE)]);
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &format!("{NODE}{ADDED_REQ}"));
     commit_all(d, "add a requirement");
@@ -1589,8 +1594,8 @@ fn scenario_another_commit() {
 
 #[test]
 fn scenario_a_merge_commit_against_its_first_parent() {
-    // req:gate/evaluate-at@0bfe14a1
-    let dir = tier_repo(&[("specs/a/SPEC.md", NODE)]);
+    // req:gate/evaluate-at@86fdcdf3
+    let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", NODE)]);
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "invariants\n");
     commit_all(d, "architecture");
@@ -1780,7 +1785,7 @@ fn a_value_config_would_reject_is_compared_as_a_value() {
 
 #[test]
 fn evaluate_at_reads_changes_and_the_policy_at_the_head() {
-    // req:gate/evaluate-at@0bfe14a1
+    // req:gate/evaluate-at@86fdcdf3
     // `HEAD` stays on `main`; the head commit adds a change with a burden and, separately,
     // a policy.
     let dir = tier_repo(&[("specs/a/SPEC.md", NODE), ("clm.toml", POLICY)]);
@@ -1823,7 +1828,7 @@ fn a_nested_clm_toml_is_not_the_policy() {
 
 #[test]
 fn architecture_needs_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let dir = tier_repo(&[("ARCHITECTURE.md", "invariants\n")]);
     let out = tier_after(&dir, &[("ARCHITECTURE.md", Some("changed\n"))], true);
     assert_eq!(
@@ -1836,7 +1841,7 @@ fn architecture_needs_review() {
 
 #[test]
 fn capabilities_file_needs_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let dir = tier_repo(&[]);
     let out = tier_after(
         &dir,
@@ -1849,7 +1854,7 @@ fn capabilities_file_needs_review() {
 
 #[test]
 fn trusted_keys_need_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let dir = tier_repo(&[("docs/allowed_signers", "alice ssh-ed25519 AAAA\n")]);
     let out = tier_after(
         &dir,
@@ -1870,7 +1875,7 @@ fn trusted_keys_need_review() {
 
 #[test]
 fn trusted_keys_need_review_however_edited() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     // A line that reads as a status edit, a deletion, and a directory in the file's place.
     let keys = "alice ssh-ed25519 AAAA\n";
     let status_line = format!("{keys}status: ssh-ed25519 BBBB\n");
@@ -1898,7 +1903,7 @@ fn trusted_keys_need_review_however_edited() {
 
 #[test]
 fn approval_setting_needs_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let weakened = POLICY.replace("\"other\"", "\"any\"");
     let out = policy_after(Some(POLICY), &[("clm.toml", Some(&weakened))], false);
     assert_eq!(verdict(&out), (Kind::Spec, true, false));
@@ -1906,7 +1911,7 @@ fn approval_setting_needs_review() {
 
 #[test]
 fn burdens_need_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let dir = tier_repo(&[]);
     let change = change_md("human_burdens: [a paid model run on every land]\n");
     let out = tier_after(&dir, &[("changes/x/change.md", Some(&change))], false);
@@ -1916,7 +1921,7 @@ fn burdens_need_review() {
 
 #[test]
 fn burdens_of_a_modified_change_need_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let change = change_md("human_burdens: [b]\n");
     let dir = tier_repo(&[("changes/x/change.md", &change)]);
     let edited = change.replace("\nx\n", "\nx, reworded\n");
@@ -1926,7 +1931,7 @@ fn burdens_of_a_modified_change_need_review() {
 
 #[test]
 fn burdens_of_a_new_archived_change_need_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let dir = tier_repo(&[]);
     let change = "---\nstatus: done\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
     let out = tier_after(
@@ -1939,7 +1944,7 @@ fn burdens_of_a_new_archived_change_need_review() {
 
 #[test]
 fn unparsable_change_needs_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     for text in ["---\nstatus: [\n---\n", "no frontmatter\n"] {
         let dir = tier_repo(&[]);
         let out = tier_after(&dir, &[("changes/x/change.md", Some(text))], false);
@@ -1958,16 +1963,19 @@ fn unparsable_change_needs_review() {
 
 #[test]
 fn contract_change_needs_no_review() {
-    // req:gate/needs-review@48a7ac76
-    let node = format!("{NODE}{ADDED_REQ}");
-    let dir = tier_repo(&[("specs/a/SPEC.md", &node)]);
+    // req:gate/needs-review@2373a9ad
+    // The Contract changes and `r2` is reworded, keeping its scenario and its one stating
+    // sentence.
+    let stated = "\n### Requirement: r2\nR2 SHALL hold.\n\n#### Scenario: s\n- ok\n";
+    let node = format!("{NODE}{stated}");
+    let dir = tier_repo(&[ROOT_SPEC, ("specs/a/SPEC.md", &node)]);
+    let reworded = node
+        .replace("\nc\n", "\nnew contract\n")
+        .replace("R2 SHALL hold.", "R2 SHALL always hold, reworded.");
     let out = tier_after(
         &dir,
         &[
-            (
-                "specs/a/SPEC.md",
-                Some(&NODE.replace("\nc\n", "\nnew contract\n")),
-            ),
+            ("specs/a/SPEC.md", Some(&reworded)),
             (
                 "docs/decisions/d.md",
                 Some("---\nstatus: accepted\n---\n\nD.\n"),
@@ -2073,8 +2081,8 @@ fn a_code_branch_may_add_a_human_item() {
 
 #[test]
 fn status_only_edit_of_a_change_with_burdens_needs_review() {
-    // req:gate/needs-review@48a7ac76
-    // req:gate/needs-review-of@988ab216
+    // req:gate/needs-review@2373a9ad
+    // req:gate/needs-review-of@60afa4d1
     // The status-only edit isn't a spec change, but it modifies a file of the change, so the
     // change's frontmatter reaches `needs_review_of` as the Worker's does.
     let change = "---\nstatus: proposed\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
@@ -2093,7 +2101,7 @@ fn status_only_edit_of_a_change_with_burdens_needs_review() {
 
 #[test]
 fn deltas_of_a_change_with_burdens_need_review() {
-    // req:gate/needs-review@48a7ac76
+    // req:gate/needs-review@2373a9ad
     let change = "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
     let dir = tier_repo(&[
         ("changes/x/change.md", change),
