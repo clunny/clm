@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-review-audit-judges-earlier-lands-by-today-s-rule-for-review]
 ---
 
