@@ -1377,8 +1377,8 @@ fn holding(root: &Path, branch: &str) -> Result<Option<Holder>, Error> {
         }))
 }
 
-/// The graph of the tree at `dir`, its markers and `node`'s pending requirements, most
-/// urgent first.
+/// The graph of the tree at `dir`, its markers and the whole list `pending` returns, every
+/// component's lines, which `job` narrows to `node` and sorts.
 fn pending_in(dir: &Path, node: &str) -> Result<(Graph, Vec<Marker>, Vec<Pending>), Error> {
     let graph = load(dir)?;
     if !graph.nodes.contains_key(node) {
@@ -1465,9 +1465,9 @@ fn job(
         } else {
             Vec::new()
         };
-        // Obsolete: every marker, `pending` having given each one in a file another
-        // component owns to that owner's line. Behind: those at another version or none, a
-        // foreign one apart.
+        // Obsolete: every marker, since once the root sets `wiring`, `pending` gives each one
+        // in a file another component owns to that owner's line, and without it the build may
+        // change the file. Behind: those at another version or none, a foreign one apart.
         let (mut own, mut foreign) = (Vec::new(), Vec::new());
         for m in &p.markers {
             if p.state == ReqState::Behind && m.version == p.version {
@@ -2027,6 +2027,31 @@ mod tests {
         // A test in `c`'s file is not `b`'s.
         let p = run("crates/c/t.rs", &in_b, &[("crates/c/lib.rs", 4)]);
         assert!(p.contains("`deferred` item naming"), "{p}");
+    }
+
+    #[test]
+    fn a_wait_on_its_own_id_names_the_other_lines_components_sorted() {
+        // req:orchestrator.run/pending-prompt@d236f866
+        let line = |node: &str, waits_on: &[&str]| Pending {
+            id: "b/gone".into(),
+            node: node.into(),
+            version: None,
+            state: ReqState::Obsolete,
+            cited: Vec::new(),
+            markers: Vec::new(),
+            priority: clm_model::Priority::P5,
+            blocked_by: Vec::new(),
+            waits_on: waits_on.iter().map(|s| s.to_string()).collect(),
+        };
+        let lines = vec![
+            line("e", &[]),
+            line("b", &["a/need", "b/gone"]),
+            line("c", &[]),
+            line("d", &[]),
+        ];
+        let b = blockers(&lines, &lines[1]);
+        assert_eq!(b.by, vec!["a/need".to_string()]);
+        assert_eq!(b.cited_in, vec!["c", "d", "e"]);
     }
 
     #[test]
