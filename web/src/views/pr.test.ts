@@ -146,7 +146,9 @@ describe('spec branches', () => {
     expect(view.querySelector(':scope > .head')!.contains(cuts)).toBe(true);
     expect(view.querySelector(':scope > .head .meta')!.compareDocumentPosition(cuts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     for (const later of ['.approve-bar', '.node-changes']) {
-      expect(cuts.compareDocumentPosition(view.querySelector(later)!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const at = view.querySelector(later);
+      expect(at).not.toBeNull();
+      expect(cuts.compareDocumentPosition(at!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
     for (const plain of [review({ branch: 'spec/plain', cuts: [] }), review({ branch: 'spec/plain', cuts: undefined })]) {
       const v = renderReview(plain, opts());
