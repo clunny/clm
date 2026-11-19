@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: applied
 resolves: [an-uncited-test-renamed-as-it-gains-a-marker-hides-a-deleted-test]
 ---
 
@@ -32,7 +32,7 @@ A test the base held with no marker, renamed in its file as it gains one, can no
 ## Edge cases and workarounds
 
 - A branch that deletes an unmarked test and renames a citing test in the same file is refused, though nothing was hidden (*an uncited test deleted beside a rename*). It errs toward refusing; the build deletes the unmarked test on a branch of its own, keeps the citing test's name, or the change lists it. An unmarked test is rarely deleted on a branch that renames its neighbour.
-- `clm land` passes only the files the branch touches as `head_files`, so an unmarked test moved to a file the branch doesn't otherwise touch is in both sides' files only because the move touches both; a move is not counted gone.
+- An unmarked test moved to another file under its name is not a gone unmarked test, since `head_files` carry its name; `clm land` passes only the files the branch touches, and a move touches both files.
 
 ## Open questions
 
