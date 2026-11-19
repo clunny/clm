@@ -862,7 +862,8 @@ fn page_open_after_a_merged_page_opens_another() {
 }
 
 #[test]
-fn page_open_exits_1_naming_the_kept_body_when_gh_fails() {
+fn page_open_exits_2_when_gh_fails() {
+    // Named for an older exit status: a renamed test reads to `clm land` as a deleted one.
     // req:host/pr-open@bdaae01c
     // req:host/keep-unopened-body@34bd03be
     let (r, gh) = (checkout("github"), fake_gh());
@@ -1313,7 +1314,8 @@ fn page_body_without_an_open_page_exits_1() {
 }
 
 #[test]
-fn a_failing_gh_pr_view_opens_nothing() {
+fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
+    // Named for an older exit status of `pr open`; `pr body` still exits 2 here.
     // req:host/pr-body@a7b89523
     // req:host/pr-open@bdaae01c
     // req:host/keep-unopened-body@34bd03be
