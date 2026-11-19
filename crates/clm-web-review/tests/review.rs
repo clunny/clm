@@ -504,6 +504,88 @@ fn specs_that_dont_load() {
 }
 
 #[test]
+fn base_specs_that_dont_load() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The merge base's specs don't load: the one line names the merge base.
+    let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
+    let v = review_of(branch_from(
+        &[("specs/n/SPEC.md", &unscenarioed)],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["r"], "active"))],
+    ));
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 111 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
+fn a_broken_live_change() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The gate loads the live `change.md` files, so one the model rejects at the head keeps
+    // the specs there from loading.
+    let v = review_of(branch_with(&[
+        ("specs/a/SPEC.md", &node("", &["p", "added"], "active")),
+        ("changes/x/change.md", "---\n: [\n---\n"),
+    ]));
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 222 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
+fn a_rule_serving_a_capability() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The gate loads the human layers, so a rule serving a capability resolves: a removed
+    // requirement is listed as gone, not hidden behind specs that seem not to load.
+    let caps = "## Capabilities\n\n### Capability: k\nOne can k.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
+    let serving = |reqs: &[&str]| {
+        node("", reqs, "active").replace(
+            "depends_on: []\n",
+            "depends_on: []\nserves: [capability/k]\n",
+        )
+    };
+    let v = review_of(branch_from(
+        &[
+            ("CAPABILITIES.md", caps),
+            ("specs/n/SPEC.md", &serving(&["r", "s"])),
+        ],
+        &[],
+        &[("specs/n/SPEC.md", &serving(&["s"]))],
+    ));
+    assert_eq!(
+        cuts(&v),
+        ["specs/n/SPEC.md: gate/cut: requirement n/r is gone"],
+        "{v}"
+    );
+}
+
+#[test]
+fn a_spec_github_withholds() {
+    // req:web.worker.review/pr-review@dffddef1
+    // A SPEC.md whose text GitHub gives as null is one the gate can't load either: its one
+    // line, not a cut for each requirement the file seems to lose.
+    let mut repo = branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
+        &[],
+        &[],
+    );
+    let mut bytes = node("", &["r", "s"], "active").into_bytes();
+    bytes.push(0xff);
+    repo.commits
+        .get_mut("222")
+        .unwrap()
+        .insert("specs/n/SPEC.md".into(), bytes);
+    let v = review_of(repo);
+    assert_eq!(v["review"], true, "{v}");
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 222 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
 fn a_broken_backlog_item() {
     // req:web.worker.review/pr-review@dffddef1
     // The cuts are read from the files the gate loads, so a backlog item the model rejects,

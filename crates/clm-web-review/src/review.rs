@@ -293,7 +293,8 @@ pub struct Comparison {
     pub fingerprint: Option<String>,
     /// The head's code key, `None` when GitHub truncated its tree.
     pub code_key: Option<String>,
-    /// The branch needs a human's review (`needs_review`, or a cut, or a widened exemption).
+    /// The branch needs a human's review (`needs_review`, a cut, a widened exemption or a
+    /// list whose text GitHub withholds).
     pub review: bool,
     /// The `gate/cut` lines `clm gate` prints for what the branch cuts, in its order.
     pub cuts: Vec<String>,
@@ -423,8 +424,8 @@ fn listed_cuts(
     if !read {
         return Vec::new();
     }
-    let (base, base_violations) = cut_graph(base_files);
-    let (head, head_violations) = cut_graph(head_files);
+    let (base, base_violations) = cut_graph(&trees.base, base_files);
+    let (head, head_violations) = cut_graph(&trees.head, head_files);
     clm_gate::cuts_or_unloaded(
         &clm_gate::Side {
             graph: &base,
@@ -446,24 +447,46 @@ fn listed_cuts(
 /// The graph the gate reads cuts from, and the violations loading it gave: `specs/`, the
 /// two human layers and the live `changes/<id>/change.md` files, and no other file, so a
 /// backlog item or a decision the gate never sees doesn't keep the cuts from being read.
-fn cut_graph(files: &Files) -> (Graph, Vec<clm_model::Violation>) {
+/// A text file of the listing the model reads whose text GitHub withholds is one the gate
+/// can't load either, a violation of that side.
+fn cut_graph(listing: &keys::Listing, files: &Files) -> (Graph, Vec<clm_model::Violation>) {
+    let live_change = |path: &str| {
+        path.strip_prefix("changes/")
+            .and_then(|rest| rest.split_once('/'))
+            .is_some_and(|(id, rest)| id != "archive" && rest == "change.md")
+    };
     let gate_reads = |path: &Path| {
         path.to_str().is_some_and(|path| {
             path.starts_with("specs/")
                 || path == "ARCHITECTURE.md"
                 || path == "CAPABILITIES.md"
-                || path
-                    .strip_prefix("changes/")
-                    .and_then(|rest| rest.split_once('/'))
-                    .is_some_and(|(id, rest)| id != "archive" && rest == "change.md")
+                || live_change(path)
         })
     };
-    let files: Files = files
+    let kept: Files = files
         .iter()
         .filter(|(path, _)| gate_reads(path))
         .map(|(path, bytes)| (path.clone(), bytes.clone()))
         .collect();
-    clm_model::load_files(&files)
+    let (graph, mut violations) = clm_model::load_files(&kept);
+    let texts = listing.entries.iter().filter_map(|e| {
+        let path = std::str::from_utf8(&e.path).ok()?;
+        let text = (path.starts_with("specs/") && path.ends_with("/SPEC.md"))
+            || path == "ARCHITECTURE.md"
+            || path == "CAPABILITIES.md"
+            || live_change(path);
+        (e.kind == "blob" && text).then_some(path)
+    });
+    for path in texts {
+        if !files.contains_key(Path::new(path)) {
+            violations.push(clm_model::Violation {
+                path: path.into(),
+                rule: "model/load-from-files",
+                message: "unreadable: GitHub withholds its text".into(),
+            });
+        }
+    }
+    (graph, violations)
 }
 
 /// A list the head holds, among the paths whose entries differ, whose text GitHub withholds
