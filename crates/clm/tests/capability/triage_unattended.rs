@@ -79,7 +79,7 @@ fn design(repo: &Repo, id: &str, slug: &str, node: &str, burdens: Option<&str>) 
     session.write(
         &format!("changes/{id}/deltas/{node}.md"),
         &format!(
-            "---\ncomponent: {node}\ncreate: false\n---\n## MODIFIED Requirements\n\n### Requirement: x <!-- base: {base} -->\n{node} SHALL x properly.\n\n#### Scenario: x\n- GIVEN g\n- WHEN w\n- THEN t, properly\n"
+            "---\ncomponent: {node}\ncreate: false\n---\n## MODIFIED Requirements\n\n### Requirement: x <!-- base: {base} -->\n{node} SHALL x properly.\n\n#### Scenario: x\n- GIVEN g, properly\n- WHEN w\n- THEN t\n"
         ),
     );
     let apply = session.clm(&["apply", id]);

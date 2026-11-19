@@ -81,8 +81,9 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
 }
 
 /// The version of the rules by which `evaluate_at` decides a branch's kind and whether it
-/// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 since.
-pub const RULES: u32 = 2;
+/// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 before a
+/// changed outcome did, 3 since.
+pub const RULES: u32 = 3;
 
 /// `evaluate_at` as the gate decided under the rules of version `rules` (`rules-version`):
 /// only the review, and with it `gate/approval`, depends on the version. `Err` for a version
@@ -272,6 +273,12 @@ pub fn evaluate_by(
             }
             // Version 1, before a cut needed review.
             None if rules == 1 => needs_review_of(&paths, setting_changed, &changes) || widened,
+            // Version 2, before a changed outcome needed review.
+            None if rules == 2 => {
+                needs_review_of(&paths, setting_changed, &changes)
+                    || widened
+                    || cut.iter().any(|c| !matches!(c, Cut::Outcome { .. }))
+            }
             // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
             None => {
                 needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty()

@@ -19,7 +19,7 @@ fn an_idea_becomes_a_spec_branch() {
     repo.write(
         "changes/20261030-x-twice/deltas/a.md",
         &format!(
-            "---\ncomponent: a\ncreate: false\n---\n## MODIFIED Requirements\n\n### Requirement: x <!-- base: {base} -->\nA SHALL x twice.\n\n#### Scenario: x\n- GIVEN g\n- WHEN w\n- THEN t, twice\n"
+            "---\ncomponent: a\ncreate: false\n---\n## MODIFIED Requirements\n\n### Requirement: x <!-- base: {base} -->\nA SHALL x twice.\n\n#### Scenario: x\n- GIVEN g, twice\n- WHEN w\n- THEN t\n"
         ),
     );
     let check = repo.clm(&["check"]);

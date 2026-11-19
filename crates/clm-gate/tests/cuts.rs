@@ -52,7 +52,7 @@ const X: &str = "X SHALL hold.";
 
 #[test]
 fn scenario_from_two_graphs() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
     let found = cuts(&base, &head, &[]);
@@ -75,7 +75,7 @@ fn scenario_from_two_graphs() {
 
 #[test]
 fn a_gone_requirement_and_its_order() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let two = format!(
         "{}{}",
         requirement("x", X, &["first"]),
@@ -101,7 +101,7 @@ fn a_gone_requirement_and_its_order() {
 
 #[test]
 fn moved_to_another_component() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let base = graph(&[
         ("a", "", requirement("x", X, &["the chain"])),
         ("b", "", requirement("y", X, &["other"])),
@@ -115,7 +115,7 @@ fn moved_to_another_component() {
 
 #[test]
 fn two_requirements_merged() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let base = graph(&[(
         "a",
         "",
@@ -134,7 +134,7 @@ fn two_requirements_merged() {
 
 #[test]
 fn a_name_another_requirement_already_held() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let base = graph(&[
         ("a", "", requirement("x", X, &["s", "not switched on"])),
         ("b", "", requirement("y", X, &["not switched on"])),
@@ -151,7 +151,7 @@ fn a_name_another_requirement_already_held() {
 
 #[test]
 fn a_renamed_scenario_is_listed() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first", "the second one"]))]);
     assert_eq!(
@@ -162,7 +162,7 @@ fn a_renamed_scenario_is_listed() {
 
 #[test]
 fn sentences_that_state_and_sentences_that_place() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     assert_eq!(
         stating_sentences(
             "The command SHALL print the list. It SHALL exit 1 when the list is empty."
@@ -210,7 +210,7 @@ fn sentences_that_state_and_sentences_that_place() {
 
 #[test]
 fn a_lost_sentence_and_a_reworded_one() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let two = "The command SHALL print the list. It SHALL exit 1 when the list is empty.";
     let base = graph(&[("a", "", requirement("x", two, &["s"]))]);
     let head = graph(&[(
@@ -243,7 +243,7 @@ fn a_lost_sentence_and_a_reworded_one() {
 
 #[test]
 fn list_lines_read_file_and_name() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let text = "# tests to delete\n\nDELETE tests/t.rs::two\tmerged into a/y\r\nremove the old ones\nDELETE b.rs::mod::three\n";
     let found: Vec<(String, String)> = list_lines(text)
         .into_iter()
@@ -260,7 +260,7 @@ fn list_lines_read_file_and_name() {
 
 #[test]
 fn tests_a_list_adds() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let g = graph(&[("a", "", requirement("x", X, &["s"]))]);
     let lists = [
         TestList {
@@ -291,7 +291,7 @@ fn tests_a_list_adds() {
 
 #[test]
 fn the_unloaded_line() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let cut = Cut::Unloaded {
         revision: "abc123".into(),
     };
@@ -303,7 +303,7 @@ fn the_unloaded_line() {
 
 #[test]
 fn cuts_or_unloaded_lists_by_the_rule_for_specs_that_dont_load() {
-    // req:gate/cuts@02dbf77f
+    // req:gate/cuts@b9cced78
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
     let broken = [clm_model::Violation {
@@ -386,4 +386,187 @@ fn scenario_an_exemption_from_two_graphs() {
         requirement("x", X, &["s"]),
     )]);
     assert!(widened_exemptions(&base, &why).is_empty());
+}
+
+/// A requirement whose scenarios are `(name, lines)`, each block's lines as written.
+fn raw(slug: &str, statement: &str, scenarios: &[(&str, &str)]) -> String {
+    let mut out = format!("\n### Requirement: {slug}\n{statement}\n");
+    for (name, body) in scenarios {
+        out.push_str(&format!("\n#### Scenario: {name}\n{body}\n"));
+    }
+    out
+}
+
+/// The cut lines of `a/x` going from the scenarios `base` to `head`.
+fn outcome_cuts(base: &[(&str, &str)], head: &[(&str, &str)]) -> Vec<String> {
+    let base = graph(&[("a", "", raw("x", X, base))]);
+    let head = graph(&[("a", "", raw("x", X, head))]);
+    lines(&cuts(&base, &head, &[]))
+}
+
+const NONE: [String; 0] = [];
+
+const EXITS_1: &str = "- GIVEN a test renamed in its file\n- WHEN the land runs\n- THEN it exits 1";
+
+#[test]
+fn a_changed_outcome_from_two_graphs() {
+    // req:gate/cuts@b9cced78
+    let changed =
+        ["specs/a/SPEC.md: gate/cut: scenario \"a renamed test\" of a/x changes its outcome"];
+    let base = [("a renamed test", EXITS_1)];
+    // reversed
+    let lands = EXITS_1.replace("it exits 1", "it lands");
+    assert_eq!(outcome_cuts(&base, &[("a renamed test", &lands)]), changed);
+    let found = cuts(
+        &graph(&[("a", "", raw("x", X, &base))]),
+        &graph(&[("a", "", raw("x", X, &[("a renamed test", &lands)]))]),
+        &[],
+    );
+    assert_eq!(
+        found,
+        [Cut::Outcome {
+            spec: PathBuf::from("specs/a/SPEC.md"),
+            id: "a/x".into(),
+            name: "a renamed test".into(),
+        }]
+    );
+    // reflowed, its white space Unicode's, or only its setting changed: no cut
+    let reflowed = EXITS_1.replace("it exits 1", "it\n  exits 1  ");
+    assert_eq!(outcome_cuts(&base, &[("a renamed test", &reflowed)]), NONE);
+    let nbsp = EXITS_1.replace("exits 1", "exits\u{a0}1");
+    assert_eq!(outcome_cuts(&base, &[("a renamed test", &nbsp)]), NONE);
+    let setting = EXITS_1.replace("renamed in its file", "renamed into another file");
+    assert_eq!(outcome_cuts(&base, &[("a renamed test", &setting)]), NONE);
+    // a word joined to the next is a change
+    let joined = EXITS_1.replace("it exits 1", "itexits 1");
+    assert_eq!(outcome_cuts(&base, &[("a renamed test", &joined)]), changed);
+}
+
+#[test]
+fn an_outcome_runs_from_its_then_line_to_the_blocks_end() {
+    // req:gate/cuts@b9cced78
+    let changed = |name: &str| {
+        vec![format!(
+            "specs/a/SPEC.md: gate/cut: scenario \"{name}\" of a/x changes its outcome"
+        )]
+    };
+    // an indented `- THEN` starts it, and the lines after it, an `- AND` among them, are in it
+    let indented = "- GIVEN g\n  - THEN t\n- AND u";
+    let and_v = indented.replace("- AND u", "- AND v");
+    assert_eq!(
+        outcome_cuts(&[("s", indented)], &[("s", &and_v)]),
+        changed("s")
+    );
+    // a line before the first `- THEN` is not
+    let two = "- GIVEN g\n- THEN t\n- THEN u";
+    let given_h = two.replace("- GIVEN g", "- GIVEN h");
+    assert_eq!(outcome_cuts(&[("s", two)], &[("s", &given_h)]), NONE);
+    let then_v = two.replace("- THEN u", "- THEN v");
+    assert_eq!(outcome_cuts(&[("s", two)], &[("s", &then_v)]), changed("s"));
+    // case is kept: `- then` starts no outcome, so the scenario's is empty
+    let lower = "- GIVEN g\n- then t";
+    let lower_u = lower.replace("then t", "then u");
+    assert_eq!(outcome_cuts(&[("s", lower)], &[("s", &lower_u)]), NONE);
+    assert_eq!(
+        outcome_cuts(&[("s", lower)], &[("s", "- GIVEN g\n- THEN t")]),
+        changed("s")
+    );
+    // a heading inside a fence doesn't end the block, and the fence's lines are read as any
+    let fenced = "- THEN it prints\n```\n#### not a heading\nold\n```";
+    let new = fenced.replace("old", "new");
+    assert_eq!(outcome_cuts(&[("s", fenced)], &[("s", &new)]), changed("s"));
+    // the next heading ends the block: a `#### Needs` after the last scenario is not in it
+    let needing = |other: &str, then: &str| {
+        let b = format!(
+            "{}{}",
+            requirement("y", X, &["s"]),
+            requirement("z", X, &["s"])
+        );
+        let a = format!("{}\n#### Needs\n- {other}\n", raw("x", X, &[("s", then)]));
+        graph(&[("a", "", a), ("b", "", b)])
+    };
+    let base = needing("b/y", "- THEN t");
+    assert_eq!(cuts(&base, &needing("b/z", "- THEN t"), &[]), []);
+    assert_eq!(
+        lines(&cuts(&base, &needing("b/z", "- THEN u"), &[])),
+        changed("s")
+    );
+}
+
+#[test]
+fn scenarios_of_one_name_compare_by_their_place_among_it() {
+    // req:gate/cuts@b9cced78
+    let line =
+        ["specs/a/SPEC.md: gate/cut: scenario \"not switched on\" of a/x changes its outcome"];
+    let first = ("not switched on", "- THEN it exits 0");
+    let second = ("not switched on", "- THEN it exits 1");
+    let third = ("not switched on", "- THEN it exits 2");
+    // two scenarios of one name, the second's outcome changed: one cut
+    assert_eq!(outcome_cuts(&[first, second], &[first, third]), line);
+    // a duplicate the head loses
+    assert_eq!(outcome_cuts(&[first, first], &[first]), line);
+    // one the head gains is no cut, nor one whose place among other names moves
+    assert_eq!(outcome_cuts(&[first], &[first, second]), NONE);
+    assert_eq!(
+        outcome_cuts(&[("s", "- THEN u"), first], &[first, ("s", "- THEN u")]),
+        NONE
+    );
+}
+
+#[test]
+fn changed_outcomes_follow_gone_scenarios_and_precede_shortened_requirements() {
+    // req:gate/cuts@b9cced78
+    let t = "- THEN t";
+    let u = "- THEN u";
+    let base = graph(&[
+        (
+            "a",
+            "",
+            raw(
+                "x",
+                "X SHALL hold. It SHALL exit 1.",
+                &[("p", t), ("q", t), ("r", t)],
+            ),
+        ),
+        ("b", "", raw("y", X, &[("s", t), ("gone", t)])),
+        ("c", "", raw("z", X, &[("s", t)])),
+    ]);
+    let head = graph(&[
+        (
+            "a",
+            "",
+            raw("x", "X SHALL hold.", &[("r", u), ("q", t), ("p", u)]),
+        ),
+        ("b", "", raw("y", X, &[("s", u)])),
+        ("c", "", String::new()),
+    ]);
+    assert_eq!(
+        lines(&cuts(&base, &head, &[])),
+        [
+            "specs/c/SPEC.md: gate/cut: requirement c/z is gone",
+            "specs/b/SPEC.md: gate/cut: scenario \"gone\" of b/y is gone",
+            "specs/a/SPEC.md: gate/cut: scenario \"p\" of a/x changes its outcome",
+            "specs/a/SPEC.md: gate/cut: scenario \"r\" of a/x changes its outcome",
+            "specs/b/SPEC.md: gate/cut: scenario \"s\" of b/y changes its outcome",
+            "specs/a/SPEC.md: gate/cut: a/x states 1 sentences where it stated 2",
+        ]
+    );
+}
+
+#[test]
+fn a_moved_scenario_is_not_compared() {
+    // req:gate/cuts@b9cced78
+    let base = graph(&[
+        ("a", "", raw("x", X, &[("the chain", "- THEN t")])),
+        ("b", "", raw("y", X, &[("other", "- THEN t")])),
+    ]);
+    let head = graph(&[
+        ("a", "", String::new()),
+        (
+            "b",
+            "",
+            raw("y", X, &[("other", "- THEN t"), ("the chain", "- THEN u")]),
+        ),
+    ]);
+    assert_eq!(cuts(&base, &head, &[]), []);
 }

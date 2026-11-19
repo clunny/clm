@@ -24,6 +24,13 @@ pub enum Cut {
         id: String,
         name: String,
     },
+    /// A scenario whose requirement keeps its name and whose outcome, its lines from `- THEN`
+    /// on, differs from that of the head's scenario of that name at its place among them.
+    Outcome {
+        spec: PathBuf,
+        id: String,
+        name: String,
+    },
     /// A requirement that states fewer sentences at the head (`now`) than at the base (`was`).
     Shortened {
         spec: PathBuf,
@@ -50,6 +57,11 @@ impl fmt::Display for Cut {
             Cut::Scenario { spec, id, name } => write!(
                 f,
                 "{}: gate/cut: scenario \"{name}\" of {id} is gone",
+                spec.display()
+            ),
+            Cut::Outcome { spec, id, name } => write!(
+                f,
+                "{}: gate/cut: scenario \"{name}\" of {id} changes its outcome",
                 spec.display()
             ),
             Cut::Shortened { spec, id, now, was } => write!(
@@ -203,22 +215,39 @@ pub fn stating_sentences(statement: &str) -> Vec<&str> {
         .collect()
 }
 
-/// A requirement's statement, its text above its first `####` heading, and the names of its
-/// scenarios in order, headings inside a fence left out.
-fn outline(r: &Requirement) -> (String, Vec<String>) {
+/// A requirement's statement, its text above its first `####` heading, and its scenarios in
+/// order, each as its name and its outcome, headings inside a fence left out.
+fn outline(r: &Requirement) -> (String, Vec<(String, String)>) {
     let lines: Vec<&str> = r.text.lines().collect();
     let mask = clm_model::outline::fence_mask(&lines);
     let heading = |i: usize| !mask[i] && lines[i].starts_with("####");
-    let first = (1..lines.len())
-        .find(|&i| heading(i))
-        .unwrap_or(lines.len());
+    let headings: Vec<usize> = (1..lines.len()).filter(|&i| heading(i)).collect();
+    let first = headings.first().copied().unwrap_or(lines.len());
     let statement = lines[1.min(first)..first].join("\n").trim().to_string();
-    let scenarios = (first..lines.len())
-        .filter(|&i| heading(i))
-        .filter_map(|i| lines[i].strip_prefix("#### Scenario: "))
-        .map(|name| name.trim_end().to_string())
+    let scenarios = headings
+        .iter()
+        .enumerate()
+        .filter_map(|(k, &i)| {
+            let name = lines[i].strip_prefix("#### Scenario: ")?;
+            let end = headings.get(k + 1).copied().unwrap_or(lines.len());
+            Some((name.trim_end().to_string(), outcome(&lines[i + 1..end])))
+        })
         .collect();
     (statement, scenarios)
+}
+
+/// A scenario's outcome: its block's lines from the first whose text, leading white space
+/// left out, starts `- THEN`, each run of white space read as one space; empty with none.
+fn outcome(block: &[&str]) -> String {
+    let from = block
+        .iter()
+        .position(|l| l.trim_start().starts_with("- THEN"))
+        .unwrap_or(block.len());
+    block[from..]
+        .iter()
+        .flat_map(|l| l.split_whitespace())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Every component requirement of `graph`, with the spec it sits in, by ID.
@@ -235,29 +264,29 @@ fn requirements(graph: &Graph) -> BTreeMap<&str, (&Path, &Requirement)> {
 }
 
 /// What a branch cuts, from the spec graphs at its merge base and its head and the lists of
-/// tests its changes declare: gone requirements, then gone scenarios, then shortened
-/// requirements, each by requirement ID, then the tests the lists add, by list path and then
-/// in the list's order (`cuts`).
+/// tests its changes declare: gone requirements, then gone scenarios, then changed outcomes,
+/// then shortened requirements, each by requirement ID and a scenario by its place at the
+/// base, then the tests the lists add, by list path and then in the list's order (`cuts`).
 pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
+    type Outlines = BTreeMap<String, (String, Vec<(String, String)>)>;
     let (was, now) = (requirements(base), requirements(head));
-    let outlines =
-        |reqs: &BTreeMap<&str, (&Path, &Requirement)>| -> BTreeMap<String, (String, Vec<String>)> {
-            reqs.iter()
-                .map(|(id, (_, r))| (id.to_string(), outline(r)))
-                .collect()
-        };
+    let outlines = |reqs: &BTreeMap<&str, (&Path, &Requirement)>| -> Outlines {
+        reqs.iter()
+            .map(|(id, (_, r))| (id.to_string(), outline(r)))
+            .collect()
+    };
     let (was_outline, now_outline) = (outlines(&was), outlines(&now));
-    let held = |outline: &BTreeMap<String, (String, Vec<String>)>, id: &str, name: &str| {
+    let held = |outline: &Outlines, id: &str, name: &str| {
         outline
             .get(id)
-            .is_some_and(|(_, names)| names.iter().any(|n| n == name))
+            .is_some_and(|(_, scenarios)| scenarios.iter().any(|(n, _)| n == name))
     };
 
     // Each scenario of the head that a gone scenario may move to: under a requirement that
     // held no scenario of its name at the base.
     let mut receivers: BTreeMap<&str, usize> = BTreeMap::new();
-    for (id, (_, names)) in &now_outline {
-        for name in names {
+    for (id, (_, scenarios)) in &now_outline {
+        for (name, _) in scenarios {
             if !held(&was_outline, id, name) {
                 *receivers.entry(name.as_str()).or_default() += 1;
             }
@@ -266,8 +295,8 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
 
     // Every gone scenario, by requirement ID and place, takes one receiver of its name.
     let mut unmoved: BTreeSet<(&str, usize)> = BTreeSet::new();
-    for (id, (_, names)) in &was_outline {
-        for (place, name) in names.iter().enumerate() {
+    for (id, (_, scenarios)) in &was_outline {
+        for (place, (name, _)) in scenarios.iter().enumerate() {
             // Still held where it was: a requirement gone from the head holds none.
             if held(&now_outline, id, name) {
                 continue;
@@ -283,9 +312,10 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
 
     let mut gone = Vec::new();
     let mut scenarios = Vec::new();
+    let mut outcomes = Vec::new();
     let mut shortened = Vec::new();
     for (id, (spec, _)) in &was {
-        let (statement, names) = &was_outline[*id];
+        let (statement, was_scenarios) = &was_outline[*id];
         let Some((now_spec, _)) = now.get(id) else {
             // The model refuses a requirement with no scenario, so one always has some.
             if unmoved.iter().any(|(u, _)| u == id) {
@@ -296,7 +326,8 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
             }
             continue;
         };
-        for (place, name) in names.iter().enumerate() {
+        let (now_statement, now_scenarios) = &now_outline[*id];
+        for (place, (name, was_outcome)) in was_scenarios.iter().enumerate() {
             if unmoved.contains(&(*id, place)) {
                 scenarios.push(Cut::Scenario {
                     spec: now_spec.to_path_buf(),
@@ -304,9 +335,30 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
                     name: name.clone(),
                 });
             }
+            if !held(&now_outline, id, name) {
+                continue;
+            }
+            // The n-th scenario of its name, against the n-th of that name at the head, or
+            // an empty outcome when the head holds no n-th.
+            let n = was_scenarios[..place]
+                .iter()
+                .filter(|(other, _)| other == name)
+                .count();
+            let now_outcome = now_scenarios
+                .iter()
+                .filter(|(other, _)| other == name)
+                .nth(n)
+                .map_or("", |(_, o)| o.as_str());
+            if was_outcome != now_outcome {
+                outcomes.push(Cut::Outcome {
+                    spec: now_spec.to_path_buf(),
+                    id: id.to_string(),
+                    name: name.clone(),
+                });
+            }
         }
         let was_n = stating_sentences(statement).len();
-        let now_n = stating_sentences(&now_outline[*id].0).len();
+        let now_n = stating_sentences(now_statement).len();
         if now_n < was_n {
             shortened.push(Cut::Shortened {
                 spec: now_spec.to_path_buf(),
@@ -329,6 +381,7 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
 
     gone.into_iter()
         .chain(scenarios)
+        .chain(outcomes)
         .chain(shortened)
         .chain(tests)
         .collect()
