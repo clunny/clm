@@ -776,11 +776,13 @@ fn scenario_only_the_setting_changed() {
 fn scenario_two_scenarios_of_one_name() {
     // req:gate/cuts@b9cced78
     let name = "not switched on";
-    let (_, cuts) = cuts_of(
-        raw(&[(name, "- THEN it exits 0"), (name, "- THEN it exits 1")]),
-        raw(&[(name, "- THEN it exits 0"), (name, "- THEN it exits 2")]),
+    assert_eq!(
+        cuts_of(
+            raw(&[(name, "- THEN it exits 0"), (name, "- THEN it exits 1")]),
+            raw(&[(name, "- THEN it exits 0"), (name, "- THEN it exits 2")]),
+        ),
+        ("spec review".into(), outcome_line(name))
     );
-    assert_eq!(cuts, outcome_line(name));
 }
 
 #[test]
