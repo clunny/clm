@@ -60,7 +60,7 @@ A spec branch needs your review when:
 - it changes the `approval` setting in `clm.toml`;
 - it adds or widens a component's exemption from a code rule;
 - a change it adds or edits declares `human_burdens`, or has a `change.md` that can't be read;
-- it cuts something: a requirement or a scenario is gone, a requirement states fewer sentences that hold `SHALL`, or a change lists a test for its build to delete in `deleted-tests.txt`.
+- it cuts something: a requirement or a scenario is gone, a scenario's outcome changes under its name, a requirement states fewer sentences that hold `SHALL`, or a change lists a test for its build to delete in `deleted-tests.txt`.
 
 A branch that changes the specs also needs your review when the specs don't load at its head or at the commit it branched from, since what it cuts then can't be listed. `clm gate` prints one line for each cut, and the pull request's description starts with them, so you read what goes before you say yes. A scenario counts as moved, not cut, only when its name appears under another requirement in the same branch, so Claude keeps a scenario's name when it rewords or moves it, and a rename shows as a cut. A build may delete, un-cite or rename a test only when a list you approved names it, except that it may rename a test in its own file when the new name cites every requirement the old one did; it re-cites the tests of a requirement that was merged or reworded.
 
