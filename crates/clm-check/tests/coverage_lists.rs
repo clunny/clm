@@ -205,9 +205,10 @@ fn a_deleted_test_is_listed_against_a_base() {
     );
 }
 
-#[test]
-fn a_clm_root_in_a_subdirectory_reads_its_base_from_that_root() {
-    // req:check/coverage-lists@963db740
+/// `clm coverage --deleted-tests HEAD` in a repository whose CLM root is `sub/`: a commit
+/// whose `sub/tests/t.rs` holds `one` and `two` and whose `other/tests/u.rs` holds `three`,
+/// each citing `a/x`, and a working tree whose `sub/tests/t.rs` holds the tests `head` names.
+fn deleted_in_a_subdirectory_root(head: &[&str]) -> Output {
     let dir = TempDir::new().unwrap();
     let top = dir.path();
     git(top, &["init", "-q"]);
@@ -220,22 +221,32 @@ fn a_clm_root_in_a_subdirectory_reads_its_base_from_that_root() {
     );
     let x = cite(&sub, "x");
     let test = |name: &str| format!("#[test]\nfn {name}() {{\n    // {x}\n}}\n");
-    write(
-        &sub,
-        "tests/t.rs",
-        &format!("{}\n{}", test("one"), test("two")),
-    );
+    let tests = |names: &[&str]| names.iter().map(|n| test(n)).collect::<Vec<_>>().join("\n");
+    write(&sub, "tests/t.rs", &tests(&["one", "two"]));
     write(top, "other/tests/u.rs", &test("three"));
     git(top, &["add", "-A"]);
     git(top, &["commit", "-q", "-m", "b"]);
-    write(
-        &sub,
-        "tests/t.rs",
-        &format!("{}\n{}", test("one"), test("second")),
-    );
-    let o = clm(&sub, &["--deleted-tests", "HEAD"]);
+    write(&sub, "tests/t.rs", &tests(head));
+    clm(&sub, &["--deleted-tests", "HEAD"])
+}
+
+#[test]
+fn a_clm_root_in_a_subdirectory_reads_its_base_from_that_root() {
+    // req:check/coverage-lists@963db740
+    let o = deleted_in_a_subdirectory_root(&["one", "second"]);
     assert!(o.status.success(), "{}", out(&o));
     assert_eq!(out(&o), "# tests deleted since HEAD: 0\n");
+}
+
+#[test]
+fn a_clm_root_in_a_subdirectory_names_a_deleted_test_from_that_root() {
+    // req:check/coverage-lists@963db740
+    let o = deleted_in_a_subdirectory_root(&["one"]);
+    assert!(o.status.success(), "{}", out(&o));
+    assert_eq!(
+        out(&o),
+        "# tests deleted since HEAD: 1\nDELETED tests/t.rs::two\ta/x\n"
+    );
 }
 
 #[test]

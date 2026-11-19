@@ -108,7 +108,7 @@ fn load(root: &Path) -> Result<Graph, Vec<Violation>> {
     }
 }
 
-/// The text of every file `scan` reads, by repository-relative path.
+/// The text of every file `scan` reads, by path relative to the CLM root.
 fn read_files(root: &Path) -> Vec<(PathBuf, String)> {
     let mut paths = clm_git::run(
         root,
