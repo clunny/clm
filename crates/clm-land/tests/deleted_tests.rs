@@ -172,16 +172,27 @@ fn a_new_name_another_file_carries_refuses_the_land() {
     let f = renamed_to_a_name_another_file_carries();
     let why = refused(clm_land::land(&f.work(), Some("tidy"), &f.env(&[])));
     assert_eq!(why, LINE);
-    // As `clm coverage --deleted-tests` lists it, over every file of both trees.
-    let tree = |rev: &str| -> Vec<(std::path::PathBuf, String)> {
-        ["tests/t.rs", "tests/u.rs"]
-            .iter()
-            .map(|p| (p.into(), f.git(&f.work(), &["show", &format!("{rev}:{p}")])))
-            .collect()
-    };
-    let gone = clm_coverage::deleted_tests(&tree("origin/main"), &tree("tidy"));
-    let gone: Vec<&str> = gone.iter().map(|t| t.test.as_str()).collect();
-    assert_eq!(gone, ["tests/t.rs::two"]);
+    // As `clm coverage --deleted-tests` lists it, run on the branch's checkout, given the
+    // root spec it loads (untracked, so it changes no tree the land read).
+    f.git(&f.work(), &["checkout", "-q", "tidy"]);
+    std::fs::create_dir_all(f.work().join("specs")).unwrap();
+    std::fs::write(
+        f.work().join("specs/SPEC.md"),
+        "---\ntitle: R\nstatus: active\nowners: []\n---\n",
+    )
+    .unwrap();
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let code = clm_check::coverage_command(
+        ["--deleted-tests", "origin/main"],
+        &f.work(),
+        &|_| None,
+        &mut out,
+        &mut err,
+    );
+    let out = String::from_utf8(out).unwrap();
+    assert_eq!(code, 0, "{out}{}", String::from_utf8_lossy(&err));
+    let listed: Vec<&str> = out.lines().filter(|l| l.starts_with("DELETED ")).collect();
+    assert_eq!(listed, ["DELETED tests/t.rs::two\ta/x"], "{out}");
 }
 
 #[test]

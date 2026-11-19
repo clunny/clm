@@ -516,6 +516,7 @@ dependencies = [
  "clap",
  "clm-apply",
  "clm-approval",
+ "clm-check",
  "clm-config",
  "clm-coverage",
  "clm-effort",

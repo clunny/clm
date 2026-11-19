@@ -4,7 +4,7 @@
 //! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, or renamed in its
 //! own file still citing all it cited, is not), unless a change's `deleted-tests.txt` in `base`'s
 //! tree names each. It reads every file of both trees under the CLM root, as `clm coverage
-//! --deleted-tests` does, so the two give one verdict on a branch.
+//! --deleted-tests` reads its base, so the two give one verdict on a committed branch.
 
 use std::path::PathBuf;
 
@@ -57,8 +57,10 @@ pub(crate) fn check(
             })
             .collect())
     };
-    // Every file of both trees, as `clm coverage --deleted-tests` reads them: an untouched
+    // Every file of both trees, as `clm coverage --deleted-tests` reads its base: an untouched
     // file makes no test gone, but its tests' names decide whether a touched file's is new.
+    // The head is the branch's commit, never a working tree, so an untracked file counts for
+    // nothing here.
     let every = |_: &str| true;
     let gone = clm_coverage::deleted_tests(&texts(&merge_base, &every)?, &texts(head, &every)?);
     if gone.is_empty() {
