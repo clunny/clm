@@ -10,8 +10,8 @@ serves: [capability/review-capability-cost, architecture/effort-accounted]
 
 ## Contract
 The work each land spent, read from Claude Code's transcripts on this machine and kept as `effort` records in the ledger (`effort-accounted`). Crate `clm-effort` offers, under its default `git` feature:
-- `sessions(transcripts, counted, branch)`: the work in the transcripts under `transcripts` whose entries ran in one of the `counted` directories, as one `SessionWork` (`session`, `branch`, `models`, `active_seconds`) per session and branch, optionally only those on `branch`, with the warnings the reading gave. A subagent's entries count for the branch checked out in the worktree it ran in, so a build run as a subagent is recorded against its `impl/<component>` branch (`transcripts`).
-- `unrecorded(root, options, env)`: the `effort` bodies `record` would append, and the reading's warnings, without appending them, for `clm land` to append with its `landed` record.
+- `sessions(transcripts, counted, pinned, branch)`: the work in the transcripts under `transcripts` whose entries ran in one of the `counted` directories, as one `SessionWork` (`session`, `branch`, `models`, `active_seconds`) per session and branch, optionally only those on `branch`, with the warnings the reading gave. A subagent's entries count for the branch checked out in the worktree it ran in, so a build run as a subagent is recorded against its `impl/<component>` branch, under the session `<session>/<agent>`, `<agent>` its file's name without `.jsonl`; once recorded so, `pinned` (the branch of each such `<session>/<agent>` the fold holds a record of) keeps them on that branch after the worktree is removed or checks out another (`transcripts`).
+- `unrecorded(root, options, env)`: the `effort` bodies `record` would append, and the reading's warnings, without appending them, for `clm land` to append with its `landed` record. It reads `pinned` from the fold, as `record` does.
 - `record(root, options, env)`: `clm effort record`, reading the transcripts under `options.transcripts`, or by default `$CLAUDE_CONFIG_DIR/projects`, else `$HOME/.claude/projects`, from the injected environment, and appending one `effort` record per session and branch whose counts exceed what the fold holds for its `id`, in one `append_all` (`ledger/append-all`).
 
 `clm effort record [--branch <b>] [--transcripts <dir>] [--cwd <dir>]... [--root <dir>]` prints `effort <branch> <session> <work tokens> tokens <active>s` for each record it appends, then `recorded <n> sessions on <m> branches`, or `nothing new to record`. It exits 0, 1 when it refuses (no CLM repository), and 2 when git or the ledger fails. `clm land` appends what `unrecorded` gives for the branch it lands with its `landed` record (`land`).
@@ -40,7 +40,10 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 - *Counted directories:* the repository's main worktree, every worktree `git worktree list --porcelain` names (`.clm/worktrees/` and `.claude/worktrees/` among them, and `../clm-wt/` when they are there), and each `--cwd <dir>` given.
 - *Project directories read:* those directly under the transcripts directory whose name starts with a counted directory's path with every character but an ASCII letter or digit replaced by `-` (Claude Code's naming), so a session's `subagents/` files are read with it. A name that starts with the encoding of `/x/clm` also starts with `/x/clm-wt`'s, so the entries' own `cwd` decides.
 - *Entries counted:* a `cwd` under a counted directory is compared by path component (`Path::starts_with`), so `/x/clm-wt` isn't under `/x/clm`.
-- *Branch:* Claude Code writes the launching session's branch into every entry of a subagent's file, so for a file under `subagents/` the branch is read from where the entries ran: the linked worktree their `cwd` is under, as `git worktree list --porcelain` names its branch when the record is made. `clm land` runs in the build's worktree with the build's branch checked out, which is when a build's work is recorded (`land/records-effort`). The main worktree is never read this way, and a worktree that is detached or gone leaves the entry's own `gitBranch`. A subagent that worked on two branches in one worktree has all of that work counted for the one checked out when the record is made; no build does that. Work already recorded for the launching session's branch stays there, since a record never shrinks, so a `clm effort record` run while a build's worktree is still detached counts those entries twice once the build lands; a build claims its branch in its first minute, and the overlap is accepted.
+- *Branch:* Claude Code writes the launching session's branch into every entry of a subagent's file, so for a file under `subagents/` the branch is read from where the entries ran: the linked worktree their `cwd` is under, as `git worktree list --porcelain` names its branch when the record is made. `clm land` runs in the build's worktree with the build's branch checked out, which is when a build's work is recorded (`land/records-effort`). The main worktree is never read this way. A subagent that worked on two branches in one worktree has all of that work counted for the one checked out when the record is made; no build does that.
+- *A subagent's branch is pinned once recorded.* Since a record never shrinks, an entry that moves from one record to another is counted twice, and a build's worktree is removed after every build (and a harness without worktrees of its own has `clm-loop` reuse `.claude/worktrees/agent-<name>` for another branch), so the worktree can't be asked again later. The work a subagent did in a worktree with a branch is therefore grouped under the session `<sessionId>/<agent>`, `<agent>` the subagent file's name without `.jsonl` (Claude Code names each launch's file afresh), and the `effort` record made for it is the pin: a later run reading a file whose `<sessionId>/<agent>` the fold holds a record of counts all of the file's entries for that record's branch, whatever the worktree now holds. No ledger field is added: the `session` string carries the pin, and nothing reads an `effort` record's `session` but its `id` and `clm ledger show`. When two records hold one `<sessionId>/<agent>` (two clones that saw the worktree on different branches), the one with the earliest `at` pins it.
+- *Until it is pinned:* an entry of a subagent file in a linked worktree that is detached counts for nothing, since the worktree's branch is not known yet and a record made now would count it twice once the build claims its branch; the entry is counted when the worktree has a branch, or for its own `gitBranch` once the worktree is gone. An entry whose `cwd` is under no linked worktree (a subagent run in the main worktree, or one whose unpinned worktree is gone) counts for its own `gitBranch` under its `sessionId`, joining the session's own work.
+- *Accepted:* a subagent never recorded while its worktree had a branch, whose worktree path is then reused for another branch, counts for the new branch, once. Records made before pinning (by `effort/transcripts` at `3669b654`) hold a build's subagent work under `<sessionId>` on its `impl/<component>` branch, unpinned, so a later run counts that work for the launching session's branch too, as it did before; those are the builds landed in the day between the two builds, and no record is rewritten, since a record never shrinks.
 - *Tokens:* Claude Code writes one line per content block, each repeating the response's `usage`, so each `message.id` counts once; where the lines differ, each count is the largest of them: `input_tokens`, `output_tokens`, `cache_read_input_tokens` and `cache_creation_input_tokens`, 0 when missing. Work tokens are input, output and cache writes; cache reads are kept apart.
 - Relative `--cwd` and `--transcripts` paths are taken from the directory `clm` runs in.
 
@@ -59,7 +62,7 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 ## Requirements
 
 ### Requirement: transcripts
-`sessions(transcripts, counted, branch)`, `counted` giving each counted directory with the branch checked out in it when it is a linked worktree that has one, SHALL read every JSONL file under the project directories of `transcripts` whose names start with a counted directory's encoded path, recursively, and count an entry when it is a JSON object with `sessionId`, `gitBranch`, a `timestamp` and a `cwd` under a counted directory by path component. An entry read from a file under a `subagents/` directory whose `cwd` is under a linked worktree of the repository with a branch checked out, the deepest counted directory that holds the `cwd` deciding which worktree that is, SHALL count for that branch, whatever its `gitBranch`, since a subagent's entries carry the branch of the session that launched it; every other entry SHALL count for its `gitBranch`. It SHALL count each `message.id`'s `message.usage` once, under `message.model`, counting nothing for `<synthetic>`, group the work by `sessionId` and the branch it counts for, and give as active seconds the sum of the gaps between the group's consecutive timestamps that are 600 seconds or less. It SHALL skip a line that isn't JSON, warning once with the count, and warn `no transcripts at <dir>` when the directory isn't there.
+`sessions(transcripts, counted, pinned, branch)`, `counted` giving each counted directory and, for a linked worktree, the branch checked out in it or that it has none, and `pinned` giving a branch for each `<session>/<agent>`, SHALL read every JSONL file under the project directories of `transcripts` whose names start with a counted directory's encoded path, recursively, and count an entry when it is a JSON object with `sessionId`, `gitBranch`, a `timestamp` and a `cwd` under a counted directory by path component. An entry read from a file `<agent>.jsonl` under a `subagents/` directory SHALL count, under the session `<sessionId>/<agent>`, for the branch `pinned` gives that session when it gives one; otherwise, when its `cwd` is under a linked worktree of the repository, the deepest counted directory that holds the `cwd` deciding which worktree that is, it SHALL count under `<sessionId>/<agent>` for the branch checked out there, whatever its `gitBranch`, since a subagent's entries carry the branch of the session that launched it, and SHALL count for nothing when that worktree has none. Every other entry SHALL count under its `sessionId` for its `gitBranch`. It SHALL count each `message.id`'s `message.usage` once, under `message.model`, counting nothing for `<synthetic>`, group the work by the session and the branch it counts for, and give as active seconds the sum of the gaps between the group's consecutive timestamps that are 600 seconds or less. It SHALL skip a line that isn't JSON, warning once with the count, and warn `no transcripts at <dir>` when the directory isn't there.
 
 #### Scenario: repeated message
 - GIVEN two lines of one session with one `message.id` and usage `{input 10, output 5}`
@@ -67,14 +70,29 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 - THEN the session has input 10 and output 5
 
 #### Scenario: a subagent in a build's worktree
-- GIVEN `<session>/subagents/agent-x.jsonl` whose entries carry `gitBranch` `main` and a `cwd` under a linked worktree in which `impl/a` is checked out
+- GIVEN `<session>/subagents/agent-x.jsonl` whose entries carry `gitBranch` `main` and a `cwd` under a linked worktree in which `impl/a` is checked out, and nothing pinned
 - WHEN `sessions` reads them
-- THEN the session's work counts for `impl/a`, and none of it for `main`
+- THEN the work counts for `impl/a` under the session `<session>/agent-x`, and none of it for `main`
 
 #### Scenario: a subagent whose worktree has no branch
-- GIVEN the same file, the worktree's `HEAD` detached
+- GIVEN the same file, the worktree's `HEAD` detached, and nothing pinned
 - WHEN `sessions` reads it
-- THEN the work counts for `main`, the entries' `gitBranch`
+- THEN it counts nothing
+
+#### Scenario: a subagent whose worktree is gone
+- GIVEN the same file, its worktree removed, and `pinned` giving `impl/a` for `<session>/agent-x`
+- WHEN `sessions` reads it
+- THEN the work counts for `impl/a` under `<session>/agent-x`, and none of it for `main`
+
+#### Scenario: a subagent's worktree reused for another branch
+- GIVEN the same file, `impl/b` now checked out in its worktree, and `pinned` giving `impl/a` for `<session>/agent-x`
+- WHEN `sessions` reads it
+- THEN the work counts for `impl/a`, and none of it for `impl/b`
+
+#### Scenario: an unpinned subagent whose worktree is gone
+- GIVEN the same file, its worktree removed, and nothing pinned
+- WHEN `sessions` reads it
+- THEN the work counts for `main` under `<session>`, the entries' `gitBranch` and `sessionId`
 
 #### Scenario: the session's own entries in a worktree
 - GIVEN a session's own file, outside any `subagents/` directory, whose entries carry `gitBranch` `spec/x` and a `cwd` under a linked worktree in which `impl/a` is checked out
@@ -87,7 +105,7 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 - THEN it gives two `SessionWork`, one per branch
 
 #### Scenario: subagent file
-- GIVEN `<session>/subagents/agent-x.jsonl` with the same `sessionId` and branch
+- GIVEN `<session>/subagents/agent-x.jsonl` with the same `sessionId` and branch, its entries' `cwd` under no linked worktree
 - WHEN `sessions` reads it
 - THEN its work joins the session's
 
@@ -112,7 +130,7 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 - THEN it gives no sessions and warns `no transcripts at <dir>`
 
 ### Requirement: record-command
-`clm effort record [--branch <b>] [--transcripts <dir>] [--cwd <dir>]... [--root <dir>]` SHALL read the sessions of the repository's worktrees and each `--cwd`, from `--transcripts` or else `$CLAUDE_CONFIG_DIR/projects` or `$HOME/.claude/projects`, and append, in one `append_all`, one `effort` record per session and branch (only `<b>`'s with `--branch`) holding, per model and count and for the active seconds, the larger of what it read and of the record the fold holds for its `effort_id`, when that differs from the folded record. It SHALL print `effort <branch> <session> <work tokens> tokens <active>s` per record and then `recorded <n> sessions on <m> branches`, or `nothing new to record`, and exit 0; 1 when it refuses, outside a CLM repository; 2 when git or the ledger fails.
+`clm effort record [--branch <b>] [--transcripts <dir>] [--cwd <dir>]... [--root <dir>]` SHALL read the sessions of the repository's worktrees and each `--cwd`, from `--transcripts` or else `$CLAUDE_CONFIG_DIR/projects` or `$HOME/.claude/projects`, with each `<session>/<agent>` the fold holds an `effort` record of pinned to that record's branch, the earliest `at` deciding between two, and append, in one `append_all`, one `effort` record per session and branch (only `<b>`'s with `--branch`) holding, per model and count and for the active seconds, the larger of what it read and of the record the fold holds for its `effort_id`, when that differs from the folded record. It SHALL print `effort <branch> <session> <work tokens> tokens <active>s` per record and then `recorded <n> sessions on <m> branches`, or `nothing new to record`, and exit 0; 1 when it refuses, outside a CLM repository; 2 when git or the ledger fails.
 
 #### Scenario: one commit
 - GIVEN two sessions on `impl/a` in the transcripts and a clone with a bare `origin`
@@ -133,6 +151,11 @@ The review pages, `clm capabilities`, `clm architecture` and their pages, built 
 - GIVEN a run that recorded a session's entries in the repository and in a `--cwd` directory
 - WHEN `clm effort record` runs again without that `--cwd`
 - THEN it prints `nothing new to record`
+
+#### Scenario: a build's worktree removed after its record
+- GIVEN a run that recorded a subagent's entries, whose `gitBranch` is `main`, for `impl/a`, the branch of the linked worktree they ran in, and the worktree then removed
+- WHEN `clm effort record` runs again
+- THEN it prints `nothing new to record`, and the fold holds no `effort` record of the session on `main`
 
 #### Scenario: branch filter
 - GIVEN sessions on `impl/a` and `impl/b`
