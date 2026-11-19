@@ -24,6 +24,7 @@ fn job() -> Job {
                 foreign_tests: vec![],
                 delete: vec![],
                 keep: vec![],
+                elsewhere: None,
             },
             Item {
                 id: "b/y".into(),
@@ -35,6 +36,7 @@ fn job() -> Job {
                 foreign_tests: vec![],
                 delete: vec![],
                 keep: vec![],
+                elsewhere: None,
             },
             Item {
                 id: "b/gone".into(),
@@ -46,6 +48,7 @@ fn job() -> Job {
                 foreign_tests: vec![],
                 delete: vec![],
                 keep: vec![],
+                elsewhere: None,
             },
         ],
         blocked: vec![
@@ -152,7 +155,7 @@ fn names_no_target_directory() {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@5e81336e
+    // req:orchestrator.run/pending-prompt@54c39a40
     let p = prompt(&job());
     let pending = p.find("## Pending requirements").unwrap();
     let list = &p[pending..];
@@ -175,7 +178,7 @@ fn scenario_behind_and_obsolete() {
 
 #[test]
 fn scenario_an_obsolete_requirement_s_tests() {
-    // req:orchestrator.run/pending-prompt@5e81336e
+    // req:orchestrator.run/pending-prompt@54c39a40
     let mut j = job();
     let gone = &mut j.pending[2];
     gone.delete = vec!["t.rs::old_rule".into()];
@@ -188,7 +191,8 @@ fn scenario_an_obsolete_requirement_s_tests() {
         "Delete the tests an approved list names (`land/deleted-tests-approved`): `t.rs::old_rule`.",
         "`clm land` refuses this build to lose every other test that cites it: `t.rs::kept_rule`;",
         "re-cite each to the requirement that now states what it proves",
-        "where none does, leave it and add a `question` item",
+        "where none does, leave it and the code it runs and add a `question` item whose \
+         `blocks` names `b/gone` (`model/parse-backlog`)",
     ] {
         assert!(list.contains(needle), "{needle} missing from {list}");
     }
@@ -210,7 +214,7 @@ fn scenario_an_obsolete_requirement_s_tests() {
 
 #[test]
 fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
-    // req:orchestrator.run/pending-prompt@5e81336e
+    // req:orchestrator.run/pending-prompt@54c39a40
     let mut j = job();
     j.wiring = true;
     let x = &mut j.pending[0];
@@ -235,8 +239,8 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 }
 
 #[test]
-fn scenario_an_obsolete_test_in_a_file_the_build_may_not_change() {
-    // req:orchestrator.run/pending-prompt@5e81336e
+fn an_obsolete_test_in_another_components_file_is_listed_apart() {
+    // req:orchestrator.run/pending-prompt@54c39a40
     let mut j = job();
     j.wiring = true;
     let gone = &mut j.pending[2];
@@ -268,7 +272,7 @@ fn scenario_an_obsolete_test_in_a_file_the_build_may_not_change() {
 
 #[test]
 fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wiring() {
-    // req:orchestrator.run/pending-prompt@5e81336e
+    // req:orchestrator.run/pending-prompt@54c39a40
     let without = prompt(&job());
     assert!(
         without.contains("wherever its file sits, is allowed"),
@@ -286,7 +290,7 @@ fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wirin
 
 #[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@5e81336e
+    // req:orchestrator.run/pending-prompt@54c39a40
     let p = prompt(&job());
     let list = &p[p.find("## Pending requirements").unwrap()..];
     assert!(!list.contains("- `b/z` unbuilt"), "{list}");
