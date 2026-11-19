@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use clm_coverage::{Marker, Pending, pending};
+use clm_coverage::{Marker, Pending, pending, waits};
 use clm_model::{BacklogKind, Graph};
 use clm_orchestrator::{ClaimRef, State, queue_from_refs};
 use serde::Serialize;
@@ -49,32 +49,33 @@ enum Target {
     Item(String),
 }
 
-/// Where the release of pending requirement `id`, which a node needs, will come from
-/// (`requirement-needs`): its node when it is unblocked, else each of its blockers in turn,
-/// its items and what the requirements it needs reach. `seen` holds the requirements already
-/// walked, so shared needs are walked once and a graph with a cycle of needs (which the model
-/// reports as a violation) still terminates.
+/// Where the release of pending line `line`, which a node waits on, will come from
+/// (`requirement-needs`, `check.coverage/wait-lines`): its node when nothing blocks it, else
+/// each of its blockers in turn, its items and what the lines `waits` gives for it reach. A
+/// wait is followed to the line it names, never by the requirement's ID alone, which an
+/// obsolete requirement's several lines share. `seen` holds the lines already walked, by node
+/// and ID, so shared waits are walked once and a cycle (of needs, which the model reports as a
+/// violation, or of an obsolete requirement's lines) still terminates.
 fn need_targets<'a>(
-    id: &'a str,
-    needed: &'a BTreeMap<String, Pending>,
-    seen: &mut BTreeSet<&'a str>,
+    line: &'a Pending,
+    lines: &'a [Pending],
+    seen: &mut BTreeSet<(&'a str, &'a str)>,
     out: &mut BTreeSet<Target>,
 ) {
-    if !seen.insert(id) {
+    if !seen.insert((line.node.as_str(), line.id.as_str())) {
         return;
     }
-    let Some(p) = needed.get(id) else { return };
-    if p.blocked_by.is_empty() && p.waits_on.is_empty() {
-        out.insert(Target::Node(p.node.clone()));
+    if line.blocked_by.is_empty() && line.waits_on.is_empty() {
+        out.insert(Target::Node(line.node.clone()));
         return;
     }
     out.extend(
-        p.blocked_by
+        line.blocked_by
             .iter()
             .map(|slug| Target::Item(format!("backlog/{slug}"))),
     );
-    for need in &p.waits_on {
-        need_targets(need, needed, seen, out);
+    for next in waits(lines, line) {
+        need_targets(next, lines, seen, out);
     }
 }
 
@@ -87,16 +88,13 @@ pub fn blockers_view(
     expiry_hours: u64,
 ) -> BlockersView {
     let queue = queue_from_refs(graph, markers, refs, now, expiry_hours);
-    let needed: BTreeMap<String, Pending> = pending(graph, markers)
-        .into_iter()
-        .map(|p| (p.id.clone(), p))
-        .collect();
+    let lines = pending(graph, markers);
     let states: BTreeMap<&str, &State> = queue
         .nodes
         .iter()
         .map(|n| (n.node.as_str(), &n.state))
         .collect();
-    let waits: BTreeMap<&str, Vec<Target>> = queue
+    let edges: BTreeMap<&str, Vec<Target>> = queue
         .nodes
         .iter()
         .filter_map(|n| match &n.state {
@@ -108,7 +106,18 @@ pub fn blockers_view(
                         (Some(item), _) => {
                             targets.insert(Target::Item(item.clone()));
                         }
-                        (None, Some(id)) => need_targets(id, &needed, &mut seen, &mut targets),
+                        // The edge's lines: those `waits` gives for this node's own lines
+                        // that wait on `id` (`a-wait-names-a-line`).
+                        (None, Some(id)) => {
+                            for own in lines
+                                .iter()
+                                .filter(|p| p.node == n.node && p.waits_on.iter().any(|w| w == id))
+                            {
+                                for line in waits(&lines, own).into_iter().filter(|p| p.id == *id) {
+                                    need_targets(line, &lines, &mut seen, &mut targets);
+                                }
+                            }
+                        }
                         (None, None) => {}
                     }
                 }
@@ -121,7 +130,7 @@ pub fn blockers_view(
     // Root (as named) -> held node -> path from the root's side.
     let mut roots: BTreeMap<String, BTreeMap<String, Vec<String>>> = BTreeMap::new();
     let mut root_kind: BTreeMap<String, (String, String, bool)> = BTreeMap::new();
-    for &start in waits.keys() {
+    for &start in edges.keys() {
         // Breadth-first along the waits, so the first path to a root is the shortest.
         let mut queue_: VecDeque<(Target, Vec<String>)> = VecDeque::new();
         let mut seen: BTreeSet<Target> = BTreeSet::new();
@@ -131,15 +140,15 @@ pub fn blockers_view(
                 continue;
             }
             match &here {
-                Target::Node(id) if id != start && waits.contains_key(id.as_str()) => {
+                Target::Node(id) if id != start && edges.contains_key(id.as_str()) => {
                     let mut via = path.clone();
                     via.push(id.clone());
-                    for next in &waits[id.as_str()] {
+                    for next in &edges[id.as_str()] {
                         queue_.push_back((next.clone(), via.clone()));
                     }
                 }
                 Target::Node(id) if id == start => {
-                    for next in &waits[start] {
+                    for next in &edges[start] {
                         queue_.push_back((next.clone(), Vec::new()));
                     }
                 }
