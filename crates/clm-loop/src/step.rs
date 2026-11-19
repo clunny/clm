@@ -515,20 +515,23 @@ fn gone_drafts(options: &Options, file: &LoopFile) -> Result<Vec<String>, Failur
         ],
     )?;
     let held: Vec<&str> = backlog.lines().collect();
-    Ok(candidates
-        .into_iter()
-        .filter(|r| {
-            r.items
-                .iter()
-                .all(|slug| !held.contains(&format!("backlog/{slug}.md").as_str()))
-        })
-        .filter_map(|r| r.name.strip_prefix("draft:"))
-        .filter(|id| {
-            let spec = format!("refs/remotes/origin/spec/{id}");
-            clm_git::git(&options.root, &["rev-parse", "--verify", "-q", &spec]).is_err()
-        })
-        .map(str::to_string)
-        .collect())
+    let mut gone = Vec::new();
+    for r in candidates {
+        let items_gone = r
+            .items
+            .iter()
+            .all(|slug| !held.contains(&format!("backlog/{slug}.md").as_str()));
+        let Some(id) = r.name.strip_prefix("draft:").filter(|_| items_gone) else {
+            continue;
+        };
+        // Asked of `origin` itself: the fetch doesn't prune, so a remote-tracking ref may name a
+        // branch since deleted. A failure to ask keeps the draft.
+        let spec = format!("refs/heads/spec/{id}");
+        if clm_git::git(&options.root, &["ls-remote", "--heads", "origin", &spec])?.is_empty() {
+            gone.push(id.to_string());
+        }
+    }
+    Ok(gone)
 }
 
 /// Finishes each draft whose items are gone with `clm draft --finish` and takes it off the loop

@@ -108,6 +108,36 @@ fn an_orphan_with_a_pushed_spec_branch() {
 }
 
 #[test]
+fn a_spec_branch_deleted_on_origin_since_the_fetch_saw_it() {
+    // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
+    let fx = Fixture::new();
+    fx.add_run(draft("20261119-x", &["b"], RunState::Planned, None));
+    push_spec(&fx, "20261119-x");
+    // Deleted on `origin` itself: the clone's remote-tracking ref stays, as an unpruned fetch
+    // leaves it.
+    let origin = fx.work.parent().unwrap().join("origin.git");
+    clm_git::git(&origin, &["update-ref", "-d", "refs/heads/spec/20261119-x"]).unwrap();
+    let actions = step(&fx.options()).unwrap();
+    assert!(
+        clm_git::git(
+            &fx.work,
+            &[
+                "rev-parse",
+                "-q",
+                "--verify",
+                "refs/remotes/origin/spec/20261119-x"
+            ]
+        )
+        .is_ok()
+    );
+    assert!(
+        !actions.iter().any(|l| l.contains("draft:20261119-x")),
+        "{actions:?}"
+    );
+    assert_eq!(fx.ran("draft --finish 20261119-x"), 1);
+}
+
+#[test]
 fn an_orphan_with_nothing_pushed_is_dropped() {
     // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
     let fx = Fixture::new();
