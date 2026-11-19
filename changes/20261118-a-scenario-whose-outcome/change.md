@@ -23,7 +23,7 @@ The gate lists a scenario whose outcome changes under its name as a cut, so a sp
 
 ## Outcome
 
-- `gate/cuts` (modified): a fourth kind of cut, a *changed outcome*, listed after the gone scenarios as `specs/<path>/SPEC.md: gate/cut: scenario "<name>" of <id> changes its outcome`; a scenario's *outcome* is defined; four scenarios added (*a reversed outcome*, *an outcome reflowed*, *only the setting changed*, *two scenarios of one name*). Since `cuts` returning anything makes a branch need review (`needs-review`, unchanged), such a branch needs review. `web.worker.review`, `host`, `check.health`, `land` and `orchestrator.run` print a cut through its `Display`, so they show the new line with no change of their own; no crate outside `clm-gate` matches on `Cut`.
+- `gate/cuts` (modified): a fourth kind of cut, a *changed outcome*, listed after the gone scenarios as `specs/<path>/SPEC.md: gate/cut: scenario "<name>" of <id> changes its outcome`; a scenario's *outcome* is defined; five scenarios added (*a duplicate the head loses*, *a reversed outcome*, *an outcome reflowed*, *only the setting changed*, *two scenarios of one name*). It now serves `capability/propose-intent` and `capability/triage-unattended` too, since whether a proposed or drafted branch lands on checks rests on it, and names the two capability tests whose fixtures change a scenario's outcome and expect `spec` (`propose_intent.rs::an_idea_becomes_a_spec_branch`, `triage_unattended.rs::triage_a_backlog`), which its build updates (`capability-tests-follow-rules`). Both requirements keep their `#### Needs` on `check.coverage/test-lists`, pending from `20261118-renaming-a-citing-test`. Since `cuts` returning anything makes a branch need review (`needs-review`, unchanged), such a branch needs review. `web.worker.review`, `host`, `check.health`, `land` and `orchestrator.run` print a cut through its `Display`, so they show the new line with no change of their own; no crate outside `clm-gate` matches on `Cut`.
 - `gate/rules-version` (modified): `RULES` is 3; under version 2 a changed outcome makes no branch need review, under version 1 no cut does; scenario *a changed outcome under each version* added.
 - `gate`'s Contract and Design name the new cut and version 3.
 - `ARCHITECTURE.md`'s `removal-needs-a-yes` (its `#### Untested` text), `docs/decisions/cuts-are-what-a-program-lists.md`, `docs/decisions/yes-no-review.md`, `docs/guide/glossary.md` (**Cut**) and `docs/guide/how-it-works.md` name the new cut.
@@ -38,8 +38,10 @@ The gate lists a scenario whose outcome changes under its name as a cut, so a sp
 
 - A scenario moved to another requirement whose outcome changes on the way is not listed: a move is matched by name and count, not scenario to scenario. Accepted as the reader's, as a merged scenario is.
 - A scenario renamed and reworded is listed once, as gone, not also as changed.
+- A requirement that loses one of two scenarios of one name is listed as a changed outcome of the lost one, compared with nothing, since the name is still held and so it isn't a gone scenario.
+- `crates/clm-gate/tests/rules_version.rs` asserts `RULES` is 2 and `clm-ledger/tests/ledger.rs` writes `Gate-Rules: 2` for lands judged the same under 2 and 3; the first is `gate`'s to update, the second stays true.
 - A changed `GIVEN` or `WHEN` that turns the same outcome into a weaker promise is not listed; it stays a reader's.
-- `plugin/skills/propose/SKILL.md` tells a session to keep a scenario's name when it rewords one; that stays true, and the gate's line now shows a reworded outcome too, so the skill needs no change.
+- `plugin/skills/propose/SKILL.md` tells a session to keep a scenario's name when it rewords one; that stays true, and the gate's line now shows a reworded outcome too, so that line needs no change. Its list of what makes a branch need review (line 7) does, and is prompt text a spec branch can't edit, so `backlog/the-propose-skill-lists-no-changed-outcome-among-the-cuts` (`kind: deferred`, `plugin`) carries it (architecture audit, `method-in-the-plugin`).
 
 ## Open questions
 
