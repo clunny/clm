@@ -59,7 +59,10 @@ A spec branch needs your review when:
 - it edits `ARCHITECTURE.md` or `CAPABILITIES.md`, or `docs/allowed_signers`, the keys a signed repository trusts;
 - it changes the `approval` setting in `clm.toml`;
 - it adds or widens a component's exemption from a code rule;
-- a change it adds or edits declares `human_burdens`, or has a `change.md` that can't be read.
+- a change it adds or edits declares `human_burdens`, or has a `change.md` that can't be read;
+- it cuts something: a requirement or a scenario is gone, a requirement states fewer sentences that hold `SHALL`, or a change lists a test for its build to delete in `deleted-tests.txt`.
+
+`clm gate` prints one line for each cut, and the pull request's description starts with them, so you read what goes before you say yes. A scenario counts as moved, not cut, only when its name appears under another requirement in the same branch, so Claude keeps a scenario's name when it rewords or moves it, and a rename shows as a cut. A build may delete, rename or un-cite a test only when a list you approved names it; it re-cites the tests of a requirement that was merged or reworded.
 
 Everything else lands on checks, and nothing is reviewed after it lands. When you say yes, Claude runs `clm approve <branch>` and Claude Code asks you to confirm that command, so the approval is yours. It's a record in your ledger, pinned to the files the branch changes: a rebase or merge of `main` that touched only other files keeps it, and any change to the branch's own files drops it, so you review again.
 
