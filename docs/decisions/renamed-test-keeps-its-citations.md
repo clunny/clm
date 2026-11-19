@@ -10,7 +10,7 @@ status: accepted
 
 **Why that loses nothing a removal yes protects.** The check is about names already: a build may rewrite a test's body under its old name, keeping its markers, and the land has never refused it. A new name in the same file with at least the same citations gives no more room than that. Whether the test still proves what it cites is the judge audit's and the mutation pass's question, as it is for a test edited in place.
 
-**What is still gone.** A test renamed and moved to another file in one branch, one renamed that cites fewer requirements, one whose new name some test at the base already carries, cited or not, every gone test beyond the new names its file gains once its unmarked tests that left have each taken one, one whose name its file still carries as often as before, and a cited test of a name whose unmarked namesake in its file may have gained a marker in its place. Each of these errs toward refusing: the build keeps the test, or the change lists it.
+**What is still gone.** A test renamed and moved to another file in one branch, one renamed that cites fewer requirements, one whose new name some test at the base already carries, cited or not, every gone test beyond the new names its file gains once its unmarked tests that left have each taken one, one whose name its file still carries as often as before, and a cited test of a name whose unmarked namesake in its file, or in the file it moved to, may have gained a marker in its place. Each of these errs toward refusing: the build keeps the test, or the change lists it.
 
 Considered:
 - **A rename recorded by the build, such as a commit trailer.** Rejected: it is the session's word where a program can check the same thing from the two trees.

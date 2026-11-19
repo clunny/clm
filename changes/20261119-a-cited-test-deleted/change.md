@@ -23,16 +23,18 @@ Two more ways a branch can delete or strip a citing test without `deleted_tests`
 ## Outcome
 
 - `check.coverage/test-lists` (modified): defines a file's *gained* tests of a bare name and takes them off the head's citing count; caps a name's renames in a file at how many fewer tests of that name its head holds; states the ambiguous same-name case as counting the cited test gone. Three scenarios added: *a cited test deleted beside an uncited test of its name* (the first item's case, returned), *one of two tests of a name renamed* (nothing returned) and *a test that loses its last marker beside a new citing test* (the second item's case, returned).
-- `docs/decisions/renamed-test-keeps-its-citations.md` states the rule as amended.
+- `docs/decisions/renamed-test-keeps-its-citations.md` states the rule as amended, and `cuts-are-what-a-program-lists` says what `clm land` refuses now covers a cited test an uncited namesake may have replaced.
+- `docs/guide/how-it-works.md` tells sessions the two new refused cases and how to get past them (`method-in-the-plugin`).
 
 ## Constraints
 
 - `deleted_tests`' signature and return type stay as they are; `clm land`, `clm land --check-only` and `clm coverage --deleted-tests` change only through what it returns.
-- Every scenario of `test-lists` as it stands keeps its outcome: in none does a file lose an unmarked test of a name it holds a citing test of at the head, and in none is a taken test's name still carried by its file as often as at the base.
+- Every scenario of `test-lists` as it stands keeps its outcome: in none does a file lose an unmarked test of a name a base test cites while it holds a citing test of that name at the head (in *a test that gains its first marker* `quiet` gains, but no base test cites `quiet`), and in none is a taken test's name still carried by its file as often as at the base.
 
 ## Edge cases and workarounds
 
 - A branch that deletes an unmarked test whose title a kept citing test of the same file shares is refused, though nothing cited was deleted: the trees can't tell it from the first item's case. It errs toward refusing; the build deletes it on a branch of its own or renames one of the two first, or the change lists it. Repeated titles in one file are rare, and mostly in TS/JS.
+- A citing test moved under its name into a file that loses an unmarked test of that name while the moved one is its only citing test of the name there is counted gone: the gained count is per file and can't tell the move from the unmarked test gaining a marker. It errs toward refusing; the build moves it on a branch of its own.
 - The same holds for an unmarked test renamed away from a title a kept citing test of its file shares: its loss counts as a gained marker.
 - The doc comment on `deleted_tests` (`crates/clm-coverage/src/lists.rs`) follows the requirement.
 
