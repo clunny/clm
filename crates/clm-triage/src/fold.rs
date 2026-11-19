@@ -282,7 +282,11 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          back to `status: applied` before committing, so rebase regenerates `specs/` from the \
          committed deltas.\n\n\
          Then run `clm check`, then `clm gate --base origin/main`, whose first line is \
-         `spec review`, since the folded changes need review. {GATE} A `human-task` item the \
+         `spec review`, since the folded changes need review. {GATE} The gate lists each removal it can see as a `gate/cut` line \
+         (`removal-needs-a-yes`), which the human reads before approving: where you merge two \
+         changes' edits to one requirement, keep every scenario's name, since a renamed one \
+         is listed as cut, add no cut of your own, and bring each change's \
+         `deleted-tests.txt` over as it is. A `human-task` item the \
          fold adds is a burden: declare one for it in the `human_burdens` of the change it \
          concerns. Then the builder check (`blocked-by-backlog`) on the elements where \
          two changes met: launch a fresh subagent, its `model` the build model as above, that \
@@ -337,7 +341,8 @@ fn prompt_many(folded: &[Folded], batch: &str) -> String {
          session asks the human for the one approval and lands the branch.\n\n\
          End your final message with one line: `proposed {batch} review <url>`, with the \
          pull request's URL, or `stopped: <reason>`. Any `left <id>: <reason>` lines come before \
-         it.\n",
+         it, and so does each `gate/cut` line your last `clm gate` run printed, as it stands, \
+         for the triage session to show the human with the approval ask.\n",
         n = folded.len(),
         changes = changes(folded),
         branches = branches.join(", "),
