@@ -36,7 +36,7 @@ fn repo(removed: &[&str]) -> TempDir {
 
 #[test]
 fn scenario_uncounted() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let dir = repo(&["gone"]);
     let g = graph(dir.path());
     let text = format!(
@@ -68,7 +68,7 @@ fn scenario_uncounted() {
 
 #[test]
 fn uncounted_lists_each_marker_of_an_id() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let dir = repo(&[]);
     let g = graph(dir.path());
     let text = format!("// {REQ}:a/y\n// {REQ}:a/y\n");
@@ -90,7 +90,7 @@ fn two_tests() -> String {
 
 #[test]
 fn scenario_a_removed_requirements_tests() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let dir = repo(&["x"]);
     // `a/x` is still held by component `a`, so only a removal the spec no longer holds
     // counts: remove it from the component's spec.
@@ -116,7 +116,7 @@ fn scenario_a_removed_requirements_tests() {
 
 #[test]
 fn obsolete_tests_ignore_groups_and_files_without_removals() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let dir = repo(&["x"]);
     write(
         dir.path(),
@@ -132,15 +132,40 @@ fn obsolete_tests_ignore_groups_and_files_without_removals() {
 
 fn base() -> String {
     format!(
-        "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn two() {{\n    // {REQ}:a/x\n    // {REQ}:a/y\n}}\n#[test]\nfn quiet() {{}}\n"
+        "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn two() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn quiet() {{}}\n"
     )
 }
 
 #[test]
 fn scenario_a_deleted_test() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let head = format!("#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n");
     let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let shown: Vec<_> = found
+        .iter()
+        .map(|t| (t.test.as_str(), t.ids.clone()))
+        .collect();
+    assert_eq!(shown, [("tests/t.rs::two", vec!["a/x".to_string()])]);
+}
+
+#[test]
+fn scenario_a_renamed_test() {
+    // req:check.coverage/test-lists@bbdcfe2f
+    let head = format!(
+        "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn second() {{\n    // {REQ}:a/x\n}}\n"
+    );
+    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+fn scenario_a_renamed_test_that_cites_less() {
+    // req:check.coverage/test-lists@bbdcfe2f
+    let base = format!(
+        "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn two() {{\n    // {REQ}:a/x\n    // {REQ}:a/y\n}}\n"
+    );
+    let head = rust_test("one", true) + &rust_test("second", true);
+    let found = deleted_tests(&files(&[(TESTS, base)]), &files(&[(TESTS, head)]));
     let shown: Vec<_> = found
         .iter()
         .map(|t| (t.test.as_str(), t.ids.clone()))
@@ -155,14 +180,57 @@ fn scenario_a_deleted_test() {
 }
 
 #[test]
-fn scenario_a_renamed_test() {
-    // req:check.coverage/test-lists@1457e30b
+fn scenario_a_test_renamed_into_another_file() {
+    // req:check.coverage/test-lists@bbdcfe2f
+    let head = files(&[
+        (TESTS, rust_test("one", true)),
+        ("tests/u.rs", rust_test("second", true)),
+    ]);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &head);
+    assert_eq!(names(&found), ["tests/t.rs::two"]);
+}
+
+#[test]
+fn scenario_one_new_name_for_two_gone_tests() {
+    // req:check.coverage/test-lists@bbdcfe2f
+    let base = rust_test("one", true) + &rust_test("two", true) + &rust_test("three", true);
+    let head = rust_test("one", true) + &rust_test("second", true);
+    let found = deleted_tests(&files(&[(TESTS, base)]), &files(&[(TESTS, head)]));
+    assert_eq!(names(&found), ["tests/t.rs::three"]);
+}
+
+#[test]
+fn a_rename_may_cite_more_and_at_other_versions() {
+    // req:check.coverage/test-lists@bbdcfe2f
+    let base = format!("#[test]\nfn two() {{\n    // {REQ}:a/x@11111111\n}}\n");
+    let head =
+        format!("#[test]\nfn second() {{\n    // {REQ}:a/y\n    // {REQ}:a/x@22222222\n}}\n");
+    let found = deleted_tests(&files(&[(TESTS, base)]), &files(&[(TESTS, head)]));
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+fn a_rename_takes_only_a_name_no_base_test_carries() {
+    // req:check.coverage/test-lists@bbdcfe2f
+    // `tests/t.rs` loses `two` and gains `kept`, but `kept` is a name `tests/u.rs` held
+    // at the base: it is a move, not a rename, so `two` is gone. A head test with no
+    // marker isn't a rename either.
+    let base = files(&[
+        (TESTS, rust_test("two", true)),
+        ("tests/u.rs", rust_test("kept", true)),
+    ]);
+    let head = files(&[(TESTS, rust_test("kept", true) + &rust_test("fresh", false))]);
+    assert_eq!(names(&deleted_tests(&base, &head)), ["tests/t.rs::two"]);
+    // In line order, the first new name that cites enough is the one matched.
+    let base = files(&[(TESTS, rust_test("two", true) + &rust_test("three", true))]);
     let head = format!(
-        "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn second() {{\n    // {REQ}:a/x\n}}\n"
+        "#[test]\nfn first() {{\n    // {REQ}:a/y\n}}\n{}",
+        rust_test("second", true)
     );
-    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
-    let names: Vec<_> = found.iter().map(|t| t.test.as_str()).collect();
-    assert_eq!(names, ["tests/t.rs::two"]);
+    assert_eq!(
+        names(&deleted_tests(&base, &files(&[(TESTS, head)]))),
+        ["tests/t.rs::three"]
+    );
 }
 
 fn names(found: &[DeletedTest]) -> Vec<&str> {
@@ -180,7 +248,7 @@ fn rust_test(name: &str, marker: bool) -> String {
 
 #[test]
 fn scenario_a_moved_test() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let head = files(&[
         (TESTS, rust_test("one", true)),
         ("tests/u.rs", rust_test("two", true)),
@@ -191,7 +259,7 @@ fn scenario_a_moved_test() {
 
 #[test]
 fn scenario_a_name_two_files_share() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let both = files(&[
         (TESTS, rust_test("two", true)),
         ("tests/u.rs", rust_test("two", true)),
@@ -208,7 +276,7 @@ fn scenario_a_name_two_files_share() {
 
 #[test]
 fn scenario_a_test_that_loses_its_marker() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let head = rust_test("one", true) + &rust_test("two", false);
     let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
     assert_eq!(names(&found), ["tests/t.rs::two"]);
@@ -216,7 +284,7 @@ fn scenario_a_test_that_loses_its_marker() {
 
 #[test]
 fn scenario_a_title_that_carries_its_marker() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let base = format!("test('keeps the list ({REQ}:a/x@11111111)', () => {{\n}});\n");
     let head = format!("test('keeps the list ({REQ}:a/z@22222222)', () => {{\n}});\n");
     let found = deleted_tests(
@@ -228,7 +296,7 @@ fn scenario_a_title_that_carries_its_marker() {
 
 #[test]
 fn scenario_one_of_two_tests_of_a_name_in_one_file() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let one = format!("test('two', () => {{\n  // {REQ}:a/x\n}});\n");
     let base = format!("{one}{one}");
     let found = deleted_tests(
@@ -242,7 +310,7 @@ fn scenario_one_of_two_tests_of_a_name_in_one_file() {
 
 #[test]
 fn deleted_tests_notice_a_missing_file_and_a_moved_test() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let found = deleted_tests(&files(&[(TESTS, base())]), &[]);
     assert_eq!(names(&found), ["tests/t.rs::one", "tests/t.rs::two"]);
     assert_eq!(found[0].line, 1);
@@ -255,7 +323,7 @@ fn deleted_tests_notice_a_missing_file_and_a_moved_test() {
 
 #[test]
 fn deleted_tests_sort_by_file_then_line() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     // Names sort against their lines (`b` above `a`), and the files' names against theirs.
     let t = rust_test("zz", true) + &rust_test("aa", true);
     let base = files(&[("tests/b.rs", t.clone()), ("tests/a.rs", t)]);
@@ -278,7 +346,7 @@ fn deleted_tests_sort_by_file_then_line() {
 
 #[test]
 fn deleted_tests_take_no_more_than_are_gone() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     // `a.rs` loses both its tests `two`, `b.rs` gains one: one is gone, the last of `a.rs`.
     let two = rust_test("two", true);
     let base = files(&[("tests/a.rs", two.clone() + &two)]);
@@ -292,7 +360,7 @@ fn deleted_tests_take_no_more_than_are_gone() {
 
 #[test]
 fn uncited_tests_leave_groups_out_and_sort() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let ts = "describe('g', () => {\n  test('t', () => {\n  });\n});\n".to_string();
     let rust = rust_test("zz", false) + &rust_test("aa", false);
     let found = uncited_tests(&files(&[("tests/t.rs", rust), ("a.test.ts", ts)]));
@@ -309,7 +377,7 @@ fn uncited_tests_leave_groups_out_and_sort() {
 
 #[test]
 fn deleted_tests_take_the_files_in_sorted_order() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     // Three tests `two` at the base, one at the head in a file that had none: two are
     // gone, taken from the files in sorted order, each giving what it lost.
     let base = files(&[
@@ -326,7 +394,7 @@ fn deleted_tests_take_the_files_in_sorted_order() {
 
 #[test]
 fn bare_name_leaves_markers_out() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     assert_eq!(
         bare_name(&format!(
             "keeps the list {REQ}:a/x@11111111 and {REQ}:b.c/y"
@@ -344,7 +412,7 @@ fn bare_name_leaves_markers_out() {
 
 #[test]
 fn scenario_uncited_tests() {
-    // req:check.coverage/test-lists@1457e30b
+    // req:check.coverage/test-lists@bbdcfe2f
     let rust = format!(
         "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n\n\n\n\n#[test]\nfn helper_rounds_up() {{\n}}\n"
     );
