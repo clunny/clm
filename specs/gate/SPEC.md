@@ -447,6 +447,9 @@ When the PR's diff lists `clm.toml` (the path at the top of the repository, matc
 - WHEN `evaluate_at(repo, p, m, false)` runs
 - THEN it returns kind `spec` needing review, with `gate/approval` among its violations
 
+#### Needs
+- check.coverage/test-lists
+
 #### Serves
 - capability/land-safely
 - architecture/git-is-truth
