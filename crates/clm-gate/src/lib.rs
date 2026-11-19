@@ -412,7 +412,7 @@ fn read_cuts(
         },
         &lists,
     );
-    let loaded = base_violations.is_empty() && head_violations.is_empty();
+    let loaded = !listed.iter().any(|c| matches!(c, Cut::Unloaded { .. }));
     let widened = loaded.then(|| !widened_exemptions(&base, &head).is_empty());
     Ok((listed, widened))
 }

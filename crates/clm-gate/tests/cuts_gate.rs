@@ -639,7 +639,9 @@ fn scenario_unloaded_specs_and_a_listed_test() {
         ],
     );
     let head = git(d, &["rev-parse", "HEAD"]);
-    let (_, stdout) = gate(d, &["--approved"]);
+    let (status, stdout) = gate(d, &["--approved"]);
+    // the listed test cites `a/x`, so the line is no `gate/deleted-tests` violation
+    assert_eq!(status, 0, "{stdout}");
     assert_eq!(
         cut_lines(&stdout),
         [
@@ -688,6 +690,25 @@ fn scenario_a_branch_that_touches_no_spec() {
     let unknown = CHANGE.replace("status: proposed\n", "status: proposed\nunknown_key: 1\n");
     edit(d, &[("changes/c/change.md", Some(&unknown))]);
     // read as a graph, the head wouldn't load: the cuts aren't read at all
+    let mut files = clm_model::Files::new();
+    files.insert("specs/SPEC.md".into(), ROOT.as_bytes().to_vec());
+    files.insert("changes/c/change.md".into(), unknown.clone().into_bytes());
+    assert!(!clm_model::load_files(&files).1.is_empty());
     let (_, stdout) = gate(d, &[]);
     assert!(cut_lines(&stdout).is_empty(), "{stdout}");
+}
+
+#[test]
+fn the_gate_lists_by_cuts_or_unloaded() {
+    // req:gate/cuts@02dbf77f
+    // `clm gate` lists what `cuts_or_unloaded` returns, the call `web.worker` makes too, so
+    // the two list one thing; it holds no rule of its own for specs that don't load.
+    let lib = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs"),
+    )
+    .unwrap();
+    let lib: String = lib.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(lib.contains("let listed = cuts_or_unloaded("));
+    assert!(lib.contains("Ok((listed, widened))"));
+    assert!(!lib.contains("Cut::Unloaded { revision"));
 }

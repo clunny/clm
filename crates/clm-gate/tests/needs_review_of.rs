@@ -64,7 +64,6 @@ fn the_gate_decides_review_by_needs_review_of() {
     let lib: String = lib.split_whitespace().collect::<Vec<_>>().join(" ");
     for decides in [
         "=> { needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty() }",
-        "let listed = cuts_or_unloaded(",
         "loaded.then(|| !widened_exemptions(&base, &head).is_empty());",
         "Ok((listed, widened))",
     ] {
@@ -75,7 +74,6 @@ fn the_gate_decides_review_by_needs_review_of() {
     let cuts = std::fs::read_to_string(dir.join("cuts.rs")).unwrap();
     assert!(cuts.contains("pub fn widened_exemptions<"));
     assert!(cuts.contains("pub fn cuts("));
-    assert!(cuts.contains("pub fn cuts_or_unloaded("));
     for (file, text) in [("policy.rs", &policy), ("cuts.rs", &cuts)] {
         for banned in ["clm_git", "Command", "std::process", "crate::", "super::"] {
             assert!(!text.contains(banned), "src/{file} mentions {banned}");

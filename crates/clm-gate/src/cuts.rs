@@ -37,7 +37,7 @@ pub enum Cut {
         file: String,
         name: String,
     },
-    /// The specs at `revision` don't load, so the cuts can't be read; `evaluate_at` adds it.
+    /// The specs at `revision` don't load, so the cuts can't be read; `cuts_or_unloaded` adds it.
     Unloaded { revision: String },
 }
 
