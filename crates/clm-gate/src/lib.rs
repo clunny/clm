@@ -12,7 +12,8 @@ mod cuts;
 mod policy;
 
 pub use cuts::{
-    Cut, ListLine, TestList, cuts, list_lines, places_a_test, stating_sentences, widened_exemptions,
+    Cut, ListLine, Side, TestList, cuts, cuts_or_unloaded, list_lines, places_a_test,
+    stating_sentences, widened_exemptions,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -398,22 +399,22 @@ fn read_cuts(
 
     let (base, base_violations) = load_graph_at(at.repo, at.merge_base, true)?;
     let (head, head_violations) = load_graph_at(at.repo, at.head, true)?;
-    let unloaded: Vec<Cut> = [(at.merge_base, base_violations), (at.head, head_violations)]
-        .into_iter()
-        .filter(|(_, v)| !v.is_empty())
-        .map(|(rev, _)| Cut::Unloaded {
-            revision: rev.to_string(),
-        })
-        .take(1)
-        .collect();
-    if !unloaded.is_empty() {
-        // The tests the lists add are still listed: they need no graph.
-        let none = clm_model::Graph::default();
-        let tests = cuts(&none, &none, &lists);
-        return Ok((unloaded.into_iter().chain(tests).collect(), None));
-    }
-    let widened = !widened_exemptions(&base, &head).is_empty();
-    Ok((cuts(&base, &head, &lists), Some(widened)))
+    let listed = cuts_or_unloaded(
+        &Side {
+            graph: &base,
+            violations: &base_violations,
+            revision: at.merge_base,
+        },
+        &Side {
+            graph: &head,
+            violations: &head_violations,
+            revision: at.head,
+        },
+        &lists,
+    );
+    let loaded = base_violations.is_empty() && head_violations.is_empty();
+    let widened = loaded.then(|| !widened_exemptions(&base, &head).is_empty());
+    Ok((listed, widened))
 }
 
 /// The text of `<rev>:<path>`, invalid UTF-8 replaced, or `None` when `rev` holds no such

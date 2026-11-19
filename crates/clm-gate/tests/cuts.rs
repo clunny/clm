@@ -4,7 +4,8 @@
 use std::path::PathBuf;
 
 use clm_gate::{
-    Cut, TestList, cuts, list_lines, places_a_test, stating_sentences, widened_exemptions,
+    Cut, Side, TestList, cuts, cuts_or_unloaded, list_lines, places_a_test, stating_sentences,
+    widened_exemptions,
 };
 use clm_model::Graph;
 
@@ -297,6 +298,57 @@ fn the_unloaded_line() {
     assert_eq!(
         cut.to_string(),
         "specs: gate/cut: the specs at abc123 don't load, so what the branch cuts isn't listed"
+    );
+}
+
+#[test]
+fn cuts_or_unloaded_lists_by_the_rule_for_specs_that_dont_load() {
+    // req:gate/cuts@e97edf05
+    let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
+    let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
+    let broken = [clm_model::Violation {
+        path: PathBuf::from("specs/a/SPEC.md"),
+        rule: "model/scenario",
+        message: "a requirement holds no scenario".into(),
+    }];
+    let side = |graph, violations, revision| Side {
+        graph,
+        violations,
+        revision,
+    };
+    let list = [TestList {
+        path: "changes/c/deleted-tests.txt",
+        head: "DELETE tests/t.rs::two\n",
+        base: None,
+    }];
+    // both load: what `cuts` gives
+    assert_eq!(
+        cuts_or_unloaded(&side(&base, &[], "b1"), &side(&head, &[], "h1"), &list),
+        cuts(&base, &head, &list)
+    );
+    // the head doesn't load: the one line naming it, then the lists' tests
+    let none = Graph::default();
+    assert_eq!(
+        lines(&cuts_or_unloaded(
+            &side(&base, &[], "b1"),
+            &side(&none, &broken, "h1"),
+            &list
+        )),
+        [
+            "specs: gate/cut: the specs at h1 don't load, so what the branch cuts isn't listed",
+            "changes/c/deleted-tests.txt: gate/cut: test tests/t.rs::two is to be deleted",
+        ]
+    );
+    // both fail: the merge base is named, once
+    assert_eq!(
+        cuts_or_unloaded(
+            &side(&none, &broken, "b1"),
+            &side(&none, &broken, "h1"),
+            &[]
+        ),
+        [Cut::Unloaded {
+            revision: "b1".into()
+        }]
     );
 }
 
