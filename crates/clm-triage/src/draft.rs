@@ -639,7 +639,16 @@ fn prompt_for(
          whose body names that code, which a code branch later resolves with the trailer \
          `Resolves: backlog/<slug>` (`deferred-work-resolves-in-code`). Write one `deltas/<component>.md` per component it changes, with bases from \
          `clm hashes <component>`, record decisions as `docs/decisions/<name>.md`, and make the \
-         backlog edits it needs. Run `clm check` until it passes, then `clm apply <id>`, \
+         backlog edits it needs. Removing behaviour needs the human's yes \
+         (`removal-needs-a-yes`), and `clm gate` lists each removal it can see as a \
+         `gate/cut` line, which makes the branch need review: keep a scenario's name when \
+         you reword or move it, since a renamed one is listed as cut; put both sides of a \
+         moved clause in the change; name each sentence holding `SHALL` that a requirement \
+         loses under `## What the requirements no longer state` in `change.md`; and write \
+         each test a build is to delete into `changes/<id>/deleted-tests.txt`, one \
+         `DELETE <file>::<name>` per line, among them the tests that cite a requirement the \
+         change removes from a file another component owns, which `clm check` fails when no \
+         list names them (`check/obsolete-tests-elsewhere`). Run `clm check` until it passes, then `clm apply <id>`, \
          commit, and {rebase}. Run `clm gate --base origin/main`: its first line says whether \
          the change needs review (`spec review`) or lands on checks (`spec`). {GATE} A \
          `check/priority-caps` report is an item left for the human, never a reason to \
