@@ -11,7 +11,7 @@ serves: [capability/land-safely]
 ## Contract
 `clm affected [--base <ref>] [--root <dir>] [--readers | --why <path> | --overlap <a> <b>]` prints what a change can break, read from the spec graph (`graph-test-selection`): the components it affects and the files whose tests a check should run, or that every test must run. It knows no test runner; the project's check command turns the files into its runner's arguments (`ci`), and `clm land` hands it the output (`land`).
 
-- The *changed files* are the paths that differ between the merge base of `<ref>` (default `origin/main`) and `HEAD`, and the working tree, with the untracked files git doesn't ignore, leaving out every doc-only path (`ledger/doc-only`). A deleted file is a changed file.
+- The *changed files* are the paths that differ between the merge base of `<ref>` (default `origin/main`) and `HEAD`, and the working tree, with the untracked files git doesn't ignore, leaving out every doc-only path (`ledger/doc-only`). A deleted file is a changed file. Every path it reads or prints, in each mode, is under the CLM root and named from it, as component `paths` are, though the CLM root be a subdirectory of the git repository (`clm-root-paths`).
 - When a changed file matches a glob of `config`'s `[affected] all`, or no component's `paths` hold it (`check.coverage/owner`), the output is one line, `all <file>`, naming the first such file in path order.
 - Otherwise the *affected* components are the owners of the changed files and every component that depends on one of them, directly or indirectly (`depends_on`). The output is a *component line* for each affected component, `node <id>`, the word `component-words` keeps for these lines, which `ci`'s check script and `clm land` read, then `file <path>` for each selected file, each group sorted, and nothing when no file changed.
 - The *selected* files are the changed files that still exist, whatever their content, the files `check`'s coverage scan reads (tracked, or untracked and not ignored; UTF-8; Markdown left out) that hold a `req:` marker whose requirement ID names an affected component (the part before `/`, whether or not the requirement still exists), or that hold no `req:` marker and whose owner is affected, and the *readers*.
@@ -28,7 +28,9 @@ Crate `clm-affected`. `select(graph, changed, markers, all) -> Selection` is pur
 
 **Readers.** `readers(differing, reads) -> Vec<path>` is pure too: it takes every differing path, doc-only ones included, with whether it still exists, and each scanned file's `clm:reads` globs, and returns the files, sorted, one of whose globs matches a differing path by `check.coverage`'s `matches`, so a glob reads as a component's `paths` do. A marker is the text `clm:reads ` and the glob after it, up to the next whitespace; a file may hold several, and a marker with no glob after it is ignored. A reader is selected whether or not its owner is affected, and a deleted reader isn't printed. The markers come from the files the coverage scan reads, so a Markdown file is never a reader. Every file of this component, source and doc comments as well as test fixtures, builds or writes the marker's text so the literal and a space never appear whole (`concat!("clm", ":reads specs/**")`), as fixtures do `req:` markers, or the file would be a reader of whatever follows; so does any other file that only mentions the marker. `--readers` skips the graph, the owners and `[affected] all`, since its question is only which tests read what changed.
 
-`affected(root, base, all)` gathers the inputs through `git` (`git-plumbing-layer`): `git rev-parse --verify --quiet <base>^{commit}`, whose status 1 is a ref that names no commit, `git merge-base <base> HEAD`, which has none when it prints nothing with status 1, then `git diff --name-only --no-renames -z <merge base>` (the working tree against the merge base, so a rename counts as its old and new path) and `git ls-files --others --exclude-standard -z`. A changed path is matched as git lists it, relative to the repository root.
+`affected(root, base, all)` gathers the inputs through `git` (`git-plumbing-layer`): `git rev-parse --verify --quiet <base>^{commit}`, whose status 1 is a ref that names no commit, `git merge-base <base> HEAD`, which has none when it prints nothing with status 1, then `git diff --name-only --no-renames -z <merge base>` (the working tree against the merge base, so a rename counts as its old and new path) and `git ls-files --others --exclude-standard -z`. The diff runs with `--relative` from the CLM root, so a changed path is named from the CLM root, as `ls-files` names the untracked and scanned ones, and a path outside it is left out (`clm-root-paths`).
+
+`affected_between(root, from, to, all)` diffs the two commits with `--relative` too, keeps of `clm_git::tree_blobs`' paths, which start at the top of the repository, only those under `git rev-parse --show-prefix` and strips that prefix from them, as `clm land`'s deleted-tests check reads a revision, and loads the graph from the prefix's directory in the tree `extract_tree` gives.
 
 `crates/clm` routes `clm affected`, loading `config`'s `affected` and passing the loader in, as it passes `detectors` to `clm check`, so this crate doesn't depend on `clm-config`. The stand-in loader in this crate's tests words its line as the root does. Fixture graphs in the tests give their root component no `depends_on`, so the root is affected only when a scenario says so.
 
@@ -277,3 +279,21 @@ The Contract's `overlap(a, b)` SHALL apply these rules to two selections, and it
 #### Serves
 - architecture/path-ownership
 - capability/prove-by-tests
+
+### Requirement: clm-root-paths
+`clm affected` SHALL read a change from the CLM root it runs in, which may be a subdirectory of its git repository. With `--base`, `--readers`, `--why` and `--overlap` alike, the paths that differ, the files the scan reads and every path it prints SHALL be those under the CLM root, named from it as component `paths` and `clm:reads` globs are, so a path outside the CLM root is no changed file, selects nothing and differs for no reader; and with `--overlap` each commit's graph, markers and files SHALL be read from that commit's tree at the CLM root's place in it. In a repository whose CLM root is the top of its git repository the output SHALL be what it is without this rule.
+
+#### Scenario: a branch in a subdirectory root
+- GIVEN a git repository whose CLM root is `sub/`, a component `a` owning `crates/a/**`, `sub/crates/a/src/util.rs` with no marker, and a branch that changes `sub/crates/a/src/lib.rs` and `other/build.sh`, outside `sub/`
+- WHEN `clm affected --base main` runs in `sub/`
+- THEN it prints the component line of `a`, `file crates/a/src/lib.rs` and `file crates/a/src/util.rs`, and no `all` line
+
+#### Scenario: two commits in a subdirectory root
+- GIVEN the same repository, a commit `m`, and commits `x` and `y` on top of `m`, `x` changing `sub/crates/a/src/lib.rs` and `other/build.sh`, and `y` changing `sub/crates/a/src/util.rs`
+- WHEN `clm affected --overlap x y` runs in `sub/`
+- THEN it prints the component line of `a`, `file crates/a/src/lib.rs` and `file crates/a/src/util.rs`, and exits 0
+
+#### Scenario: a reader in a subdirectory root
+- GIVEN the same repository, `sub/crates/a/tests/r.rs` holding `clm:reads ARCHITECTURE.md`, and a branch that changes only `ARCHITECTURE.md` at the top of the git repository, outside `sub/`
+- WHEN `clm affected --base main --readers` runs in `sub/`
+- THEN it prints nothing and exits 0
