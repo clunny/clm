@@ -372,6 +372,13 @@ fn an_archived_list_approves_too_and_no_list_keeps_every_test() {
         p.contains("cites it: `t.rs::old_rule` and `t.rs::kept_rule`;"),
         "{p}"
     );
+    // A line naming a test of that name in another file approves nothing here.
+    let r = obsolete_tests("changes/g/deleted-tests.txt", "DELETE u.rs::old_rule\n");
+    let p = prompt(&r, &fake(), "b", &[]);
+    assert!(
+        !p.contains("Delete the tests an approved list names"),
+        "{p}"
+    );
 }
 
 #[test]
