@@ -234,7 +234,7 @@ The session's own change is left out, so it never trips over its own work: when 
 - `converged`;
 - `ready`, with its pending requirements (`queue-pending-entries`);
 - `claimed`, with the time its claim lapses;
-- `blocked`, with what blocks its pending requirements, each blocker a backlog item or a pending requirement (`requirement-needs`), and which requirements it blocks. A requirement blocker SHALL carry `components`, serialised under that name: the distinct components, sorted by ID, of the lines the requirements it blocks wait on for it, as `check.coverage`'s `waits` gives them (`check.coverage/wait-lines`). So an obsolete requirement that waits on its own ID (`check.coverage/pending-report`) is a blocker whose `components` are the other components that own files citing it.
+- `blocked`, with what blocks its pending requirements, each blocker a backlog item or a pending requirement (`requirement-needs`), and which requirements it blocks. A requirement blocker SHALL carry `components`, serialised under that name: over every requirement of the component that the blocker blocks, the components of the lines `check.coverage`'s `waits` returns for that requirement's line (`check.coverage/wait-lines`) whose `id` is the blocker's ID, each once, sorted by component ID. An item blocker SHALL carry none, and its serialised form SHALL hold no `components` key. So an obsolete requirement that waits on its own ID (`check.coverage/pending-report`) is a blocker whose `components` are the other components that own files citing it.
 
 A component's `depends_on` SHALL NOT affect its state (`needs-alone-order`), and there SHALL be no `waiting` state.
 
@@ -246,17 +246,21 @@ A component's `depends_on` SHALL NOT affect its state (`needs-alone-order`), and
 #### Scenario: blocked by a need
 - GIVEN component `a` whose only pending requirement `a/x` needs `b/y`, uncited on component `b`, which `a` doesn't depend on
 - WHEN `queue_from_refs` runs
-- THEN it reports `a` blocked by `b/y`, blocking `a/x`, and `b` ready
+- THEN it reports `a` blocked by `b/y`, with `components` `[b]`, blocking `a/x`, and `b` ready
 
 #### Scenario: an obsolete requirement waiting on its other lines
 - GIVEN a root with `wiring: []`, components `b`, `c` and `d` with `paths` `["crates/b/**"]`, `["crates/c/**"]` and `["crates/d/**"]`, an `applied` change that removed `b/gone`, markers citing `b/gone` in a file of each, and nothing else pending
 - WHEN `queue_from_refs` runs
 - THEN `b` is `blocked` by the requirement `b/gone` with `components` `[c, d]`, and `c` and `d` are `ready`
 
+#### Scenario: an item blocker names no components
+- GIVEN component `a` whose only pending requirement is in the `blocks` of `backlog/q.md`
+- WHEN `queue_from_refs` runs and its result is serialised
+- THEN `a`'s blocker holds `item` `backlog/q` and no `components` key
+
 #### Needs
 - check.coverage/pending-report
 - check.coverage/wait-lines
-- check.coverage/pending-report
 - view/blockers-view
 - view/status-report
 - model/parse-backlog
@@ -659,7 +663,7 @@ The messages `clm next`, `clm claim`, `clm proposals` and `clm status`'s `claims
 - architecture/plain-terms
 
 ### Requirement: priority-orders-components
-A pending requirement's priority SHALL be the highest priority among the changes outside the archive whose deltas add, modify or remove it, or `P5` when there is none. A component's *effective priority* SHALL be the highest of the priorities of its unblocked pending requirements and of the priorities seeded on it: a pending requirement blocked by a wait seeds its priority on the component of each line it waits on, as `check.coverage`'s `waits` gives them (`check.coverage/wait-lines`), never on the component the first part of a waited ID names, and a line waited on that is itself blocked by a wait passes it on to the lines it waits on, through components of any state, so a `claimed` or `blocked` component in between passes a dependant's priority on. A wait SHALL be each entry of the requirement's `waits_on` (`check.coverage/pending-report`): a requirement its `Needs` names, for an `obsolete` requirement one a move took it to and, on its own component's line, its own ID, standing for its lines on the components that own the other files citing it, and for a capability a rule serving it that holds it back (an `unbuilt` one, or a `behind` one itself blocked), so the rules serving a capability, and the work a changed one waits on, inherit its priority. `depends_on` SHALL carry no priority (`needs-alone-order`). `queue_from_refs` SHALL report each component's effective priority, and `clm next` SHALL sort by it.
+A pending requirement's priority SHALL be the highest priority among the changes outside the archive whose deltas add, modify or remove it, or `P5` when there is none. A component's *effective priority* SHALL be the highest of the priorities of its unblocked pending requirements and of the priorities seeded on it: a pending requirement blocked by a wait seeds its priority on the component of each line it waits on, as `check.coverage`'s `waits` gives them (`check.coverage/wait-lines`), never on the component the first part of a waited ID names, and a line waited on that is itself blocked by a wait passes it on to the lines it waits on, a line being followed once, by its component and its ID together, through components of any state, so a `claimed` or `blocked` component in between passes a dependant's priority on. A wait SHALL be each entry of the requirement's `waits_on` (`check.coverage/pending-report`): a requirement its `Needs` names, for an `obsolete` requirement one a move took it to and, on its own component's line, its own ID, standing for its lines on the components that own the other files citing it, and for a capability a rule serving it that holds it back (an `unbuilt` one, or a `behind` one itself blocked), so the rules serving a capability, and the work a changed one waits on, inherit its priority. `depends_on` SHALL carry no priority (`needs-alone-order`). `queue_from_refs` SHALL report each component's effective priority, and `clm next` SHALL sort by it.
 
 #### Scenario: urgent work pulls the node it needs forward
 - GIVEN component `a` whose only pending requirement `a/x` comes from a change with `priority: P1` and needs uncited `b/y`, `b/y` from a change with no priority, and a pending component `c` on another part of the graph from a change with `priority: P3`
