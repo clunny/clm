@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-coverage-deleted-tests-names-base-files-from-the-repository]
 ---
 

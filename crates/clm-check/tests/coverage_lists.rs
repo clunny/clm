@@ -106,7 +106,7 @@ fn removing_change(root: &Path) {
 
 #[test]
 fn an_uncounted_marker_is_listed_after_the_coverage() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     let d = dir.path();
     let marker = cite(d, "x");
@@ -124,7 +124,7 @@ fn an_uncounted_marker_is_listed_after_the_coverage() {
 
 #[test]
 fn uncounted_markers_of_one_id_share_a_line() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     let d = dir.path();
     let marker = cite(d, "x");
@@ -143,7 +143,7 @@ fn uncounted_markers_of_one_id_share_a_line() {
 
 #[test]
 fn a_removed_requirements_tests_are_listed_by_what_they_lose() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["y"]);
     let d = dir.path();
     removing_change(d);
@@ -168,7 +168,7 @@ fn a_removed_requirements_tests_are_listed_by_what_they_lose() {
 
 #[test]
 fn obsolete_tests_print_no_coverage() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["y"]);
     let d = dir.path();
     let o = clm(d, &["--obsolete-tests"]);
@@ -181,7 +181,7 @@ fn obsolete_tests_print_no_coverage() {
 
 #[test]
 fn a_deleted_test_is_listed_against_a_base() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     let d = dir.path();
     let x = cite(d, "x");
@@ -205,9 +205,53 @@ fn a_deleted_test_is_listed_against_a_base() {
     );
 }
 
+/// `clm coverage --deleted-tests HEAD` in a repository whose CLM root is `sub/`: a commit
+/// whose `sub/tests/t.rs` holds `one` and `two` and whose `other/tests/u.rs` holds `three`,
+/// each citing `a/x`, and a working tree whose `sub/tests/t.rs` holds the tests `head` names.
+fn deleted_in_a_subdirectory_root(head: &[&str]) -> Output {
+    let dir = TempDir::new().unwrap();
+    let top = dir.path();
+    git(top, &["init", "-q"]);
+    let sub = top.join("sub");
+    write(&sub, "specs/SPEC.md", ROOT);
+    write(
+        &sub,
+        "specs/a/SPEC.md",
+        "---\ntitle: A\nstatus: active\nowners: []\n---\n\n## Requirements\n\n### Requirement: x\nx.\n\n#### Scenario: s\n- ok\n",
+    );
+    let x = cite(&sub, "x");
+    let test = |name: &str| format!("#[test]\nfn {name}() {{\n    // {x}\n}}\n");
+    let tests = |names: &[&str]| names.iter().map(|n| test(n)).collect::<Vec<_>>().join("\n");
+    write(&sub, "tests/t.rs", &tests(&["one", "two"]));
+    write(top, "other/tests/u.rs", &test("three"));
+    git(top, &["add", "-A"]);
+    git(top, &["commit", "-q", "-m", "b"]);
+    write(&sub, "tests/t.rs", &tests(head));
+    clm(&sub, &["--deleted-tests", "HEAD"])
+}
+
+#[test]
+fn a_clm_root_in_a_subdirectory_reads_its_base_from_that_root() {
+    // req:check/coverage-lists@963db740
+    let o = deleted_in_a_subdirectory_root(&["one", "second"]);
+    assert!(o.status.success(), "{}", out(&o));
+    assert_eq!(out(&o), "# tests deleted since HEAD: 0\n");
+}
+
+#[test]
+fn a_clm_root_in_a_subdirectory_names_a_deleted_test_from_that_root() {
+    // req:check/coverage-lists@963db740
+    let o = deleted_in_a_subdirectory_root(&["one"]);
+    assert!(o.status.success(), "{}", out(&o));
+    assert_eq!(
+        out(&o),
+        "# tests deleted since HEAD: 1\nDELETED tests/t.rs::two\ta/x\n"
+    );
+}
+
 #[test]
 fn an_unknown_base_exits_1_naming_it() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     let o = clm(dir.path(), &["--deleted-tests", "nope"]);
     assert_eq!(o.status.code(), Some(1));
@@ -216,7 +260,7 @@ fn an_unknown_base_exits_1_naming_it() {
 
 #[test]
 fn the_two_flags_together_are_a_usage_error() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     let o = clm(dir.path(), &["--obsolete-tests", "--deleted-tests", "HEAD"]);
     assert_eq!(o.status.code(), Some(2));
@@ -224,7 +268,7 @@ fn the_two_flags_together_are_a_usage_error() {
 
 #[test]
 fn a_graph_that_doesnt_load_fails_each_list() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     let d = dir.path();
     write(d, "specs/a/SPEC.md", "not a spec");
@@ -242,7 +286,7 @@ fn a_graph_that_doesnt_load_fails_each_list() {
 
 #[test]
 fn the_count_line_counts_deletes_and_uncites_apart() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["y"]);
     let d = dir.path();
     removing_change(d);
@@ -259,7 +303,7 @@ fn the_count_line_counts_deletes_and_uncites_apart() {
 
 #[test]
 fn uncounted_lines_follow_the_obsolete_lines() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["y"]);
     let d = dir.path();
     removing_change(d);
@@ -285,7 +329,7 @@ fn uncounted_lines_follow_the_obsolete_lines() {
 
 #[test]
 fn plain_coverage_fails_on_a_graph_that_doesnt_load() {
-    // req:check/coverage-lists@ee87592c
+    // req:check/coverage-lists@963db740
     let dir = repo(&["x"]);
     write(dir.path(), "specs/a/SPEC.md", "not a spec");
     let o = clm(dir.path(), &[]);
