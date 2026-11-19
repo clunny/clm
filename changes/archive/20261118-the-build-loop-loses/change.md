@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves:
   - the-build-loop-loses-a-red-verify-reported-by-its-last-line
 ---
