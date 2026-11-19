@@ -8,6 +8,7 @@ mod cap;
 mod check_log;
 mod check_only;
 mod command;
+mod deleted_tests;
 mod derived;
 mod exe;
 mod finish;
@@ -39,6 +40,18 @@ pub use clm_approval::{Env, Output};
 /// `clm approve [<branch>]`, which `clm-approval` holds (`land.approval/approve`).
 pub fn approve(root: &Path, branch: Option<&str>, env: &Env) -> Result<Output, Error> {
     Ok(clm_approval::approve(root, branch, env)?)
+}
+
+/// Ends a merge commit's message with the trailer `Gate-Rules: <RULES>`, the version of the
+/// gate's rules the land is judged by, in the trailer block that holds any `Change:` or
+/// `Checked:` line, after them (`land/gate-rules-trailer`).
+fn end_with_gate_rules(message: &mut String) {
+    message.push_str(if message.contains("\n\n") {
+        "\n"
+    } else {
+        "\n\n"
+    });
+    message.push_str(&format!("Gate-Rules: {}", clm_gate::RULES));
 }
 
 #[derive(Debug)]

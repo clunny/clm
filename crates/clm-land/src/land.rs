@@ -87,6 +87,9 @@ pub(crate) fn land_to(
         // A build holds its own files, before the lock, the merge and any check
         // (`land/build-holds-own-files`).
         crate::own_files::check(&repo, &branch, &base, &head)?;
+        // A code branch loses no citing test no approved list names, judged with it
+        // (`land/deleted-tests-approved`).
+        crate::deleted_tests::check(&repo, Some(&branch), &base, &head)?;
         // A signed repository signs this land's record, so a lander without a key is
         // refused before any check runs (`land/signed-land`).
         let signed = repo.approval.signed(&base)?;
@@ -409,6 +412,7 @@ pub(crate) fn land_to(
         if let (true, Some(id)) = (spec_land, changes.first()) {
             message.push_str(&format!("\n\nChange: {id}"));
         }
+        crate::end_with_gate_rules(&mut message);
         let merge = repo.git(&[
             "commit-tree",
             &tree,

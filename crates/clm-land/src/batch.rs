@@ -367,6 +367,7 @@ impl Batch<'_, '_, '_> {
         let (ctx, repo) = (self.ctx, self.ctx.repo);
         let (head, on_origin) = repo.approval.head(&w.branch, true)?;
         crate::own_files::check(repo, &w.branch, base, &head)?;
+        crate::deleted_tests::check(repo, Some(&w.branch), base, &head)?;
         if w.branch.starts_with("spec/") {
             let files = clm_gate::files_outside_spec_paths(&repo.root, base, &head)
                 .map_err(Error::Refused)?;
@@ -444,6 +445,7 @@ impl Batch<'_, '_, '_> {
                 message.push_str(if change.is_some() { "\n" } else { "\n\n" });
                 message.push_str(&format!("Checked: {key}"));
             }
+            crate::end_with_gate_rules(&mut message);
             commits.push(repo.git(&[
                 "commit-tree",
                 &m.tree,

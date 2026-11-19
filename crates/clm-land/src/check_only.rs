@@ -48,12 +48,14 @@ pub(crate) fn check_only_to(
         Some(_) => repo.env_of(std::fs::read(repo.root.join("clm.toml")).ok().as_deref())?,
         None => Vec::new(),
     };
-    // A build learns of a file another component owns before the check runs
-    // (`land/build-holds-own-files`).
-    if let Some(branch) = clm_git::current_branch(&repo.root)?
-        && let Some(base) = repo.rev(&format!("refs/remotes/{}/main", clm_git::REMOTE))?
-    {
-        crate::own_files::check(&repo, &branch, &base, "HEAD")?;
+    // A build learns of a file another component owns, and of a citing test it lost, before
+    // the check runs (`land/build-holds-own-files`, `land/deleted-tests-approved`).
+    if let Some(base) = repo.rev(&format!("refs/remotes/{}/main", clm_git::REMOTE))? {
+        let branch = clm_git::current_branch(&repo.root)?;
+        if let Some(branch) = &branch {
+            crate::own_files::check(&repo, branch, &base, "HEAD")?;
+        }
+        crate::deleted_tests::check(&repo, branch.as_deref(), &base, "HEAD")?;
     }
     let before = Tree::read(&repo)?;
     if let Some(land) = &repo.settings.land.value {
