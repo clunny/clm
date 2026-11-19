@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-affected-between-two-commits-names-files-from-the-repository-root]
 ---
 

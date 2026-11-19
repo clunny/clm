@@ -144,6 +144,8 @@ fn repo(clm_toml: &str) -> TempDir {
 #[test]
 fn the_call_writes_what_the_command_prints_and_returns_its_status() {
     // req:check.affected/commands-in-crate@6731de32
+    // A CLM root at the top of its repository prints what it did before `clm-root-paths`.
+    // req:check.affected/clm-root-paths@e89be136
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -924,6 +926,7 @@ fn independent_changes_overlap_in_nothing() {
 #[test]
 fn a_dependant_of_both_is_what_they_share() {
     // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/clm-root-paths@e89be136
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1126,4 +1129,119 @@ fn an_exempt_test_is_selected_and_explained_whenever_a_component_is_affected() {
         stdout(&out),
         "crates/d/tests/t.rs exempt from undeclared-imports\n"
     );
+}
+
+/// A repository on `main` whose CLM root is `sub/`: a root component and `a` owning
+/// `crates/a/**`, with `sub/crates/a/src/lib.rs`, `sub/crates/a/src/util.rs` (no marker) and
+/// `sub/crates/a/tests/r.rs` reading `ARCHITECTURE.md`; outside `sub/`, `other/build.sh` and
+/// an `ARCHITECTURE.md` at the top of the git repository. Switched to a branch `work`.
+fn subdirectory_repo() -> TempDir {
+    let dir = TempDir::new().unwrap();
+    let top = dir.path();
+    git(top, &["init", "-q", "-b", "main"]);
+    let sub = top.join("sub");
+    write(&sub, "clm.toml", "");
+    write(&sub, "specs/SPEC.md", &spec("[\"clm.toml\"]", "[]"));
+    write(&sub, "specs/a/SPEC.md", &spec("[\"crates/a/**\"]", "[]"));
+    write(&sub, "crates/a/src/lib.rs", "fn f() {}\n");
+    write(&sub, "crates/a/src/util.rs", "fn u() {}\n");
+    write(
+        &sub,
+        "crates/a/tests/r.rs",
+        &format!("// {READS}ARCHITECTURE.md\n"),
+    );
+    write(&sub, "ARCHITECTURE.md", "# Sub\n");
+    write(&sub, "crates/a/README.md", "# A\n");
+    write(top, "other/build.sh", "true\n");
+    write(top, "ARCHITECTURE.md", "# Top\n");
+    // Outside the CLM root, a file citing `a` and reading `ARCHITECTURE.md`: no scan reads it.
+    write(
+        top,
+        "other/t.rs",
+        &format!(
+            "// {}\n// {READS}ARCHITECTURE.md\n",
+            concat!("req", ":a/x@12345678")
+        ),
+    );
+    commit_all(top, "start");
+    git(top, &["switch", "-q", "-c", "work"]);
+    dir
+}
+
+#[test]
+fn a_branch_in_a_subdirectory_root_is_named_from_the_root() {
+    // req:check.affected/clm-root-paths@e89be136
+    let dir = subdirectory_repo();
+    let top = dir.path();
+    let sub = top.join("sub");
+    write(&sub, "crates/a/src/lib.rs", "fn g() {}\n");
+    write(top, "other/build.sh", "false\n");
+    commit_all(top, "change");
+    // An untracked file outside the CLM root is no changed file either.
+    write(top, "other/new.sh", "true\n");
+    let out = clm_affected(&sub, "main");
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/src/lib.rs\nfile crates/a/src/util.rs\nfile crates/a/tests/r.rs\n"
+    );
+    // `--why` names the paths from the CLM root too.
+    let out = clm_affected_with(&sub, "main", &["--why", "crates/a/src/util.rs"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "crates/a/src/util.rs owned by a\na owns crates/a/src/lib.rs (changed)\n"
+    );
+}
+
+#[test]
+fn two_commits_in_a_subdirectory_root_are_read_from_its_place_in_their_trees() {
+    // req:check.affected/clm-root-paths@e89be136
+    let dir = subdirectory_repo();
+    let top = dir.path();
+    let sub = top.join("sub");
+    git(top, &["switch", "-q", "-c", "x", "main"]);
+    write(&sub, "crates/a/src/lib.rs", "fn g() {}\n");
+    write(top, "other/build.sh", "false\n");
+    commit_all(top, "x");
+    git(top, &["switch", "-q", "-c", "y", "main"]);
+    write(&sub, "crates/a/src/util.rs", "fn v() {}\n");
+    commit_all(top, "y");
+    let out = clm_affected_args(&sub, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/src/lib.rs\nfile crates/a/src/util.rs\nfile crates/a/tests/r.rs\n"
+    );
+    // A changed Markdown file that is code, which no scan reads, is found in each commit's
+    // tree by its name from the CLM root.
+    for side in ["x", "y"] {
+        git(top, &["switch", "-q", side]);
+        write(&sub, "crates/a/README.md", &format!("# A, {side}\n"));
+        commit_all(top, side);
+    }
+    let out = clm_affected_args(&sub, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/README.md\nfile crates/a/src/lib.rs\nfile crates/a/src/util.rs\nfile crates/a/tests/r.rs\n"
+    );
+}
+
+#[test]
+fn a_reader_in_a_subdirectory_root_reads_only_paths_under_it() {
+    // req:check.affected/clm-root-paths@e89be136
+    let dir = subdirectory_repo();
+    let top = dir.path();
+    let sub = top.join("sub");
+    write(top, "ARCHITECTURE.md", "# Top, changed\n");
+    commit_all(top, "top");
+    let out = clm_affected_with(&sub, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "");
+    // The root's own `ARCHITECTURE.md` is the one the marker names.
+    write(&sub, "ARCHITECTURE.md", "# Sub, changed\n");
+    let out = clm_affected_with(&sub, "main", &["--readers"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(stdout(&out), "file crates/a/tests/r.rs\n");
 }
