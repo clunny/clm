@@ -12,12 +12,13 @@
 //!   otherwise `ready`, whatever its `depends_on` (`needs-alone-order`); a live claim makes it
 //!   `claimed` instead, so the `claimed` nodes are exactly the live claims;
 //! - its effective priority is the highest among its unblocked pending requirements and the
-//!   requirements waiting on its pending ones (a `Needs`, a move, a serving rule), through nodes of any state
-//!   (`priority-orders-nodes`).
+//!   lines waiting on its lines (a `Needs`, a move, an obsolete requirement's own ID, a serving
+//!   rule), each wait resolved to its lines by `check.coverage`'s `waits`, through nodes of any
+//!   state (`priority-orders-nodes`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use clm_coverage::{Marker, Pending, complete_changes, pending};
+use clm_coverage::{Marker, Pending, complete_changes, pending, waits};
 use clm_model::{Graph, Priority};
 use serde::Serialize;
 
@@ -83,8 +84,10 @@ pub struct Requirement {
     /// Slugs of the backlog items whose `blocks` name it.
     pub blocked_by: Vec<String>,
     /// What else it waits on, as `<node>/<slug>`: the pending requirements its `Needs` name, for
-    /// an obsolete one the pending ones a move took it to, and for a capability the `unbuilt`
-    /// rules serving it (`check.coverage/pending-report`).
+    /// an obsolete one the pending ones a move took it to and, on its own component's line, its
+    /// own ID while it has lines on other components, and for a capability the rules serving
+    /// it that hold it back (`check.coverage/pending-report`). `waits` resolves each to its
+    /// lines (`check.coverage/wait-lines`).
     pub waits_on: Vec<String>,
 }
 
@@ -103,15 +106,13 @@ impl From<&Pending> for Requirement {
     }
 }
 
-impl Requirement {
-    /// Whether a backlog item or a pending requirement it needs blocks it.
-    fn is_blocked(&self) -> bool {
-        !self.blocked_by.is_empty() || !self.waits_on.is_empty()
-    }
+/// Whether a backlog item or a wait blocks the pending line `p`.
+fn is_blocked(p: &Pending) -> bool {
+    !p.blocked_by.is_empty() || !p.waits_on.is_empty()
 }
 
-/// What blocks requirements of a node: a backlog item or a pending requirement of another
-/// node; exactly one of `item` and `requirement` is set.
+/// What blocks requirements of a node: a backlog item or a pending requirement; exactly one
+/// of `item` and `requirement` is set, and `components` with `requirement` alone.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Block {
     /// `backlog/<slug>`.
@@ -120,6 +121,10 @@ pub struct Block {
     /// `<node>/<slug>`, a pending requirement the blocked ones need.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub requirement: Option<String>,
+    /// For a requirement blocker, the components of the lines it stands for, sorted;
+    /// `None` for an item blocker.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub components: Option<Vec<String>>,
     pub requirements: Vec<String>,
 }
 
@@ -210,20 +215,21 @@ pub fn queue_from_refs(
         })
         .collect();
 
-    let mut by_node: BTreeMap<&str, Vec<Requirement>> = graph
+    let lines = pending(graph, markers);
+    let mut by_node: BTreeMap<&str, Vec<&Pending>> = graph
         .nodes
         .keys()
         .map(|id| (id.as_str(), Vec::new()))
         .collect();
-    for p in pending(graph, markers) {
+    for p in &lines {
         if let Some(list) = by_node.get_mut(p.node.as_str()) {
-            list.push(Requirement::from(&p));
+            list.push(p);
         }
     }
     for list in by_node.values_mut() {
         list.sort_by(|a, b| (a.priority, &a.id).cmp(&(b.priority, &b.id)));
     }
-    let priorities = effective_priorities(&by_node);
+    let priorities = effective_priorities(&lines, &by_node);
 
     let nodes = graph
         .nodes
@@ -235,13 +241,13 @@ pub fn queue_from_refs(
                 State::Claimed { lapses_at }
             } else if pending.is_empty() {
                 State::Converged
-            } else if pending.iter().all(Requirement::is_blocked) {
+            } else if pending.iter().all(|p| is_blocked(p)) {
                 State::Blocked {
-                    by: blocks(pending),
+                    by: blocks(&lines, pending),
                 }
             } else {
                 State::Ready {
-                    pending: pending.clone(),
+                    pending: pending.iter().map(|p| Requirement::from(*p)).collect(),
                 }
             };
             Node {
@@ -257,71 +263,79 @@ pub fn queue_from_refs(
     }
 }
 
-/// What blocks `pending`, each with the requirements it blocks: the items sorted by slug,
-/// then the needed requirements sorted by ID.
-fn blocks(pending: &[Requirement]) -> Vec<Block> {
+/// What blocks `pending`, the lines of one node, each with the requirements it blocks: the
+/// items sorted by slug, then the waited requirements sorted by ID, each with the components
+/// of the lines `waits` gives for it (`check.coverage/wait-lines`), never the component its
+/// ID names. `lines` is the whole list `pending` returned.
+fn blocks(lines: &[Pending], pending: &[&Pending]) -> Vec<Block> {
     let mut by_item: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-    let mut by_need: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    let mut by_wait: BTreeMap<&str, (BTreeSet<&str>, Vec<String>)> = BTreeMap::new();
     for p in pending {
         for slug in &p.blocked_by {
             by_item.entry(slug).or_default().push(p.id.clone());
         }
-        for need in &p.waits_on {
-            by_need.entry(need).or_default().push(p.id.clone());
+        let waited = waits(lines, p);
+        for id in &p.waits_on {
+            let (components, requirements) = by_wait.entry(id).or_default();
+            components.extend(
+                waited
+                    .iter()
+                    .filter(|w| w.id == *id)
+                    .map(|w| w.node.as_str()),
+            );
+            requirements.push(p.id.clone());
         }
     }
     let items = by_item.into_iter().map(|(slug, requirements)| Block {
         item: Some(format!("backlog/{slug}")),
         requirement: None,
+        components: None,
         requirements,
     });
-    let needs = by_need.into_iter().map(|(need, requirements)| Block {
-        item: None,
-        requirement: Some(need.to_string()),
-        requirements,
-    });
-    items.chain(needs).collect()
+    let waits = by_wait
+        .into_iter()
+        .map(|(id, (components, requirements))| Block {
+            item: None,
+            requirement: Some(id.to_string()),
+            components: Some(components.into_iter().map(String::from).collect()),
+            requirements,
+        });
+    items.chain(waits).collect()
 }
 
-/// Each node's effective priority (`priority-orders-nodes`): its own, the highest among its
-/// unblocked pending requirements, raised by every requirement that waits on one of its pending
-/// ones (a `Needs`, a move, or for a capability a serving rule). A requirement blocked by a wait seeds its priority on the node of each pending
-/// requirement it waits on, whatever that node's state, and one waited on that is itself
-/// blocked by a wait passes it on. `depends_on` carries none.
-fn effective_priorities(by_node: &BTreeMap<&str, Vec<Requirement>>) -> BTreeMap<String, Priority> {
-    let requirements: BTreeMap<&str, &Requirement> = by_node
-        .values()
-        .flatten()
-        .map(|p| (p.id.as_str(), p))
-        .collect();
+/// Each node's effective priority (`priority-orders-nodes`): the highest among its unblocked
+/// pending requirements, raised by every line that waits on one of its lines. A line blocked
+/// by a wait seeds its priority on the node of each line `waits` gives for it, whatever that
+/// node's state, never on the node a waited ID names, and a line waited on that waits in turn
+/// passes it on, each line followed once by its node and ID together. `depends_on` carries
+/// none.
+fn effective_priorities(
+    lines: &[Pending],
+    by_node: &BTreeMap<&str, Vec<&Pending>>,
+) -> BTreeMap<String, Priority> {
     let mut effective: BTreeMap<String, Priority> = by_node
         .iter()
         .filter_map(|(id, list)| {
             list.iter()
-                .filter(|p| !p.is_blocked())
+                .filter(|p| !is_blocked(p))
                 .map(|p| p.priority)
                 .min()
                 .map(|p| (id.to_string(), p))
         })
         .collect();
     for p in by_node.values().flatten() {
-        let mut seen = BTreeSet::new();
-        let mut stack: Vec<&str> = p.waits_on.iter().map(String::as_str).collect();
-        while let Some(need) = stack.pop() {
-            if !seen.insert(need) {
+        // The line itself is never seeded, so a blocked line lends nothing to its own node.
+        let mut seen: BTreeSet<(&str, &str)> = BTreeSet::from([(p.node.as_str(), p.id.as_str())]);
+        let mut stack = waits(lines, p);
+        while let Some(w) = stack.pop() {
+            if !seen.insert((w.node.as_str(), w.id.as_str())) {
                 continue;
             }
-            let Some(node) = need.split_once('/').map(|(n, _)| n) else {
-                continue;
-            };
-            if !by_node.contains_key(node) {
-                continue;
+            if by_node.contains_key(w.node.as_str()) {
+                let e = effective.entry(w.node.clone()).or_insert(p.priority);
+                *e = (*e).min(p.priority);
             }
-            let e = effective.entry(node.to_string()).or_insert(p.priority);
-            *e = (*e).min(p.priority);
-            if let Some(needed) = requirements.get(need) {
-                stack.extend(needed.waits_on.iter().map(String::as_str));
-            }
+            stack.extend(waits(lines, w));
         }
     }
     effective
