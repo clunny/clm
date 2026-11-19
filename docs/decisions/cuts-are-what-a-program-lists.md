@@ -16,7 +16,7 @@ It adds a fifth case to the four in which `yes-no-review` has a spec branch need
 
 **The tests a change deletes are declared.** `clm coverage --obsolete-tests` lists every test of a merged requirement, which a build re-cites, and misses a duplicate whose requirement stays. The change's list errs safely both ways: a line too many is read, and a line too few has the land refuse the build. An approved list is one on the base a land lands on, live or archived: it got there through the gate, which asked review for each line.
 
-**What `clm land` refuses** (`land/deleted-tests-approved`). Any code branch, whatever its name, that leaves the tree with fewer citing tests of a name and no list naming the test. A moved test is not gone. A renamed test is: a build keeps a test's name.
+**What `clm land` refuses** (`land/deleted-tests-approved`). Any code branch, whatever its name, that leaves the tree with fewer citing tests of a name and no list naming the test. A moved test is not gone, nor, since `renamed-test-keeps-its-citations`, is a test renamed in its own file that cites every requirement it cited; any other renamed test is.
 
 **What stays a reader's.** A reword that keeps the count of sentences; a sentence of behaviour worded like one that places a test; whether a merged scenario states what two did; and whether a test asserts what its requirement says, which is the judge audit's.
 
