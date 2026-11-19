@@ -698,7 +698,7 @@ fn scenario_blocked_node_holds_nothing_up() {
 
 #[test]
 fn scenario_need_pulls_priority() {
-    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/next@fd7e1025
+    // req:orchestrator/priority-orders-components@147ea0bf req:orchestrator/next@fd7e1025
     let g = with_changes(
         &[
             ("specs/a/SPEC.md", &needing("", "b/y", &[])),
@@ -717,7 +717,7 @@ fn scenario_need_pulls_priority() {
 
 #[test]
 fn a_need_blocked_by_an_item_too_still_seeds_and_lists_both() {
-    // req:orchestrator/queue-from-refs@cbcfd325
+    // req:orchestrator/queue-from-refs@cbcfd325 req:orchestrator/priority-orders-components@147ea0bf
     // `a/x` is blocked by `backlog/q` and needs `b/y`, which needs `d/z`, so the seeded
     // priority passes on along the needs.
     let b = node_with("", "", &[("y", "It SHALL.\n\n#### Needs\n- d/z")]);
@@ -918,6 +918,72 @@ fn scenario_an_obsolete_requirement_pulls_the_owner_of_its_other_markers_forward
     let q = queue(&g, &markers, &[]);
     assert_eq!(q.next(), ["c", "d"]);
     assert_eq!(priority(&q, "c"), Priority::P1);
+    assert_eq!(priority(&q, "b"), Priority::P5);
+}
+
+#[test]
+fn a_requirement_blocker_names_only_its_own_lines_once() {
+    // req:orchestrator/queue-from-refs@cbcfd325
+    // `a/x` waits on `b/y` and `c/z`, `a/w` on `b/y` too: each blocker names the components
+    // of its own ID's lines only, each once, over every requirement it blocks.
+    let a = node_with(
+        "",
+        "",
+        &[
+            ("x", "It SHALL.\n\n#### Needs\n- b/y\n- c/z"),
+            ("w", "It SHALL.\n\n#### Needs\n- b/y"),
+        ],
+    );
+    let g = graph(&[
+        ROOT,
+        ("specs/a/SPEC.md", &a),
+        ("specs/b/SPEC.md", &node("", &["y"])),
+        ("specs/c/SPEC.md", &node("", &["z"])),
+    ]);
+    let q = queue(&g, &[], &[]);
+    let State::Blocked { by } = state(&q, "a") else {
+        panic!("{q:?}");
+    };
+    let got: Vec<(&str, Vec<String>, Vec<String>)> = by
+        .iter()
+        .map(|b| {
+            (
+                b.blocker(),
+                b.components.clone().unwrap(),
+                b.requirements.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("b/y", vec!["b".into()], vec!["a/w".into(), "a/x".into()]),
+            ("c/z", vec!["c".into()], vec!["a/x".into()]),
+        ]
+    );
+}
+
+#[test]
+fn an_obsolete_requirement_seeds_every_component_of_its_other_lines() {
+    // req:orchestrator/priority-orders-components@147ea0bf
+    // `b/gone`'s line on `b` waits on its lines on `c` and `d`, both of one ID: each is
+    // followed, by its component and ID together, so both are seeded.
+    let mut more: Vec<(String, String)> = vec![(
+        "backlog/q.md".into(),
+        "---\ntitle: Q\nkind: question\nblocks: [b/gone]\n---\n".into(),
+    )];
+    more.extend(adds("20260101-c", "", "c", "y"));
+    more.extend(adds("20260101-d", "", "d", "y"));
+    let more: Vec<(&str, &str)> = more.iter().map(|(p, t)| (p.as_str(), t.as_str())).collect();
+    let g = removed_gone("P1", &[("b", &[]), ("c", &["y"]), ("d", &["y"])], &more);
+    let markers = [
+        marker_in("b", "b/gone"),
+        marker_in("c", "b/gone"),
+        marker_in("d", "b/gone"),
+    ];
+    let q = queue(&g, &markers, &[]);
+    assert_eq!(priority(&q, "c"), Priority::P1);
+    assert_eq!(priority(&q, "d"), Priority::P1);
     assert_eq!(priority(&q, "b"), Priority::P5);
 }
 

@@ -84,8 +84,10 @@ pub struct Requirement {
     /// Slugs of the backlog items whose `blocks` name it.
     pub blocked_by: Vec<String>,
     /// What else it waits on, as `<node>/<slug>`: the pending requirements its `Needs` name, for
-    /// an obsolete one the pending ones a move took it to, and for a capability the `unbuilt`
-    /// rules serving it (`check.coverage/pending-report`).
+    /// an obsolete one the pending ones a move took it to and, on its own component's line, its
+    /// own ID while it has lines on other components, and for a capability the rules serving
+    /// it that hold it back (`check.coverage/pending-report`). `waits` resolves each to its
+    /// lines (`check.coverage/wait-lines`).
     pub waits_on: Vec<String>,
 }
 
@@ -322,7 +324,8 @@ fn effective_priorities(
         })
         .collect();
     for p in by_node.values().flatten() {
-        let mut seen: BTreeSet<(&str, &str)> = BTreeSet::new();
+        // The line itself is never seeded, so a blocked line lends nothing to its own node.
+        let mut seen: BTreeSet<(&str, &str)> = BTreeSet::from([(p.node.as_str(), p.id.as_str())]);
         let mut stack = waits(lines, p);
         while let Some(w) = stack.pop() {
             if !seen.insert((w.node.as_str(), w.id.as_str())) {
