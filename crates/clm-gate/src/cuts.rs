@@ -265,9 +265,9 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
     // Every gone scenario, by requirement ID and place, takes one receiver of its name.
     let mut unmoved: BTreeSet<(&str, usize)> = BTreeSet::new();
     for (id, (_, names)) in &was_outline {
-        let kept = now_outline.contains_key(id);
         for (place, name) in names.iter().enumerate() {
-            if kept && held(&now_outline, id, name) {
+            // Still held where it was: a requirement gone from the head holds none.
+            if held(&now_outline, id, name) {
                 continue;
             }
             match receivers.get_mut(name.as_str()).filter(|n| **n > 0) {
