@@ -62,18 +62,26 @@ fn change(root: &Path, removes: &[(&str, &str)], adds: &[(&str, &str)]) {
         &format!("changes/{CHANGE}/change.md"),
         "---\nstatus: applied\n---\n",
     );
-    let mut deltas: std::collections::BTreeMap<&str, String> = Default::default();
+    // Each component's delta: its removals and its additions, each under one heading.
+    let mut deltas: std::collections::BTreeMap<&str, (String, String)> = Default::default();
     for (c, slug) in removes {
-        deltas.entry(c).or_default().push_str(&format!(
-            "## REMOVED Requirements\n\n### Requirement: {slug} <!-- base: 0123456789abcdef -->\n\n"
+        deltas.entry(c).or_default().0.push_str(&format!(
+            "### Requirement: {slug} <!-- base: 0123456789abcdef -->\n\n"
         ));
     }
     for (c, slug) in adds {
-        deltas.entry(c).or_default().push_str(&format!(
-            "## ADDED Requirements\n\n### Requirement: {slug}\nIt SHALL.\n\n#### Scenario: s\n- GIVEN g\n- WHEN w\n- THEN t\n\n"
+        deltas.entry(c).or_default().1.push_str(&format!(
+            "### Requirement: {slug}\nIt SHALL.\n\n#### Scenario: s\n- GIVEN g\n- WHEN w\n- THEN t\n\n"
         ));
     }
-    for (c, body) in deltas {
+    for (c, (removed, added)) in deltas {
+        let mut body = String::new();
+        if !removed.is_empty() {
+            body.push_str(&format!("## REMOVED Requirements\n\n{removed}"));
+        }
+        if !added.is_empty() {
+            body.push_str(&format!("## ADDED Requirements\n\n{added}"));
+        }
         write(
             root,
             &format!("changes/{CHANGE}/deltas/{c}.md"),
@@ -401,4 +409,64 @@ fn no_exemption_excuses_it() {
         ),
     );
     assert!(found(dir.path()).contains(&UNLISTED_LINE.to_string()));
+}
+
+#[test]
+fn with_no_capability_component_the_root_builds_the_capability_tests() {
+    // req:check/obsolete-tests-elsewhere@ad5010b7
+    let dir = TempDir::new().unwrap();
+    let root = dir.path();
+    write(
+        root,
+        "specs/SPEC.md",
+        &component("[\"crates/root/**\"]", "wiring: []\n", &["r"]),
+    );
+    write(
+        root,
+        "specs/c/SPEC.md",
+        &component("[\"crates/c/**\"]", "", &["y"]),
+    );
+    write(root, "CAPABILITIES.md", CAPABILITIES);
+    removes_gone(root);
+    write(
+        root,
+        "crates/root/t.rs",
+        &test_file("old_cap", &["capability/gone"]),
+    );
+    write(
+        root,
+        "crates/c/t.rs",
+        &test_file("old_cap", &["capability/gone"]),
+    );
+    git(root);
+    assert_eq!(
+        found(root),
+        [
+            "crates/c/t.rs:8: check/obsolete-tests-elsewhere: test old_cap cites capability/gone, which 20260101-x removed, from `c`'s file; list it in that change's deleted-tests.txt, and prove what stays in the files of the component that states it"
+        ]
+    );
+}
+
+#[test]
+fn the_line_names_the_first_removed_id_and_its_first_change() {
+    // req:check/obsolete-tests-elsewhere@ad5010b7
+    let dir = repo(
+        Some("[]"),
+        &[("crates/c/t.rs", test_file("old_rule", &["b/zed", "b/gone"]))],
+    );
+    change(dir.path(), &[("b", "gone"), ("b", "zed")], &[]);
+    write(
+        dir.path(),
+        "changes/20250101-a/change.md",
+        "---\nstatus: applied\n---\n",
+    );
+    write(
+        dir.path(),
+        "changes/20250101-a/deltas/b.md",
+        "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0123456789abcdef -->\n",
+    );
+    assert_eq!(
+        found(dir.path()),
+        [UNLISTED_LINE.replace("20260101-x", "20250101-a")]
+    );
 }
