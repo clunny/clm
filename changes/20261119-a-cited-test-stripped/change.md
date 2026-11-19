@@ -21,7 +21,7 @@ One more way a branch can strip a citing test's last marker without `deleted_tes
 
 ## Outcome
 
-- `check.coverage/test-lists` (modified): defines a file's *stripped* tests of a bare name, counts its gone unmarked tests against its head's unmarked tests less its stripped ones plus its gained ones, and states the ambiguous same-name case as counting the cited test gone. One scenario added: *a cited test stripped beside a deleted uncited test of its name* (the item's case, returned).
+- `check.coverage/test-lists` (modified): defines a file's *stripped* tests of a bare name, counts its gone unmarked tests against its head's unmarked tests less its stripped ones plus its gained ones, and states the ambiguous same-name case as counting the cited test gone. Two scenarios added: *a cited test stripped beside a deleted uncited test of its name* (the item's case, returned) and *a cited test stripped beside a kept citing namesake* (the rejected approach's case, returned, so a kept cited test doesn't account for an unmarked one).
 - `docs/decisions/renamed-test-keeps-its-citations.md` states the rule as amended, and `docs/guide/how-it-works.md` names the new refused case (`method-in-the-plugin`).
 
 ## Constraints
