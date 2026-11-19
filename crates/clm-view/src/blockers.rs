@@ -54,8 +54,8 @@ enum Target {
 /// each of its blockers in turn, its items and what the lines `waits` gives for it reach. A
 /// wait is followed to the line it names, never by the requirement's ID alone, which an
 /// obsolete requirement's several lines share. `seen` holds the lines already walked, by node
-/// and ID, so shared waits are walked once and a cycle (of needs, which the model reports as a
-/// violation, or of an obsolete requirement's lines) still terminates.
+/// and ID, so shared waits are walked once and a cycle of needs, which the model reports as a
+/// violation, still terminates.
 fn need_targets<'a>(
     line: &'a Pending,
     lines: &'a [Pending],
