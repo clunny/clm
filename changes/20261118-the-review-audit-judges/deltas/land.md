@@ -60,7 +60,7 @@ Crate `clm-land`, called from `crates/clm`'s `land`, `approve` (re-exported from
 ## ADDED Requirements
 
 ### Requirement: gate-rules-trailer
-Every merge commit `clm land` makes, for a land alone or for lands taken together (`batched-lands`), SHALL end its message with the line `Gate-Rules: <n>`, `n` being `clm-gate`'s `RULES`, in the trailer block that holds any `Change:` or `Checked:` line it writes, after them, so that `git log`'s `%(trailers:key=Gate-Rules,valueonly)` reads `n` from it.
+Every merge commit `clm land` pushes to `main`, for a land alone or for lands taken together (`batched-lands`), and not the provisional commit a batch judges its members on, SHALL end its message with the line `Gate-Rules: <n>`, `n` being `clm-gate`'s `RULES`, in the trailer block that holds any `Change:` or `Checked:` line it writes, after them, so that `git log`'s `%(trailers:key=Gate-Rules,valueonly)` reads `n` from it.
 
 #### Serves
 - architecture/signed-ledger-records

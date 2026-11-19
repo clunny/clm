@@ -23,7 +23,7 @@ The review audit, `clm ledger verify --review`, judges each signed land by the g
 ## Outcome
 
 `gate` (`deltas/gate.md`):
-- `gate/rules-version` (added): `RULES` is 2; `evaluate_by(repo, base, head, approved, rules)`, with `evaluate_at` being it at `RULES`; version 1 decides a spec branch's review without `cuts`; a version of 0 or above `RULES` is an error naming both. `#### Needs` `check.coverage/test-lists`, as `gate/cuts`, on which it relies, has.
+- `gate/rules-version` (added): `RULES` is 2; `evaluate_by(repo, base, head, approved, rules)`, with `evaluate_at` being it at `RULES`; version 1 decides a spec branch's review as `needs-review` does but with `cuts` (and unloadable specs) making none need review, rename branches keeping their own rule; only the review and `gate/approval` differ between versions; a version below 1 or above `RULES` is an error naming both. `#### Needs` `check.coverage/test-lists`, as `gate/cuts`, on which it relies, has.
 - Contract and Design: `RULES` and `evaluate_by`, and the rule for later tightenings: a change that makes the gate rate some diff higher raises `RULES` and keeps the older answer behind the version.
 
 `land` (`deltas/land.md`):
@@ -31,7 +31,7 @@ The review audit, `clm ledger verify --review`, judges each signed land by the g
 - Design step 4 names the trailer.
 
 `ledger` (`deltas/ledger.md`):
-- `ledger/verify-recomputes-review` (modified): recomputes with `evaluate_by` under the rules in force, the higher of the merge commit's `Gate-Rules` trailer (1 when absent or not a whole number) and the highest such value of an earlier signed land on the chain, read whatever `--since` says; four scenarios added: a removal before the rule, under the rule, a lower trailer after a higher one, and rules newer than this `clm` (reported as `ledger/unrated-land` through the gate's error). `#### Needs` changes from `gate/evaluate-at` to `gate/rules-version`.
+- `ledger/verify-recomputes-review` (modified): recomputes with `evaluate_by` under the rules in force, the higher of the land's own version (the highest whole-number `Gate-Rules` trailer of its merge commit, 1 when none) and its floor (the highest own version, capped at `RULES`, of an earlier land on the chain signed as `ledger/unsigned-land` judges it), read whatever `--since` says; five scenarios added: a removal before the rule, under the rule, a lower trailer after a higher one, rules newer than this `clm` (reported as `ledger/unrated-land` through the gate's error), and a land after such a one, still recomputed thanks to the cap. `#### Needs` changes from `gate/evaluate-at` to `gate/rules-version`.
 - Design's **Recomputed review** says how the rules in force are read.
 
 `docs/decisions/audit-by-the-rules-in-force.md` records the choice; `checkpoint-recomputes-new-lands`' **Rules drift** paragraph now names it and keeps only the drift no version covers.
@@ -44,8 +44,12 @@ No requirement and no scenario is removed, and no sentence is cut.
 - A clone running an older `clm` that lands after a newer one has landed is judged by the newer rules; if they would have asked for review, the land is reported. That is a real finding: the land got less than `main` already asked.
 - The window between a release and its first land is open: a land in it that writes the older version is judged by the older rules, which some `clm` in use still applied.
 - Only kind and review depend on the version; the cuts and the violations are today's at every version, since the audit reads neither.
-- The build order is `gate/rules-version` (after `gate/cuts`, in the same build of `gate`), then `land/gate-rules-trailer` and `ledger/verify-recomputes-review`, each by its `#### Needs`.
+- The build order is `gate/rules-version` (after `gate/cuts`, in the same build of `gate`: a need may not name its own component, so it carries `gate/cuts`' own need, `check.coverage/test-lists`), then `land/gate-rules-trailer` and `ledger/verify-recomputes-review`, each by its `#### Needs`. `gate/rules-version` also relies on `gate/needs-review`, `gate/needs-review-of` (`widened_exemptions`) and `gate/evaluate-at`, all `gate`'s own and behind.
+- `land`'s build updates its own tests that assert a merge commit's whole message, `crates/clm-land/tests/land.rs` (the code land's and the spec land's), and `crates/clm-land/tests/unrecorded.rs`' comment saying its hand-built messages are as `clm land` pushes them. No capability test reads a merge commit's message.
+- `ledger`'s build re-cites its existing tests of `verify-recomputes-review`, whose hand-built merges carry no trailer and read as version 1, and adds tests for the five new scenarios.
+- `land` writes the `RULES` of the `clm-gate` it links, while step 6 runs the gate as a subprocess (`CLM_GATE` in tests); in a release both are one binary, so they agree.
+- The floor costs one more `git log` over the whole first-parent chain and a signature check per signed land before `--since`, on each `--review` run.
 
 ## Open questions
 
-None yet.
+- `plain-terms` asks every term to be in the glossary; `Gate-Rules` and the gate's rules version now are (`docs/guide/glossary.md`, under *How work reaches `main`*), though the older trailers `Change:` and `Checked:` aren't, and no check covers trailers.
