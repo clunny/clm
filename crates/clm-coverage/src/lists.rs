@@ -174,9 +174,12 @@ pub fn bare_name(name: &str) -> String {
 /// test of the base carries, cited or not, and whose markers cite every ID it cited. Taken in
 /// the order returned, each is *renamed*, and not returned, when it and every earlier renamed
 /// one can each be paired with a different test it fits, so as many are renamed as can be and
-/// the earlier wins a tie. So a test moved to another file is not gone, nor one renamed in its
-/// file that cites at least what it cited; one renamed and moved at once, renamed citing less,
-/// replaced by a base test that gains a marker, deleted or uncited is.
+/// the earlier wins a tie. A base test with no marker that its file no longer holds by name
+/// could have become any new test of its file, so it takes one first: a file's renames number
+/// no more than its new tests, cited or not, less those gone unmarked tests. So a test moved
+/// to another file is not gone, nor one renamed in its file that cites at least what it cited;
+/// one renamed and moved at once, renamed citing less, replaced by a base test that gains a
+/// marker, deleted or uncited is.
 pub fn deleted_tests(
     base_files: &[(PathBuf, String)],
     head_files: &[(PathBuf, String)],
@@ -196,11 +199,15 @@ pub fn deleted_tests(
     // order; and every bare name a base test carries, cited or not, which no rename takes.
     let mut base: BTreeMap<String, BTreeMap<&Path, Vec<FileTest>>> = BTreeMap::new();
     let mut base_names: BTreeSet<String> = BTreeSet::new();
+    // How many tests holding no marker each file of the base holds of each bare name.
+    let mut unmarked: BTreeMap<(&Path, String), usize> = BTreeMap::new();
     for (path, text) in base_files {
         for c in file_tests(path, text) {
             let name = bare_name(&c.name);
             base_names.insert(name.clone());
-            if !c.ids.is_empty() {
+            if c.ids.is_empty() {
+                *unmarked.entry((path.as_path(), name)).or_default() += 1;
+            } else {
                 base.entry(name)
                     .or_default()
                     .entry(path.as_path())
@@ -233,14 +240,33 @@ pub fn deleted_tests(
         }
     }
     let gone = by_file_and_line(out);
-    // The head's citing tests of a new name, by file in line order, each with its IDs.
+    // The head's citing tests of a new name, by file in line order, each with its IDs; how
+    // many renames each file has room for, its new tests, cited or not, less its gone
+    // unmarked tests, which take new tests first.
     let mut fresh: BTreeMap<&Path, Vec<BTreeSet<String>>> = BTreeMap::new();
+    let mut room: BTreeMap<&Path, usize> = BTreeMap::new();
     for (path, text) in head_files {
-        for c in citing_tests(path, text) {
-            if !base_names.contains(&bare_name(&c.name)) {
-                let ids = c.ids.into_iter().collect();
-                fresh.entry(path.as_path()).or_default().push(ids);
+        let path = path.as_path();
+        for c in file_tests(path, text) {
+            let name = bare_name(&c.name);
+            if let Some(count) = unmarked.get_mut(&(path, name.clone())) {
+                *count = count.saturating_sub(1);
             }
+            if base_names.contains(&name) {
+                continue;
+            }
+            *room.entry(path).or_default() += 1;
+            if !c.ids.is_empty() {
+                fresh
+                    .entry(path)
+                    .or_default()
+                    .push(c.ids.into_iter().collect());
+            }
+        }
+    }
+    for ((path, _), gone_unmarked) in unmarked {
+        if let Some(r) = room.get_mut(path) {
+            *r = r.saturating_sub(gone_unmarked);
         }
     }
     // For each taken test in order, the indexes of the fresh tests of its file it fits.
@@ -262,9 +288,14 @@ pub fn deleted_tests(
         .collect();
     let mut out = Vec::new();
     for (k, (path, test)) in gone.into_iter().enumerate() {
-        let renamed = held.get_mut(path).is_some_and(|holders| {
-            let mut seen = vec![false; holders.len()];
-            pair(k, &fits, holders, &mut seen)
+        let left = room.get_mut(path).filter(|r| **r > 0);
+        let renamed = left.is_some_and(|r| {
+            held.get_mut(path).is_some_and(|holders| {
+                let mut seen = vec![false; holders.len()];
+                let paired = pair(k, &fits, holders, &mut seen);
+                *r -= usize::from(paired);
+                paired
+            })
         });
         if !renamed {
             out.push(test);
