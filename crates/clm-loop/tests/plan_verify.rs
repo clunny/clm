@@ -124,6 +124,10 @@ fn a_note_reported_in_place_of_the_outcome() {
     let why = refused.to_string();
     assert!(why.contains("starts `verify `"), "{why}");
     assert!(why.contains("`none`"), "{why}");
+    // The outcome with the notes after it is not one line.
+    let tail =
+        "verify failed 1a2b3c4 culprit 9f8e7d6 components a\nclm verify: output is at /tmp/v.log";
+    returned(&fx.options(), "verify", None, tail, None, None).unwrap_err();
     // Also with a cause, which every other rule would act on.
     for cause in ["context", "running", "stopped"] {
         returned(&fx.options(), "verify", None, note, Some(cause), None).unwrap_err();
@@ -178,4 +182,41 @@ fn a_note_with_no_verify_listed_is_refused_as_no_run() {
     .unwrap_err()
     .to_string();
     assert!(why.contains("no run verify"), "{why}");
+}
+
+#[test]
+fn a_note_from_an_earlier_verify_task_is_ignored() {
+    // req:orchestrator.loop/plan-verify@4398852a
+    let fx = Fixture::new();
+    fx.set("verify-due", "verify due work-done\n");
+    step(&fx.options()).unwrap();
+    launched(&fx.options(), "verify", "t-v2").unwrap();
+    fx.keep("verify", "t-v1");
+    let note = "clm verify: output is at /tmp/v.log";
+    returned(&fx.options(), "verify", Some("t-v1"), note, None, None).unwrap();
+    assert_eq!(fx.file().run("verify").unwrap().state, RunState::Running);
+}
+
+#[test]
+fn an_invalid_cause_or_until_is_refused_first() {
+    // req:orchestrator.loop/plan-verify@4398852a
+    let fx = Fixture::new();
+    fx.set("verify-due", "verify due work-done\n");
+    step(&fx.options()).unwrap();
+    let note = "clm verify: output is at /tmp/v.log";
+    let why = returned(&fx.options(), "verify", None, note, Some("bogus"), None)
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains("unknown cause"), "{why}");
+    let why = returned(
+        &fx.options(),
+        "verify",
+        None,
+        note,
+        Some("context"),
+        Some("2026-11-13T14:00:00Z"),
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(why.contains("--until goes with --cause limit"), "{why}");
 }
