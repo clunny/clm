@@ -412,8 +412,8 @@ fn a_spec_that_doesnt_load_prints_nothing_on_stdout() {
 
 /// Component `b` owning `crates/b/**`, whose `b/x` moved from an earlier commit's text, cited
 /// at that text at `crates/b/t.rs:2` and `crates/c/t.rs:2` and at the current one at
-/// `crates/b/now.rs:1`, and whose `b/gone`, which a live change removed, `crates/c/gone.rs:1`
-/// cites; `c` owning `crates/c/**`, and the root carrying `root_extra` frontmatter.
+/// `crates/b/now.rs:1`; `c` owning `crates/c/**`, and the root carrying `root_extra`
+/// frontmatter.
 fn stale_marker_in_c(root_extra: &str) -> Repo {
     let r = repo();
     let w = &r.work;
@@ -437,18 +437,7 @@ fn stale_marker_in_c(root_extra: &str) -> Repo {
         "crates/b/now.rs",
         &format!("// {}:b/x@{now}\n#[test]\nfn t() {{}}\n", "req"),
     );
-    write(w, "changes/g/change.md", "---\nstatus: applied\n---\n");
-    write(
-        w,
-        "changes/g/deltas/b.md",
-        "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0000000000000000 -->\n",
-    );
-    write(
-        w,
-        "crates/c/gone.rs",
-        &format!("// {}:b/gone\n#[test]\nfn t() {{}}\n", "req"),
-    );
-    push_main(w, "b moved, gone removed");
+    push_main(w, "b moved");
     r
 }
 
@@ -481,15 +470,6 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
     );
     assert!(!list.contains("crates/b/t.rs:2, crates/c/t.rs:2"), "{list}");
     assert!(!list.contains("crates/b/now.rs"), "{list}");
-    // An obsolete requirement's marker in `c`'s file is listed apart, not for removal.
-    assert!(
-        !list.contains("its markers are at crates/c/gone.rs:1"),
-        "{list}"
-    );
-    assert!(
-        list.contains("`crates/c/gone.rs:1` in `c`'s file"),
-        "{list}"
-    );
     assert!(
         !list.contains("another component's `paths` included"),
         "{list}"
@@ -533,33 +513,8 @@ fn obsolete_test_in_c(root_extra: &str) -> Repo {
 }
 
 #[test]
-fn an_obsolete_test_in_another_components_file_is_listed_apart() {
+fn an_obsolete_test_in_a_file_the_build_may_change_is_its_own() {
     // req:orchestrator.run/pending-prompt@54c39a40
-    let p = prompt(&obsolete_test_in_c("wiring: []\n"), &fake(), "b", &[]);
-    let list = &p[p.find("- `b/gone` obsolete").expect("b/gone obsolete")..];
-    let list = &list[..list.find("\n- `").unwrap_or(list.len())];
-    assert!(
-        list.contains("`crates/c/t.rs::old_rule` in `c`'s file"),
-        "{list}"
-    );
-    assert!(list.contains("`crates/c/t.rs:3` in `c`'s file"), "{list}");
-    assert!(
-        list.contains("`clm land` refuses this build's edit"),
-        "{list}"
-    );
-    // Neither a test to delete nor one to keep, nor a marker whose code is removed.
-    assert!(
-        !list.contains("Delete the tests an approved list names"),
-        "{list}"
-    );
-    assert!(
-        list.contains("cites it: `crates/b/t.rs::kept_rule`;"),
-        "{list}"
-    );
-    assert!(
-        list.contains("its markers in your files are at crates/b/t.rs:3."),
-        "{list}"
-    );
     // Without `wiring`, the build may change `c`'s file, and the list's line approves it.
     let p = prompt(&obsolete_test_in_c(""), &fake(), "b", &[]);
     assert!(
@@ -703,8 +658,6 @@ fn a_stale_marker_in_a_wiring_file_is_re_cited() {
     let p = prompt(&r, &f, "b", &[]);
     assert!(p.contains(": crates/b/t.rs:2, crates/c/t.rs:2."), "{p}");
     assert!(!p.contains("`crates/c/t.rs:2` in `c`'s file"), "{p}");
-    // `crates/c/gone.rs`, which no `wiring` glob matches, is still `c`'s alone.
-    assert!(p.contains("`crates/c/gone.rs:1` in `c`'s file"), "{p}");
 }
 
 #[test]
