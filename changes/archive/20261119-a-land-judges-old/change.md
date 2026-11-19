@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-land-judges-old-test-names-from-the-touched-files-alone]
 ---
 
