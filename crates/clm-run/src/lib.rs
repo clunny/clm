@@ -139,16 +139,14 @@ pub struct Item {
     /// the current text, or `None` when the earlier text wasn't found.
     pub diffs: Vec<(String, Option<String>)>,
     /// Obsolete: the markers' locations. Behind: the locations of the markers that cite it
-    /// at another version or without one (`stale-markers-keep-behind`). Either way, except
-    /// those of `foreign`.
+    /// at another version or without one (`stale-markers-keep-behind`), except those of
+    /// `foreign`.
     pub markers: Vec<String>,
-    /// Once the root sets `wiring`, the markers in a file another component owns, each with
-    /// that owner, which this build may not change (`pending-prompt`): behind, the stale
-    /// ones; obsolete, every one, none of which `markers` holds.
+    /// Behind, once the root sets `wiring`: the stale markers in a file another component
+    /// owns, each with that owner, which this build may not change (`pending-prompt`). An
+    /// obsolete requirement has none: `pending` gives such a marker to its file's owner
+    /// (`check.coverage/pending-report`).
     pub foreign: Vec<(String, String)>,
-    /// Obsolete, once the root sets `wiring`: the tests that hold `foreign`'s markers, each
-    /// `<file>::<name>` with its file's owner, in neither `delete` nor `keep`.
-    pub foreign_tests: Vec<(String, String)>,
     /// Obsolete: the tests among `markers` that an approved `deleted-tests.txt` names
     /// (`land/deleted-tests-approved`), each `<file>::<name>`, which the build deletes.
     pub delete: Vec<String>,
@@ -180,6 +178,19 @@ pub struct Elsewhere {
     pub owner_code: Option<String>,
 }
 
+/// A blocked requirement and what blocks it (`pending-prompt`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Blocked {
+    /// `<node>/<slug>`.
+    pub id: String,
+    /// The `backlog/<slug>` items whose `blocks` name it, then the pending requirements it
+    /// waits on.
+    pub by: Vec<String>,
+    /// For an obsolete requirement that waits on its own ID, the components its other lines
+    /// are pending on, sorted: those whose files still cite it (`check.coverage/wait-lines`).
+    pub cited_in: Vec<String>,
+}
+
 /// The job a run gives its session.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Job {
@@ -191,9 +202,8 @@ pub struct Job {
     pub skills: Vec<(String, String)>,
     /// The unblocked pending requirements, most urgent first.
     pub pending: Vec<Item>,
-    /// The blocked requirements, each with what blocks it: `backlog/<slug>` items, then the
-    /// pending requirements it needs.
-    pub blocked: Vec<(String, Vec<String>)>,
+    /// The blocked requirements, each with what blocks it.
+    pub blocked: Vec<Blocked>,
     /// The node's `clm context` bundle.
     pub bundle: Option<String>,
     /// Whether the run resumes `impl/<node>`, which then has commits `origin/main` lacks.
@@ -503,8 +513,7 @@ pub fn prompt(job: &Job) -> String {
          For an `obsolete` requirement, remove the \
          code its markers mark that no other requirement needs (`no-dead-code`), unless its \
          entry below says it was not your component's, and delete \
-         or keep each of its tests as its entry below says (`removal-needs-a-yes`), leaving \
-         those its entry lists apart in another component's file. {recite} \
+         or keep each of its tests as its entry below says (`removal-needs-a-yes`). {recite} \
          Your build changes only your own component's files: those your component's `tests` match, \
          wherever they sit, and those its `paths` match that no other component's `tests` match \
          (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \
@@ -525,8 +534,7 @@ pub fn prompt(job: &Job) -> String {
          component that an exemption names still holds every other rule, and you add nothing to \
          such a file that the exemption would excuse. For an `obsolete` requirement whose \
          code another component still uses, remove its markers and tests as usual, but keep that \
-         code, with no `clm:remove-by` marker (and leave any marker or test its entry lists \
-         apart), and add a `deferred` item without `blocks`, whose \
+         code, with no `clm:remove-by` marker, and add a `deferred` item without `blocks`, whose \
          `components` name both components and whose body names the kept code, the component \
          that uses it, and that the code goes once that component no longer uses it \
          (`contract-removal-needs`, `deferred-work-resolves-in-code`). Files the root's Design \
@@ -690,32 +698,10 @@ pub fn prompt(job: &Job) -> String {
             } else if item.markers.is_empty() {
                 p.push_str("  A live change removed it.");
             } else {
-                let yours = if item.foreign.is_empty() {
-                    ""
-                } else {
-                    " in your files"
-                };
                 p.push_str(&format!(
-                    "  A live change removed it; its markers{yours} are at {}. Remove the code \
-                     they mark that no other requirement needs.",
+                    "  A live change removed it; its markers are at {}. Remove the code they \
+                     mark that no other requirement needs.",
                     item.markers.join(", ")
-                ));
-            }
-            // clm:remove-by 20261119-an-obsolete-marker-moves-in-three-steps: once `pending` gives such a marker to its file's
-            // owner (`check.coverage/pending-report`), no obsolete line holds one.
-            if !item.foreign.is_empty() {
-                let each: Vec<String> = item
-                    .foreign
-                    .iter()
-                    .chain(&item.foreign_tests)
-                    .map(|(at, owner)| format!("`{at}` in `{owner}`'s file"))
-                    .collect();
-                p.push_str(&format!(
-                    " Leave each of its markers in a file another component owns, and the \
-                     test that holds it: {}. `clm land` refuses this build's edit to such a \
-                     file (`land/build-holds-own-files`); add a `question` item that names each \
-                     such file and blocks nothing, the requirement being gone.",
-                    listing_owned(&each, "and", false)
                 ));
             }
             if !item.delete.is_empty() {
@@ -776,11 +762,17 @@ pub fn prompt(job: &Job) -> String {
     }
     if !job.blocked.is_empty() {
         p.push_str("\nBlocked, left out of the list above; build nothing that relies on them:\n");
-        for (id, items) in &job.blocked {
-            p.push_str(&format!(
-                "- `{id}`, blocked by {}\n",
-                listing_owned(items, "and", true)
-            ));
+        for b in &job.blocked {
+            let by = (!b.by.is_empty())
+                .then(|| format!("blocked by {}", listing_owned(&b.by, "and", true)));
+            let cited_in = (!b.cited_in.is_empty()).then(|| {
+                format!(
+                    "waiting on {}, whose files still cite it",
+                    listing_owned(&b.cited_in, "and", true)
+                )
+            });
+            let what: Vec<String> = by.into_iter().chain(cited_in).collect();
+            p.push_str(&format!("- `{}`, {}\n", b.id, what.join(", and ")));
         }
     }
     if let Some(bundle) = &job.bundle {
@@ -1393,26 +1385,38 @@ fn pending_in(dir: &Path, node: &str) -> Result<(Graph, Vec<Marker>, Vec<Pending
         return Err(Error::Refused(format!("no component `{node}`")));
     }
     let markers = clm_coverage::scan(dir).req;
-    let mut pending: Vec<Pending> = clm_coverage::pending(&graph, &markers)
-        .into_iter()
-        .filter(|p| p.node == node)
-        .collect();
-    pending.sort_by(|a, b| (a.priority, &a.id).cmp(&(b.priority, &b.id)));
+    let pending = clm_coverage::pending(&graph, &markers);
     Ok((graph, markers, pending))
 }
 
-/// What blocks `p`: the `backlog/<slug>` items whose `blocks` name it, then the other pending
-/// requirements it waits on (`requirement-needs`, `moved-markers-wait`, `serving-rules-order-capabilities`).
-fn blockers(p: &Pending) -> Vec<String> {
-    p.blocked_by
-        .iter()
-        .map(|s| format!("backlog/{s}"))
-        .chain(p.waits_on.iter().cloned())
-        .collect()
+/// What blocks `p`, a line of `lines`, the whole list `pending` returns: the `backlog/<slug>`
+/// items whose `blocks` name it, then the other pending requirements it waits on
+/// (`requirement-needs`, `moved-markers-wait`, `serving-rules-order-capabilities`), and, in
+/// place of its own ID, the components its other lines are pending on, which `waits` finds
+/// only in the whole list (`check.coverage/wait-lines`).
+fn blockers(lines: &[Pending], p: &Pending) -> Blocked {
+    let mut cited_in: Vec<String> = clm_coverage::waits(lines, p)
+        .into_iter()
+        .filter(|w| w.id == p.id)
+        .map(|w| w.node.clone())
+        .collect();
+    cited_in.sort();
+    cited_in.dedup();
+    Blocked {
+        id: p.id.clone(),
+        by: p
+            .blocked_by
+            .iter()
+            .map(|s| format!("backlog/{s}"))
+            .chain(p.waits_on.iter().filter(|id| **id != p.id).cloned())
+            .collect(),
+        cited_in,
+    }
 }
 
 /// The job for `node`, whose tree at `rev` in the repository at `root` is extracted at
-/// `tree`, with `graph` and every marker, `scanned`, read from it.
+/// `tree`, with `graph`, every marker, `scanned`, and the whole list `pending` returns,
+/// `lines`, read from it.
 fn job(
     root: &Path,
     rev: &str,
@@ -1420,8 +1424,10 @@ fn job(
     graph: &Graph,
     scanned: &[Marker],
     node: &str,
-    pending: &[Pending],
+    lines: &[Pending],
 ) -> Result<Job, Error> {
+    let mut pending: Vec<&Pending> = lines.iter().filter(|p| p.node == node).collect();
+    pending.sort_by(|a, b| (a.priority, &a.id).cmp(&(b.priority, &b.id)));
     let spec = graph.nodes[node].path.to_string_lossy().into_owned();
     let mut history = History::new(root, rev, &spec);
     let mut items = Vec::new();
@@ -1438,9 +1444,9 @@ fn job(
         (owner != node && !wiring.iter().any(|g| clm_coverage::matches(g, &file))).then_some(owner)
     };
     for p in pending {
-        let by = blockers(p);
-        if !by.is_empty() {
-            blocked.push((p.id.clone(), by));
+        let b = blockers(lines, p);
+        if !b.by.is_empty() || !b.cited_in.is_empty() {
+            blocked.push(b);
             continue;
         }
         let diffs = if p.state == ReqState::Behind {
@@ -1459,26 +1465,24 @@ fn job(
         } else {
             Vec::new()
         };
-        // Obsolete: every marker. Behind: those at another version or none. A foreign one
-        // apart, either way.
-        let (mut own, mut foreign, mut foreign_markers) = (Vec::new(), Vec::new(), Vec::new());
+        // Obsolete: every marker, `pending` having given each one in a file another
+        // component owns to that owner's line. Behind: those at another version or none, a
+        // foreign one apart.
+        let (mut own, mut foreign) = (Vec::new(), Vec::new());
         for m in &p.markers {
             if p.state == ReqState::Behind && m.version == p.version {
                 continue;
             }
-            match foreign_owner(m) {
-                Some(owner) => {
-                    foreign.push((m.to_string(), owner.to_string()));
-                    foreign_markers.push(m);
-                }
+            match foreign_owner(m).filter(|_| p.state == ReqState::Behind) {
+                Some(owner) => foreign.push((m.to_string(), owner.to_string())),
                 None => own.push(m),
             }
         }
         let markers = own.iter().map(|m| m.to_string()).collect();
         let mut elsewhere = None;
-        let (delete, keep, foreign_tests) = if p.state == ReqState::Obsolete {
+        let (delete, keep) = if p.state == ReqState::Obsolete {
             let approved = approved.get_or_insert_with(|| approved_lists(tree));
-            let (delete, keep) = if owner_of_id(graph, &p.id) == node {
+            if owner_of_id(graph, &p.id) == node {
                 obsolete_tests_in(graph, tree, &p.id, &own)
                     .into_iter()
                     .partition(|test| approved_names(approved, test))
@@ -1486,19 +1490,9 @@ fn job(
                 let (delete, e) = not_its_own(graph, tree, scanned, node, &p.id, &own, approved);
                 elsewhere = Some(e);
                 (delete, Vec::new())
-            };
-            // clm:remove-by 20261119-an-obsolete-marker-moves-in-three-steps, with `Item::foreign_tests`.
-            let foreign_tests = obsolete_tests_in(graph, tree, &p.id, &foreign_markers)
-                .into_iter()
-                .filter_map(|test| {
-                    let file = test.split_once("::").map_or(test.as_str(), |(f, _)| f);
-                    let owner = clm_coverage::owner(graph, Path::new(file))?.to_string();
-                    Some((test, owner))
-                })
-                .collect();
-            (delete, keep, foreign_tests)
+            }
         } else {
-            (Vec::new(), Vec::new(), Vec::new())
+            (Vec::new(), Vec::new())
         };
         items.push(Item {
             id: p.id.clone(),
@@ -1507,7 +1501,6 @@ fn job(
             diffs,
             markers,
             foreign,
-            foreign_tests,
             delete,
             keep,
             elsewhere,
@@ -1936,7 +1929,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_removed_capability() {
-        // req:orchestrator.run/pending-prompt@54c39a40
+        // req:orchestrator.run/pending-prompt@d236f866
         let cite = format!("// {}:capability/gone", "req");
         let test = format!("#[test]\nfn old_cap() {{\n    {cite}\n}}\n");
         let p = prompt_for_c(
@@ -1980,7 +1973,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_requirement_whose_own_files_don_t_cite_it() {
-        // req:orchestrator.run/pending-prompt@54c39a40
+        // req:orchestrator.run/pending-prompt@d236f866
         let gone = format!("// {}:b/gone\n", "req");
         let lib = format!("//\n//\n//\n{gone}pub fn f() {{}}\n");
         let files = |at: &str, b_cites: &str| {
@@ -2038,7 +2031,7 @@ mod tests {
 
     #[test]
     fn a_test_that_also_cites_a_held_requirement_loses_only_its_marker() {
-        // req:orchestrator.run/pending-prompt@54c39a40
+        // req:orchestrator.run/pending-prompt@d236f866
         let test = format!(
             "#[test]\nfn both() {{\n    // {r}:g/gone\n    // {r}:c/s\n}}\n",
             r = "req"
