@@ -25,6 +25,8 @@ A subagent's pin stays on one branch however often its records are re-recorded. 
 ## Edge cases and workarounds
 
 - A clone that records a subagent for a third branch before it has fetched the pin moves the pin when that branch sorts first, counting the work there too. It needs a race between clones, as the two-clone case does; accepted in the Design.
+- A subagent the ledger already holds records of for two branches may have its pin move once, to the branch that sorts first, when this is built; no record is rewritten.
+- `effort`'s test `the_earliest_record_pins_a_subagent` records `impl/b` before `impl/a` and expects `impl/b`; under the new rule `impl/a` pins, so the build rewrites it, as the new scenario's test or beside it, re-cited at the new version.
 - No capability test sees a difference: a single clone's records keep their branch.
 
 ## Open questions
