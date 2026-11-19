@@ -81,15 +81,23 @@ pub(crate) fn affected_readers(root: &Path, base: &str) -> Result<Vec<String>, F
     Ok(readers(&differing(root, base)?, &scanned(root)?.reads))
 }
 
-/// Every path that differs between the merge base of `base` and `HEAD` and the working tree,
-/// untracked files and doc-only paths included, sorted.
+/// Every path under `root` that differs between the merge base of `base` and `HEAD` and the
+/// working tree, untracked files and doc-only paths included, named from `root` and sorted
+/// (`clm-root-paths`).
 fn differing(root: &Path, base: &str) -> Result<Vec<Changed>, Failure> {
     resolve(root, base, &format!("unknown base {base}"))?;
     let merge_base = merge_base(root, base, "HEAD", &format!("{base} and HEAD"))?;
 
     let mut paths = names(&git(
         root,
-        &["diff", "--name-only", "--no-renames", "-z", &merge_base],
+        &[
+            "diff",
+            "--name-only",
+            "--no-renames",
+            "--relative",
+            "-z",
+            &merge_base,
+        ],
     )?);
     paths.extend(names(&git(
         root,
@@ -206,8 +214,9 @@ fn names(out: &[u8]) -> Vec<String> {
 
 /// The selection for the paths that differ between the commits `from` and `to`, read from
 /// the two commits alone: no working tree, no untracked file. The graph, the scan and the
-/// files that still exist are those of `to`'s tree. Refused as `affected` is when the graph
-/// can't be loaded.
+/// files that still exist are those of `to`'s tree, each read at the CLM root's place in it,
+/// and every path is under `root` and named from it (`clm-root-paths`). Refused as
+/// `affected` is when the graph can't be loaded.
 pub fn affected_between(
     root: &Path,
     from: &str,
@@ -216,13 +225,30 @@ pub fn affected_between(
 ) -> Result<Selection, Failure> {
     let paths = names(&git(
         root,
-        &["diff", "--name-only", "--no-renames", "-z", from, to],
+        &[
+            "diff",
+            "--name-only",
+            "--no-renames",
+            "--relative",
+            "-z",
+            from,
+            to,
+        ],
     )?);
+    let prefix = String::from_utf8_lossy(&git(root, &["rev-parse", "--show-prefix"])?)
+        .trim_end_matches('\n')
+        .to_string();
     let wanted: BTreeSet<&str> = paths.iter().map(String::as_str).collect();
-    let blobs = clm_git::tree_blobs(root, to, &|p| !p.ends_with(".md") || wanted.contains(p))?;
+    let blobs = clm_git::tree_blobs(root, to, &|p| {
+        p.strip_prefix(prefix.as_str())
+            .is_some_and(|p| !p.ends_with(".md") || wanted.contains(p))
+    })?;
     let mut scan = Scan::default();
     let mut present = BTreeSet::new();
     for (path, bytes) in blobs {
+        let Some(path) = path.strip_prefix(prefix.as_str()).map(str::to_string) else {
+            continue;
+        };
         present.insert(path.clone());
         if path.ends_with(".md") {
             continue;
@@ -240,7 +266,7 @@ pub fn affected_between(
         .collect();
     // The whole tree, since the graph also reads `changes/`, `backlog/` and the human layer.
     let tree = clm_git::extract_tree(root, to)?;
-    let graph = load_graph(tree.path())?;
+    let graph = load_graph(&tree.path().join(&prefix))?;
     Ok(combined(&graph, &differing, &scan.cited, &scan.reads, all))
 }
 
