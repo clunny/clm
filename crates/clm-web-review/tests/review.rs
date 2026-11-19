@@ -90,7 +90,7 @@ fn review_of(repo: FakeRepo) -> Value {
 
 #[test]
 fn modified_requirement() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review();
     let nodes = v["nodes"].as_array().unwrap();
     let ids: Vec<&str> = nodes.iter().map(|n| n["id"].as_str().unwrap()).collect();
@@ -137,7 +137,7 @@ fn modified_requirement() {
 
 #[test]
 fn approval_state() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     let fingerprint = fingerprint(&repo);
     ledger(
@@ -165,7 +165,7 @@ fn approval_state() {
 
 #[test]
 fn no_ledger() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review();
     assert_eq!(v["approvals"], json!([]));
     assert_eq!(v["checked"], false);
@@ -174,7 +174,7 @@ fn no_ledger() {
 
 #[test]
 fn approval_of_an_older_diff() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // An approval is pinned to the diff it was given for: a push that changes the diff
     // leaves it behind. The older diff differs in a decision, an authored file: the branch
     // adds a change, so its `specs/` don't count (`gate/fingerprint`).
@@ -196,7 +196,7 @@ fn approval_of_an_older_diff() {
 
 #[test]
 fn checked_head() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     let tree: Vec<(String, String)> = repo.commits["222"]
         .iter()
@@ -230,7 +230,7 @@ fn checked_head() {
 
 #[test]
 fn checked_needs_the_whole_tree() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     let tree: Vec<(String, String)> = repo.commits["222"]
         .iter()
@@ -259,7 +259,7 @@ fn checked_needs_the_whole_tree() {
 
 #[test]
 fn page_url() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     repo.pages
         .push(("spec/c2".into(), 5, "https://github.com/o/a/pull/5".into()));
@@ -277,7 +277,7 @@ fn page_url() {
 
 #[test]
 fn only_spec_branches() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     repo.branches.insert("impl/n".into(), "222".into());
     let fake = Fake::default();
@@ -295,7 +295,7 @@ fn only_spec_branches() {
 
 #[test]
 fn contract_frontmatter_and_assets() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review();
     let m = &v["nodes"][0];
     assert_eq!(m["id"], "m");
@@ -328,7 +328,7 @@ fn contract_frontmatter_and_assets() {
 
 #[test]
 fn capabilities_edit_is_a_document() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     let caps = "## Capabilities\n\n### Capability: k\nOne can k.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
     repo.commits
@@ -343,7 +343,7 @@ fn capabilities_edit_is_a_document() {
 
 #[test]
 fn change_intent_and_documents() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review();
     let c = &v["change"];
     assert_eq!(c["id"], "c2");
@@ -408,7 +408,7 @@ fn cuts(v: &Value) -> Vec<&str> {
 
 #[test]
 fn a_removed_requirement() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review_of(branch_from(
         &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
         &[],
@@ -423,7 +423,7 @@ fn a_removed_requirement() {
 
 #[test]
 fn a_shortened_requirement() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // Every cut the gate lists, in its order: a requirement stating fewer sentences too.
     let two = node("", &["r", "s"], "active").replace("It SHALL r.", "It SHALL r. It SHALL q.");
     let v = review_of(branch_from(
@@ -440,7 +440,7 @@ fn a_shortened_requirement() {
 
 #[test]
 fn cuts_in_the_gates_order() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // Several cuts come as `clm gate` prints them: gone requirements, then shortened ones,
     // then the tests the lists add.
     let two =
@@ -470,7 +470,7 @@ fn cuts_in_the_gates_order() {
 
 #[test]
 fn a_widened_exemption() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let exempt = node("", &["r"], "active").replace(
         "depends_on: []\n",
         "depends_on: []\nexemptions:\n  - rule: skipped-tests\n    files: [\"src/n/**\"]\n    until: backlog/x\n",
@@ -486,8 +486,211 @@ fn a_widened_exemption() {
 }
 
 #[test]
+fn specs_that_dont_load() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The head's specs don't load, so the requirements can't be compared: the gate's one
+    // line, naming the head, and review.
+    let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
+    let v = review_of(branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r"], "active"))],
+        &[],
+        &[("specs/n/SPEC.md", &unscenarioed)],
+    ));
+    assert_eq!(v["review"], true, "{v}");
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 222 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
+fn base_specs_that_dont_load() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The merge base's specs don't load: the one line names the merge base.
+    let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
+    let v = review_of(branch_from(
+        &[("specs/n/SPEC.md", &unscenarioed)],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["r"], "active"))],
+    ));
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 111 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
+fn a_broken_live_change() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The gate loads the live `change.md` files, so one the model rejects at the head keeps
+    // the specs there from loading.
+    let v = review_of(branch_with(&[
+        ("specs/a/SPEC.md", &node("", &["p", "added"], "active")),
+        ("changes/x/change.md", "---\n: [\n---\n"),
+    ]));
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 222 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
+fn a_rule_serving_a_capability() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The gate loads the human layers, so a rule serving a capability resolves: a removed
+    // requirement is listed as gone, not hidden behind specs that seem not to load.
+    let caps = "## Capabilities\n\n### Capability: k\nOne can k.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n";
+    let serving = |reqs: &[&str]| {
+        node("", reqs, "active").replace(
+            "depends_on: []\n",
+            "depends_on: []\nserves: [capability/k]\n",
+        )
+    };
+    let v = review_of(branch_from(
+        &[
+            ("CAPABILITIES.md", caps),
+            ("specs/n/SPEC.md", &serving(&["r", "s"])),
+        ],
+        &[],
+        &[("specs/n/SPEC.md", &serving(&["s"]))],
+    ));
+    assert_eq!(
+        cuts(&v),
+        ["specs/n/SPEC.md: gate/cut: requirement n/r is gone"],
+        "{v}"
+    );
+}
+
+#[test]
+fn a_spec_github_withholds() {
+    // req:web.worker.review/pr-review@dffddef1
+    // A SPEC.md whose text GitHub gives as null is one the gate can't load either: its one
+    // line, not a cut for each requirement the file seems to lose.
+    let mut repo = branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
+        &[],
+        &[],
+    );
+    let mut bytes = node("", &["r", "s"], "active").into_bytes();
+    bytes.push(0xff);
+    repo.commits
+        .get_mut("222")
+        .unwrap()
+        .insert("specs/n/SPEC.md".into(), bytes);
+    let v = review_of(repo);
+    assert_eq!(v["review"], true, "{v}");
+    assert_eq!(
+        cuts(&v),
+        ["specs: gate/cut: the specs at 222 don't load, so what the branch cuts isn't listed"]
+    );
+}
+
+#[test]
+fn a_broken_backlog_item() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The cuts are read from the files the gate loads, so a backlog item the model rejects,
+    // which the gate never sees, doesn't make the specs fail to load.
+    let bad = "---\ntitle: Bad\nkind: nonsense\ncomponents: [n]\n---\n";
+    let repo = branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r"], "active"))],
+        &[],
+        &[
+            ("specs/n/SPEC.md", &node("", &["r", "added"], "active")),
+            ("backlog/bad.md", bad),
+        ],
+    );
+    let head: clm_model::Files = repo.commits["222"]
+        .iter()
+        .map(|(p, b)| (p.into(), b.clone()))
+        .collect();
+    let (_, violations) = clm_model::load_files(&head);
+    assert!(
+        violations.iter().any(|v| v.path.starts_with("backlog")),
+        "the model rejects the item: {violations:?}"
+    );
+    let v = review_of(repo);
+    assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
+}
+
+#[test]
+fn a_broken_archived_change() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The gate loads only the live `change.md` files, so an archived one the model rejects
+    // doesn't make the specs fail to load either.
+    let repo = branch_from(
+        &[
+            ("specs/n/SPEC.md", &node("", &["r"], "active")),
+            ("changes/archive/x/change.md", "---\n: [\n---\n"),
+        ],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["r", "added"], "active"))],
+    );
+    let head: clm_model::Files = repo.commits["222"]
+        .iter()
+        .map(|(p, b)| (p.into(), b.clone()))
+        .collect();
+    let (_, violations) = clm_model::load_files(&head);
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.path.starts_with("changes/archive")),
+        "the model rejects the archived change: {violations:?}"
+    );
+    let v = review_of(repo);
+    assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
+}
+
+#[test]
+fn untouched_specs_list_no_cuts() {
+    // req:web.worker.review/pr-review@dffddef1
+    // The cuts are read only when a changed path is under `specs/` or a list: a branch that
+    // edits a decision lists none, though the specs on both sides don't load.
+    let unscenarioed = node("", &["r"], "active").replace("\n#### Scenario: s\n- ok\n", "");
+    let v = review_of(branch_from(
+        &[("specs/n/SPEC.md", &unscenarioed)],
+        &[],
+        &[(
+            "docs/decisions/d.md",
+            "---\ntitle: D\ndate: 2026-10-01\nstatus: accepted\n---\nWhy.\n",
+        )],
+    ));
+    assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
+}
+
+#[test]
+fn a_list_github_withholds() {
+    // req:web.worker.review/pr-review@dffddef1
+    // A list whose text GitHub gives as null can't be read, so the branch needs review.
+    let mut repo = branch_with(&[(
+        "changes/c/change.md",
+        "---\nstatus: applied\n---\n\n## Intent\nc\n",
+    )]);
+    repo.commits.get_mut("222").unwrap().insert(
+        "changes/c/deleted-tests.txt".into(),
+        b"DELETE tests/a.rs::\xff\n".to_vec(),
+    );
+    let v = review_of(repo);
+    assert_eq!(v["review"], true, "{v}");
+}
+
+#[test]
+fn a_truncated_listing_lists_no_cuts() {
+    // req:web.worker.review/pr-review@dffddef1
+    // Cuts read from part of the files would mislead: none are listed, and review holds.
+    let mut repo = branch_from(
+        &[("specs/n/SPEC.md", &node("", &["r", "s"], "active"))],
+        &[],
+        &[("specs/n/SPEC.md", &node("", &["s"], "active"))],
+    );
+    repo.truncated_trees.insert("222".into());
+    let v = review_of(repo);
+    assert_eq!(v["review"], true, "{v}");
+    assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
+}
+
+#[test]
 fn a_test_list_cut() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // A change listing a test to delete needs review, whether or not the test exists: that
     // is the gate's to check, as the Worker fetches no code.
     let change = "---\nstatus: applied\n---\n\n## Intent\nx\n";
@@ -524,7 +727,7 @@ fn a_test_list_cut() {
 
 #[test]
 fn an_archived_test_list() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // An archive move takes the live list's lines as its base, as the gate does: nothing is
     // cut anew.
     let change = "---\nstatus: applied\n---\n\n## Intent\nx\n";
@@ -546,7 +749,7 @@ fn an_archived_test_list() {
 
 #[test]
 fn no_cuts() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // `spec_pr` drops `n/gone`, but its scenario moves to `n/new`: nothing is cut.
     let v = review();
     assert_eq!(cuts(&v), Vec::<&str>::new(), "{v}");
@@ -554,7 +757,7 @@ fn no_cuts() {
 
 #[test]
 fn human_layer_without_a_change() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review_of(branch_with(&[("ARCHITECTURE.md", "# Arch\n\nMore.\n")]));
     assert_eq!(v["review"], true, "{v}");
     assert_eq!(v["change"], Value::Null);
@@ -562,7 +765,7 @@ fn human_layer_without_a_change() {
 
 #[test]
 fn a_change_with_burdens() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let burdened = review_of(branch_with(&[(
         "changes/x/change.md",
         "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n",
@@ -588,7 +791,7 @@ fn a_change_with_burdens() {
 
 #[test]
 fn a_change_whose_change_md_is_missing() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // A change the branch touches whose `change.md` the head lacks, or can't be parsed,
     // fails closed, as the gate does.
     let delta = "---\nbase: {}\n---\n";
@@ -600,7 +803,7 @@ fn a_change_whose_change_md_is_missing() {
 
 #[test]
 fn an_archived_change_with_burdens() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review_of(branch_with(&[(
         "changes/archive/x/change.md",
         "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n",
@@ -610,7 +813,7 @@ fn an_archived_change_with_burdens() {
 
 #[test]
 fn an_archived_change_without_burdens() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let v = review_of(branch_with(&[(
         "changes/archive/x/change.md",
         "---\nstatus: applied\n---\n\n## Intent\nx\n",
@@ -620,7 +823,7 @@ fn an_archived_change_without_burdens() {
 
 #[test]
 fn the_approval_setting_needs_review() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let changed = review_of(branch_with(&[("clm.toml", "approval = \"other\"\n")]));
     assert_eq!(changed["review"], true, "{changed}");
     let comment = review_of(branch_with(&[("clm.toml", "# a comment\n")]));
@@ -629,7 +832,7 @@ fn the_approval_setting_needs_review() {
 
 #[test]
 fn truncated_base_listing_needs_review() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     repo.truncated_trees.insert("111".into());
     assert_eq!(review_of(repo)["review"], true);
@@ -637,7 +840,7 @@ fn truncated_base_listing_needs_review() {
 
 #[test]
 fn an_old_archived_change_is_not_read() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // A file added beside an archived change's `change.md` doesn't make it the branch's
     // change, as the gate reads only a newly archived one.
     let mut repo = branch_with(&[("changes/archive/x/notes.md", "Notes.\n")]);
@@ -654,7 +857,7 @@ fn an_old_archived_change_is_not_read() {
 
 #[test]
 fn a_removed_change_is_not_read() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // Only the changes the head holds a touched file of count: a branch that deletes a
     // change with burdens is judged by its other paths.
     let mut repo = branch_with(&[]);
@@ -669,7 +872,7 @@ fn a_removed_change_is_not_read() {
 
 #[test]
 fn truncated_listing_needs_review() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     repo.truncated_trees.insert("222".into());
     let v = review_of(repo);
@@ -679,7 +882,7 @@ fn truncated_listing_needs_review() {
 
 #[test]
 fn comparison_cached_before_review_moved() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // A comparison kept under an earlier key isn't served, even one of today's shape: the
     // branch's `review`, which now counts what it cuts, is computed anew.
     let fake = Fake::default();
@@ -697,7 +900,11 @@ fn comparison_cached_before_review_moved() {
                      "review": false, "cuts": []});
     block_on(async {
         use clm_web_platform::platform::Cache;
-        for key in ["compare3:o/a@111:222", "compare4:o/a@111:222"] {
+        for key in [
+            "compare3:o/a@111:222",
+            "compare4:o/a@111:222",
+            "compare5:o/a@111:222",
+        ] {
             fake.cache_put(key, &old.to_string(), 86_400).await;
         }
     });
@@ -713,7 +920,7 @@ fn comparison_cached_before_review_moved() {
 
 #[test]
 fn change_without_sections() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     let mut repo = spec_pr();
     repo.commits.get_mut("222").unwrap().insert(
         "changes/c2/change.md".into(),
@@ -726,7 +933,7 @@ fn change_without_sections() {
 
 #[test]
 fn change_with_empty_sections() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // A heading with nothing under it is no section: the view then falls back to the whole intent.
     let mut repo = spec_pr();
     repo.commits.get_mut("222").unwrap().insert(
@@ -739,7 +946,7 @@ fn change_with_empty_sections() {
 
 #[test]
 fn comparison_cached_with_a_patch_id() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // A comparison the Cache API kept from when fingerprints were patch-ids isn't served:
     // its fingerprint would match no approval made since.
     let fake = Fake::default();
@@ -761,7 +968,7 @@ fn comparison_cached_with_a_patch_id() {
 
 #[test]
 fn truncated_listing() {
-    // req:web.worker.review/pr-review@574ed19f
+    // req:web.worker.review/pr-review@dffddef1
     // req:web.worker.review/fingerprint-from-trees@24bcb92e
     // GitHub truncating the merge base's listing leaves the review without a fingerprint,
     // so no approval shows, though one exists for the branch's real fingerprint.
