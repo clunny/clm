@@ -272,7 +272,7 @@ fn behind_and_obsolete() -> Repo {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (behind_and_obsolete(), fake());
     let p = prompt(&r, &f, "b", &[]);
     let current = load(&r.work)
@@ -292,6 +292,96 @@ fn scenario_behind_and_obsolete() {
     assert!(p.contains("Re-cite each marker"), "{p}");
     assert!(p.contains("t.rs:10, t.rs:11, t.rs:12"), "{p}");
     assert!(!p.contains("crates/b/t.rs:1"), "{p}");
+}
+
+/// Component `b`, a live change `g` that removed `b/gone`, and tests `old_rule` and
+/// `kept_rule` in `t.rs`, each citing `b/gone`; the change's list at `list` holds `text`.
+fn obsolete_tests(list: &str, text: &str) -> Repo {
+    let r = repo();
+    let w = &r.work;
+    write(w, "changes/g/change.md", "---\nstatus: applied\n---\n");
+    write(
+        w,
+        "changes/g/deltas/b.md",
+        "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0000000000000000 -->\n",
+    );
+    write(w, list, text);
+    // An archived change holds its `change.md`, or the spec doesn't load.
+    if let Some(dir) = list
+        .strip_suffix("/deleted-tests.txt")
+        .filter(|d| d.starts_with("changes/archive/"))
+    {
+        write(
+            w,
+            &format!("{dir}/change.md"),
+            "---\nstatus: applied\n---\n",
+        );
+    }
+    write(
+        w,
+        "t.rs",
+        &format!(
+            "#[test]\nfn old_rule() {{\n    // {r}:b/gone\n}}\n\n#[test]\nfn kept_rule() {{\n    // {r}:b/gone\n}}\n",
+            r = "req"
+        ),
+    );
+    push_main(w, "gone removed");
+    r
+}
+
+#[test]
+fn scenario_an_obsolete_requirement_s_tests() {
+    // req:orchestrator.run/pending-prompt@c50d1883
+    let (r, f) = (
+        obsolete_tests("changes/g/deleted-tests.txt", "DELETE t.rs::old_rule\n"),
+        fake(),
+    );
+    let p = prompt(&r, &f, "b", &[]);
+    let list = &p[p.find("- `b/gone` obsolete").expect("b/gone obsolete")..];
+    assert!(
+        list.contains("(`land/deleted-tests-approved`): `t.rs::old_rule`."),
+        "{list}"
+    );
+    assert!(
+        list.contains(
+            "refuses this build to lose every other test that cites it: `t.rs::kept_rule`;"
+        ),
+        "{list}"
+    );
+}
+
+#[test]
+fn an_archived_list_approves_too_and_no_list_keeps_every_test() {
+    // req:orchestrator.run/pending-prompt@c50d1883
+    // `land` reads archived lists as well as live ones, and compares names by `bare_name`.
+    let r = obsolete_tests(
+        "changes/archive/h/deleted-tests.txt",
+        &format!("DELETE t.rs::kept_rule {}:b/gone\n", "req"),
+    );
+    let p = prompt(&r, &fake(), "b", &[]);
+    assert!(p.contains("): `t.rs::kept_rule`."), "{p}");
+    assert!(p.contains("cites it: `t.rs::old_rule`;"), "{p}");
+    // A list that isn't a change's isn't approval.
+    let r = obsolete_tests("docs/deleted-tests.txt", "DELETE t.rs::old_rule\n");
+    let p = prompt(&r, &fake(), "b", &[]);
+    assert!(
+        !p.contains("Delete the tests an approved list names"),
+        "{p}"
+    );
+    assert!(
+        p.contains("cites it: `t.rs::old_rule` and `t.rs::kept_rule`;"),
+        "{p}"
+    );
+}
+
+#[test]
+fn a_spec_that_doesnt_load_prints_nothing_on_stdout() {
+    // req:orchestrator.run/run@5c35d326
+    let (r, f) = (repo(), fake());
+    write(&r.work, "changes/archive/h/deleted-tests.txt", "\n");
+    push_main(&r.work, "an archived change with no change.md");
+    let stderr = refused(&r, &f, "b", &[], 1);
+    assert!(stderr.contains("missing change.md"), "{stderr}");
 }
 
 /// Component `b` owning `crates/b/**`, whose `b/x` moved from an earlier commit's text, cited
@@ -338,7 +428,7 @@ fn stale_marker_in_c(root_extra: &str) -> Repo {
 
 #[test]
 fn scenario_stale_marker_in_another_components_files() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (stale_marker_in_c(""), fake());
     let p = prompt(&r, &f, "b", &[]);
     assert!(p.contains("-It SHALL x.\n+It SHALL x, more."), "{p}");
@@ -349,7 +439,7 @@ fn scenario_stale_marker_in_another_components_files() {
 
 #[test]
 fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (stale_marker_in_c("wiring: []\n"), fake());
     let p = prompt(&r, &f, "b", &[]);
     let list = &p[p.find("## Pending requirements").unwrap()..];
@@ -367,7 +457,7 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
     assert!(!list.contains("crates/b/now.rs"), "{list}");
     // An obsolete requirement's markers are all listed for removal, `c`'s file included.
     assert!(
-        list.contains("remove the code and tests marked at crates/c/gone.rs:1."),
+        list.contains("its markers are at crates/c/gone.rs:1."),
         "{list}"
     );
     assert!(
@@ -378,7 +468,7 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 
 #[test]
 fn a_stale_marker_in_a_wiring_file_is_re_cited() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     // Every build may edit a file a `wiring` glob matches (`model/wiring-globs`).
     let (r, f) = (stale_marker_in_c("wiring: [\"crates/c/t.rs\"]\n"), fake());
     let p = prompt(&r, &f, "b", &[]);
@@ -388,7 +478,7 @@ fn a_stale_marker_in_a_wiring_file_is_re_cited() {
 
 #[test]
 fn pending_requirements_are_listed_most_urgent_first() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (repo(), fake());
     // `b/r` comes from `x` at no priority; `u` adds `b/u` at P1 and `t` adds `b/t` at P3.
     write(&r.work, "specs/b/SPEC.md", &node("", &["r", "t", "u"]));
@@ -415,7 +505,7 @@ fn pending_requirements_are_listed_most_urgent_first() {
 
 #[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (repo(), fake());
     write(
         &r.work,
@@ -436,7 +526,7 @@ fn scenario_blocked_requirement_left_out() {
 
 #[test]
 fn scenario_needing_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (repo(), fake());
     write(
         &r.work,
@@ -784,7 +874,7 @@ fn resumed_behind_main(r: &Repo, f: &Fake, conflict: bool) {
 
 #[test]
 fn scenario_resumed_branch_behind_main() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (repo(), fake());
     resumed_behind_main(&r, &f, false);
     let p = prompt(&r, &f, "b", &[]);
@@ -797,7 +887,7 @@ fn scenario_resumed_branch_behind_main() {
 
 #[test]
 fn scenario_resumed_branch_that_conflicts_with_main() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let (r, f) = (repo(), fake());
     resumed_behind_main(&r, &f, true);
     // The branch and `origin/main` change the same line, so their merge conflicts.

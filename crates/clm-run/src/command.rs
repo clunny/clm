@@ -163,8 +163,8 @@ where
 }
 
 /// What `clm <cmd>` prints for `result`: its text on `out` with status 0, a refusal on `err`
-/// with 1, the violations on `out`, one line each as `clm-model` gives it, with 1, and git's
-/// failure on `err` with 2.
+/// with 1, the violations on `err`, one line each as `clm-model` gives it, with 1, and git's
+/// failure on `err` with 2: a run that fails prints nothing on `out` (`run`).
 fn printed(
     cmd: &str,
     result: Result<String, Error>,
@@ -177,7 +177,7 @@ fn printed(
         Err(Error::Refused(why)) => writeln!(err, "clm {cmd}: {why}").map(|()| 1),
         Err(Error::Spec(violations)) => {
             for v in violations {
-                writeln!(out, "{v}")?;
+                writeln!(err, "{v}")?;
             }
             Ok(1)
         }

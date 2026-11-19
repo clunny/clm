@@ -21,6 +21,8 @@ fn job() -> Job {
                 ],
                 markers: vec!["crates/c/t.rs:8".into()],
                 foreign: vec![],
+                delete: vec![],
+                keep: vec![],
             },
             Item {
                 id: "b/y".into(),
@@ -29,6 +31,8 @@ fn job() -> Job {
                 diffs: vec![],
                 markers: vec![],
                 foreign: vec![],
+                delete: vec![],
+                keep: vec![],
             },
             Item {
                 id: "b/gone".into(),
@@ -37,6 +41,8 @@ fn job() -> Job {
                 diffs: vec![],
                 markers: vec!["t.rs:9".into()],
                 foreign: vec![],
+                delete: vec![],
+                keep: vec![],
             },
         ],
         blocked: vec![
@@ -143,7 +149,7 @@ fn names_no_target_directory() {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let p = prompt(&job());
     let pending = p.find("## Pending requirements").unwrap();
     let list = &p[pending..];
@@ -156,10 +162,7 @@ fn scenario_behind_and_obsolete() {
         "{list}"
     );
     assert!(list.contains("version `none` wasn't found"), "{list}");
-    assert!(
-        list.contains("remove the code and tests marked at t.rs:9"),
-        "{list}"
-    );
+    assert!(list.contains("markers are at t.rs:9"), "{list}");
     assert!(
         list.contains("Re-cite each marker") && list.contains("another component's `paths`"),
         "{list}"
@@ -168,8 +171,38 @@ fn scenario_behind_and_obsolete() {
 }
 
 #[test]
+fn scenario_an_obsolete_requirement_s_tests() {
+    // req:orchestrator.run/pending-prompt@c50d1883
+    let mut j = job();
+    let gone = &mut j.pending[2];
+    gone.delete = vec!["t.rs::old_rule".into()];
+    gone.keep = vec!["t.rs::kept_rule".into()];
+    let p = prompt(&j);
+    let list = &p[p.find("- `b/gone` obsolete").expect("b/gone obsolete")..];
+    let list = &list[..list.find("\nBlocked").unwrap_or(list.len())];
+    for needle in [
+        "Remove the code they mark that no other requirement needs",
+        "Delete the tests an approved list names (`land/deleted-tests-approved`): `t.rs::old_rule`.",
+        "`clm land` refuses this build to lose every other test that cites it: `t.rs::kept_rule`;",
+        "re-cite each to the requirement that now states what it proves",
+        "where none does, leave it and add a `question` item",
+    ] {
+        assert!(list.contains(needle), "{needle} missing from {list}");
+    }
+    // A list with nothing in it isn't printed.
+    let mut j = job();
+    j.pending[2].keep = vec!["t.rs::kept_rule".into()];
+    let p = prompt(&j);
+    assert!(
+        !p.contains("Delete the tests an approved list names"),
+        "{p}"
+    );
+    assert!(p.contains("`t.rs::kept_rule`"), "{p}");
+}
+
+#[test]
 fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let mut j = job();
     j.wiring = true;
     let x = &mut j.pending[0];
@@ -195,7 +228,7 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 
 #[test]
 fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wiring() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let without = prompt(&job());
     assert!(
         without.contains("wherever its file sits, is allowed"),
@@ -213,7 +246,7 @@ fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wirin
 
 #[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@209c6f80
+    // req:orchestrator.run/pending-prompt@c50d1883
     let p = prompt(&job());
     let list = &p[p.find("## Pending requirements").unwrap()..];
     assert!(!list.contains("- `b/z` unbuilt"), "{list}");
