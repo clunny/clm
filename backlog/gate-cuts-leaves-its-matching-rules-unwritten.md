@@ -3,9 +3,9 @@ title: "gate/cuts leaves how it reads a sentence and what loading means unwritte
 kind: question
 components: [gate]
 choices:
-  - "Write the build's choices into gate/cuts as they stand"
-  - "Make SHALL case-insensitive and keep the rest"
-  - "Match placement phrases as substrings, as the text says"
+  - "Write the build's choices in as they are"
+  - "Also match shall in any case"
+  - "Match the phrases as substrings"
 ---
 
 The build of `gate/cuts` made choices the requirement's text leaves open. They are in the code and some in tests, but no sentence keeps them, so a later rewrite can drop them unseen (`code-fix-needs-a-written-rule`):
