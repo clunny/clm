@@ -1148,6 +1148,7 @@ fn subdirectory_repo() -> TempDir {
         &format!("// {READS}ARCHITECTURE.md\n"),
     );
     write(&sub, "ARCHITECTURE.md", "# Sub\n");
+    write(&sub, "crates/a/README.md", "# A\n");
     write(top, "other/build.sh", "true\n");
     write(top, "ARCHITECTURE.md", "# Top\n");
     commit_all(top, "start");
@@ -1197,6 +1198,19 @@ fn two_commits_in_a_subdirectory_root_are_read_from_its_place_in_their_trees() {
     assert_eq!(
         stdout(&out),
         "node a\nfile crates/a/src/lib.rs\nfile crates/a/src/util.rs\nfile crates/a/tests/r.rs\n"
+    );
+    // A changed Markdown file that is code, which no scan reads, is found in each commit's
+    // tree by its name from the CLM root.
+    for side in ["x", "y"] {
+        git(top, &["switch", "-q", side]);
+        write(&sub, "crates/a/README.md", &format!("# A, {side}\n"));
+        commit_all(top, side);
+    }
+    let out = clm_affected_args(&sub, &["--overlap", "x", "y"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert_eq!(
+        stdout(&out),
+        "node a\nfile crates/a/README.md\nfile crates/a/src/lib.rs\nfile crates/a/src/util.rs\nfile crates/a/tests/r.rs\n"
     );
 }
 
