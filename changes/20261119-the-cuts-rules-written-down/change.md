@@ -31,7 +31,7 @@ The builds of `20261118-the-pass-s-tooling` made choices its requirements left o
 
 ## Constraints
 
-- No behaviour of `clm gate` changes: each clause added to `gate/cuts` is what the build does and, for the five choices, what a test of its crate asserts or the build's item names.
+- No behaviour of `clm gate` changes: each clause added to `gate/cuts` is what the build does, as the builder check confirmed against `crates/clm-gate/src/cuts.rs` and `lib.rs`: the reading of a sentence, the files loaded, the unloaded line followed by the lists' tests, the merge base named when both sides fail, and the graphs read only for a diff that touches `specs/` or a list.
 
 ## What the requirements no longer state
 
@@ -40,3 +40,12 @@ Nothing. No requirement, scenario or sentence is removed.
 ## What the builds do
 
 `gate` first (a re-cite, the new call and the scenarios that have no test yet), then `web.worker.review`, `orchestrator.run` and `host`.
+
+- `gate`'s build writes the tests no scenario had: a lowercase `shall`, a phrase inside a word, a sentence ending at a line break, a rule that serves a capability, both sides failing to load, and `cuts_or_unloaded` itself.
+- `web.worker.review`'s build loads a second pair of graphs for the cut call, from only the files the gate loads, empties `cuts` for a truncated listing, and names the cache key anew, `compare6`.
+- `host`'s build gives the two tests that prove the kept body the marker of `keep-unopened-body`.
+
+## Open questions
+
+- **An obsolete marker in another component's file has no owner step.** Listed apart, it stays, so its requirement stays `obsolete` on its own component, which the queue keeps offering, and the question a build files can block nothing. It can arise only in a file an exemption from `check/tests-cite-their-owner` covers. `backlog/an-obsolete-marker-in-another-component-s-file-is-nobody-s-to-remove` asks the human whether the marker should count as pending on the file's owner.
+- **`host/keep-unopened-body` says `clm pr open` exits 1** where a failed `gh pr create` exits 2 today, which a test asserts. Older than this change; `backlog/a-failed-pull-request-open-exits-2-where-its-requirement-says-1` is a `bug` on `host`.

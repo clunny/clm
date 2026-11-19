@@ -1,7 +1,22 @@
 ---
 component: gate
-base: { design: "03eee22ad3a4bd54" }
+base: { contract: "d114ca3f4f27d5a7", design: "03eee22ad3a4bd54" }
 ---
+
+## MODIFIED Contract
+`clm gate --base <ref> [--approved]` decides whether `HEAD` may merge into `<ref>`. Its first line is the branch's kind, `spec review` for a spec branch that needs a human's review, `spec` for one that doesn't, `code` or `mixed`, then any violations in `check`'s format, and it exits 0 to allow or 1 to block. `--approved` says the ledger holds an approval of this diff that the repository's policy accepts; `clm land` computes it from the fold (`land-locally`), and the gate itself reads no ledger and no host.
+
+`clm fingerprint`, the fingerprint an approval is pinned to, is the child `gate.fingerprint`'s (crate `clm-fingerprint`). `clm-gate` re-exports its `Entry`, `parse_ls_tree`, `fingerprint_of`, `adds_change`, `added_changes` and `fingerprint`, so `land`, `ledger`, `web` and `crates/clm` call them as `clm_gate::...` (`fingerprint-reexported`).
+
+`clm-gate` also offers `settings_unchanged(before, after)`: given `clm.toml`'s bytes on each side of a diff (`Option<&[u8]>`, `None` where the file doesn't exist), whether its settings are the same once the upgrade notes `upgraded` and `declined_migrations`, comments and formatting are set aside, false when either side isn't UTF-8 TOML. `land` reads it to count a land whose `clm.toml` changed only so as checked (`land/settings-unchanged-is-checked`).
+
+`clm gate` lists what a spec branch cuts, one `gate/cut` line each after the kind line: a requirement that is gone, a scenario that is gone, a requirement that states fewer sentences, and a test a change's `deleted-tests.txt` lists to delete (`cuts`, `removal-needs-a-yes`). The lines change no exit status; a spec branch with any needs review. `clm-gate` offers the list as `cuts(base, head, lists)` over two spec graphs, with `widened_exemptions(base, head)`, `stating_sentences(statement)` and `places_a_test(sentence)`, all building for wasm, `list_lines(text)`, and `cuts_or_unloaded(base, head, lists)`, each side a `Side` holding its graph, the violations its loading gave and its revision, which returns `cuts`' result or, when a side didn't load, the one line that says so and the tests the lists add, for `web.worker.review`, `host`, `check.health`, `land` and `orchestrator.run`; each cut prints as its line, and `evaluate_at`'s result holds the cuts. A `deleted-tests.txt` line that names no citing test is the violation `gate/deleted-tests`.
+
+`clm-gate` also offers `foreign_files(repo, base, head, component)`: the code files `head` changes against `base` that aren't `component`'s build's to change, each with its owner, none when the root at the merge base sets no `wiring` (`own-files`). The gate itself reads no branch name, so `clm gate` doesn't report them: `clm land`, which knows the branch, applies the rule (`land/build-holds-own-files`), as it applies `files-outside-spec-paths` to a spec branch.
+
+`clm-gate` offers `clm gate` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. `crates/clm` routes the command to it and adds nothing to what it writes.
+
+`clm-gate` also offers `RULES`, the version of the rules by which it decides a branch's kind and whether it needs review, and `evaluate_by(repo, base, head, approved, rules)`, the gate as it decided under the rules of version `rules`, which `evaluate_at` is with `RULES` (`rules-version`). `land` names in each merge commit the version it judged the land by (`land/gate-rules-trailer`), and `ledger`'s `verify --review` recomputes each land under the version in force when it landed (`audit-by-the-rules-in-force`).
 
 ## MODIFIED Design
 Changes come from `git diff --name-status --no-renames <merge-base>...HEAD`. Spec paths are `specs/`, `changes/`, `backlog/`, `docs/`, `ARCHITECTURE.md`, `CAPABILITIES.md`, `CLAUDE.md` and `AGENTS.md`. File contents at the merge base and at `HEAD` are compared with `git diff <rev>:<path> <rev>:<path>`. Uses the `git` CLI, not a git library.
@@ -43,7 +58,7 @@ A branch behind `<ref>` may land (`land-locally`). `clm land` merges `<ref>` int
 - a *shortened requirement*: one both graphs hold whose statement, its text above its first `####` heading, has fewer stating sentences at the head than at the base, with both counts;
 - a *test to delete*: each list line the head's text holds and the base's text doesn't, with its path, in the paths' order and then the file's.
 
-A scenario's name is the text after `#### Scenario: ` in its requirement's block. A scenario is *moved* when `head` holds a scenario of the same name under a requirement of another ID that held no scenario of that name in `base`; each such scenario of `head` SHALL take one gone scenario and no more, the gone scenarios taken in the order of their requirement IDs and then of their place. A *sentence* ends at a `.`, `?` or `!` that whitespace, a line break included, or the statement's end follows. A *stating sentence* is one that holds `SHALL` as a whole word in capitals, as the spec format writes it, and none of the placement phrases `SHALL sit`, `sat in` and `is left in`, each matched as whole words and without regard to case, so `is left intact` holds none; `clm-gate` SHALL offer `stating_sentences(statement)`, returning them, and `places_a_test(sentence)`, returning the first placement phrase a sentence holds. A *list line* is `DELETE <file>::<name>`, the name ending at a tab or at the line's end; a blank line and a line starting `#` are skipped; `clm-gate` SHALL offer `list_lines(text)`, returning each list line's file and name. A list line names a test when the files agree and the names agree as `check.coverage`'s `bare_name` gives them.
+A scenario's name is the text after `#### Scenario: ` in its requirement's block. A scenario is *moved* when `head` holds a scenario of the same name under a requirement of another ID that held no scenario of that name in `base`; each such scenario of `head` SHALL take one gone scenario and no more, the gone scenarios taken in the order of their requirement IDs and then of their place. A *sentence* ends at a `.`, `?` or `!` that whitespace, a line break included, or the statement's end follows. A *stating sentence* is one that holds `SHALL` as a whole word in capitals, as the spec format writes it, and none of the placement phrases `SHALL sit`, `sat in` and `is left in`, each matched as whole words separated by single spaces and without regard to case, so `is left intact` holds none and a phrase broken across a line is not found; `clm-gate` SHALL offer `stating_sentences(statement)`, returning them, and `places_a_test(sentence)`, returning the first placement phrase a sentence holds. A *list line* is `DELETE <file>::<name>`, the name ending at a tab or at the line's end; a blank line and a line starting `#` are skipped; `clm-gate` SHALL offer `list_lines(text)`, returning each list line's file and name. A list line names a test when the files agree and the names agree as `check.coverage`'s `bare_name` gives them.
 
 For a `spec` branch, `clm gate` SHALL print one line per cut after its first line and before any violation, `evaluate_at` returning the cuts beside its verdict:
 - `specs/<component path>/SPEC.md: gate/cut: requirement <id> is gone`;
@@ -51,7 +66,7 @@ For a `spec` branch, `clm gate` SHALL print one line per cut after its first lin
 - `specs/<component path>/SPEC.md: gate/cut: <id> states <n> sentences where it stated <m>`;
 - `<list path>: gate/cut: test <file>::<name> is to be deleted`.
 
-The lines SHALL NOT change its exit status, and a branch `rename/replay` accepts SHALL have its cuts listed as any other. A `spec` branch SHALL be blocked with rule `gate/deleted-tests`, with `--approved` or without, naming the list and the line, for each line its head adds to a list that is neither skipped nor a list line, and for each list line it adds that names no test with a marker on its lines in `<file>` at the head (`check.coverage/test-lists`). When the graph at the merge base or at the head loads with any violation, from `specs/`, a human layer or a live `change.md`, the cuts can't be read: `clm gate` SHALL print `specs: gate/cut: the specs at <revision> don't load, so what the branch cuts isn't listed`, for the merge base when both fail, and the branch SHALL need review. `clm-gate` SHALL offer that rule as `cuts_or_unloaded(base, head, lists)`, building for wasm as `cuts` does, `base` and `head` each a graph with the violations its loading gave and the revision's name as printed: it SHALL return that one cut when a side holds a violation and `cuts`' result otherwise, and SHALL be what `clm gate` lists by, so the gate and `web.worker` list one thing.
+The lines SHALL NOT change its exit status, and a branch `rename/replay` accepts SHALL have its cuts listed as any other. A `spec` branch SHALL be blocked with rule `gate/deleted-tests`, with `--approved` or without, naming the list and the line, for each line its head adds to a list that is neither skipped nor a list line, and for each list line it adds that names no test with a marker on its lines in `<file>` at the head (`check.coverage/test-lists`). The cuts SHALL be read only for a branch whose diff changes a path under `specs/` or a `deleted-tests.txt`; any other branch has none. When the graph at the merge base or at the head, loaded from the files named above and no other, loads with any violation, the requirements can't be compared: `clm gate` SHALL print `specs: gate/cut: the specs at <revision> don't load, so what the branch cuts isn't listed`, `<revision>` the commit ID of that side and the merge base's when both fail, then the *test to delete* lines of `lists`, which need no graph, and the branch SHALL need review. `clm-gate` SHALL offer that rule as `cuts_or_unloaded(base, head, lists)`, building for wasm as `cuts` does, `base` and `head` each a `Side`: the graph, the violations its loading gave and the revision as printed. It SHALL return the unloaded cut and then the tests to delete when a side holds a violation, and `cuts`' result otherwise, and SHALL be what `clm gate` lists by, so the gate and `web.worker` list one thing.
 
 #### Scenario: a removed requirement
 - GIVEN component `a` with requirement `a/x`, whose one scenario is `first`, and a branch that only removes `a/x` from `specs/a/SPEC.md`
@@ -141,7 +156,17 @@ The lines SHALL NOT change its exit status, and a branch `rename/replay` accepts
 #### Scenario: specs that don't load
 - GIVEN a branch that only changes `specs/a/SPEC.md` so that a requirement of `a` holds no scenario
 - WHEN `clm gate --base main` runs, and `cuts_or_unloaded` runs for the two graphs with their violations
-- THEN the gate prints `spec review` and `specs: gate/cut: the specs at HEAD don't load, so what the branch cuts isn't listed`, and the call returns that one cut
+- THEN the gate prints `spec review` and `specs: gate/cut: the specs at <c> don't load, so what the branch cuts isn't listed`, `<c>` the head's commit ID, and the call returns that one cut
+
+#### Scenario: unloaded specs and a listed test
+- GIVEN the same branch, also adding `changes/c/deleted-tests.txt` with `DELETE tests/t.rs::two`, a test that cites `a/x`
+- WHEN `clm gate --base main` runs
+- THEN it prints the unloaded line and then `changes/c/deleted-tests.txt: gate/cut: test tests/t.rs::two is to be deleted`
+
+#### Scenario: a branch that touches no spec
+- GIVEN a branch that only edits a live `changes/c/change.md` so that its frontmatter names an unknown key, and no path under `specs/`
+- WHEN `clm gate --base main` runs
+- THEN it prints no `gate/cut` line
 
 #### Scenario: from two graphs
 - GIVEN the graphs of *a removed scenario* loaded from texts, and no lists
