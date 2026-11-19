@@ -36,7 +36,7 @@ fn repo(removed: &[&str]) -> TempDir {
 
 #[test]
 fn scenario_uncounted() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let dir = repo(&["gone"]);
     let g = graph(dir.path());
     let text = format!(
@@ -68,7 +68,7 @@ fn scenario_uncounted() {
 
 #[test]
 fn uncounted_lists_each_marker_of_an_id() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let dir = repo(&[]);
     let g = graph(dir.path());
     let text = format!("// {REQ}:a/y\n// {REQ}:a/y\n");
@@ -90,7 +90,7 @@ fn two_tests() -> String {
 
 #[test]
 fn scenario_a_removed_requirements_tests() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let dir = repo(&["x"]);
     // `a/x` is still held by component `a`, so only a removal the spec no longer holds
     // counts: remove it from the component's spec.
@@ -116,7 +116,7 @@ fn scenario_a_removed_requirements_tests() {
 
 #[test]
 fn obsolete_tests_ignore_groups_and_files_without_removals() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let dir = repo(&["x"]);
     write(
         dir.path(),
@@ -130,6 +130,11 @@ fn obsolete_tests_ignore_groups_and_files_without_removals() {
     assert!(found.is_empty(), "{found:?}");
 }
 
+/// The base files of *a deleted test*: `one` and `two`, each citing `a/x`.
+fn pair_base() -> String {
+    rust_test("one", true) + &rust_test("two", true)
+}
+
 fn base() -> String {
     format!(
         "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn two() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn quiet() {{}}\n"
@@ -138,9 +143,9 @@ fn base() -> String {
 
 #[test]
 fn scenario_a_deleted_test() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let head = format!("#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n");
-    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &files(&[(TESTS, head)]));
     let shown: Vec<_> = found
         .iter()
         .map(|t| (t.test.as_str(), t.ids.clone()))
@@ -150,17 +155,18 @@ fn scenario_a_deleted_test() {
 
 #[test]
 fn scenario_a_renamed_test() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let head = format!(
         "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn second() {{\n    // {REQ}:a/x\n}}\n"
     );
-    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let base = rust_test("one", true) + &rust_test("two", true);
+    let found = deleted_tests(&files(&[(TESTS, base)]), &files(&[(TESTS, head)]));
     assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
 fn scenario_a_renamed_test_that_cites_less() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let base = format!(
         "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n#[test]\nfn two() {{\n    // {REQ}:a/x\n    // {REQ}:a/y\n}}\n"
     );
@@ -181,18 +187,18 @@ fn scenario_a_renamed_test_that_cites_less() {
 
 #[test]
 fn scenario_a_test_renamed_into_another_file() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let head = files(&[
         (TESTS, rust_test("one", true)),
         ("tests/u.rs", rust_test("second", true)),
     ]);
-    let found = deleted_tests(&files(&[(TESTS, base())]), &head);
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &head);
     assert_eq!(names(&found), ["tests/t.rs::two"]);
 }
 
 #[test]
 fn scenario_one_new_name_for_two_gone_tests() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let base = rust_test("one", true) + &rust_test("two", true) + &rust_test("three", true);
     let head = rust_test("one", true) + &rust_test("second", true);
     let found = deleted_tests(&files(&[(TESTS, base)]), &files(&[(TESTS, head)]));
@@ -201,7 +207,7 @@ fn scenario_one_new_name_for_two_gone_tests() {
 
 #[test]
 fn a_rename_may_cite_more_and_at_other_versions() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let base = format!("#[test]\nfn two() {{\n    // {REQ}:a/x@11111111\n}}\n");
     let head =
         format!("#[test]\nfn second() {{\n    // {REQ}:a/y\n    // {REQ}:a/x@22222222\n}}\n");
@@ -211,7 +217,7 @@ fn a_rename_may_cite_more_and_at_other_versions() {
 
 #[test]
 fn a_rename_takes_only_a_name_no_base_test_carries() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     // `tests/t.rs` loses `two` and gains `kept`, but `kept` is a name `tests/u.rs` held
     // at the base: it is a move, not a rename, so `two` is gone. A head test with no
     // marker isn't a rename either.
@@ -233,7 +239,7 @@ fn a_rename_takes_only_a_name_no_base_test_carries() {
 
 #[test]
 fn a_group_name_at_the_base_leaves_a_rename_fresh() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     // A `describe` group named `second` at the base isn't a test: a head test `second` is
     // still a new name, so `two` was renamed.
     let base =
@@ -248,7 +254,7 @@ fn a_group_name_at_the_base_leaves_a_rename_fresh() {
 
 #[test]
 fn scenario_a_test_that_gains_its_first_marker() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let head = rust_test("one", true) + &rust_test("quiet", true);
     let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
     let shown: Vec<_> = found
@@ -259,8 +265,84 @@ fn scenario_a_test_that_gains_its_first_marker() {
 }
 
 #[test]
+fn scenario_an_uncited_test_renamed_as_it_gains_its_first_marker() {
+    // req:check.coverage/test-lists@d258ae73
+    let head = rust_test("one", true) + &rust_test("quiet_now", true);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let shown: Vec<_> = found
+        .iter()
+        .map(|t| (t.test.as_str(), t.ids.clone()))
+        .collect();
+    assert_eq!(shown, [("tests/t.rs::two", vec!["a/x".to_string()])]);
+}
+
+#[test]
+fn scenario_an_uncited_test_renamed_to_a_name_it_doesnt_cite_under() {
+    // req:check.coverage/test-lists@d258ae73
+    let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("quiet_now", false);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+fn scenario_an_uncited_test_deleted_beside_a_rename() {
+    // req:check.coverage/test-lists@d258ae73
+    let head = rust_test("one", true) + &rust_test("second", true);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let shown: Vec<_> = found
+        .iter()
+        .map(|t| (t.test.as_str(), t.ids.clone()))
+        .collect();
+    assert_eq!(shown, [("tests/t.rs::two", vec!["a/x".to_string()])]);
+}
+
+#[test]
+fn gone_unmarked_tests_are_counted_per_file_and_name() {
+    // req:check.coverage/test-lists@d258ae73
+    // An unmarked test of another file, or one the head still holds by name, takes no new
+    // test: `two` is renamed `second`.
+    let base_files = files(&[
+        (TESTS, base()),
+        ("tests/u.rs", rust_test("other_quiet", false)),
+    ]);
+    let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("quiet", false);
+    let found = deleted_tests(&base_files, &files(&[(TESTS, head)]));
+    assert!(found.is_empty(), "{found:?}");
+    // Two unmarked tests of one name, one left at the head: one is gone, and takes the
+    // one new test, so `two` is gone.
+    let base2 = base() + &rust_test("quiet", false);
+    let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("quiet", false);
+    let found = deleted_tests(&files(&[(TESTS, base2)]), &files(&[(TESTS, head)]));
+    assert_eq!(names(&found), ["tests/t.rs::two"]);
+    // Two new tests and one gone unmarked test leave room for one rename: of `two` and
+    // `three`, both fitting either new test, the earlier is renamed and `three` is gone.
+    let base3 = base() + &rust_test("three", true);
+    let head = rust_test("one", true) + &rust_test("second", true) + &rust_test("third", true);
+    let found = deleted_tests(&files(&[(TESTS, base3)]), &files(&[(TESTS, head)]));
+    assert_eq!(names(&found), ["tests/t.rs::three"]);
+    // An unmarked test that keeps its name and gains a marker is not gone, so it takes no
+    // new test: `two` is renamed `second`.
+    let head = rust_test("one", true) + &rust_test("quiet", true) + &rust_test("second", true);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+fn a_rename_fits_only_a_new_test_of_its_own_file() {
+    // req:check.coverage/test-lists@d258ae73
+    // `tests/t.rs` has room for a rename (an unmarked new test), and the test `two` fits is
+    // new in `tests/u.rs`: renamed and moved at once, `two` is gone.
+    let head = files(&[
+        (TESTS, rust_test("one", true) + &rust_test("helper", false)),
+        ("tests/u.rs", rust_test("second", true)),
+    ]);
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &head);
+    assert_eq!(names(&found), ["tests/t.rs::two"]);
+}
+
+#[test]
 fn scenario_two_renames_that_each_keep_their_citations() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let base = format!(
         "{}#[test]\nfn second() {{\n    // {REQ}:a/x\n    // {REQ}:a/y\n}}\n",
         rust_test("first", true)
@@ -275,7 +357,7 @@ fn scenario_two_renames_that_each_keep_their_citations() {
 
 #[test]
 fn renames_pair_as_many_as_can_be_and_the_earlier_wins_a_tie() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     // One head test fits both taken tests: the earlier counts as renamed.
     let base = rust_test("one", true) + &rust_test("two", true);
     let head = rust_test("fresh", true);
@@ -317,18 +399,18 @@ fn rust_test(name: &str, marker: bool) -> String {
 
 #[test]
 fn scenario_a_moved_test() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let head = files(&[
         (TESTS, rust_test("one", true)),
         ("tests/u.rs", rust_test("two", true)),
     ]);
-    let found = deleted_tests(&files(&[(TESTS, base())]), &head);
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &head);
     assert!(found.is_empty(), "{found:?}");
 }
 
 #[test]
 fn scenario_a_name_two_files_share() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let both = files(&[
         (TESTS, rust_test("two", true)),
         ("tests/u.rs", rust_test("two", true)),
@@ -345,15 +427,15 @@ fn scenario_a_name_two_files_share() {
 
 #[test]
 fn scenario_a_test_that_loses_its_marker() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let head = rust_test("one", true) + &rust_test("two", false);
-    let found = deleted_tests(&files(&[(TESTS, base())]), &files(&[(TESTS, head)]));
+    let found = deleted_tests(&files(&[(TESTS, pair_base())]), &files(&[(TESTS, head)]));
     assert_eq!(names(&found), ["tests/t.rs::two"]);
 }
 
 #[test]
 fn scenario_a_title_that_carries_its_marker() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let base = format!("test('keeps the list ({REQ}:a/x@11111111)', () => {{\n}});\n");
     let head = format!("test('keeps the list ({REQ}:a/z@22222222)', () => {{\n}});\n");
     let found = deleted_tests(
@@ -365,7 +447,7 @@ fn scenario_a_title_that_carries_its_marker() {
 
 #[test]
 fn scenario_one_of_two_tests_of_a_name_in_one_file() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let one = format!("test('two', () => {{\n  // {REQ}:a/x\n}});\n");
     let base = format!("{one}{one}");
     let found = deleted_tests(
@@ -379,7 +461,7 @@ fn scenario_one_of_two_tests_of_a_name_in_one_file() {
 
 #[test]
 fn deleted_tests_notice_a_missing_file_and_a_moved_test() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let found = deleted_tests(&files(&[(TESTS, base())]), &[]);
     assert_eq!(names(&found), ["tests/t.rs::one", "tests/t.rs::two"]);
     assert_eq!(found[0].line, 1);
@@ -392,7 +474,7 @@ fn deleted_tests_notice_a_missing_file_and_a_moved_test() {
 
 #[test]
 fn deleted_tests_sort_by_file_then_line() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     // Names sort against their lines (`b` above `a`), and the files' names against theirs.
     let t = rust_test("zz", true) + &rust_test("aa", true);
     let base = files(&[("tests/b.rs", t.clone()), ("tests/a.rs", t)]);
@@ -415,7 +497,7 @@ fn deleted_tests_sort_by_file_then_line() {
 
 #[test]
 fn deleted_tests_take_no_more_than_are_gone() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     // `a.rs` loses both its tests `two`, `b.rs` gains one: one is gone, the last of `a.rs`.
     let two = rust_test("two", true);
     let base = files(&[("tests/a.rs", two.clone() + &two)]);
@@ -429,7 +511,7 @@ fn deleted_tests_take_no_more_than_are_gone() {
 
 #[test]
 fn uncited_tests_leave_groups_out_and_sort() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let ts = "describe('g', () => {\n  test('t', () => {\n  });\n});\n".to_string();
     let rust = rust_test("zz", false) + &rust_test("aa", false);
     let found = uncited_tests(&files(&[("tests/t.rs", rust), ("a.test.ts", ts)]));
@@ -446,7 +528,7 @@ fn uncited_tests_leave_groups_out_and_sort() {
 
 #[test]
 fn deleted_tests_take_the_files_in_sorted_order() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     // Three tests `two` at the base, one at the head in a file that had none: two are
     // gone, taken from the files in sorted order, each giving what it lost.
     let base = files(&[
@@ -463,7 +545,7 @@ fn deleted_tests_take_the_files_in_sorted_order() {
 
 #[test]
 fn bare_name_leaves_markers_out() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     assert_eq!(
         bare_name(&format!(
             "keeps the list {REQ}:a/x@11111111 and {REQ}:b.c/y"
@@ -481,7 +563,7 @@ fn bare_name_leaves_markers_out() {
 
 #[test]
 fn scenario_uncited_tests() {
-    // req:check.coverage/test-lists@1f461b0a
+    // req:check.coverage/test-lists@d258ae73
     let rust = format!(
         "#[test]\nfn one() {{\n    // {REQ}:a/x\n}}\n\n\n\n\n#[test]\nfn helper_rounds_up() {{\n}}\n"
     );
