@@ -12,7 +12,7 @@ Once the root sets `wiring`, a build changes only its own component's files (`ow
 
 **The owner's build carries it out and judges nothing.** The removed requirement is pending on each other component that owns a file citing it (`check.coverage/pending-report`), and that build deletes the tests the list names and removes markers outside a test. The removed requirement's line on its own component is blocked while another component holds one: deleting a test breaks nothing, and removing code a test still runs does. `clm pending` prints the wait as blocked by the requirement's own ID, which the queue reads as it reads any pending requirement, so there is no new kind of blocker and the line stays in view.
 
-**What counts as the requirement's own.** A file a `wiring` glob matches, which every build may change, and a file no component owns. A removed component's tests follow the rule as a removed requirement's do, each on its file's owner (`node-removal`). A removed capability keeps the placement `removed-capabilities-build-out` gives it, with the fault this decision mends still in it. A project that sets no `wiring` sees none of this.
+**What counts as the requirement's own.** A file a `wiring` glob matches, which every build may change, and a file no component owns. A removed component's tests follow the rule as a removed requirement's do, each on its file's owner (`node-removal`). A removed capability is placed and checked the same way, its component being the one that builds the capability tests (`a-question-holds-a-removed-requirement-s-unlisted-test`). A project that sets no `wiring` sees none of this.
 
 **The code.** When no file of the removed requirement's own component cites it, no line ever reaches that component, so the owner's prompt says to file a `deferred` item for the code the requirement needed. That the build files it is an instruction, not a check.
 
@@ -20,6 +20,6 @@ Once the root sets `wiring`, a build changes only its own component's files (`ow
 
 Considered:
 - **Listing the marker apart on the removing component's prompt, with a question to file.** Built on 2026-11-19 and replaced: the question can block nothing, since the requirement is gone.
-- **Letting a question block an obsolete line.** Rejected: it ends the loop by handing the human each test, which is implementation and not intent.
+- **Letting a question block an obsolete line.** Rejected for a test in another component's file: it ends the loop by handing the human each test, which is implementation and not intent, where the change can list them all. Taken for a test in the requirement's own files that no list names and nothing states any more (`a-question-holds-a-removed-requirement-s-unlisted-test`).
 - **Giving the marker to the file's owner to remove or re-cite.** Drafted and not proposed: the owner can't judge a re-cite, which `stale-markers-keep-behind` had rejected for a `behind` marker, and nothing ordered its build against the removing component's.
 - **Accepting it while no component holds an exemption.** Rejected by the human on 2026-11-19: a known fault is fixed.
