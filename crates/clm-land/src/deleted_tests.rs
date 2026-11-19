@@ -3,9 +3,9 @@
 //! branch not named `spec/*` that, against its merge base with `base`, loses a citing test as
 //! `clm_coverage::deleted_tests` counts one gone (a test moved to another file, or renamed in its
 //! own file still citing all it cited, is not), unless a change's `deleted-tests.txt` in `base`'s
-//! tree names each.
+//! tree names each. It reads every file of both trees under the CLM root, as `clm coverage
+//! --deleted-tests` does, so the two give one verdict on a branch.
 
-use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use clm_gate::ListLine;
@@ -31,7 +31,7 @@ pub(crate) fn check(
     let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
         return Ok(());
     };
-    // The files the branch adds, changes or deletes, relative to the CLM root.
+    // A branch that touches nothing under the CLM root loses nothing, and reads nothing.
     let changed = repo.git(&[
         "diff",
         "--name-only",
@@ -41,8 +41,7 @@ pub(crate) fn check(
         &merge_base,
         head,
     ])?;
-    let changed: BTreeSet<&str> = changed.split('\0').filter(|p| !p.is_empty()).collect();
-    if changed.is_empty() {
+    if changed.split('\0').all(str::is_empty) {
         return Ok(());
     }
     let prefix = repo.git(&["rev-parse", "--show-prefix"])?;
@@ -58,8 +57,10 @@ pub(crate) fn check(
             })
             .collect())
     };
-    let touched = |p: &str| changed.contains(p);
-    let gone = clm_coverage::deleted_tests(&texts(&merge_base, &touched)?, &texts(head, &touched)?);
+    // Every file of both trees, as `clm coverage --deleted-tests` reads them: an untouched
+    // file makes no test gone, but its tests' names decide whether a touched file's is new.
+    let every = |_: &str| true;
+    let gone = clm_coverage::deleted_tests(&texts(&merge_base, &every)?, &texts(head, &every)?);
     if gone.is_empty() {
         return Ok(());
     }
@@ -79,9 +80,9 @@ pub(crate) fn check(
             (!named).then(|| {
                 format!(
                     "{file}: {RULE}: test {name}, which cited {}, is gone and no approved list \
-                     names it. Keep the test under its name, or under a new name in its file \
-                     citing every requirement it cited, or leave the requirement unbuilt and \
-                     add a question item",
+                     names it. Keep the test under its name, or under a name no citing test \
+                     carried, in its file, citing every requirement it cited, or leave the \
+                     requirement unbuilt and add a question item",
                     t.ids.join(", ")
                 )
             })
@@ -111,7 +112,7 @@ mod tests {
 
     #[test]
     fn lists_live_and_archived() {
-        // req:land/deleted-tests-approved@f9eddc3a
+        // req:land/deleted-tests-approved@3f3cdc80
         assert!(is_list("changes/c/deleted-tests.txt"));
         assert!(is_list("changes/archive/c/deleted-tests.txt"));
         assert!(!is_list("changes/c/deltas/deleted-tests.txt"));
