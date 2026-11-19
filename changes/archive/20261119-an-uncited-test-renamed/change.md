@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [an-uncited-test-renamed-as-it-gains-a-marker-hides-a-deleted-test]
 ---
 
