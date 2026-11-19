@@ -391,6 +391,7 @@ impl Host for GitHub {
         {
             return Ok(Some(url));
         }
+        let (body_file, _guard) = crate::cuts::with_cuts(root, branch, body_file)?;
         let body = body_file.to_string_lossy();
         let out = gh(
             root,
@@ -421,6 +422,7 @@ impl Host for GitHub {
                 "`{branch}` has no open PR whose head it is"
             )));
         };
+        let (file, _guard) = crate::cuts::with_cuts(root, &branch, file)?;
         gh(
             root,
             &[

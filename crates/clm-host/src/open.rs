@@ -5,6 +5,7 @@ use std::path::Path;
 
 use clm_git::{REMOTE, current_branch, git};
 
+use crate::cuts::{Sent, take_sent};
 use crate::keep::{TempFile, keep_body};
 use crate::{Error, adapter};
 
@@ -53,11 +54,21 @@ pub fn pr_open(
         (None, Some(file)) => file,
         (None, None) => unreachable!("a body is either given or written"),
     };
+    take_sent();
     adapter(host)
         .page_open(root, &branch, &title, file)
-        .map_err(|e| match text.filter(|t| !t.trim().is_empty()) {
-            Some(text) => keeping(root, &branch, &text, e),
-            None => e,
+        .map_err(|e| {
+            // The body as sent, with its `## Cuts` section when it had one; none when the
+            // gate refused before anything was sent.
+            let text = match take_sent() {
+                Some(Sent::Unevaluated) => None,
+                Some(Sent::Body(sent)) => Some(sent),
+                None => text,
+            };
+            match text.filter(|t| !t.trim().is_empty()) {
+                Some(text) => keeping(root, &branch, &text, e),
+                None => e,
+            }
         })
 }
 

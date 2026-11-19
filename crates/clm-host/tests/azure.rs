@@ -62,6 +62,31 @@ fn with_fakes<T>(
         .status()
         .unwrap();
     assert!(init.success());
+    // A commit on `branch` that `origin/main` holds too, so the gate finds nothing cut.
+    for args in [
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "base",
+        ][..],
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    ] {
+        let ok = Command::new("git")
+            .args(args)
+            .current_dir(repo.path())
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap();
+        assert!(ok.success(), "git {args:?}");
+    }
     fs::write(repo.path().join("body.md"), body_text).unwrap();
     let out = body(repo.path(), dir.path());
     unsafe { std::env::set_var("PATH", old) };
@@ -539,6 +564,86 @@ fn an_update_is_cut_too() {
         assert_eq!(fs::read_to_string(kept_path(root)).unwrap(), body);
         assert!(calls(dir, "az").contains("repos pr update --id 12"));
     });
+}
+
+/// Commits on the repository's branch a spec of component `a` holding `slugs`' requirements.
+fn commit_spec(root: &Path, slugs: &[&str]) {
+    let file = |rel: &str, text: &str| {
+        fs::create_dir_all(root.join(rel).parent().unwrap()).unwrap();
+        fs::write(root.join(rel), text).unwrap();
+    };
+    file(
+        "specs/SPEC.md",
+        "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nr\n\n## Design\nr\n\n## Requirements\n",
+    );
+    let mut a = "---\ntitle: a\nstatus: active\nowners: []\npaths: [\"src/a/**\"]\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n".to_string();
+    for slug in slugs {
+        a.push_str(&format!(
+            "\n### Requirement: {slug}\n{slug} SHALL hold.\n\n#### Scenario: {slug}\n- GIVEN g\n- WHEN w\n- THEN t\n"
+        ));
+    }
+    file("specs/a/SPEC.md", &a);
+    for args in [
+        &["add", "specs"][..],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-qm",
+            "spec",
+        ],
+    ] {
+        let ok = Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap();
+        assert!(ok.success(), "git {args:?}");
+    }
+}
+
+/// Makes the repository's branch a spec branch that removes `a/x` against `origin/main`.
+fn cut_a_x(root: &Path) {
+    commit_spec(root, &["x", "y"]);
+    let ok = Command::new("git")
+        .args(["update-ref", "refs/remotes/origin/main", "HEAD"])
+        .current_dir(root)
+        .status()
+        .unwrap();
+    assert!(ok.success());
+    commit_spec(root, &["y"]);
+}
+
+const CUTS: &str = "## Cuts\n- specs/a/SPEC.md: gate/cut: requirement a/x is gone\n\n";
+
+#[test]
+fn the_cuts_come_before_the_cut_to_fit() {
+    // req:host/pr-open@bdaae01c
+    // req:host/pr-body@a7b89523
+    let body = long_body();
+    for listed in ["[]".to_string(), format!("[{}]", pull_request(12))] {
+        with_fakes(&[], "spec/x", &body, |root, dir| {
+            cut_a_x(root);
+            fake_az_keeping_descriptions(dir, &listed);
+            let file = root.join("body.md");
+            if listed == "[]" {
+                Azure.page_open(root, "spec/x", "x", &file).unwrap();
+            } else {
+                Azure.page_body(root, &file).unwrap();
+            }
+            let sent = fs::read_to_string(dir.join("description")).unwrap();
+            assert!(units(&sent) <= 4000, "{}", units(&sent));
+            assert!(sent.starts_with(&format!("{CUTS}line 000")), "{sent}");
+            let kept = fs::read_to_string(kept_path(root)).unwrap();
+            assert_eq!(kept, format!("{CUTS}{body}"));
+            assert_eq!(fs::read_to_string(&file).unwrap(), body);
+        });
+    }
 }
 
 /// The test binary runs itself on this one with `CLM_CUT_CHILD` set, to read what the cut

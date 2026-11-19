@@ -284,7 +284,9 @@ fn fake_gh() -> Gh {
          'pr create') while [ $# -gt 0 ]; do \
          [ \"$1\" = --body-file ] && cp \"$2\" \"$FAKE_OUT/body\"; shift; done; \
          echo 'Creating pull request'; echo https://github.com/o/r/pull/9;;\n\
-         'issue create') echo https://github.com/o/r/issues/3;;\nesac\n",
+         'issue create') echo https://github.com/o/r/issues/3;;\n\
+         'api -X') for a in \"$@\"; do case \"$a\" in body=@*) \
+         cp \"${a#body=@}\" \"$FAKE_OUT/body\";; esac; done;;\nesac\n",
     );
     Gh { dir }
 }
@@ -818,7 +820,7 @@ const OPEN_ARGS: [&str; 7] = [
 
 #[test]
 fn scenario_page_open_github() {
-    // req:host/pr-open@db347388
+    // req:host/pr-open@bdaae01c
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
     assert_eq!(code, Some(0), "{err}");
@@ -836,7 +838,7 @@ fn scenario_page_open_github() {
 
 #[test]
 fn scenario_page_already_open() {
-    // req:host/pr-open@db347388
+    // req:host/pr-open@bdaae01c
     let (r, gh) = (checkout("github"), fake_gh());
     let view = r#"{"url":"https://github.com/o/r/pull/4","state":"OPEN","headRefName":"spec/x"}"#;
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_PR_VIEW", view)]);
@@ -851,7 +853,7 @@ fn scenario_page_already_open() {
 
 #[test]
 fn page_open_after_a_merged_page_opens_another() {
-    // req:host/pr-open@db347388
+    // req:host/pr-open@bdaae01c
     let (r, gh) = (checkout("github"), fake_gh());
     let view = r#"{"url":"https://github.com/o/r/pull/4","state":"MERGED","headRefName":"spec/x"}"#;
     let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_PR_VIEW", view)]);
@@ -861,7 +863,7 @@ fn page_open_after_a_merged_page_opens_another() {
 
 #[test]
 fn page_open_exits_2_when_gh_fails() {
-    // req:host/pr-open@db347388
+    // req:host/pr-open@bdaae01c
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
     assert_eq!(code, Some(2), "{err}");
@@ -870,7 +872,7 @@ fn page_open_exits_2_when_gh_fails() {
 
 #[test]
 fn scenario_page_open_no_host() {
-    // req:host/pr-open@db347388
+    // req:host/pr-open@bdaae01c
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
@@ -878,6 +880,165 @@ fn scenario_page_open_no_host() {
         assert_eq!(out, "none\n");
         assert!(gh.calls().is_empty(), "{:?}", gh.calls());
     }
+}
+
+const ROOT_SPEC: &str = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nroot\n\n## Design\nroot design\n\n## Requirements\n";
+
+/// Component `a`'s spec holding a requirement for each of `slugs`.
+fn component_a(slugs: &[&str]) -> String {
+    let mut out = "---\ntitle: a\nstatus: active\nowners: []\npaths: [\"src/a/**\"]\n---\n\n## Contract\nc\n\n## Design\nd\n\n## Requirements\n".to_string();
+    for slug in slugs {
+        out.push_str(&format!(
+            "\n### Requirement: {slug}\n{slug} SHALL hold.\n\n#### Scenario: {slug}\n- GIVEN g\n- WHEN w\n- THEN t\n"
+        ));
+    }
+    out
+}
+
+/// A checkout whose `clm.toml` sets `host = "github"` and whose `origin/main` holds component
+/// `a` with requirements `x` and `y`, on `branch`, which commits `a` holding `head` instead.
+fn spec_edit(branch: &str, head: &[&str]) -> Repo {
+    let r = repo();
+    write(&r.work, "specs/SPEC.md", ROOT_SPEC);
+    write(&r.work, "specs/a/SPEC.md", &component_a(&["x", "y"]));
+    git(&r.work, &["add", "-A"]);
+    git(&r.work, &["commit", "-qm", "a"]);
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    git(&r.work, &["checkout", "-q", "-b", branch]);
+    write(&r.work, "specs/a/SPEC.md", &component_a(head));
+    git(&r.work, &["add", "-A"]);
+    git(&r.work, &["commit", "-qm", "edit a"]);
+    write(&r.work, "clm.toml", "host = \"github\"\n");
+    write(&r.work, "body.md", "The body\n");
+    r
+}
+
+const CUTS: &str = "## Cuts\n- specs/a/SPEC.md: gate/cut: requirement a/x is gone\n\n";
+
+#[test]
+fn scenario_pr_open_a_branch_with_cuts() {
+    // req:host/pr-open@bdaae01c
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(out, "https://github.com/o/r/pull/9\n");
+    assert_eq!(body(&gh), format!("{CUTS}The body\n"));
+    assert_eq!(
+        fs::read_to_string(r.work.join("body.md")).unwrap(),
+        "The body\n"
+    );
+}
+
+#[test]
+fn scenario_pr_open_a_branch_without_cuts() {
+    // req:host/pr-open@bdaae01c
+    let (r, gh) = (spec_edit("spec/y", &["x", "y", "z"]), fake_gh());
+    let args = [
+        "pr",
+        "open",
+        "spec/y",
+        "--title",
+        "y",
+        "--body-file",
+        "body.md",
+    ];
+    let (code, out, err) = clm(&r.work, &gh, &args, &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(out, "https://github.com/o/r/pull/9\n");
+    assert_eq!(body(&gh), "The body\n");
+    assert_eq!(
+        creates(&gh),
+        ["pr create --base main --head spec/y --title y --body-file body.md"]
+    );
+}
+
+#[test]
+fn pr_open_exits_1_when_the_gate_cant_be_evaluated() {
+    // req:host/pr-open@bdaae01c
+    let (r, gh) = (checkout("github"), fake_gh());
+    let args = [
+        "pr",
+        "open",
+        "spec/nowhere",
+        "--title",
+        "x",
+        "--body-file",
+        "body.md",
+    ];
+    let (code, _, err) = clm(&r.work, &gh, &args, &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("gate") && !err.contains("kept"), "{err}");
+    assert!(creates(&gh).is_empty(), "{:?}", gh.calls());
+}
+
+#[test]
+fn a_drawn_body_starts_with_the_cuts_too() {
+    // req:host/pr-open@bdaae01c
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    let (code, _, err) = clm(&r.work, &gh, &["pr", "open", "spec/x"], &[]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(body(&gh), format!("{CUTS}- edit a\n"));
+}
+
+#[test]
+fn the_gate_waits_for_the_checks_before_it() {
+    // req:host/pr-open@bdaae01c
+    // req:host/pr-body@a7b89523
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    // Already open: nothing is sent, so the gate isn't asked.
+    let view = r#"{"url":"https://github.com/o/r/pull/4","state":"OPEN","headRefName":"spec/x"}"#;
+    let (code, out, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_PR_VIEW", view)]);
+    assert_eq!(
+        (code, out.as_str()),
+        (Some(0), "https://github.com/o/r/pull/4\n"),
+        "{err}"
+    );
+    // A blank body and a branch with no open pull request refuse for that, not the gate.
+    write(&r.work, "body.md", " \n");
+    let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(!err.contains("gate"), "{err}");
+    write(&r.work, "body.md", "The body\n");
+    let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("no open PR") && !err.contains("gate"), "{err}");
+}
+
+#[test]
+fn a_body_that_fails_to_open_is_kept_with_its_cuts() {
+    // req:host/pr-open@bdaae01c
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &[("FAKE_CREATE_EXIT", "1")]);
+    assert_eq!(code, Some(2), "{err}");
+    let (_, kept) = err.split_once("the body is kept at ").expect(&err);
+    let kept = fs::read_to_string(kept.trim()).unwrap();
+    assert_eq!(kept, format!("{CUTS}The body\n"));
+}
+
+#[test]
+fn scenario_pr_body_a_branch_with_cuts() {
+    // req:host/pr-body@a7b89523
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    let (code, out, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(out, "updated #7\n");
+    assert_eq!(body(&gh), format!("{CUTS}The body\n"));
+}
+
+#[test]
+fn pr_body_exits_1_when_the_gate_cant_be_evaluated() {
+    // req:host/pr-body@a7b89523
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
+    assert_eq!(code, Some(1), "{err}");
+    assert!(err.contains("gate"), "{err}");
+    assert!(
+        !gh.calls().iter().any(|c| c.starts_with("api")),
+        "{:?}",
+        gh.calls()
+    );
 }
 
 /// The `pr create` calls `gh` got.
@@ -901,7 +1062,7 @@ fn spec_branch(intent: &str) -> Repo {
     r
 }
 
-/// The body file the last `pr create` was given.
+/// The body file the last `pr create` or `api` call was given.
 fn body(gh: &Gh) -> String {
     fs::read_to_string(gh.dir.path().join("body")).unwrap()
 }
@@ -1069,7 +1230,7 @@ const BODY_ARGS: [&str; 3] = ["pr", "body", "body.md"];
 
 #[test]
 fn scenario_page_body_updated() {
-    // req:host/pr-body@7e8f221a
+    // req:host/pr-body@a7b89523
     let (r, gh) = (checkout("github"), fake_gh());
     let (code, out, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
     assert_eq!(code, Some(0), "{err}");
@@ -1087,7 +1248,7 @@ fn scenario_page_body_updated() {
 
 #[test]
 fn scenario_page_body_blank_file() {
-    // req:host/pr-body@7e8f221a
+    // req:host/pr-body@a7b89523
     let (r, gh) = (checkout("github"), fake_gh());
     write(&r.work, "body.md", " \n\t\n");
     let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &[("FAKE_PR_VIEW", PR_7)]);
@@ -1100,7 +1261,7 @@ fn scenario_page_body_blank_file() {
 
 #[test]
 fn page_body_without_an_open_page_exits_1() {
-    // req:host/pr-body@7e8f221a
+    // req:host/pr-body@a7b89523
     let (r, gh) = (checkout("github"), fake_gh());
     let merged = r#"{"number":7,"state":"MERGED","headRefName":"spec/x"}"#;
     let other = r#"{"number":8,"state":"OPEN","headRefName":"spec/y"}"#;
@@ -1125,8 +1286,8 @@ fn page_body_without_an_open_page_exits_1() {
 
 #[test]
 fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
-    // req:host/pr-body@7e8f221a
-    // req:host/pr-open@db347388
+    // req:host/pr-body@a7b89523
+    // req:host/pr-open@bdaae01c
     let (r, gh) = (checkout("github"), fake_gh());
     let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
     let (code, _, err) = clm(&r.work, &gh, &BODY_ARGS, &env);
@@ -1143,7 +1304,7 @@ fn a_failing_gh_pr_view_exits_2_and_opens_nothing() {
 
 #[test]
 fn page_body_without_a_host_does_nothing() {
-    // req:host/pr-body@7e8f221a
+    // req:host/pr-body@a7b89523
     for host in ["none", "git"] {
         let (r, gh) = (checkout(host), fake_gh());
         let (code, out, err) = clm(&r.work, &gh, &BODY_ARGS, &[]);

@@ -3,6 +3,7 @@
 
 mod azure;
 mod command;
+mod cuts;
 mod github;
 mod keep;
 mod open;

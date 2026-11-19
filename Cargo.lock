@@ -480,6 +480,7 @@ version = "0.26.0"
 dependencies = [
  "clap",
  "clm-config",
+ "clm-gate",
  "clm-git",
  "serde_json",
  "tempfile",
