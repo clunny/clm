@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-review-lists-every-line-of-a-test-list-whose-base-text]
 ---
 
