@@ -12,6 +12,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clm_coverage::{Pending, State as ReqState};
+use clm_gate::{ListLine, list_lines};
 use clm_git::{git, git_isolated};
 use clm_model::{Files, Graph};
 pub use clm_orchestrator::Error;
@@ -144,6 +145,12 @@ pub struct Item {
     /// Behind, once the root sets `wiring`: the stale markers in a file another component
     /// owns, each with that owner, which this build may not change (`pending-prompt`).
     pub foreign: Vec<(String, String)>,
+    /// Obsolete: the tests among its markers that an approved `deleted-tests.txt` names
+    /// (`land/deleted-tests-approved`), each `<file>::<name>`, which the build deletes.
+    pub delete: Vec<String>,
+    /// Obsolete: every other test among its markers, which `clm land` refuses the build to
+    /// lose, each `<file>::<name>`.
+    pub keep: Vec<String>,
 }
 
 /// The job a run gives its session.
@@ -467,7 +474,8 @@ pub fn prompt(job: &Job) -> String {
          `#### Enforced by` names and is never cited by a test (`human-layer-proof`); one \
          that says only `#### Untested` needs no proof. \
          For an `obsolete` requirement, remove the \
-         code and tests its markers mark (`no-dead-code`). {recite} \
+         code its markers mark that no other requirement needs (`no-dead-code`), and delete \
+         or keep each of its tests as its entry below says (`removal-needs-a-yes`). {recite} \
          Your build changes only your own component's files: those your component's `tests` match, \
          wherever they sit, and those its `paths` match that no other component's `tests` match \
          (`path-ownership`, `components-own-their-tests`), apart from the two exceptions \
@@ -643,9 +651,26 @@ pub fn prompt(job: &Job) -> String {
         }
         if item.state == "obsolete" {
             p.push_str(&format!(
-                "  A live change removed it; remove the code and tests marked at {}.\n",
+                "  A live change removed it; its markers are at {}. Remove the code they mark \
+                 that no other requirement needs.",
                 item.markers.join(", ")
             ));
+            if !item.delete.is_empty() {
+                p.push_str(&format!(
+                    " Delete the tests an approved list names (`land/deleted-tests-approved`): \
+                     {}.",
+                    listing_owned(&item.delete, "and", true)
+                ));
+            }
+            if !item.keep.is_empty() {
+                p.push_str(&format!(
+                    " `clm land` refuses this build to lose every other test that cites it: {}; \
+                     re-cite each to the requirement that now states what it proves and, where \
+                     none does, leave it and add a `question` item.",
+                    listing_owned(&item.keep, "and", true),
+                ));
+            }
+            p.push('\n');
         } else if item.state == "behind" && !item.markers.is_empty() {
             // Only while the root sets no `wiring` may a build edit another component's file.
             let wherever = if job.wiring {
@@ -1289,6 +1314,8 @@ fn job(
     let mut history = History::new(root, rev, &spec);
     let mut items = Vec::new();
     let mut blocked = Vec::new();
+    // The approved lists' lines, read once the first obsolete requirement needs them.
+    let mut approved: Option<Vec<ListLine>> = None;
     // Once the root sets `wiring`, the component that owns a marker's file when that isn't
     // `node` and no `wiring` glob lets every build edit it: the files `clm land` refuses
     // this build's edit to (`land/build-holds-own-files`).
@@ -1332,6 +1359,12 @@ fn job(
                 }
             }
         }
+        let (delete, keep) = if p.state == ReqState::Obsolete {
+            let approved = approved.get_or_insert_with(|| approved_lists(tree));
+            obsolete_tests_split(graph, tree, p, approved)
+        } else {
+            (Vec::new(), Vec::new())
+        };
         items.push(Item {
             id: p.id.clone(),
             version: p.version.clone(),
@@ -1339,6 +1372,8 @@ fn job(
             diffs,
             markers,
             foreign,
+            delete,
+            keep,
         });
     }
     let bundle = clm_context::bundle(graph, tree, node);
@@ -1358,6 +1393,55 @@ fn job(
         setup: None,
         wiring: graph.wiring().is_some(),
     })
+}
+
+/// The lines of every change's `deleted-tests.txt` in the tree at `tree`, live or archived
+/// (`changes/<id>/` or `changes/archive/<id>/`), the lists `clm land` reads as approved
+/// (`land/deleted-tests-approved`).
+fn approved_lists(tree: &Path) -> Vec<ListLine> {
+    let changes = tree.join("changes");
+    let ids = |dir: &Path| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .map(|d| d.flatten().map(|e| e.path()).collect())
+            .unwrap_or_default()
+    };
+    let mut dirs = ids(&changes);
+    dirs.extend(ids(&changes.join("archive")));
+    dirs.sort();
+    dirs.iter()
+        .filter(|d| d.file_name().is_some_and(|n| n != "archive"))
+        .filter_map(|d| fs::read_to_string(d.join("deleted-tests.txt")).ok())
+        .flat_map(|text| list_lines(&text))
+        .collect()
+}
+
+/// The tests among obsolete `p`'s markers in the tree at `tree`, each `<file>::<name>`: those
+/// an `approved` line names, compared by file and `bare_name` as `clm land` compares them, and
+/// every other one.
+fn obsolete_tests_split(
+    graph: &Graph,
+    tree: &Path,
+    p: &Pending,
+    approved: &[ListLine],
+) -> (Vec<String>, Vec<String>) {
+    let mut paths: Vec<&PathBuf> = p.markers.iter().map(|m| &m.path).collect();
+    paths.sort();
+    paths.dedup();
+    let files: Vec<(PathBuf, String)> = paths
+        .into_iter()
+        .filter_map(|path| Some((path.clone(), fs::read_to_string(tree.join(path)).ok()?)))
+        .collect();
+    clm_coverage::obsolete_tests(graph, &files)
+        .into_iter()
+        .filter(|t| t.ids.contains(&p.id))
+        .map(|t| t.test)
+        .partition(|test| {
+            let (file, name) = test.split_once("::").unwrap_or(("", test));
+            let bare = clm_coverage::bare_name(name);
+            approved
+                .iter()
+                .any(|l| l.file == file && clm_coverage::bare_name(&l.name) == bare)
+        })
 }
 
 /// The history of a node's `SPEC.md` up to a revision: its commits, newest first, and each
