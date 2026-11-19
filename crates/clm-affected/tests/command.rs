@@ -144,6 +144,8 @@ fn repo(clm_toml: &str) -> TempDir {
 #[test]
 fn the_call_writes_what_the_command_prints_and_returns_its_status() {
     // req:check.affected/commands-in-crate@6731de32
+    // A CLM root at the top of its repository prints what it did before `clm-root-paths`.
+    // req:check.affected/clm-root-paths@e89be136
     let dir = repo("");
     let root = dir.path();
     write(root, "crates/a/src/lib.rs", "fn g() {}\n");
@@ -924,6 +926,7 @@ fn independent_changes_overlap_in_nothing() {
 #[test]
 fn a_dependant_of_both_is_what_they_share() {
     // req:check.affected/overlap-selection@f23b11bd
+    // req:check.affected/clm-root-paths@e89be136
     let dir = overlap_repo("", "[a, b]", &|r| touch(r, "crates/a/src/lib.rs"), &|r| {
         touch(r, "crates/b/src/lib.rs")
     });
@@ -1151,6 +1154,15 @@ fn subdirectory_repo() -> TempDir {
     write(&sub, "crates/a/README.md", "# A\n");
     write(top, "other/build.sh", "true\n");
     write(top, "ARCHITECTURE.md", "# Top\n");
+    // Outside the CLM root, a file citing `a` and reading `ARCHITECTURE.md`: no scan reads it.
+    write(
+        top,
+        "other/t.rs",
+        &format!(
+            "// {}\n// {READS}ARCHITECTURE.md\n",
+            concat!("req", ":a/x@12345678")
+        ),
+    );
     commit_all(top, "start");
     git(top, &["switch", "-q", "-c", "work"]);
     dir
@@ -1165,6 +1177,8 @@ fn a_branch_in_a_subdirectory_root_is_named_from_the_root() {
     write(&sub, "crates/a/src/lib.rs", "fn g() {}\n");
     write(top, "other/build.sh", "false\n");
     commit_all(top, "change");
+    // An untracked file outside the CLM root is no changed file either.
+    write(top, "other/new.sh", "true\n");
     let out = clm_affected(&sub, "main");
     assert_eq!(out.status.code(), Some(0), "{out:?}");
     assert_eq!(
