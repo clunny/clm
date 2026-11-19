@@ -202,6 +202,9 @@ export interface BranchReview {
   /** The `changes_requested` records for the branch, oldest first (web/request-changes).
    * Absent as `comments` may be. */
   change_requests?: ChangeRequest[];
+  /** The `gate/cut` lines `clm gate` prints for what the branch cuts, in its order. Absent
+   * as `comments` may be. */
+  cuts?: string[];
 }
 
 /** A `commented` record on a spec branch. */
