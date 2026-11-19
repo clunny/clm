@@ -308,6 +308,94 @@ fn linked_worktree_counted() {
 }
 
 #[test]
+fn subagent_recorded_for_its_worktree_branch() {
+    // req:effort/transcripts@3669b654
+    // A session in the main checkout, which has `main` checked out, on `spec/x`, launches
+    // one subagent in a linked worktree on `impl/a` and one in the checkout itself.
+    let dir = tempfile::tempdir().unwrap();
+    let clone = repository(dir.path());
+    let linked = clone.join(".claude/worktrees/a");
+    sh(
+        &clone,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "impl/a",
+            linked.to_str().unwrap(),
+        ],
+    );
+    transcript(
+        dir.path(),
+        &clone,
+        "s1/subagents/agent-x",
+        &[entry("s1", "spec/x", &linked, 0, "m1")],
+    );
+    transcript(
+        dir.path(),
+        &clone,
+        "s1/subagents/agent-y",
+        &[entry("s1", "spec/x", &clone, 0, "m2")],
+    );
+    let env = env(dir.path(), &[]);
+    let out = clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap();
+    assert_eq!(
+        out.lines,
+        [
+            "effort impl/a s1 35 tokens 0s",
+            "effort spec/x s1 35 tokens 0s",
+            "recorded 2 sessions on 2 branches"
+        ],
+        "{:?}",
+        out.warnings
+    );
+}
+
+#[test]
+fn a_cwd_inside_a_worktree_keeps_its_branch() {
+    // req:effort/transcripts@3669b654
+    // A `--cwd` inside the linked worktree is the deepest counted directory holding the
+    // subagent's `cwd`, and is still that worktree.
+    let dir = tempfile::tempdir().unwrap();
+    let clone = repository(dir.path());
+    let linked = clone.join(".claude/worktrees/a");
+    sh(
+        &clone,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "impl/a",
+            linked.to_str().unwrap(),
+        ],
+    );
+    let inside = linked.join("crates");
+    transcript(
+        dir.path(),
+        &clone,
+        "s1/subagents/agent-x",
+        &[entry("s1", "spec/x", &inside, 0, "m1")],
+    );
+    let env = env(dir.path(), &[]);
+    let options = clm_effort::Options {
+        cwds: vec![inside],
+        ..Default::default()
+    };
+    let out = clm_effort::record(&clone, &options, &env).unwrap();
+    assert_eq!(
+        out.lines,
+        [
+            "effort impl/a s1 35 tokens 0s",
+            "recorded 1 sessions on 1 branches"
+        ],
+        "{:?}",
+        out.warnings
+    );
+}
+
+#[test]
 fn outside_a_clm_repository_refused() {
     // req:effort/record-command@2365b153
     let dir = tempfile::tempdir().unwrap();

@@ -36,10 +36,11 @@ struct Group {
 
 /// The work in the transcripts under `transcripts` whose entries ran in a `counted`
 /// directory, one per session and branch (only `branch`'s when given), in branch and session
-/// order, and the warnings.
+/// order, and the warnings. Each counted directory comes with the branch checked out in it
+/// when it is a linked worktree that has one, which a subagent's entries run there count for.
 pub fn sessions(
     transcripts: &Path,
-    counted: &[PathBuf],
+    counted: &[(PathBuf, Option<String>)],
     branch: Option<&str>,
 ) -> (Vec<SessionWork>, Vec<String>) {
     let Ok(projects) = std::fs::read_dir(transcripts) else {
@@ -48,7 +49,7 @@ pub fn sessions(
             vec![format!("no transcripts at {}", transcripts.display())],
         );
     };
-    let prefixes: Vec<String> = counted.iter().map(|dir| encoded(dir)).collect();
+    let prefixes: Vec<String> = counted.iter().map(|(dir, _)| encoded(dir)).collect();
     let mut files = Vec::new();
     for project in projects.flatten() {
         let name = project.file_name().to_string_lossy().into_owned();
@@ -62,20 +63,40 @@ pub fn sessions(
     // With a branch named plainly, a line that doesn't hold it can't be its entry, and isn't
     // parsed.
     let needle = branch.filter(|b| !b.contains(['"', '\\']));
+    // A subagent's line counts for `branch` when it holds the branch or ran in a worktree
+    // that has the branch checked out, so it must name one or the other; with a path JSON
+    // would escape, every subagent line is parsed.
+    let worktrees: Option<Vec<&str>> = counted
+        .iter()
+        .filter(|(_, b)| b.is_some() && b.as_deref() == branch)
+        .map(|(dir, _)| dir.to_str().filter(|d| !d.contains(['"', '\\'])))
+        .collect();
     for file in files {
         let Ok(bytes) = std::fs::read(&file) else {
             continue;
+        };
+        // A subagent's entries carry the launching session's branch, so they count for the
+        // branch of the worktree they ran in, which no line need name.
+        let subagent = file
+            .strip_prefix(transcripts)
+            .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == "subagents"));
+        let paths: &[&str] = match (&worktrees, subagent) {
+            (_, false) => &[],
+            (Some(paths), true) => paths,
+            // The empty string, which every line holds.
+            (None, true) => &[""],
         };
         for line in bytes.split(|b| *b == b'\n') {
             let Ok(line) = std::str::from_utf8(line) else {
                 bad += 1;
                 continue;
             };
-            if line.trim().is_empty() || needle.is_some_and(|b| !line.contains(b)) {
+            let named = |b: &str| line.contains(b) || paths.iter().any(|p| line.contains(p));
+            if line.trim().is_empty() || needle.is_some_and(|b| !named(b)) {
                 continue;
             }
             match serde_json::from_str::<Value>(line) {
-                Ok(entry) => read_entry(&entry, counted, branch, &mut groups),
+                Ok(entry) => read_entry(&entry, counted, subagent, branch, &mut groups),
                 Err(_) => bad += 1,
             }
         }
@@ -109,10 +130,13 @@ pub fn sessions(
     (work, warnings)
 }
 
-/// Counts `entry` into its group when it ran in a counted directory.
+/// Counts `entry` into its group when it ran in a counted directory: for the branch of the
+/// linked worktree it ran in when it is a `subagent`'s and that worktree has one, else for
+/// its `gitBranch`.
 fn read_entry(
     entry: &Value,
-    counted: &[PathBuf],
+    counted: &[(PathBuf, Option<String>)],
+    subagent: bool,
     only: Option<&str>,
     groups: &mut BTreeMap<(String, String), Group>,
 ) {
@@ -125,9 +149,19 @@ fn read_entry(
     ) else {
         return;
     };
-    if only.is_some_and(|b| b != branch)
-        || !counted.iter().any(|dir| Path::new(cwd).starts_with(dir))
-    {
+    // The deepest counted directory holding `cwd` is the worktree it ran in.
+    let Some((_, checked_out)) = counted
+        .iter()
+        .filter(|(dir, _)| Path::new(cwd).starts_with(dir))
+        .max_by_key(|(dir, _)| dir.components().count())
+    else {
+        return;
+    };
+    let branch = match checked_out {
+        Some(checked_out) if subagent => checked_out.as_str(),
+        _ => branch,
+    };
+    if only.is_some_and(|b| b != branch) {
         return;
     }
     let message = entry.get("message");

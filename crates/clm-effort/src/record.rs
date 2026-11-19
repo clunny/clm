@@ -175,11 +175,22 @@ fn grown(
     env: &dyn Fn(&str) -> Option<String>,
 ) -> Result<(Vec<SessionWork>, Vec<String>), Error> {
     clm_repository(root)?;
-    let mut counted: Vec<PathBuf> = clm_git::worktrees(root)?
+    // Git lists the main worktree first; only a linked worktree's branch decides a
+    // subagent's (`transcripts`).
+    let mut counted: Vec<(PathBuf, Option<String>)> = clm_git::worktrees(root)?
         .into_iter()
-        .map(|w| w.path)
+        .enumerate()
+        .map(|(n, w)| (w.path, w.branch.filter(|_| n > 0)))
         .collect();
-    counted.extend(options.cwds.iter().cloned());
+    // A `--cwd` inside a linked worktree is that worktree's, so it hides no branch.
+    let worktrees = counted.clone();
+    counted.extend(options.cwds.iter().map(|dir| {
+        let held = worktrees
+            .iter()
+            .filter(|(path, _)| dir.starts_with(path))
+            .max_by_key(|(path, _)| path.components().count());
+        (dir.clone(), held.and_then(|(_, branch)| branch.clone()))
+    }));
     let mut warnings = Vec::new();
     let work = match options.transcripts.clone().or_else(|| transcripts_dir(env)) {
         Some(dir) => {
