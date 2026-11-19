@@ -8,7 +8,12 @@ pub use clm_model::Violation;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod command;
+mod cuts;
 mod policy;
+
+pub use cuts::{
+    Cut, ListLine, TestList, cuts, list_lines, places_a_test, stating_sentences, widened_exemptions,
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use command::{Args, command};
@@ -56,6 +61,9 @@ pub struct Outcome {
     /// `Spec`.
     pub review: bool,
     pub violations: Vec<Violation>,
+    /// What a `spec` branch cuts (`cuts`), each printing as its `gate/cut` line; empty for
+    /// any other kind.
+    pub cuts: Vec<Cut>,
 }
 
 pub fn is_spec_path(path: &str) -> bool {
@@ -219,12 +227,14 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
     };
 
     let mut review = false;
+    let mut cut = Vec::new();
     if kind == Kind::Spec {
         // Every path the diff touches, and every change one of whose files it adds or
         // modifies, a status-only edit included, as the Worker passes them.
         let changes = change_frontmatters(&at, &entries, &new_archived)?;
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
-        let added = added_exemptions(&at, &entries)?;
+        let (listed, widened) = read_cuts(&at, &entries, &mut violations)?;
+        cut = listed;
         review = match &replayed {
             // Its replayed edits to the human layers change no intent (`needs-review`).
             Some(text) => {
@@ -233,10 +243,13 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
                         .iter()
                         .any(|fm| fm.as_ref().is_none_or(change_needs_review))
             }
-            // Relaxing a rule, or widening a relaxation, is always seen by a human.
-            None => needs_review_of(&paths, setting_changed, &changes) || !added.is_empty(),
+            // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
+            None => {
+                needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty()
+            }
         };
         violations.extend(undeclared_burdens(&at, &entries, &changes));
+        let added = added_exemptions(&at, &entries)?;
         violations.extend(exemptions_name_their_items(&at, &added)?);
     }
 
@@ -271,7 +284,99 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
         kind,
         review,
         violations,
+        cuts: cut,
     })
+}
+
+/// A change's `deleted-tests.txt`, live or archived: `changes/[archive/]<id>/deleted-tests.txt`.
+fn test_list(file: &str) -> Option<&str> {
+    let rest = file.strip_prefix(CHANGES)?;
+    let rest = rest.strip_prefix("archive/").unwrap_or(rest);
+    let (id, name) = rest.split_once('/')?;
+    (name == "deleted-tests.txt" && id != "archive").then_some(id)
+}
+
+/// What a `spec` branch cuts, and whether it adds or widens an exemption (`cuts`,
+/// `needs-review-of`), read from the spec graphs at the merge base and the head, loaded only
+/// when the diff touches `specs/` or a `deleted-tests.txt`. Adds a `gate/deleted-tests`
+/// violation for each line a list gains that names no citing test at the head. When either
+/// side's specs don't load, the one cut says so.
+fn read_cuts(
+    at: &At,
+    entries: &[(char, &str)],
+    violations: &mut Vec<Violation>,
+) -> Result<(Vec<Cut>, bool), String> {
+    let lists: Vec<&str> = entries
+        .iter()
+        .filter(|(status, file)| matches!(status, 'A' | 'M') && test_list(file).is_some())
+        .map(|&(_, file)| file)
+        .collect();
+    if lists.is_empty() && !entries.iter().any(|(_, f)| f.starts_with(SPECS)) {
+        return Ok((Vec::new(), false));
+    }
+    let mut texts = Vec::new();
+    for path in lists {
+        let head = show(at.repo, &format!("{}:{path}", at.head))?;
+        let mut base = show(at.repo, &format!("{}:{path}", at.merge_base)).ok();
+        if base.is_none()
+            && let Some(id) = test_list(path)
+        {
+            base = show(
+                at.repo,
+                &format!("{}:{CHANGES}{id}/deleted-tests.txt", at.merge_base),
+            )
+            .ok();
+        }
+        texts.push((path, head, base));
+    }
+    let lists: Vec<TestList> = texts
+        .iter()
+        .map(|(path, head, base)| TestList {
+            path,
+            head,
+            base: base.as_deref(),
+        })
+        .collect();
+    for list in &lists {
+        for line in cuts::added_lines(list) {
+            let message = match line {
+                Err(line) => format!(
+                    "`{line}` is no list line: write `DELETE <file>::<name>`, a `#` comment or a blank line"
+                ),
+                Ok(ListLine { file, name }) => {
+                    let text = show(at.repo, &format!("{}:{file}", at.head)).unwrap_or_default();
+                    if cuts::names_a_test(Path::new(&file), &text, &name) {
+                        continue;
+                    }
+                    format!("`DELETE {file}::{name}` names no test with a marker in `{file}`")
+                }
+            };
+            violations.push(Violation {
+                path: PathBuf::from(list.path),
+                rule: "gate/deleted-tests",
+                message,
+            });
+        }
+    }
+
+    let (base, base_violations) = load_graph_at(at.repo, at.merge_base, true)?;
+    let (head, head_violations) = load_graph_at(at.repo, at.head, true)?;
+    let unloaded: Vec<Cut> = [(at.merge_base, base_violations), (at.head, head_violations)]
+        .into_iter()
+        .filter(|(_, v)| !v.is_empty())
+        .map(|(rev, _)| Cut::Unloaded {
+            revision: rev.to_string(),
+        })
+        .take(1)
+        .collect();
+    if !unloaded.is_empty() {
+        // The tests the lists add are still listed: they need no graph.
+        let none = clm_model::Graph::default();
+        let tests = cuts(&none, &none, &lists);
+        return Ok((unloaded.into_iter().chain(tests).collect(), false));
+    }
+    let widened = !widened_exemptions(&base, &head).is_empty();
+    Ok((cuts(&base, &head, &lists), widened))
 }
 
 /// The files `head` changes against `base` from their merge base, as `classify` reads them,
@@ -626,12 +731,30 @@ fn backlog_components(repo: &Path, rev: &str, file: &str) -> Option<Vec<String>>
 /// holds what a checkout of `rev` writes (`base-specs-as-checkout`); load violations are
 /// ignored (`clm check` reports them). A `rev` without `specs/` loads empty.
 fn load_specs_at(repo: &Path, rev: &str) -> Result<clm_model::Graph, String> {
+    Ok(load_graph_at(repo, rev, false)?.0)
+}
+
+/// Loads the graph at `rev` as `load_specs_at` does, with its load violations, and, when
+/// `layers`, with `ARCHITECTURE.md` and `CAPABILITIES.md` where they exist, so the rules'
+/// `serves` resolve and a graph that loads in a checkout loads here (`cuts`).
+fn load_graph_at(
+    repo: &Path,
+    rev: &str,
+    layers: bool,
+) -> Result<(clm_model::Graph, Vec<Violation>), String> {
     let mut paths = Vec::new();
-    // Only git's own refusal means "no `specs/`"; a git that can't run fails the gate.
-    match clm_git::git(repo, &["cat-file", "-e", &format!("{rev}:specs")]) {
-        Ok(_) => paths.push("specs".to_string()),
-        Err(clm_git::Error::Failed { .. }) => {}
-        Err(e) => return Err(e.to_string()),
+    let tops: &[&str] = if layers {
+        &["specs", "ARCHITECTURE.md", "CAPABILITIES.md"]
+    } else {
+        &["specs"]
+    };
+    for top in tops {
+        // Only git's own refusal means "no such path"; a git that can't run fails the gate.
+        match clm_git::git(repo, &["cat-file", "-e", &format!("{rev}:{top}")]) {
+            Ok(_) => paths.push(top.to_string()),
+            Err(clm_git::Error::Failed { .. }) => {}
+            Err(e) => return Err(e.to_string()),
+        }
     }
     // `extract_paths` takes its paths literally, so only files that exist are named: a path
     // that isn't UTF-8 can't be named exactly, and is left out rather than failing the gate.
@@ -651,7 +774,7 @@ fn load_specs_at(repo: &Path, rev: &str) -> Result<clm_model::Graph, String> {
     );
     let paths: Vec<&str> = paths.iter().map(String::as_str).collect();
     let tmp = clm_git::extract_paths(repo, rev, &paths).map_err(|e| e.to_string())?;
-    Ok(clm_model::load(tmp.path()).0)
+    Ok(clm_model::load(tmp.path()))
 }
 
 /// The file at `<rev>:<path>` as committed: untrimmed, and an error unless it is UTF-8.
