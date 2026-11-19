@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [pending-cannot-move-an-obsolete-marker-to-its-file-s-owner-while-clm-run-s-tests-expect-it-on-its-own-component, an-item-cannot-hold-a-requirement-a-done-change-removed, clm-run-lists-an-obsolete-requirement-s-foreign-markers-no-rule-states]
 ---
 
