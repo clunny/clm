@@ -3,7 +3,7 @@ title: "The run prompt tells a build to delete or re-cite an obsolete requiremen
 kind: question
 components: [orchestrator.run]
 choices:
-  - "List them apart, as for a behind marker in another component's file"
+  - "List them apart, as behind markers"
   - "Leave the prompt as it is"
 ---
 
