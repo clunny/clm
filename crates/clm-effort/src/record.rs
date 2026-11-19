@@ -240,9 +240,10 @@ fn grown(
 }
 
 /// The branch each subagent's `<session>/<agent>` is pinned to: that of the fold's `effort`
-/// record of it, the earliest `at` deciding between two (`transcripts`).
+/// record of it, the branch that sorts first by byte order deciding among two or more,
+/// whatever their `at`, since a re-record moves one's `at` and never its branch (`transcripts`).
 fn pins(fold: &clm_ledger::Fold) -> BTreeMap<String, String> {
-    let mut earliest: BTreeMap<&str, (&str, &str)> = BTreeMap::new();
+    let mut first: BTreeMap<&str, &str> = BTreeMap::new();
     for record in fold.efforts.values() {
         let Body::Effort {
             session, branch, ..
@@ -254,15 +255,14 @@ fn pins(fold: &clm_ledger::Fold) -> BTreeMap<String, String> {
         if !session.contains('/') {
             continue;
         }
-        let at = record.at.as_str();
-        let pin = earliest.entry(session).or_insert((at, branch));
-        if at < pin.0 {
-            *pin = (at, branch);
+        let pin = first.entry(session).or_insert(branch);
+        if branch.as_str() < *pin {
+            *pin = branch;
         }
     }
-    earliest
+    first
         .into_iter()
-        .map(|(session, (_, branch))| (session.to_string(), branch.to_string()))
+        .map(|(session, branch)| (session.to_string(), branch.to_string()))
         .collect()
 }
 
