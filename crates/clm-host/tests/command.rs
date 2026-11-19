@@ -1021,6 +1021,30 @@ fn a_body_that_fails_to_open_is_kept_with_its_cuts() {
 }
 
 #[test]
+fn a_body_kept_before_the_gate_ran_holds_its_cuts() {
+    // req:host/keep-unopened-body@34bd03be
+    // `gh pr view` fails before the body is sent: the kept copy still starts with the cuts.
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
+    let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
+    assert_eq!(code, Some(1), "{err}");
+    let (_, kept) = err.split_once("the body is kept at ").expect(&err);
+    let kept = fs::read_to_string(kept.trim()).unwrap();
+    assert_eq!(kept, format!("{CUTS}The body\n"));
+}
+
+#[test]
+fn a_body_whose_gate_cant_be_evaluated_is_not_kept_after_a_host_failure() {
+    // req:host/keep-unopened-body@34bd03be
+    let (r, gh) = (checkout("github"), fake_gh());
+    git(&r.work, &["update-ref", "-d", "refs/remotes/origin/main"]);
+    let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
+    let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
+    assert_eq!(code, Some(2), "{err}");
+    assert!(!err.contains("kept"), "{err}");
+}
+
+#[test]
 fn scenario_pr_body_a_branch_with_cuts() {
     // req:host/pr-body@a7b89523
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());

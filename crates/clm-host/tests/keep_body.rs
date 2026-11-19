@@ -94,7 +94,10 @@ fn message(e: Error) -> String {
 fn the_host_refuses() {
     // req:host/keep-unopened-body@34bd03be
     with_fakes(|root| {
-        let why = message(open(Host::Azure, root).unwrap_err());
+        // A refusal, which `clm pr open` exits 1 for.
+        let Err(Error::Refused(why)) = open(Host::Azure, root) else {
+            panic!("not a refusal");
+        };
         let path = kept(&root.join(".git").canonicalize().unwrap());
         assert!(why.contains("TF401398"), "{why}");
         assert!(
