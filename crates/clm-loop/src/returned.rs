@@ -216,6 +216,20 @@ pub fn returned(
         );
         return crate::step::next_actions(options);
     }
+    // `clm verify` prints notes on stderr after its outcome line, so a session reading both
+    // streams as one may report a note: refused before every other rule (`plan-verify`).
+    if name == "verify" {
+        if known.is_none() {
+            return Err(Failure::Refused(format!("the loop has no run {name}")));
+        }
+        let line = result.trim();
+        if line != "none" && !line.starts_with("verify ") {
+            return Err(Failure::Refused(format!(
+                "`{line}` isn't verify's outcome: report the line of the run's output that \
+                 starts `verify `, or `none` when no line does"
+            )));
+        }
+    }
     if let Some(known) = &known
         && late_report(options, known, result.trim())
     {
