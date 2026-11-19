@@ -18,6 +18,8 @@ The human first chose to list the marker apart (built), then, on 2026-11-19, to 
 - **No order between the two builds.** `b` and `c` would each hold a line for one requirement, both ready at once; `b` removing code `c`'s test still runs is held only by `contract-removal-needs`' fallback.
 - **The owner can't judge a re-cite.** `c`'s bundle doesn't hold `b`'s requirements (`ancestor-scoped-context`); `stale-markers-keep-behind` rejected the same step for a `behind` marker for that reason. It also contradicts `moved-markers-wait`, `removed-requirements-build-out` and `contract-removal-needs`, which give the markers to the removed requirement's own component, and leaves `check.coverage/removed-capabilities` and `orchestrator`'s Design saying otherwise.
 
+Its builder check found three more choices the owner step would have to make: a marker left in a child's file by a nested split would wait on a requirement of its own component, which `orchestrator`'s Design says never happens; a file a `wiring` glob matches is every build's to change, so its owner is not the only one who can; and a removed capability's markers follow another requirement, `check.coverage/removed-capabilities`.
+
 The choices:
 
 - **Accept it** while no component holds an exemption: the route to one already needs the human's review (`gate/needs-review`), which is where the cost can be weighed. Delete this item, and record the acceptance beside `temporary-exemptions`.

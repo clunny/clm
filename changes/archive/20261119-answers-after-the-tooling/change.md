@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [building-the-renamed-test-rule-breaks-land-s-test-of-the-old-rule, reconsider-check.coverage-test-lists, the-fix-for-a-red-verify-lost-to-a-note-is-outside-the-plan-s-freeze]
 ---
 
