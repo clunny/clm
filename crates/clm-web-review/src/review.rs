@@ -616,7 +616,8 @@ struct BranchReview {
     pub base: String,
     pub base_sha: String,
     pub head_sha: String,
-    /// The branch needs a human's review (`gate/needs-review-of`).
+    /// The branch needs a human's review (`gate/needs-review-of`), a cut or a widened
+    /// exemption included (`gate/cuts`).
     pub review: bool,
     /// The `gate/cut` lines `clm gate` prints for what the branch cuts (`gate/cuts`).
     pub cuts: Vec<String>,
