@@ -241,12 +241,70 @@ fn scenario_one_of_two_tests_of_a_name_in_one_file() {
 }
 
 #[test]
-fn deleted_tests_notice_a_missing_file() {
+fn deleted_tests_notice_a_missing_file_and_a_moved_test() {
     // req:check.coverage/test-lists@1457e30b
     let found = deleted_tests(&files(&[(TESTS, base())]), &[]);
     assert_eq!(names(&found), ["tests/t.rs::one", "tests/t.rs::two"]);
     assert_eq!(found[0].line, 1);
     assert_eq!(found[1].line, 5);
+    // The file is gone but `one` moved: only `two` is gone.
+    let head = files(&[("tests/other.rs", rust_test("one", true))]);
+    let found = deleted_tests(&files(&[(TESTS, base())]), &head);
+    assert_eq!(names(&found), ["tests/t.rs::two"]);
+}
+
+#[test]
+fn deleted_tests_sort_by_file_then_line() {
+    // req:check.coverage/test-lists@1457e30b
+    // Names sort against their lines (`b` above `a`), and the files' names against theirs.
+    let t = rust_test("zz", true) + &rust_test("aa", true);
+    let base = files(&[("tests/b.rs", t.clone()), ("tests/a.rs", t)]);
+    let shown: Vec<_> = deleted_tests(&base, &[])
+        .iter()
+        .map(|t| (t.test.clone(), t.line))
+        .collect();
+    let want = [
+        ("tests/a.rs::zz", 1),
+        ("tests/a.rs::aa", 5),
+        ("tests/b.rs::zz", 1),
+        ("tests/b.rs::aa", 5),
+    ];
+    assert_eq!(
+        shown,
+        want.map(|(n, l)| (n.to_string(), l)),
+        "deleted tests out of order"
+    );
+}
+
+#[test]
+fn deleted_tests_take_no_more_than_are_gone() {
+    // req:check.coverage/test-lists@1457e30b
+    // `a.rs` loses both its tests `two`, `b.rs` gains one: one is gone, the last of `a.rs`.
+    let two = rust_test("two", true);
+    let base = files(&[("tests/a.rs", two.clone() + &two)]);
+    let head = files(&[("tests/a.rs", String::new()), ("tests/b.rs", two)]);
+    let shown: Vec<_> = deleted_tests(&base, &head)
+        .iter()
+        .map(|t| (t.test.clone(), t.line))
+        .collect();
+    assert_eq!(shown, [("tests/a.rs::two".to_string(), 5)]);
+}
+
+#[test]
+fn uncited_tests_leave_groups_out_and_sort() {
+    // req:check.coverage/test-lists@1457e30b
+    let ts = "describe('g', () => {\n  test('t', () => {\n  });\n});\n".to_string();
+    let rust = rust_test("zz", false) + &rust_test("aa", false);
+    let found = uncited_tests(&files(&[("tests/t.rs", rust), ("a.test.ts", ts)]));
+    let shown: Vec<_> = found.iter().map(|t| (t.test.as_str(), t.line)).collect();
+    assert_eq!(
+        shown,
+        [
+            ("a.test.ts::t", 2),
+            ("tests/t.rs::zz", 1),
+            ("tests/t.rs::aa", 4)
+        ]
+    );
 }
 
 #[test]
@@ -280,6 +338,8 @@ fn bare_name_leaves_markers_out() {
         "keeps ()"
     );
     assert_eq!(bare_name("plain_name"), "plain_name");
+    // Markers that overlap leave their text out once, without panicking.
+    assert_eq!(bare_name(&format!("t {REQ}:a/{REQ}:b/c end")), "t end");
 }
 
 #[test]
