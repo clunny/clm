@@ -24,7 +24,11 @@ pub(crate) fn check(
     if branch.is_some_and(|b| b.starts_with("spec/")) {
         return Ok(());
     }
-    let merge_base = repo.git(&["merge-base", base, head])?;
+    // With no history in common there is nothing the branch removed from it; a land is
+    // refused at its merge anyway.
+    let Ok(merge_base) = repo.git(&["merge-base", base, head]) else {
+        return Ok(());
+    };
     // The files the branch adds, changes or deletes, relative to the CLM root.
     let changed = repo.git(&[
         "diff",
@@ -64,7 +68,8 @@ pub(crate) fn check(
     let lines: Vec<String> = gone
         .iter()
         .filter_map(|t| {
-            let (file, name) = t.test.split_once("::")?;
+            // A test always reads `<file>::<name>`; one that didn't would still be named.
+            let (file, name) = t.test.split_once("::").unwrap_or(("", &t.test));
             let bare = clm_coverage::bare_name(name);
             let named = approved
                 .iter()

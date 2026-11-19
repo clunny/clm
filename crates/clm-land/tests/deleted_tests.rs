@@ -262,3 +262,60 @@ fn a_root_in_a_subdirectory_names_the_file_from_the_root() {
     let why = refused(clm_land::land(&proj, Some("impl/a"), &f.env(&[])));
     assert_eq!(why, LINE);
 }
+
+/// The tickets in the land lock's queue.
+fn tickets(f: &Fixture) -> usize {
+    std::fs::read_dir(f.work().join(".clm/land.queue"))
+        .map(|dir| {
+            dir.filter_map(Result::ok)
+                .filter(|e| {
+                    let name = e.file_name();
+                    let name = name.to_string_lossy();
+                    name.contains("-ordinary-p") || name.contains("-priority-p")
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+#[test]
+fn a_waiting_land_that_lost_a_test_is_not_taken_with_another() {
+    // req:land/deleted-tests-approved@f6971347
+    let f = with_tests();
+    f.branch("impl/a", &[("a.txt", "a2\n")]);
+    f.branch("impl/b", &[("b.txt", "b\n")]);
+    std::fs::create_dir_all(f.work().join(".clm")).unwrap();
+    let held = std::fs::File::create(f.work().join(".clm/land.lock")).unwrap();
+    held.lock().unwrap();
+    let env = f.env(&[]);
+    let outs: Vec<_> = std::thread::scope(|s| {
+        let mut runs = Vec::new();
+        for (i, n) in ["a", "b"].iter().enumerate() {
+            let (env, work) = (&env, f.work());
+            let branch = format!("impl/{n}");
+            runs.push(s.spawn(move || clm_land::land(&work, Some(&branch), env)));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while tickets(&f) < i + 1 {
+                assert!(std::time::Instant::now() < deadline, "no ticket");
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
+        // While both wait, `impl/b` loses a citing test: the holder judges it as it takes it.
+        f.git(&f.work(), &["checkout", "-q", "impl/b"]);
+        f.commit_files(&[("tests/t.rs", &test("one"))], "lose two");
+        f.git(&f.work(), &["push", "-q", "origin", "impl/b"]);
+        f.git(&f.work(), &["checkout", "-q", "main"]);
+        drop(held);
+        runs.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    let mut outs = outs.into_iter();
+    outs.next().unwrap().unwrap();
+    assert_eq!(refused(outs.next().unwrap()), LINE);
+    f.git(&f.work(), &["fetch", "-q", "origin"]);
+    let subjects = f.git(
+        &f.work(),
+        &["log", "--first-parent", "--format=%s", "origin/main"],
+    );
+    assert!(subjects.contains("Merge impl/a into main"), "{subjects}");
+    assert!(!subjects.contains("impl/b"), "{subjects}");
+}

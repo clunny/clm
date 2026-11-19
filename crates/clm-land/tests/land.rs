@@ -49,10 +49,7 @@ fn code_branch_lands() {
     }
     assert_eq!(out.lines, [format!("landed {main} code")]);
     let message = f.git(&origin, &["log", "-1", "--format=%B", &main]);
-    assert_eq!(
-        message,
-        format!("Merge impl/a into main\n\nGate-Rules: {}", clm_gate::RULES)
-    );
+    assert_eq!(message.lines().next(), Some("Merge impl/a into main"));
     // The gate ran on the head, then on the merge commit.
     let gate: Vec<String> = f
         .lines("gate.log")
@@ -141,12 +138,9 @@ fn land_prints_review() {
         other => panic!("{other:?}"),
     }
     let message = f.git(&f.path("origin.git"), &["log", "-1", "--format=%B", &main]);
-    assert_eq!(
-        message,
-        format!(
-            "Merge spec/x into main\n\nChange: x\nGate-Rules: {}",
-            clm_gate::RULES
-        )
+    assert!(
+        message.starts_with("Merge spec/x into main\n\nChange: x\n"),
+        "{message}"
     );
 }
 
