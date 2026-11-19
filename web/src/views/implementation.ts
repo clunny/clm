@@ -1,6 +1,7 @@
 // The implementation view (Build): counts, then a switch between In flight, the `view`
 // node's `flight` model, and Blockers, its `blockers` model, as the Worker computed them,
-// and the activity feed (web/implementation-view, web/blockers-view, web/activity-feed).
+// and the activity feed (web.views/implementation-view, web.views/blockers-view,
+// web.views/activity-feed).
 
 import { Child, chip, code, div, el } from './dom';
 import { ago, lapsesIn } from './time';

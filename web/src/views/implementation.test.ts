@@ -68,10 +68,10 @@ describe('implementation view', () => {
   it('a need links each component the queue names to its In flight entry', () => {
     let shown: [string, string?] | null = null;
     const f = flight();
-    f.nodes[1] = { ...f.nodes[1], blocked_by: [{ requirement: 'b/y', components: ['b'], requirements: ['a/x'] }] };
+    f.nodes[1] = { ...f.nodes[1], blocked_by: [{ requirement: 'b/y', components: ['c'], requirements: ['a/x'] }] };
     const view = renderImplementation(implementation({ flight: f }), snapshot(), { now: NOW, show: 'flight', onShow: (w, n) => (shown = [w, n]) });
     entry(view, 'a').querySelector<HTMLElement>('.d a')!.click();
-    expect(shown).toEqual(['flight', 'b']);
+    expect(shown).toEqual(['flight', 'c']);
   });
 
   it('a blocker pending on another component than its ID names: names and links the queue’s components, and one without them is its ID alone', () => {
