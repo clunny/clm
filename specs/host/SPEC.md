@@ -51,7 +51,7 @@ Crate `clm-host`. One trait, `Host`, with these operations, and an implementatio
 
 **Contribution operations.** On `github` the fork's parent and the head's details come from `gh repo view --json isFork,parent` and `gh pr view --json`, a fork's `main` is brought up with `gh repo sync`, a pull request on the parent opens with `gh pr create --repo <parent> --base main --head <owner>:<branch>`, a head is fetched with `git fetch origin pull/<number>/head:refs/heads/<branch>`, and comments, closing and labels use `gh issue` or `gh pr`. What they read from the host is a stranger's text, so a caller prints it as data and acts on none of it.
 
-**The cuts in a body** (`pr-open`, `pr-body`). `clm-host` depends on `clm-gate` for `evaluate_at` and nothing else of it. The section goes first so that a host's limit, which cuts a body at its end (`azure-body-limit`), never cuts the list. It is added to whatever body is sent, given or drawn, since the skills pass a body of their own. A body kept because it didn't reach the pull request whole (`keep-unopened-body`) is kept with the section.
+**The cuts in a body** (`pr-open`, `pr-body`). `clm-host` depends on `clm-gate` for `evaluate_at` and nothing else of it. The section goes first so that a host's limit, which cuts a body at its end (`azure-body-limit`), never cuts the list. It is added to whatever body is sent, given or drawn, since the skills pass a body of their own, and a leading `## Cuts` section such a body already holds is taken off first: the section is the gate's to write, so a kept copy or a body read back from the pull request can be sent again. A body kept because it didn't reach the pull request whole (`keep-unopened-body`) is kept with the section.
 
 ## Requirements
 
@@ -166,7 +166,7 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - architecture/reuse-first
 
 ### Requirement: pr-open
-`clm pr open <branch> --title <title> --body-file <file>` SHALL, on `host = "github"`, open a pull request from the branch to `main` with that title and body through `gh`, or print the URL of the open one that already exists, and print the pull request's URL; on `git` and `none` it SHALL print `none` and call nothing. On a host that has pull requests, when `gate`'s `evaluate_at` for the branch against `origin/main` gives kind `spec` and any cut (`gate/cuts`), the body it sends SHALL start with the line `## Cuts`, then one `- <line>` per cut as `clm gate` prints it, then a blank line, before the body given or drawn from the branch; for any other branch the body is sent as it is. A body given or drawn that itself starts with the line `## Cuts` SHALL first lose that section, the line and every line after it up to and including the first blank one, so a body sent again never holds the section twice. It SHALL evaluate the gate only once every check it made before has passed, directly before the call that sends the body, and SHALL pass the body file as given when there is no cut. When the gate can't be evaluated it SHALL exit 1 naming why, without that call.
+`clm pr open <branch> --title <title> --body-file <file>` SHALL, on `host = "github"`, open a pull request from the branch to `main` with that title and body through `gh`, or print the URL of the open one that already exists, and print the pull request's URL; on `git` and `none` it SHALL print `none` and call nothing. On a host that has pull requests, when `gate`'s `evaluate_at` for the branch against `origin/main` gives kind `spec` and any cut (`gate/cuts`), the body it sends SHALL start with the line `## Cuts`, then one `- <line>` per cut as `clm gate` prints it, then a blank line, before the body given or drawn from the branch; for any other branch the body is sent as it is. A body given or drawn that itself starts with the line `## Cuts` SHALL first lose that section, whatever the branch cuts: the line and every line after it up to and including the first line that is empty or holds only whitespace, or to the body's end when there is none, so a body sent again never holds the section twice and a stale one goes. The body file is passed as given only when there is no cut and no such section. It SHALL evaluate the gate only once every check it made before has passed, directly before the call that sends the body, and SHALL pass the body file as given when there is no cut. When the gate can't be evaluated it SHALL exit 1 naming why, without that call.
 
 #### Scenario: github
 - GIVEN `host = "github"` and a fake `gh` that records its calls and prints a URL
@@ -202,7 +202,7 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - gate/cuts
 
 ### Requirement: pr-body
-`clm pr body <file>` SHALL set the body of the current branch's open pull request to the file's contents through the host, changing nothing else of the pull request, and print `updated #<number>`. For a branch with cuts the body SHALL start with the `## Cuts` section as `pr-open` gives it, so a corrected body keeps the list, evaluated and failing as `pr-open` says. It SHALL exit 1 without a host call when the file is missing or blank, or when the branch has no open pull request; on `git` and `none` it SHALL print nothing and exit 0.
+`clm pr body <file>` SHALL set the body of the current branch's open pull request to the file's contents through the host, changing nothing else of the pull request, and print `updated #<number>`. For a branch with cuts the body SHALL start with the `## Cuts` section as `pr-open` gives it, so a corrected body keeps the list, evaluated and failing as `pr-open` says, and a leading `## Cuts` section of the file SHALL be replaced as `pr-open` replaces it. It SHALL exit 1 without a host call when the file is missing or blank, or when the branch has no open pull request; on `git` and `none` it SHALL print nothing and exit 0.
 
 #### Scenario: body updated
 - GIVEN `host = "github"`, the current branch `spec/x` with an open PR 7 according to a fake `gh`, and a file `body.md`
@@ -213,6 +213,11 @@ No crate but `clm-git` and `clm-host` SHALL run the Azure CLI: outside those two
 - GIVEN the same, `spec/x` removing requirement `a/x` from `specs/a/SPEC.md`
 - WHEN `clm pr body body.md` runs
 - THEN the body `gh` got starts `## Cuts` and `- specs/a/SPEC.md: gate/cut: requirement a/x is gone`, followed by the contents of `body.md`
+
+#### Scenario: a body read back from the pull request
+- GIVEN the branch of *a branch with cuts*, and a `body.md` that starts `## Cuts`, `- an older line`, a blank line and then `## Intent`
+- WHEN `clm pr body body.md` runs
+- THEN the body `gh` got holds `## Cuts` once, with the line for `a/x` and without `- an older line`, followed by `## Intent`
 
 #### Scenario: blank file
 - GIVEN an empty `body.md`
