@@ -235,7 +235,6 @@ fn a_root_in_a_subdirectory_reads_paths_from_the_root() {
     // req:land/deleted-tests-approved@f6971347
     let f = Fixture::nested();
     let proj = f.work();
-    std::fs::create_dir_all(proj.join("tests")).unwrap();
     f.commit_files(
         &[
             ("tests/t.rs", &format!("{}\n{}", test("one"), test("two"))),
@@ -247,4 +246,19 @@ fn a_root_in_a_subdirectory_reads_paths_from_the_root() {
     f.branch("impl/a", &[("tests/t.rs", &test("one"))]);
     clm_land::land(&proj, Some("impl/a"), &f.env(&[])).unwrap();
     assert_eq!(f.landed().len(), 1);
+}
+
+#[test]
+fn a_root_in_a_subdirectory_names_the_file_from_the_root() {
+    // req:land/deleted-tests-approved@f6971347
+    let f = Fixture::nested();
+    let proj = f.work();
+    f.commit_files(
+        &[("tests/t.rs", &format!("{}\n{}", test("one"), test("two")))],
+        "tests",
+    );
+    f.git(&proj, &["push", "-q", "origin", "main"]);
+    f.branch("impl/a", &[("tests/t.rs", &test("one"))]);
+    let why = refused(clm_land::land(&proj, Some("impl/a"), &f.env(&[])));
+    assert_eq!(why, LINE);
 }
