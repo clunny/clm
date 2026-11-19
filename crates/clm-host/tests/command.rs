@@ -1073,6 +1073,21 @@ fn a_stale_section_goes_from_a_branch_without_cuts() {
 }
 
 #[test]
+fn a_kept_body_holds_the_section_once() {
+    // req:host/keep-unopened-body@c77d0cda
+    // req:host/pr-open@f06b4b0e
+    // A kept copy sent again, whose host fails before the gate runs: kept with one section.
+    let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
+    write(&r.work, "body.md", STALE);
+    let env = [("FAKE_VIEW_ERROR", "HTTP 401: Bad credentials")];
+    let (code, _, err) = clm(&r.work, &gh, &OPEN_ARGS, &env);
+    assert_eq!(code, Some(2), "{err}");
+    let (_, kept) = err.split_once("the body is kept at ").expect(&err);
+    let kept = fs::read_to_string(kept.trim()).unwrap();
+    assert_eq!(kept, format!("{CUTS}## Intent\nThe intent\n"));
+}
+
+#[test]
 fn scenario_pr_body_a_body_read_back_from_the_pull_request() {
     // req:host/pr-body@42b28fb0
     let (r, gh) = (spec_edit("spec/x", &["y"]), fake_gh());
