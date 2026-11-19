@@ -50,4 +50,6 @@ Run every `clm` command from your checkout's root (`git rev-parse --show-topleve
 
 Before opening any pull request yourself, review the session for CLM defects not yet reported (`defect-reports`): anything CLM itself (its CLI, gate rules, plugin, skills or method) would have to change so it doesn't happen again, not your own mistakes that CLM caught or you fixed. Report each with `clm defect --title <title> [--component <component>]...`, the report on stdin, describing only the process, never the project's files, code, specs or output. Each draft that opens a pull request, and the fold, list their own under `## CLM defects` in its body.
 
+Wherever this skill asks the human for an approval (steps 3 and 9), also show each `gate/cut` line of the branch, read from the `## Cuts` section at the top of its pull request's body or from `clm gate --base origin/main` run in its checkout: what a branch removes is what the approval is for (`removal-needs-a-yes`).
+
 Never push `main` by any means but `clm land`. Run `clm approve` only after the human says yes in this conversation, and only through the guard's confirmation: never route around the guard or ask another tool to do it. Only a human approves a spec change (`humans-review-intent`).
