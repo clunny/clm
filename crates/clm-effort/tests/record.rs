@@ -458,32 +458,46 @@ fn held(session: &str, branch: &str) -> clm_ledger::Entry {
 #[test]
 fn the_branch_that_sorts_first_pins_a_subagent() {
     // req:effort/record-command@021172fb
-    // Two clones saw the subagent's worktree on different branches; the branch that sorts
-    // first pins it, though its record is the later one.
+    // Two clones saw each subagent's worktree on different branches; the branch that sorts
+    // first pins it, whether its record is the earlier one (`s2`) or the later (`s1`).
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let env = env(dir.path(), &[]);
-    clm_ledger::append_all(&clone, vec![held("s1/agent-x", "impl/b")], &env).unwrap();
-    let first = clm_ledger::fold(&clone).unwrap().efforts
+    clm_ledger::append_all(
+        &clone,
+        vec![held("s1/agent-x", "impl/b"), held("s2/agent-y", "impl/a")],
+        &env,
+    )
+    .unwrap();
+    let at = clm_ledger::fold(&clone).unwrap().efforts
         [&clm_ledger::effort_id("s1/agent-x", "impl/b")]
         .at
         .clone();
-    wait_past(&first);
-    clm_ledger::append_all(&clone, vec![held("s1/agent-x", "impl/a")], &env).unwrap();
-    // The worktree is gone; its entries ran inside the main checkout.
-    let gone = clone.join(".claude/worktrees/a");
-    transcript(
-        dir.path(),
+    wait_past(&at);
+    clm_ledger::append_all(
         &clone,
-        "s1/subagents/agent-x",
-        &[entry("s1", "main", &gone, 0, "m1")],
-    );
+        vec![held("s1/agent-x", "impl/a"), held("s2/agent-y", "impl/b")],
+        &env,
+    )
+    .unwrap();
+    // The worktrees are gone; their entries ran inside the main checkout.
+    let gone = clone.join(".claude/worktrees/a");
+    for sid in ["s1", "s2"] {
+        let agent = if sid == "s1" { "agent-x" } else { "agent-y" };
+        transcript(
+            dir.path(),
+            &clone,
+            &format!("{sid}/subagents/{agent}"),
+            &[entry(sid, "main", &gone, 0, "m1")],
+        );
+    }
     let out = clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap();
     assert_eq!(
         out.lines,
         [
             "effort impl/a s1/agent-x 35 tokens 0s",
-            "recorded 1 sessions on 1 branches"
+            "effort impl/a s2/agent-y 35 tokens 0s",
+            "recorded 2 sessions on 1 branches"
         ],
         "{:?}",
         out.warnings
@@ -521,7 +535,11 @@ fn a_pin_re_recorded() {
     );
     let out = clm_effort::record(&clone, &options, &env).unwrap();
     assert_eq!(
-        out.lines[0], "effort impl/a s1/agent-x 70 tokens 60s",
+        out.lines,
+        [
+            "effort impl/a s1/agent-x 70 tokens 60s",
+            "recorded 1 sessions on 1 branches"
+        ],
         "{:?}",
         out.warnings
     );
