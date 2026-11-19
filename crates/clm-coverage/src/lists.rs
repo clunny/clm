@@ -170,8 +170,9 @@ pub fn bare_name(name: &str) -> String {
 /// carries, cited or not, and whose markers cite every ID it cited. Taken in the order
 /// returned, each is *renamed*, and not returned, when it and every earlier renamed one can
 /// each be paired with a different test it fits, so as many are renamed as can be and the
-/// earlier wins a tie. A base test with no marker that its file no longer holds by name could
-/// have become any new test of its file, so it takes one first: a file's renames number no
+/// earlier wins a tie. A base test with no marker that its file's head doesn't account for by
+/// name (its gained tests, and its unmarked ones less those that may be cited tests *stripped*
+/// of their marker) could have become any new test of its file, so it takes one first: a file's renames number no
 /// more than its new tests, cited or not, less those gone unmarked tests; and its renames of
 /// one name no more than the tests of that name, cited or not, it holds fewer of at the head,
 /// since a name a file still carries as often was not renamed. So a test moved to another file
@@ -230,7 +231,7 @@ pub fn deleted_tests(
     let mut held: BTreeMap<&str, BTreeMap<&Path, usize>> = BTreeMap::new();
     for ((path, name), h) in &head_count {
         let b = base_count.get(&(*path, name.clone())).unwrap_or(&none);
-        let gained = b.unmarked.saturating_sub(h.unmarked).min(h.marked);
+        let gained = b.gained(h);
         held.entry(name.as_str())
             .or_default()
             .insert(*path, h.marked - gained);
@@ -241,7 +242,7 @@ pub fn deleted_tests(
     for ((path, name), b) in &base_count {
         let h = head_count.get(&(*path, name.clone())).unwrap_or(&none);
         if let Some(r) = room.get_mut(path) {
-            *r = r.saturating_sub(b.unmarked.saturating_sub(h.total()));
+            *r = r.saturating_sub(b.unmarked.saturating_sub(b.accounted(h)));
         }
         lost.insert((*path, name.clone()), b.total().saturating_sub(h.total()));
     }
@@ -324,6 +325,20 @@ impl Count {
 
     fn total(&self) -> usize {
         self.marked + self.unmarked
+    }
+
+    /// The *gained* tests of the head's count `h` against this base count: the unmarked
+    /// tests lost, at most the cited ones the head holds, which may have gained a marker.
+    fn gained(&self, h: &Count) -> usize {
+        self.unmarked.saturating_sub(h.unmarked).min(h.marked)
+    }
+
+    /// How many of this base count's unmarked tests the head's count `h` accounts for: its
+    /// gained tests, and its unmarked tests less its *stripped* ones, the cited tests lost, at
+    /// most the unmarked ones the head holds, which may have lost their marker.
+    fn accounted(&self, h: &Count) -> usize {
+        let stripped = self.marked.saturating_sub(h.marked).min(h.unmarked);
+        self.gained(h) + (h.unmarked - stripped)
     }
 }
 
