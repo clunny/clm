@@ -51,7 +51,10 @@ fn a_printed_draft_whose_only_item_a_build_resolved() {
     let first = step(&fx.options()).unwrap();
     line(&first, "launch draft:d1 ");
     fx.set("triage", "");
-    fx.set("finish-d1", "freed d1\nleft /w/agent-d1: still on disk\n");
+    fx.set(
+        "finish-d1",
+        "left b: needs the human\nfreed d1\nleft /w/agent-d1: still on disk\n",
+    );
     resolve(&fx, "b");
     let second = step(&fx.options()).unwrap();
     assert!(!second.iter().any(|l| l.contains("draft:d1")), "{second:?}");
@@ -130,14 +133,19 @@ fn an_orphan_with_nothing_pushed_is_dropped() {
 fn drafts_kept_as_before() {
     // req:orchestrator.loop/draft-of-gone-items-dropped@4dafc4af
     let fx = Fixture::new();
-    // A running draft with a live session, and a planned draft that names no item.
+    // A running and a stopped draft with a live session, and a planned draft that names no item.
     fx.add_run(draft("r", &["b"], RunState::Running, Some("t-1")));
+    fx.add_run(draft("s", &["b"], RunState::Stopped, Some("t-2")));
     fx.add_run(draft("n", &[], RunState::Planned, None));
     let actions = step(&fx.options()).unwrap();
     line(&actions, "launch draft:n ");
-    assert_eq!(fx.ran("draft --finish r"), 0);
-    assert_eq!(fx.ran("draft --finish n"), 0);
-    let file = fx.file();
-    assert!(file.runs.iter().any(|r| r.name == "draft:r"));
-    assert!(file.runs.iter().any(|r| r.name == "draft:n"));
+    for id in ["r", "s", "n"] {
+        assert_eq!(fx.ran(&format!("draft --finish {id}")), 0, "{id}");
+        assert!(
+            fx.file()
+                .runs
+                .iter()
+                .any(|r| r.name == format!("draft:{id}"))
+        );
+    }
 }
