@@ -11,20 +11,30 @@ depends_on: [model, apply, vcs, init, check.coverage, gate]
 ## ADDED Requirements
 
 ### Requirement: obsolete-tests-elsewhere
-Once the root sets `wiring` (`model/wiring-globs`), `clm check` SHALL report each test (`check.coverage/test-spans`, groups left out) in a file of its scan that holds a marker citing a requirement a change outside the archive removed (`check.coverage`'s `removed`), of a component the spec graph holds, when another component owns the file (`check.coverage/owner`), no `wiring` glob matches the file, and no approved list names the test, as ``<file>:<line>: check/obsolete-tests-elsewhere: test <name> cites <requirement>, which <change> removed, from `c`'s file; list it in that change's deleted-tests.txt, and prove what stays in `b`'s own files``, `<line>` the test's first line, `<change>` the first of the removing changes, `c` the file's owner and `b` the requirement's component; `run` SHALL report it too. An approved list here is a `changes/<id>/deleted-tests.txt` or `changes/archive/<id>/deleted-tests.txt` in the tree checked, and it names a test by a list line (`gate/cuts`, read with its `list_lines`) whose file is the test's and whose name agrees with it as `check.coverage`'s `bare_name` gives them. It SHALL NOT judge a marker outside a test, a marker citing a removed capability, a file no component owns, or a file the removed requirement's own component owns, and no exemption excuses it. While the root sets no `wiring` it SHALL report nothing.
+Once the root sets `wiring` (`model/wiring-globs`), `clm check` SHALL report each test (`check.coverage/test-spans`, groups left out) in a file of its scan whose every marker cites a requirement a change outside the archive removed (`check.coverage`'s `removed`), when a component owns the file (`check.coverage/owner`), that component is not the one a cited requirement's ID names, whether or not the spec graph still holds that one, no `wiring` glob matches the file, and no approved list names the test, as ``<file>:<line>: check/obsolete-tests-elsewhere: test <name> cites <requirement>, which <change> removed, from `c`'s file; list it in that change's deleted-tests.txt, and prove what stays in the files of the component that states it``, `<line>` the test's first line as `test-spans` gives it, `<requirement>` the first such ID, `<change>` the first of its removing changes and `c` the file's owner; `run` SHALL report it too. An approved list here is a `changes/<id>/deleted-tests.txt` or `changes/archive/<id>/deleted-tests.txt` among the files `clm check` reads in the tree it checks, and it names a test by a list line (`gate/cuts`, read with its `list_lines`) whose file is the test's and whose name agrees with it as `check.coverage`'s `bare_name` gives them. It SHALL NOT report a test one of whose removed requirements a move (`check.coverage/status-report`) takes to a requirement of the file's owner, which that owner's build re-cites; a test that also cites a requirement the spec holds, whose obsolete marker alone goes; a marker outside a test; a marker citing a removed capability; or a file no component owns. No exemption excuses it, and while the root sets no `wiring` it SHALL report nothing.
 
 #### Scenario: a test nobody listed
-- GIVEN a root with `wiring: []`, components `b` and `c` with `paths` `["crates/b/**"]` and `["crates/c/**"]`, an `applied` change `20260101-x` that removed `b/gone`, and a test `old_rule` at line 8 of `crates/c/t.rs` citing `b/gone`
+- GIVEN a root with `wiring: []`, components `b` and `c` with `paths` `["crates/b/**"]` and `["crates/c/**"]`, an `applied` change `20260101-x` that removed `b/gone`, and a test `old_rule` whose first line is line 8 of `crates/c/t.rs`, citing `b/gone` alone
 - WHEN `clm check` runs
-- THEN it exits 1 with the line ``crates/c/t.rs:8: check/obsolete-tests-elsewhere: test old_rule cites b/gone, which 20260101-x removed, from `c`'s file; list it in that change's deleted-tests.txt, and prove what stays in `b`'s own files``
+- THEN it exits 1 with the line ``crates/c/t.rs:8: check/obsolete-tests-elsewhere: test old_rule cites b/gone, which 20260101-x removed, from `c`'s file; list it in that change's deleted-tests.txt, and prove what stays in the files of the component that states it``
 
 #### Scenario: a listed test
 - GIVEN the same, with `changes/20260101-x/deleted-tests.txt` holding `DELETE crates/c/t.rs::old_rule`
 - WHEN `clm check` runs
 - THEN it reports no `check/obsolete-tests-elsewhere` violation
 
-#### Scenario: its own component's file
-- GIVEN the first scenario's repository with the test in `crates/b/t.rs` instead
+#### Scenario: a removed component's test
+- GIVEN a root with `wiring: []`, no component `g`, an `applied` change `20260101-x` that removed `g/x`, and a test in `crates/c/t.rs` citing `g/x` alone
+- WHEN `clm check` runs
+- THEN it reports that test under `check/obsolete-tests-elsewhere`
+
+#### Scenario: moved into the file's owner
+- GIVEN the same, the change adding `c/x` as the move of `g/x`
+- WHEN `clm check` runs
+- THEN it reports no `check/obsolete-tests-elsewhere` violation
+
+#### Scenario: its own component's file, and a test that cites a live requirement too
+- GIVEN the first scenario's repository with a test citing `b/gone` in `crates/b/t.rs`, and the test in `crates/c/t.rs` also citing `c`'s requirement `c/y`
 - WHEN `clm check` runs
 - THEN it reports no `check/obsolete-tests-elsewhere` violation
 
@@ -44,4 +54,3 @@ Once the root sets `wiring` (`model/wiring-globs`), `clm check` SHALL report eac
 
 #### Needs
 - gate/cuts
-- check.coverage/pending-report
