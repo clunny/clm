@@ -225,6 +225,22 @@ fn the_pre_check_judges_a_detached_head() {
 }
 
 #[test]
+fn the_pre_check_passes_a_renamed_test_keeping_its_marker() {
+    // req:land/deleted-tests-approved@f9eddc3a
+    let f = with_tests();
+    f.branch(
+        "tidy",
+        &[(
+            "tests/t.rs",
+            &format!("{}\n{}", test("one"), test("second")),
+        )],
+    );
+    f.git(&f.work(), &["checkout", "-q", "tidy"]);
+    let out = clm_land::check_only(&f.work(), None, &f.env(&[])).unwrap();
+    assert_eq!(out.lines.last().unwrap(), "checks pass");
+}
+
+#[test]
 fn the_pre_check_on_a_spec_branch_judges_nothing() {
     // req:land/deleted-tests-approved@f9eddc3a
     let f = with_tests();
