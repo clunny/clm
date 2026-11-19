@@ -10,7 +10,7 @@ const build = (impl = implementation(), snap = snapshot(), which: 'flight' | 'bl
   renderImplementation(impl, snap, { now: NOW, show: which, onShow: () => {} });
 const entry = (e: HTMLElement, node: string) => e.querySelector<HTMLElement>(`.fn[data-node="${node}"]`)!;
 
-// req:web.views/implementation-view@915d41a2
+// req:web.views/implementation-view@3ce3f29a
 describe('implementation view', () => {
   it('claimed node: shows it claimed, its last push, and lapsing in 3 hours', () => {
     const b = entry(build(), 'b');
@@ -65,13 +65,41 @@ describe('implementation view', () => {
     expect(a.querySelector('.rq')?.textContent).toContain('blocked by b/y');
   });
 
-  it('a need links to the In flight entry of the node that holds it', () => {
+  it('a need links each component the queue names to its In flight entry', () => {
     let shown: [string, string?] | null = null;
     const f = flight();
-    f.nodes[1] = { ...f.nodes[1], blocked_by: [{ requirement: 'b/y', requirements: ['a/x'] }] };
+    f.nodes[1] = { ...f.nodes[1], blocked_by: [{ requirement: 'b/y', components: ['b'], requirements: ['a/x'] }] };
     const view = renderImplementation(implementation({ flight: f }), snapshot(), { now: NOW, show: 'flight', onShow: (w, n) => (shown = [w, n]) });
     entry(view, 'a').querySelector<HTMLElement>('.d a')!.click();
     expect(shown).toEqual(['flight', 'b']);
+  });
+
+  it('a blocker pending on another component than its ID names: names and links the queue’s components, and one without them is its ID alone', () => {
+    const shown: string[] = [];
+    const base = flight().nodes[1];
+    const pend = (id: string) => [{ ...base.pending[0], id, blocked_by: [] }];
+    const f = flight({
+      nodes: [
+        { ...base, node: 'b', pending: pend('b/z'), blocked_by: [{ requirement: 'b/gone', components: ['c', 'd'], requirements: ['b/z'] }] },
+        { ...base, node: 'c', state: 'ready', pending: pend('c/w'), blocked_by: [] },
+        { ...base, node: 'd', state: 'ready', pending: pend('d/w'), blocked_by: [] },
+        { ...base, node: 'e', pending: pend('e/v'), blocked_by: [{ requirement: 'a/x', requirements: ['e/v'] }] },
+      ],
+    });
+    const view = renderImplementation(implementation({ flight: f }), snapshot(), { now: NOW, show: 'flight', onShow: (_w, n) => n && shown.push(n) });
+    const b = entry(view, 'b').querySelector<HTMLElement>('.d')!;
+    expect(b.textContent).toContain('Blocked by b/gone on c, d');
+    const links = [...b.querySelectorAll<HTMLAnchorElement>('a')];
+    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['c', '#node-c'],
+      ['d', '#node-d'],
+    ]);
+    for (const a of links) a.click();
+    expect(shown).toEqual(['c', 'd']);
+    const e = entry(view, 'e').querySelector<HTMLElement>('.d')!;
+    expect(e.textContent).toContain('Blocked by a/x');
+    expect(e.textContent).not.toContain(' on ');
+    expect(e.querySelector('a')).toBeNull();
   });
 
   it('blocked by an item and a need: shows both', () => {

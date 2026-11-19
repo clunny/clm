@@ -277,12 +277,16 @@ export interface FlightClaim {
   lapses_in_hours: number;
 }
 
-/** What blocks requirements of a node: exactly one of `item` and `requirement` is set. */
+/** What blocks requirements of a node: exactly one of `item` and `requirement` is set, and
+ * `components` only with `requirement`. */
 export interface FlightBlock {
   /** `backlog/<slug>`. */
   item?: string;
   /** `<node>/<slug>`, a pending requirement of another node they need (`requirement-needs`). */
   requirement?: string;
+  /** For a requirement blocker, the components the queue says it is pending on, in its
+   * order; absent from a view stored before the queue gave them. */
+  components?: string[];
   requirements: string[];
 }
 

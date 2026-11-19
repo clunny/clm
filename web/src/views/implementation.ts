@@ -77,12 +77,15 @@ function nodeEntry(n: FlightNode, impl: Implementation, snap: Snapshot, o: Build
     const checked = page.checked === undefined ? '' : el('span', { class: 'checked' }, page.checked ? 'checked' : 'not checked');
     lines.push(['Page ', el('a', { class: 'page', href: page.url, target: '_blank', rel: 'noopener' }, `#${page.number}`), checked ? ' · ' : '', checked]);
   }
-  // A backlog item, or a requirement of another node it needs (`requirement-needs`), which
-  // links to that node's entry.
+  // A backlog item, or a requirement it needs (`requirement-needs`), followed by the
+  // components the queue says it is pending on, each linking to its own entry; never to the
+  // node its ID names, which may not be where it is pending. One with no `components`, as in
+  // a view stored before the queue gave them, is its ID alone.
   for (const b of n.blocked_by) {
     const item = snap.backlog.find((x) => `backlog/${x.slug}` === b.item);
-    const name = b.requirement ? nodeLink(b.requirement.split('/')[0], o, code(b.requirement)) : code(b.item ?? '');
-    lines.push(['Blocked by ', name, item && HUMAN.has(item.kind) ? chip('wait', 'waits on you') : '', ` · ${b.requirements.join(', ')}`]);
+    const on = b.requirement && b.components?.length ? [' on ', ...b.components.flatMap((c, i) => (i ? [', ', nodeLink(c, o)] : [nodeLink(c, o)]))] : [];
+    const name = code(b.requirement ?? b.item ?? '');
+    lines.push(['Blocked by ', name, ...on, item && HUMAN.has(item.kind) ? chip('wait', 'waits on you') : '', ` · ${b.requirements.join(', ')}`]);
   }
   const lease = n.claim
     ? [div('lease', el('i', { style: `width:${Math.max(0, Math.min(100, ((n.claim.lapses_at - o.now) / (impl.expiry_hours * 3600)) * 100))}%` }))]
