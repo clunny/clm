@@ -36,10 +36,11 @@ struct Group {
 
 /// The work in the transcripts under `transcripts` whose entries ran in a `counted`
 /// directory, one per session and branch (only `branch`'s when given), in branch and session
-/// order, and the warnings.
+/// order, and the warnings. Each counted directory comes with the branch checked out in it
+/// when it is a linked worktree that has one, which a subagent's entries run there count for.
 pub fn sessions(
     transcripts: &Path,
-    counted: &[PathBuf],
+    counted: &[(PathBuf, Option<String>)],
     branch: Option<&str>,
 ) -> (Vec<SessionWork>, Vec<String>) {
     let Ok(projects) = std::fs::read_dir(transcripts) else {
@@ -48,7 +49,7 @@ pub fn sessions(
             vec![format!("no transcripts at {}", transcripts.display())],
         );
     };
-    let prefixes: Vec<String> = counted.iter().map(|dir| encoded(dir)).collect();
+    let prefixes: Vec<String> = counted.iter().map(|(dir, _)| encoded(dir)).collect();
     let mut files = Vec::new();
     for project in projects.flatten() {
         let name = project.file_name().to_string_lossy().into_owned();
@@ -66,6 +67,12 @@ pub fn sessions(
         let Ok(bytes) = std::fs::read(&file) else {
             continue;
         };
+        // A subagent's entries carry the launching session's branch, so they count for the
+        // branch of the worktree they ran in, which no line need name.
+        let subagent = file
+            .strip_prefix(transcripts)
+            .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == "subagents"));
+        let needle = needle.filter(|_| !subagent);
         for line in bytes.split(|b| *b == b'\n') {
             let Ok(line) = std::str::from_utf8(line) else {
                 bad += 1;
@@ -75,7 +82,7 @@ pub fn sessions(
                 continue;
             }
             match serde_json::from_str::<Value>(line) {
-                Ok(entry) => read_entry(&entry, counted, branch, &mut groups),
+                Ok(entry) => read_entry(&entry, counted, subagent, branch, &mut groups),
                 Err(_) => bad += 1,
             }
         }
@@ -109,10 +116,13 @@ pub fn sessions(
     (work, warnings)
 }
 
-/// Counts `entry` into its group when it ran in a counted directory.
+/// Counts `entry` into its group when it ran in a counted directory: for the branch of the
+/// linked worktree it ran in when it is a `subagent`'s and that worktree has one, else for
+/// its `gitBranch`.
 fn read_entry(
     entry: &Value,
-    counted: &[PathBuf],
+    counted: &[(PathBuf, Option<String>)],
+    subagent: bool,
     only: Option<&str>,
     groups: &mut BTreeMap<(String, String), Group>,
 ) {
@@ -125,9 +135,19 @@ fn read_entry(
     ) else {
         return;
     };
-    if only.is_some_and(|b| b != branch)
-        || !counted.iter().any(|dir| Path::new(cwd).starts_with(dir))
-    {
+    // The deepest counted directory holding `cwd` is the worktree it ran in.
+    let Some((_, checked_out)) = counted
+        .iter()
+        .filter(|(dir, _)| Path::new(cwd).starts_with(dir))
+        .max_by_key(|(dir, _)| dir.components().count())
+    else {
+        return;
+    };
+    let branch = match checked_out {
+        Some(checked_out) if subagent => checked_out.as_str(),
+        _ => branch,
+    };
+    if only.is_some_and(|b| b != branch) {
         return;
     }
     let message = entry.get("message");
