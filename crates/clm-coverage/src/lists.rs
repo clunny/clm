@@ -170,8 +170,12 @@ pub fn bare_name(name: &str) -> String {
 /// line. Tests holding a marker are counted by bare name: where the head holds `m` of a
 /// name the base holds `n` of, `m < n`, `n - m` are gone, taken from the files in sorted
 /// order, each giving its tests of that name, last first, as many as it holds fewer of at
-/// the head. So a test moved to another file is not gone; a renamed, deleted or uncited
-/// one is, since a program can't tell a rename from a removal.
+/// the head. A test so taken is *renamed*, and not returned, when its file at the head holds
+/// a citing test of a bare name no citing test of the base carries, whose markers cite every
+/// ID it cited: taken in the order returned, each is matched with the first such test of its
+/// file, in line order, not matched before. So a test moved to another file is not gone, nor
+/// one renamed in its file that cites at least what it cited; one renamed and moved at once,
+/// renamed citing less, deleted or uncited is.
 pub fn deleted_tests(
     base_files: &[(PathBuf, String)],
     head_files: &[(PathBuf, String)],
@@ -198,6 +202,7 @@ pub fn deleted_tests(
                 .push(c);
         }
     }
+    let base_names: BTreeSet<String> = base.keys().cloned().collect();
     let none = BTreeMap::new();
     let mut out = Vec::new();
     for (name, by_file) in base {
@@ -217,11 +222,35 @@ pub fn deleted_tests(
                     line: c.line,
                     ids: sorted_unique(c.ids),
                 };
-                out.push((path, c.line, test));
+                out.push((path, c.line, (path, test)));
             }
         }
     }
-    by_file_and_line(out)
+    let mut gone = by_file_and_line(out);
+    // The head's citing tests of a new name, by file in line order, each until matched.
+    let mut fresh: BTreeMap<&Path, Vec<Option<BTreeSet<String>>>> = BTreeMap::new();
+    for (path, text) in head_files {
+        for c in citing_tests(path, text) {
+            if !base_names.contains(&bare_name(&c.name)) {
+                let ids = Some(c.ids.into_iter().collect());
+                fresh.entry(path.as_path()).or_default().push(ids);
+            }
+        }
+    }
+    gone.retain(|(path, test)| {
+        let Some(new) = fresh.get_mut(path) else {
+            return true;
+        };
+        let cites_all = |ids: &BTreeSet<String>| test.ids.iter().all(|id| ids.contains(id));
+        match new.iter_mut().find(|n| n.as_ref().is_some_and(cites_all)) {
+            Some(n) => {
+                *n = None;
+                false
+            }
+            None => true,
+        }
+    });
+    gone.into_iter().map(|(_, t)| t).collect()
 }
 
 /// Each test, groups left out, with no marker on its lines, sorted by file and then by line.
