@@ -61,8 +61,9 @@ Nothing: no requirement, scenario or sentence holding `SHALL` goes. The one cut 
 
 1. Done before this change: the small code branch, `8b9a9e16`.
 2. `check.coverage`: `wait-lines`, `pending-report`, `removed-capabilities`.
-3. `orchestrator` (`queue-from-refs`, `priority-orders-components`), `orchestrator.run` and `view`, each needing step 2.
-4. `web.views`, needing `orchestrator/queue-from-refs`.
+3. `orchestrator.run` and `view`, each needing step 2.
+4. `orchestrator` (`queue-from-refs`, `priority-orders-components`), which needed `view/blockers-view` before this change and still does.
+5. `web.views`, needing `orchestrator/queue-from-refs`. It reads `components` as a key that may be absent, so `web`'s browser fixtures, which hold none, still build.
 
 Each step that a build takes is stated in its requirement, its component's Design or `backlog/clm-run-lists-an-obsolete-requirement-s-foreign-markers-no-rule-states`, which names the code and the test `orchestrator.run`'s build removes.
 
