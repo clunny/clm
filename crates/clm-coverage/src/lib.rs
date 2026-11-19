@@ -20,7 +20,10 @@ pub use coverage::{
 #[cfg(feature = "checkout")]
 pub use coverage::{Scan, scan};
 pub use glob::matches;
-pub use lists::{DeletedTest, ObsoleteTest, Uncounted, deleted_tests, obsolete_tests, uncounted};
+pub use lists::{
+    DeletedTest, ObsoleteTest, UncitedTest, Uncounted, bare_name, deleted_tests, obsolete_tests,
+    uncited_tests, uncounted,
+};
 pub use pending::{Pending, owner, pending};
 pub use spans::{TestSpan, markers_outside_tests, tests_in};
 pub use status::{
