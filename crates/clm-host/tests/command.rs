@@ -967,7 +967,7 @@ fn pr_open_exits_1_when_the_gate_cant_be_evaluated() {
     ];
     let (code, _, err) = clm(&r.work, &gh, &args, &[]);
     assert_eq!(code, Some(1), "{err}");
-    assert!(err.contains("gate"), "{err}");
+    assert!(err.contains("gate") && !err.contains("kept"), "{err}");
     assert!(creates(&gh).is_empty(), "{:?}", gh.calls());
 }
 
