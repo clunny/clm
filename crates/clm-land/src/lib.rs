@@ -8,6 +8,7 @@ mod cap;
 mod check_log;
 mod check_only;
 mod command;
+mod deleted_tests;
 mod derived;
 mod exe;
 mod finish;
