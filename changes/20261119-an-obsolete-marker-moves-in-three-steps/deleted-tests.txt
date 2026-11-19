@@ -1,0 +1,1 @@
+DELETE crates/clm-run/tests/prompt.rs::an_obsolete_test_in_another_components_file_is_listed_apart
