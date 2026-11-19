@@ -1,6 +1,6 @@
 //! Reading Claude Code's transcripts (`effort/transcripts`).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use clm_ledger::Usage;
@@ -86,6 +86,12 @@ pub fn sessions(
         )
         .map(|(dir, _)| dir.to_str().filter(|d| !d.contains(['"', '\\'])))
         .collect();
+    // The agents some pin names, whose files are read whole, since their worktree may be
+    // gone.
+    let pinned_agents: BTreeSet<&str> = pinned
+        .keys()
+        .filter_map(|key| key.rsplit_once('/').map(|(_, agent)| agent))
+        .collect();
     for file in files {
         let Ok(bytes) = std::fs::read(&file) else {
             continue;
@@ -97,12 +103,9 @@ pub fn sessions(
             .is_ok_and(|rel| rel.components().any(|c| c.as_os_str() == "subagents"))
             .then(|| file.file_stem().map(|s| s.to_string_lossy().into_owned()))
             .flatten();
-        // A file a pin may name is read whole, since its worktree may be gone.
-        let pinned_file = agent.as_deref().is_some_and(|agent| {
-            pinned
-                .keys()
-                .any(|key| key.rsplit_once('/').is_some_and(|(_, a)| a == agent))
-        });
+        let pinned_file = agent
+            .as_deref()
+            .is_some_and(|agent| pinned_agents.contains(agent));
         let paths: &[&str] = match (&worktrees, &agent) {
             (_, None) => &[],
             (Some(paths), Some(_)) if !pinned_file => paths,

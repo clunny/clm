@@ -491,7 +491,7 @@ fn the_earliest_record_pins_a_subagent() {
 
 #[test]
 fn a_cwd_inside_a_detached_worktree_is_detached() {
-    // req:effort/record-command@05b07a1d
+    // req:effort/transcripts@39911632
     let dir = tempfile::tempdir().unwrap();
     let clone = repository(dir.path());
     let linked = clone.join(".claude/worktrees/a");
@@ -511,6 +511,24 @@ fn a_cwd_inside_a_detached_worktree_is_detached() {
     };
     let out = clm_effort::record(&clone, &options, &env).unwrap();
     assert_eq!(out.lines, ["nothing new to record"], "{:?}", out.warnings);
+}
+
+#[test]
+fn a_ledger_that_cant_be_written_exits_2() {
+    // req:effort/record-command@05b07a1d
+    let dir = tempfile::tempdir().unwrap();
+    let clone = repository(dir.path());
+    transcript(
+        dir.path(),
+        &clone,
+        "s1",
+        &[entry("s1", "impl/a", &clone, 0, "m1")],
+    );
+    // A file where the ledger branches' ref directory goes, so no ledger ref can be written.
+    std::fs::write(clone.join(".git/refs/heads/clm"), "x\n").unwrap();
+    let env = env(dir.path(), &[]);
+    let e = clm_effort::record(&clone, &clm_effort::Options::default(), &env).unwrap_err();
+    assert_eq!(e.exit_code(), 2, "{e}");
 }
 
 #[test]

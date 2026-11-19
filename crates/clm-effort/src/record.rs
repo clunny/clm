@@ -250,6 +250,7 @@ fn pins(fold: &clm_ledger::Fold) -> BTreeMap<String, String> {
         else {
             continue;
         };
+        // Only a subagent's record pins; a bare `sessionId` could match no key, so it is left out.
         if !session.contains('/') {
             continue;
         }
