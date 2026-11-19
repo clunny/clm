@@ -5,7 +5,7 @@ mod common;
 
 use std::path::Path;
 
-use common::{git, repo, report, section, settings, write};
+use common::{repo, report, section, settings, write};
 
 /// Component `a`'s spec with `paths`, `contract`, `design` and one requirement per
 /// `(slug, statement)`.
@@ -194,7 +194,7 @@ fn helper() {{}}\n\n#[test]\nfn helper_rounds_up() {{\n    assert!(true);\n}}\n"
         "vendor/v.rs",
         "#[test]\nfn vendored() {\n    assert!(true);\n}\n",
     );
-    git(d, &["add", "-A"]);
+    // Untracked, as a build sees a test it hasn't added yet.
     let out = report(d);
     assert_eq!(
         section(&out, "uncited-test"),

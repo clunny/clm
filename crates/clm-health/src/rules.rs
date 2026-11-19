@@ -193,26 +193,41 @@ pub(crate) fn design_exit(graph: &Graph) -> Section {
     Section::of("design-exit", "lines", lines)
 }
 
-/// Each test with no marker in a tracked file some component owns. `Git` when git can't
-/// list the files.
+/// Each test with no marker in a file of the checkout (tracked, or untracked and not
+/// ignored, as `check.coverage`'s scan lists them) that some component owns. `Git` when git
+/// can't list the files.
 pub(crate) fn uncited_test(root: &Path, graph: &Graph) -> Result<Section, Failure> {
-    let mut files = clm_git::tracked_files(root).map_err(|e| Failure::Git(e.to_string()))?;
-    files.sort();
-    let mut lines = Vec::new();
-    for file in files {
-        if clm_coverage::owner(graph, &file).is_none() {
-            continue;
-        }
-        let Ok(text) = std::fs::read_to_string(root.join(&file)) else {
-            continue; // unreadable or not UTF-8: not a test source
-        };
-        let prefix = format!("{}::", file.display());
-        let listed: [(PathBuf, String); 1] = [(file.clone(), text)];
-        for t in clm_coverage::uncited_tests(&listed) {
-            let name = t.test.strip_prefix(&prefix).unwrap_or(&t.test);
-            let at = format!("{}:{}", file.display(), t.line);
-            lines.push(finding(at, "uncited-test", name));
-        }
-    }
+    let args = [
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+    ];
+    let out = clm_git::run(root, "git", &args, clm_git::Options::default())
+        .map_err(|e| Failure::Git(e.to_string()))?;
+    let mut paths: Vec<PathBuf> = out
+        .split(|b| *b == 0)
+        .filter(|s| !s.is_empty())
+        .map(|s| PathBuf::from(String::from_utf8_lossy(s).into_owned()))
+        .filter(|p| clm_coverage::owner(graph, p).is_some())
+        .collect();
+    paths.sort();
+    paths.dedup();
+    let files: Vec<(PathBuf, String)> = paths
+        .into_iter()
+        .filter_map(|p| {
+            // Unreadable or not UTF-8: not a test source.
+            let text = std::fs::read_to_string(root.join(&p)).ok()?;
+            Some((p, text))
+        })
+        .collect();
+    let lines = clm_coverage::uncited_tests(&files)
+        .into_iter()
+        .map(|t| {
+            let (file, name) = t.test.split_once("::").unwrap_or(("", &t.test));
+            finding(format!("{file}:{}", t.line), "uncited-test", name)
+        })
+        .collect();
     Ok(Section::of("uncited-test", "tests", lines))
 }
