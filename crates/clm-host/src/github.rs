@@ -33,9 +33,16 @@ fn open_pr(root: &Path, branch: &str) -> Result<Option<Value>, Error> {
     Ok(open.then_some(pr))
 }
 
-/// The last line of a command's output: where `gh` prints the URL it made.
-fn last_line(out: &str) -> String {
-    out.lines().last().unwrap_or_default().trim().to_string()
+/// The last line of `what`'s output: where `gh` prints the URL it made. An answer without
+/// one is an answer the adapter can't read (`host-tool-failure`).
+fn last_line(what: &str, out: &str) -> Result<String, Error> {
+    let line = out.lines().last().unwrap_or_default().trim();
+    if !line.starts_with("https://") && !line.starts_with("http://") {
+        return Err(Error::Git(format!(
+            "{what}: no URL in the answer: {line:?}"
+        )));
+    }
+    Ok(line.to_string())
 }
 
 fn json(what: &str, text: &str) -> Result<Value, Error> {
@@ -329,7 +336,7 @@ impl Host for GitHub {
             "--body-file",
             &body,
         ];
-        Ok(last_line(&gh(root, &create)?))
+        last_line("gh pr create", &gh(root, &create)?)
     }
 
     fn show(&self, root: &Path, number: u64) -> Result<Shown, Error> {
@@ -408,7 +415,7 @@ impl Host for GitHub {
                 &body,
             ],
         )?;
-        Ok(Some(last_line(&out)))
+        last_line("gh pr create", &out).map(Some)
     }
 
     fn page_body(&self, root: &Path, file: &Path) -> Result<Option<String>, Error> {
@@ -455,6 +462,6 @@ impl Host for GitHub {
             "--body-file",
             &body,
         ];
-        Ok(last_line(&gh(root, &args)?))
+        last_line("gh issue create", &gh(root, &args)?)
     }
 }

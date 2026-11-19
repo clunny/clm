@@ -229,12 +229,12 @@ fn nowhere_to_file(root: &Path, body_file: &Path) -> Result<String, Error> {
     Err(Error::Nowhere(report))
 }
 
-/// Refuses a body file that is missing or holds only whitespace: a page body can't be
-/// blanked.
+/// Refuses a body file that is missing or holds only whitespace beside a leading `## Cuts`
+/// section, which the gate's replaces: a page body can't be blanked.
 fn check_body(root: &Path, file: &Path) -> Result<(), Error> {
     let text = std::fs::read_to_string(root.join(file))
         .map_err(|e| Error::Refused(format!("{}: {e}", file.display())))?;
-    if text.trim().is_empty() {
+    if cuts::without_section(&text).trim().is_empty() {
         return Err(Error::Refused(format!(
             "{} holds only whitespace; a page body can't be blanked",
             file.display()

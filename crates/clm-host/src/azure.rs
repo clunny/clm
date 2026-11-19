@@ -37,8 +37,9 @@ fn pr_raw(root: &Path, args: &[&str]) -> Result<Vec<u8>, Error> {
             env: &[],
         },
     )
-    // A failed `az` (not installed, not signed in) is a refusal with its message: exit 1.
-    .map_err(|e| Error::Refused(e.to_string()))?;
+    // A failed `az` (not installed, not signed in) is the host's tool failing, with its
+    // message: exit 2 (`host-tool-failure`).
+    .map_err(|e| Error::Git(e.to_string()))?;
     Ok(out)
 }
 

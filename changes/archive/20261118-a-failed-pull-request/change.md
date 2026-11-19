@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-failed-pull-request-open-exits-2-where-its-requirement-says-1]
 ---
 
