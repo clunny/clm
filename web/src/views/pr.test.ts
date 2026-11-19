@@ -136,11 +136,11 @@ describe('spec branches', () => {
   });
 
   it("a branch that cuts: Cuts lists the review's lines under the header, above its components; none without cuts", () => {
-    const line = 'specs/n/SPEC.md: gate/cut: requirement n/r is gone';
-    const view = renderReview(review({ branch: 'spec/x', cuts: [line] }), opts());
+    const lines = ['specs/n/SPEC.md: gate/cut: requirement n/r is gone', 'specs/n/SPEC.md: gate/cut: scenario n/s: one is gone'];
+    const view = renderReview(review({ branch: 'spec/x', cuts: lines }), opts());
     const cuts = view.querySelector<HTMLElement>('.cuts')!;
     expect(cuts.querySelector('h3')?.textContent).toBe('Cuts');
-    expect([...cuts.querySelectorAll('.cut')].map((c) => c.textContent)).toEqual([line]);
+    expect([...cuts.querySelectorAll('.cut')].map((c) => c.textContent)).toEqual(lines);
     // Right under the header, before Approve and the components.
     expect(cuts.previousElementSibling?.classList.contains('head')).toBe(true);
     for (const later of ['.approve-bar', '.node-changes']) {
