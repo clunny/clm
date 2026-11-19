@@ -418,6 +418,38 @@ fn blocks_a_requirement_another_node_s_delta_removes() {
     reports_block(&violations, "a/gone");
 }
 
+#[test]
+fn blocks_a_requirement_a_rejected_delta_removes() {
+    // req:model/parse-backlog@18344ef2
+    // A delta that fails to load removes nothing.
+    let rejected = format!("{REMOVES_GONE}\n## MODIFIED Design\n### Requirement: z\n");
+    let dir = repo(&[
+        ("specs/a/SPEC.md", WITH_REQS),
+        ("backlog/x.md", &blocking("a/gone")),
+        ("changes/c/change.md", "---\nstatus: applied\n---\n"),
+        ("changes/c/deltas/a.md", &rejected),
+    ]);
+    let (graph, violations) = load(dir.path());
+    assert!(graph.changes["c"].deltas.is_empty(), "{violations:?}");
+    reports_block(&violations, "a/gone");
+}
+
+#[test]
+fn blocks_a_requirement_whose_slug_an_applied_change_lists_as_a_capability() {
+    // req:model/parse-backlog@18344ef2
+    // `removes_capabilities` allows `capability/<slug>` alone, never a requirement.
+    let dir = repo(&[
+        ("specs/a/SPEC.md", WITH_REQS),
+        ("backlog/x.md", &blocking("a/gone")),
+        (
+            "changes/c/change.md",
+            "---\nstatus: applied\nremoves_capabilities: [gone]\n---\n",
+        ),
+    ]);
+    let (_, violations) = load(dir.path());
+    reports_block(&violations, "a/gone");
+}
+
 /// A workaround flag on `requirement`.
 fn flag(requirement: &str) -> String {
     format!("---\ntitle: Hard to build\nkind: workaround\nrequirement: {requirement}\n---\n")

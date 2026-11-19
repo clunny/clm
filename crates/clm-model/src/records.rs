@@ -459,8 +459,9 @@ fn removed_by_an_applied_change(graph: &Graph, id: &str) -> bool {
 /// `graph`. A node may also be one that a `create: true` delta of a change outside the
 /// archive creates, so a spec PR can file items naming the node it adds
 /// (`backlog-nodes`). A `blocks` entry must name a requirement that exists, that a live
-/// change adds or that an applied one removes, so the spec PR that removes a requirement edits the items that block it
-/// (`requirement-blocks`). A workaround flag must name a requirement that exists at its
+/// change adds, or that a change outside the archive at `applied` or `implementing`
+/// removes (a capability by `removes_capabilities`), so the spec PR that removes a
+/// requirement edits the items that block it (`requirement-blocks`). A workaround flag must name a requirement that exists at its
 /// current version, so the spec change that removes or rewrites one deletes its flags or
 /// re-records them (`workaround-flags`).
 pub(crate) fn check_backlog(graph: &Graph, violations: &mut Vec<Violation>) {

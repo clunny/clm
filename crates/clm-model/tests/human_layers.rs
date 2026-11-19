@@ -489,7 +489,7 @@ fn blocks_a_removed_capability() {
         ]);
         assert_eq!(graph.backlog["q"].frontmatter.blocks, ["capability/gone"]);
     }
-    for status in ["proposed", "approved", "done"] {
+    for status in ["proposed", "approved", "done", "abandoned"] {
         one_violation(
             &[
                 ("CAPABILITIES.md", &capabilities(APPROVE)),
