@@ -439,6 +439,36 @@ fn a_shortened_requirement() {
 }
 
 #[test]
+fn cuts_in_the_gates_order() {
+    // req:web.worker.review/pr-review@574ed19f
+    // Several cuts come as `clm gate` prints them: gone requirements, then shortened ones,
+    // then the tests the lists add.
+    let two =
+        node("", &["r", "s", "t"], "active").replace("It SHALL s.", "It SHALL s. It SHALL q.");
+    let v = review_of(branch_from(
+        &[("specs/n/SPEC.md", &two)],
+        &[],
+        &[
+            ("specs/n/SPEC.md", &node("", &["s", "t"], "active")),
+            (
+                "changes/x/change.md",
+                "---\nstatus: applied\n---\n\n## Intent\nx\n",
+            ),
+            ("changes/x/deleted-tests.txt", "DELETE tests/a.rs::t\n"),
+        ],
+    ));
+    assert_eq!(
+        cuts(&v),
+        [
+            "specs/n/SPEC.md: gate/cut: requirement n/r is gone",
+            "specs/n/SPEC.md: gate/cut: n/s states 1 sentences where it stated 2",
+            "changes/x/deleted-tests.txt: gate/cut: test tests/a.rs::t is to be deleted",
+        ],
+        "{v}"
+    );
+}
+
+#[test]
 fn a_widened_exemption() {
     // req:web.worker.review/pr-review@574ed19f
     let exempt = node("", &["r"], "active").replace(
@@ -535,7 +565,7 @@ fn a_change_with_burdens() {
     // req:web.worker.review/pr-review@574ed19f
     let burdened = review_of(branch_with(&[(
         "changes/x/change.md",
-        "---\nstatus: applied\nburdens: [b]\n---\n\n## Intent\nx\n",
+        "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n",
     )]));
     assert_eq!(burdened["review"], true, "{burdened}");
     assert_eq!(burdened["change"]["id"], "x");
@@ -573,7 +603,7 @@ fn an_archived_change_with_burdens() {
     // req:web.worker.review/pr-review@574ed19f
     let v = review_of(branch_with(&[(
         "changes/archive/x/change.md",
-        "---\nstatus: applied\nburdens: [b]\n---\n\n## Intent\nx\n",
+        "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n",
     )]));
     assert_eq!(v["review"], true, "{v}");
 }
@@ -611,7 +641,7 @@ fn an_old_archived_change_is_not_read() {
     // A file added beside an archived change's `change.md` doesn't make it the branch's
     // change, as the gate reads only a newly archived one.
     let mut repo = branch_with(&[("changes/archive/x/notes.md", "Notes.\n")]);
-    let burdened = "---\nstatus: applied\nburdens: [b]\n---\n\n## Intent\nx\n";
+    let burdened = "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
     for sha in ["111", "222"] {
         repo.commits.get_mut(sha).unwrap().insert(
             "changes/archive/x/change.md".into(),
@@ -628,7 +658,7 @@ fn a_removed_change_is_not_read() {
     // Only the changes the head holds a touched file of count: a branch that deletes a
     // change with burdens is judged by its other paths.
     let mut repo = branch_with(&[]);
-    let burdened = "---\nstatus: applied\nburdens: [b]\n---\n\n## Intent\nx\n";
+    let burdened = "---\nstatus: applied\nhuman_burdens: [b]\n---\n\n## Intent\nx\n";
     repo.commits
         .get_mut("111")
         .unwrap()
