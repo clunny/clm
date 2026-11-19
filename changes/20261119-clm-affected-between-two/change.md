@@ -33,6 +33,10 @@ resolves: [clm-affected-between-two-commits-names-files-from-the-repository-root
 
 - `exists` for a working-tree changed path is `root.join(path).is_file()`; with paths named from the CLM root this becomes right in a subdirectory root without a further change.
 
+## Edge cases noted by the builder check
+
+- A test beyond the three scenarios should prove a changed Markdown reader target under `--overlap` in a subdirectory root, since that is where the `keep` filter's strip matters.
+
 ## Open questions
 
-None.
+None. The architecture audit's one gap, `docs/guide/ci-and-deployment.md` saying `file` paths are relative to the repository root, is fixed in this change: they are relative to the CLM root.

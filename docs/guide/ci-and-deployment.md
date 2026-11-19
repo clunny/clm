@@ -44,7 +44,7 @@ fi
 
 - `all <path>`: the only line in the file. The branch changes a file that no component's `paths` hold, or one that matches `[affected] all`, so every test must run;
 - `node <id>`: a component the branch affects, directly or through `depends_on`. The word is `node` rather than component, since programs read these lines. Useful when your suites map to components rather than files;
-- `file <path>`: a file whose tests should run: a changed file that still exists, a test that cites a requirement of an affected component, a file of an affected component that cites none, or a test whose `clm:reads` marker matches what changed (next section). Paths are relative to the repository root.
+- `file <path>`: a file whose tests should run: a changed file that still exists, a test that cites a requirement of an affected component, a file of an affected component that cites none, or a test whose `clm:reads` marker matches what changed (next section). Paths are relative to the CLM root, the directory holding `specs/`, which may be a subdirectory of the git repository.
 
 The `node` lines come first, then the `file` lines, each group sorted. An empty file means the branch changes nothing a test depends on, so no test needs to run. Run `clm affected` on a branch to see what a land would hand over.
 
