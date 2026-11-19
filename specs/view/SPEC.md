@@ -262,6 +262,7 @@ The `blockers` view SHALL hold every component `queue_from_refs` reports as `blo
 - THEN `a` is under `backlog/q`, weight 1, and not under `b`, which is `ready`
 
 #### Needs
+- check.coverage/pending-report
 - plugin.panel/component-inspector
 - model/parse-backlog
 
