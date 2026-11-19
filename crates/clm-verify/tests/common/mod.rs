@@ -59,6 +59,27 @@ if [ -e "$DIR/fail-path" ] && [ -e "$(cat "$DIR/fail-path")" ]; then exit 1; fi
 [ ! -e "$DIR/check-fails" ]
 "#;
 
+/// Set in the child a test re-runs itself in, so its stderr can be read.
+const CHILD: &str = "CLM_TEST_VERIFY_CHILD";
+
+/// Re-runs the test `name` in a child and returns the child's stderr; `None` in the child.
+pub fn in_child(name: &str) -> Option<String> {
+    if std::env::var_os(CHILD).is_some() {
+        return None;
+    }
+    let out = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env(CHILD, "1")
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("1 passed"),
+        "{stdout}"
+    );
+    Some(String::from_utf8_lossy(&out.stderr).into_owned())
+}
+
 /// `clm_verify::verify_with` in the repository at `root` with a memory file that doesn't
 /// exist, the real lengths of a minute and of the grace, no stop request and no announcement.
 pub fn verify(

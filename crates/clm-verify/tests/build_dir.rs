@@ -4,7 +4,7 @@ mod common;
 
 use std::sync::Once;
 
-use common::{Fixture, write_exec};
+use common::{Fixture, in_child, write_exec};
 
 /// The caller's environment: a `CLM_LAND_DIR` and a `CARGO_TARGET_DIR` of its own. Every
 /// test here sets the same values, once, before it starts a check.
@@ -102,27 +102,6 @@ fn a_bisect_probes_place() {
     // The verification itself and its one probe.
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(lines.iter().all(|l| *l == main_build_dir(&f)), "{lines:?}");
-}
-
-/// Set in the child a scenario re-runs itself in, so its stderr can be read.
-const CHILD: &str = "CLM_TEST_BUILD_DIR_CHILD";
-
-/// Re-runs the test `name` in a child and returns the child's stderr; `None` in the child.
-fn in_child(name: &str) -> Option<String> {
-    if std::env::var_os(CHILD).is_some() {
-        return None;
-    }
-    let out = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", name, "--nocapture"])
-        .env(CHILD, "1")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        out.status.success() && stdout.contains("1 passed"),
-        "{stdout}"
-    );
-    Some(String::from_utf8_lossy(&out.stderr).into_owned())
 }
 
 /// A clone with a passing record on a land of `files`, whose `[verify]` runs the script body

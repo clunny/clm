@@ -3,10 +3,7 @@
 mod common;
 
 use clm_verify::Request;
-use common::{Fixture, write_exec};
-
-/// Set in the child each scenario re-runs itself in, so its stderr can be read.
-const CHILD: &str = "CLM_TEST_CAP_CHILD";
+use common::{Fixture, in_child, write_exec};
 
 /// A fixture with a passing record, one land since, and `[land] target_cap_gb = 1` when `cap`
 /// is set; its check writes `bytes` bytes (sparse) into `CLM_LAND_DIR` and exits `code`.
@@ -37,24 +34,6 @@ fn fixture(cap: bool, bytes: u64, code: u8) -> Fixture {
         ),
     );
     f
-}
-
-/// Re-runs the test `name` in a child and returns the child's stderr; `None` in the child.
-fn in_child(name: &str) -> Option<String> {
-    if std::env::var_os(CHILD).is_some() {
-        return None;
-    }
-    let out = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", name, "--nocapture"])
-        .env(CHILD, "1")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        out.status.success() && stdout.contains("1 passed"),
-        "{stdout}"
-    );
-    Some(String::from_utf8_lossy(&out.stderr).into_owned())
 }
 
 fn main_build(f: &Fixture) -> std::path::PathBuf {
