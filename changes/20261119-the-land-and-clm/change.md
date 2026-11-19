@@ -36,6 +36,9 @@ resolves: [the-land-and-clm-coverage-can-disagree-about-a-renamed-test]
 
 - Reading both trees costs reading every blob twice on each land and `--check-only` run (a few thousand files here, under a second), where the touched files took milliseconds. Accepted: `clm coverage` pays the same, and it runs before the land's lock, so it holds no other land up.
 - A file that isn't UTF-8 is skipped on both sides, as now.
+- "Every file of the two trees" means every file under the CLM root, named from it, as the land names them now; the build keeps its prefix filter and drops only the filter to touched files.
+- In a repository whose CLM root is a subdirectory, `clm coverage --deleted-tests` names its base files from the repository root, so it can still disagree there; that is `check`'s bug, filed as `backlog/clm-coverage-deleted-tests-names-base-files-from-the-repository`, and this change doesn't depend on it.
+- `land/deleted-tests-approved`'s build also catches up `20261118-renaming-a-citing-test`'s version, which no land build has taken yet: the refusal's advice and a land test for *a renamed test* landing.
 
 ## Open questions
 
