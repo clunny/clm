@@ -1,6 +1,7 @@
 //! The lists `clm coverage` prints beside its report (`test-lists`): markers no test
-//! counts, tests a removal leaves with nothing to cite, and tests a tree has lost. They
-//! take files as paths and texts, so they build without the `checkout` feature.
+//! counts, tests a removal leaves with nothing to cite, and tests a tree has lost; and the
+//! tests that cite nothing, for `clm health`. They take files as paths and texts, so they
+//! build without the `checkout` feature.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -31,7 +32,7 @@ pub struct ObsoleteTest {
     pub every: bool,
 }
 
-/// A test of the base tree that the head tree holds no test of that name for.
+/// A test of the base tree that is gone from the head tree (`deleted_tests`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeletedTest {
     /// `<file>::<name>`.
@@ -40,6 +41,15 @@ pub struct DeletedTest {
     pub line: usize,
     /// The IDs its markers cited, sorted.
     pub ids: Vec<String>,
+}
+
+/// A test (never a group) with no marker on its lines.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UncitedTest {
+    /// `<file>::<name>`.
+    pub test: String,
+    /// The test's first line.
+    pub line: usize,
 }
 
 /// Each requirement or capability that exists, or that a change outside the archive
@@ -65,19 +75,22 @@ pub fn uncounted(graph: &Graph, outside: &[Marker]) -> Vec<Uncounted> {
 }
 
 /// A test of one file, groups left out, with the IDs of the markers on its lines.
-struct Cited {
+struct FileTest {
+    name: String,
     test: String,
     line: usize,
     ids: Vec<String>,
 }
 
-fn cited_tests(path: &Path, text: &str) -> Vec<Cited> {
+/// Every test of one file, groups left out, cited or not.
+fn file_tests(path: &Path, text: &str) -> Vec<FileTest> {
     let lines: Vec<&str> = text.lines().collect();
     tests_in(path, text)
         .into_iter()
         .filter(|t| !t.group)
-        .map(|t| Cited {
+        .map(|t| FileTest {
             test: format!("{}::{}", path.display(), t.name),
+            name: t.name,
             line: t.first,
             ids: lines[t.first - 1..t.last.min(lines.len())]
                 .iter()
@@ -88,6 +101,13 @@ fn cited_tests(path: &Path, text: &str) -> Vec<Cited> {
         .collect()
 }
 
+/// The tests of one file, groups left out, that hold a marker.
+fn citing_tests(path: &Path, text: &str) -> impl Iterator<Item = FileTest> {
+    file_tests(path, text)
+        .into_iter()
+        .filter(|c| !c.ids.is_empty())
+}
+
 fn sorted_unique(ids: impl IntoIterator<Item = String>) -> Vec<String> {
     ids.into_iter()
         .collect::<BTreeSet<_>>()
@@ -95,13 +115,19 @@ fn sorted_unique(ids: impl IntoIterator<Item = String>) -> Vec<String> {
         .collect()
 }
 
+/// The entries sorted by file and then by line, the order every list here returns.
+fn by_file_and_line<T>(mut out: Vec<(&Path, usize, T)>) -> Vec<T> {
+    out.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+    out.into_iter().map(|(_, _, t)| t).collect()
+}
+
 /// Each test holding a marker that cites a requirement or capability a change outside the
 /// archive removed, sorted by file and then by line.
 pub fn obsolete_tests(graph: &Graph, files: &[(PathBuf, String)]) -> Vec<ObsoleteTest> {
     let removed = removed(graph);
-    let mut out: Vec<(&Path, ObsoleteTest)> = Vec::new();
+    let mut out = Vec::new();
     for (path, text) in files {
-        for c in cited_tests(path, text) {
+        for c in file_tests(path, text) {
             let gone: Vec<String> = c
                 .ids
                 .iter()
@@ -117,39 +143,100 @@ pub fn obsolete_tests(graph: &Graph, files: &[(PathBuf, String)]) -> Vec<Obsolet
                 every: gone.len() == c.ids.len(),
                 ids: sorted_unique(gone),
             };
-            out.push((path, test));
+            out.push((path.as_path(), c.line, test));
         }
     }
-    out.sort_by(|a, b| (a.0, a.1.line).cmp(&(b.0, b.1.line)));
-    out.into_iter().map(|(_, t)| t).collect()
+    by_file_and_line(out)
 }
 
-/// Each test holding a marker in `base_files` that `head_files` holds no test of that name
-/// in a file of that path for, sorted by file and then by line. A renamed test is listed,
-/// since a program can't tell a rename from a removal.
+/// A test's name with every `req:` marker in it left out, ID and version, and the space
+/// before each, so a test whose title carries its marker keeps its name when re-cited.
+pub fn bare_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut from = 0;
+    for m in parse_markers(name) {
+        // A marker can start inside the one before it, when a slug ends at the next
+        // marker's colon: that text is already left out.
+        let start = m.range.start.max(from);
+        let kept = &name[from..start];
+        out.push_str(kept.strip_suffix(' ').unwrap_or(kept));
+        from = m.range.end.max(from);
+    }
+    out.push_str(&name[from..]);
+    out
+}
+
+/// The tests of `base_files` that are gone from `head_files`, sorted by file and then by
+/// line. Tests holding a marker are counted by bare name: where the head holds `m` of a
+/// name the base holds `n` of, `m < n`, `n - m` are gone, taken from the files in sorted
+/// order, each giving its tests of that name, last first, as many as it holds fewer of at
+/// the head. So a test moved to another file is not gone; a renamed, deleted or uncited
+/// one is, since a program can't tell a rename from a removal.
 pub fn deleted_tests(
     base_files: &[(PathBuf, String)],
     head_files: &[(PathBuf, String)],
 ) -> Vec<DeletedTest> {
-    let kept: BTreeSet<String> = head_files
-        .iter()
-        .flat_map(|(path, text)| cited_tests(path, text))
-        .map(|c| c.test)
-        .collect();
-    let mut out: Vec<(&Path, DeletedTest)> = Vec::new();
-    for (path, text) in base_files {
-        for c in cited_tests(path, text) {
-            if c.ids.is_empty() || kept.contains(&c.test) {
-                continue;
-            }
-            let test = DeletedTest {
-                test: c.test,
-                line: c.line,
-                ids: sorted_unique(c.ids),
-            };
-            out.push((path, test));
+    // How many tests of each bare name each file of the head holds.
+    let mut head: BTreeMap<String, BTreeMap<&Path, usize>> = BTreeMap::new();
+    for (path, text) in head_files {
+        for c in citing_tests(path, text) {
+            *head
+                .entry(bare_name(&c.name))
+                .or_default()
+                .entry(path.as_path())
+                .or_default() += 1;
         }
     }
-    out.sort_by(|a, b| (a.0, a.1.line).cmp(&(b.0, b.1.line)));
-    out.into_iter().map(|(_, t)| t).collect()
+    // By bare name, then by file in sorted order, each file's tests in line order.
+    let mut base: BTreeMap<String, BTreeMap<&Path, Vec<FileTest>>> = BTreeMap::new();
+    for (path, text) in base_files {
+        for c in citing_tests(path, text) {
+            base.entry(bare_name(&c.name))
+                .or_default()
+                .entry(path.as_path())
+                .or_default()
+                .push(c);
+        }
+    }
+    let none = BTreeMap::new();
+    let mut out = Vec::new();
+    for (name, by_file) in base {
+        let held = head.get(&name).unwrap_or(&none);
+        let n: usize = by_file.values().map(Vec::len).sum();
+        let mut left = n.saturating_sub(held.values().sum());
+        for (path, tests) in by_file {
+            if left == 0 {
+                break;
+            }
+            let here = held.get(path).copied().unwrap_or(0);
+            let take = tests.len().saturating_sub(here).min(left);
+            left -= take;
+            for c in tests.into_iter().rev().take(take) {
+                let test = DeletedTest {
+                    test: c.test,
+                    line: c.line,
+                    ids: sorted_unique(c.ids),
+                };
+                out.push((path, c.line, test));
+            }
+        }
+    }
+    by_file_and_line(out)
+}
+
+/// Each test, groups left out, with no marker on its lines, sorted by file and then by line.
+pub fn uncited_tests(files: &[(PathBuf, String)]) -> Vec<UncitedTest> {
+    let mut out = Vec::new();
+    for (path, text) in files {
+        for c in file_tests(path, text) {
+            if c.ids.is_empty() {
+                let test = UncitedTest {
+                    test: c.test,
+                    line: c.line,
+                };
+                out.push((path.as_path(), c.line, test));
+            }
+        }
+    }
+    by_file_and_line(out)
 }
