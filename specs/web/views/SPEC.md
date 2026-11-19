@@ -181,7 +181,7 @@ The PR view SHALL show the PR's `## Intent` section first, above the per-node ch
 - architecture/humans-review-intent
 
 ### Requirement: spec-branch-review
-The PR list SHALL list the `spec/*` branches the Worker's branch list gives, each by name with its page's number and title when it has a page, and SHALL open each branch's review, routed by branch name and loaded from the Worker's branch review. The review's header SHALL show "needs review" when the review's top-level `review` is true, whether or not it has a `change`, and nothing for it otherwise, the writer and time of each approval the review lists, or "not approved" when it lists none, "checked" or "not checked", and a link to the page when there is one, and SHALL show no labels. The PR list SHALL list nothing but the spec branches: no lands to review. The app SHALL request no `/pulls` route of the Worker.
+The PR list SHALL list the `spec/*` branches the Worker's branch list gives, each by name with its page's number and title when it has a page, and SHALL open each branch's review, routed by branch name and loaded from the Worker's branch review. The review's header SHALL show "needs review" when the review's top-level `review` is true, whether or not it has a `change`, and nothing for it otherwise, the writer and time of each approval the review lists, or "not approved" when it lists none, "checked" or "not checked", and a link to the page when there is one, and SHALL show no labels. Under the header, above the review's components, it SHALL list each line of the review's `cuts` as the Worker gives it, under the heading `Cuts`, and show no such heading for a review with none, so a person approving in the app reads what the branch removes before they tap Approve (`removal-needs-a-yes`). The PR list SHALL list nothing but the spec branches: no lands to review. The app SHALL request no `/pulls` route of the Worker.
 
 #### Serves
 - capability/follow-from-browser
@@ -205,6 +205,11 @@ The PR list SHALL list the `spec/*` branches the Worker's branch list gives, eac
 - GIVEN `spec/arch`'s review with `review` true and no `change`, and `spec/plain`'s with `review` false and a `change`
 - WHEN each review is shown
 - THEN `spec/arch`'s header shows "needs review" and `spec/plain`'s doesn't
+
+#### Scenario: a branch that cuts
+- GIVEN `spec/x`'s review whose `cuts` hold `specs/n/SPEC.md: gate/cut: requirement n/r is gone`, and `spec/plain`'s with empty `cuts`
+- WHEN each review is shown
+- THEN `spec/x`'s shows `Cuts` with that line above its components, and `spec/plain`'s shows no `Cuts` heading
 
 ### Requirement: approve-button
 Approve intent SHALL send one approve request per tap and none while one is in flight, and once the Worker accepts it SHALL read Approved and stay disabled. It SHALL be disabled offline, for a review without a fingerprint, and for a review that already shows an approval, which it SHALL read from the review's approvals, never from a label.
