@@ -100,6 +100,23 @@ fn specs_that_dont_load_need_no_review_under_version_1() {
     assert_eq!((old.review, now.review), (false, true));
     assert_eq!(old.cuts, now.cuts);
     assert_eq!(now.cuts.len(), 1);
+
+    // an exemption it adds still needs review under version 1, read from the text
+    let exempt = "owners: []\nexemptions:\n  - rule: skipped-tests\n    files: [\"src/a/**\"]\n    until: backlog/x\n";
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &format!("{HEAD}{X}{Y}\n### Requirement: z\nZ SHALL hold.\n")
+            .replace("owners: []\n", exempt),
+    );
+    write(
+        d,
+        "backlog/x.md",
+        "---\nkind: deferred\ncomponents: [a]\n---\nEnds it.\n",
+    );
+    commit(d, "exempt");
+    let old = evaluate_by(d, "main", "HEAD", false, 1).unwrap();
+    assert!(old.review, "{:?}", old.violations);
 }
 
 #[test]
