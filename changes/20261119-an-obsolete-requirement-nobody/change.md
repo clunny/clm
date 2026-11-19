@@ -1,5 +1,5 @@
 ---
-status: done
+status: applied
 resolves: [an-obsolete-requirement-nobody-can-clear-keeps-its-component-ready]
 ---
 

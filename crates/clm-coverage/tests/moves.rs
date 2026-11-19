@@ -330,7 +330,7 @@ fn moved(d: &Path) -> Graph {
 
 #[test]
 fn moved_requirement_waits_for_the_move() {
-    // req:check.coverage/pending-report@ebf1b50f
+    // req:check.coverage/pending-report@e2446051
     let dir = TempDir::new().unwrap();
     let g = moved(dir.path());
     let markers = [marker("a/x", None, "t.rs", 4)];
@@ -351,7 +351,7 @@ fn moved_requirement_waits_for_the_move() {
 
 #[test]
 fn move_landed_marker_left_behind() {
-    // req:check.coverage/pending-report@ebf1b50f
+    // req:check.coverage/pending-report@e2446051
     let dir = TempDir::new().unwrap();
     let g = moved(dir.path());
     let markers = [
