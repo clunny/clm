@@ -1206,11 +1206,25 @@ fn signed_main_with_specs(dir: &Path, signers: bool) -> (tempfile::TempDir, Path
 /// Branch `name` off `main` writing `files`, merged into `main`: the merge commit and the
 /// branch's fingerprint against `main`.
 fn merge_files(dir: &Path, name: &str, files: &[(&str, &str)]) -> (String, String) {
+    merge_files_ending(dir, name, files, "")
+}
+
+/// `merge_files` with `ending` appended to the merge commit's message, as a paragraph of its
+/// own when it isn't empty.
+fn merge_files_ending(
+    dir: &Path,
+    name: &str,
+    files: &[(&str, &str)],
+    ending: &str,
+) -> (String, String) {
     sh(dir, &["switch", "-q", "-c", name]);
     commit(dir, files, "work");
     let out = fingerprint(dir, "main");
     sh(dir, &["switch", "-q", "main"]);
-    let message = format!("Merge {name}");
+    let mut message = format!("Merge {name}");
+    if !ending.is_empty() {
+        message.push_str(&format!("\n\n{ending}"));
+    }
     sh(dir, &["merge", "-q", "--no-ff", "-m", &message, name]);
     (sh(dir, &["rev-parse", "HEAD"]), out.trim().to_string())
 }
@@ -1250,7 +1264,7 @@ fn requirement_added(dir: &Path) -> (String, String) {
 
 #[test]
 fn review_recorded_as_none() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1275,7 +1289,7 @@ fn review_recorded_as_none() {
 
 #[test]
 fn review_spec_recorded_as_code() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1302,7 +1316,7 @@ fn review_spec_recorded_as_code() {
 
 #[test]
 fn review_honest_and_over_stated_lands() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1336,7 +1350,7 @@ fn review_honest_and_over_stated_lands() {
 
 #[test]
 fn review_highest_signed_record_is_the_recorded_one() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     // Two signed records name the land, `code` and `spec review`: the higher one is recorded.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1359,7 +1373,7 @@ fn review_highest_signed_record_is_the_recorded_one() {
 
 #[test]
 fn review_not_recomputed_without_the_flag() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let (_keys, christopher) = signed_main_with_specs(root, true);
@@ -1372,7 +1386,7 @@ fn review_not_recomputed_without_the_flag() {
 
 #[test]
 fn review_before_the_switch() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     let _keys = signed_main_with_specs(root, false);
@@ -1385,7 +1399,7 @@ fn review_before_the_switch() {
 
 #[test]
 fn review_ranks_code_with_spec() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     // A backlog-only diff, `spec` to the gate, recorded as a code land: no finding.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -1400,7 +1414,7 @@ fn review_ranks_code_with_spec() {
 
 #[test]
 fn review_unsigned_land_is_not_recomputed() {
-    // req:ledger/verify-recomputes-review@5890d0dc
+    // req:ledger/verify-recomputes-review@42a503d9
     // On a signed `main`, an unsigned record understating a diff that needs review is only
     // unsigned.
     let dir = tempfile::tempdir().unwrap();
@@ -1416,6 +1430,234 @@ fn review_unsigned_land_is_not_recomputed() {
         out.contains("ledger/unsigned-land") && out.contains(&merge),
         "{out}"
     );
+}
+
+/// The merge of a branch that only removes requirement `r` from `a`, its message ending with
+/// `ending`: under the rules of version 1 a spec land that needs no review, under version 2
+/// one that does, since it cuts a requirement.
+fn requirement_removed(dir: &Path, ending: &str) -> (String, String) {
+    merge_files_ending(
+        dir,
+        "cut",
+        &[("specs/a/SPEC.md", &node_a("c", &[]))],
+        ending,
+    )
+}
+
+/// `clm ledger verify <args>`: exit code, each line's rule and the commit it names, and the
+/// whole output.
+fn findings(root: &Path, args: &[&str]) -> (Option<i32>, Vec<(String, String)>, String) {
+    let mut line = vec!["ledger", "verify"];
+    line.extend(args);
+    let (code, out, err) = clm(root, root, &line);
+    let found = out
+        .lines()
+        .map(|l| {
+            let rule = l.split(": ").nth(1).unwrap_or(l).to_string();
+            let commit = l
+                .split_whitespace()
+                .map(|w| w.trim_end_matches(':'))
+                .find(|w| w.len() == 40 && w.chars().all(|c| c.is_ascii_hexdigit()))
+                .unwrap_or("")
+                .to_string();
+            (rule, commit)
+        })
+        .collect();
+    (code, found, format!("{out}{err}"))
+}
+
+/// The pairs `findings` gives, from `(rule, commit)`s.
+fn found(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+    pairs
+        .iter()
+        .map(|(rule, commit)| (rule.to_string(), commit.to_string()))
+        .collect()
+}
+
+#[test]
+fn review_a_removal_before_the_rule() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let (merge, fingerprint) = requirement_removed(root, "");
+    let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
+    assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
+}
+
+#[test]
+fn review_a_removal_under_the_rule() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let (merge, fingerprint) = requirement_removed(root, "Gate-Rules: 2");
+    let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
+    assert_eq!(code, Some(1), "{out}{err}");
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2, "{out}");
+    assert!(
+        lines[0].contains("ledger/understated-land")
+            && lines[0].contains(&merge)
+            && lines[0].contains("recorded spec, the gate gives spec review"),
+        "{out}"
+    );
+    assert!(
+        lines[1].contains("ledger/unapproved-land") && lines[1].contains(&merge),
+        "{out}"
+    );
+}
+
+#[test]
+fn review_the_highest_whole_trailer_counts() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    // Of these trailers only `  1 ` is, trimmed, a whole number of at least 1: version 1.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let ending = "Gate-Rules: 2x\nGate-Rules: 0\nGate-Rules: +2\nGate-Rules:  1 ";
+    let (merge, fingerprint) = requirement_removed(root, ending);
+    let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
+    assert_eq!((code, out.as_str()), (Some(0), ""), "{err}");
+
+    // Of two whole trailers, the higher counts, whatever their order.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let (merge, fingerprint) = requirement_removed(root, "Gate-Rules: 1\nGate-Rules: 2");
+    let land = land_as(root, &merge, &fingerprint, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, findings, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    let want = [
+        ("ledger/understated-land", merge.as_str()),
+        ("ledger/unapproved-land", &merge),
+    ];
+    assert_eq!(findings, found(&want), "{out}");
+}
+
+#[test]
+fn review_a_lower_trailer_after_a_higher_one() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let files = [("src/x.rs", "fn x() { 1; }\n")];
+    let (first, first_fp) = merge_files_ending(root, "code", &files, "Gate-Rules: 2");
+    let land = land_as(root, &first, &first_fp, LandKind::Code, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (second, second_fp) = requirement_removed(root, "Gate-Rules: 1");
+    let land = land_as(root, &second, &second_fp, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, findings, out) = findings(root, &["--review", "--since", &first]);
+    assert_eq!(code, Some(1), "{out}");
+    let want = [
+        ("ledger/understated-land", second.as_str()),
+        ("ledger/unapproved-land", &second),
+    ];
+    assert_eq!(findings, found(&want), "{out}");
+}
+
+#[test]
+fn review_a_floor_counts_only_a_signed_land() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    // An earlier land no signed record names raises no floor: it is only unsigned.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let files = [("src/x.rs", "fn x() { 1; }\n")];
+    let (first, first_fp) = merge_files_ending(root, "code", &files, "Gate-Rules: 2");
+    let land = land_as(root, &first, &first_fp, LandKind::Code, false);
+    append(root, land, &env(root, &[])).unwrap();
+    let (second, second_fp) = requirement_removed(root, "");
+    let land = land_as(root, &second, &second_fp, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, findings, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    assert_eq!(
+        findings,
+        found(&[("ledger/unsigned-land", &first)]),
+        "{out}"
+    );
+}
+
+/// A signed, checked code land whose merge commit ends with `Gate-Rules: ` and a number above
+/// `clm-gate`'s `RULES`: the merge commit and that number.
+fn rules_newer_than_this_clm(root: &Path, christopher: &Path) -> (String, u32) {
+    let newer = clm_gate::RULES + 1;
+    let files = [("src/x.rs", "fn x() { 2; }\n")];
+    let ending = format!("Gate-Rules: {newer}");
+    let (merge, fingerprint) = merge_files_ending(root, "newer", &files, &ending);
+    let land = land_as(root, &merge, &fingerprint, LandKind::Code, false);
+    append_signed(root, "christopher-lunny", christopher, "clm-land", land);
+    (merge, newer)
+}
+
+#[test]
+fn review_rules_newer_than_this_clm() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let (merge, newer) = rules_newer_than_this_clm(root, &christopher);
+    let (code, out, err) = clm(root, root, &["ledger", "verify", "--review"]);
+    assert_eq!(code, Some(1), "{out}{err}");
+    assert_eq!(out.lines().count(), 1, "{out}");
+    assert!(
+        out.contains("ledger/unrated-land")
+            && out.contains(&format!("landed {merge}: the gate can't rate it: "))
+            && out.contains(&format!("version {newer}"))
+            && out.contains(&format!("RULES ({})", clm_gate::RULES)),
+        "{out}"
+    );
+}
+
+#[test]
+fn review_a_land_after_rules_newer_than_this_clm() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let (first, _) = rules_newer_than_this_clm(root, &christopher);
+    let (second, second_fp) = architecture_change(root);
+    let land = land_as(root, &second, &second_fp, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, findings, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    let want = [
+        ("ledger/unrated-land", first.as_str()),
+        ("ledger/understated-land", &second),
+        ("ledger/unapproved-land", &second),
+    ];
+    assert_eq!(findings, found(&want), "{out}");
+}
+
+#[test]
+fn review_a_capped_floor_still_rates_later_lands() {
+    // req:ledger/verify-recomputes-review@42a503d9
+    // After a land under rules newer than this clm the floor is `RULES`: a later removal is
+    // rated under `RULES`, not reported as unrated.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let (_keys, christopher) = signed_main_with_specs(root, true);
+    let (first, _) = rules_newer_than_this_clm(root, &christopher);
+    let (second, second_fp) = requirement_removed(root, "");
+    let land = land_as(root, &second, &second_fp, LandKind::Spec, false);
+    append_signed(root, "christopher-lunny", &christopher, "clm-land", land);
+    let (code, findings, out) = findings(root, &["--review"]);
+    assert_eq!(code, Some(1), "{out}");
+    let want = [
+        ("ledger/unrated-land", first.as_str()),
+        ("ledger/understated-land", &second),
+        ("ledger/unapproved-land", &second),
+    ];
+    assert_eq!(findings, found(&want), "{out}");
 }
 
 /// The merge of a branch adding `changes/x/change.md` as a gitlink to a commit the repository

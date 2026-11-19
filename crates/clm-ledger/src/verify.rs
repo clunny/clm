@@ -1,6 +1,6 @@
 //! `clm ledger verify` (`ledger/verify`): `main`'s history audited against the records.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use crate::{Body, Error, Fold, LandKind, Record, read};
@@ -22,13 +22,18 @@ const RELEASE: &str = "Release v";
 /// The trailer of a commit made by hand under a decision (`verify-by-hand-merge`).
 const BY_HAND: &str = "Clm-By-Hand";
 
+/// The trailer naming the version of the gate's rules a land was judged by
+/// (`land/gate-rules-trailer`).
+const GATE_RULES: &str = "Gate-Rules";
+
 /// Audits the first-parent chain of `tip` after `since` (by default, from the oldest commit
 /// on it a `landed` record names): each commit no `landed` record names, merge or not
 /// (`clm land` always merges, so a single-parent commit there was pushed around it), except
 /// a release or a commit made by hand under an accepted decision, and each landed commit
 /// whose land's code key no `checked` record names.
 /// With `review`, each signed land's kind and whether it needed review are also recomputed
-/// with the gate rather than trusted (`verify-recomputes-review`). Doesn't fetch.
+/// with the gate, under the rules in force when it landed, rather than trusted
+/// (`verify-recomputes-review`). Doesn't fetch.
 pub fn verify(
     root: &Path,
     tip: &str,
@@ -65,6 +70,11 @@ pub fn verify(
             None => chain.clear(),
         }
     }
+    let rules = if review {
+        rules_in_force(root, &fold, tip)?
+    } else {
+        HashMap::new()
+    };
     let mut findings = Vec::new();
     for (sha, parents, by_hand, subject) in chain.into_iter().rev() {
         if !by_hand.is_empty() && by_hand_allowed(root, sha, parents, by_hand)? {
@@ -100,7 +110,10 @@ pub fn verify(
                     ),
                 });
             }
-            findings.extend(audit_signed(root, &fold, sha, parents, lands, review)?);
+            // A commit of the audited range is on the whole chain, so it has its rules; were
+            // one missing, the strictest rules this gate knows, never laxer ones.
+            let rules = review.then(|| rules.get(sha).copied().unwrap_or(clm_gate::RULES));
+            findings.extend(audit_signed(root, &fold, sha, parents, lands, rules)?);
         } else if !subject.starts_with(RELEASE) {
             findings.push(Finding {
                 rule: "ledger/unrecorded-land",
@@ -113,6 +126,68 @@ pub fn verify(
         }
     }
     Ok(findings)
+}
+
+/// The rules in force for each commit on the first-parent chain of `tip`, the whole chain
+/// whatever `--since` says (`verify-recomputes-review`, `audit-by-the-rules-in-force`): the
+/// higher of its own version and its floor, the highest own version, capped at the gate's
+/// `RULES`, of an earlier commit whose first parent is signed and that a `landed` record
+/// signed under that first parent's `docs/allowed_signers` names. A lander can't take older,
+/// laxer rules by writing a lower trailer than `main` has already landed under, and one land
+/// above `RULES` is one unrated land, not every land after it.
+fn rules_in_force(root: &Path, fold: &Fold, tip: &str) -> Result<HashMap<String, u32>, Error> {
+    // One NUL-ended entry per commit, its trailers unfolded, so no message text can split an
+    // entry or forge another.
+    let format = format!(
+        "--format=%H%x1f%P%x1f%(trailers:key={GATE_RULES},valueonly,unfold,separator=%x1e)"
+    );
+    let log = clm_git::git(root, &["log", "-z", "--first-parent", &format, tip])?;
+    let mut rules = HashMap::new();
+    let mut floor = 1;
+    for entry in log.split('\0').collect::<Vec<_>>().into_iter().rev() {
+        let mut fields = entry.trim_start_matches('\n').splitn(3, '\x1f');
+        let (Some(sha), Some(parents)) = (fields.next(), fields.next()) else {
+            continue;
+        };
+        let own = own_rules(fields.next().unwrap_or(""));
+        rules.insert(sha.to_string(), own.max(floor));
+        let capped = own.min(clm_gate::RULES);
+        if capped > floor && signed_land(root, fold, sha, parents)? {
+            floor = capped;
+        }
+    }
+    Ok(rules)
+}
+
+/// A commit's own version of the rules: the highest of its `Gate-Rules` trailers (separated
+/// by `\x1e`) that, trimmed, is a whole number of at least 1, or 1 when there is none.
+fn own_rules(trailers: &str) -> u32 {
+    trailers
+        .split('\x1e')
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()))
+        .map(|value| value.parse::<u32>().unwrap_or(u32::MAX))
+        .filter(|&version| version >= 1)
+        .max()
+        .unwrap_or(1)
+}
+
+/// Whether `sha`'s first parent is signed and a `landed` record naming `sha` is signed under
+/// it, as `ledger/unsigned-land` judges a land.
+fn signed_land(root: &Path, fold: &Fold, sha: &str, parents: &str) -> Result<bool, Error> {
+    let (Some(lands), Some(first)) = (fold.lands.get(sha), parents.split_whitespace().next())
+    else {
+        return Ok(false);
+    };
+    if !crate::signed(root, first)? {
+        return Ok(false);
+    }
+    for land in lands {
+        if Rated::recorded(land).is_some() && signed_by(root, first, fold, land, "clm-land")? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Whether some `checked` record counts for `key`: one that checked the tree whole, or a
@@ -249,9 +324,10 @@ impl std::fmt::Display for Rated {
 /// A land of `sha` whose first parent is signed (`signed-ledger-records`): no `landed`
 /// record naming it signed under `clm-land` is `ledger/unsigned-land`. The highest-ranked
 /// signed record (the first in the fold's order among equals) is the recorded one; with
-/// `review`, the gate's kind and review ranking above it is `ledger/understated-land`. A
-/// land recorded or recomputed as needing review whose diff, recomputed from the parents, no counted approval
-/// names is `ledger/unapproved-land`. A land whose first parent isn't signed is judged as
+/// `review`, the rules in force when it landed, the gate's kind and review under them ranking
+/// above it is `ledger/understated-land`. A land recorded or recomputed as needing review
+/// whose diff, recomputed from the parents, no counted approval names is
+/// `ledger/unapproved-land`. A land whose first parent isn't signed is judged as
 /// before.
 fn audit_signed(
     root: &Path,
@@ -259,7 +335,7 @@ fn audit_signed(
     sha: &str,
     parents: &str,
     lands: &[Record],
-    review: bool,
+    review: Option<u32>,
 ) -> Result<Vec<Finding>, Error> {
     let mut parents = parents.split_whitespace();
     let (Some(first), second) = (parents.next(), parents.next()) else {
@@ -292,11 +368,12 @@ fn audit_signed(
     };
     let mut findings = Vec::new();
     let mut needs_review = rated.needs_review();
-    if review {
-        // As `clm land` rated it: the merge commit against the `main` it merged into. A land
-        // the gate can't rate is named and judged by its record, and the walk goes on
+    if let Some(rules) = review {
+        // As `clm land` rated it: the merge commit against the `main` it merged into, under
+        // the rules in force. A land the gate can't rate, a version above its `RULES`
+        // included, is named and judged by its record, and the walk goes on
         // (`verify-unrated-land`).
-        match clm_gate::evaluate_at(root, first, sha, false) {
+        match clm_gate::evaluate_by(root, first, sha, false, rules) {
             Ok(outcome) => {
                 let gate = Rated::gate(&outcome);
                 if gate.rank() > rated.rank() {
