@@ -14,3 +14,5 @@ Considered:
 - Marking the node `status: deprecated` and leaving it empty. `spec-is-current` says the spec describes only the system as it is.
 - A `RENAMED Node` delta that moves the node and rewrites its requirement IDs in place. It handles only the rename, still has to rewrite every dependant's `depends_on`, and a removal is needed anyway to retire a node.
 - Letting a spec PR delete `specs/<node>/` by hand. `clm sync` regenerates `specs/` from `main` and the deltas, so the deletion doesn't survive, and the gate would have nothing to rate but a missing file.
+
+**Changed on 2026-11-19** (`a-removed-requirement-s-tests-elsewhere-are-listed`). Once the root sets `wiring`, an obsolete marker counts against the owner of its file also when the component its ID names still exists and another component owns the file.
