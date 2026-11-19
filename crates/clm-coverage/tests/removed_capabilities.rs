@@ -69,7 +69,7 @@ fn cited() -> [Marker; 2] {
 
 #[test]
 fn scenario_removed_capability_cited() {
-    // req:check.coverage/removed-capabilities@ec1473a4
+    // req:check.coverage/removed-capabilities@bd5e072d
     let dir = repo(KEPT);
     let d = dir.path();
     with_capability_component(d);
@@ -84,8 +84,67 @@ fn scenario_removed_capability_cited() {
 }
 
 #[test]
+fn scenario_removed_capability_in_another_components_file() {
+    // req:check.coverage/removed-capabilities@bd5e072d
+    let dir = repo(KEPT);
+    let d = dir.path();
+    write(
+        d,
+        "specs/SPEC.md",
+        "---\ntitle: R\nstatus: active\nowners: []\nwiring: []\n---\n",
+    );
+    with_capability_component(d);
+    write(d, "specs/c/SPEC.md", &spec("[\"crates/c/**\"]", &[]));
+    change(d, "20260101-x", "applied", "gone");
+    let g = graph(d);
+    let both = [
+        marker(
+            "capability/gone",
+            None,
+            "crates/clm/tests/capability/gone.rs",
+            3,
+        ),
+        marker("capability/gone", None, "crates/c/t.rs", 8),
+    ];
+    assert_eq!(
+        pending_lines(&g, &both, "capability"),
+        ["capability/gone obsolete crates/clm/tests/capability/gone.rs:3 blocked capability/gone"]
+    );
+    assert_eq!(
+        pending_lines(&g, &both, "c"),
+        ["capability/gone obsolete crates/c/t.rs:8"]
+    );
+    assert_eq!(
+        pending_lines(&g, &both[..1], "capability"),
+        ["capability/gone obsolete crates/clm/tests/capability/gone.rs:3"]
+    );
+    assert!(pending_lines(&g, &both[..1], "c").is_empty());
+}
+
+#[test]
+fn scenario_a_question_holds_a_removed_capability() {
+    // req:check.coverage/removed-capabilities@bd5e072d
+    let dir = repo(KEPT);
+    let d = dir.path();
+    with_capability_component(d);
+    change(d, "20260101-x", "applied", "gone");
+    write(
+        d,
+        "backlog/q.md",
+        "---\ntitle: Q\nkind: question\nblocks: [capability/gone]\n---\n",
+    );
+    let g = graph(d);
+    assert_eq!(
+        pending_lines(&g, &cited(), "capability"),
+        [
+            "capability/gone obsolete capabilities/web/gone.spec.ts:5 crates/clm/tests/capability/gone.rs:3 blocked backlog/q"
+        ]
+    );
+}
+
+#[test]
 fn removal_is_listed_whatever_the_status_and_gives_every_change() {
-    // req:check.coverage/removed-capabilities@ec1473a4
+    // req:check.coverage/removed-capabilities@bd5e072d
     let dir = repo(KEPT);
     let d = dir.path();
     change(d, "20260101-b", "proposed", "gone");
@@ -96,7 +155,7 @@ fn removal_is_listed_whatever_the_status_and_gives_every_change() {
 
 #[test]
 fn the_priority_is_the_highest_of_the_changes_listing_it() {
-    // req:check.coverage/removed-capabilities@ec1473a4
+    // req:check.coverage/removed-capabilities@bd5e072d
     let dir = repo(KEPT);
     let d = dir.path();
     for (id, p) in [
@@ -122,7 +181,7 @@ fn the_priority_is_the_highest_of_the_changes_listing_it() {
 
 #[test]
 fn scenario_listed_but_still_held() {
-    // req:check.coverage/removed-capabilities@ec1473a4
+    // req:check.coverage/removed-capabilities@bd5e072d
     let dir = repo(KEPT_AND_GONE);
     let d = dir.path();
     change(d, "20260101-x", "proposed", "gone");
@@ -144,7 +203,7 @@ fn scenario_listed_but_still_held() {
 
 #[test]
 fn scenario_change_archived() {
-    // req:check.coverage/removed-capabilities@ec1473a4
+    // req:check.coverage/removed-capabilities@bd5e072d
     let dir = repo(KEPT);
     let d = dir.path();
     with_capability_component(d);
@@ -166,7 +225,7 @@ fn scenario_change_archived() {
 
 #[test]
 fn scenario_no_capability_component() {
-    // req:check.coverage/removed-capabilities@ec1473a4
+    // req:check.coverage/removed-capabilities@bd5e072d
     let dir = repo(KEPT);
     let d = dir.path();
     write(d, "specs/v/SPEC.md", &spec("[\"crates/v/**\"]", &[]));
