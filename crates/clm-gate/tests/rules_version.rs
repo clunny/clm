@@ -58,8 +58,8 @@ fn rules(out: &clm_gate::Outcome) -> Vec<&str> {
 
 #[test]
 fn scenario_a_removal_under_each_version() {
-    // req:gate/rules-version@494cf9a0
-    assert_eq!(RULES, 2);
+    // req:gate/rules-version@aee5eff0
+    assert_eq!(RULES, 3);
     let dir = repo();
     let d = dir.path();
     write(d, "specs/a/SPEC.md", &format!("{HEAD}{Y}"));
@@ -84,8 +84,61 @@ fn scenario_a_removal_under_each_version() {
 }
 
 #[test]
+fn scenario_a_changed_outcome_under_each_version() {
+    // req:gate/rules-version@aee5eff0
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    let first = |then: &str| {
+        format!(
+            "{HEAD}\n### Requirement: x\nX SHALL hold.\n\n#### Scenario: first\n- GIVEN g\n- WHEN w\n- THEN {then}\n"
+        )
+    };
+    git(d, &["init", "-q", "-b", "main"]);
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", &first("it exits 1"));
+    commit(d, "base");
+    git(d, &["checkout", "-q", "-b", "s"]);
+    write(d, "specs/a/SPEC.md", &first("it lands"));
+    commit(d, "reverse it");
+    let v2 = evaluate_by(d, "main", "s", false, 2).unwrap();
+    let now = evaluate_by(d, "main", "s", false, RULES).unwrap();
+    assert_eq!((v2.kind, v2.review), (Kind::Spec, false));
+    assert_eq!((now.kind, now.review), (Kind::Spec, true));
+    assert!(rules(&v2).is_empty(), "{:?}", v2.violations);
+    assert_eq!(rules(&now), ["gate/approval"]);
+    for out in [&v2, &now] {
+        let lines: Vec<String> = out.cuts.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            lines,
+            ["specs/a/SPEC.md: gate/cut: scenario \"first\" of a/x changes its outcome"]
+        );
+    }
+    // version 1 too lists it and needs no review
+    let v1 = evaluate_by(d, "main", "s", false, 1).unwrap();
+    assert_eq!((v1.review, v1.cuts.len()), (false, 1));
+
+    // under version 2 a changed outcome beside another cut still needs review
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "specs/a/SPEC.md", &format!("{}{Y}", first("it exits 1")));
+    commit(d, "add y");
+    git(d, &["checkout", "-q", "-b", "t"]);
+    write(d, "specs/a/SPEC.md", &first("it lands"));
+    commit(d, "reverse it and remove y");
+    let v2 = evaluate_by(d, "main", "t", false, 2).unwrap();
+    let lines: Vec<String> = v2.cuts.iter().map(ToString::to_string).collect();
+    assert_eq!(
+        lines,
+        [
+            "specs/a/SPEC.md: gate/cut: requirement a/y is gone",
+            "specs/a/SPEC.md: gate/cut: scenario \"first\" of a/x changes its outcome",
+        ]
+    );
+    assert!(v2.review);
+}
+
+#[test]
 fn specs_that_dont_load_need_no_review_under_version_1() {
-    // req:gate/rules-version@494cf9a0
+    // req:gate/rules-version@aee5eff0
     let dir = repo();
     let d = dir.path();
     // a requirement with no scenario doesn't load
@@ -121,7 +174,7 @@ fn specs_that_dont_load_need_no_review_under_version_1() {
 
 #[test]
 fn scenario_the_same_verdict_under_both() {
-    // req:gate/rules-version@494cf9a0
+    // req:gate/rules-version@aee5eff0
     let dir = repo();
     let d = dir.path();
     write(d, "ARCHITECTURE.md", "invariants\n");
@@ -135,7 +188,7 @@ fn scenario_the_same_verdict_under_both() {
 
 #[test]
 fn scenario_a_version_this_gate_doesnt_know() {
-    // req:gate/rules-version@494cf9a0
+    // req:gate/rules-version@aee5eff0
     let dir = repo();
     let d = dir.path();
     for version in [RULES + 1, 0] {

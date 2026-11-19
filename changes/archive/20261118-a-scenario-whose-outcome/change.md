@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-scenario-whose-outcome-is-reversed-under-its-name-lands-on]
 human_burdens:
   - About one spec branch in three that edits specs comes to need review (30 of the last 93 changed a scenario's outcome)
