@@ -301,6 +301,16 @@ export function renderReview(r: Review, o: ReviewOptions): HTMLElement {
           code(`${r.branch} → ${r.base}`),
         ),
         ...holding,
+        // What the branch removes, read before Approve (removal-needs-a-yes): inside the header,
+        // so the Graph tab, which keeps the header and the Approve bar, shows it too.
+        r.cuts?.length
+          ? el(
+              'div',
+              { class: 'card sec cuts', style: 'margin-top:8px' },
+              el('h3', { class: 'h' }, 'Cuts'),
+              ...r.cuts.map((line) => div('dec cut mono', line)),
+            )
+          : '',
       ),
     ),
     div('prhead', div('', intent), div('approve-bar', act, request, signedNote)),

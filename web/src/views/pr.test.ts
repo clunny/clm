@@ -90,7 +90,7 @@ describe('Intent first', () => {
   });
 });
 
-// req:web.views/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@26ee0085
 describe('Needs review', () => {
   it("needs review without a change: the review's top-level review decides, not the change", () => {
     const meta = (r: BranchReview) => renderReview(r, opts()).querySelector('.meta')!.textContent;
@@ -106,7 +106,7 @@ describe('Needs review', () => {
   });
 });
 
-// req:web.views/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@26ee0085
 describe('spec branches', () => {
   it('branch without a page: both listed, spec/c with #7 and its title, spec/d with no page', () => {
     const list = renderPrList(branches, link);
@@ -133,6 +133,28 @@ describe('spec branches', () => {
     expect(head.querySelector<HTMLAnchorElement>('a.page')?.href).toBe('https://github.com/o/a/pull/7');
     expect(head.querySelector('.label, .labels')).toBeNull();
     expect(head.textContent).not.toMatch(/spec-approved|label/i);
+  });
+
+  it("a branch that cuts: Cuts lists the review's lines under the header, above its components; none without cuts", () => {
+    const lines = ['specs/n/SPEC.md: gate/cut: requirement n/r is gone', 'specs/n/SPEC.md: gate/cut: scenario n/s: one is gone'];
+    const view = renderReview(review({ branch: 'spec/x', cuts: lines }), opts());
+    const cuts = view.querySelector<HTMLElement>('.cuts')!;
+    expect(cuts.querySelector('h3')?.textContent).toBe('Cuts');
+    expect([...cuts.querySelectorAll('.cut')].map((c) => c.textContent)).toEqual(lines);
+    // In the header, under its chips, so a tab that keeps the header keeps it; before Approve
+    // and the components.
+    expect(view.querySelector(':scope > .head')!.contains(cuts)).toBe(true);
+    expect(view.querySelector(':scope > .head .meta')!.compareDocumentPosition(cuts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const later of ['.approve-bar', '.node-changes']) {
+      const at = view.querySelector(later);
+      expect(at).not.toBeNull();
+      expect(cuts.compareDocumentPosition(at!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    for (const plain of [review({ branch: 'spec/plain', cuts: [] }), review({ branch: 'spec/plain', cuts: undefined })]) {
+      const v = renderReview(plain, opts());
+      expect(v.querySelector('.cuts')).toBeNull();
+      expect([...v.querySelectorAll('h3')].map((h) => h.textContent)).not.toContain('Cuts');
+    }
   });
 
   it('says not approved and checked, and shows no page link without a page', () => {
@@ -183,7 +205,7 @@ describe('what Approve may send', () => {
   });
 });
 
-// req:web.views/spec-branch-review@a7d7ac89
+// req:web.views/spec-branch-review@26ee0085
 describe('no review list', () => {
   it('the PR list shows the spec branches only: no To review list and no Mark reviewed', () => {
     const list = renderPrList(branches, link);

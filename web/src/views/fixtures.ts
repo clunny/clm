@@ -155,6 +155,7 @@ export function review(over: Partial<BranchReview> = {}): BranchReview {
     approvals: [],
     signed: false,
     checked: true,
+    cuts: [],
     page: { number: 7, url: 'https://github.com/o/a/pull/7' },
     ...body(),
     ...over,
