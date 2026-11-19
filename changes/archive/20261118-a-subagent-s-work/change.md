@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-subagent-s-work-is-counted-twice-once-its-worktree-is-removed]
 ---
 

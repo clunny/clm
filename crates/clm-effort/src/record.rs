@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use clm_ledger::{Body, Entry, Usage};
 
-use crate::{SessionWork, sessions};
+use crate::{Checkout, SessionWork, sessions};
 
 /// What `clm effort record` reads.
 #[derive(Debug, Clone, Default)]
@@ -177,24 +177,34 @@ fn grown(
     clm_repository(root)?;
     // Git lists the main worktree first; only a linked worktree's branch decides a
     // subagent's (`transcripts`).
-    let mut counted: Vec<(PathBuf, Option<String>)> = clm_git::worktrees(root)?
+    let mut counted: Vec<(PathBuf, Checkout)> = clm_git::worktrees(root)?
         .into_iter()
         .enumerate()
-        .map(|(n, w)| (w.path, w.branch.filter(|_| n > 0)))
+        .map(|(n, w)| {
+            let checkout = match w.branch {
+                _ if n == 0 => Checkout::Unlinked,
+                Some(branch) => Checkout::Branch(branch),
+                None => Checkout::Detached,
+            };
+            (w.path, checkout)
+        })
         .collect();
-    // A `--cwd` inside a linked worktree is that worktree's, so it hides no branch.
+    // A `--cwd` inside a linked worktree is that worktree's, branch or none.
     let worktrees = counted.clone();
     counted.extend(options.cwds.iter().map(|dir| {
         let held = worktrees
             .iter()
             .filter(|(path, _)| dir.starts_with(path))
             .max_by_key(|(path, _)| path.components().count());
-        (dir.clone(), held.and_then(|(_, branch)| branch.clone()))
+        let checkout = held.map_or(Checkout::Unlinked, |(_, c)| c.clone());
+        (dir.clone(), checkout)
     }));
+    let fold = clm_ledger::fold(root)?;
+    let pinned = pins(&fold);
     let mut warnings = Vec::new();
     let work = match options.transcripts.clone().or_else(|| transcripts_dir(env)) {
         Some(dir) => {
-            let (work, mut read) = sessions(&dir, &counted, options.branch.as_deref());
+            let (work, mut read) = sessions(&dir, &counted, &pinned, options.branch.as_deref());
             warnings.append(&mut read);
             work
         }
@@ -203,7 +213,6 @@ fn grown(
             Vec::new()
         }
     };
-    let fold = clm_ledger::fold(root)?;
     // Each count is the larger of what was read and what the fold holds, so a run that sees
     // less of a session never shrinks its record.
     let new: Vec<SessionWork> = work
@@ -228,6 +237,33 @@ fn grown(
         })
         .collect();
     Ok((new, warnings))
+}
+
+/// The branch each subagent's `<session>/<agent>` is pinned to: that of the fold's `effort`
+/// record of it, the earliest `at` deciding between two (`transcripts`).
+fn pins(fold: &clm_ledger::Fold) -> BTreeMap<String, String> {
+    let mut earliest: BTreeMap<&str, (&str, &str)> = BTreeMap::new();
+    for record in fold.efforts.values() {
+        let Body::Effort {
+            session, branch, ..
+        } = &record.body
+        else {
+            continue;
+        };
+        // Only a subagent's record pins; a bare `sessionId` could match no key, so it is left out.
+        if !session.contains('/') {
+            continue;
+        }
+        let at = record.at.as_str();
+        let pin = earliest.entry(session).or_insert((at, branch));
+        if at < pin.0 {
+            *pin = (at, branch);
+        }
+    }
+    earliest
+        .into_iter()
+        .map(|(session, (_, branch))| (session.to_string(), branch.to_string()))
+        .collect()
 }
 
 /// `work` with each count, and the active seconds, the larger of its own and the held ones.
