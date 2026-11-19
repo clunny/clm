@@ -284,8 +284,8 @@ export interface FlightBlock {
   item?: string;
   /** `<node>/<slug>`, a pending requirement of another node they need (`requirement-needs`). */
   requirement?: string;
-  /** For a requirement blocker, the components the queue says it is pending on, in its
-   * order; absent from a view stored before the queue gave them. */
+  /** For a requirement blocker, the components the queue says it is pending on, sorted,
+   * drawn in the order given; absent from a view stored before the queue gave them. */
   components?: string[];
   requirements: string[];
 }
