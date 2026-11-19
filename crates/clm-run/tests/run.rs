@@ -295,7 +295,8 @@ fn scenario_behind_and_obsolete() {
 }
 
 /// Component `b`, a live change `g` that removed `b/gone`, and tests `old_rule` and
-/// `kept_rule` in `t.rs`, each citing `b/gone`; the change's list at `list` holds `text`.
+/// `kept_rule` in `t.rs`, each citing `b/gone`, beside `other_rule`, citing `b/gone2`, which
+/// `g` removed too; the change's list at `list` holds `text`.
 fn obsolete_tests(list: &str, text: &str) -> Repo {
     let r = repo();
     let w = &r.work;
@@ -303,7 +304,7 @@ fn obsolete_tests(list: &str, text: &str) -> Repo {
     write(
         w,
         "changes/g/deltas/b.md",
-        "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0000000000000000 -->\n",
+        "---\ncomponent: b\n---\n## REMOVED Requirements\n\n### Requirement: gone <!-- base: 0000000000000000 -->\n\n### Requirement: gone2 <!-- base: 0000000000000000 -->\n",
     );
     write(w, list, text);
     // An archived change holds its `change.md`, or the spec doesn't load.
@@ -321,7 +322,7 @@ fn obsolete_tests(list: &str, text: &str) -> Repo {
         w,
         "t.rs",
         &format!(
-            "#[test]\nfn old_rule() {{\n    // {r}:b/gone\n}}\n\n#[test]\nfn kept_rule() {{\n    // {r}:b/gone\n}}\n",
+            "#[test]\nfn old_rule() {{\n    // {r}:b/gone\n}}\n\n#[test]\nfn kept_rule() {{\n    // {r}:b/gone\n}}\n\n#[test]\nfn other_rule() {{\n    // {r}:b/gone2\n}}\n",
             r = "req"
         ),
     );
@@ -336,8 +337,19 @@ fn scenario_an_obsolete_requirement_s_tests() {
         obsolete_tests("changes/g/deleted-tests.txt", "DELETE t.rs::old_rule\n"),
         fake(),
     );
+    // The lists come from the merged tree, never the checkout `clm run` runs in.
+    write(
+        &r.work,
+        "changes/g/deleted-tests.txt",
+        "DELETE t.rs::old_rule\nDELETE t.rs::kept_rule\n",
+    );
     let p = prompt(&r, &f, "b", &[]);
     let list = &p[p.find("- `b/gone` obsolete").expect("b/gone obsolete")..];
+    let list = &list[..list.find("- `b/gone2`").unwrap_or(list.len())];
+    assert!(
+        list.contains("Remove the code they mark that no other requirement needs"),
+        "{list}"
+    );
     assert!(
         list.contains("(`land/deleted-tests-approved`): `t.rs::old_rule`."),
         "{list}"

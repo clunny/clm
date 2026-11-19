@@ -198,6 +198,11 @@ fn scenario_an_obsolete_requirement_s_tests() {
         "{p}"
     );
     assert!(p.contains("`t.rs::kept_rule`"), "{p}");
+    let mut j = job();
+    j.pending[2].delete = vec!["t.rs::old_rule".into()];
+    let p = prompt(&j);
+    assert!(!p.contains("refuses this build to lose"), "{p}");
+    assert!(p.contains("`t.rs::old_rule`"), "{p}");
 }
 
 #[test]
