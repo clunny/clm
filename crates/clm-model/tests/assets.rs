@@ -36,7 +36,8 @@ fn clean(files: &Files) -> Graph {
 
 #[test]
 fn same_as_disk() {
-    // req:model/load-from-files@5011a677
+    // req:model/load-from-files@e29f9cdd
+    // req:model/parse-node-specs@6f4cc5af
     let map = files(&[
         ("specs/SPEC.md", NODE.as_bytes()),
         ("specs/a/SPEC.md", NODE.as_bytes()),
@@ -78,6 +79,10 @@ fn same_as_disk() {
     assert!(g.backlog.contains_key("i"));
     assert!(g.decisions.contains_key("d"));
     assert_eq!(from_map.1[1].path, Path::new("specs/c/SPEC.md"));
+    assert!(
+        !g.nodes.contains_key("c"),
+        "a SPEC.md that isn't UTF-8 loads no component"
+    );
     assert_eq!(
         g.nodes["a"].assets["m.png"],
         asset_hash(&[0xff, 0, 1]),
@@ -87,7 +92,7 @@ fn same_as_disk() {
 
 #[test]
 fn asset_hash_of_text() {
-    // req:model/node-assets@e54a1acb
+    // req:model/node-assets@e949b951
     let graph = clean(&files(&[
         ("specs/SPEC.md", NODE.as_bytes()),
         ("specs/a/SPEC.md", NODE.as_bytes()),
@@ -101,7 +106,7 @@ fn asset_hash_of_text() {
 
 #[test]
 fn asset_hash_of_bytes() {
-    // req:model/node-assets@e54a1acb
+    // req:model/node-assets@e949b951
     let bytes = [0xff, 0xfe, 0, 7];
     let digest = Sha256::digest(bytes);
     let expected: String = digest[..8].iter().map(|b| format!("{b:02x}")).collect();
@@ -115,7 +120,7 @@ fn asset_hash_of_bytes() {
 
 #[test]
 fn spec_inside_assets() {
-    // req:model/parse-node-specs@f87bf5ee
+    // req:model/parse-node-specs@6f4cc5af
     let graph = clean(&files(&[
         ("specs/SPEC.md", NODE.as_bytes()),
         ("specs/a/SPEC.md", NODE.as_bytes()),
@@ -129,7 +134,7 @@ fn spec_inside_assets() {
 
 #[test]
 fn root_has_no_assets() {
-    // req:model/node-assets@e54a1acb
+    // req:model/node-assets@e949b951
     let (graph, violations) = load_files(&files(&[
         ("specs/SPEC.md", NODE.as_bytes()),
         ("specs/assets/m.png", &[1]),
@@ -141,19 +146,20 @@ fn root_has_no_assets() {
 
 #[test]
 fn assets_of_a_missing_node() {
-    // req:model/node-assets@e54a1acb
+    // req:model/node-assets@e949b951
     let (_, violations) = load_files(&files(&[
         ("specs/SPEC.md", NODE.as_bytes()),
         ("specs/ghost/assets/m.png", &[1]),
     ]));
     assert_eq!(rules(&violations), ["model/node-assets"]);
+    assert_eq!(violations[0].path, Path::new("specs/ghost/assets/m.png"));
     assert!(violations[0].message.contains("`ghost`"), "{violations:?}");
 }
 
 #[cfg(unix)]
 #[test]
 fn links_are_not_followed_into_directories() {
-    // req:model/load-from-files@5011a677
+    // req:model/load-from-files@e29f9cdd
     use std::os::unix::fs::symlink;
     let dir = on_disk(&files(&[
         ("specs/SPEC.md", NODE.as_bytes()),
@@ -172,11 +178,20 @@ fn links_are_not_followed_into_directories() {
             .iter()
             .all(|v| v.message.starts_with("unreadable"))
     );
+    let mut named: Vec<_> = violations.iter().map(|v| v.path.clone()).collect();
+    named.sort();
+    assert_eq!(
+        named,
+        [
+            PathBuf::from("changes/x/dangling.md"),
+            PathBuf::from("changes/x/up")
+        ]
+    );
 }
 
 #[test]
 fn files_outside_the_loaded_dirs_are_ignored() {
-    // req:model/load-from-files@5011a677
+    // req:model/load-from-files@e29f9cdd
     let mut map = files(&[("specs/SPEC.md", NODE.as_bytes())]);
     let graph = clean(&map);
     map.insert("src/SPEC.md".into(), b"junk".to_vec());

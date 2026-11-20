@@ -45,7 +45,7 @@ fn reported(violations: &[Violation], names: &[&str]) {
 
 #[test]
 fn constraints_load() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let text = format!(
         "# Architecture\n\n## Constraints\n\n{}",
         body("### Constraint:", "single-source")
@@ -63,7 +63,7 @@ fn constraints_load() {
 
 #[test]
 fn an_absent_file_writes_constraints() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let (graph, violations) = load(None);
     assert!(violations.is_empty(), "{violations:?}");
     assert_eq!(graph.heading(Layer::Architecture), "### Constraint:");
@@ -75,7 +75,7 @@ fn an_absent_file_writes_constraints() {
 
 #[test]
 fn the_old_requirement_heading_is_prose() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let in_constraints = format!(
         "## Constraints\n\n{}{}",
         body("### Constraint:", "a"),
@@ -94,7 +94,7 @@ fn the_old_requirement_heading_is_prose() {
 
 #[test]
 fn the_other_form_in_a_fence_is_text() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let text = format!(
         "## Constraints\n\n{}```markdown\n### Requirement: shown\n```\n",
         body("### Constraint:", "a")
@@ -105,7 +105,7 @@ fn the_other_form_in_a_fence_is_text() {
 
 #[test]
 fn a_constraint_outside_its_section_is_reported() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let text = format!(
         "## Constraints\n\n{}## Elsewhere\n\n{}",
         body("### Constraint:", "a"),
@@ -114,13 +114,4 @@ fn a_constraint_outside_its_section_is_reported() {
     let (graph, violations) = load(Some(&text));
     reported(&violations, &["`lost`", "Constraints"]);
     assert_eq!(ids(&graph), ["architecture/a"]);
-}
-
-#[test]
-fn free_form_architecture_has_no_entries() {
-    // req:model/human-layers@c4f90bbc
-    let text = "# Architecture\n\n## Layer 1 invariants\n\n- **`single-source`**: git holds it.\n";
-    let (graph, violations) = load(Some(text));
-    assert!(violations.is_empty(), "{violations:?}");
-    assert!(ids(&graph).is_empty());
 }

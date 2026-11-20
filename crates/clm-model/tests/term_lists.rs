@@ -52,7 +52,7 @@ fn check<T: Copy + PartialEq + std::fmt::Debug + DeserializeOwned>(terms: &[(T, 
 
 #[test]
 fn enum_lists_match_the_types() {
-    // req:model/term-lists@28b92c61
+    // req:model/term-lists@e01a7a8c
     check::<Status>(STATUS_TERMS);
     check::<ChangeStatus>(CHANGE_STATUS_TERMS);
     check::<BacklogKind>(BACKLOG_KIND_TERMS);
@@ -60,7 +60,7 @@ fn enum_lists_match_the_types() {
 
 #[test]
 fn lists_hold_the_words_clm_writes() {
-    // req:model/term-lists@28b92c61
+    // req:model/term-lists@e01a7a8c
     let status: Vec<&str> = STATUS_TERMS.iter().map(|(_, w)| *w).collect();
     assert_eq!(status, ["unbuilt", "active", "deprecated"]);
     let kinds: Vec<&str> = BACKLOG_KIND_TERMS.iter().map(|(_, w)| *w).collect();
@@ -82,7 +82,7 @@ fn lists_hold_the_words_clm_writes() {
 
 #[test]
 fn key_list_holds_every_field_but_the_ignored_ones() {
-    // req:model/term-lists@28b92c61
+    // req:model/term-lists@e01a7a8c
     let mut fields = accepted::<ChangeFrontmatter>("zzz: 1");
     for ignored in ["after", "prefer_after", "gate", "burdens"] {
         assert!(fields.remove(ignored), "{ignored} is a field");

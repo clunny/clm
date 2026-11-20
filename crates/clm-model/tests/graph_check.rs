@@ -26,7 +26,7 @@ fn rules(violations: &[Violation]) -> Vec<&str> {
 
 #[test]
 fn graph_check_on_a_loaded_graph() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", &node("", ""));
     write(dir.path(), "specs/a/SPEC.md", &node("\noptional: true", ""));
@@ -70,7 +70,7 @@ fn graph_check_on_a_loaded_graph() {
 
 #[test]
 fn graph_check_covers_needs_and_backlog_references() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let req = |slug: &str, needs: &str| {
         format!("### Requirement: {slug}\nx\n#### Scenario: s\n- y\n{needs}\n")
     };
@@ -111,7 +111,7 @@ fn graph_check_covers_needs_and_backlog_references() {
 
 #[test]
 fn node_parser_as_loading_parses() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let body = "## Requirements\n\n### Requirement: foo\nx\n#### Scenario: s\n- y\n\n### Requirement: foo\nx\n#### Scenario: s\n- y\n";
     let text = node("", body);
     let path = Path::new("specs/a/SPEC.md");
@@ -129,7 +129,8 @@ fn node_parser_as_loading_parses() {
 
 #[test]
 fn node_parser_without_frontmatter_or_with_a_root_rule() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
+    // req:model/parse-node-specs@6f4cc5af
     let path = Path::new("specs/a/SPEC.md");
     let (parsed, violations) = parse_node("a", path, "no frontmatter", &BTreeSet::new());
     assert!(parsed.is_none());
@@ -143,8 +144,67 @@ fn node_parser_without_frontmatter_or_with_a_root_rule() {
 }
 
 #[test]
+fn graph_check_covers_enforcement_and_flags() {
+    // req:model/graph-check@c29a439f
+    let req =
+        |slug: &str| format!("### Requirement: {slug}\nIt SHALL.\n\n#### Scenario: s\n- y\n\n");
+    let dir = TempDir::new().unwrap();
+    write(dir.path(), "specs/SPEC.md", &node("", ""));
+    write(
+        dir.path(),
+        "specs/a/SPEC.md",
+        &node("", &format!("## Requirements\n\n{}{}", req("x"), req("y"))),
+    );
+    write(
+        dir.path(),
+        "ARCHITECTURE.md",
+        "# A\n\n## Constraints\n\n### Constraint: e\nIt SHALL hold.\n\n#### Scenario: s\n- y\n\n#### Enforced by\n- a/y\n",
+    );
+    let (graph, loaded) = load(dir.path());
+    let version = graph.requirement("a/x").unwrap().version().to_string();
+    write(
+        dir.path(),
+        "backlog/w.md",
+        &format!("---\ntitle: W\nkind: workaround\nrequirement: a/x@{version}\n---\n"),
+    );
+    assert!(loaded.is_empty(), "{loaded:?}");
+    let (mut graph, loaded) = load(dir.path());
+    assert!(loaded.is_empty(), "{loaded:?}");
+    assert!(check_graph(&graph).is_empty());
+    let a = graph.nodes.get_mut("a").unwrap();
+    a.requirements.retain(|r| r.id != "a/y");
+    let x = a.requirements.iter_mut().find(|r| r.id == "a/x").unwrap();
+    x.hash = "ffffffffffffffff".into();
+    let mut checked = check_graph(&graph);
+    checked.sort_by_key(|v| v.rule);
+    assert_eq!(
+        rules(&checked),
+        ["model/human-layers", "model/parse-backlog"],
+        "{checked:?}"
+    );
+    assert_eq!(checked[0].path, Path::new("ARCHITECTURE.md"));
+    assert!(checked[0].message.contains("a/y"), "{checked:?}");
+    assert_eq!(checked[1].path, Path::new("backlog/w.md"));
+    assert!(checked[1].message.contains("a/x"), "{checked:?}");
+}
+
+#[test]
+fn node_parser_gives_no_assets() {
+    // req:model/graph-check@c29a439f
+    let dir = TempDir::new().unwrap();
+    let text = node("", "");
+    write(dir.path(), "specs/SPEC.md", &text);
+    write(dir.path(), "specs/a/SPEC.md", &text);
+    write(dir.path(), "specs/a/assets/m.html", "<p>x</p>");
+    let (graph, _) = load(dir.path());
+    assert!(!graph.nodes["a"].assets.is_empty());
+    let (parsed, _) = parse_node("a", Path::new("specs/a/SPEC.md"), &text, &BTreeSet::new());
+    assert!(parsed.unwrap().assets.is_empty());
+}
+
+#[test]
 fn graph_check_on_an_edited_graph() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", &node("", ""));
     write(dir.path(), "specs/a/SPEC.md", &node("", ""));

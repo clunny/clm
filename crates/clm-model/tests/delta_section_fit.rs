@@ -53,7 +53,7 @@ const CREATE_FM: &str = "## Frontmatter\n```yaml\ntitle: B\nstatus: specd\nowner
 
 #[test]
 fn stray_contract_under_modified_contract() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = "---\ncomponent: a\n---\n\n## MODIFIED Contract\n\n## Contract\nThe contract.\n";
     let (graph, violations) = load_delta(delta);
     assert_eq!(violations.len(), 2, "{violations:?}");
@@ -73,7 +73,7 @@ fn stray_contract_under_modified_contract() {
 
 #[test]
 fn design_without_create() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = "---\ncomponent: a\n---\n## Design\nThe design.\n";
     let (graph, violations) = load_delta(delta);
     assert_eq!(violations.len(), 1, "{violations:?}");
@@ -86,7 +86,7 @@ fn design_without_create() {
 
 #[test]
 fn frontmatter_without_create() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = format!("---\ncomponent: a\n---\n{CREATE_FM}");
     let (graph, violations) = load_delta(&delta);
     assert_eq!(violations.len(), 1, "{violations:?}");
@@ -99,7 +99,7 @@ fn frontmatter_without_create() {
 
 #[test]
 fn edit_section_in_a_create_delta() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = format!(
         "---\ncomponent: b\ncreate: true\n---\n{CREATE_FM}\n## Contract\nc\n\n## MODIFIED Requirements\n### Requirement: x <!-- base: 0123456789abcdef -->\nt\n#### Scenario: s\n- y\n"
     );
@@ -114,7 +114,7 @@ fn edit_section_in_a_create_delta() {
 
 #[test]
 fn every_edit_section_in_a_create_delta() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     for section in [
         "MODIFIED Frontmatter",
         "MODIFIED Contract",
@@ -136,7 +136,7 @@ fn every_edit_section_in_a_create_delta() {
 
 #[test]
 fn misfit_removed_assets_judged_no_further() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = format!(
         "---\ncomponent: b\ncreate: true\n---\n{CREATE_FM}## REMOVED Assets\n- not an entry\n"
     );
@@ -148,7 +148,7 @@ fn misfit_removed_assets_judged_no_further() {
 
 #[test]
 fn stray_frontmatter_without_a_fence() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = "---\ncomponent: a\n---\n## Frontmatter\ntitle: B\n";
     let (graph, violations) = load_delta(delta);
     assert_eq!(violations.len(), 1, "{violations:?}");
@@ -159,7 +159,7 @@ fn stray_frontmatter_without_a_fence() {
 
 #[test]
 fn edit_section_with_stray_text_in_a_create_delta() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = format!(
         "---\ncomponent: b\ncreate: true\n---\n{CREATE_FM}## MODIFIED Requirements\nstray\n### Requirement: x <!-- base: 0123456789abcdef -->\nt\n#### Scenario: s\n- y\n"
     );
@@ -178,7 +178,7 @@ fn edit_section_with_stray_text_in_a_create_delta() {
 
 #[test]
 fn blank_modified_design() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = "---\ncomponent: a\n---\n## MODIFIED Design\n\n  \n\t\n## ADDED Requirements\n### Requirement: x\nt\n#### Scenario: s\n- y\n";
     let (graph, violations) = load_delta(delta);
     assert_eq!(violations.len(), 1, "{violations:?}");
@@ -191,7 +191,7 @@ fn blank_modified_design() {
 
 #[test]
 fn comment_or_fence_is_not_empty() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     for body in ["<!-- todo -->\n", "```\n```\n"] {
         let delta = format!("---\ncomponent: a\n---\n## MODIFIED Contract\n{body}");
         let (graph, violations) = load_delta(&delta);
@@ -202,7 +202,7 @@ fn comment_or_fence_is_not_empty() {
 
 #[test]
 fn line_numbers_with_crlf() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = "---\r\ncomponent: a\r\n---\r\n\r\n## Design\r\nd\r\n";
     let (_, violations) = load_delta(delta);
     let m = &fits(&violations)[0].message;
@@ -211,7 +211,7 @@ fn line_numbers_with_crlf() {
 
 #[test]
 fn well_formed_deltas() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let (graph, violations) =
         load_delta("---\ncomponent: a\n---\n## MODIFIED Contract\nThe new contract.\n");
     assert!(violations.is_empty(), "{violations:?}");
@@ -226,7 +226,7 @@ fn well_formed_deltas() {
 
 #[test]
 fn removal_delta_judged_once() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let delta = "---\ncomponent: a\nremove: true\n---\n## Contract\nc\n";
     let (graph, violations) = load_delta(delta);
     assert_eq!(violations.len(), 1, "{violations:?}");
@@ -237,7 +237,7 @@ fn removal_delta_judged_once() {
 
 #[test]
 fn archived_deltas_too() {
-    // req:model/delta-section-fit@c678a1c3
+    // req:model/delta-section-fit@a89826d8
     let dir = TempDir::new().unwrap();
     write(
         dir.path(),

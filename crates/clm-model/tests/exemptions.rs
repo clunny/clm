@@ -28,7 +28,7 @@ fn rules(violations: &[Violation]) -> Vec<&str> {
 
 #[test]
 fn an_exemption_parsed() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let dir = repo(
         "\nexemptions: [{rule: undeclared-imports, files: [\"tests/test_api.py\"], until: backlog/x, why: \"the suite builds the whole app\"}, {rule: skipped-tests, files: [\"a/**\", \"b.py\"], until: backlog/y}]",
     );
@@ -47,7 +47,7 @@ fn an_exemption_parsed() {
 
 #[test]
 fn the_third_rule() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let dir = repo("\nexemptions: [{rule: tests-cite-their-owner, files: [x], until: backlog/x}]");
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -57,7 +57,7 @@ fn the_third_rule() {
 
 #[test]
 fn absent_means_none() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let (graph, violations) = load(repo("").path());
     assert!(violations.is_empty(), "{violations:?}");
     assert!(graph.nodes["a"].frontmatter.exemptions.is_empty());
@@ -65,7 +65,7 @@ fn absent_means_none() {
 
 #[test]
 fn a_rule_that_cant_be_exempted() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let dir = repo("\nexemptions: [{rule: paths-disjoint, files: [x], until: backlog/x}]");
     let (_, violations) = load(dir.path());
     assert_eq!(rules(&violations), ["model/exemptions"]);
@@ -79,7 +79,7 @@ fn a_rule_that_cant_be_exempted() {
 
 #[test]
 fn bad_entries_name_their_position_and_the_problem() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let ok = "{rule: skipped-tests, files: [x], until: backlog/x}";
     for (entry, word) in [
         ("{rule: skipped-tests, files: [x]}", "until"),
@@ -141,7 +141,7 @@ fn bad_entries_name_their_position_and_the_problem() {
 
 #[test]
 fn the_item_is_not_looked_up_when_loading() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let dir =
         repo("\nexemptions: [{rule: skipped-tests, files: [x], until: backlog/no-such-item}]");
     let (graph, violations) = load(dir.path());
@@ -155,7 +155,7 @@ fn yaml(s: &str) -> serde_yaml::Value {
 
 #[test]
 fn the_exposed_check_agrees_with_loading() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let value = "[{rule: skipped-tests, files: [x], until: backlog/x}, {rule: skipped-tests, files: [x], until: backlog/a/b}]";
     let msgs = check_exemptions(&yaml(value)).unwrap_err();
     assert_eq!(msgs.len(), 1);
@@ -169,7 +169,7 @@ fn the_exposed_check_agrees_with_loading() {
 
 #[test]
 fn a_value_that_isnt_a_list() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     for value in ["3", "null"] {
         let msgs = check_exemptions(&yaml(value)).unwrap_err();
         assert_eq!(msgs.len(), 1, "{value}");
@@ -182,7 +182,7 @@ fn a_value_that_isnt_a_list() {
 
 #[test]
 fn every_problem_of_every_entry() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let msgs = check_exemptions(&yaml("[{rule: skipped-tests}, {files: [x]}]")).unwrap_err();
     assert_eq!(msgs.len(), 4, "{msgs:?}");
     let at = |n: &str, w: &str| {
@@ -198,7 +198,7 @@ fn every_problem_of_every_entry() {
 
 #[test]
 fn a_why_that_isnt_a_string() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let value = yaml("[{rule: skipped-tests, files: [x], until: backlog/x, why: 3}]");
     let msgs = check_exemptions(&value).unwrap_err();
     assert_eq!(msgs.len(), 1);
@@ -208,7 +208,7 @@ fn a_why_that_isnt_a_string() {
 
 #[test]
 fn entries_from_the_exposed_check() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let value = yaml(
         "[{rule: undeclared-imports, files: [\"tests/test_api.py\"], until: backlog/x, why: w}, {rule: skipped-tests, files: [y], until: backlog/z}]",
     );
@@ -223,7 +223,7 @@ fn entries_from_the_exposed_check() {
 
 #[test]
 fn loading_reports_each_message() {
-    // req:model/exemptions@1b57cabd
+    // req:model/exemptions@4c906fe9
     let value = "[{rule: skipped-tests}, {files: [x]}]";
     let msgs = check_exemptions(&yaml(value)).unwrap_err();
     let (_, violations) = load(repo(&format!("\nexemptions: {value}")).path());
