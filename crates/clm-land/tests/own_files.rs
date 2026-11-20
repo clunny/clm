@@ -238,13 +238,18 @@ fn a_file_outside_the_root_names_no_owner() {
         "impl/a",
         &[("crates/a/src/lib.rs", "a2\n"), ("../b", "b\n")],
     );
+    let line = "../b: land/build-holds-own-files: outside the CLM root, which no build of the \
+                root's components may change. Leave the requirement unbuilt and add a question \
+                item that blocks it";
+    let old = f.remote("main");
     let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
-    assert_eq!(
-        why,
-        "../b: land/build-holds-own-files: outside the CLM root, which no build of the root's \
-         components may change. Leave the requirement unbuilt and add a question item that \
-         blocks it"
-    );
+    assert_eq!(why, line);
+    assert_eq!(f.remote("main"), old);
+    assert!(f.records().is_empty());
+    // The build's pre-check prints the same line.
+    f.git(&f.work(), &["checkout", "-q", "impl/a"]);
+    let why = refused(clm_land::check_only(&f.work(), None, &f.env(&[])));
+    assert_eq!(why, line);
     assert!(f.lines("check.log").is_empty());
     assert!(f.lines("clm-check.log").is_empty());
 }
