@@ -152,6 +152,7 @@ fn assets_of_a_missing_node() {
         ("specs/ghost/assets/m.png", &[1]),
     ]));
     assert_eq!(rules(&violations), ["model/node-assets"]);
+    assert_eq!(violations[0].path, Path::new("specs/ghost/assets/m.png"));
     assert!(violations[0].message.contains("`ghost`"), "{violations:?}");
 }
 
@@ -176,6 +177,15 @@ fn links_are_not_followed_into_directories() {
         violations
             .iter()
             .all(|v| v.message.starts_with("unreadable"))
+    );
+    let mut named: Vec<_> = violations.iter().map(|v| v.path.clone()).collect();
+    named.sort();
+    assert_eq!(
+        named,
+        [
+            PathBuf::from("changes/x/dangling.md"),
+            PathBuf::from("changes/x/up")
+        ]
     );
 }
 

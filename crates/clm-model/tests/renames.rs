@@ -170,3 +170,10 @@ fn human_layer_requirements_can_be_renamed() {
     assert!(violations.is_empty(), "{violations:?}");
     assert_eq!(graph.changes["x"].renames.len(), 2);
 }
+
+#[test]
+fn renames_that_are_not_a_list() {
+    // req:model/rename-records@7aa84f3d
+    let p = problems("renames: sprocket\n");
+    assert_eq!(p.len(), 1, "{p:?}");
+}

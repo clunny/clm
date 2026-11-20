@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use clm_model::{Priority, Violation, content_hash, load};
+use clm_model::{ChangeStatus, Priority, Violation, content_hash, load, parse_change_frontmatter};
 use tempfile::TempDir;
 
 fn spec(fm: &str, body: &str) -> String {
@@ -59,6 +59,7 @@ fn node_without_parent_spec_is_rejected() {
     let dir = repo(&[("SPEC.md", node("")), ("a/b/SPEC.md", node(""))]);
     let (_, violations) = load(dir.path());
     assert_eq!(rules(&violations), ["model/parse-node-specs"]);
+    assert_eq!(violations[0].path, Path::new("specs/a/b/SPEC.md"));
     assert!(violations[0].message.contains("`a`"));
 }
 
@@ -67,7 +68,12 @@ fn missing_root_spec_is_rejected() {
     // req:model/parse-node-specs@6f4cc5af
     let dir = repo(&[("a/SPEC.md", node(""))]);
     let (_, violations) = load(dir.path());
-    assert!(rules(&violations).contains(&"model/parse-node-specs"));
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.rule == "model/parse-node-specs" && v.path == Path::new("specs/SPEC.md")),
+        "{violations:?}"
+    );
 }
 
 #[test]
@@ -745,10 +751,14 @@ fn live_gate_rejected() {
     // req:model/parse-changes@e4c8b4b0
     let dir = repo(&[("SPEC.md", node(""))]);
     change_at(dir.path(), "x", "gate: HARD\nstatus: proposed\n");
-    let (_, violations) = load(dir.path());
+    let (graph, violations) = load(dir.path());
     assert_eq!(rules(&violations), ["model/parse-changes"]);
     assert_eq!(violations[0].path, Path::new("changes/x/change.md"));
     assert!(violations[0].message.contains("gate"), "{violations:?}");
+    assert!(
+        graph.changes.contains_key("x"),
+        "a live `gate` stays loaded"
+    );
 }
 
 #[test]
@@ -758,6 +768,47 @@ fn archived_gate_ignored() {
     change_at(dir.path(), "archive/w", "gate: HARD\nstatus: done\n");
     let graph = assert_clean(dir.path());
     assert!(graph.changes["w"].archived);
+}
+
+#[test]
+fn one_change_md_alone() {
+    // req:model/parse-changes@e4c8b4b0
+    let gated = parse_change_frontmatter("---\nstatus: proposed\ngate: HARD\n---\n# Intent\n")
+        .expect("`gate` is accepted wherever the change lies");
+    assert_eq!(gated.status, ChangeStatus::Proposed);
+    assert_eq!(parse_change_frontmatter("---\nstatus: nope\n---\n"), None);
+    assert_eq!(parse_change_frontmatter("status: proposed\n"), None);
+    // `renames` isn't checked, not even that it is a list.
+    assert!(parse_change_frontmatter("---\nstatus: proposed\nrenames: sprocket\n---\n").is_some());
+    // Every rule of the keys and their values refuses.
+    for bad in [
+        "priority: P0",
+        "colour: blue",
+        "frontmatter_keys: [Colour]",
+        "removes_capabilities: [capability/x]",
+        "human_burdens: [a]\nburdens: [b]",
+    ] {
+        let text = format!("---\nstatus: proposed\n{bad}\n---\n");
+        assert_eq!(parse_change_frontmatter(&text), None, "{bad}");
+    }
+}
+
+#[test]
+fn a_frontmatter_section_with_no_fence() {
+    // req:model/parse-changes@e4c8b4b0
+    let create =
+        "---\ncomponent: b\ncreate: true\n---\n## Frontmatter\ntitle: B\n\n## Contract\nB.\n";
+    let modify = "---\ncomponent: clm\n---\n## MODIFIED Frontmatter\ntitle: B\n";
+    for (section, delta) in [("Frontmatter", create), ("MODIFIED Frontmatter", modify)] {
+        let dir = with_change(CHANGE, &[("d.md", delta)]);
+        let (_, violations) = load(dir.path());
+        assert_eq!(rules(&violations), ["model/parse-changes"], "{section}");
+        assert_eq!(violations[0].path, Path::new("changes/c/deltas/d.md"));
+        assert!(
+            violations[0].message.contains(&format!("## {section}`")),
+            "{violations:?}"
+        );
+    }
 }
 
 #[test]

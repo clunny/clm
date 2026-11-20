@@ -578,6 +578,27 @@ fn requirements_lists_entries_last() {
 }
 
 #[test]
+fn layers_by_id() {
+    // req:model/human-layers@5097da4e
+    let node = rules("a", &["x"]);
+    let graph = clean(&[
+        ("ARCHITECTURE.md", &architecture(GIT_IS_TRUTH)),
+        ("CAPABILITIES.md", &capabilities(APPROVE)),
+        (&node.0, &node.1),
+    ]);
+    assert_eq!(Layer::of("capability/x"), Some(Layer::Capability));
+    assert_eq!(Layer::of("land/x"), None);
+    assert_eq!(Layer::Capability.file(), "CAPABILITIES.md");
+    let cap = graph.entry("capability/approve").expect("the capability");
+    assert_eq!(cap.id, "capability/approve");
+    assert!(graph.requirement("a/x").is_some());
+    assert!(
+        graph.entry("a/x").is_none(),
+        "never a component's requirement"
+    );
+}
+
+#[test]
 fn layer_names() {
     // req:model/human-layers@5097da4e
     assert_eq!(Layer::ALL, [Layer::Architecture, Layer::Capability]);
