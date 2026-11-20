@@ -56,6 +56,24 @@ fn scenario_available_not_free() {
 }
 
 #[test]
+fn the_shares_are_judged_below_their_bounds() {
+    // req:machine/machine-report@53f8492b
+    let states = |available: u64| {
+        let mut r = readings();
+        r.memory = space(100, available);
+        r.disk = space(100, available);
+        let report = judged(&r, &Record::default(), &[], 3);
+        (report.memory.state, report.disk.state)
+    };
+    assert_eq!(states(9), (State::Critical, State::Warn));
+    assert_eq!(states(10), (State::Warn, State::Ok));
+    assert_eq!(states(19), (State::Warn, State::Ok));
+    assert_eq!(states(20), (State::Ok, State::Ok));
+    assert_eq!(states(4).1, State::Critical);
+    assert_eq!(states(5).1, State::Warn);
+}
+
+#[test]
 fn scenario_disk_against_the_builds() {
     // req:machine/machine-report@53f8492b
     let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
