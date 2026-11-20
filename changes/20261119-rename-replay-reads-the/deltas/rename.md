@@ -1,0 +1,93 @@
+---
+component: rename
+base: { contract: "dc6555d45a3e53ee", design: "616eccfc95843117" }
+---
+
+## MODIFIED Contract
+`clm rename <change-id>` carries out the renames a live, `proposed` change records in its `change.md`'s `renames` (`model/rename-records`): it generates the change's deltas, applies them, rewrites what cites the renamed IDs and terms, test markers included, rebases the deltas of the other live changes whose status is `proposed` or `approved` and whose bases the rename moves (`other-deltas`), archives the change as `done` and deletes the items its `resolves` names, so the branch lands with nothing left pending but the requirements whose code still names an ID the rename rewrote in their text (`marker-rewrite`). It writes the working tree and commits nothing. It prints, on standard output, one `renamed <old> -> <new>` line per rename, then one `rebased <element> of <component> in <delta path>` line per element of another change's delta it rebased, then one `still names <old> <file>:<line>` line per mention it leaves for the author to judge, and exits 0. It exits 1 on a refusal, with the cause on standard error and nothing written, and 2 with git's message on standard error when git fails. `clm rename --help` prints the usage and exits 0.
+
+The crate `clm-rename` exposes `rename(root, change_id)`, the command on a directory: it returns the lines the command prints, or a `Failure` (`vcs/failure`, which the crate offers again as `Failure`), `Refused` for a refusal and `Git` when git fails. `root` need not be a git checkout: where it holds no `.git`, every file under it outside directories named `.git` and `target` counts as tracked (`finish`), so a caller runs it on a tree it extracted. `replays(repo, base, head)`, `repo` the CLM root, returns whether `head`'s tree is exactly what `rename` produces from `base`'s with the change `head` adds, both read as the CLM root's trees with paths relative to it, and `head` changing nothing outside the root (`replay`), or a `Failure` when git fails. `gate` calls `replays` to classify a branch and to list a branch's files outside the spec paths (`gate/classify`, `gate/files-outside-spec-paths`), and `sync` calls both to regenerate a rename branch instead of rebasing it (`sync/regenerate-renames`, `regenerate-dont-merge`).
+
+`clm-rename` offers `clm rename` as a call (`commands-in-crate`, `commands-live-in-their-crates`): it takes the command's arguments as the command line gives them, the repository root, the environment as a lookup and a stream each for standard output and standard error, and returns the exit status. Its arguments are `RenameArgs`, which `crates/clm`'s parser reads. `crates/clm` routes the command to it and adds nothing to what it writes. The call and `RenameArgs` are left out of a build for `wasm32-unknown-unknown`.
+
+## MODIFIED Design
+**Why one record** (`rename-by-replay`). A rename is mechanical, but its edits reach code paths (test markers) and the human layers, which a spec branch can't edit without being `mixed` or needing review. The pairs in `change.md` are the whole intent: everything else on the branch follows from them and from the base, so a program can reproduce it, and the gate trusts the branch exactly when it reproduces. `rename` writes ordinary deltas, which `clm apply` and the removal and move machinery (`node-removal`, `progress-follows-moves`) read as they read any.
+
+**Reading the record.** `rename` reads the change from the graph `clm_model::load` loads: its status, its `renames` in order and its `resolves` are the loaded `Change`'s (`model/rename-records`), never a second parse of `change.md`. It writes `change.md` only by its `status:` line, so the change applies and is archived with its `renames` as written.
+
+**Generation.** From those renames `rename` builds one map from each old ID to its new one: a component rename maps the component and each descendant (`a` → `b` gives `a.c` → `b.c`) and each of their requirements (`a/x` → `b/x`); a requirement rename maps the one ID. Terms are a list of `(old, new)` pairs, applied in order after the ID map. Each component's new text is computed in memory (frontmatter, Contract, Design, requirements); the deltas are the difference from the graph's text, written to `changes/<id>/deltas/` once what was there is cleared, each MODIFIED element based on `clm-apply`'s `hashes`. A renamed component gets a `remove: true` delta and a `create: true` delta with its rewritten text; its assets are copied to `changes/<id>/assets/<new-id>/` and listed under the old component's `REMOVED Assets`. The steps run in this order: the deltas and assets are written, then the human layers and the backlog items' references, so the graph `clm_apply::apply` checks holds the new names; `clm_apply::apply` writes `specs/` and marks the change `applied`; the markers are rewritten (their IDs, then their versions once the leftovers are found: **Markers**); the other changes' deltas are rebased (**Other changes' deltas**); the flags' versions are re-recorded (`flag-rerecord`); the `status:` line is set to `done` and the change archived with `clm_apply::archive`; and the `resolves` items are deleted.
+
+**What a reference is.** Structured references are whole values: `depends_on` entries, `serves` entries and `#### Serves`, `#### Needs` and `#### Enforced by` lines, and backlog `components`, `blocks` and `requirement` values. A list's items are its values whether it is written in flow style (`[a, b]`) or, in a backlog item, which `rename` writes itself, in block style (a `- a` line per item under the key), and a value is the same value quoted or bare. A component's frontmatter changes only through a delta, which can't modify a value on more than one line (`apply/frontmatter`), so a block-style list there that holds an old ID is a refusal (`refusals`), never a half-rewritten list. No other key holds a reference: `successor` holds a change ID, which a token equal to an old component ID doesn't make one. In spec text (requirements with their scenarios, Contracts, Designs and the human-layer entries), a reference is a code span whose whole text is an old requirement or entry ID, one that holds a `/`, or a code span whose whole text is an old slug when no other requirement, entry or decision (`docs/decisions/<slug>.md`) has that slug, the bare slug CLM's prose cites a rule by. A component's ID, in prose or in a code span (the word `apply`), is a word, not a reference: renaming it is a `term` pair. The lines of fenced code hold no reference: a fence shows an example, whose IDs are the example's own.
+
+**Terms.** An occurrence of a term counts when neither neighbour continues an ID or a path, as `term-swap` gives the characters. So `sprocket-scoped-context`, `crates/sprocket/` and `req:sprocket/x` are untouched, and `the sprocket.` is swapped. Headings (every line starting with `#`) and the lines of `#### Needs`, `#### Serves` and `#### Enforced by` blocks are never swapped: a heading holds a requirement's slug or an entry's, which only a `requirement` pair renames, and the ID lines are references. A term in fenced code is swapped as anywhere else, since a word is the same word in an example. A line of fenced code is never a heading, even one starting with `#` (a shell comment, or a heading in an example), so it is swapped too, and it starts and ends no block: the ID lines of a block are the lines after its heading outside fenced code, up to the next heading outside it, and a fence opened in the block holds no ID line.
+
+**Markers.** The files are those `check.coverage`'s `scan` reads (`check.coverage/markers-from-files`), and the markers its `marker_spans` finds in each, with their byte ranges (`check.coverage/marker-spans`), so a marker `rename` rewrites is exactly one the coverage counts, never one found by a second reading of the pattern. Each is replaced in place by its byte range. That holds under `changes/archive/` and `docs/decisions/` too, which `references` otherwise leaves as history (`rename-by-replay`): a marker there that kept an old ID would name no requirement, and `check/dangling-markers` would fail the rename branch over a file the author never touched. The marker is the only text `rename` edits there.
+
+**Which markers stay behind** (`marker-rewrite`, `rename-leaves-disagreeing-proof-behind`). Re-citing a reworded requirement at its new version claims its tests prove the new text. When `references` rewrote an old ID or slug in the requirement's text and the code still names that old one, the claim is false: the code still says what the old text said, so the marker keeps its version and the component's build brings the code to the new name. The leftovers (**Leftovers**) are found after the markers name their new IDs and before their versions are chosen, so a marker `rename` rewrites is never a leftover, and the versions change no line the search reads. A term's leftover never holds a marker back: a word in code may be a sense of the word the swap didn't mean (`component-words`), which the author judges from the `still names` lines, while an old ID names one rule.
+
+**Other changes' deltas** (`other-deltas`, `rename-rebases-other-deltas`). A term swap or a reference rewrite changes the text, and so the hash, of elements another live change's delta may MODIFY or REMOVE; left alone, that delta is stale (`apply/stale-base`) and `clm check` fails the rename branch over a change it doesn't own. The branch can't rebase that delta by hand and still replay (`replay`), and `sync.regenerate`'s `other-delta-merge` would commit a merge the replay doesn't reproduce, so `rename` rebases it as part of its output. After `clm_apply::apply`, for each such change, in ID order, and each of its deltas for a component the graph holds both before and after the rename (a component only the rename creates, a renamed component's new ID, is left out, since nothing before the rename accepted a base of it), it takes the elements `clm_apply::stale_bases` names against the component after the rename and not against it before, and a frontmatter base, which `stale_bases` leaves out, that equals the component's `frontmatter` hash before the rename and not after: those are exactly the ones the rename moved. A base is only ever replaced, never added, since each such element records one. An element the delta MODIFIES has its text in the delta rewritten by the edits `rename` makes to spec text (a Contract, Design or requirement block as `references` and `term-swap` edit it; a MODIFIED Frontmatter by the value edit `references` makes to frontmatter), and the new base is written where `sync.regenerate`'s merge writes one (`sync.regenerate/stale-delta-merge`: the delta frontmatter's base key, or a requirement heading's `<!-- base: -->` comment), located with `clm_model::outline`'s spans. No three-way merge is needed: the edits are a function of the text, so applying them to the delta's text keeps the delta's own edits and adds the rename's, with no conflict to report and no `git` process to run, so the wasm build is unaffected. The replay reproduces these edits, since `rename` makes them from the base, as it reproduces the flags' versions (`flag-rerecord`).
+
+**Leftovers.** After writing, `rename` searches the tracked text files outside `specs/`, `changes/`, `ARCHITECTURE.md` and `CAPABILITIES.md`, and outside `docs/decisions/`, which record history, for each old ID as a whole token, each old term as `Terms` counts it and, for each requirement or entry rename, its old slug as a code span's whole text (`` `slim-nodes` ``, the form `CLAUDE.md` cites an entry by) when `references` would rewrite that span in spec text. A component rename keeps each requirement's slug, so it adds no slug. These are skills, guides, `CLAUDE.md` and code, whose edits are code changes or the author's prose.
+
+**Replay** (`replay`). `replays` reads both revisions through `clm-git`, as the CLM root's trees (`fingerprint-covers-the-clm-root`): `repo` is the CLM root, which may be a subdirectory of its git repository (`root-from-cwd`), and `git rev-parse --show-prefix` run there gives its place. It lists each revision once, with `git ls-tree -r -z --full-tree`, and splits the listing by that prefix: the entries under it, with the prefix taken off each path, are the root's listing, the one `clm fingerprint` lists; the entries outside it are compared between the two revisions by path, mode and object ID, and when they differ `replays` is false before it extracts anything, since the gate classes a replayed branch `spec` with every code file it changes, and an approval's fingerprint covers only the root's files (`gate/paths-under-the-root`, `approval-policy`). At a repository's top the prefix is empty, nothing lies outside it, and nothing changes. From the root's listings it reads the change `head` adds (live or new archived, from `clm-fingerprint`'s `added_changes`, the shape `gate` and `clm land` use), its `change.md` at `head`, read as `<head>:./<path>` from the root, and `base`'s tree, extracted whole with `extract_tree` into a temporary directory (`vcs/extract-as-checkout`), of which the root's directory, `<prefix>` under the extraction, is the tree it works in and hashes. It places the `change.md` at `changes/<id>/change.md` there with its `status:` line set to `proposed`, runs `rename` there, and compares what is left with `head`'s listing, kind by kind: each regular file by path, mode and blob ID (`git hash-object --no-filters` of each file the rename left, and its owner's executable bit for the mode); each symbolic link by path and the blob ID of the path it names, read from the directory without following it, since a rename removes a link with a component's directory and writes an asset it read through a link as a regular file, so what `head` must hold is what the rename left, not what `base` held; and each submodule against `base`'s listing, since the extracted tree holds a submodule only as an empty directory and the rename writes none. The executable bit is read only where the platform has one: the crate also builds for `wasm32-unknown-unknown`, where nothing calls `replays`. A new file under `backlog/` is left out because a session files defect reports on any branch; only a regular file is one. It reads `renames` from the blob's frontmatter, since no graph is loaded before the tree is extracted.
+
+**Wasm.** `clm-gate` is in the `web` Worker's wasm build, so `clm-rename` and what it pulls in build for `wasm32-unknown-unknown`, as `clm-gate`'s other dependencies do; the Worker never calls it. The checks' wasm build of `clm-web` shows it.
+
+## MODIFIED Requirements
+
+### Requirement: replay <!-- base: ea76852cef211032 -->
+`replays(repo, base, head)`, with `repo` the CLM root, SHALL read each revision's tree as the CLM root's, as `gate.fingerprint/fingerprint` lists one: the entries under the root, each path relative to it, so that the paths below (`changes/`, `backlog/` and the files compared) are the root's wherever the root sits in its git repository. It SHALL be true exactly when `head` adds one change, live or new archived, whose `change.md` at `head` sets `renames`, `head`'s entries outside the CLM root are `base`'s, at the same paths with the same modes and object IDs, and `head`'s tracked tree is exactly the tree `clm rename` leaves when run on `base`'s tree with that `change.md` placed live with status `proposed`, compared entry by entry:
+- the regular files of `head`'s tree, leaving out each one under `backlog/` at a path where `base`'s tree holds no entry, and the regular files the rename leaves are the same paths, each with the same mode, `100755` in `head`'s tree for a file the rename leaves executable by its owner and `100644` for any other, and the same git blob ID, the ID of a file the rename leaves being that of its bytes as they stand, with no filter applied;
+- the symbolic links of `head`'s tree and the symbolic links the rename leaves, none of them followed, are the same paths, each naming the same path byte for byte;
+- the submodules of `head`'s tree are the submodules of `base`'s, at the same paths with the same commit IDs, since `clm rename` neither writes nor removes one.
+
+It SHALL be false when `clm rename` refuses or fails there, SHALL read both revisions without the working tree, SHALL be false without extracting a tree when `head` adds no such change or more than one change, or adds, removes or changes an entry outside the CLM root, and SHALL return an error when git fails to list or read a revision.
+
+#### Scenario: an untouched rename branch
+- GIVEN a branch cut from `base` on which `clm rename r` ran and its result was committed
+- WHEN `replays(repo, base, HEAD)` runs
+- THEN it is true
+
+#### Scenario: an extra edit
+- GIVEN that branch with one more commit editing a line of `crates/x/src/lib.rs`
+- WHEN `replays(repo, base, HEAD)` runs
+- THEN it is false
+
+#### Scenario: a defect report filed
+- GIVEN that branch with one more commit adding `backlog/d.md`
+- WHEN `replays(repo, base, HEAD)` runs
+- THEN it is true
+
+#### Scenario: a symbolic link added
+- GIVEN that branch with one more commit adding a symbolic link `l` to `README.md`
+- WHEN `replays(repo, base, HEAD)` runs
+- THEN it is false
+
+#### Scenario: a mode changed
+- GIVEN that branch with one more commit that makes `crates/x/src/lib.rs` executable and changes nothing else
+- WHEN `replays(repo, base, HEAD)` runs
+- THEN it is false
+
+#### Scenario: a base that holds a symbolic link
+- GIVEN a `base` that holds a symbolic link `l` to `README.md`, and a branch cut from it on which `clm rename r` ran and its result was committed
+- WHEN `replays(repo, base, HEAD)` runs
+- THEN it is true; and with one more commit that points `l` at `ARCHITECTURE.md`, it is false
+
+#### Scenario: a rename that refuses on the base
+- GIVEN a `head` that adds one change whose `change.md` sets `renames` holding `requirement: a/none` with `to: y`, where `base` holds no requirement `a/none`
+- WHEN `replays(repo, base, head)` runs
+- THEN it is false, not an error
+
+#### Scenario: a subdirectory root
+- GIVEN a git repository whose CLM root is its subdirectory `tool/`, and a branch cut from `base` on which `clm rename r` ran in `tool/` and its result was committed
+- WHEN `replays(tool, base, HEAD)` runs, `tool` being the path of `tool/`
+- THEN it is true
+
+#### Scenario: a file outside a subdirectory root
+- GIVEN that branch with one more commit editing `README.md` at the git repository's top, outside `tool/`
+- WHEN `replays(tool, base, HEAD)` runs
+- THEN it is false
+
+#### Serves
+- architecture/humans-review-intent
+- capability/land-safely
