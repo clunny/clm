@@ -231,7 +231,7 @@ fn approve_refuses_a_missing_or_odd_branch() {
 #[test]
 fn truncated_listing() {
     // req:web.worker.review/approve@4584ce53
-    // req:web.worker.review/fingerprint-from-trees@24bcb92e
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
     // With the merge base's listing truncated there's no fingerprint to approve.
     let mut repo = repo();
     repo.truncated_trees.insert("111".into());

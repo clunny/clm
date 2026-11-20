@@ -1102,7 +1102,7 @@ fn comparison_cached_with_a_patch_id() {
 #[test]
 fn truncated_listing() {
     // req:web.worker.review/pr-review@751149f9
-    // req:web.worker.review/fingerprint-from-trees@24bcb92e
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
     // GitHub truncating the merge base's listing leaves the review without a fingerprint,
     // so no approval shows, though one exists for the branch's real fingerprint.
     let mut repo = spec_pr();
