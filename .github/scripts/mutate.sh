@@ -166,8 +166,8 @@ covered_lines() {
 }
 
 # The report of a run of every test of package $1 in the tree, kept under the package's name for
-# the rest of the pass: made by the first block that needs it, written to a path of the block's
-# job and only then kept, so two blocks at once never write one report.
+# the rest of the pass: a block that starts once it is kept runs none of its own. It is written to
+# a path of the block's job and only then kept, so two blocks at once never write one report.
 package_report() {
   local kept=$pass_work/package-$1.info out=$work/package-$1.info
   if ! [ -s "$kept" ]; then
@@ -470,18 +470,19 @@ judge_rust() {
   # The limit counts only the mutants that may be tried. Cut from a file, not a pipe: a reader
   # that stops at the limit would kill a longer writer with SIGPIPE, and `pipefail` the script.
   tryable "$work/further" >"$work/further-all"
-  # More than the limit: those of code only the requirement's tests run first.
-  if [ "$(lines_in "$work/further-all")" -gt "$limit" ]; then
-    by_share "$work/further-all" >"$work/further-ordered"
-    mv -f "$work/further-ordered" "$work/further-all"
-  fi
-  head -n "$limit" "$work/further-all" >"$work/further-try"
   caught=0
   missed=0
   if [ -s "$work/diff-try" ]; then
     names_of "$work/diff-try"
     run_mutants "$work/m1" --in-diff "$diff" "${re_args[@]}"
   fi
+  # More than the limit, and the further mutants are to be tried: those of code only the
+  # requirement's tests run first.
+  if [ "$caught" -eq 0 ] && [ "$(lines_in "$work/further-all")" -gt "$limit" ]; then
+    by_share "$work/further-all" >"$work/further-ordered"
+    mv -f "$work/further-ordered" "$work/further-all"
+  fi
+  head -n "$limit" "$work/further-all" >"$work/further-try"
   if [ "$caught" -eq 0 ] && [ -s "$work/further-try" ]; then
     names_of "$work/further-try"
     run_mutants "$work/m2" "${re_args[@]}"

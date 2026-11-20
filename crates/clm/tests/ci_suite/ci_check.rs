@@ -2014,7 +2014,8 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// lists the lines run (one per line, `<n>` for every file or `<file>:<n>` for one, then, after a
 /// space, the times it ran when not once; an empty file for none). A call with no filterset
 /// (`-E`), a run of every test of a package, exits first with the status in
-/// `bin/llvm-cov-all-exit` when it exists, writing nothing, and reads `bin/lcov-run-all` in place
+/// `bin/llvm-cov-all-exit` when it exists, or 0 when `bin/llvm-cov-all-no-report` does, writing
+/// nothing, and reads `bin/lcov-run-all` in place
 /// of `bin/lcov-run` when it exists. Then it exits with the status in `bin/llvm-cov-exit` when it
 /// exists, the report written, so the status alone tells a failed run.
 ///
@@ -2097,6 +2098,7 @@ if [ "$1" = llvm-cov ]; then
   case " $* " in *" -E "*) ;; *)
     [ ! -e "$bin/llvm-cov-all-exit" ] || exit "$(cat "$bin/llvm-cov-all-exit")"
     [ ! -e "$bin/lcov-run-all" ] || runs=$bin/lcov-run-all
+    [ ! -e "$bin/llvm-cov-all-no-report" ] || exit 0
     ;;
   esac
   [ ! -e "$bin/llvm-cov-no-report" ] || exit 0
@@ -3387,16 +3389,91 @@ fn a_packages_tests_run_once_in_a_pass() {
 #[test]
 fn the_run_of_a_packages_tests_failing_leaves_no_verdict() {
     // req:ci/mutate-script@b6d5d850
+    for fake in ["llvm-cov-all-exit", "llvm-cov-all-no-report"] {
+        let tree = share_tree(&["x"], 1);
+        tree.report(fake, "1");
+        let (ok, log, result, stderr) = tree.mutate(&[]);
+        assert!(!ok, "{fake}: {log:?}");
+        assert!(
+            stderr.contains("cargo llvm-cov") && stderr.contains("a/x"),
+            "{fake}: {stderr}"
+        );
+        assert!(result.is_empty(), "{fake}: {result:?}");
+        assert!(block_tries(&log).is_empty(), "{fake}: {log:?}");
+    }
+}
+
+#[test]
+fn the_package_run_is_written_in_the_blocks_job_before_it_is_kept() {
+    // req:ci/mutate-script@b6d5d850
     let tree = share_tree(&["x"], 1);
-    tree.report("llvm-cov-all-exit", "1");
+    let (ok, log, _, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    let runs = package_runs(&log);
+    assert_eq!(runs.len(), 1, "{log:?}");
+    let path = runs[0]
+        .split(" --output-path ")
+        .nth(1)
+        .and_then(|r| r.split(' ').next())
+        .unwrap_or_else(|| panic!("{}", runs[0]));
+    assert!(path.contains("/block-0/"), "{path}");
+}
+
+#[test]
+fn a_lines_count_is_summed_over_the_runs_of_every_test_package() {
+    // req:ci/mutate-script@b6d5d850
+    // Tests of two packages, each package's run giving line 3 two runs and line 30 one: line 3,
+    // run three times by the block's tests, has 3/4, and line 30, run twice, has 2/2. Read from
+    // one package's run alone, both would have 1 and keep the list's order.
+    let tree = share_tree(&["x"], 1);
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\ntest crates/clm-run/tests/it.rs\tproves_x\nlimit 1\n",
+    )
+    .unwrap();
+    tree.report("lcov-run", "3 3\n30 2\n");
+    tree.report("lcov-run-all", "3 2\n30 1\n");
     let (ok, log, result, stderr) = tree.mutate(&[]);
-    assert!(!ok, "{log:?}");
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    let runs = package_runs(&log);
+    assert_eq!(runs.len(), 2, "{log:?}");
     assert!(
-        stderr.contains("cargo llvm-cov") && stderr.contains("a/x"),
-        "{stderr}"
+        runs.iter().any(|r| r.contains("--package clm-run")),
+        "{log:?}"
     );
-    assert!(result.is_empty(), "{result:?}");
-    assert!(block_tries(&log).is_empty(), "{log:?}");
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(
+        tries[0].contains("replace on_thirty") && !tries[0].contains("replace on_three"),
+        "{}",
+        tries[0]
+    );
+}
+
+#[test]
+fn a_block_caught_on_its_diff_runs_no_package() {
+    // req:ci/mutate-script@b6d5d850
+    let tree = share_tree(&["x"], 1);
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ndiff /tmp/the.diff\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 1\n",
+    )
+    .unwrap();
+    tree.report(
+        "list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n3 3 crates/clm-check/src/lib.rs:3:5: replace on_three with ()\n30 30 crates/clm-check/src/lib.rs:30:5: replace on_thirty with ()\n",
+    );
+    tree.report(
+        "diff-list",
+        "1 1 crates/clm-check/src/lib.rs:1:5: replace d with ()\n",
+    );
+    tree.report("lcov-run", "1\n3\n30\n");
+    tree.report("diff-caught", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
+    assert!(package_runs(&log).is_empty(), "{log:?}");
 }
 
 #[test]
