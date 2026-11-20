@@ -1,5 +1,6 @@
 ---
 status: applied
+resolves: [a-listed-test-of-a-requirement-that-stays-reaches-no-build]
 ---
 
 ## Intent
@@ -23,6 +24,8 @@ Read against the rule and against the code on 2026-11-19, by one reader per comp
 - **Taken: Codex's formats were checked, not copied into the spec unverified.** Its source at `d0264b75` and its hooks documentation show the keys, the allow and the block are Claude Code's, and that it reads an `ask` as an error and runs the command. `agent-harness` states them, and the workaround flag is deleted.
 - **Taken: this repository's own settings stay requirements of `config`** (`verify-here` and the like), and the rule's decision gains that case. A spec branch can't set `clm.toml`, so without them nothing states a setting or orders the build that switches it on.
 - **Taken: a clause that is the root's code stays where it is until the root's wave.** `machine`'s "exit 0 whatever the states" and the command lines of `gate.fingerprint` and `agent-harness` are the root's code. Cutting them here would leave them stated nowhere for five waves; a move puts both sides on one branch.
+- **Taken: the build prompt names a listed test under a requirement that stays** (`orchestrator.run/pending-prompt`). The builder check found that a `deleted-tests.txt` line reached a build only when its requirement was removed; 15 of this change's 17 lines cite a requirement that is reworded, so each build would have re-cited the test and the cut would never have happened. Writing the deletions into each component's Design would name tests in a spec, and a note to the build session reaches no later wave. `backlog/a-listed-test-of-a-requirement-that-stays-reaches-no-build` blocks the eleven requirements that wait on it, and `orchestrator.run`'s build deletes it.
+- **Taken: `rename/replay` keeps "exactly" and its build mends the code.** The first draft wrote down what the code does, a comparison of regular files alone; `rename-by-replay` and `humans-review-intent` rely on the tree being exactly what `clm rename` produces, so a rename branch that added a symbolic link would have replayed as true. The audit found it.
 - **Not taken: merging requirements to bring `model` and `config` under budget.** Most of their IDs are printed as rule labels or named under `#### Needs` and `#### Enforced by`; a merge changes what tests in seven crates assert and saves about 40 tokens a requirement. Both stay over 12,000 spec tokens after the pass.
 - **Not taken: cutting `context`'s wasm build and `bundle_from` now.** No code uses either, but `ci` builds the crate for wasm, so the cut goes with `ci` in wave 3.
 - **Not taken: moving `model/exemptions`' sentence on a glob that matches other components' files to `check`**, whose behaviour it is: wave 2 holds `check` and moves it with both sides on one branch.
@@ -39,11 +42,12 @@ Read against the rule and against the code on 2026-11-19, by one reader per comp
 - **`agent-harness`**: both agent harnesses' events and decisions are stated in the requirement; the hook event loses its `kind`.
 - **`machine`**: the JSON keys, the text lines, the disk rule, the sample's shape and the rows' layout are in the requirements that pointed at the Design.
 - **`upgrade`** depends on `vcs`.
+- **`orchestrator.run`**: `pending-prompt` lists, for a `behind` requirement, the citing tests an approved list names, as tests to delete.
 - 139 requirements become 138: `model/test-dependencies-retired`, `config/component-size-from-text` and `context/says-component` go, each with its scenarios moved; `context/bundle-components` and `apply/reapply` are added.
 
 ## Constraints
 
-- No behaviour changes but three, each agreed: `vcs/one-git-layer` fails for a crate it used to pass over; `agent-harness`'s hook event loses a field no caller reads; `model` no longer says whether a component is optional, which no caller asks.
+- No behaviour changes but five. Three the human agreed as cuts: `vcs/one-git-layer` fails for a crate it used to pass over; `agent-harness`'s hook event loses a field no caller reads; `model` no longer says whether a component is optional, which no caller asks. Two are mends the reviews found: `replays` is false for a branch that adds a symbolic link or a submodule, and the build prompt names a listed test under a requirement that stays.
 - No requirement whose ID a violation prints, or another spec or `ARCHITECTURE.md` names, is renamed or merged.
 - Every clause newly stated is what the code does today, checked against the source; the ones no test asserts are listed for the builds below.
 - `removal-needs-a-yes`: every sentence, scenario and test below was put to the human on 2026-11-19, who agreed them as recommended.
@@ -90,7 +94,11 @@ Scenario outcomes that change under their names:
 - `model/optional-nodes` "optional depends on required" and "inherited from an ancestor": without the query that goes.
 - Reworded to name a requirement in place of a function, or to drop where a test sits: `rename`'s "a reworded Contract another change modifies", "a flagged requirement reworded", "a flagged requirement renamed" and "the archived record loads"; `model/term-lists` "lists match the types"; `config/config-list` "a key get knows"; and "a command called in a test" and "arguments it can't parse" of `commands-in-crate` in `apply`, `config`, `context` and `rename`. `context/bundle-errors` "unknown node" gains the exact line.
 
-Tests the builds delete are in `deleted-tests.txt`, 19 lines, each with its reason: seven tests of the three scans and their scanners, eight duplicates or subsets, two that prove a rule or a query that goes, the fingerprint's source scan, and a unit test the 5-second scenario replaces.
+Scenarios that move under their names beside those named above: `vcs`'s "fetch uses it" from `remote-name` to `fetch-tries-again`; `gate.fingerprint`'s "content changed" to `fingerprint-stable`; `apply`'s "refused change keeps its question" and "refused change keeps its item" to `atomic`; `rename`'s "the archived record loads" to `finish` and "an item's components" to `references`.
+
+Sentences with no SHALL also go where they narrated a build long done, restated another requirement or stated another component's behaviour: in `config`'s `host-setting`, `health-lcov-here`, `verify-here`, `retired-terms-detector`, `unreferenced-detector`, `committed-settings` and `local-settings`; in `model`'s `parse-changes`, `parse-backlog`, `carried-constraints`, `content-hash`, `valid-frontmatter`, `human-layers`, `reserved-ids`, `outside-globs` and `wiring-globs`; and in `apply`'s `hash-command`, `resulting-graph` and `resulting-graph-call`.
+
+Tests the builds delete are in `deleted-tests.txt`, 17 lines, each with its reason: seven tests of the three scans and their scanners, six duplicates or subsets, two that prove a rule or a query that goes, the fingerprint's source scan, and a unit test the 5-second scenario replaces. Two tests first listed as duplicates are not, and are re-cited instead: `fetch_brings_origin_up_to_date` and `archived_changes_may_name_unknown_changes`.
 
 ## What no test asserts today
 
@@ -100,7 +108,7 @@ A floor: each build's review looks for more. Each is a clause the code already d
 - `config`: no `clm.toml` read outside a CLM repository; `build` and `verify` whole from one layer; the fallback when `commondir` can't be read; an array of more than one string printed; a variable that isn't UTF-8, end to end.
 - `context`: `served_capabilities`' order; `bundle` for an unknown component; no `# ARCHITECTURE.md` heading and no `# Dependencies` section through the command; the streams of "invalid graph".
 - `apply`: the label for a component that is gone; "no such section", "a list item in the delta", "no frontmatter section", "no such change" twice; the line `clm archive` prints; `reapply`'s "an answered question is left" and "a stale delta"; the printed `removed backlog/<slug>.md`.
-- `rename`: exit 2 when git fails; "nothing committed"; "a tree that is no checkout"; a replay of a rename that refuses; what a replay leaves uncompared; both fenced-code scenarios.
+- `rename`: `replays` for a branch that adds a symbolic link, which the code doesn't do yet; exit 2 when git fails; "nothing committed"; "a tree that is no checkout"; a replay of a rename that refuses; what a replay leaves uncompared; both fenced-code scenarios.
 - `gate.fingerprint`: what `added_changes` returns; "no merge base"; the exact hash of "paths are bytes".
 - `agent-harness`: "the reason comes first"; that a block's stderr is the reason alone.
 - `machine`: "outside a git repository"; `disk.state`, `disk.path`, `disk.available` and `memory.available` in the JSON; the text of an unknown memory or disk reading; adjacent cells of one state as one run.
@@ -109,4 +117,5 @@ A floor: each build's review looks for more. Each is a clause the code already d
 
 - **`model` and `config` stay over budget**, at about 21,000 and 15,500 spec tokens against 12,000. `model` splits along its record kinds (changes, the human layers, the backlog), each needing a crate of its own (`splits-import-one-way`); `config` could give this repository's own settings to a child. Or the human sets each a `size_budget`. For after the waves.
 - **Found and filed, not mended here:** `backlog/the-gate-s-placement-rule-skips-a-behaviour-sentence-that-holds`, `backlog/an-i-o-failure-while-clm-apply-writes-leaves-the-files-already`, `backlog/the-fingerprint-covers-only-the-clm-root-s-subdirectory-and-the`, `backlog/a-change-md-s-gate-key-is-rejected-by-loading-and-accepted-by`, and the idea `backlog/codex-can-name-a-subagent-s-model-and-abilities-says-it-can-t`.
-- **For later waves**, recorded in the plan item when this lands: `context`'s wasm build with `ci`; `model/exemptions`' glob sentence, `Priority::cap` and the backlog item's printed line to `check`; the root's command clauses, `config/settings-guide-covers-keys` with the root's guide scans, and the `shared-plumbing` family.
+- **For later waves**, recorded in the plan item by this branch: `context`'s wasm build with `ci`; `model/exemptions`' glob sentence, `Priority::cap` and the backlog item's printed line to `check`; the root's command clauses, `config/settings-guide-covers-keys` with the root's guide scans, and the `shared-plumbing` family.
+- **`orchestrator.run` and `upgrade` are not this wave's components.** `orchestrator.run` gains one clause and is built again in wave 4; `upgrade` gains a dependency and a fix under `clm claim upgrade --fix`, and is built in wave 2.

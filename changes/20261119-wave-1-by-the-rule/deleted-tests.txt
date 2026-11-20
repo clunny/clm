@@ -1,5 +1,4 @@
 DELETE crates/clm-git/tests/scan.rs::a_renamed_or_target_specific_dependency_is_scanned	proves a rule one-git-layer no longer holds: every crate is read, listed or not
-DELETE crates/clm-git/tests/queries.rs::fetch_brings_origin_up_to_date	duplicate of plumbing.rs::fetch_fetches_the_remote
 DELETE crates/clm-git/src/lib.rs::a_worktree_that_never_goes_is_given_up_on_after_the_limit	replaced by the test of "never removable" through remove_worktree itself
 DELETE crates/clm-model/tests/says_component.rs::clm_model_literals_use_no_old_word	the scan of source for retired words is cut
 DELETE crates/clm-model/tests/says_component.rs::scanner_finds_a_standalone_old_word	a test of that scan's own scanner
@@ -7,7 +6,6 @@ DELETE crates/clm-model/tests/says_component.rs::literals_finds_string_literals_
 DELETE crates/clm-model/tests/model.rs::optional_is_inherited	asserts only the query nothing calls; required_depends_on_optional_is_rejected proves inheritance
 DELETE crates/clm-model/tests/renamed_words.rs::an_unknown_component	its scenario is parse-backlog's "unknown node", proven in records.rs
 DELETE crates/clm-model/tests/constraints.rs::free_form_architecture_has_no_entries	duplicate of the test of that name in human_layers.rs
-DELETE crates/clm-model/tests/model.rs::archived_changes_may_name_unknown_changes	a subset of order_keys_are_accepted_and_ignored
 DELETE crates/clm-config/tests/this_repository.rs::the_retired_terms_detector_passes_here	the root's the_repository_holds_no_retired_term runs the same scan
 DELETE crates/clm-config/tests/command.rs::this_repository_names_the_retired_terms_detector	covered in full by config.rs::this_repository_names_the_retired_terms_detector_last
 DELETE crates/clm-context/tests/says_component.rs::string_literals_hold_no_old_word	the scan of source for retired words is cut
@@ -15,5 +13,5 @@ DELETE crates/clm-context/tests/says_component.rs::scanner_spots_old_words	a tes
 DELETE crates/clm-apply/tests/says_component.rs::apply_source_says_component	the scan of source for retired words is cut
 DELETE crates/clm-apply/tests/command.rs::hashes_fails_on_an_unknown_node	a subset of a_call_writes_what_the_command_prints_and_returns_its_status
 DELETE crates/clm-rename/src/build.rs::a_marker_only_outside_a_test_is_read	a unit test of a private function; a_marker_outside_a_test_is_rewritten proves it end to end
-DELETE crates/clm-rename/tests/rename.rs::a_behind_marker_stays_behind	duplicate of current_and_behind_markers_follow_a_rename
+DELETE crates/clm-rename/tests/rename.rs::a_behind_marker_stays_behind	a subset of current_and_behind_markers_follow_a_rename
 DELETE crates/clm-fingerprint/tests/fingerprint.rs::git_runs_through_the_layer	vcs/one-git-layer reads every crate

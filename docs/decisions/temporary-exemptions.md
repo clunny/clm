@@ -18,7 +18,7 @@ What adoption, or any project at any time, still needs is a way to say "this own
 
 **Why the tests still run, and on every land.** Until a feature's own tests replace them, exempt tests are the only thing guarding its behaviour (`proven-by-tests`). A file exempt from `undeclared-imports` imports code the graph doesn't connect it to, so any change can break it; test selection runs it whenever any component is affected (`check.affected/affected-files`), keeping `land-checks-stay-fast`'s guarantee. That makes the debt cost land time, which is a reason to pay it down.
 
-**Withdrawing `test_depends_on` follows `expand-contract`.** `check`, `check.affected` and its `why` chain, `context` and `init` stop reading it first; `model/test-dependencies-retired` removes it after them, the field marked `clm:remove-by` this change meanwhile.
+**Withdrawing `test_depends_on` follows `expand-contract`.** `check`, `check.affected` and its `why` chain, `context` and `init` stop reading it first; `model/test-dependencies-retired` (since `20261119-wave-1-by-the-rule` a scenario of `model/valid-frontmatter`) removes it after them, the field marked `clm:remove-by` this change meanwhile.
 
 Rejected:
 - **`test_depends_on`**, above. Withdrawn.
