@@ -105,7 +105,8 @@ impl Edits {
     /// Spec text with references and terms rewritten (`references`, `term-swap`). Headings,
     /// except those in `headings`, which are replaced whole, are left alone, as are the
     /// lines of fenced code for references; the ID lines of `Needs`, `Serves` and
-    /// `Enforced by` blocks are references, never swapped.
+    /// `Enforced by` blocks are references, never swapped. A line of fenced code is never a
+    /// heading, so its terms are swapped and it starts or ends no block.
     pub(crate) fn body(&self, text: &str, headings: &BTreeMap<String, String>) -> String {
         let mut out = String::new();
         let (mut fenced, mut ids) = (false, false);
@@ -116,7 +117,7 @@ impl Edits {
             if marker.starts_with("```") || marker.starts_with("~~~") {
                 fenced = !fenced;
                 out.push_str(line);
-            } else if content.starts_with('#') {
+            } else if content.starts_with('#') && !fenced {
                 ids = matches!(
                     content.trim_end(),
                     "#### Needs" | "#### Serves" | "#### Enforced by"

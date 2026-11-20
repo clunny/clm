@@ -388,7 +388,7 @@ fn terms_repo(term: &str, to: &str) -> TempDir {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn a_word_in_prose() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -406,7 +406,7 @@ fn a_word_in_prose() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn part_of_an_id_or_a_path_is_not_a_term() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -428,7 +428,7 @@ fn part_of_an_id_or_a_path_is_not_a_term() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn a_term_before_punctuation_and_a_following_dot_path() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -487,7 +487,7 @@ fn several_renames_apply_together() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn a_heading_is_left_alone() {
     let dir = repo();
     let d = dir.path();
@@ -508,7 +508,7 @@ fn a_heading_is_left_alone() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn needs_lines_are_not_swapped() {
     let dir = repo();
     let d = dir.path();
@@ -533,6 +533,54 @@ fn needs_lines_are_not_swapped() {
     );
     rename(d, "r").unwrap();
     assert!(read(d, "specs/b/SPEC.md").contains("- a/sprocket"));
+}
+
+#[test]
+// req:rename/term-swap@f4c62d32
+fn a_term_in_fenced_code() {
+    let dir = terms_repo("sprocket", "cogs");
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node(
+            "",
+            "Run:\n\n```sh\nprint the sprocket\n```\n",
+            &[("q", "Q SHALL.")],
+        ),
+    );
+    rename(d, "r").unwrap();
+    assert!(read(d, "specs/e/SPEC.md").contains("```sh\nprint the cogs\n```"));
+}
+
+#[test]
+// req:rename/term-swap@f4c62d32
+fn a_heading_in_fenced_code() {
+    let dir = repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &node(
+            "",
+            "d",
+            &[(
+                "x",
+                "X SHALL hold.\n\n```md\n# the sprocket\n#### Needs\n```\nprint the sprocket",
+            )],
+        ),
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - term: sprocket\n    to: cogs\n", ""),
+    );
+    rename(d, "r").unwrap();
+    let spec = read(d, "specs/a/SPEC.md");
+    assert!(
+        spec.contains("```md\n# the cogs\n#### Needs\n```\nprint the cogs\n"),
+        "{spec}"
+    );
 }
 
 #[test]
