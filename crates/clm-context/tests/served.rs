@@ -181,9 +181,9 @@ fn hash_moves_with_a_served_capability() {
     assert_eq!(hash(&c_edited), before);
 }
 
-/// The IDs `served_capabilities` returns for node `n` of `g`.
-fn served_ids(g: &Graph) -> Vec<String> {
-    clm_context::served_capabilities(g, &g.nodes["n"])
+/// The IDs `served_capabilities` returns for node `id` of `g`.
+fn served_ids(g: &Graph, id: &str) -> Vec<String> {
+    clm_context::served_capabilities(g, &g.nodes[id])
         .into_iter()
         .map(|c| c.id.clone())
         .collect()
@@ -199,15 +199,25 @@ fn served_capabilities_are_the_blocks_in_bundle_order() {
         "architecture/x",
         &format!("{SERVES_B}\n{serves_a}"),
     );
-    assert_eq!(served_ids(&g), ["capability/a", "capability/b"]);
+    assert_eq!(served_ids(&g, "n"), ["capability/a", "capability/b"]);
     let out = bundle(&g);
     assert!(
         out.find("A-TEXT").unwrap() < out.find("B-TEXT").unwrap(),
         "{out}"
     );
 
+    // The component that builds the capability tests: every entry, in the file's order.
+    assert_eq!(
+        served_ids(&root_graph(true), "capability"),
+        ["capability/a", "capability/b"]
+    );
+    assert_eq!(
+        served_ids(&root_graph(false), "clm"),
+        ["capability/a", "capability/b"]
+    );
+
     // No `# Capabilities served` section, no entries.
     let g = graph(&capabilities(&["a"]), "architecture/x", PLAIN);
     assert!(!bundle(&g).contains("# Capabilities served"));
-    assert!(served_ids(&g).is_empty());
+    assert!(served_ids(&g, "n").is_empty());
 }

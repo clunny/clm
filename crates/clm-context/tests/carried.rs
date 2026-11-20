@@ -37,8 +37,12 @@ fn a_project_gets_the_carried_section() {
     assert!(at("### Constraint: proven-by-tests (method)") > at("# CLM's constraints"));
     assert!(out.contains("### Constraint: yagni (default)"));
     assert!(!out.contains("### Constraint: expand-contract"));
-    assert!(out.contains("clm guide constraints"));
-    assert!(out.contains("kept in CLM's repository"));
+    // The section's first line says what it holds, where tiers are explained and where the
+    // names it doesn't list are kept.
+    let first = out[at("# CLM's constraints")..].lines().nth(2).unwrap();
+    assert!(first.contains("from the `clm` that runs"), "{first}");
+    assert!(first.contains("clm guide constraints"), "{first}");
+    assert!(first.contains("kept in CLM's repository"), "{first}");
     let method = at("### Constraint: proven-by-tests (method)");
     assert!(!out[method..method + out[method..].find("\n### ").unwrap()].contains("Guarantee:"));
 }

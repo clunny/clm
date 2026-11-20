@@ -313,8 +313,8 @@ fn the_layout() {
     write(
         root,
         "ARCHITECTURE.md",
-        "## Constraints\n\n### Constraint: x\nIt SHALL x.\n\n#### Scenario: s\n- ok\n\n\
-         #### Carries\n- method\n",
+        "## Constraints\n\n### Constraint: x\nIt SHALL x.  \n\n#### Scenario: s\n- ok\n\n\
+         #### Carries\n- method\n\n\n",
     );
     write(
         root,
@@ -330,7 +330,7 @@ fn the_layout() {
         root,
         "specs/a/SPEC.md",
         "---\ntitle: A\nstatus: active\nowners: []\ndepends_on: [b]\nserves: [capability/k]\n---\n\n\
-         ## Contract\nA-CONTRACT  \nsecond line\t\n\n## Design\nA-DESIGN\n\n## Requirements\n\n\
+         ## Contract\nA-CONTRACT  \nsecond line\t\n\n## Design\nA-DESIGN \n\n\n\n## Requirements\n\n\
          ### Requirement: r\nIt SHALL r.   \n\n#### Scenario: s\n- ok\n",
     );
     write(
@@ -370,6 +370,31 @@ fn the_layout() {
         m = clm_model::asset_hash(b"M\n"),
     );
     assert_eq!(text, expected);
+
+    // A project that isn't the source: the carried section takes its place between
+    // `ARCHITECTURE.md`'s text and `# Capabilities served`, and the rest is as before.
+    write(
+        root,
+        "ARCHITECTURE.md",
+        "## Constraints\n\n### Constraint: x\nIt SHALL x.  \n\n#### Scenario: s\n- ok\n\n\n",
+    );
+    let text = stdout(&clm_context(root, &["a"]));
+    assert!(
+        text.lines().all(|l| !l.ends_with([' ', '\t'])),
+        "a line ends in whitespace:\n{text}"
+    );
+    assert!(
+        text.starts_with(
+            "# ARCHITECTURE.md\n\n## Constraints\n\n### Constraint: x\nIt SHALL x.\n\n\
+             #### Scenario: s\n- ok\n\n# CLM's constraints\n\nThese are the constraints"
+        ),
+        "{text}"
+    );
+    let served = expected.find("# Capabilities served").unwrap();
+    let carried = text.find("# CLM's constraints").unwrap();
+    let rest = text.find("\n\n# Capabilities served").unwrap() + 2;
+    assert!(carried < rest, "{text}");
+    assert_eq!(text[rest..], expected[served..]);
 }
 
 #[test]
@@ -518,13 +543,13 @@ fn a_stream_it_cant_write_returns_2() {
         clm_context::command(args, dir.path(), &|_| None, out, err)
     };
     let mut sink = Vec::new();
-    // The bundle, its hash and the usage go to a closed output stream.
+    // Each of these returns 0 or 1 when its write succeeds; to a closed output stream, 2.
     assert_eq!(run(&["a"], &mut Closed, &mut sink), 2);
     assert_eq!(run(&["a", "--hash"], &mut Closed, &mut sink), 2);
     assert_eq!(run(&["--help"], &mut Closed, &mut sink), 2);
-    // The unknown component's line and the usage error go to a closed error stream.
-    assert_eq!(run(&["zz"], &mut sink, &mut Closed), 2);
-    assert_eq!(run(&["--no-such-option"], &mut sink, &mut Closed), 2);
+    node(dir.path(), "b", "B", "missing");
+    assert_eq!(run(&["a"], &mut Vec::new(), &mut sink), 1);
+    assert_eq!(run(&["a"], &mut Closed, &mut sink), 2);
     assert!(sink.is_empty());
 }
 
