@@ -65,8 +65,28 @@ pub fn validate(graph: &Graph, change: &Change) -> Vec<Violation> {
 }
 
 /// Applies change `id` in the repo at `root`, all or nothing. Returns the files written and
-/// removed.
+/// removed; when a write or removal fails, every file is put back as it was, and each it
+/// couldn't put back is named `not restored` among the violations (`failed-write`).
 pub fn apply(root: &Path, id: &str) -> Result<Vec<FileOp>, Vec<Violation>> {
+    let mut journal = Journal::new(root);
+    apply_into(root, id, &mut journal).map_err(|mut violations| {
+        violations.extend(
+            journal
+                .undo()
+                .into_iter()
+                .map(|(path, e)| violation(&path, "apply/atomic", format!("not restored: {e}"))),
+        );
+        violations
+    })
+}
+
+/// `apply`, performing its files through `journal` and putting none back when one fails:
+/// the caller undoes the journal (`journal`).
+pub fn apply_into(
+    root: &Path,
+    id: &str,
+    journal: &mut Journal,
+) -> Result<Vec<FileOp>, Vec<Violation>> {
     let (graph, violations) = clm_model::load(root);
     let Some(change) = graph.changes.get(id) else {
         let mut refused = vec![violation(
@@ -79,10 +99,85 @@ pub fn apply(root: &Path, id: &str) -> Result<Vec<FileOp>, Vec<Violation>> {
     };
     let ops = plan(&graph, change, violations)?;
     for op in &ops {
-        op.perform(root)
+        journal
+            .perform(op)
             .map_err(|e| vec![io_violation(op.path(), e)])?;
     }
     Ok(ops)
+}
+
+/// Performs `FileOp`s under a root, remembering what each path held before the first op on
+/// it, so that `undo` puts every path back (`journal`).
+#[derive(Debug)]
+pub struct Journal {
+    root: PathBuf,
+    /// Each path touched, in order of first touch, with its bytes before, or none.
+    before: Vec<(PathBuf, Option<Vec<u8>>)>,
+    /// The directories the journal's writes created, shallowest first.
+    created: Vec<PathBuf>,
+}
+
+impl Journal {
+    pub fn new(root: &Path) -> Journal {
+        Journal {
+            root: root.to_path_buf(),
+            before: Vec::new(),
+            created: Vec::new(),
+        }
+    }
+
+    /// Performs `op` under the root, first remembering what its path holds when no op has
+    /// touched it yet; a path it can't read gets no op, and the read's failure is returned.
+    pub fn perform(&mut self, op: &FileOp) -> std::io::Result<()> {
+        let rel = op.path();
+        if !self.before.iter().any(|(path, _)| path == rel) {
+            let was = match fs::read(self.root.join(rel)) {
+                Ok(bytes) => Some(bytes),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => return Err(e),
+            };
+            self.before.push((rel.to_path_buf(), was));
+        }
+        if let FileOp::Write(..) = op {
+            let missing: Vec<PathBuf> = rel
+                .ancestors()
+                .skip(1)
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .take_while(|dir| !self.root.join(dir).exists())
+                .map(Path::to_path_buf)
+                .collect();
+            self.created.extend(missing.into_iter().rev());
+        }
+        op.perform(&self.root)
+    }
+
+    /// Puts each path touched back as it was, in the reverse order of first touch: its bytes,
+    /// with the directories they need, or its absence, dropping each directory the journal's
+    /// writes created that is left empty. A path already as it was is left alone. Returns
+    /// each path it couldn't put back, with why.
+    pub fn undo(self) -> Vec<(PathBuf, std::io::Error)> {
+        let mut not_back = Vec::new();
+        for (rel, was) in self.before.iter().rev() {
+            let full = self.root.join(rel);
+            let restored = match (fs::read(&full), was) {
+                (Ok(now), Some(was)) if now == *was => continue,
+                (Err(e), None) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                (_, Some(bytes)) => full
+                    .parent()
+                    .map_or(Ok(()), fs::create_dir_all)
+                    .and_then(|()| fs::write(&full, bytes)),
+                (_, None) => fs::remove_file(&full),
+            };
+            if let Err(e) = restored {
+                not_back.push((rel.clone(), e));
+            }
+        }
+        for dir in self.created.iter().rev() {
+            // Fails, and so stays, when it isn't empty.
+            let _ = fs::remove_dir(self.root.join(dir));
+        }
+        not_back
+    }
 }
 
 /// One file `apply` writes or removes, by repo-relative path.
@@ -137,6 +232,15 @@ pub fn archive(root: &Path, id: &str) -> Result<PathBuf, Vec<Violation>> {
             message,
         )])
     };
+    let to = PathBuf::from("changes")
+        .join(clm_model::ARCHIVE_DIR)
+        .join(id);
+    // Read on disk before the graph: a change both live and archived loads only as the
+    // archived one, which would read as no live change (`archive-command`).
+    let live = root.join("changes").join(id).join("change.md").is_file();
+    if live && root.join(&to).exists() {
+        return refuse(format!("{} already exists", to.display()));
+    }
     let Some(change) = graph.changes.get(id).filter(|c| !c.archived) else {
         return refuse(format!("no unarchived change `{id}`"));
     };
@@ -145,12 +249,6 @@ pub fn archive(root: &Path, id: &str) -> Result<PathBuf, Vec<Violation>> {
             "change `{id}` is {:?}; only done or abandoned changes can be archived",
             change.frontmatter.status
         ));
-    }
-    let to = PathBuf::from("changes")
-        .join(clm_model::ARCHIVE_DIR)
-        .join(id);
-    if root.join(&to).exists() {
-        return refuse(format!("{} already exists", to.display()));
     }
     fs::create_dir_all(root.join("changes").join(clm_model::ARCHIVE_DIR))
         .and_then(|_| fs::rename(root.join("changes").join(id), root.join(&to)))
@@ -844,20 +942,29 @@ fn modify(
     check_requirements(node, delta, errs);
 
     let (fm, body) = split_frontmatter(&node.source)?;
+    // A frontmatter at fault still has the body judged: every reason, per delta (`atomic`).
     let fm = match &delta.modified_frontmatter {
-        Some(yaml) => match edit_frontmatter(fm, yaml)
-            .and_then(|fm| frontmatter_errors(declared, delta, &fm).map(|()| fm))
-        {
-            Ok(fm) => fm,
-            Err(msg) => {
-                errs.push(violation(&delta.path, "apply/frontmatter", msg));
-                return None;
+        Some(yaml) => match edit_frontmatter(fm, yaml) {
+            // The declared keys are judged only once every line is well formed.
+            Ok(fm) => match frontmatter_errors(declared, delta, &fm) {
+                Ok(()) => Some(fm),
+                Err(msg) => {
+                    errs.push(violation(&delta.path, "apply/frontmatter", msg));
+                    None
+                }
+            },
+            Err(msgs) => {
+                errs.extend(
+                    msgs.into_iter()
+                        .map(|msg| violation(&delta.path, "apply/frontmatter", msg)),
+                );
+                None
             }
         },
-        None => fm.to_string(),
+        None => Some(fm.to_string()),
     };
-    let body = edit_body(body, delta, errs, &node.id)?;
-    Some((node.path.clone(), format!("---\n{fm}\n---\n{body}")))
+    let body = edit_body(body, delta, errs, &node.id);
+    Some((node.path.clone(), format!("---\n{}\n---\n{}", fm?, body?)))
 }
 
 fn check_base(
@@ -882,9 +989,12 @@ fn check_base(
     errs.push(violation(&delta.path, "apply/stale-base", message));
 }
 
-/// Replaces (or appends) each top-level key line from `yaml`, leaving other lines untouched.
-fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, String> {
+/// Replaces (or appends) each top-level key line from `yaml`, leaving other lines untouched;
+/// or every line of `yaml` that isn't a one-line `key: value` and every key whose current
+/// value spans more than one line, each as a message of its own (`frontmatter`).
+fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, Vec<String>> {
     let mut lines: Vec<String> = fm.lines().map(String::from).collect();
+    let mut faults = Vec::new();
     for line in yaml
         .lines()
         .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
@@ -892,9 +1002,10 @@ fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, String> {
         let key = match line.split_once(':') {
             Some((k, _)) if !k.is_empty() && !k.starts_with([' ', '\t', '-']) => k,
             _ => {
-                return Err(format!(
+                faults.push(format!(
                     "frontmatter values must be single-line `key: value`, got `{line}`"
                 ));
+                continue;
             }
         };
         let prefix = format!("{key}:");
@@ -904,16 +1015,21 @@ fn edit_frontmatter(fm: &str, yaml: &str) -> Result<String, String> {
                     .get(i + 1)
                     .is_some_and(|n| n.starts_with([' ', '\t', '-']))
                 {
-                    return Err(format!(
+                    faults.push(format!(
                         "current `{key}` spans more than one line; make it single-line first"
                     ));
+                    continue;
                 }
                 lines[i] = line.to_string();
             }
             None => lines.push(line.to_string()),
         }
     }
-    Ok(lines.join("\n"))
+    if faults.is_empty() {
+        Ok(lines.join("\n"))
+    } else {
+        Err(faults)
+    }
 }
 
 /// `declared-frontmatter-keys`: the frontmatter `fm` that `delta` produces, checked as the
