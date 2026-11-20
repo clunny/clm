@@ -30,7 +30,7 @@ No change or code fix since 2026-11-12 fixes it: the loop's changes of those day
 ## Outcome
 
 - `orchestrator/next` (modified): at equal effective priority, components with no waiting pending requirement come before those with one, then by ID. Its scenario *need against the node graph* now prints `b` then `a`, and a new scenario shows the order with and without the cap.
-- `orchestrator`'s Design gains *Ties at equal priority*, with the reasons above.
+- `orchestrator`'s Design gains *Ties at equal priority*, with the reasons above, and `docs/decisions/priority-orders-nodes.md` records the tie-break in `clm next`'s order (the architecture audit's finding).
 - `orchestrator.loop/release` (modified): a `planned` run doesn't refuse the release; a new scenario *a printed build released*.
 - `backlog/the-fix-for-a-build-ordered-before-what-it-needs-is-outside-the-freeze` (`kind: question`) blocks both requirements until the human answers.
 
@@ -41,14 +41,16 @@ No change or code fix since 2026-11-12 fixes it: the loop's changes of those day
 ## Constraints
 
 - `clm next`'s output format, its cap and its readiness are unchanged; only the order of components at equal effective priority changes.
-- The loop's plan, `view`'s queue model and `queue_from_refs` are unchanged.
+- The loop's plan and the states and fields of `view`'s queue model and `queue_from_refs` are unchanged. The tie-break goes in the queue's own order (`Queue::next`), which `clm next` and `clm view queue`'s next section without a loop both read, so that section's order at ties follows `clm next`'s, as `view.repo`'s "in priority order" allows. The loop keeps `clm next`'s order among builds at equal priority, the priority it reads from `clm view flight` being the same effective priority.
 
 ## Edge cases
 
 - **Nothing else is ready.** A component that waits is still offered for its unblocked requirements when the places reach it, and is then built again once what it waits on is current, as now.
 - **A component both waited on and waiting** sorts with those that wait, since building it now still means building it again.
+- **An obsolete requirement waiting on its own ID**, its lines on other components, counts as waiting: the component is built again once those lines go.
+- **A release relaunches at once.** Once released, a ready component is offered again by the next step's plan, as after any release; to hold a printed build instead, the human pauses it (`pause`), and the tie-break puts a component that waits behind other ready work.
 - **Waits on a backlog item** (`blocked_by`) don't count: an answer may be long in coming, and holding the component behind it would only delay the rest.
 
 ## Open questions
 
-None.
+- Until the human answers the question item, `orchestrator.loop/release` is not current, so `backlog/the-build-skill-releases-a-claim-by-hand`, which waits for it, waits on that answer too. `orchestrator/next` also waits for `config/max-builds-setting`, which wave 1 left behind, as it did before this change.
