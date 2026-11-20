@@ -25,7 +25,7 @@ On 2026-11-19 a loop draft fixed a bug by component: it claimed `impl/<component
 - `vcs/held-lock` (added): `worktrees(root)` gives each worktree whether its lock is held.
 - `orchestrator.checkpoint/checkpoint` (modified): a landed build's worktree whose lock is held stays, with its local branch; two scenarios prove the kept and the removed case.
 - `orchestrator.run/run` (modified): a landed leftover whose lock is held is kept, and `clm run <component>` exits 1 naming its path and saying a running process holds its lock, without claiming.
-- `orchestrator.checkpoint`'s Design says why.
+- `orchestrator.checkpoint`'s and `orchestrator.run`'s Designs say why, and `a-held-lock-keeps-a-worktree` names the sentence of `builds-in-subagents` it narrows.
 
 ## Constraints
 

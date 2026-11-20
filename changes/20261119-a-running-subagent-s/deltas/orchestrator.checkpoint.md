@@ -35,7 +35,7 @@ A branch squash-merged or fast-forwarded into `main` isn't landed by this test: 
 #### Scenario: a running subagent's worktree kept
 - GIVEN the landed `impl/a` of "landed work cleaned up", its worktree locked with the reason `claude agent agent-1 (pid <p> start 1)`, `<p>` the ID of a process that is running
 - WHEN `clm wrap-up` runs
-- THEN the worktree's directory is still there and `git worktree list` names it on `impl/a`, the local branch `impl/a` still exists, it printed no `removed` line naming the worktree's path or `impl/a`, prints `wrap-up ok` and exits 0
+- THEN the worktree's directory is still there and `git worktree list` names it on `impl/a`, the local branch `impl/a` still exists, it printed no `removed` line naming the worktree's path and no line `removed impl/a`, prints `wrap-up ok` and exits 0
 
 #### Scenario: an ended session's worktree removed
 - GIVEN the landed `impl/a` of "landed work cleaned up", its worktree locked with the reason `claude agent agent-1 (pid <p> start 1)`, `<p>` the ID of a process that has ended
