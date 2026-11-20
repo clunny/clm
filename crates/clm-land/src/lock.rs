@@ -552,7 +552,9 @@ mod tests {
 
     /// Starts the waiters one after another, each once its first line is said, behind a lock
     /// held outside the queue (and a `streak` already in the queue, if given), releases that
-    /// lock and returns the order they held it in and their first lines.
+    /// lock and returns the order they held it in and their first lines. A waiter already
+    /// started may say a new count while the next one starts, when the newcomer goes before
+    /// it: the next start waits for the newcomer's own line, whatever comes first.
     fn run_in_order_after(
         ids: &[(&'static str, Rank)],
         streak: Option<u32>,
@@ -571,8 +573,12 @@ mod tests {
         let mut first = Vec::new();
         for (id, rank) in ids {
             handles.push(waiter(&path, *rank, id, &order_tx, &lines_tx));
-            let (who, line) = lines_rx.recv_timeout(Duration::from_secs(10)).unwrap();
-            assert_eq!(who, *id);
+            let line = loop {
+                let (who, line) = lines_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+                if who == *id {
+                    break line;
+                }
+            };
             first.push(line);
         }
         drop(outside);
