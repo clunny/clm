@@ -1,6 +1,6 @@
 ---
 status: applied
-resolves: [a-listed-test-of-a-requirement-that-stays-reaches-no-build]
+resolves: [no-rule-states-what-clm-hashes-does-for-an-unknown-component]
 ---
 
 ## Intent
@@ -20,11 +20,11 @@ Read against the rule and against the code on 2026-11-19, by one reader per comp
 ## Approaches
 
 - **Taken: one whole check in `vcs`, with the crates that start other programs named.** Every crate under `crates/`, its `src/` and its build script, whether or not it lists `clm-git`. Reading only literal `git` and `gh` calls would miss a wrapper that takes the program as an argument, which eight copies caught by refusing any process; so the check refuses any process outside six named crates. The list is in the requirement: a new crate that starts a program is a spec change, which is the review that rule wants.
-- **Taken: route the two offenders through the layer, not an exception.** The build script's fix landed first (`1d2936a7`). `clm-upgrade`'s needs `upgrade` to depend on `vcs`, which this change declares; the fix is `backlog/upgrade-s-unit-tests-start-git-themselves`, which blocks `vcs/one-git-layer`.
+- **Taken: route the two offenders through the layer, not an exception.** Both were mended on small branches before this change: the root's build script (`1d2936a7`) and `clm-upgrade`'s unit tests, once `upgrade` depended on `vcs`.
 - **Taken: Codex's formats were checked, not copied into the spec unverified.** Its source at `d0264b75` and its hooks documentation show the keys, the allow and the block are Claude Code's, and that it reads an `ask` as an error and runs the command. `agent-harness` states them, and the workaround flag is deleted.
 - **Taken: this repository's own settings stay requirements of `config`** (`verify-here` and the like), and the rule's decision gains that case. A spec branch can't set `clm.toml`, so without them nothing states a setting or orders the build that switches it on.
 - **Taken: a clause that is the root's code stays where it is until the root's wave.** `machine`'s "exit 0 whatever the states" and the command lines of `gate.fingerprint` and `agent-harness` are the root's code. Cutting them here would leave them stated nowhere for five waves; a move puts both sides on one branch.
-- **Taken: the build prompt names a listed test under a requirement that stays** (`orchestrator.run/pending-prompt`). The builder check found that a `deleted-tests.txt` line reached a build only when its requirement was removed; 15 of this change's 17 lines cite a requirement that is reworded, so each build would have re-cited the test and the cut would never have happened. Writing the deletions into each component's Design would name tests in a spec, and a note to the build session reaches no later wave. `backlog/a-listed-test-of-a-requirement-that-stays-reaches-no-build` blocks the eleven requirements that wait on it, and `orchestrator.run`'s build deletes it.
+- **Taken: the build prompt's gap went first, as a change of its own.** The builder check found that a `deleted-tests.txt` line reached a build only when its requirement was removed; 14 of this change's 16 lines cite a requirement that is reworded, so each build would have re-cited the test and the cut would never have happened. `20261119-a-listed-test-reaches-its-build` has `orchestrator.run/pending-prompt` name such a test and is built before this change lands: carried here it would have waited on `model`'s build and had five components built twice. It also lets `upgrade` import `clm-git`, and `clm-upgrade`'s unit tests went through the layer on a small branch after it.
 - **Taken: `rename/replay` keeps "exactly" and its build mends the code.** The first draft wrote down what the code does, a comparison of regular files alone; `rename-by-replay` and `humans-review-intent` rely on the tree being exactly what `clm rename` produces, so a rename branch that added a symbolic link would have replayed as true. The audit found it.
 - **Not taken: merging requirements to bring `model` and `config` under budget.** Most of their IDs are printed as rule labels or named under `#### Needs` and `#### Enforced by`; a merge changes what tests in seven crates assert and saves about 40 tokens a requirement. Both stay over 12,000 spec tokens after the pass.
 - **Not taken: cutting `context`'s wasm build and `bundle_from` now.** No code uses either, but `ci` builds the crate for wasm, so the cut goes with `ci` in wave 3.
@@ -41,13 +41,11 @@ Read against the rule and against the code on 2026-11-19, by one reader per comp
 - **`gate.fingerprint`**: the bytes hashed are stated exactly, with `added_changes`, `parse_ls_tree` and the call's failure.
 - **`agent-harness`**: both agent harnesses' events and decisions are stated in the requirement; the hook event loses its `kind`.
 - **`machine`**: the JSON keys, the text lines, the disk rule, the sample's shape and the rows' layout are in the requirements that pointed at the Design.
-- **`upgrade`** depends on `vcs`.
-- **`orchestrator.run`**: `pending-prompt` lists, for a `behind` requirement, the citing tests an approved list names, as tests to delete.
 - 139 requirements become 138: `model/test-dependencies-retired`, `config/component-size-from-text` and `context/says-component` go, each with its scenarios moved; `context/bundle-components` and `apply/reapply` are added.
 
 ## Constraints
 
-- No behaviour changes but five. Three the human agreed as cuts: `vcs/one-git-layer` fails for a crate it used to pass over; `agent-harness`'s hook event loses a field no caller reads; `model` no longer says whether a component is optional, which no caller asks. Two are mends the reviews found: `replays` is false for a branch that adds a symbolic link or a submodule, and the build prompt names a listed test under a requirement that stays.
+- No behaviour changes but these. Three the human agreed as cuts: `vcs/one-git-layer` fails for a crate it used to pass over; `agent-harness`'s hook event loses a field no caller reads; `model` no longer says whether a component is optional, which no caller asks. The others are mends the reviews found, each a place where the code falls short of what its requirement plainly means: `replays` is false for a branch that adds a symbolic link or a submodule, and a line of `machine`'s history whose share is no number is no sample, where today it can stop `clm machine --format ansi`.
 - No requirement whose ID a violation prints, or another spec or `ARCHITECTURE.md` names, is renamed or merged.
 - Every clause newly stated is what the code does today, checked against the source; the ones no test asserts are listed for the builds below.
 - `removal-needs-a-yes`: every sentence, scenario and test below was put to the human on 2026-11-19, who agreed them as recommended.
@@ -98,7 +96,7 @@ Scenarios that move under their names beside those named above: `vcs`'s "fetch u
 
 Sentences with no SHALL also go where they narrated a build long done, restated another requirement or stated another component's behaviour: in `config`'s `host-setting`, `health-lcov-here`, `verify-here`, `retired-terms-detector`, `unreferenced-detector`, `committed-settings` and `local-settings`; in `model`'s `parse-changes`, `parse-backlog`, `carried-constraints`, `content-hash`, `valid-frontmatter`, `human-layers`, `reserved-ids`, `outside-globs` and `wiring-globs`; and in `apply`'s `hash-command`, `resulting-graph` and `resulting-graph-call`.
 
-Tests the builds delete are in `deleted-tests.txt`, 17 lines, each with its reason: seven tests of the three scans and their scanners, six duplicates or subsets, two that prove a rule or a query that goes, the fingerprint's source scan, and a unit test the 5-second scenario replaces. Two tests first listed as duplicates are not, and are re-cited instead: `fetch_brings_origin_up_to_date` and `archived_changes_may_name_unknown_changes`.
+Tests the builds delete are in `deleted-tests.txt`, 16 lines, each with its reason: seven tests of the three scans and their scanners, five duplicates or subsets, two that prove a rule or a query that goes, the fingerprint's source scan, and a unit test the 5-second scenario replaces. Three tests first listed are kept and re-cited instead: `fetch_brings_origin_up_to_date` and `archived_changes_may_name_unknown_changes` are no duplicates, and `hashes_fails_on_an_unknown_node` is the one test that cites `apply/hash-command` for an unknown component.
 
 ## What no test asserts today
 
@@ -118,4 +116,4 @@ A floor: each build's review looks for more. Each is a clause the code already d
 - **`model` and `config` stay over budget**, at about 21,000 and 15,500 spec tokens against 12,000. `model` splits along its record kinds (changes, the human layers, the backlog), each needing a crate of its own (`splits-import-one-way`); `config` could give this repository's own settings to a child. Or the human sets each a `size_budget`. For after the waves.
 - **Found and filed, not mended here:** `backlog/the-gate-s-placement-rule-skips-a-behaviour-sentence-that-holds`, `backlog/an-i-o-failure-while-clm-apply-writes-leaves-the-files-already`, `backlog/the-fingerprint-covers-only-the-clm-root-s-subdirectory-and-the`, `backlog/a-change-md-s-gate-key-is-rejected-by-loading-and-accepted-by`, and the idea `backlog/codex-can-name-a-subagent-s-model-and-abilities-says-it-can-t`.
 - **For later waves**, recorded in the plan item by this branch: `context`'s wasm build with `ci`; `model/exemptions`' glob sentence, `Priority::cap` and the backlog item's printed line to `check`; the root's command clauses, `config/settings-guide-covers-keys` with the root's guide scans, and the `shared-plumbing` family.
-- **`orchestrator.run` and `upgrade` are not this wave's components.** `orchestrator.run` gains one clause and is built again in wave 4; `upgrade` gains a dependency and a fix under `clm claim upgrade --fix`, and is built in wave 2.
+- **`backlog/no-rule-states-what-clm-hashes-does-for-an-unknown-component`**, a question for the human, is answered by `apply/hash-command`, which states what the command does today, the first of the item's two choices: exit 2 with `clm hashes: no valid component `<id>``, as `clm context` exits 2 for an unknown component. The item is deleted here; the human confirms the choice with the approval.

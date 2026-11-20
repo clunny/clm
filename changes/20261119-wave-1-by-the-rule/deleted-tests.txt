@@ -11,7 +11,6 @@ DELETE crates/clm-config/tests/command.rs::this_repository_names_the_retired_ter
 DELETE crates/clm-context/tests/says_component.rs::string_literals_hold_no_old_word	the scan of source for retired words is cut
 DELETE crates/clm-context/tests/says_component.rs::scanner_spots_old_words	a test of that scan's own scanner
 DELETE crates/clm-apply/tests/says_component.rs::apply_source_says_component	the scan of source for retired words is cut
-DELETE crates/clm-apply/tests/command.rs::hashes_fails_on_an_unknown_node	a subset of a_call_writes_what_the_command_prints_and_returns_its_status
 DELETE crates/clm-rename/src/build.rs::a_marker_only_outside_a_test_is_read	a unit test of a private function; a_marker_outside_a_test_is_rewritten proves it end to end
 DELETE crates/clm-rename/tests/rename.rs::a_behind_marker_stays_behind	a subset of current_and_behind_markers_follow_a_rename
 DELETE crates/clm-fingerprint/tests/fingerprint.rs::git_runs_through_the_layer	vcs/one-git-layer reads every crate
