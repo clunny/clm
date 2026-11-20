@@ -38,26 +38,64 @@ pub(crate) fn places_of(root: &Path, prefix: &str) -> Result<PathBuf, Error> {
     Ok(main.join(prefix).join(".clm"))
 }
 
-/// The tree at a commit, held exclusively until dropped.
+/// The tree at a commit.
 pub(crate) struct Tree {
     /// The CLM root inside the tree.
     pub(crate) dir: PathBuf,
-    _lock: File,
 }
 
 impl Tree {
-    /// Waits for the verify lock, then checks `commit` out, clean of untracked files (files
-    /// git ignores stay, so a build directory is reused from run to run).
+    /// Waits for the verify lock, unless the call already holds it, then checks `commit` out,
+    /// clean of untracked files (files git ignores stay, so what the check builds serves the
+    /// call's mutation pass, until `clear` removes them at the call's end:
+    /// `verify-tree-cleared`). The call holds the lock from here until `clear`, so no other
+    /// call cleans or moves the tree between its check and its pass.
     pub(crate) fn at(ctx: &Ctx, commit: &str) -> Result<Tree, Error> {
         let places = places(ctx)?;
-        let lock = lock(&places.join("verify.lock"))?;
+        if ctx.tree_lock.borrow().is_none() {
+            let held = lock(&places.join("verify.lock"))?;
+            *ctx.tree_lock.borrow_mut() = Some(held);
+        }
         let top = places.join("verify-tree");
         checkout(&ctx.root, &top, commit)?;
+        ctx.checked_out.set(true);
         Ok(Tree {
             dir: top.join(&ctx.prefix),
-            _lock: lock,
         })
     }
+}
+
+/// Removes from the verify tree every file git doesn't track, those it ignores included, as
+/// `git clean -ffdx` at its top does, under the verify lock the call holds, which it then
+/// lets go (`verify-tree-cleared`).
+/// Only a tree whose own top git finds there is cleaned: in a tree whose `.git` is gone, git
+/// finds the main worktree around it. A clean that can't be made is said on stderr and
+/// changes nothing else.
+pub(crate) fn clear(ctx: &Ctx) {
+    let cleared = || -> Result<(), String> {
+        let places = places(ctx).map_err(|e| e.to_string())?;
+        let _lock = match ctx.tree_lock.borrow_mut().take() {
+            Some(held) => held,
+            None => lock(&places.join("verify.lock")).map_err(|e| e.to_string())?,
+        };
+        let top = places.join("verify-tree");
+        own_top(&top)?;
+        clm_git::git(&top, &["clean", "--quiet", "-ffdx"]).map_err(|e| e.to_string())?;
+        Ok(())
+    };
+    if let Err(why) = cleared() {
+        say(&format!("clm verify: cannot clean .clm/verify-tree: {why}"));
+    }
+}
+
+/// Whether git run in `top` finds its top at `top` itself, and if not, why.
+fn own_top(top: &Path) -> Result<(), String> {
+    let own = std::fs::canonicalize(top).map_err(|e| format!("{}: {e}", top.display()))?;
+    let found = clm_git::git(top, &["rev-parse", "--show-toplevel"]).map_err(|e| e.to_string())?;
+    if std::fs::canonicalize(&found).ok() != Some(own) {
+        return Err(format!("git finds its top at {found}, not the tree"));
+    }
+    Ok(())
 }
 
 /// Locks `path`, creating it and its directory, and says once when another run holds it.
@@ -108,12 +146,7 @@ fn checkout(root: &Path, top: &Path, commit: &str) -> Result<(), Error> {
 /// Whether `top` is a worktree of its own: git run there finds its top at `top`, not the
 /// worktree around it.
 fn whole(top: &Path) -> bool {
-    let canon = |p: &Path| std::fs::canonicalize(p).ok();
-    top.join(".git").is_file()
-        && canon(top).is_some_and(|own| {
-            clm_git::git(top, &["rev-parse", "--show-toplevel"])
-                .is_ok_and(|t| canon(Path::new(&t)) == Some(own))
-        })
+    top.join(".git").is_file() && own_top(top).is_ok()
 }
 
 fn switch(top: &Path, commit: &str) -> Result<(), clm_git::Error> {

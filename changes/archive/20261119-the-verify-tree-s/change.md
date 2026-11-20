@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-verify-tree-s-build-caches-grow-without-bound-and-take-the]
 ---
 

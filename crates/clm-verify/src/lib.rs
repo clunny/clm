@@ -16,6 +16,7 @@ mod tree;
 
 pub use kept::kept_log;
 
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -149,6 +150,11 @@ pub(crate) struct Ctx<'a> {
     pub(crate) base: String,
     /// Where the CLM repository is in its git repository: `rev-parse --show-prefix`.
     pub(crate) prefix: String,
+    /// Whether this call has checked a commit out into the verify tree, which it then clears
+    /// before it returns (`verify-tree-cleared`).
+    pub(crate) checked_out: Cell<bool>,
+    /// The verify tree's lock, held from the call's first checkout until it clears the tree.
+    pub(crate) tree_lock: RefCell<Option<std::fs::File>>,
 }
 
 impl<'a> Ctx<'a> {
@@ -181,6 +187,8 @@ impl<'a> Ctx<'a> {
             host,
             base,
             prefix,
+            checked_out: Cell::new(false),
+            tree_lock: RefCell::new(None),
         }))
     }
 
@@ -237,17 +245,15 @@ pub fn verify_with(
             return Ok(outcome);
         }
     };
-    let state = State::load(&ctx)?;
-    let mut outcome = match request {
-        Request::Due { work_done, dry_run } => due::due(&ctx, &state, *work_done, *dry_run),
-        Request::Commit(sha) => run::commit(&ctx, &state, sha),
-        Request::Import => import::import_all(&ctx, &state),
-        Request::Bisect(sha) => bisect::bisect_red(&ctx, &state, sha),
-    }?;
-    announce(&outcome);
-    if let Some(end) = outcome.mutate {
-        outcome.notes.extend(mutate::pass(&ctx, &state, end, call));
+    let outcome = judge(&ctx, request, call, announce);
+    // However the call ended, the tree keeps nothing past it, the pass's builds included; and
+    // before any filing, which lands a branch (`verify-tree-cleared`).
+    if ctx.checked_out.get() {
+        tree::clear(&ctx);
     }
+    // Filing doesn't use the tree, so another call may have it meanwhile.
+    drop(ctx.tree_lock.take());
+    let mut outcome = outcome?;
     // What the pass found reaches `main` as backlog items, whether or not a run was due
     // (`files-unproven`); only a clone in `local` mode holds the right to land them.
     let dry = matches!(request, Request::Due { dry_run: true, .. });
@@ -258,6 +264,28 @@ pub fn verify_with(
         && ctx.verify.mutate.is_some()
     {
         outcome.notes.extend(file::file(&ctx));
+    }
+    Ok(outcome)
+}
+
+/// The verification `request` asks for, announced, and the mutation pass a green run goes on
+/// to.
+fn judge(
+    ctx: &Ctx,
+    request: &Request,
+    call: &Call,
+    announce: impl FnOnce(&Outcome),
+) -> Result<Outcome, Error> {
+    let state = State::load(ctx)?;
+    let mut outcome = match request {
+        Request::Due { work_done, dry_run } => due::due(ctx, &state, *work_done, *dry_run),
+        Request::Commit(sha) => run::commit(ctx, &state, sha),
+        Request::Import => import::import_all(ctx, &state),
+        Request::Bisect(sha) => bisect::bisect_red(ctx, &state, sha),
+    }?;
+    announce(&outcome);
+    if let Some(end) = outcome.mutate {
+        outcome.notes.extend(mutate::pass(ctx, &state, end, call));
     }
     Ok(outcome)
 }
