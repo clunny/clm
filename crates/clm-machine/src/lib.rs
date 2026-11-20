@@ -200,7 +200,11 @@ fn judge_disk(
         };
     };
     let Some(peak) = peak else {
-        let share = space.available as f64 / space.total.max(1) as f64;
+        // A disk whose total is 0 is critical, whatever it claims is free.
+        let share = match space.total {
+            0 => 0.0,
+            total => space.available as f64 / total as f64,
+        };
         let state = if share < 0.05 {
             State::Critical
         } else if share < 0.10 {

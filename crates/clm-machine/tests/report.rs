@@ -13,7 +13,7 @@ fn record(peak: u64, builds: &[(&str, u64)]) -> Record {
 
 #[test]
 fn scenario_the_json() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let dir = repo();
     let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
     let json = clm_machine::json(&snapshot.report);
@@ -30,7 +30,7 @@ fn scenario_the_json() {
 
 #[test]
 fn scenario_sustained_cpu() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let cpu = |load1, load5| {
         let mut r = readings();
         (r.load1, r.load5) = (Some(load1), Some(load5));
@@ -44,7 +44,7 @@ fn scenario_sustained_cpu() {
 
 #[test]
 fn scenario_available_not_free() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let memory = |available_gib: f64| {
         let mut r = readings();
         r.memory = space(16 * GIB, (available_gib * GIB as f64) as u64);
@@ -56,8 +56,26 @@ fn scenario_available_not_free() {
 }
 
 #[test]
+fn the_shares_are_judged_below_their_bounds() {
+    // req:machine/machine-report@53f8492b
+    let states = |available: u64| {
+        let mut r = readings();
+        r.memory = space(100, available);
+        r.disk = space(100, available);
+        let report = judged(&r, &Record::default(), &[], 3);
+        (report.memory.state, report.disk.state)
+    };
+    assert_eq!(states(9), (State::Critical, State::Warn));
+    assert_eq!(states(10), (State::Warn, State::Ok));
+    assert_eq!(states(19), (State::Warn, State::Ok));
+    assert_eq!(states(20), (State::Ok, State::Ok));
+    assert_eq!(states(4).1, State::Critical);
+    assert_eq!(states(5).1, State::Warn);
+}
+
+#[test]
 fn scenario_disk_against_the_builds() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
     let judge = |free_gib: u64| {
         let mut r = readings();
@@ -80,7 +98,7 @@ fn scenario_disk_against_the_builds() {
 
 #[test]
 fn scenario_disk_before_any_measurement() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let judge = |free_gib: u64| {
         let mut r = readings();
         r.disk = space(100 * GIB, free_gib * GIB);
@@ -95,7 +113,7 @@ fn scenario_disk_before_any_measurement() {
 
 #[test]
 fn scenario_no_load_average() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     (r.load1, r.load5) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -109,7 +127,7 @@ fn scenario_no_load_average() {
 
 #[test]
 fn scenario_text() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), Some(8.0));
     r.memory = space(16 * GIB, 4 * GIB);
@@ -127,7 +145,7 @@ fn scenario_text() {
 
 #[test]
 fn scenario_text_names_the_need() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), Some(8.0));
     r.memory = space(16 * GIB, 4 * GIB);
@@ -149,7 +167,7 @@ fn scenario_text_names_the_need() {
 
 #[test]
 fn scenario_no_memory_or_disk_reading() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), Some(8.0));
     (r.memory, r.disk) = (None, None);
@@ -175,9 +193,10 @@ fn scenario_no_memory_or_disk_reading() {
 
 #[test]
 fn a_memory_total_of_zero_is_unknown_and_printed() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     r.memory = space(0, 0);
+    r.disk = space(0, 4096);
     let report = judged(&r, &Record::default(), &[], 3);
     assert_eq!(report.memory.state, State::Unknown);
     let text = clm_machine::text(&report);
@@ -185,7 +204,8 @@ fn a_memory_total_of_zero_is_unknown_and_printed() {
         text.lines().nth(1),
         Some("mem  0B available of 0B  unknown")
     );
-    // A disk whose total is 0 is critical.
+    assert_eq!(report.disk.state, State::Critical);
+    // Nothing free of nothing is critical too.
     r.disk = space(0, 0);
     assert_eq!(
         judged(&r, &Record::default(), &[], 3).disk.state,
@@ -194,8 +214,42 @@ fn a_memory_total_of_zero_is_unknown_and_printed() {
 }
 
 #[test]
+fn read_reports_whatever_the_files_hold() {
+    // req:machine/machine-report@53f8492b
+    let dir = repo();
+    let clm_dir = common::common(dir.path()).join("clm");
+    std::fs::create_dir_all(&clm_dir).unwrap();
+    std::fs::write(clm_dir.join("machine"), "peak lots\nbuild\n\u{0}\u{ff}").unwrap();
+    std::fs::write(clm_dir.join("machine-samples"), [0xffu8, 0xfe, b'\n', b'x']).unwrap();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
+    assert_eq!(snapshot.report.disk.peak, None);
+    assert_eq!(snapshot.report.disk.free_places, 3);
+    assert!(!snapshot.history.is_empty());
+}
+
+#[test]
+fn read_reports_whatever_the_files_allow() {
+    // req:machine/machine-report@53f8492b
+    let dir = repo();
+    // A file where the clone's `clm` directory belongs: no record or history can be read
+    // under it, and none written.
+    let clm_dir = common::common(dir.path()).join("clm");
+    std::fs::write(&clm_dir, "not a directory").unwrap();
+    let now = clm_git::now();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, now);
+    assert_eq!(snapshot.report.disk.peak, None);
+    assert_eq!(snapshot.report.disk.free_places, 3);
+    assert_eq!(snapshot.history.len(), 1);
+    assert_eq!(snapshot.history[0].time, now);
+    assert_eq!(
+        std::fs::read_to_string(&clm_dir).unwrap(),
+        "not a directory"
+    );
+}
+
+#[test]
 fn a_ratio_whose_load_average_is_unknown_is_a_dash() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), None);
     let text = clm_machine::text(&judged(&r, &Record::default(), &[], 3));
@@ -213,7 +267,7 @@ fn a_ratio_whose_load_average_is_unknown_is_a_dash() {
 
 #[test]
 fn scenario_the_disks_state_in_the_json() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
     let mut r = readings();
     r.disk = space(100 * GIB, 2 * GIB);
@@ -234,7 +288,7 @@ fn scenario_the_disks_state_in_the_json() {
 
 #[test]
 fn scenario_an_unmeasured_build_owes_the_peak() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let rec = record(8 * GIB, &[("a", 5 * GIB)]);
     let mut r = readings();
     r.disk = space(100 * GIB, 7 * GIB);
@@ -245,7 +299,7 @@ fn scenario_an_unmeasured_build_owes_the_peak() {
 
 #[test]
 fn scenario_outside_a_git_repository() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let dir = tempfile::tempdir().unwrap();
     let now = clm_git::now();
     let snapshot = clm_machine::read(dir.path(), 3, 4, now);

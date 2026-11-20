@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [no-rule-states-what-clm-hashes-does-for-an-unknown-component]
 ---
 
