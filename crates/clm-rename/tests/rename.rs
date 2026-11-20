@@ -1380,7 +1380,7 @@ fn flag(version: &str) -> String {
 }
 
 #[test]
-// req:rename/flag-rerecord@d115e4a4
+// req:rename/flag-rerecord@3f249b07
 fn a_flag_on_a_reworded_requirement_stays_current() {
     let (dir, old) = flag_repo("  - term: sprocket\n    to: cogs\n");
     let d = dir.path();
@@ -1392,7 +1392,7 @@ fn a_flag_on_a_reworded_requirement_stays_current() {
 }
 
 #[test]
-// req:rename/flag-rerecord@d115e4a4
+// req:rename/flag-rerecord@3f249b07
 fn a_flag_on_a_renamed_requirement_follows_it() {
     let (dir, old) = flag_repo("  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1405,7 +1405,7 @@ fn a_flag_on_a_renamed_requirement_follows_it() {
 }
 
 #[test]
-// req:rename/flag-rerecord@d115e4a4
+// req:rename/flag-rerecord@3f249b07
 fn a_flag_at_an_older_version_keeps_it() {
     let (dir, _) = flag_repo("  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1414,6 +1414,30 @@ fn a_flag_at_an_older_version_keeps_it() {
     clm_rename::rename(d, "r").unwrap();
     let want = flag("00000000").replace("requirement: a/x@", "requirement: a/y@");
     assert_eq!(read(d, "backlog/f.md"), want);
+}
+
+#[test]
+// req:rename/flag-rerecord@3f249b07
+fn a_quoted_flag() {
+    for quote in ["\"", "'"] {
+        let text = |v: &str| {
+            flag(v).replace(
+                &format!("requirement: a/x@{v}"),
+                &format!("requirement:  {quote}a/x@{v}{quote}"),
+            )
+        };
+        let dir = markers_repo("d", "  - term: sprocket\n    to: cogs\n");
+        let d = dir.path();
+        let old = version_of(d, "a/x");
+        write(d, "backlog/f.md", &text(&old));
+        git(d, &["init", "-q"]);
+        git(d, &["add", "-A"]);
+        clm_rename::rename(d, "r").unwrap();
+        let new = version_of(d, "a/x");
+        assert_ne!(new, old);
+        assert_eq!(read(d, "backlog/f.md"), text(&new));
+        assert!(violations(d).iter().all(|v| !v.path.starts_with("backlog")));
+    }
 }
 
 fn component_repo(items: &[(&str, &str)]) -> TempDir {

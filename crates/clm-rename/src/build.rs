@@ -318,13 +318,39 @@ fn rewrite_flags(root: &Path, done: &Done, writes: &mut Writes) -> Result<(), Fa
         let Ok(text) = fs::read_to_string(root.join(&item.path)) else {
             continue;
         };
-        let old = format!("requirement: {id}@{was}");
-        let out = text.replacen(&old, &format!("requirement: {id}@{now}"), 1);
-        if out != text {
+        if let Some(out) = rerecord(&text, &format!("{id}@{was}"), &format!("{id}@{now}")) {
             writes.put(&item.path, out.as_bytes())?;
         }
     }
     Ok(())
+}
+
+/// Backlog item `text` with its frontmatter's `requirement` value, `old` however spaced
+/// after the key and quoted or bare, set to `new` inside the same quotes; none when the
+/// value isn't `old`.
+fn rerecord(text: &str, old: &str, new: &str) -> Option<String> {
+    let mut lines: Vec<&str> = text.split_inclusive('\n').collect();
+    if lines.first()?.trim_end() != "---" {
+        return None;
+    }
+    let end = 1 + lines[1..].iter().position(|l| l.trim_end() == "---")?;
+    let (at, value) = (1..end).find_map(|n| Some((n, lines[n].strip_prefix("requirement:")?)))?;
+    let bare = value.trim();
+    let inner = ["\"", "'"]
+        .iter()
+        .find_map(|q| bare.strip_prefix(q)?.strip_suffix(q))
+        .unwrap_or(bare);
+    if inner != old {
+        return None;
+    }
+    let start = lines[at].len() - value.len() + value.find(inner)?;
+    let line = format!(
+        "{}{new}{}",
+        &lines[at][..start],
+        &lines[at][start + inner.len()..]
+    );
+    lines[at] = &line;
+    Some(lines.concat())
 }
 
 /// Whether `change`'s deltas still wait to be applied: a proposed or approved change that
