@@ -13,7 +13,7 @@ The gate reads the paths a branch changes relative to the CLM root, as the appro
 
 ## Approaches
 
-- **Taken: turn each path into one relative to the root.** A path under the root loses the root's prefix (`git rev-parse --show-prefix`); a path outside it climbs out with `../`, which git itself reads relative to the directory it runs in, both as a pathspec and as `<rev>:./<path>`. Every rule then reads root-relative paths, as the fingerprint, `land/derived-specs` and `rename/replay` already do, and an outside file can't collide with a root file of the same name. At a repository's top the prefix is empty and nothing changes.
+- **Taken: turn each path into one relative to the root.** A path under the root loses the root's prefix (`git rev-parse --show-prefix`); a path outside it climbs out with `../`, which git itself reads relative to the directory it runs in, both as a pathspec and as `<rev>:./<path>`. Every rule then reads root-relative paths, as the fingerprint and `land/derived-specs` already do, and an outside file can't collide with a root file of the same name. At a repository's top the prefix is empty and nothing changes.
 - **Not taken: `git diff --relative`.** It prints root-relative paths but drops every file outside the root, so a spec branch carrying one would land under an approval that never covered it.
 - **Not taken: refuse a CLM root that isn't the repository's top.** `root-from-cwd` lets a repository keep CLM in a subdirectory, and the fingerprint was just defined for that layout.
 - **Not taken: match spec paths through the prefix and keep top-relative paths.** Every rule that names a path (`clm.toml`, `docs/allowed_signers`, `changes/<id>/`, a component's `paths`, the code-fix trailer's `backlog/<slug>`) would carry the prefix, and the pathspec reads would still need the other form.
@@ -34,7 +34,10 @@ The gate reads the paths a branch changes relative to the CLM root, as the appro
 
 ## Edge cases and workarounds
 
-- A path outside the root that climbs more than one level (`../../x`) can't occur: the root is under the repository's top, and git prints only paths under the top.
+- A path outside the root is the shortest path from the root to it: with the root at `a/b/`, `a/x` is `../x` and `x` is `../../x`.
+- `extract_paths` takes paths relative to the repository's top and refuses `..`, so the gate's graph loads pass the root's prefix and load from its directory in the extraction (builder check); `clm-git` doesn't change.
+- `rename/replay` reads the whole repository's tree (`ls-tree --full-tree`), so in a subdirectory root it never finds the branch's added change and a rename branch is `mixed`, failing closed. Filed as `backlog/rename-replay-reads-the-repository-s-top-not-the-clm-root` on `rename` (builder check).
+- A branch at the repository's top that edits a spec-path name outside the root, such as the top's own `CLAUDE.md`, rates lower under version 5 (`code`) than under 4 (`spec`); the audit reports only understatement, so no version is needed for it.
 - `gate/up-to-date`'s check of `specs/` changed on both sides names the root's `specs/` files.
 
 ## What the requirements no longer state
