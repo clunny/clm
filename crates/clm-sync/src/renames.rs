@@ -32,15 +32,16 @@ pub(crate) fn regenerate(
     let [(id, _)] = added else {
         return Ok(Outcome::Other);
     };
+    // Read root-relative (`paths-under-the-root`), so a root in a subdirectory finds it.
     let live = format!("changes/{id}/change.md");
-    let path = if exists_at(root, "HEAD", &live)? {
+    let path = if exists_at(root, "HEAD", &format!("./{live}"))? {
         live
     } else {
         format!("changes/{}/{id}/change.md", clm_model::ARCHIVE_DIR)
     };
     let bytes = run(
         root,
-        &["cat-file", "blob", &format!("HEAD:{path}")],
+        &["cat-file", "blob", &crate::root::object("HEAD", &path)],
         Options::default(),
     )?;
     let source = String::from_utf8_lossy(&bytes).into_owned();

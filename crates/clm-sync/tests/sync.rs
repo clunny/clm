@@ -92,6 +92,12 @@ struct Repo {
 /// A clone of a bare `origin` whose `main` has node `a` with requirement `p`, and HEAD on a
 /// fresh branch `branch`.
 fn repo(branch: &str) -> Repo {
+    repo_at(branch, "")
+}
+
+/// [`repo`] with the CLM root at `prefix` (empty, or a directory ending in `/`), and a
+/// `README.md` at the repository's top.
+fn repo_at(branch: &str, prefix: &str) -> Repo {
     let (o, w) = (TempDir::new().unwrap(), TempDir::new().unwrap());
     let (origin, work) = (o.path().to_path_buf(), w.path().join("work"));
     git(&origin, &["init", "-q", "--bare", "-b", "main"]);
@@ -106,9 +112,16 @@ fn repo(branch: &str) -> Repo {
     );
     git(&work, &["config", "user.name", "t"]);
     git(&work, &["config", "user.email", "t@t"]);
-    write(&work, "specs/SPEC.md", ROOT);
-    write(&work, "specs/a/SPEC.md", &node_a("specd", "c", &["p"]));
+    write(&work, &format!("{prefix}specs/SPEC.md"), ROOT);
+    write(
+        &work,
+        &format!("{prefix}specs/a/SPEC.md"),
+        &node_a("specd", "c", &["p"]),
+    );
     write(&work, "src/lib.rs", "one\ntwo\nthree\n");
+    if !prefix.is_empty() {
+        write(&work, "README.md", "one\ntwo\nthree\n");
+    }
     commit(&work, "base");
     git(&work, &["push", "-q", "origin", "HEAD:main"]);
     git(&work, &["checkout", "-q", "-b", branch]);
@@ -913,7 +926,7 @@ fn a_serves_c(r: &Repo) {
 #[test]
 fn spec_changed_reports_capabilities() {
     // req:sync/spec-changed@14245755
-    // req:sync/extract-through-layer@5c278f6c
+    // req:sync/extract-through-layer@ccb1a495
     let r = repo("impl/a");
     a_serves_c(&r);
     main_moves(
@@ -2162,7 +2175,7 @@ fn only_checkouts_of_the_repo(r: &Repo, log: &Path) {
 
 #[test]
 fn no_post_checkout_hook_when_regenerating() {
-    // req:sync/extract-through-layer@5c278f6c
+    // req:sync/extract-through-layer@ccb1a495
     let r = repo("spec/x");
     apply_change(&r, "x", "", &adds_x());
     main_moves(
@@ -2180,7 +2193,7 @@ fn no_post_checkout_hook_when_regenerating() {
 
 #[test]
 fn no_post_checkout_hook_when_comparing_a_nodes_spec() {
-    // req:sync/extract-through-layer@5c278f6c
+    // req:sync/extract-through-layer@ccb1a495
     let r = repo("impl/a");
     write(&r.work, "src/new.rs", "new\n");
     commit(&r.work, "work");
@@ -3123,4 +3136,160 @@ fn a_lock_met_at_the_reapply_commit_is_waited_out() {
     );
     assert_eq!(git(&r.work, &["log", "-1", "--format=%s"]), "Re-apply x");
     assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+}
+
+/// The CLM root of [`repo_at`]'s repositories in these tests: the subdirectory `tool/`.
+const TOOL: &str = "tool/";
+
+/// The CLM root in `r`'s work clone.
+fn tool(r: &Repo) -> PathBuf {
+    r.work.join(TOOL)
+}
+
+/// `clm sync` run in the CLM root `tool/`.
+fn sync_tool(r: &Repo) -> Report {
+    sync(&tool(r)).unwrap()
+}
+
+/// [`assert_refused`] for a run in `tool/`.
+fn assert_tool_refused(r: &Repo, lines: &[&str]) {
+    let before = tree_state(r);
+    let report = sync_tool(r);
+    assert!(!report.ok, "{:?}", report.lines);
+    assert_eq!(report.lines, lines);
+    assert_eq!(tree_state(r), before);
+}
+
+#[test]
+fn uncommitted_spec_edit_in_a_subdirectory_root() {
+    // req:sync/paths-under-the-root@6e985447
+    let r = repo_at("spec/x", TOOL);
+    write(
+        &r.work,
+        "tool/backlog/q.md",
+        "---\ntitle: Q\nkind: idea\n---\n",
+    );
+    commit(&r.work, "q");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    write(
+        &r.work,
+        "tool/backlog/q.md",
+        "---\ntitle: Q2\nkind: idea\n---\n",
+    );
+    assert_tool_refused(&r, &["uncommitted backlog/q.md"]);
+}
+
+#[test]
+fn a_top_level_specs_directory_is_outside_the_root() {
+    // req:sync/paths-under-the-root@6e985447
+    let r = repo_at("spec/x", TOOL);
+    write(&r.work, "specs/notes.md", "notes\n");
+    commit(&r.work, "notes");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    write(&r.work, "specs/notes.md", "notes, edited\n");
+
+    let report = sync_tool(&r);
+    assert!(report.ok, "{:?}", report.lines);
+    assert!(
+        !report.lines.iter().any(|l| l.starts_with("uncommitted")),
+        "{:?}",
+        report.lines
+    );
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), origin_main(&r));
+    assert_eq!(read(&r.work, "specs/notes.md"), "notes, edited\n");
+    assert_eq!(
+        git(&r.work, &["status", "--porcelain"]),
+        "M specs/notes.md",
+        "still uncommitted"
+    );
+}
+
+#[test]
+fn an_edit_outside_the_root_that_main_changed() {
+    // req:sync/paths-under-the-root@6e985447
+    let r = repo_at("spec/x", TOOL);
+    main_moves(&r, &[("README.md", "one\n2\nthree\n")]);
+    write(&r.work, "README.md", "one\nTWO\nthree\n");
+    assert_tool_refused(&r, &["uncommitted ../README.md"]);
+}
+
+#[test]
+fn specs_conflict_in_a_subdirectory_root() {
+    // req:sync/paths-under-the-root@6e985447
+    // req:sync/extract-through-layer@ccb1a495
+    let r = repo_at("spec/x", TOOL);
+    let root = tool(&r);
+    write(
+        &root,
+        "changes/y/change.md",
+        "---\nstatus: proposed\n---\n\n# y\n",
+    );
+    write(&root, "changes/y/deltas/a.md", &adds_x());
+    clm_apply::apply(&root, "y").unwrap();
+    commit(&r.work, "Apply y");
+    main_moves(
+        &r,
+        &[("tool/specs/a/SPEC.md", &node_a("specd", "c", &["p", "y"]))],
+    );
+
+    let report = sync_tool(&r);
+    assert!(report.ok, "{:?}", report.lines);
+    assert!(
+        !report.lines.iter().any(|l| l.starts_with("conflict")),
+        "{:?}",
+        report.lines
+    );
+    let spec = read(&r.work, "tool/specs/a/SPEC.md");
+    assert!(
+        spec.contains("Requirement: x") && spec.contains("Requirement: y"),
+        "{spec}"
+    );
+    assert!(!rebasing(&r));
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+}
+
+#[test]
+fn a_conflict_outside_the_root() {
+    // req:sync/paths-under-the-root@6e985447
+    let r = repo_at("topic", TOOL);
+    write(&r.work, "README.md", "one\nTWO\nthree\n");
+    commit(&r.work, "work");
+    main_moves(&r, &[("README.md", "one\n2\nthree\n")]);
+
+    let report = sync_tool(&r);
+    assert!(!report.ok);
+    assert_eq!(report.lines, ["conflict ../README.md"]);
+    assert!(rebasing(&r), "the rebase is left in progress");
+}
+
+#[test]
+fn spec_changed_in_a_subdirectory_root() {
+    // req:sync/paths-under-the-root@6e985447
+    // req:sync/extract-through-layer@ccb1a495
+    let r = repo_at("impl/a", TOOL);
+    write(&r.work, "src/new.rs", "new\n");
+    commit(&r.work, "work");
+    let at = |r: &Repo| {
+        let (graph, violations) = clm_model::load(&tool(r));
+        assert!(violations.is_empty(), "{violations:?}");
+        graph.requirement("a/p").unwrap().version().to_string()
+    };
+    let old = at(&r);
+    let modified =
+        read(&r.work, "tool/specs/a/SPEC.md").replace("It SHALL p.", "It SHALL p, more.");
+    main_moves(&r, &[("tool/specs/a/SPEC.md", &modified)]);
+
+    let report = sync_tool(&r);
+    assert!(!report.ok, "{:?}", report.lines);
+    let new = at(&r);
+    assert_ne!(old, new);
+    assert_eq!(
+        report.lines[..3],
+        [
+            "spec changed a".to_string(),
+            "changed specs/a/SPEC.md".into(),
+            format!("requirement a/p {old} -> {new}"),
+        ]
+    );
+    names_pending(&report.lines[3]);
 }

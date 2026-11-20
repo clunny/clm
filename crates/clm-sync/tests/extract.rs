@@ -11,7 +11,7 @@ const GONE: [&str; 2] = [
 
 #[test]
 fn no_extract_of_its_own() {
-    // req:sync/extract-through-layer@5c278f6c
+    // req:sync/extract-through-layer@ccb1a495
     let files = rust_files(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"));
     assert!(!files.is_empty(), "no source files read");
     let mut found = Vec::new();

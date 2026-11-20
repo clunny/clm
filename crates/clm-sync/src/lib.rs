@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use clm_git::{Options, REMOTE};
 use clm_regenerate::{Regenerated, exists_at, extract_present, git, io, regenerated, run};
+use root::{Root, object};
 use scratch::Scratch;
 
 pub use command::{AutosyncArgs, RebaseArgs, autosync_command, rebase_command};
@@ -15,6 +16,7 @@ pub use command::{AutosyncArgs, RebaseArgs, autosync_command, rebase_command};
 mod command;
 mod items;
 mod renames;
+mod root;
 mod scratch;
 
 /// `main` on the remote, as fetched: what every sync rebases onto.
@@ -80,6 +82,7 @@ pub fn sync(
     env: &dyn Fn(&str) -> Option<String>,
     settings: impl FnOnce(&Path) -> Result<clm_health::Settings, String>,
 ) -> Result<Report, Error> {
+    let place = Root::of(root)?;
     let marker = git_path(root, "clm/sync-rebase")?;
     let rebasing =
         git_path(root, "rebase-merge")?.exists() || git_path(root, "rebase-apply")?.exists();
@@ -118,7 +121,7 @@ pub fn sync(
         clm_git::fetch(root)?;
         let onto = git(root, &["rev-parse", &main_ref()])?;
         let fresh = merge_base(root, "HEAD", &onto)?;
-        let work = uncommitted(root, &branch, &onto, fresh.as_deref())?;
+        let work = uncommitted(root, &place, &branch, &onto, fresh.as_deref())?;
         if !work.is_empty() {
             return Ok(Report::left(
                 work.iter().map(|p| format!("uncommitted {p}")).collect(),
@@ -166,22 +169,32 @@ pub fn sync(
             renames::Outcome::Other => {}
             renames::Outcome::Left(lines) => return Ok(Report::left(lines)),
             renames::Outcome::Done => {
-                return conclude(root, env, settings, &onto, base.as_deref(), &base_file, &[]);
+                return conclude(
+                    root,
+                    &place,
+                    env,
+                    settings,
+                    &onto,
+                    base.as_deref(),
+                    &base_file,
+                    &[],
+                );
             }
         }
     }
 
     // `sync-owns-merge-drivers`: on a branch that adds a change, whatever its status,
     // `specs/` keeps the side being rebased onto (a driver that leaves `%A`): a file nobody
-    // wrote by hand, which step 4 rebuilds when the change is applied.
+    // wrote by hand, which step 4 rebuilds when the change is applied. git matches a pattern
+    // holding a slash from the repository's top, so it names the root's `specs/`.
     let keep = !added.is_empty();
     let attributes = git_path(root, "clm/attributes")?;
     let rules = if !keep {
-        ""
+        String::new()
     } else {
-        "specs/** merge=clm-keep\n"
+        format!("{}specs/** merge=clm-keep\n", place.prefix())
     };
-    write(&attributes, rules)?;
+    write(&attributes, &rules)?;
     let config = [
         "-c".to_string(),
         format!("core.attributesFile={}", attributes.display()),
@@ -224,7 +237,21 @@ pub fn sync(
             Err(clm_git::Error::Failed { stderr, .. }) => stderr,
             Err(e) => return Err(e.into()),
         };
-        let conflicts = names(root, &["diff", "--name-only", "-z", "--diff-filter=U"])?;
+        // Named from the root, so a conflict outside it reads `../<path>` and is never one of
+        // the root's `specs/`; a `specs/` one is handed back to git root-relative.
+        let conflicts: Vec<String> = names(
+            root,
+            &[
+                "diff",
+                "--no-relative",
+                "--name-only",
+                "-z",
+                "--diff-filter=U",
+            ],
+        )?
+        .iter()
+        .map(|p| place.name(p))
+        .collect();
         if conflicts.is_empty() {
             // The `-c` overrides would bury what git said, such as the path it won't
             // overwrite.
@@ -267,6 +294,7 @@ pub fn sync(
 
     conclude(
         root,
+        &place,
         env,
         settings,
         &onto,
@@ -279,8 +307,10 @@ pub fn sync(
 /// What follows the rebase, or the regenerated rename commit, on `HEAD`: the regenerate
 /// step for the changes in `applied`, the spec-changed report against `base`, archiving,
 /// proposal items, and the judgement of `HEAD` (`judged-by-check`).
+#[allow(clippy::too_many_arguments)]
 fn conclude(
     root: &Path,
+    place: &Root,
     env: &dyn Fn(&str) -> Option<String>,
     settings: impl FnOnce(&Path) -> Result<clm_health::Settings, String>,
     onto: &str,
@@ -297,7 +327,7 @@ fn conclude(
         return Ok(Report::left(lines));
     }
     let branch = branch(root);
-    let changed = spec_changed(root, branch.as_deref(), base, onto)?;
+    let changed = spec_changed(root, place, branch.as_deref(), base, onto)?;
     let moved = !changed.is_empty();
     lines.extend(changed);
     let (done, left) = archive_complete(root, branch.as_deref())?;
@@ -315,7 +345,7 @@ fn conclude(
     }
     // `judged-by-check` (`sync-judges-head`): `HEAD`'s commit, never the working tree, in a
     // temporary worktree removed on every exit path.
-    let scratch = Scratch::new(root, env)?;
+    let scratch = Scratch::new(root, place.prefix(), env)?;
     let left: Vec<String> = left.iter().map(clm_check::format).collect();
     let judged = judge(root, &scratch, branch.as_deref(), settings, &left);
     let warning = scratch.remove();
@@ -378,7 +408,8 @@ fn stash_tip(root: &Path) -> Result<Option<String>, Error> {
 }
 
 /// `sync-ignores-untracked`, `sync-carries-unrelated-edits`: the uncommitted work that stops
-/// a sync of `branch` onto `onto`, sorted, as paths from the top of the repository. It is
+/// a sync of `branch` onto `onto`, sorted, each named from the CLM root (`place`), so a
+/// file outside it reads `../<path>` and is never under the root's trees. It is
 /// each staged change, which the commits sync makes would sweep in; each tracked file
 /// modified or deleted under `specs/`, `changes/` or `backlog/`, which sync writes; each one
 /// `onto` changed since `base` (every one without a base), which the rebase writes; on
@@ -388,6 +419,7 @@ fn stash_tip(root: &Path) -> Result<Option<String>, Error> {
 /// sets aside and puts back.
 fn uncommitted(
     root: &Path,
+    place: &Root,
     branch: &str,
     onto: &str,
     base: Option<&str>,
@@ -406,9 +438,18 @@ fn uncommitted(
         Some(base) => Some(
             names(
                 root,
-                &["diff", "--name-only", "-z", "--no-renames", base, onto],
+                &[
+                    "diff",
+                    "--no-relative",
+                    "--name-only",
+                    "-z",
+                    "--no-renames",
+                    base,
+                    onto,
+                ],
             )?
-            .into_iter()
+            .iter()
+            .map(|p| place.name(p))
             .collect(),
         ),
         None => None,
@@ -418,7 +459,7 @@ fn uncommitted(
     // the index.
     let mut paths = BTreeSet::new();
     for entry in &status {
-        let (Some(xy), Some(path)) = (entry.get(..2), entry.get(3..)) else {
+        let (Some(xy), Some(path)) = (entry.get(..2), entry.get(3..).map(|p| place.name(p))) else {
             continue;
         };
         let (staged, modified) = (!xy.starts_with(' '), !xy.ends_with(' '));
@@ -428,9 +469,9 @@ fn uncommitted(
                     || ["specs/", "changes/", "backlog/"]
                         .iter()
                         .any(|d| path.starts_with(d))
-                    || main_changed.as_ref().is_none_or(|m| m.contains(path)));
+                    || main_changed.as_ref().is_none_or(|m| m.contains(&path)));
         if stops {
-            paths.insert(path.to_string());
+            paths.insert(path);
         }
     }
     let untracked = git(
@@ -450,7 +491,7 @@ fn uncommitted(
         untracked
             .split('\0')
             .filter(|p| !p.is_empty())
-            .map(str::to_string),
+            .map(|p| place.name(p)),
     );
     Ok(paths.into_iter().collect())
 }
@@ -479,10 +520,14 @@ struct SpecAt {
     capability_blocks: Vec<String>,
 }
 
-fn spec_at(root: &Path, rev: &str, node: &str) -> Result<SpecAt, Error> {
-    let tmp = extract_present(root, rev, &["specs", "ARCHITECTURE.md", "CAPABILITIES.md"])?;
-    let (graph, _) = clm_model::load(tmp.path());
-    let bundle = clm_context::bundle(&graph, tmp.path(), node).map(|b| clm_context::hash(&b));
+fn spec_at(root: &Path, place: &Root, rev: &str, node: &str) -> Result<SpecAt, Error> {
+    // `extract-through-layer`: the root's paths, named from the repository's top, and the
+    // graph loaded from the root's place in the extraction.
+    let paths = ["specs", "ARCHITECTURE.md", "CAPABILITIES.md"].map(|p| place.under(p));
+    let tmp = extract_present(root, rev, &paths.each_ref().map(String::as_str))?;
+    let at = tmp.path().join(place.prefix());
+    let (graph, _) = clm_model::load(&at);
+    let bundle = clm_context::bundle(&graph, &at, node).map(|b| clm_context::hash(&b));
     let mut paths: BTreeSet<String> = ["ARCHITECTURE.md".to_string()].into();
     let capability_blocks = graph.nodes.get(node).map_or_else(Vec::new, |n| {
         clm_context::served_capabilities(&graph, n)
@@ -520,6 +565,7 @@ fn spec_at(root: &Path, rev: &str, node: &str) -> Result<SpecAt, Error> {
 /// Nothing on other branches, or when nothing in the bundle moved.
 fn spec_changed(
     root: &Path,
+    place: &Root,
     branch: Option<&str>,
     base: Option<&str>,
     onto: &str,
@@ -532,6 +578,7 @@ fn spec_changed(
         root,
         &[
             "diff",
+            "--no-relative",
             "--name-only",
             base,
             onto,
@@ -544,7 +591,10 @@ fn spec_changed(
     if touched.is_empty() {
         return Ok(Vec::new());
     }
-    let (before, after) = (spec_at(root, base, node)?, spec_at(root, onto, node)?);
+    let (before, after) = (
+        spec_at(root, place, base, node)?,
+        spec_at(root, place, onto, node)?,
+    );
     if before.bundle == after.bundle {
         return Ok(Vec::new());
     }
@@ -559,9 +609,13 @@ fn spec_changed(
     if before.capability_blocks != after.capability_blocks {
         paths.push("CAPABILITIES.md");
     }
-    let mut args = vec!["diff", "--name-only", base, onto, "--"];
+    let mut args = vec!["diff", "--no-relative", "--name-only", base, onto, "--"];
     args.extend(&paths);
-    out.extend(git(root, &args)?.lines().map(|p| format!("changed {p}")));
+    out.extend(
+        git(root, &args)?
+            .lines()
+            .map(|p| format!("changed {}", place.name(p))),
+    );
     let ids: BTreeSet<&String> = before
         .versions
         .keys()
@@ -782,7 +836,7 @@ fn added_changes(
         } else {
             clm_model::ChangeStatus::Applied
         };
-        let text = git(root, &["show", &format!("HEAD:{file}")])?;
+        let text = git(root, &["show", &object("HEAD", file)])?;
         let regenerate =
             clm_model::parse_change_frontmatter(&text).is_some_and(|fm| fm.status == regenerated);
         ids.insert(id.to_string(), regenerate);
@@ -790,7 +844,7 @@ fn added_changes(
     // A change `onto` holds unapplied, which `HEAD` applies (`regenerate-applied-live-changes`):
     // `onto`'s `specs/` lacks its deltas, so they are regenerated as an added change's are.
     let status_at = |rev: &str, file: &str| -> Result<Option<clm_model::ChangeStatus>, Error> {
-        let text = git(root, &["show", &format!("{rev}:{file}")])?;
+        let text = git(root, &["show", &object(rev, file)])?;
         Ok(clm_model::parse_change_frontmatter(&text).map(|fm| fm.status))
     };
     for file in &onto_files {
@@ -822,8 +876,8 @@ fn added_changes(
     Ok(ids.into_iter().collect())
 }
 
-/// Every `change.md` under `changes/` in `rev`'s tree, live and archived, as paths from the
-/// top of the repository.
+/// Every `change.md` under the root's `changes/` in `rev`'s tree, live and archived, as paths
+/// relative to the root, as `git ls-tree` lists them from the directory it runs in.
 fn change_files(root: &Path, rev: &str) -> Result<BTreeSet<String>, Error> {
     let files = git(
         root,
