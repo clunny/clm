@@ -2,7 +2,7 @@
 title: Upgrade
 status: active
 owners: ["@clunny"]
-depends_on: [config]
+depends_on: [config, vcs]
 paths: ["crates/clm-upgrade/**"]
 successor: ""
 serves: [capability/upgrade-clm, architecture/upgrades-carry-migrations]
