@@ -39,7 +39,7 @@ fn call(root: &Path) -> (u8, String) {
 
 #[test]
 fn scenario_a_name_the_contract_doesnt_hold() {
-    // req:check.health/rule-signals@f7800f03
+    // req:check.health/rule-signals@015eed9a
     let dir = repo();
     let d = dir.path();
     write(
@@ -69,7 +69,7 @@ it, in the file `clm.toml` names, with `walk_up(path)` again.\n\n```\n`fenced_on
 
 #[test]
 fn code_names_are_paths_lists_or_camel_case() {
-    // req:check.health/rule-signals@f7800f03
+    // req:check.health/rule-signals@015eed9a
     let dir = repo();
     let d = dir.path();
     write(
@@ -108,7 +108,7 @@ reading `human_burdens`, `origin/main`, `Settings` and `a.b(c)`.",
 
 #[test]
 fn scenario_a_requirement_that_places_a_test() {
-    // req:check.health/rule-signals@f7800f03
+    // req:check.health/rule-signals@015eed9a
     let dir = repo();
     let d = dir.path();
     write(
@@ -139,8 +139,44 @@ fn scenario_a_requirement_that_places_a_test() {
 }
 
 #[test]
+fn scenario_a_phrase_in_a_sentence_of_behaviour() {
+    // req:check.health/rule-signals@015eed9a
+    let dir = repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &component(
+            "[]",
+            "Plain.",
+            "Plain.",
+            &[
+                (
+                    "z",
+                    "The directory SHALL be deleted once nothing else is left in it. Every test \
+SHALL pass.",
+                ),
+                (
+                    "w",
+                    "It SHALL print.\nIts tests SHALL sit\nin a's own files.",
+                ),
+            ],
+        ),
+    );
+    let out = report(d);
+    assert_eq!(
+        section(&out, "test-placement"),
+        [
+            "health/test-placement: 1 requirements",
+            "specs/a/SPEC.md: health/test-placement: a/w SHALL sit",
+        ],
+        "{out}"
+    );
+}
+
+#[test]
 fn scenario_an_exit_in_a_design() {
-    // req:check.health/rule-signals@f7800f03
+    // req:check.health/rule-signals@015eed9a
     let dir = repo();
     let d = dir.path();
     let spec = component(
@@ -169,7 +205,7 @@ Nothing exits here, nor at exit1.\n```\nexits 5\n```",
 
 #[test]
 fn scenario_a_test_that_cites_nothing() {
-    // req:check.health/rule-signals@f7800f03
+    // req:check.health/rule-signals@015eed9a
     let dir = repo();
     let d = dir.path();
     write(
@@ -209,7 +245,7 @@ fn helper() {{}}\n\n#[test]\nfn helper_rounds_up() {{\n    assert!(true);\n}}\n"
 
 #[test]
 fn scenario_nothing_found() {
-    // req:check.health/rule-signals@f7800f03
+    // req:check.health/rule-signals@015eed9a
     let dir = repo();
     let d = dir.path();
     write(

@@ -101,12 +101,15 @@ pub(crate) fn outside_contract(graph: &Graph) -> Section {
     Section::of("outside-contract", "names", lines)
 }
 
-/// Each requirement whose statement holds a sentence that places a test, with the first
-/// placement phrase found (`gate`'s `places_a_test`).
+/// Each requirement whose statement holds a sentence, as `gate`'s `sentences` splits it, that
+/// places a test, with the first placement phrase found (`gate`'s `places_a_test`).
 pub(crate) fn test_placement(graph: &Graph) -> Section {
     let lines = requirements(graph)
         .filter_map(|(n, r)| {
-            let phrase = clm_gate::places_a_test(&statement(r).join("\n"))?;
+            let statement = statement(r).join("\n");
+            let phrase = clm_gate::sentences(&statement)
+                .into_iter()
+                .find_map(clm_gate::places_a_test)?;
             Some(finding(
                 n.path.display(),
                 "test-placement",
