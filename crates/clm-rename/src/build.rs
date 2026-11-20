@@ -5,6 +5,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 
+use clm_apply::{FileOp, Journal};
 use clm_coverage::MarkerSpan;
 use clm_git::Failure;
 use clm_model::outline::{requirement_spans, section_spans};
@@ -57,61 +58,46 @@ fn io(path: &Path, e: std::io::Error) -> Failure {
     Failure::Refused(format!("{}: {e}", path.display()))
 }
 
-/// The files `rename` writes, each with what it held before, so a refusal restores them.
-struct Writes<'a> {
-    root: &'a Path,
-    before: Vec<(PathBuf, Option<Vec<u8>>)>,
+/// The one record of every file a run writes and removes, its own and the apply's, so a
+/// failure puts them all back (`undo-on-failure`, `apply/journal`).
+struct Writes {
+    journal: Journal,
 }
 
-impl Writes<'_> {
-    /// Remembers what `rel` holds, or that it holds nothing, before the first write to it.
-    fn remember(&mut self, rel: &Path) -> Result<(), Failure> {
-        if self.before.iter().any(|(p, _)| p == rel) {
-            return Ok(());
-        }
-        let was = match fs::read(self.root.join(rel)) {
-            Ok(bytes) => Some(bytes),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => return Err(io(rel, e)),
-        };
-        self.before.push((rel.to_path_buf(), was));
-        Ok(())
-    }
-
+impl Writes {
     /// Removes the files directly in `rel`, the change's old deltas.
-    fn clear(&mut self, rel: &Path) -> Result<(), Failure> {
-        let Ok(entries) = fs::read_dir(self.root.join(rel)) else {
+    fn clear(&mut self, root: &Path, rel: &Path) -> Result<(), Failure> {
+        let Ok(entries) = fs::read_dir(root.join(rel)) else {
             return Ok(());
         };
-        for entry in entries.flatten() {
-            let path = rel.join(entry.file_name());
-            self.remember(&path)?;
-            fs::remove_file(self.root.join(&path)).map_err(|e| io(&path, e))?;
+        let mut paths: Vec<PathBuf> = entries.flatten().map(|e| rel.join(e.file_name())).collect();
+        paths.sort();
+        for path in paths {
+            self.perform(&FileOp::Remove(path))?;
         }
         Ok(())
     }
 
     fn put(&mut self, rel: &Path, bytes: &[u8]) -> Result<(), Failure> {
-        let full = self.root.join(rel);
-        self.remember(rel)?;
-        if let Some(dir) = full.parent() {
-            fs::create_dir_all(dir).map_err(|e| io(dir, e))?;
-        }
-        fs::write(&full, bytes).map_err(|e| io(&full, e))
+        self.perform(&FileOp::Write(rel.to_path_buf(), bytes.to_vec()))
     }
 
-    fn undo(self) {
-        for (rel, was) in self.before.iter().rev() {
-            let full = self.root.join(rel);
-            let _ = match was {
-                Some(bytes) => fs::write(&full, bytes),
-                None => fs::remove_file(&full),
-            };
-            for dir in rel.ancestors().skip(1) {
-                if fs::remove_dir(self.root.join(dir)).is_err() {
-                    break;
-                }
-            }
+    fn perform(&mut self, op: &FileOp) -> Result<(), Failure> {
+        self.journal.perform(op).map_err(|e| io(op.path(), e))
+    }
+
+    /// Puts every file back and returns `failure` with a `not restored` line for each file
+    /// that couldn't be.
+    fn undo(self, failure: Failure) -> Failure {
+        let lines: String = self
+            .journal
+            .undo()
+            .iter()
+            .map(|(path, e)| format!("\n{}: not restored: {e}", path.display()))
+            .collect();
+        match failure {
+            Failure::Refused(why) => Failure::Refused(why + &lines),
+            Failure::Git(why) => Failure::Git(why + &lines),
         }
     }
 }
@@ -172,52 +158,48 @@ pub(crate) fn carry_out(root: &Path, id: &str) -> Result<Done, Failure> {
     let (renames, resolves) = (change.renames.clone(), change.frontmatter.resolves.clone());
     drop(graph);
     let mut writes = Writes {
-        root,
-        before: Vec::new(),
+        journal: Journal::new(root),
     };
     let done = generate(root, id, &renames, &mut writes)
-        .and_then(|done| apply(root, id).map(|()| done))
+        .and_then(|done| apply(root, id, &mut writes).map(|()| done))
         .and_then(|done| rewrite_markers(root, &done, &resolves, &mut writes).map(|()| done))
         .and_then(|mut done| {
             done.rebased = rebase_others(root, id, &done, &mut writes)?;
             Ok(done)
         })
-        .and_then(|done| rewrite_flags(root, &done, &mut writes).map(|()| done));
+        .and_then(|done| rewrite_flags(root, &done, &mut writes).map(|()| done))
+        .and_then(|done| finish(root, id, &mut writes).map(|()| done));
     let done = match done {
         Ok(done) => done,
-        Err(e) => {
-            writes.undo();
-            return Err(e);
-        }
+        Err(e) => return Err(writes.undo(e)),
     };
-    finish(root, id, &resolves)?;
+    for slug in &resolves {
+        let _ = fs::remove_file(root.join("backlog").join(format!("{slug}.md")));
+    }
     Ok(done)
 }
 
-fn apply(root: &Path, id: &str) -> Result<(), Failure> {
-    clm_apply::apply(root, id).map(drop).map_err(|violations| {
-        let why: Vec<String> = violations
-            .iter()
-            .map(|v| format!("{}: {}", v.path.display(), v.message))
-            .collect();
-        Failure::Refused(why.join("\n"))
-    })
+fn apply(root: &Path, id: &str, writes: &mut Writes) -> Result<(), Failure> {
+    clm_apply::apply_into(root, id, &mut writes.journal)
+        .map(drop)
+        .map_err(|violations| {
+            let why: Vec<String> = violations
+                .iter()
+                .map(|v| format!("{}: {}", v.path.display(), v.message))
+                .collect();
+            Failure::Refused(why.join("\n"))
+        })
 }
 
-/// Marks the applied change `done` by its `status:` line alone, archives it, and deletes the
-/// items it resolves.
-fn finish(root: &Path, id: &str, resolves: &[String]) -> Result<(), Failure> {
-    let change = root.join("changes").join(id).join("change.md");
-    let applied = fs::read_to_string(&change).map_err(|e| io(&change, e))?;
-    fs::write(&change, record::with_status(&applied, "done")).map_err(|e| io(&change, e))?;
-    clm_apply::archive(root, id).map_err(|vs| {
+/// Marks the applied change `done` by its `status:` line alone and archives it.
+fn finish(root: &Path, id: &str, writes: &mut Writes) -> Result<(), Failure> {
+    let change = Path::new("changes").join(id).join("change.md");
+    let applied = fs::read_to_string(root.join(&change)).map_err(|e| io(&change, e))?;
+    writes.put(&change, record::with_status(&applied, "done").as_bytes())?;
+    clm_apply::archive(root, id).map(drop).map_err(|vs| {
         let why: Vec<String> = vs.iter().map(|v| v.message.clone()).collect();
         Failure::Refused(why.join("\n"))
-    })?;
-    for slug in resolves {
-        let _ = fs::remove_file(root.join("backlog").join(format!("{slug}.md")));
-    }
-    Ok(())
+    })
 }
 
 /// Rewrites the markers that cite a renamed requirement, or one whose text the rename
@@ -673,7 +655,7 @@ fn generate(
     let plan = plan(&graph, id, renames)?;
     let declared = graph.declared_frontmatter_keys();
     let deltas = Path::new("changes").join(id).join("deltas");
-    writes.clear(&deltas)?;
+    writes.clear(root, &deltas)?;
     for node in graph.nodes.values() {
         let heads = headings(&plan, &node.id, "### Requirement:");
         let (fm, body) = split_frontmatter(&node.source).unwrap_or(("", &node.source));

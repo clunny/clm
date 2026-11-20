@@ -1350,3 +1350,43 @@ fn a_marker_outside_a_test_is_rewritten() {
     assert_eq!(read(d, "src/lib.rs"), code("a/y", &format!("@{new}")));
     assert_eq!(read(d, "src/bare.rs"), code("a/y", ""));
 }
+
+#[test]
+// req:rename/undo-on-failure@09708a89
+fn a_write_after_the_apply_fails() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(
+        d,
+        "backlog/q.md",
+        "---\ntitle: Q\nkind: question\ncomponents: [a]\n---\n\nWhich?\n",
+    );
+    write(d, "changes/r/deltas/old.md", "not a delta\n");
+    let source = change("  - requirement: a/x\n    to: y\n", "resolves: [q]\n");
+    write(d, "changes/r/change.md", &source);
+    let old = version_of(d, "a/x");
+    write(d, "crates/x/tests/t.rs", &cite("a/x", &old));
+    let test = d.join("crates/x/tests/t.rs");
+    let mut perms = fs::metadata(&test).unwrap().permissions();
+    perms.set_readonly(true);
+    fs::set_permissions(&test, perms).unwrap();
+    let spec = read(d, "specs/a/SPEC.md");
+    let failure = rename(d, "r").unwrap_err();
+    assert_eq!(failure.exit_code(), 1, "{failure}");
+    assert!(
+        failure.to_string().contains("crates/x/tests/t.rs"),
+        "{failure}"
+    );
+    assert_eq!(read(d, "specs/a/SPEC.md"), spec);
+    assert_eq!(read(d, "changes/r/change.md"), source);
+    let deltas: Vec<_> = fs::read_dir(d.join("changes/r/deltas"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(deltas, ["old.md"]);
+    assert_eq!(read(d, "changes/r/deltas/old.md"), "not a delta\n");
+    assert!(d.join("backlog/q.md").exists());
+    assert!(!d.join("changes/archive").exists());
+    assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
+}
