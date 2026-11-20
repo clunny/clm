@@ -13,7 +13,7 @@ fn record(peak: u64, builds: &[(&str, u64)]) -> Record {
 
 #[test]
 fn scenario_the_json() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let dir = repo();
     let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
     let json = clm_machine::json(&snapshot.report);
@@ -30,7 +30,7 @@ fn scenario_the_json() {
 
 #[test]
 fn scenario_sustained_cpu() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let cpu = |load1, load5| {
         let mut r = readings();
         (r.load1, r.load5) = (Some(load1), Some(load5));
@@ -44,7 +44,7 @@ fn scenario_sustained_cpu() {
 
 #[test]
 fn scenario_available_not_free() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let memory = |available_gib: f64| {
         let mut r = readings();
         r.memory = space(16 * GIB, (available_gib * GIB as f64) as u64);
@@ -57,7 +57,7 @@ fn scenario_available_not_free() {
 
 #[test]
 fn scenario_disk_against_the_builds() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
     let judge = |free_gib: u64| {
         let mut r = readings();
@@ -80,7 +80,7 @@ fn scenario_disk_against_the_builds() {
 
 #[test]
 fn scenario_disk_before_any_measurement() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let judge = |free_gib: u64| {
         let mut r = readings();
         r.disk = space(100 * GIB, free_gib * GIB);
@@ -95,7 +95,7 @@ fn scenario_disk_before_any_measurement() {
 
 #[test]
 fn scenario_no_load_average() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.load1, r.load5) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -109,7 +109,7 @@ fn scenario_no_load_average() {
 
 #[test]
 fn scenario_text() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), Some(8.0));
     r.memory = space(16 * GIB, 4 * GIB);
@@ -127,7 +127,7 @@ fn scenario_text() {
 
 #[test]
 fn scenario_text_names_the_need() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), Some(8.0));
     r.memory = space(16 * GIB, 4 * GIB);
@@ -149,7 +149,7 @@ fn scenario_text_names_the_need() {
 
 #[test]
 fn scenario_no_memory_or_disk_reading() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), Some(8.0));
     (r.memory, r.disk) = (None, None);
@@ -175,7 +175,7 @@ fn scenario_no_memory_or_disk_reading() {
 
 #[test]
 fn a_memory_total_of_zero_is_unknown_and_printed() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     r.memory = space(0, 0);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -195,7 +195,7 @@ fn a_memory_total_of_zero_is_unknown_and_printed() {
 
 #[test]
 fn a_ratio_whose_load_average_is_unknown_is_a_dash() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let mut r = readings();
     (r.load1, r.load5) = (Some(12.0), None);
     let text = clm_machine::text(&judged(&r, &Record::default(), &[], 3));
@@ -213,7 +213,7 @@ fn a_ratio_whose_load_average_is_unknown_is_a_dash() {
 
 #[test]
 fn scenario_the_disks_state_in_the_json() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let rec = record(8 * GIB, &[("a", 5 * GIB), ("b", 8 * GIB)]);
     let mut r = readings();
     r.disk = space(100 * GIB, 2 * GIB);
@@ -234,7 +234,7 @@ fn scenario_the_disks_state_in_the_json() {
 
 #[test]
 fn scenario_an_unmeasured_build_owes_the_peak() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let rec = record(8 * GIB, &[("a", 5 * GIB)]);
     let mut r = readings();
     r.disk = space(100 * GIB, 7 * GIB);
@@ -245,7 +245,7 @@ fn scenario_an_unmeasured_build_owes_the_peak() {
 
 #[test]
 fn scenario_outside_a_git_repository() {
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     let dir = tempfile::tempdir().unwrap();
     let now = clm_git::now();
     let snapshot = clm_machine::read(dir.path(), 3, 4, now);

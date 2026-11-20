@@ -149,3 +149,20 @@ fn a_record_dated_in_the_future_is_due() {
     let bytes = again["disk"]["builds"][0]["bytes"].as_u64().unwrap();
     assert!(bytes < 3 * MIB, "measured again: bytes {bytes}");
 }
+
+#[test]
+fn a_record_that_cannot_be_read_counts_as_none() {
+    // req:machine/build-measure@25e6eaf6
+    let (dir, _holder, _tree) = clone_with_build();
+    // A directory where the record belongs can be neither read nor replaced.
+    let record_path = common(dir.path()).join("clm/machine");
+    fs::create_dir_all(&record_path).unwrap();
+    let t = clm_git::now();
+    let first = json(dir.path(), t);
+    assert!(first["disk"]["peak"].as_u64().unwrap() >= 3 * MIB);
+    assert_eq!(first["disk"]["measured"], clm_machine::format_time(t));
+    // Nothing was kept, so the next run measures again.
+    let again = json(dir.path(), t + 60);
+    assert_eq!(again["disk"]["measured"], clm_machine::format_time(t + 60));
+    assert!(record_path.is_dir());
+}

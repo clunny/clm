@@ -129,6 +129,21 @@ fn scenario_unknown_cpu() {
     assert!(cpu.starts_with("\x1b[2m"), "unknown is dimmed");
     assert!(cpu.ends_with("\x1b[2m - unknown\x1b[0m"));
     assert_eq!(plain(cpu), "cpu  ▄  - unknown");
+    // The blank cell is coloured by the state its sample recorded, as any other.
+    assert_eq!(
+        cpu,
+        "\x1b[2mcpu  \x1b[0m\x1b[32m▄\x1b[0m\x1b[2m \x1b[0m\x1b[2m - unknown\x1b[0m"
+    );
+}
+
+#[test]
+fn the_cpu_figure_needs_only_the_minute_load() {
+    // req:machine/machine-history@c34a107b
+    let mut r = readings();
+    (r.load1, r.load5) = (Some(12.0), None);
+    let report = judged(&r, &Record::default(), &[], 3);
+    let out = clm_machine::rows(&report, &[sample(1, Some(0.75))], 40);
+    assert_eq!(plain(out.lines().next().unwrap()), "cpu  ▆ 1.5× unknown");
 }
 
 #[test]
@@ -398,7 +413,8 @@ fn a_share_is_never_below_zero() {
     for load in [-2.0, f64::NAN, f64::INFINITY] {
         r.load1 = Some(load);
         let sample = Sample::of(1, &judged(&r, &Record::default(), &[], 3));
-        assert_eq!(sample.cpu, Some(0.0), "load {load}");
+        let share = sample.cpu.expect("a share");
+        assert!(share.is_finite() && share >= 0.0, "load {load}: {share}");
     }
     // A total of 0 gives no share.
     r.memory = space(0, 0);

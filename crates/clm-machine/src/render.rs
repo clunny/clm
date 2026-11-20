@@ -200,7 +200,7 @@ pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
 mod tests {
     use super::size;
 
-    // req:machine/machine-report@ec4a0cdd
+    // req:machine/machine-report@5f920ce4
     #[test]
     fn a_size_is_a_number_and_a_unit() {
         const K: u64 = 1024;
