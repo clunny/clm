@@ -520,7 +520,7 @@ Every `git` command `clm-git` runs, through `git`, `run` or `run_within` with th
 - capability/work-concurrently
 
 ### Requirement: held-lock
-`worktrees(root)` SHALL give each worktree whether its lock is *held*: it is held when the worktree is locked, the lock's reason, as `git worktree list --porcelain` gives it, holds the word `pid` followed by one space and a positive decimal process ID, and a process with that ID runs on this machine, which a signal 0 sent to it tells, a refusal for want of permission counting as running. A worktree that isn't locked, whose lock has no reason or a reason that names no process ID, or whose named process doesn't run, SHALL NOT be held. On a platform where CLM can't tell whether a process runs, a lock whose reason names a process ID SHALL be held.
+`worktrees(root)` SHALL give each worktree whether its lock is *held*: it is held when the worktree is locked, the lock's reason, as `git worktree list --porcelain` gives it, holds `pid`, at its start or after a character that is neither a letter nor a digit, then one space and a run of decimal digits ending at its end or at a character that isn't a digit, the first such in the reason, whose value is above 0 and fits the platform's process ID type, and a process with that ID runs on this machine, which a signal 0 sent to it tells, a refusal for want of permission counting as running. A worktree that isn't locked, whose lock has no reason or a reason that names no process ID so, or whose named process doesn't run, SHALL NOT be held; a value of 0 or one too large for that type names no process, and SHALL never be passed to the signal call. On a platform where CLM can't tell whether a process runs, a lock whose reason names a process ID SHALL be held.
 
 #### Scenario: a running process's lock
 - GIVEN a linked worktree `w` locked with the reason `claude agent agent-1 (pid <p> start 1)`, `<p>` the ID of the test's own process
@@ -532,10 +532,15 @@ Every `git` command `clm-git` runs, through `git`, `run` or `run_within` with th
 - WHEN `worktrees(root)` runs
 - THEN its entry for `w` is locked and not held
 
-#### Scenario: a lock naming no process
-- GIVEN a linked worktree `w` locked by `git worktree lock` with no reason, and a linked worktree `v` locked with the reason `kept by hand`
+#### Scenario: another user's process
+- GIVEN a linked worktree `w` locked with the reason `claude agent agent-1 (pid 1 start 1)`, on Unix
 - WHEN `worktrees(root)` runs
-- THEN the entries for `w` and `v` are each locked and not held
+- THEN its entry for `w` is locked and held
+
+#### Scenario: a lock naming no process
+- GIVEN linked worktrees locked by `git worktree lock` with no reason, with the reason `kept by hand`, with `rapid 1`, with `pid 0`, with `pid 99999999999999999999` and with `pid x1`
+- WHEN `worktrees(root)` runs
+- THEN each entry is locked and not held
 
 #### Serves
 - capability/work-concurrently
