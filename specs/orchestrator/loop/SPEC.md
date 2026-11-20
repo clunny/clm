@@ -428,9 +428,9 @@ The plan SHALL hold the human's queue, each entry with what the human does about
 - THEN it exits 1 naming `build:a`, `clm branch delete` didn't run, and the local `impl/a` and the loop file are unchanged
 
 #### Scenario: a printed build released
-- GIVEN a step that printed `launch build:a build <model> <file>`, no `launched` for it, and `origin/impl/a` pushed from this clone
-- WHEN `clm build release a` runs
-- THEN it exits 0, `clm branch delete impl/a` and `clm run --finish a` ran, and the loop file lists no `build:a`
+- GIVEN a loop file listing `build:a` as planned, not an orphan, with no task ID, as a step that printed `launch build:a build <model> <file>` leaves it, and `origin/impl/a` pushed from this clone
+- WHEN `clm build release a` runs, and again in a fresh fixture whose loop file lists `build:a` as returned
+- THEN each exits 0, `clm branch delete impl/a` and `clm run --finish a` ran, and the loop file lists no `build:a`
 
 #### Scenario: another clone's claim
 - GIVEN a `clm branch delete impl/a` that exits 1 saying this clone didn't push the tip, and a local `impl/a`
