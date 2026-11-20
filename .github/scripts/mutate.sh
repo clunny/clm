@@ -306,10 +306,14 @@ try_file_mutants() {
 # The block's test files under a crate's `tests/`, a test target's files, which cargo-mutants
 # never mutates, in the order of its `test` lines, each once.
 test_target_files() {
-  local t file seen=
+  local t file rest seen=
   for t in ${tests[@]+"${tests[@]}"}; do
     file=${t%%"$tab"*}
-    case $file in crates/*/tests/*.rs) ;; *) continue ;; esac
+    case $file in crates/*.rs) ;; *) continue ;; esac
+    # Under `crates/<dir>/tests/`, not a `tests/` deeper in the crate.
+    rest=${file#crates/}
+    rest=${rest#*/}
+    case $rest in tests/*) ;; *) continue ;; esac
     case "$nl$seen" in *"$nl$file$nl"*) continue ;; esac
     seen="$seen$file$nl"
     printf '%s\n' "$file"
@@ -585,7 +589,9 @@ runs_other_files() {
 judge_test_files() {
   local copy=$pass_work/copy-$job
   if ! [ -d "$copy" ]; then
-    make_tree "$root" "$copy" || die "a copy of the tree could not be made for requirement $id"
+    # From the tree, so the mutants land on the revision they were listed and their lines found
+    # for, wherever the checkout's `HEAD` has moved since.
+    make_tree "$tree" "$copy" || die "a copy of the tree could not be made for requirement $id"
   fi
   caught=0
   missed=0
@@ -597,6 +603,15 @@ judge_test_files() {
   else
     verdict=not-judged
   fi
+}
+
+# Writes `$work/file-all`, the mutants of the block's test files, listed from the tree's copies.
+list_test_file_mutants() {
+  local f
+  : >"$work/file-all"
+  for f in $(test_target_files); do
+    [ ! -f "$tree/$f" ] || list_file_mutants "$work/file-all" "$tree" "$f" "requirement $id"
+  done
 }
 
 # Judges the Rust files of a block, its tools ready. Sets `verdict` to killed, survived <n> or
@@ -614,14 +629,15 @@ judge_rust() {
   # The diff's mutants, and the further ones: the files' others, in the tool's order until
   # ordered by share.
   list_mutants "$work/all"
-  # And those of its test files, which judge the block only when its code offers none.
+  # And those of its test files, which judge the block only when its code offers none its
+  # tests run: listed only then, since the tool's option for them is one it marks unstable.
   : >"$work/file-all"
-  for f in $(test_target_files); do
-    [ ! -f "$tree/$f" ] || list_file_mutants "$work/file-all" "$tree" "$f" "requirement $id"
-  done
-  if ! [ -s "$work/all" ] && ! [ -s "$work/file-all" ]; then
-    verdict=not-judged
-    return
+  if ! [ -s "$work/all" ]; then
+    list_test_file_mutants
+    if ! [ -s "$work/file-all" ]; then
+      verdict=not-judged
+      return
+    fi
   fi
   : >"$work/diff"
   if [ -n "$diff" ] && [ -s "$work/all" ]; then list_mutants "$work/diff" --in-diff "$diff"; fi
@@ -634,10 +650,13 @@ judge_rust() {
   # asserts, and would hide the code's survivors. A test that runs another component's code
   # reads as before.
   tryable "$work/all" >"$work/all-try"
-  tryable "$work/file-all" >"$work/file-try"
-  if ! [ -s "$work/all-try" ] && [ -s "$work/file-try" ] && ! runs_other_files; then
-    judge_test_files
-    return
+  if ! [ -s "$work/all-try" ] && ! runs_other_files; then
+    [ ! -s "$work/all" ] || list_test_file_mutants
+    tryable "$work/file-all" >"$work/file-try"
+    if [ -s "$work/file-try" ]; then
+      judge_test_files
+      return
+    fi
   fi
   # Tests that run no line of any file with a mutant can notice no change to it: every mutant
   # they would be given survives, untried. Unless they read the repository's own files, whose

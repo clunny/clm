@@ -2078,12 +2078,23 @@ block_of() {
 # `mutants --Zmutate-file <file> --json` lists one mutant of the script's fixture's test file,
 # on its line 1, and none of another file unless `bin/zlist` holds `<first> <last>` lines: a
 # mutant for each, which appends ` /* mutant <first> */` to the file's line `<first>`, with
-# the diff that does so.
+# the diff that does so. For another file it exits with the status in `bin/zlist-exit`, prints
+# what is no JSON with `bin/zlist-garbage`, and lists a mutant on line 6 whose diff applies to
+# no file with `bin/zlist-stale`; each such file it lists goes to `$CI_LOG.zlisted`.
 if [ "$1" = mutants ] && [ "$2" = --Zmutate-file ]; then
   f=$3
   case $f in
     *clm_mutate_fixture.rs) lines="1 1" ;;
-    *) lines=$(cat "$bin/zlist" 2>/dev/null || true) ;;
+    *)
+      [ ! -e "$bin/zlist-exit" ] || exit "$(cat "$bin/zlist-exit")"
+      if [ -e "$bin/zlist-garbage" ]; then printf 'not json'; exit 0; fi
+      if [ -e "$bin/zlist-stale" ]; then
+        printf '[{"file":"x","name":"x:1:5: stale","diff":"--- x\\n+++ y\\n@@ -1,1 +1,1 @@\\n-no such line\\n+a mutant\\n","span":{"start":{"line":6,"column":5},"end":{"line":6,"column":9}}}]'
+        exit 0
+      fi
+      echo "$f" >> "$CI_LOG.zlisted"
+      lines=$(cat "$bin/zlist" 2>/dev/null || true)
+      ;;
   esac
   printf '['
   sep=
@@ -2106,7 +2117,8 @@ fi
 # `.git/objects/info/alternates` to `$CI_LOG.fixture-file-alternates` and what `git status`
 # says of tracked files to `$CI_LOG.fixture-file-status`; for any other run it appends its
 # directory to `$CI_LOG.nextest-cwd` and its `CLM_SLOT` and `CARGO_TARGET_DIR` to
-# `$CI_LOG.nextest-env`, copies the plan's first test file there to `$CI_LOG.nextest-file`, and
+# `$CI_LOG.nextest-env` and what `git status` says there of tracked files to
+# `$CI_LOG.nextest-status`, copies the plan's first test file there to `$CI_LOG.nextest-file`, and
 # exits with the status in `bin/nextest-exit`, or 0.
 if [ "$1" = nextest ] && [ "$2" = run ]; then
   case " $* " in *"test(~fixture_file_"*)
@@ -2122,6 +2134,8 @@ if [ "$1" = nextest ] && [ "$2" = run ]; then
   esac
   echo "$PWD" >> "$CI_LOG.nextest-cwd"
   echo "${CLM_SLOT-unset} ${CARGO_TARGET_DIR-unset}" >> "$CI_LOG.nextest-env"
+  git status --porcelain --untracked-files=no >> "$CI_LOG.nextest-status" 2>&1 ||
+    echo "git status failed" >> "$CI_LOG.nextest-status"
   t=$(sed -n 's/^test //p' "$CLM_MUTATE" | head -n 1 | cut -f1)
   [ ! -f "$t" ] || cp "$t" "$CI_LOG.nextest-file"
   exit "$(cat "$bin/nextest-exit" 2>/dev/null || echo 0)"
@@ -2447,6 +2461,8 @@ impl Tree {
             "nextest-cwd",
             "nextest-env",
             "nextest-file",
+            "zlisted",
+            "nextest-status",
         ] {
             let _ = fs::remove_file(self.dir.path().join(format!("log.{kept}")));
         }
@@ -3956,6 +3972,123 @@ fn a_rule_in_the_tests_own_file_is_judged_by_the_mutants_of_that_file() {
         .collect();
     assert_eq!(mutated.lines().collect::<Vec<_>>(), want);
     assert_eq!(fs::read_to_string(&file).unwrap(), original);
+    // Where git, as the tree's index marks every tracked file unchanged, sees no change.
+    assert_eq!(tree.log_lines("nextest-status"), Vec::<String>::new());
+}
+
+#[test]
+fn a_test_files_listing_that_fails_or_cant_be_read_leaves_no_verdict() {
+    // req:ci/mutate-script@53d32d04
+    for (fake, what) in [
+        ("zlist-exit", "--Zmutate-file"),
+        ("zlist-garbage", "--Zmutate-file"),
+        ("zlist-stale", "--Zmutate-file"),
+    ] {
+        let tree = test_file_tree();
+        let file = tree.work().join("crates/clm-check/tests/it.rs");
+        let original = fs::read(&file).unwrap();
+        tree.report(fake, "1");
+        let (ok, log, result, stderr) = tree.mutate(&[]);
+        assert!(!ok, "{fake}: {log:?}");
+        assert!(
+            stderr.contains(what) && stderr.contains("a/x"),
+            "{fake}: {stderr}"
+        );
+        assert!(result.is_empty(), "{fake}: {result:?}");
+        assert!(block_nextest_runs(&log).is_empty(), "{fake}: {log:?}");
+        assert_eq!(fs::read(&file).unwrap(), original);
+    }
+}
+
+#[test]
+fn a_block_with_a_diff_and_code_run_on_no_mutants_line_is_judged_by_its_test_file() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ndiff /tmp/the.diff\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
+    )
+    .unwrap();
+    tree.report(
+        "diff-list",
+        "30 30 crates/clm-check/src/lib.rs:30:5: replace on_thirty with ()\n",
+    );
+    // The code file runs, on a line with no mutant: it is the block's own, not another's.
+    let mut run = test_file_lines(5..=9);
+    run.push_str("crates/clm-check/src/lib.rs:10\n");
+    tree.report("lcov-run", &run);
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+    assert_eq!(block_nextest_runs(&log).len(), 1, "{log:?}");
+    assert_eq!(result, ["a/x killed"]);
+}
+
+#[test]
+fn only_files_under_a_crates_tests_are_listed_each_once() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    let deeper = tree.work().join("crates/clm-check/src/tests");
+    fs::create_dir_all(&deeper).unwrap();
+    fs::write(deeper.join("y.rs"), "// y\n").unwrap();
+    git(&tree.work(), &["add", "-A"]);
+    git(&tree.work(), &["commit", "-q", "-m", "a deeper tests/"]);
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/src/tests/y.rs\tproves_y\ntest crates/clm-check/tests/it.rs\tproves_x\ntest crates/clm-check/tests/it.rs\tproves_z\nlimit 20\n",
+    )
+    .unwrap();
+    let (ok, log, _, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    let listed = tree.log_lines("zlisted");
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert!(
+        listed[0].ends_with("/crates/clm-check/tests/it.rs"),
+        "{listed:?}"
+    );
+}
+
+#[test]
+fn a_jobs_copy_is_reused_by_its_next_block_with_the_file_put_back() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    let block =
+        "code crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n";
+    fs::write(
+        tree.dir.path().join("plan"),
+        format!("requirement a/x\n{block}requirement a/y\n{block}"),
+    )
+    .unwrap();
+    tree.report("nextest-exit", "0");
+    let file = tree.work().join("crates/clm-check/tests/it.rs");
+    let original = fs::read_to_string(&file).unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1", "a/y survived 1"]);
+    // One copy for the job, the file in it put back after the first block: the second block's
+    // run sees its own mutant alone.
+    let dirs = tree.log_lines("nextest-cwd");
+    assert!(dirs.len() == 2 && dirs[0] == dirs[1], "{dirs:?}");
+    let mutated = fs::read_to_string(tree.dir.path().join("log.nextest-file")).unwrap();
+    assert_eq!(
+        mutated,
+        original.replace("// line 6\n", "// line 6 /* mutant 6 */\n")
+    );
+    // The fixture's test file is judged once in the pass.
+    assert_eq!(
+        log.iter()
+            .filter(|l| l.contains("--Zmutate-file") && l.contains("clm_mutate_fixture.rs"))
+            .count(),
+        1,
+        "{log:?}"
+    );
+    assert_eq!(
+        log.iter()
+            .filter(|l| l.starts_with("cargo nextest run") && l.contains("fixture_file_"))
+            .count(),
+        2,
+        "{log:?}"
+    );
 }
 
 #[test]
@@ -4061,6 +4194,8 @@ fn the_mutants_of_the_code_come_before_those_of_the_test_file() {
     assert_eq!(tries.len(), 1, "{log:?}");
     assert!(tries[0].contains("replace on_thirty"), "{}", tries[0]);
     assert!(block_nextest_runs(&log).is_empty(), "{log:?}");
+    // Its test file's mutants aren't even listed.
+    assert_eq!(tree.log_lines("zlisted"), Vec::<String>::new());
     assert_eq!(result, ["a/x survived 1"]);
 }
 
