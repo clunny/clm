@@ -71,7 +71,7 @@ fn req_block(slug: &str, body: &str) -> String {
 
 #[test]
 fn stale_delta_blocks_every_write() {
-    // req:apply/atomic@bb8aa354
+    // req:apply/atomic@01fcf63b
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -99,7 +99,7 @@ fn stale_delta_blocks_every_write() {
 
 #[test]
 fn stale_requirement_reports_both_hashes() {
-    // req:apply/stale-base@6b3410c6
+    // req:apply/stale-base@f167d384
     let dir = repo(&[]);
     let d = dir.path();
     let current = hash(d, "a", "requirement:y");
@@ -165,7 +165,7 @@ fn modify_y_then_edit_serves(d: &Path, own: bool) {
 
 #[test]
 fn serves_edit_stales_a_delta_with_its_own_serves() {
-    // req:apply/stale-base@6b3410c6
+    // req:apply/stale-base@f167d384
     let dir = repo_with_serves();
     let d = dir.path();
     modify_y_then_edit_serves(d, true);
@@ -177,7 +177,7 @@ fn serves_edit_stales_a_delta_with_its_own_serves() {
 
 #[test]
 fn serves_edit_leaves_a_delta_without_serves_valid() {
-    // req:apply/stale-base@6b3410c6 req:apply/requirements@b45cdf6f
+    // req:apply/stale-base@f167d384 req:apply/requirements@79d20887
     let dir = repo_with_serves();
     let d = dir.path();
     modify_y_then_edit_serves(d, false);
@@ -191,7 +191,7 @@ fn serves_edit_leaves_a_delta_without_serves_valid() {
 
 #[test]
 fn a_wrong_version_is_stale_without_serves() {
-    // req:apply/stale-base@6b3410c6
+    // req:apply/stale-base@f167d384
     let dir = repo_with_serves();
     let d = dir.path();
     let current = hash(d, "a", "requirement:y");
@@ -211,7 +211,7 @@ fn a_wrong_version_is_stale_without_serves() {
 
 #[test]
 fn a_bare_version_is_no_base() {
-    // req:apply/stale-base@6b3410c6
+    // req:apply/stale-base@f167d384
     let dir = repo_with_serves();
     let d = dir.path();
     let current = hash(d, "a", "requirement:y");
@@ -226,12 +226,34 @@ fn a_bare_version_is_no_base() {
         let (graph, _) = load(d);
         let violations = validate(&graph, &graph.changes["c"]);
         assert_eq!(rules(&violations), ["apply/stale-base"], "{base}");
+        assert!(violations[0].message.contains("a/y"), "{violations:?}");
     }
 }
 
 #[test]
+fn modifying_a_component_that_is_gone_is_stale() {
+    // req:apply/stale-base@f167d384
+    let dir = repo(&[]);
+    let d = dir.path();
+    write(
+        d,
+        "changes/c/deltas/gone.md",
+        "---\ncomponent: gone\nbase: { design: \"0000000000000000\" }\n---\n## MODIFIED Design\nnew\n",
+    );
+    let (graph, _) = load(d);
+    let violations = validate(&graph, &graph.changes["c"]);
+    assert_eq!(rules(&violations), ["apply/stale-base"]);
+    assert!(
+        violations[0]
+            .message
+            .contains("component `gone` no longer exists"),
+        "{violations:?}"
+    );
+}
+
+#[test]
 fn removal_compares_the_whole_hash() {
-    // req:apply/stale-base@6b3410c6
+    // req:apply/stale-base@f167d384
     let dir = repo_with_serves();
     let d = dir.path();
     let base = hash(d, "a", "requirement:y");
@@ -251,7 +273,7 @@ fn removal_compares_the_whole_hash() {
 
 #[test]
 fn modification_without_base_is_invalid() {
-    // req:apply/stale-base@6b3410c6 req:apply/hash-command@752d167d
+    // req:apply/stale-base@f167d384 req:apply/hash-command@4b76b466
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -270,7 +292,7 @@ fn modification_without_base_is_invalid() {
 
 #[test]
 fn modify_replaces_in_place_and_keeps_order() {
-    // req:apply/requirements@b45cdf6f
+    // req:apply/requirements@79d20887
     let dir = repo(&[]);
     let d = dir.path();
     let base = hash(d, "a", "requirement:y");
@@ -293,7 +315,7 @@ fn modify_replaces_in_place_and_keeps_order() {
 
 #[test]
 fn modify_without_serves_keeps_the_rules_serves() {
-    // req:apply/requirements@b45cdf6f
+    // req:apply/requirements@79d20887
     for (own, kept) in [
         ("", "capability/c"),
         ("\n#### Serves\n- capability/d\n", "capability/d"),
@@ -339,7 +361,7 @@ fn modify_without_serves_keeps_the_rules_serves() {
 
 #[test]
 fn kept_serves_stops_at_the_next_heading_and_skips_fences() {
-    // req:apply/requirements@b45cdf6f
+    // req:apply/requirements@79d20887
     let dir = repo(&[]);
     let d = dir.path();
     let entry = |c: &str| {
@@ -376,7 +398,7 @@ fn kept_serves_stops_at_the_next_heading_and_skips_fences() {
 
 #[test]
 fn add_appends_and_remove_deletes() {
-    // req:apply/requirements@b45cdf6f
+    // req:apply/requirements@79d20887
     let dir = repo(&[]);
     let d = dir.path();
     let base = hash(d, "a", "requirement:x");
@@ -401,14 +423,14 @@ fn add_appends_and_remove_deletes() {
 
 #[test]
 fn slug_existence_is_checked() {
-    // req:apply/requirements@b45cdf6f
+    // req:apply/requirements@79d20887
     let dir = repo(&[]);
     let d = dir.path();
     write(
         d,
         "changes/c/deltas/a.md",
         &format!(
-            "---\ncomponent: a\n---\n## ADDED Requirements\n{}\n## MODIFIED Requirements\n### Requirement: ghost <!-- base: 0000000000000000 -->\nx\n",
+            "---\ncomponent: a\n---\n## ADDED Requirements\n{}\n## MODIFIED Requirements\n### Requirement: ghost <!-- base: 0000000000000000 -->\nx\n\n## REMOVED Requirements\n### Requirement: spook <!-- base: 0000000000000000 -->\n",
             req_block("x", "Dup.")
         ),
     );
@@ -416,13 +438,20 @@ fn slug_existence_is_checked() {
     let violations = validate(&graph, &graph.changes["c"]);
     assert_eq!(
         rules(&violations),
-        ["apply/requirements", "apply/requirements"]
+        [
+            "apply/requirements",
+            "apply/requirements",
+            "apply/requirements"
+        ]
     );
+    for (v, id) in violations.iter().zip(["a/x", "a/ghost", "a/spook"]) {
+        assert!(v.message.contains(id), "{violations:?}");
+    }
 }
 
 #[test]
 fn modify_contract_leaves_design_byte_identical() {
-    // req:apply/sections@c799ce06
+    // req:apply/sections@6020d036
     let dir = repo(&[]);
     let d = dir.path();
     let base = hash(d, "a", "contract");
@@ -442,8 +471,32 @@ fn modify_contract_leaves_design_byte_identical() {
 }
 
 #[test]
+fn modifying_a_section_the_component_lacks_is_invalid() {
+    // req:apply/sections@6020d036
+    let dir = repo(&[]);
+    let d = dir.path();
+    let text = read(d, "specs/a/SPEC.md").replace("## Design\nA design\nwith two lines.\n\n", "");
+    write(d, "specs/a/SPEC.md", &text);
+    let base = hash(d, "a", "design");
+    write(
+        d,
+        "changes/c/deltas/a.md",
+        &format!(
+            "---\ncomponent: a\nbase: {{ design: \"{base}\" }}\n---\n## MODIFIED Design\nNew design.\n"
+        ),
+    );
+    let (graph, _) = load(d);
+    let violations = validate(&graph, &graph.changes["c"]);
+    assert_eq!(rules(&violations), ["apply/sections"], "{violations:?}");
+    assert!(
+        violations[0].message.contains("`a`") && violations[0].message.contains("## Design"),
+        "{violations:?}"
+    );
+}
+
+#[test]
 fn frontmatter_edit_preserves_other_lines_and_comments() {
-    // req:apply/frontmatter@5c9e4b50
+    // req:apply/frontmatter@6693f644
     let dir = repo(&[]);
     let d = dir.path();
     let base = hash(d, "a", "frontmatter");
@@ -464,7 +517,7 @@ fn frontmatter_edit_preserves_other_lines_and_comments() {
 
 #[test]
 fn multi_line_frontmatter_value_is_invalid() {
-    // req:apply/frontmatter@5c9e4b50
+    // req:apply/frontmatter@6693f644
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -498,7 +551,7 @@ fn create_delta(node: &str) -> String {
 
 #[test]
 fn creates_node_and_child_in_one_change() {
-    // req:apply/create-node@78361ffe
+    // req:apply/create-node@954415e2
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/b.md", &create_delta("b"));
@@ -513,7 +566,7 @@ fn creates_node_and_child_in_one_change() {
 
 #[test]
 fn create_is_invalid_if_node_exists_or_parent_missing() {
-    // req:apply/create-node@78361ffe
+    // req:apply/create-node@954415e2
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/a.md", &create_delta("a"));
@@ -527,8 +580,27 @@ fn create_is_invalid_if_node_exists_or_parent_missing() {
 }
 
 #[test]
+fn create_without_a_frontmatter_section_is_invalid() {
+    // req:apply/create-node@954415e2
+    let dir = repo(&[]);
+    let d = dir.path();
+    write(
+        d,
+        "changes/c/deltas/b.md",
+        "---\ncomponent: b\ncreate: true\n---\n## Contract\nC.\n\n## Design\nD.\n",
+    );
+    let (graph, _) = load(d);
+    let violations = validate(&graph, &graph.changes["c"]);
+    assert_eq!(rules(&violations), ["apply/create-node"], "{violations:?}");
+    assert!(
+        violations[0].message.contains("## Frontmatter"),
+        "{violations:?}"
+    );
+}
+
+#[test]
 fn already_applied_change_is_refused() {
-    // req:apply/change-status@d7dfb1f4
+    // req:apply/change-status@b79e108f
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/change.md", "---\nstatus: applied\n---\n");
@@ -548,7 +620,7 @@ fn already_applied_change_is_refused() {
 
 #[test]
 fn success_marks_change_applied() {
-    // req:apply/change-status@d7dfb1f4
+    // req:apply/change-status@b79e108f
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -575,7 +647,7 @@ fn success_marks_change_applied() {
 
 #[test]
 fn hashes_match_what_validation_compares() {
-    // req:apply/hash-command@752d167d
+    // req:apply/hash-command@4b76b466
     let dir = repo(&[]);
     let d = dir.path();
     let (graph, _) = load(d);
@@ -635,7 +707,7 @@ fn asset_repo(base: Option<&str>, extra: &str, assets: &[(&str, &[u8])]) -> Temp
 
 #[test]
 fn modified_asset_is_written() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let current = clm_model::asset_hash(b"old\n");
     let dir = asset_repo(Some(&current), "", &[("m.html", b"new\n")]);
     let d = dir.path();
@@ -652,7 +724,7 @@ fn modified_asset_is_written() {
 
 #[test]
 fn stale_asset_writes_nothing() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let base = clm_model::asset_hash(b"old\n");
     let dir = asset_repo(
         Some(&base),
@@ -675,7 +747,7 @@ fn stale_asset_writes_nothing() {
 
 #[test]
 fn modified_asset_without_base_is_stale() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let dir = asset_repo(None, "", &[("m.html", b"new\n")]);
     let d = dir.path();
     let violations = apply(d, "c").unwrap_err();
@@ -686,7 +758,7 @@ fn modified_asset_without_base_is_stale() {
 
 #[test]
 fn removed_asset_is_deleted() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let dir = asset_repo(None, "", &[]);
     let d = dir.path();
     write(d, "specs/a/assets/img/old.png", "png");
@@ -709,7 +781,7 @@ fn removed_asset_is_deleted() {
 
 #[test]
 fn a_recorded_base_for_a_missing_asset_is_stale() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     // `main` deleted `m.html` after the delta recorded its hash.
     let base = clm_model::asset_hash(b"old\n");
     let dir = asset_repo(Some(&base), "", &[("m.html", b"new\n")]);
@@ -718,12 +790,13 @@ fn a_recorded_base_for_a_missing_asset_is_stale() {
     let violations = apply(d, "c").unwrap_err();
     assert_eq!(rules(&violations), ["apply/stale-base"]);
     assert!(violations[0].message.contains("m.html"), "{violations:?}");
+    assert!(violations[0].message.contains("`a`"), "{violations:?}");
     assert!(!d.join("specs/a/assets/m.html").exists());
 }
 
 #[test]
 fn an_asset_both_written_and_removed_or_removed_twice_is_invalid() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let base = clm_model::asset_hash(b"old\n");
     let entry = format!("- `m.html` <!-- base: {base} -->\n");
     let dir = asset_repo(
@@ -745,7 +818,7 @@ fn an_asset_both_written_and_removed_or_removed_twice_is_invalid() {
 
 #[test]
 fn root_assets_are_invalid() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/clm.md", "---\ncomponent: clm\n---\n");
@@ -757,7 +830,7 @@ fn root_assets_are_invalid() {
 
 #[test]
 fn removing_a_missing_or_changed_asset_is_stale() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let dir = asset_repo(
         None,
         "## REMOVED Assets\n- `ghost.png` <!-- base: 0000000000000000 -->\n- `m.html` <!-- base: 1111111111111111 -->\n",
@@ -776,7 +849,7 @@ fn removing_a_missing_or_changed_asset_is_stale() {
 
 #[test]
 fn new_asset_needs_no_base_and_binary_is_copied_byte_for_byte() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let bytes: &[u8] = &[0xff, 0x00, 0xfe, b'\n'];
     let dir = asset_repo(None, "", &[("img/new.bin", bytes)]);
     let d = dir.path();
@@ -791,7 +864,7 @@ fn new_asset_needs_no_base_and_binary_is_copied_byte_for_byte() {
 
 #[test]
 fn created_node_gets_its_assets() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/b.k.md", &create_delta("b.k"));
@@ -806,7 +879,7 @@ fn created_node_gets_its_assets() {
 
 #[test]
 fn hashes_of_the_capability_node() {
-    // req:apply/hash-command@752d167d
+    // req:apply/hash-command@4b76b466
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -842,7 +915,7 @@ fn hashes_of_the_capability_node() {
 
 #[test]
 fn hashes_of_a_layer_without_its_node() {
-    // req:apply/hash-command@752d167d
+    // req:apply/hash-command@4b76b466
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -862,7 +935,7 @@ fn hashes_of_a_layer_without_its_node() {
 
 #[test]
 fn hashes_lists_assets_after_requirements() {
-    // req:apply/hash-command@752d167d req:apply/apply-assets@786adb62
+    // req:apply/hash-command@4b76b466 req:apply/apply-assets@04b6c8ee
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/z.txt", "z\n");
@@ -937,7 +1010,7 @@ fn messages(violations: &[Violation]) -> String {
 
 #[test]
 fn node_removed() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/m.html", "m\n");
@@ -952,7 +1025,7 @@ fn node_removed() {
 
 #[test]
 fn removal_leaving_out_a_requirement_or_asset_is_invalid() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/m.html", "m\n");
@@ -963,7 +1036,12 @@ fn removal_leaving_out_a_requirement_or_asset_is_invalid() {
     );
     let before = snapshot(d, "");
     let violations = apply(d, "c").unwrap_err();
+    assert_eq!(
+        rules(&violations),
+        ["apply/remove-node", "apply/remove-node"]
+    );
     let text = messages(&violations);
+    assert!(text.contains("`a`"), "{text}");
     assert!(text.contains("a/y"), "{text}");
     assert!(text.contains("m.html"), "{text}");
     assert!(!text.contains("a/x"), "{text}");
@@ -973,7 +1051,7 @@ fn removal_leaving_out_a_requirement_or_asset_is_invalid() {
 
 #[test]
 fn removal_needs_current_bases_for_frontmatter_contract_and_design() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     let full = removal(d, "a", &[]);
@@ -1012,7 +1090,7 @@ fn removal_needs_current_bases_for_frontmatter_contract_and_design() {
 
 #[test]
 fn removing_a_missing_node_is_invalid() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1021,25 +1099,27 @@ fn removing_a_missing_node_is_invalid() {
         "---\ncomponent: gone\nremove: true\n---\n## REMOVED Requirements\n",
     );
     let violations = apply(d, "c").unwrap_err();
+    assert_eq!(rules(&violations), ["apply/stale-base"]);
     assert!(messages(&violations).contains("`gone`"), "{violations:?}");
 }
 
 #[test]
 fn removing_a_node_with_a_child_left_behind_is_invalid() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/b/SPEC.md", &node_a(&["q"]));
     write(d, "changes/c/deltas/a.md", &removal(d, "a", &[]));
     let before = snapshot(d, "");
     let violations = apply(d, "c").unwrap_err();
+    assert_eq!(rules(&violations), ["apply/remove-node"]);
     assert!(messages(&violations).contains("`a.b`"), "{violations:?}");
     assert_eq!(snapshot(d, ""), before);
 }
 
 #[test]
 fn removing_the_root_is_invalid() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = TempDir::new().unwrap();
     let d = dir.path();
     write(d, "specs/SPEC.md", ROOT);
@@ -1051,19 +1131,24 @@ fn removing_the_root_is_invalid() {
     write(d, "changes/c/deltas/clm.md", &removal(d, "clm", &[]));
     let before = snapshot(d, "");
     let violations = apply(d, "c").unwrap_err();
+    assert_eq!(rules(&violations), ["apply/remove-node"]);
     assert!(messages(&violations).contains("`clm`"), "{violations:?}");
     assert_eq!(snapshot(d, ""), before);
 }
 
 #[test]
 fn removing_a_node_the_change_creates_a_child_of_is_invalid() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/a.md", &removal(d, "a", &[]));
     write(d, "changes/c/deltas/a.c.md", &create_delta("a.c"));
     let before = snapshot(d, "");
     let violations = apply(d, "c").unwrap_err();
+    assert!(
+        rules(&violations).contains(&"apply/remove-node"),
+        "{violations:?}"
+    );
     let text = messages(&violations);
     assert!(text.contains("`a`") && text.contains("`a.c`"), "{text}");
     assert_eq!(snapshot(d, ""), before);
@@ -1071,7 +1156,7 @@ fn removing_a_node_the_change_creates_a_child_of_is_invalid() {
 
 #[test]
 fn parent_and_child_removed_together() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     for order in [["a", "a.b"], ["a.b", "a"]] {
         let dir = repo(&[]);
         let d = dir.path();
@@ -1092,7 +1177,7 @@ fn parent_and_child_removed_together() {
 
 #[test]
 fn removal_keeps_a_directory_holding_other_files() {
-    // req:apply/remove-node@668c4ecf
+    // req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/m.html", "m\n");
@@ -1124,7 +1209,7 @@ fn colour_create() -> String {
 
 #[test]
 fn key_the_same_change_declares() {
-    // req:apply/declared-frontmatter-keys@70002c38
+    // req:apply/declared-frontmatter-keys@21340322
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/change.md", &change_md("proposed", "[colour]"));
@@ -1137,7 +1222,7 @@ fn key_the_same_change_declares() {
 
 #[test]
 fn key_another_live_change_declares() {
-    // req:apply/declared-frontmatter-keys@70002c38
+    // req:apply/declared-frontmatter-keys@21340322
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/y/change.md", &change_md("applied", "[colour]"));
@@ -1150,7 +1235,7 @@ fn key_another_live_change_declares() {
 
 #[test]
 fn undeclared_key_is_a_violation_and_writes_nothing() {
-    // req:apply/declared-frontmatter-keys@70002c38
+    // req:apply/declared-frontmatter-keys@21340322
     let dir = repo(&[]);
     let d = dir.path();
     // An abandoned change isn't live, so its keys aren't declared.
@@ -1176,7 +1261,7 @@ fn undeclared_key_is_a_violation_and_writes_nothing() {
 
 #[test]
 fn a_known_key_is_still_validated() {
-    // req:apply/declared-frontmatter-keys@70002c38
+    // req:apply/declared-frontmatter-keys@21340322
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1194,7 +1279,7 @@ fn a_known_key_is_still_validated() {
 
 #[test]
 fn optional_root_is_a_violation_and_writes_nothing() {
-    // req:apply/declared-frontmatter-keys@70002c38
+    // req:apply/declared-frontmatter-keys@21340322
     let dir = repo(&[]);
     let d = dir.path();
     let base = hash(d, "clm", "frontmatter");
@@ -1218,7 +1303,7 @@ fn optional_root_is_a_violation_and_writes_nothing() {
 
 #[test]
 fn outside_off_the_root_is_a_violation_on_both_paths() {
-    // req:apply/declared-frontmatter-keys@70002c38
+    // req:apply/declared-frontmatter-keys@21340322
     // "Any other failure of that check": the node-ID check's other root rule,
     // `outside-globs`, refuses `outside` on a non-root node, modified or created.
     let dir = repo(&[]);
@@ -1261,7 +1346,7 @@ fn frontmatter_delta(root: &Path, id: &str, yaml: &str) -> String {
 
 #[test]
 fn required_node_depends_on_a_node_made_optional() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1289,7 +1374,7 @@ fn required_node_depends_on_a_node_made_optional() {
 
 #[test]
 fn dependant_left_behind() {
-    // req:apply/resulting-graph@b3caad6a req:apply/remove-node@668c4ecf
+    // req:apply/resulting-graph@ded55ba9 req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1311,7 +1396,7 @@ fn dependant_left_behind() {
 
 #[test]
 fn dependant_edited_in_the_same_change() {
-    // req:apply/remove-node@668c4ecf req:apply/resulting-graph@b3caad6a
+    // req:apply/remove-node@5d7d1634 req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1330,7 +1415,7 @@ fn dependant_edited_in_the_same_change() {
 
 #[test]
 fn backlog_blocks_a_removed_requirement() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1375,7 +1460,7 @@ fn resolving_and_removing_y(d: &Path, slug: &str, kind: &str, blocks: &str) {
 
 #[test]
 fn answered_question_blocks_a_removed_requirement() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     resolving_and_removing_y(d, "q", "question", "a/y");
@@ -1393,7 +1478,7 @@ fn answered_question_blocks_a_removed_requirement() {
 
 #[test]
 fn resolved_bug_blocks_a_removed_requirement() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     resolving_and_removing_y(d, "b", "bug", "a/y");
@@ -1414,7 +1499,7 @@ fn resolved_bug_blocks_a_removed_requirement() {
 
 #[test]
 fn answered_question_that_blocks_nothing_is_no_violation() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1433,7 +1518,7 @@ fn answered_question_that_blocks_nothing_is_no_violation() {
 
 #[test]
 fn violation_already_present_is_not_reported_again() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1452,7 +1537,7 @@ fn violation_already_present_is_not_reported_again() {
 
 #[test]
 fn needs_and_backlog_nodes_naming_a_removed_node_are_new_violations() {
-    // req:apply/resulting-graph@b3caad6a req:apply/remove-node@668c4ecf
+    // req:apply/resulting-graph@ded55ba9 req:apply/remove-node@5d7d1634
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1487,7 +1572,7 @@ fn needs_and_backlog_nodes_naming_a_removed_node_are_new_violations() {
 
 #[test]
 fn not_checked_while_a_delta_is_invalid() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     // Removing `a` is valid, but `b`'s delta, which would drop its dependency on `a`, is
     // stale: only the stale base is reported, not the graph left without `b`'s edit.
     let dir = repo(&[]);
@@ -1506,7 +1591,7 @@ fn not_checked_while_a_delta_is_invalid() {
 
 #[test]
 fn a_second_copy_of_a_violation_already_present_is_new() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1523,7 +1608,7 @@ fn a_second_copy_of_a_violation_already_present_is_new() {
 
 #[test]
 fn a_parse_violation_the_written_node_already_has_is_not_reported_again() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     // `a/y` has no scenario, which the node parser reports on `a`'s current text and on
     // the text the change writes alike.
     let dir = repo(&[]);
@@ -1545,7 +1630,7 @@ fn a_parse_violation_the_written_node_already_has_is_not_reported_again() {
 
 #[test]
 fn a_violation_whose_message_the_change_alters_is_new() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     // `a` -> `b` -> `a` is a cycle already; making `b` depend on `k`, which depends on
     // `a`, turns it into a longer one, whose message names `k`.
     let dir = repo(&[]);
@@ -1576,7 +1661,7 @@ fn a_violation_whose_message_the_change_alters_is_new() {
 
 #[test]
 fn checked_whatever_the_status_but_not_by_reapply() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9 req:apply/reapply@8b586bdf
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[a]"));
@@ -1588,12 +1673,54 @@ fn checked_whatever_the_status_but_not_by_reapply() {
         rules(&validate(&graph, change)),
         ["apply/change-status", "apply/resulting-graph"]
     );
-    assert!(clm_apply::reapply(&graph, change).is_ok());
+    let files = clm_apply::reapply(&graph, change).unwrap();
+    assert!(
+        files.contains(&FileOp::Remove("specs/a/SPEC.md".into())),
+        "{files:?}"
+    );
+}
+
+#[test]
+fn reapply_leaves_an_answered_question_and_the_change() {
+    // req:apply/reapply@8b586bdf
+    let dir = repo(&[]);
+    let d = dir.path();
+    item(d, "q", "question");
+    write(
+        d,
+        "changes/c/change.md",
+        "---\nstatus: applied\nresolves: [q]\n---\n\n# c\n",
+    );
+    valid_delta(d);
+    let (graph, _) = load(d);
+    let before = snapshot(d, "");
+    let files = clm_apply::reapply(&graph, &graph.changes["c"]).unwrap();
+    let paths: Vec<_> = files.iter().map(|f| f.path().to_path_buf()).collect();
+    assert!(paths.contains(&"specs/a/SPEC.md".into()), "{paths:?}");
+    assert!(!paths.contains(&"backlog/q.md".into()), "{paths:?}");
+    assert!(!paths.contains(&"changes/c/change.md".into()), "{paths:?}");
+    assert_eq!(snapshot(d, ""), before);
+}
+
+#[test]
+fn reapply_returns_a_stale_delta_s_violation() {
+    // req:apply/reapply@8b586bdf
+    let dir = repo(&[]);
+    let d = dir.path();
+    write(d, "changes/c/change.md", &change_md("applied", "[]"));
+    write(
+        d,
+        "changes/c/deltas/a.md",
+        "---\ncomponent: a\n---\n## REMOVED Requirements\n### Requirement: y <!-- base: 1111111111111111 -->\n",
+    );
+    let (graph, _) = load(d);
+    let violations = clm_apply::reapply(&graph, &graph.changes["c"]).unwrap_err();
+    assert_eq!(rules(&violations), ["apply/stale-base"]);
 }
 
 #[test]
 fn a_created_node_is_checked_at_its_path() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1612,7 +1739,7 @@ fn a_created_node_is_checked_at_its_path() {
 
 #[test]
 fn violation_the_change_fixes() {
-    // req:apply/loaded-graph@311a0b6b req:apply/atomic@bb8aa354
+    // req:apply/loaded-graph@311a0b6b req:apply/atomic@01fcf63b
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1630,7 +1757,7 @@ fn violation_the_change_fixes() {
 
 #[test]
 fn violation_the_change_leaves() {
-    // req:apply/loaded-graph@311a0b6b req:apply/atomic@bb8aa354
+    // req:apply/loaded-graph@311a0b6b req:apply/atomic@01fcf63b
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1648,7 +1775,7 @@ fn violation_the_change_leaves() {
 
 #[test]
 fn entry_removed_with_the_rules_that_served_it() {
-    // req:apply/loaded-graph@311a0b6b req:apply/requirements@b45cdf6f
+    // req:apply/loaded-graph@311a0b6b req:apply/requirements@79d20887
     let dir = repo(&[]);
     let d = dir.path();
     let spec = read(d, "specs/a/SPEC.md").replace(
@@ -1700,7 +1827,7 @@ fn a_file_the_model_cant_parse_blocks() {
 
 #[test]
 fn invalid_delta_and_a_broken_graph() {
-    // req:apply/loaded-graph@311a0b6b req:apply/atomic@bb8aa354
+    // req:apply/loaded-graph@311a0b6b req:apply/atomic@01fcf63b
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/b/SPEC.md", &node_b("[gone]"));
@@ -1731,7 +1858,7 @@ fn remove_y(root: &Path) -> String {
 
 #[test]
 fn resulting_graph_of_a_removal() {
-    // req:apply/resulting-graph-call@3288507d
+    // req:apply/resulting-graph-call@8777e548
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/a.md", &remove_y(d));
@@ -1763,7 +1890,7 @@ fn resulting_graph_of_a_removal() {
 
 #[test]
 fn resulting_drops_a_removed_node() {
-    // req:apply/resulting-graph-call@3288507d
+    // req:apply/resulting-graph-call@8777e548
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/deltas/a.md", &removal(d, "a", &[]));
@@ -1776,7 +1903,7 @@ fn resulting_drops_a_removed_node() {
 
 #[test]
 fn resulting_is_none_for_a_stale_delta() {
-    // req:apply/resulting-graph-call@3288507d
+    // req:apply/resulting-graph-call@8777e548
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1790,7 +1917,7 @@ fn resulting_is_none_for_a_stale_delta() {
 
 #[test]
 fn resulting_leaves_out_the_items_apply_deletes() {
-    // req:apply/resulting-graph-call@3288507d
+    // req:apply/resulting-graph-call@8777e548
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "q", "question");
@@ -1810,7 +1937,7 @@ fn resulting_leaves_out_the_items_apply_deletes() {
 
 #[test]
 fn resulting_keeps_a_promoted_human_task() {
-    // req:apply/resulting-graph-call@3288507d
+    // req:apply/resulting-graph-call@8777e548
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "h", "human");
@@ -1823,7 +1950,7 @@ fn resulting_keeps_a_promoted_human_task() {
 
 #[test]
 fn resulting_ignores_the_change_status() {
-    // req:apply/resulting-graph-call@3288507d
+    // req:apply/resulting-graph-call@8777e548
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "changes/c/change.md", &change_md("applied", "[]"));
@@ -1856,7 +1983,7 @@ fn refused_status_and_a_broken_graph() {
 
 #[test]
 fn stale_bases_names_what_validate_calls_stale() {
-    // req:apply/stale-elements@94ee9040
+    // req:apply/stale-elements@d94f183d
     let dir = repo_with_serves();
     let d = dir.path();
     let (bx, by) = (hash(d, "a", "requirement:x"), hash(d, "a", "requirement:y"));
@@ -1877,7 +2004,7 @@ fn stale_bases_names_what_validate_calls_stale() {
     // Only y's `#### Serves` is edited (a version-only base stays valid); x loses a line.
     let spec = read(d, "specs/a/SPEC.md")
         .replace("- capability/c\n", "- capability/d\n")
-        .replace("The x SHALL hold.", "The x SHALL differ.");
+        .replace("#### Scenario: x\n- ok\n", "#### Scenario: x\n- differs\n");
     write(d, "specs/a/SPEC.md", &spec);
     let (graph, _) = load(d);
     let delta = &graph.changes["c"].deltas[0];
@@ -1892,7 +2019,7 @@ fn stale_bases_names_what_validate_calls_stale() {
 
 #[test]
 fn stale_bases_orders_held_before_lacking_and_skips_untouched() {
-    // req:apply/stale-elements@94ee9040
+    // req:apply/stale-elements@d94f183d
     let dir = repo_with_serves();
     let d = dir.path();
     // z (removed, stale) is listed before x (modified with own Serves, stale) and w (absent);
@@ -1916,7 +2043,7 @@ fn stale_bases_orders_held_before_lacking_and_skips_untouched() {
 
 #[test]
 fn stale_bases_of_a_gone_node_lists_every_element() {
-    // req:apply/stale-elements@94ee9040
+    // req:apply/stale-elements@d94f183d
     let dir = repo(&[]);
     let d = dir.path();
     write(
@@ -1967,7 +2094,7 @@ fn valid_delta(d: &Path) {
 
 #[test]
 fn answered_question_is_deleted() {
-    // req:apply/answered-questions@e2932b53
+    // req:apply/answered-questions@baab55dd
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "q", "question");
@@ -1980,7 +2107,7 @@ fn answered_question_is_deleted() {
 
 #[test]
 fn other_kinds_stay() {
-    // req:apply/answered-questions@e2932b53
+    // req:apply/answered-questions@baab55dd
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "b", "bug");
@@ -1993,7 +2120,7 @@ fn other_kinds_stay() {
 
 #[test]
 fn refused_change_keeps_its_question() {
-    // req:apply/answered-questions@e2932b53
+    // req:apply/atomic@01fcf63b
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "q", "question");
@@ -2009,7 +2136,7 @@ fn refused_change_keeps_its_question() {
 
 #[test]
 fn already_deleted_question_is_no_violation() {
-    // req:apply/answered-questions@e2932b53
+    // req:apply/answered-questions@baab55dd
     let dir = repo(&[]);
     let d = dir.path();
     resolving(d, &["q"]);
@@ -2040,7 +2167,7 @@ fn removals(ops: &[FileOp], path: &str) -> usize {
 
 #[test]
 fn promoted_idea_is_deleted() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/promoted-item@6800843d
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "i", "idea");
@@ -2053,7 +2180,7 @@ fn promoted_idea_is_deleted() {
 
 #[test]
 fn promoted_item_of_any_kind_is_deleted() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/promoted-item@6800843d
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "b", "bug");
@@ -2065,7 +2192,7 @@ fn promoted_item_of_any_kind_is_deleted() {
 
 #[test]
 fn promoted_human_task_stays() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/promoted-item@6800843d
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "h", "human-task");
@@ -2077,7 +2204,7 @@ fn promoted_human_task_stays() {
 
 #[test]
 fn refused_change_keeps_its_promoted_item() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/atomic@01fcf63b
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "i", "idea");
@@ -2093,7 +2220,7 @@ fn refused_change_keeps_its_promoted_item() {
 
 #[test]
 fn already_deleted_promoted_item_is_no_violation() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/promoted-item@6800843d
     let dir = repo(&[]);
     let d = dir.path();
     promoted(d, "backlog/i", &[]);
@@ -2107,7 +2234,7 @@ fn already_deleted_promoted_item_is_no_violation() {
 
 #[test]
 fn from_without_the_backlog_prefix_deletes_nothing() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/promoted-item@6800843d
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "i", "idea");
@@ -2119,7 +2246,7 @@ fn from_without_the_backlog_prefix_deletes_nothing() {
 
 #[test]
 fn item_named_in_from_and_resolves_is_removed_once() {
-    // req:apply/promoted-item@5992a1d8
+    // req:apply/promoted-item@6800843d
     let dir = repo(&[]);
     let d = dir.path();
     item(d, "q", "question");
@@ -2132,7 +2259,7 @@ fn item_named_in_from_and_resolves_is_removed_once() {
 
 #[test]
 fn workaround_flag_on_a_rewritten_requirement() {
-    // req:apply/resulting-graph@b3caad6a
+    // req:apply/resulting-graph@ded55ba9
     let dir = repo(&[]);
     let d = dir.path();
     let version = {

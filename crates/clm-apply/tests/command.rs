@@ -68,7 +68,7 @@ fn change_repo(delta: &str) -> TempDir {
 
 #[test]
 fn a_call_writes_what_the_command_prints_and_returns_its_status() {
-    // req:apply/commands-in-crate@67d7369f
+    // req:apply/commands-in-crate@7152b780 req:apply/change-status@b79e108f
     let dir = change_repo("---\ncomponent: clm\n---\n");
     // Found from the root the call is given, with no `--root`.
     let out = call(dir.path(), &["apply", "c"]);
@@ -100,7 +100,7 @@ fn a_call_writes_what_the_command_prints_and_returns_its_status() {
 
 #[test]
 fn a_violation_prints_as_the_models_line() {
-    // req:apply/commands-in-crate@67d7369f
+    // req:apply/commands-in-crate@7152b780
     let dir = change_repo(
         "---\ncomponent: clm\nbase: { contract: \"0000000000000000\" }\n---\n## MODIFIED Contract\nc2\n",
     );
@@ -118,7 +118,7 @@ fn a_violation_prints_as_the_models_line() {
 
 #[test]
 fn arguments_it_cant_parse() {
-    // req:apply/commands-in-crate@67d7369f
+    // req:apply/commands-in-crate@7152b780
     let dir = change_repo("---\ncomponent: clm\n---\n");
     for name in ["apply", "archive", "hashes"] {
         let out = call(dir.path(), &[name, "c", "--nosuchoption"]);
@@ -145,7 +145,7 @@ fn arguments_it_cant_parse() {
 
 #[test]
 fn hashes_prints_elements_usable_as_bases() {
-    // req:apply/hash-command@752d167d
+    // req:apply/hash-command@4b76b466
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let (code, out) = clm(dir.path(), &["hashes", "clm"]);
     assert_eq!(code, Some(0));
@@ -169,32 +169,92 @@ fn hashes_prints_elements_usable_as_bases() {
 
 #[test]
 fn hashes_prints_asset_lines() {
-    // req:apply/hash-command@752d167d req:apply/apply-assets@786adb62
+    // req:apply/hash-command@4b76b466 req:apply/apply-assets@04b6c8ee
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(dir.path(), "specs/a/SPEC.md", NODE);
+    write(dir.path(), "specs/a/assets/z.txt", "z\n");
     write(dir.path(), "specs/a/assets/m.html", "<p>m</p>\n");
     let (code, out) = clm(dir.path(), &["hashes", "a"]);
     assert_eq!(code, Some(0));
-    let expected = format!("asset:m.html {}", clm_model::asset_hash(b"<p>m</p>\n"));
-    assert_eq!(out.lines().last(), Some(expected.as_str()), "{out}");
-}
-
-#[test]
-fn hashes_fails_on_an_unknown_node() {
-    // req:apply/hash-command@752d167d
-    let dir = change_repo("---\ncomponent: clm\n---\n");
-    let out = call_with_root(dir.path(), &["hashes", "nope"]);
-    let stderr = out.stderr;
-    assert_eq!(out.status, Some(2));
-    assert!(
-        stderr.contains("clm hashes: no valid component `nope`"),
-        "{stderr}"
+    let tail: Vec<&str> = out.lines().skip(4).collect();
+    assert_eq!(
+        tail,
+        [
+            format!("asset:m.html {}", clm_model::asset_hash(b"<p>m</p>\n")),
+            format!("asset:z.txt {}", clm_model::asset_hash(b"z\n")),
+        ],
+        "{out}"
+    );
+    assert_eq!(
+        out.lines().nth(3).map(|l| l.starts_with("requirement:r ")),
+        Some(true)
     );
 }
 
 #[test]
+fn hashes_fails_on_an_unknown_node() {
+    // req:apply/hash-command@4b76b466
+    let dir = change_repo("---\ncomponent: clm\n---\n");
+    let out = call_with_root(dir.path(), &["hashes", "nope"]);
+    assert_eq!(out.status, Some(2));
+    assert_eq!(out.stdout, "");
+    assert_eq!(out.stderr, "clm hashes: no valid component `nope`\n");
+}
+
+#[test]
+fn apply_names_a_change_that_doesnt_exist() {
+    // req:apply/change-status@b79e108f
+    let dir = change_repo("---\ncomponent: clm\n---\n");
+    let before = fs::read_to_string(dir.path().join("specs/SPEC.md")).unwrap();
+    let out = call_with_root(dir.path(), &["apply", "nope"]);
+    assert_eq!(out.status, Some(1));
+    assert!(
+        out.stdout
+            .lines()
+            .any(|l| l.contains("apply/change-status") && l.contains("no change `nope`")),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(
+        fs::read_to_string(dir.path().join("specs/SPEC.md")).unwrap(),
+        before
+    );
+    assert!(
+        fs::read_to_string(dir.path().join("changes/c/change.md"))
+            .unwrap()
+            .contains("proposed")
+    );
+}
+
+#[test]
+fn apply_prints_an_answered_question_it_removes() {
+    // req:apply/answered-questions@baab55dd req:apply/promoted-item@6800843d
+    let dir = change_repo("---\ncomponent: clm\n---\n");
+    let d = dir.path();
+    write(
+        d,
+        "backlog/q.md",
+        "---\ntitle: T\nkind: question\ncomponents: [clm]\n---\n\nbody\n",
+    );
+    write(
+        d,
+        "changes/c/change.md",
+        "---\nstatus: proposed\nfrom: backlog/q\nresolves: [q]\n---\n",
+    );
+    let out = call(d, &["apply", "c"]);
+    assert_eq!(out.status, Some(0), "{}", out.stdout);
+    assert_eq!(
+        out.stdout.matches("  removed backlog/q.md\n").count(),
+        1,
+        "{}",
+        out.stdout
+    );
+    assert!(!d.join("backlog/q.md").exists());
+}
+
+#[test]
 fn apply_reports_and_exits_1_writing_nothing() {
-    // req:apply/atomic@bb8aa354
+    // req:apply/atomic@01fcf63b
     let dir = change_repo(
         "---\ncomponent: clm\nbase: { contract: \"0000000000000000\" }\n---\n## MODIFIED Contract\nc2\n",
     );
@@ -213,7 +273,7 @@ fn apply_reports_and_exits_1_writing_nothing() {
 
 #[test]
 fn apply_exits_1_on_a_stale_asset_and_reports_removals() {
-    // req:apply/apply-assets@786adb62
+    // req:apply/apply-assets@04b6c8ee
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let d = dir.path();
     write(d, "specs/a/SPEC.md", NODE);
@@ -256,7 +316,7 @@ fn apply_exits_1_on_a_stale_asset_and_reports_removals() {
 #[test]
 fn backlog_and_archive_commands() {
     let dir = change_repo("---\ncomponent: clm\n---\n");
-    // req:apply/archive-command@c68462bb
+    // req:apply/archive-command@08442b52
     let (code, _) = clm(dir.path(), &["archive", "c"]);
     assert_eq!(code, Some(1), "proposed change must not archive");
     write(
@@ -271,7 +331,7 @@ fn backlog_and_archive_commands() {
 
 #[test]
 fn hashes_of_layers() {
-    // req:apply/hash-command@752d167d
+    // req:apply/hash-command@4b76b466
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let entry = |slug: &str| {
         format!("### Capability: {slug}\nOne can.\n\n#### Why\nw\n\n#### Scenario: s\n- ok\n")
@@ -306,7 +366,7 @@ fn hashes_of_layers() {
 
 #[test]
 fn hashes_of_the_capability_node_come_first() {
-    // req:apply/hash-command@752d167d
+    // req:apply/hash-command@4b76b466
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(
         dir.path(),

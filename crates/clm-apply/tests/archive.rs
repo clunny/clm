@@ -30,7 +30,7 @@ fn repo(status: &str) -> TempDir {
 
 #[test]
 fn moves_done_change_into_archive() {
-    // req:apply/archive-command@c68462bb
+    // req:apply/archive-command@08442b52
     let dir = repo("done");
     let d = dir.path();
     let to = archive(d, "x").unwrap();
@@ -45,7 +45,7 @@ fn moves_done_change_into_archive() {
 
 #[test]
 fn refuses_unfinished_change_or_existing_target() {
-    // req:apply/archive-command@c68462bb
+    // req:apply/archive-command@08442b52
     let dir = repo("applied");
     let d = dir.path();
     let v = archive(d, "x").unwrap_err();
