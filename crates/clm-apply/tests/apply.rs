@@ -92,6 +92,10 @@ fn stale_delta_blocks_every_write() {
 
     let violations = apply(d, "c").unwrap_err();
     assert_eq!(rules(&violations), ["apply/stale-base"]);
+    assert!(
+        violations[0].message.contains("contract of `clm`"),
+        "{violations:?}"
+    );
     assert_eq!(read(d, "specs/a/SPEC.md"), before_a);
     assert_eq!(read(d, "specs/SPEC.md"), before_root);
     assert!(read(d, "changes/c/change.md").contains("status: proposed"));
@@ -669,6 +673,15 @@ fn create_is_invalid_if_node_exists_or_parent_missing() {
         rules(&violations),
         ["apply/create-node", "apply/create-node"]
     );
+    assert!(
+        violations[0].path.ends_with("a.md")
+            && violations[0].message.contains("`a` already exists"),
+        "{violations:?}"
+    );
+    assert!(
+        violations[1].path.ends_with("q.r.md") && violations[1].message.contains("`q`"),
+        "{violations:?}"
+    );
 }
 
 #[test]
@@ -1027,7 +1040,7 @@ fn hashes_of_a_layer_without_its_node() {
 
 #[test]
 fn hashes_lists_assets_after_requirements() {
-    // req:apply/hash-command@4b76b466 req:apply/apply-assets@04b6c8ee
+    // req:apply/hash-command@4b76b466
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/z.txt", "z\n");

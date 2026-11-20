@@ -169,7 +169,7 @@ fn hashes_prints_elements_usable_as_bases() {
 
 #[test]
 fn hashes_prints_asset_lines() {
-    // req:apply/hash-command@4b76b466 req:apply/apply-assets@04b6c8ee
+    // req:apply/hash-command@4b76b466
     let dir = change_repo("---\ncomponent: clm\n---\n");
     write(dir.path(), "specs/a/SPEC.md", NODE);
     write(dir.path(), "specs/a/assets/z.txt", "z\n");
@@ -273,7 +273,7 @@ fn apply_reports_and_exits_1_writing_nothing() {
 
 #[test]
 fn apply_exits_1_on_a_stale_asset_and_reports_removals() {
-    // req:apply/apply-assets@04b6c8ee
+    //
     let dir = change_repo("---\ncomponent: clm\n---\n");
     let d = dir.path();
     write(d, "specs/a/SPEC.md", NODE);

@@ -121,3 +121,20 @@ fn a_path_it_cant_put_back_is_returned() {
     // The others are still put back.
     assert_eq!(fs::read(d.join("x/f")).unwrap(), b"1");
 }
+
+#[test]
+fn undo_runs_in_the_reverse_order_of_first_touch() {
+    // req:apply/journal@e3e1076a
+    // Removing `s/p/q` empties and drops `s/p`, where a file is then written: `s/p` must go
+    // before `s/p/q` can come back in its directory.
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "s/p/q", b"q");
+    write(d, "s/keep", b"k");
+    let mut journal = Journal::new(d);
+    journal.perform(&FileOp::Remove("s/p/q".into())).unwrap();
+    journal.perform(&put("s/p", b"a file")).unwrap();
+    let not_back = journal.undo();
+    assert!(not_back.is_empty(), "{not_back:?}");
+    assert_eq!(fs::read(d.join("s/p/q")).unwrap(), b"q");
+}
