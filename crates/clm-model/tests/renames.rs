@@ -176,4 +176,5 @@ fn renames_that_are_not_a_list() {
     // req:model/rename-records@7aa84f3d
     let p = problems("renames: sprocket\n");
     assert_eq!(p.len(), 1, "{p:?}");
+    assert!(p[0].contains("`renames` isn't a list"), "{p:?}");
 }

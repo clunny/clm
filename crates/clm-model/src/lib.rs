@@ -97,7 +97,7 @@ pub struct Frontmatter {
     /// (`human-layers`), so a tree from before still loads. A sink, so nothing can read it.
     #[serde(default)]
     capabilities: change::Ignored,
-    /// Set on this node only; `Graph::is_optional` adds the ancestors (`optional-nodes`).
+    /// Set on this component only; the `optional-nodes` rules add its ancestors.
     #[serde(default)]
     pub optional: bool,
     #[serde(default)]

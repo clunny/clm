@@ -39,8 +39,20 @@ fn a_required_component_on_an_optional_one() {
         ("specs/b/SPEC.md", &b),
     ]);
     assert_eq!(v.len(), 1, "{v:?}");
-    assert!(v[0].message.contains("required component `b`"), "{v:?}");
-    assert!(v[0].message.contains("optional component `a`"), "{v:?}");
+    assert!(
+        v[0].message
+            .contains("required component `b` depends on optional component `a`"),
+        "{v:?}"
+    );
+}
+
+// req:model/says-component@e37a6f5e
+#[test]
+fn the_shapes_it_names() {
+    let needs = "---\ntitle: T\nstatus: unbuilt\nowners: []\n---\n\n## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Scenario: s\n- ok\n\n#### Needs\nneeds b/y\n";
+    says(&[("specs/a/SPEC.md", needs)], "- <component>/<slug>`");
+    let flag = "---\ntitle: T\nkind: workaround\nrequirement: nonsense\n---\n";
+    says(&[("backlog/f.md", flag)], "<component>/<slug>@<version>`");
 }
 
 /// The one violation loading `files` with the root gives says `words`.
