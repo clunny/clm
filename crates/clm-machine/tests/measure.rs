@@ -122,6 +122,75 @@ fn a_place_without_a_worktree_is_unmeasured() {
 }
 
 #[test]
+fn a_worktree_on_another_branch_is_not_the_places() {
+    // req:machine/build-measure@25e6eaf6
+    // `ghost` names `impl/ghost`; the only other worktrees are the main checkout and one on
+    // `impl/other`, which holds a 3 MiB file but no place.
+    let dir = repo();
+    let holder = tempfile::tempdir().unwrap();
+    let other = holder.path().join("other");
+    clm_git::git(
+        dir.path(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            other.to_str().unwrap(),
+            "-b",
+            "impl/other",
+        ],
+    )
+    .unwrap();
+    fill(&other.join("three"), 3 * MIB);
+    clm_orchestrator::take_place(
+        dir.path(),
+        "ghost",
+        clm_orchestrator::PlaceKind::Build,
+        &["impl/ghost".to_string()],
+        3,
+        4,
+    )
+    .unwrap();
+    let json = json(dir.path(), clm_git::now());
+    assert_eq!(json["disk"]["builds"].as_array().unwrap().len(), 1);
+    assert_eq!(json["disk"]["builds"][0]["name"], "ghost");
+    assert!(json["disk"]["builds"][0]["bytes"].is_null());
+    assert!(json["disk"]["peak"].is_null());
+}
+
+#[test]
+fn a_place_that_does_not_count_is_not_measured() {
+    // req:machine/build-measure@25e6eaf6
+    // `stale` was taken long ago and has no live claim, so it no longer counts: its 3 MiB
+    // worktree is neither listed nor measured, and only `a` is.
+    let dir = repo();
+    let (_a, _tree_a) = build(dir.path(), "a");
+    let (_stale, tree_stale) = build(dir.path(), "stale");
+    fill(&tree_stale.join("three"), 3 * MIB);
+    let place = common(dir.path()).join("clm/builds/stale");
+    let text = fs::read_to_string(&place).unwrap();
+    let old: String = text
+        .lines()
+        .map(|l| {
+            if l.starts_with("taken ") {
+                "taken 2020-01-01T00:00:00Z\n".to_string()
+            } else {
+                format!("{l}\n")
+            }
+        })
+        .collect();
+    fs::write(&place, old).unwrap();
+    let json = json(dir.path(), clm_git::now());
+    let builds = json["disk"]["builds"].as_array().unwrap();
+    assert_eq!(builds.len(), 1, "{builds:?}");
+    assert_eq!(builds[0]["name"], "a");
+    assert_eq!(json["disk"]["free_places"], 2);
+    assert!(json["disk"]["peak"].as_u64().unwrap() < 3 * MIB);
+    let record = fs::read_to_string(common(dir.path()).join("clm/machine")).unwrap();
+    assert!(!record.contains("stale"), "{record}");
+}
+
+#[test]
 fn a_record_round_trips_and_its_peak_only_rises() {
     // req:machine/build-measure@25e6eaf6
     let record = Record {
