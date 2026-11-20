@@ -57,7 +57,7 @@ fn the_sample_holds_the_shares() {
 
 #[test]
 fn a_reading_the_system_refuses_is_unknown() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@53f8492b
     let mut r = readings();
     (r.memory, r.disk) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
