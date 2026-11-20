@@ -89,7 +89,7 @@ pub fn abilities(agent_harness: AgentHarness) -> Abilities {
     }
 }
 
-/// What `clm`'s hooks read from an event; each field is `None` when absent.
+/// What `clm`'s hooks read from an event; each field is `None` when absent or not a string.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HookEvent {
     pub tool: Option<String>,

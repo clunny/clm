@@ -16,6 +16,10 @@ fn claude_code_marker() {
         detect(env(&[("CLAUDECODE", "1")])),
         AgentHarness::ClaudeCode
     );
+    assert_eq!(
+        detect(env(&[("CLAUDECODE", "yes")])),
+        AgentHarness::ClaudeCode
+    );
 }
 
 // req:agent-harness/detect@a89f980b

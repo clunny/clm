@@ -92,6 +92,7 @@ fn the_reason_comes_first() {
         let rest = &r.stderr["confirm clm approve\n".len()..];
         assert!(rest.contains("can't ask the human"), "{rest}");
         assert!(rest.contains("own terminal"), "{rest}");
+        assert!(!rest.trim_end().contains('\n'), "{rest}");
         assert_eq!(r.stdout, "");
         assert_eq!(r.exit_code, 2);
     }
