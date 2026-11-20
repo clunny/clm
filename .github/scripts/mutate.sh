@@ -153,13 +153,14 @@ lcov_counts() {
 # Writes `$work/covered`, a `<file>	<line>	<count>` line for each line the block's tests run:
 # one run of the block's tests alone, under its filterset, over its test packages, in the tree.
 # A mutant on no such line is one no test citing the requirement could notice, so it is never
-# tried.
+# tried. The files under a crate's `tests/`, which `cargo llvm-cov` leaves out by default, are
+# reported too, and with them the dependencies' files, whose paths stay absolute.
 covered_lines() {
   local report=$work/covered.info p args=()
   rm -f "$report"
   for p in $packages; do args+=(--package "$p"); done
-  (cd "$tree" && cargo llvm-cov nextest --no-rustc-wrapper --no-tests=pass --lcov --output-path "$report" \
-    "${args[@]}" -E "$filterset") ||
+  (cd "$tree" && cargo llvm-cov nextest --no-rustc-wrapper --no-default-ignore-filename-regex --no-tests=pass \
+    --lcov --output-path "$report" "${args[@]}" -E "$filterset") ||
     die "cargo llvm-cov failed to find the lines the tests of requirement $id run"
   [ -s "$report" ] || die "cargo llvm-cov wrote no report for requirement $id"
   lcov_counts "$report" >"$work/covered"
@@ -243,6 +244,78 @@ names_of() {
   done <"$1"
 }
 
+# Appends to $1 a `<file>	<first line>	<last line>	<name>	<diff file>` line for each mutant
+# `cargo mutants --Zmutate-file` lists for file $3 of tree $2, in its order, writing each
+# mutant's diff to a file of its own beside $1; $4 names what it judges, for an error. The tool
+# names the file by its base name alone, so each mutant is keyed by $3, the path it was given.
+list_file_mutants() {
+  local out=$1 dir=$2 file=$3 what=$4 n
+  n=$(lines_in "$out")
+  mkdir -p "$out.d"
+  (cd "$dir" && cargo mutants --Zmutate-file "$dir/$file" --json) >"$out.json" ||
+    die "cargo mutants --Zmutate-file failed on $file for $what"
+  node -e '
+    const fs = require("fs");
+    const [json, file, dir, start] = process.argv.slice(1);
+    const list = JSON.parse(fs.readFileSync(json, "utf8"));
+    if (!Array.isArray(list)) throw new Error("not a list");
+    list.forEach((m, i) => {
+      const s = m.span.start.line, e = m.span.end.line;
+      if (!Number.isInteger(s) || !Number.isInteger(e) || typeof m.name !== "string" ||
+        typeof m.diff !== "string") throw new Error("a mutant without its span, name or diff");
+      const d = dir + "/" + (Number(start) + i) + ".diff";
+      fs.writeFileSync(d, m.diff);
+      console.log([file, s, e, m.name.replace(/[\t\n]/g, " "), d].join("\t"));
+    });
+  ' "$out.json" "$file" "$out.d" "$n" >>"$out" ||
+    die "cargo mutants --Zmutate-file listed mutants of $file that could not be read for $what"
+}
+
+# Tries the mutants of list $1 (`list_file_mutants`' lines) in tree $2, one at a time, up to $3
+# of them, and none after the first caught when $4 is `first`: writes the mutant into its file
+# as its diff changes it, runs `cargo nextest run` over the packages `$packages` under
+# `$filterset`, and puts the file back. Adds to `caught` when nextest exits 100, as when a test
+# fails, and to `missed` when it exits 0; 101, a build that failed, counts neither way, as
+# cargo-mutants counts an unviable mutant. Any other status, or a diff that doesn't apply, fails
+# the script, naming $5, after the file is put back.
+try_file_mutants() {
+  local list=$1 dir=$2 max=$3 stop=$4 what=$5 f a b name d status n=0 p args=()
+  for p in $packages; do args+=(--package "$p"); done
+  while IFS="$tab" read -r -u 4 f a b name d; do
+    [ "$n" -lt "$max" ] || break
+    if [ "$stop" = first ] && [ "$caught" -gt 0 ]; then break; fi
+    n=$((n + 1))
+    cp -p "$dir/$f" "$work/file-mutant.orig"
+    if ! patch -s -f --no-backup-if-mismatch -r - "$dir/$f" <"$d" >/dev/null; then
+      cp "$work/file-mutant.orig" "$dir/$f"
+      die "cargo mutants --Zmutate-file listed a mutant of $f that could not be written for $what"
+    fi
+    status=0
+    (cd "$dir" && cargo nextest run --no-tests=pass "${args[@]}" -E "$filterset") || status=$?
+    # Not `-p`: put back with a time newer than the mutant's build, so cargo rebuilds it.
+    cp "$work/file-mutant.orig" "$dir/$f"
+    case $status in
+      0) missed=$((missed + 1)) ;;
+      100) caught=$((caught + 1)) ;;
+      101) ;;
+      *) die "cargo nextest failed (status $status) on a mutant of $f for $what" ;;
+    esac
+  done 4<"$list"
+}
+
+# The block's test files under a crate's `tests/`, a test target's files, which cargo-mutants
+# never mutates, in the order of its `test` lines, each once.
+test_target_files() {
+  local t file seen=
+  for t in ${tests[@]+"${tests[@]}"}; do
+    file=${t%%"$tab"*}
+    case $file in crates/*/tests/*.rs) ;; *) continue ;; esac
+    case "$nl$seen" in *"$nl$file$nl"*) continue ;; esac
+    seen="$seen$file$nl"
+    printf '%s\n' "$file"
+  done
+}
+
 # Makes `$2`, the tree `cargo mutants` runs in and copies with `--copy-vcs true`, from the
 # checkout `$1`: a git repository whose `.git` is a directory of its own, borrowing `$1`'s object
 # store by an absolute path and holding none of it (`git clone --shared`), checked out at `$1`'s
@@ -323,8 +396,55 @@ mod tests {
     }
 }
 EOF
+  # A test target's file, whose function no test is the one its tests judge. Its git checks are
+  # macros, which no tool mutates, so the function holds its only mutants.
+  mkdir -p "$src/tests"
+  cat >"$src/tests/clm_mutate_fixture.rs" <<'EOF'
+// The crate's own directory must be the top of a git repository.
+macro_rules! in_git_repository {
+    () => {{
+        let top = std::process::Command::new("git")
+            .args(["rev-parse", "--show-toplevel"])
+            .output()
+            .unwrap();
+        assert!(top.status.success(), "not in a git repository");
+        let top = String::from_utf8(top.stdout).unwrap();
+        let here = std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+        assert_eq!(std::fs::canonicalize(top.trim()).unwrap(), here);
+    }};
+}
+
+// Git sees no tracked file changed from `HEAD`, though the mutant changed this file.
+macro_rules! tracked_files_unchanged {
+    () => {{
+        let status = std::process::Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=no"])
+            .output()
+            .unwrap();
+        assert!(status.status.success(), "git status failed");
+        assert_eq!(String::from_utf8(status.stdout).unwrap(), "");
+    }};
+}
+
+fn triple(x: i32) -> i32 {
+    x * 3
+}
+
+#[test]
+fn fixture_file_notices() {
+    in_git_repository!();
+    assert_eq!(triple(3), 9);
+}
+
+#[test]
+fn fixture_file_blind() {
+    in_git_repository!();
+    tracked_files_unchanged!();
+    let _ = triple(3);
+}
+EOF
   { git -C "$src" init -q &&
-    git -C "$src" add Cargo.toml src/lib.rs &&
+    git -C "$src" add Cargo.toml src/lib.rs tests/clm_mutate_fixture.rs &&
     git -C "$src" -c user.name=clm -c user.email=clm@localhost -c commit.gpgsign=false \
       commit -q --no-verify -m fixture &&
     make_tree "$src" "$fix"; } || die "cargo mutants' fixture could not be made a git repository"
@@ -343,6 +463,25 @@ EOF
       notices) [ "$caught" -gt 0 ] && [ "$missed" -eq 0 ] ;;
       blind) [ "$missed" -gt 0 ] && [ "$caught" -eq 0 ] ;;
     esac || die "cargo mutants judged its fixture wrongly: $caught caught and $missed missed for the $kind test"
+  done
+  # Its test file's mutants, every one the tool lists, tried as a block's test file's are, with
+  # no run to find the lines, in a copy made as a block's is: so a copy in which git sees the
+  # mutant, a listing misread or a nextest whose exit status means something else fails the
+  # fixture too.
+  local copy=$work/fixture-copy packages=clm-mutate-fixture filterset
+  make_tree "$src" "$copy" || die "cargo mutants' fixture could not be copied"
+  : >"$work/fixture-file"
+  list_file_mutants "$work/fixture-file" "$copy" tests/clm_mutate_fixture.rs "cargo mutants' fixture"
+  for kind in notices blind; do
+    filterset="binary_id(=clm-mutate-fixture::clm_mutate_fixture) & test(~fixture_file_$kind)"
+    caught=0
+    missed=0
+    CARGO_TARGET_DIR=$work/fixture-target try_file_mutants "$work/fixture-file" "$copy" \
+      "$(lines_in "$work/fixture-file")" all "cargo mutants' fixture"
+    case $kind in
+      notices) [ "$caught" -gt 0 ] && [ "$missed" -eq 0 ] ;;
+      blind) [ "$missed" -gt 0 ] && [ "$caught" -eq 0 ] ;;
+    esac || die "cargo mutants and cargo nextest judged their fixture's test file wrongly: $caught caught and $missed missed for the $kind test"
   done
 }
 
@@ -428,6 +567,38 @@ rust_selection() {
   [ "${#rust_files[@]}" -gt 0 ] && [ -n "$filterset" ]
 }
 
+# Whether the block's tests run a line of a Rust file of the repository other than its code
+# files and its test files. The report's files outside the tree, the dependencies' and the
+# standard library's, keep absolute paths and are none of the repository's.
+runs_other_files() {
+  local t own=
+  for t in ${rust_files[@]+"${rust_files[@]}"} ${tests[@]+"${tests[@]}"}; do own="$own${t%%"$tab"*}$nl"; done
+  own="$own" awk -F'\t' 'BEGIN { n = split(ENVIRON["own"], o, "\n"); for (i = 1; i <= n; i++) mine[o[i]] = 1 }
+    $1 !~ /^\// && $1 ~ /\.rs$/ && !($1 in mine) { found = 1; exit }
+    END { exit !found }' "$work/covered"
+}
+
+# Judges the block by the mutants of its test files its tests run, `$work/file-try`: up to its
+# `limit`, none after the first caught, each written into a copy of the tree of the block's job
+# number, made the first time the job needs one, never the tree cargo-mutants copies or the
+# checkout. The block's `diff` plays no part. Sets `verdict`.
+judge_test_files() {
+  local copy=$pass_work/copy-$job
+  if ! [ -d "$copy" ]; then
+    make_tree "$root" "$copy" || die "a copy of the tree could not be made for requirement $id"
+  fi
+  caught=0
+  missed=0
+  try_file_mutants "$work/file-try" "$copy" "$limit" first "requirement $id"
+  if [ "$caught" -gt 0 ]; then
+    verdict=killed
+  elif [ "$missed" -gt 0 ]; then
+    verdict="survived $missed"
+  else
+    verdict=not-judged
+  fi
+}
+
 # Judges the Rust files of a block, its tools ready. Sets `verdict` to killed, survived <n> or
 # not-judged.
 judge_rust() {
@@ -443,14 +614,31 @@ judge_rust() {
   # The diff's mutants, and the further ones: the files' others, in the tool's order until
   # ordered by share.
   list_mutants "$work/all"
-  if ! [ -s "$work/all" ]; then
+  # And those of its test files, which judge the block only when its code offers none.
+  : >"$work/file-all"
+  for f in $(test_target_files); do
+    [ ! -f "$tree/$f" ] || list_file_mutants "$work/file-all" "$tree" "$f" "requirement $id"
+  done
+  if ! [ -s "$work/all" ] && ! [ -s "$work/file-all" ]; then
     verdict=not-judged
     return
   fi
   : >"$work/diff"
-  if [ -n "$diff" ]; then list_mutants "$work/diff" --in-diff "$diff"; fi
+  if [ -n "$diff" ] && [ -s "$work/all" ]; then list_mutants "$work/diff" --in-diff "$diff"; fi
   covered_lines
   awk -F'\t' 'FILENAME == ARGV[1] { d[$4] = 1; next } !($4 in d)' "$work/diff" "$work/all" >"$work/further"
+  # No mutant of its code on a line its tests run, and no line run of any other Rust file of the
+  # repository but its test files: its rule may be code in a test's own file, as a scan of the
+  # repository's sources is, and the mutants of its test files judge it, alone. Never beside the
+  # code's: a mutant of a helper that builds a test's fixture is caught however little the test
+  # asserts, and would hide the code's survivors. A test that runs another component's code
+  # reads as before.
+  tryable "$work/all" >"$work/all-try"
+  tryable "$work/file-all" >"$work/file-try"
+  if ! [ -s "$work/all-try" ] && [ -s "$work/file-try" ] && ! runs_other_files; then
+    judge_test_files
+    return
+  fi
   # Tests that run no line of any file with a mutant can notice no change to it: every mutant
   # they would be given survives, untried. Unless they read the repository's own files, whose
   # data may be the rule they prove: then nothing here judges them.
@@ -854,6 +1042,7 @@ run_block() {
   work=$work/block-$1
   mkdir -p "$work"
   tag=$1
+  job=$2
   export CLM_SLOT=$((slot_base + $2 - 1)) CARGO_TARGET_DIR=$target_base/mutate-job-$2
   load_block "$1"
   finish_block

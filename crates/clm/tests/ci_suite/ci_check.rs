@@ -2012,7 +2012,10 @@ fn without_a_land_place_the_cargo_variables_stay() {
 /// names, an `SF:` line naming it absolutely under the real path of the directory it runs in, as
 /// the tool does, and a `DA:` line for each of its lines 1 to 40, run once unless `bin/lcov-run`
 /// lists the lines run (one per line, `<n>` for every file or `<file>:<n>` for one, then, after a
-/// space, the times it ran when not once; an empty file for none). A call with no filterset
+/// space, the times it ran when not once; an empty file for none). Given
+/// `--no-default-ignore-filename-regex`, it reports the plan's `test` files the same way, then a
+/// dependency's file outside the tree with its line 1 run, and a record for each `<file>:<n>`
+/// line of `bin/lcov-extra`, with that line run. A call with no filterset
 /// (`-E`), a run of every test of a package, exits first with the status in
 /// `bin/llvm-cov-all-exit` when it exists, or 0 when `bin/llvm-cov-all-no-report` does, writing
 /// nothing, and reads `bin/lcov-run-all` in place
@@ -2072,6 +2075,57 @@ block_of() {
   if [ -n "$f" ]; then f=${f##*/}; echo "${f%.rs}"; return; fi
   printf '%s\n' "$*" | sed -n 's/.*test(~proves_\([a-z0-9]*\)).*/\1/p'
 }
+# `mutants --Zmutate-file <file> --json` lists one mutant of the script's fixture's test file,
+# on its line 1, and none of another file unless `bin/zlist` holds `<first> <last>` lines: a
+# mutant for each, which appends ` /* mutant <first> */` to the file's line `<first>`, with
+# the diff that does so.
+if [ "$1" = mutants ] && [ "$2" = --Zmutate-file ]; then
+  f=$3
+  case $f in
+    *clm_mutate_fixture.rs) lines="1 1" ;;
+    *) lines=$(cat "$bin/zlist" 2>/dev/null || true) ;;
+  esac
+  printf '['
+  sep=
+  while read -r first last; do
+    [ -n "$last" ] || continue
+    d=$(diff -u --label "${f##*/}" --label mutant "$f" <(sed "${first}s|\$| /* mutant $first */|" "$f") |
+      sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' | awk '{ printf "%s\\n", $0 }')
+    printf '%s{"file":"%s","name":"%s:%s:5: mutant %s","diff":"%s",' "$sep" "${f##*/}" "${f##*/}" "$first" "$first" "$d"
+    printf '"span":{"start":{"line":%s,"column":5},"end":{"line":%s,"column":9}}}' "$first" "$last"
+    sep=,
+  done <<EOF
+$lines
+EOF
+  printf ']'
+  exit 0
+fi
+# `nextest run` exits 100, as when a test fails, for the fixture's test file's test that
+# notices, and for its blind one too when `bin/nextest-fixture-catches-all` exists, 0 for its
+# blind one, after copying the fixture's test file to `$CI_LOG.fixture-test-file`, its
+# `.git/objects/info/alternates` to `$CI_LOG.fixture-file-alternates` and what `git status`
+# says of tracked files to `$CI_LOG.fixture-file-status`; for any other run it appends its
+# directory to `$CI_LOG.nextest-cwd` and its `CLM_SLOT` and `CARGO_TARGET_DIR` to
+# `$CI_LOG.nextest-env`, copies the plan's first test file there to `$CI_LOG.nextest-file`, and
+# exits with the status in `bin/nextest-exit`, or 0.
+if [ "$1" = nextest ] && [ "$2" = run ]; then
+  case " $* " in *"test(~fixture_file_"*)
+    cp tests/clm_mutate_fixture.rs "$CI_LOG.fixture-test-file"
+    cp .git/objects/info/alternates "$CI_LOG.fixture-file-alternates" 2>/dev/null || true
+    git status --porcelain --untracked-files=no > "$CI_LOG.fixture-file-status" 2>&1 ||
+      echo "git status failed" >> "$CI_LOG.fixture-file-status"
+    ;;
+  esac
+  case " $* " in
+    *"test(~fixture_file_notices)"*) exit 100 ;;
+    *"test(~fixture_file_blind)"*) [ ! -e "$bin/nextest-fixture-catches-all" ] || exit 100; exit 0 ;;
+  esac
+  echo "$PWD" >> "$CI_LOG.nextest-cwd"
+  echo "${CLM_SLOT-unset} ${CARGO_TARGET_DIR-unset}" >> "$CI_LOG.nextest-env"
+  t=$(sed -n 's/^test //p' "$CLM_MUTATE" | head -n 1 | cut -f1)
+  [ ! -f "$t" ] || cp "$t" "$CI_LOG.nextest-file"
+  exit "$(cat "$bin/nextest-exit" 2>/dev/null || echo 0)"
+fi
 case " $* " in *" --version "*) ;; *)
   if [ -e "$bin/record-calls" ] && { [ "$1" = llvm-cov ] || [ "$1" = mutants ]; }; then
     me=$(block_of "$@")
@@ -2103,7 +2157,14 @@ if [ "$1" = llvm-cov ]; then
   esac
   [ ! -e "$bin/llvm-cov-no-report" ] || exit 0
   : > "$report"
-  sed -n 's/^code //p' "$CLM_MUTATE" | while IFS= read -r f; do
+  {
+    sed -n 's/^code //p' "$CLM_MUTATE"
+    # The files under `tests/`, and the dependencies' files, only when they aren't left out.
+    case " $* " in *" --no-default-ignore-filename-regex "*)
+      sed -n 's/^test //p' "$CLM_MUTATE" | cut -f1 | sort -u
+      ;;
+    esac
+  } | while IFS= read -r f; do
     echo "SF:$(pwd -P)/$f" >> "$report"
     for n in $(seq 1 40); do
       run=1
@@ -2115,6 +2176,15 @@ if [ "$1" = llvm-cov ]; then
     done
     echo end_of_record >> "$report"
   done
+  case " $* " in *" --no-default-ignore-filename-regex "*)
+    # A dependency's file, outside the tree, and each `<file>:<line>` of `bin/lcov-extra` run.
+    printf 'SF:/nonexistent-registry/dep-1.0.0/src/lib.rs\nDA:1,1\nend_of_record\n' >> "$report"
+    while IFS= read -r x; do
+      [ -n "$x" ] || continue
+      printf 'SF:%s/%s\nDA:%s,1\nend_of_record\n' "$(pwd -P)" "${x%:*}" "${x##*:}" >> "$report"
+    done < <(cat "$bin/lcov-extra" 2>/dev/null || true)
+    ;;
+  esac
   [ ! -e "$bin/llvm-cov-exit" ] || exit "$(cat "$bin/llvm-cov-exit")"
   exit 0
 fi
@@ -2371,6 +2441,12 @@ impl Tree {
             "tempdir",
             "stale-tempdirs",
             "fixture-test",
+            "fixture-test-file",
+            "fixture-file-alternates",
+            "fixture-file-status",
+            "nextest-cwd",
+            "nextest-env",
+            "nextest-file",
         ] {
             let _ = fs::remove_file(self.dir.path().join(format!("log.{kept}")));
         }
@@ -2411,7 +2487,7 @@ const RUST_BLOCK: &str = "requirement a/x\ncode crates/clm-check/src/lib.rs\ndif
 
 #[test]
 fn a_rust_requirement_whose_test_notices_is_killed() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report(
@@ -2452,7 +2528,7 @@ fn a_rust_requirement_whose_test_notices_is_killed() {
 
 #[test]
 fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-missed", "3");
     tree.report("further-missed", "2");
@@ -2508,7 +2584,7 @@ fn tests_that_notice_nothing_survive_with_the_count_of_both_runs() {
 
 #[test]
 fn a_block_of_playwright_specs_is_not_judged() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(
         "requirement w/y\ncode web/src/app.ts\ntest web/e2e/app.spec.ts\tpaints\nlimit 20\n",
     );
@@ -2524,7 +2600,7 @@ fn a_block_of_playwright_specs_is_not_judged() {
 
 #[test]
 fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree("");
     let diff = tree.dir.path().join("the.diff");
     fs::write(
@@ -2597,7 +2673,7 @@ fn a_typescript_requirement_runs_stryker_on_its_diff_and_its_vitest_tests() {
 
 #[test]
 fn a_plan_with_nothing_to_mutate_is_not_judged() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree("requirement d/z\ncode docs/readme.md\ntest docs/t.rs\tt\nlimit 20\n");
     let (ok, log, result, _) = tree.mutate(&[]);
     assert!(ok, "{log:?}");
@@ -2606,7 +2682,7 @@ fn a_plan_with_nothing_to_mutate_is_not_judged() {
 
 #[test]
 fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let land = tree.dir.path().join("land");
@@ -2624,7 +2700,7 @@ fn the_pass_ends_with_coverage_copied_to_the_land_dir_and_fails_with_it() {
 
 #[test]
 fn the_mutation_tools_are_pinned_and_installed_when_absent() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let (_, log, _, _) = tree.mutate(&[]);
@@ -2681,7 +2757,7 @@ fn the_mutation_tools_are_pinned_and_installed_when_absent() {
 
 #[test]
 fn the_mutation_script_is_in_no_land_check_or_workflow() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     // clm:reads clm.toml
     // clm:reads .github/**
     let toml = fs::read_to_string(repo().join("clm.toml")).unwrap();
@@ -2718,7 +2794,7 @@ fn the_mutation_script_is_in_no_land_check_or_workflow() {
 
 #[test]
 fn vitest_tests_that_notice_nothing_survive() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(
         "requirement p/q\ncode plugin-panel/src/a.ts\ntest plugin-panel/test/a.test.ts\tt\nlimit 20\n",
     );
@@ -2740,7 +2816,7 @@ fn vitest_tests_that_notice_nothing_survive() {
 
 #[test]
 fn a_tool_that_fails_leaves_no_verdict() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("mutants-exit", "4");
@@ -2764,7 +2840,7 @@ const WEB_BLOCK: &str =
 
 #[test]
 fn stryker_that_runs_no_test_leaves_no_verdict() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-exit", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2778,16 +2854,22 @@ fn stryker_that_runs_no_test_leaves_no_verdict() {
 
 #[test]
 fn the_fixture_is_judged_first_outside_the_repository() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     let before = snapshot(&tree.work());
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
     assert_eq!(result, ["a/x killed"]);
+    // The runs of the crate's mutants: the listing of its test file's goes apart
+    // (`the_fixtures_test_file_is_judged_with_its_every_mutant_in_a_copy_made_as_the_tree_is`).
     let runs: Vec<&String> = log
         .iter()
-        .filter(|l| l.starts_with("cargo mutants ") && !l.ends_with(" --version"))
+        .filter(|l| {
+            l.starts_with("cargo mutants ")
+                && !l.ends_with(" --version")
+                && !l.contains("--Zmutate-file")
+        })
         .collect();
     let first_block = runs
         .iter()
@@ -2856,7 +2938,7 @@ fn the_fixture_is_judged_first_outside_the_repository() {
 
 #[test]
 fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&format!("{RUST_BLOCK}{}", RUST_BLOCK.replace("a/x", "a/y")));
     tree.report("diff-caught", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -2878,7 +2960,7 @@ fn the_tree_and_the_fixture_are_made_once_for_every_rust_block() {
 
 #[test]
 fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     // The checkout is a linked worktree of a repository with a branch and a remote-tracking
@@ -2965,7 +3047,7 @@ fn the_tree_the_tool_copies_has_a_git_directory_of_its_own() {
 
 #[test]
 fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("diff-caught", "1");
     tree.report("fixture-catches-all", "");
@@ -2992,7 +3074,7 @@ fn a_tool_that_judges_its_fixture_wrongly_judges_nothing() {
 
 #[test]
 fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -3029,7 +3111,7 @@ fn stryker_is_judged_on_a_fixture_in_the_directory_before_its_first_block() {
 
 #[test]
 fn a_typescript_test_reads_a_file_of_the_repository() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     // A dot entry, and one git doesn't track, are entries of the top as much as the rest.
     fs::write(tree.work().join(".hidden"), "").unwrap();
@@ -3090,7 +3172,7 @@ fn a_typescript_test_reads_a_file_of_the_repository() {
 
 #[test]
 fn the_stryker_fixture_reads_a_file_of_the_repository() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
     let (ok, log, _, stderr) = tree.mutate(&[]);
@@ -3154,7 +3236,7 @@ fn block_tries(log: &[String]) -> Vec<&String> {
 
 #[test]
 fn a_mutant_the_tests_never_run_is_not_tried() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = lines_tree("3\n");
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3195,7 +3277,7 @@ fn a_mutant_the_tests_never_run_is_not_tried() {
 
 #[test]
 fn a_mutant_is_tried_when_any_line_of_its_span_runs() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = lines_tree("12\n");
     tree.report(
         "list",
@@ -3215,7 +3297,7 @@ fn a_mutant_is_tried_when_any_line_of_its_span_runs() {
 
 #[test]
 fn the_limit_counts_only_mutants_the_script_may_try() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(
         "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 2\n",
     );
@@ -3238,7 +3320,7 @@ fn the_limit_counts_only_mutants_the_script_may_try() {
 
 #[test]
 fn a_list_of_further_mutants_far_longer_than_the_limit_is_cut_to_it() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     // Far more than a pipe holds, so a reader that stops at the limit would leave the writer
     // to die of SIGPIPE and end the script.
     let pad = "x".repeat(300);
@@ -3293,7 +3375,7 @@ fn package_runs(log: &[String]) -> Vec<&String> {
 
 #[test]
 fn the_further_mutants_of_the_requirements_own_code_come_first() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = share_tree(&["x"], 1);
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3327,7 +3409,7 @@ fn the_further_mutants_of_the_requirements_own_code_come_first() {
 
 #[test]
 fn a_mutants_share_is_its_best_lines_capped_at_one_and_ties_keep_the_list_order() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = share_tree(&["x"], 3);
     // In list order: `low` (share 0.1); `span`, whose line 5 has 0.25 and line 6 has 1;
     // `unrun`, whose line no test of the package runs (1); `even` (1); and `over`, whose line
@@ -3352,7 +3434,7 @@ fn a_mutants_share_is_its_best_lines_capped_at_one_and_ties_keep_the_list_order(
 
 #[test]
 fn no_more_further_mutants_than_the_limit_runs_no_package() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = share_tree(&["x"], 2);
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3369,7 +3451,7 @@ fn no_more_further_mutants_than_the_limit_runs_no_package() {
 
 #[test]
 fn a_packages_tests_run_once_in_a_pass() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = share_tree(&["x", "y"], 1);
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3388,7 +3470,7 @@ fn a_packages_tests_run_once_in_a_pass() {
 
 #[test]
 fn the_run_of_a_packages_tests_failing_leaves_no_verdict() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     for fake in ["llvm-cov-all-exit", "llvm-cov-all-no-report"] {
         let tree = share_tree(&["x"], 1);
         tree.report(fake, "1");
@@ -3405,7 +3487,7 @@ fn the_run_of_a_packages_tests_failing_leaves_no_verdict() {
 
 #[test]
 fn the_package_run_is_written_in_the_blocks_job_before_it_is_kept() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = share_tree(&["x"], 1);
     let (ok, log, _, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3421,7 +3503,7 @@ fn the_package_run_is_written_in_the_blocks_job_before_it_is_kept() {
 
 #[test]
 fn a_lines_count_is_summed_over_the_runs_of_every_test_package() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     // Tests of two packages, each package's run giving line 3 two runs and line 30 one: line 3,
     // run three times by the block's tests, has 3/4, and line 30, run twice, has 2/2. Read from
     // one package's run alone, both would have 1 and keep the list's order.
@@ -3453,7 +3535,7 @@ fn a_lines_count_is_summed_over_the_runs_of_every_test_package() {
 
 #[test]
 fn a_block_caught_on_its_diff_runs_no_package() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = share_tree(&["x"], 1);
     fs::write(
         tree.dir.path().join("plan"),
@@ -3478,7 +3560,7 @@ fn a_block_caught_on_its_diff_runs_no_package() {
 
 #[test]
 fn tests_that_run_none_of_the_code_survive_untried() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = lines_tree("");
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3488,7 +3570,7 @@ fn tests_that_run_none_of_the_code_survive_untried() {
 
 #[test]
 fn tests_that_read_the_repositorys_files_and_run_none_of_the_code_are_not_judged() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     // The block of `tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_more`,
     // whose diff's mutant and further ones would survive, with a `reads` line.
     let tree = mutate_tree(&RUST_BLOCK.replace("limit 20", "reads specs/**\nlimit 20"));
@@ -3519,7 +3601,7 @@ fn tests_that_read_the_repositorys_files_and_run_none_of_the_code_are_not_judged
 
 #[test]
 fn tests_that_run_the_code_but_no_mutant_of_it_are_not_judged() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = lines_tree("10\n");
     let (ok, log, result, stderr) = tree.mutate(&[]);
     assert!(ok, "{log:?} {stderr}");
@@ -3529,7 +3611,7 @@ fn tests_that_run_the_code_but_no_mutant_of_it_are_not_judged() {
 
 #[test]
 fn the_run_that_finds_the_lines_failing_leaves_no_verdict() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = lines_tree("3\n");
     tree.report("llvm-cov-exit", "1");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -3555,7 +3637,7 @@ fn the_run_that_finds_the_lines_failing_leaves_no_verdict() {
 
 #[test]
 fn a_diff_mutant_the_tests_never_run_is_not_tried() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report(
         "list",
@@ -3595,7 +3677,7 @@ fn a_diff_mutant_the_tests_never_run_is_not_tried() {
 
 #[test]
 fn lines_run_only_in_a_file_with_no_mutant_count_as_none_run() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(
         "requirement a/x\ncode crates/clm-check/src/lib.rs\ncode crates/clm-check/src/other.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
     );
@@ -3612,7 +3694,7 @@ fn lines_run_only_in_a_file_with_no_mutant_count_as_none_run() {
 
 #[test]
 fn the_lines_are_read_from_a_tree_reached_through_a_link() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     // The tool writes real paths; the temporary directory the tree is made in is a link.
     let tree = lines_tree("3\n");
     let real = tree.dir.path().join("real-tmp");
@@ -3628,7 +3710,7 @@ fn the_lines_are_read_from_a_tree_reached_through_a_link() {
 
 #[test]
 fn tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_more() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK.replace("limit 20", "limit 2").as_str());
     tree.report(
         "list",
@@ -3648,7 +3730,7 @@ fn tests_that_run_none_of_the_code_count_the_diffs_mutants_and_at_most_limit_mor
 
 #[test]
 fn a_mutant_stryker_finds_no_test_running_is_neither_caught_nor_survived() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-survived", "1");
     tree.report("stryker-nocov", "2");
@@ -3659,7 +3741,7 @@ fn a_mutant_stryker_finds_no_test_running_is_neither_caught_nor_survived() {
 
 #[test]
 fn stryker_finding_no_test_running_any_mutant_counts_them_all_survived() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-nocov", "2");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -3674,7 +3756,7 @@ fn stryker_finding_no_test_running_any_mutant_counts_them_all_survived() {
 
 #[test]
 fn stryker_finding_no_test_running_any_mutant_of_a_block_that_reads_files_is_not_judged() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&WEB_BLOCK.replace("limit 20", "reads docs/**\nlimit 20"));
     tree.report("stryker-nocov", "2");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -3689,7 +3771,7 @@ fn stryker_finding_no_test_running_any_mutant_of_a_block_that_reads_files_is_not
 
 #[test]
 fn a_mutant_both_stryker_runs_report_counts_once() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     // The diff's lines are among the first `limit`, so the further run reports its mutants again.
     let tree = mutate_tree("");
     let diff = tree.dir.path().join("the.diff");
@@ -3722,7 +3804,7 @@ fn a_mutant_both_stryker_runs_report_counts_once() {
 
 #[test]
 fn stryker_whose_fixture_shows_no_test_running_the_blind_function_judges_nothing() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(WEB_BLOCK);
     tree.report("stryker-killed", "1");
     tree.report("stryker-fixture-blind-nocov", "");
@@ -3737,7 +3819,7 @@ fn stryker_whose_fixture_shows_no_test_running_the_blind_function_judges_nothing
 
 #[test]
 fn a_diff_with_no_mutant_lists_none_and_the_further_ones_are_tried() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     // The real tool prints nothing at all for such a diff.
     tree.report("diff-list", "");
@@ -3751,7 +3833,7 @@ fn a_diff_with_no_mutant_lists_none_and_the_further_ones_are_tried() {
 
 #[test]
 fn a_block_whose_files_have_no_mutant_is_not_judged_without_finding_lines() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(RUST_BLOCK);
     tree.report("list", "");
     let (ok, log, result, stderr) = tree.mutate(&[]);
@@ -3761,6 +3843,345 @@ fn a_block_whose_files_have_no_mutant_is_not_judged_without_finding_lines() {
         !log.iter().any(|l| l.starts_with("cargo llvm-cov nextest")),
         "{log:?}"
     );
+}
+
+/// The tree of *a rule in the test's own file*: a Rust block with no diff whose one test is in
+/// `crates/clm-check/tests/it.rs`, a file of 45 lines, whose code file has one mutant, on line
+/// 30, which its tests don't run, whose tests run lines 5 to 9 of the test file, whose test file
+/// has two mutants, on line 6 and on line 40, and whose `cargo nextest run` exits 100.
+fn test_file_tree() -> Tree {
+    let tree = mutate_tree(
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
+    );
+    let text: String = (1..=45).map(|n| format!("// line {n}\n")).collect();
+    fs::create_dir_all(tree.work().join("crates/clm-check/tests")).unwrap();
+    fs::write(tree.work().join("crates/clm-check/tests/it.rs"), text).unwrap();
+    git(&tree.work(), &["add", "-A"]);
+    git(&tree.work(), &["commit", "-q", "-m", "a test file"]);
+    tree.report(
+        "list",
+        "30 30 crates/clm-check/src/lib.rs:30:5: replace on_thirty with ()\n",
+    );
+    tree.report("lcov-run", &test_file_lines(5..=9));
+    tree.report("zlist", "6 6\n40 40\n");
+    tree.report("nextest-exit", "100");
+    tree
+}
+
+/// `lcov-run` lines that report `lines` of the test file of `test_file_tree` run.
+fn test_file_lines(lines: impl IntoIterator<Item = u32>) -> String {
+    lines
+        .into_iter()
+        .map(|n| format!("crates/clm-check/tests/it.rs:{n}\n"))
+        .collect()
+}
+
+/// The `cargo nextest run` calls of `log` for a block, not for the fixture.
+fn block_nextest_runs(log: &[String]) -> Vec<&String> {
+    log.iter()
+        .filter(|l| l.starts_with("cargo nextest run") && !l.contains("fixture_file_"))
+        .collect()
+}
+
+#[test]
+fn a_rule_in_the_tests_own_file_is_judged_by_the_mutants_of_that_file() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    let file = tree.work().join("crates/clm-check/tests/it.rs");
+    let original = fs::read_to_string(&file).unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
+    // The run that finds the lines reports the files under `tests/`.
+    let cov = log
+        .iter()
+        .find(|l| l.starts_with("cargo llvm-cov nextest ") && l.contains(" -E "))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    assert!(cov.contains("--no-default-ignore-filename-regex"), "{cov}");
+    // The tool lists the mutants of the tree's copy of the test file, not the checkout's.
+    let listed = log
+        .iter()
+        .find(|l| {
+            l.contains("--Zmutate-file") && l.ends_with("crates/clm-check/tests/it.rs --json")
+        })
+        .unwrap_or_else(|| panic!("{log:?}"));
+    let work = fs::canonicalize(tree.work()).unwrap();
+    assert!(
+        !listed.contains(&*work.to_string_lossy())
+            && !listed.contains(&*tree.work().to_string_lossy()),
+        "{listed}"
+    );
+    assert!(block_tries(&log).is_empty(), "{log:?}");
+    // Run once: the mutant on line 6 caught, the one on line 40, which no test runs, untried,
+    // under the block's filterset, over its test packages, with the job's build directory.
+    let runs = block_nextest_runs(&log);
+    assert_eq!(runs.len(), 1, "{log:?}");
+    for part in [
+        "--no-tests=pass",
+        "--package clm-check",
+        "package(=clm-check)",
+        "binary_id(=clm-check::it)",
+        "test(~proves_x)",
+    ] {
+        assert!(runs[0].contains(part), "no {part} in {}", runs[0]);
+    }
+    let env = tree.log_lines("nextest-env");
+    assert!(
+        env.len() == 1 && env[0].starts_with("0 /") && env[0].ends_with("/mutate-job-1"),
+        "{env:?}"
+    );
+    // In a copy of its own: neither the checkout nor the tree `cargo mutants` ran in.
+    let dirs = tree.log_lines("nextest-cwd");
+    assert_eq!(dirs.len(), 1, "{dirs:?}");
+    let ran = PathBuf::from(&dirs[0]);
+    assert!(
+        !ran.starts_with(&work) && !ran.starts_with(tree.work()),
+        "{ran:?}"
+    );
+    let trees = tree.log_lines("cwd");
+    assert!(trees.len() > 2, "{trees:?}");
+    assert!(!trees.contains(&dirs[0]), "{dirs:?} {trees:?}");
+    // With the test file there changed as the mutant on line 6 says, and the checkout's as it
+    // was.
+    let mutated = fs::read_to_string(tree.dir.path().join("log.nextest-file")).unwrap();
+    let want: Vec<String> = original
+        .lines()
+        .map(|l| {
+            if l == "// line 6" {
+                "// line 6 /* mutant 6 */".to_owned()
+            } else {
+                l.to_owned()
+            }
+        })
+        .collect();
+    assert_eq!(mutated.lines().collect::<Vec<_>>(), want);
+    assert_eq!(fs::read_to_string(&file).unwrap(), original);
+}
+
+#[test]
+fn a_rule_in_the_tests_own_file_that_its_tests_dont_notice_survives() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    tree.report("nextest-exit", "0");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    assert_eq!(block_nextest_runs(&log).len(), 1, "{log:?}");
+    // With both mutants' lines run, both are tried, each in turn, and the file put back
+    // between them: the second run sees only its own mutant.
+    tree.report("lcov-run", &test_file_lines((5..=9).chain([40])));
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 2"]);
+    assert_eq!(block_nextest_runs(&log).len(), 2, "{log:?}");
+    let last = fs::read_to_string(tree.dir.path().join("log.nextest-file")).unwrap();
+    assert!(
+        last.contains("// line 40 /* mutant 40 */") && !last.contains("mutant 6"),
+        "{last}"
+    );
+    // Up to the block's limit.
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 1\n",
+    )
+    .unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x survived 1"]);
+    assert_eq!(block_nextest_runs(&log).len(), 1, "{log:?}");
+    // And none after the first caught.
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nlimit 20\n",
+    )
+    .unwrap();
+    tree.report("nextest-exit", "100");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
+    assert_eq!(block_nextest_runs(&log).len(), 1, "{log:?}");
+}
+
+#[test]
+fn a_test_files_mutant_that_doesnt_build_is_not_judged() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    tree.report("nextest-exit", "101");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x not-judged"]);
+}
+
+#[test]
+fn a_rule_in_the_tests_own_file_of_a_block_that_reads_files_is_judged() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    fs::write(
+        tree.dir.path().join("plan"),
+        "requirement a/x\ncode crates/clm-check/src/lib.rs\ntest crates/clm-check/tests/it.rs\tproves_x\nreads crates/**\nlimit 20\n",
+    )
+    .unwrap();
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
+}
+
+#[test]
+fn an_empty_test_in_a_file_with_helpers_is_judged_by_its_code() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    tree.report("lcov-run", &test_file_lines([2, 3]));
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert!(block_nextest_runs(&log).is_empty(), "{log:?}");
+    assert_eq!(result, ["a/x survived 1"]);
+}
+
+#[test]
+fn a_test_that_runs_another_components_code_is_judged_by_its_code() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    tree.report("lcov-extra", "crates/clm-land/src/lib.rs:4\n");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert!(block_nextest_runs(&log).is_empty(), "{log:?}");
+    assert_eq!(result, ["a/x survived 1"]);
+}
+
+#[test]
+fn the_mutants_of_the_code_come_before_those_of_the_test_file() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    let mut run = test_file_lines(5..=9);
+    run.push_str("crates/clm-check/src/lib.rs:30\n");
+    tree.report("lcov-run", &run);
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    let tries = block_tries(&log);
+    assert_eq!(tries.len(), 1, "{log:?}");
+    assert!(tries[0].contains("replace on_thirty"), "{}", tries[0]);
+    assert!(block_nextest_runs(&log).is_empty(), "{log:?}");
+    assert_eq!(result, ["a/x survived 1"]);
+}
+
+#[test]
+fn nextest_failing_for_a_test_files_mutant_leaves_no_verdict() {
+    // req:ci/mutate-script@53d32d04
+    let tree = test_file_tree();
+    tree.report("nextest-exit", "2");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("cargo nextest") && stderr.contains("a/x"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+    // And the run that finds the lines failing leaves none either, with no mutant tried.
+    tree.report("nextest-exit", "100");
+    tree.report("llvm-cov-exit", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(
+        stderr.contains("cargo llvm-cov") && stderr.contains("a/x"),
+        "{stderr}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+    assert!(block_nextest_runs(&log).is_empty(), "{log:?}");
+}
+
+#[test]
+fn a_tool_that_judges_the_fixtures_test_file_wrongly_judges_nothing() {
+    // req:ci/mutate-script@53d32d04
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report("diff-caught", "1");
+    tree.report("nextest-fixture-catches-all", "");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(!ok, "{log:?}");
+    assert!(stderr.contains("fixture"), "{stderr}");
+    assert!(
+        !log.iter()
+            .any(|l| l.contains("crates/clm-check/src/lib.rs")),
+        "{log:?}"
+    );
+    assert!(result.is_empty(), "{result:?}");
+}
+
+#[test]
+fn the_fixtures_test_file_is_judged_with_its_every_mutant_in_a_copy_made_as_the_tree_is() {
+    // req:ci/mutate-script@53d32d04
+    let tree = mutate_tree(RUST_BLOCK);
+    tree.report("diff-caught", "1");
+    let (ok, log, result, stderr) = tree.mutate(&[]);
+    assert!(ok, "{log:?} {stderr}");
+    assert_eq!(result, ["a/x killed"]);
+    // The fixture's test file is listed, and its one mutant tried with each of its two tests,
+    // before any call names the block's files.
+    let listed = log
+        .iter()
+        .position(|l| l.contains("--Zmutate-file") && l.contains("tests/clm_mutate_fixture.rs"))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    let fixture_runs: Vec<usize> = log
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| l.starts_with("cargo nextest run") && l.contains("fixture_file_"))
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(fixture_runs.len(), 2, "{log:?}");
+    assert!(log[fixture_runs[0]].contains("test(~fixture_file_notices)"));
+    assert!(log[fixture_runs[1]].contains("test(~fixture_file_blind)"));
+    assert!(log[fixture_runs[0]].contains("binary_id(=clm-mutate-fixture::clm_mutate_fixture)"));
+    let block = log
+        .iter()
+        .position(|l| l.contains("crates/clm-check/src/lib.rs"))
+        .unwrap_or_else(|| panic!("{log:?}"));
+    assert!(
+        listed < fixture_runs[0] && fixture_runs[1] < block,
+        "{log:?}"
+    );
+    // Tried in a copy made as the tree is: its `.git` borrows another repository's object store,
+    // and git there sees no change to the test file the mutant changed.
+    let alternates =
+        fs::read_to_string(tree.dir.path().join("log.fixture-file-alternates")).unwrap_or_default();
+    let store = alternates.trim();
+    assert!(
+        Path::new(store).is_absolute() && store.ends_with("/objects"),
+        "alternates: {alternates:?}"
+    );
+    let status = fs::read_to_string(tree.dir.path().join("log.fixture-file-status")).unwrap();
+    assert_eq!(status, "", "git saw the fixture's test file's mutant");
+    let test_file = fs::read_to_string(tree.dir.path().join("log.fixture-test-file")).unwrap();
+    assert!(
+        test_file
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .ends_with(" /* mutant 1 */"),
+        "{test_file}"
+    );
+    // Its helpers are macros, which no tool mutates, so the function no test is holds its only
+    // mutants; its tests ask git for the repository's top and, the blind one, for the working
+    // tree's status.
+    assert!(
+        test_file.contains("macro_rules! in_git_repository")
+            && test_file.contains("macro_rules! tracked_files_unchanged")
+            && test_file.contains("--show-toplevel")
+            && test_file.contains("\"--porcelain\", \"--untracked-files=no\""),
+        "{test_file}"
+    );
+    let blind = test_file
+        .split("fn fixture_file_blind()")
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        blind.contains("in_git_repository!();") && blind.contains("tracked_files_unchanged!();"),
+        "{test_file}"
+    );
+    let notices = test_file
+        .split("fn fixture_file_notices()")
+        .nth(1)
+        .and_then(|s| s.split("#[test]").next())
+        .unwrap_or_default();
+    assert!(notices.contains("in_git_repository!();"), "{test_file}");
 }
 
 /// Every file under `dir`, but `target/`, which the script's coverage step writes, with its
@@ -3843,7 +4264,7 @@ struct Call {
 
 #[test]
 fn blocks_run_at_once_up_to_the_jobs_each_with_a_slot_and_a_build_directory_of_its_own() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&letter_blocks(&["a", "b", "c"]));
     tree.report("record-calls", "");
     tree.report("further-caught", "1");
@@ -3916,7 +4337,7 @@ fn blocks_run_at_once_up_to_the_jobs_each_with_a_slot_and_a_build_directory_of_i
 
 #[test]
 fn each_line_is_written_as_its_block_is_judged() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&letter_blocks(&["a", "b"]));
     tree.report("further-caught", "1");
     tree.report("gate-b", "");
@@ -3940,7 +4361,7 @@ fn each_line_is_written_as_its_block_is_judged() {
 
 #[test]
 fn without_a_positive_count_of_jobs_it_judges_one_block_at_a_time() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&letter_blocks(&["a", "b"]));
     tree.report("further-caught", "1");
     tree.report("gate-a", "");
@@ -3972,7 +4393,7 @@ fn without_a_positive_count_of_jobs_it_judges_one_block_at_a_time() {
 
 #[test]
 fn a_failing_block_lets_the_running_ones_finish_and_starts_no_more() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&letter_blocks(&["a", "b", "c"]));
     tree.report("further-caught", "1");
     tree.report("exit-a", "4");
@@ -3993,7 +4414,7 @@ fn a_failing_block_lets_the_running_ones_finish_and_starts_no_more() {
 
 #[test]
 fn ended_part_way_it_ends_its_blocks_and_removes_its_temporary_directory() {
-    // req:ci/mutate-script@b6d5d850
+    // req:ci/mutate-script@53d32d04
     let tree = mutate_tree(&letter_blocks(&["a", "b"]));
     tree.report("further-caught", "1");
     tree.report("sleep-b", "");
