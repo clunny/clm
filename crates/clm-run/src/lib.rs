@@ -1299,7 +1299,9 @@ fn tidy(root: &Path, node: &str, branch: &str) -> Result<(), Error> {
                 return Err(Error::Refused(format!(
                     "{} has the landed `{branch}` checked out and a running process holds \
                      its lock, so it may still be in use; run `{node}` again once that \
-                     process has ended",
+                     process has ended, or, when nothing works in it any more, run \
+                     `git worktree unlock {}` first",
+                    h.path.display(),
                     h.path.display()
                 )));
             }

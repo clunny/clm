@@ -1306,10 +1306,14 @@ fn scenario_landed_leftover_in_use() {
     let (wt, old) = landed_leftover(&r, &f);
     let path = wt.to_str().unwrap();
     git(&r.work, &["worktree", "unlock", path]);
-    // This test's own process is one that runs.
+    // This test's own process is one that runs. Where CLM can't tell whether a process
+    // runs (not Unix), a lock naming one counts as held whatever its pid.
     let reason = format!("claude agent agent-1 (pid {} start 1)", std::process::id());
     git(&r.work, &["worktree", "lock", "--reason", &reason, path]);
+    let (places, local) = (place_names(&r), local_tip(&r, "impl/b"));
     let stderr = refused(&r, &f, "b", &[], 1);
+    assert_eq!(place_names(&r), places, "refused before the place");
+    assert_eq!(local_tip(&r, "impl/b"), local, "the local branch is kept");
     assert!(stderr.contains(".claude/worktrees/agent-1"), "{stderr}");
     assert!(
         stderr.contains("running process holds its lock"),
