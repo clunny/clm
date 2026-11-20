@@ -177,4 +177,11 @@ fn a_call_that_only_judged_a_trigger() {
     assert_eq!(out.code, 0);
     assert!(f.lines("check-head.log").is_empty(), "no check ran");
     assert!(!tree.join("target").exists());
+    // `--dry-run` too, since judging the trigger checked the tree out.
+    std::fs::create_dir_all(tree.join("target")).unwrap();
+    std::fs::write(tree.join("target/old"), "old\n").unwrap();
+    let out = f.dry(false);
+    assert!(out.line.starts_with("verify not-due"), "{}", out.line);
+    assert_eq!(out.code, 3);
+    assert!(!tree.join("target").exists());
 }
