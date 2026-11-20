@@ -808,7 +808,7 @@ fn an_ambiguous_slug_is_not_reported() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn code_that_still_names_a_rewritten_entry_leaves_the_requirement_behind() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -822,11 +822,11 @@ fn code_that_still_names_a_rewritten_entry_leaves_the_requirement_behind() {
     );
     assert!(read(d, "specs/a/SPEC.md").contains("(`cogs-scoped-context`)"));
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_held_back_marker_still_takes_the_new_id() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -837,11 +837,11 @@ fn a_held_back_marker_still_takes_the_new_id() {
     write(d, "plugin/skills/s/SKILL.md", "`sprocket-scoped-context`\n");
     rename(d, "r").unwrap();
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/y", &old));
-    assert_eq!(pending_ids(d), ["a/y"]);
+    assert_eq!(pending_ids(d), ["a/y Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn code_that_still_names_a_rewritten_id_leaves_the_requirement_behind() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -862,11 +862,11 @@ fn code_that_still_names_a_rewritten_id_leaves_the_requirement_behind() {
     );
     rename(d, "r").unwrap();
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_file_holding_a_marker_of_the_requirement_holds_it_back() {
     let dir = slug_repo("crates/y/**");
     let d = dir.path();
@@ -877,11 +877,11 @@ fn a_file_holding_a_marker_of_the_requirement_holds_it_back() {
         &format!("# {}a/x@{old}\nuse `sprocket-scoped-context`\n", "req:"),
     );
     rename(d, "r").unwrap();
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn another_components_code_naming_it_does_not_hold_the_marker_back() {
     let dir = slug_repo("crates/**");
     let d = dir.path();
@@ -901,7 +901,7 @@ fn another_components_code_naming_it_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_term_left_in_the_code_does_not_hold_the_marker_back() {
     let dir = repo();
     let d = dir.path();
@@ -933,7 +933,7 @@ fn a_term_left_in_the_code_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_term_spelt_like_a_rewritten_slug_does_not_hold_the_marker_back() {
     let dir = repo();
     let d = dir.path();
@@ -1203,13 +1203,14 @@ fn version_of(d: &Path, id: &str) -> String {
         .to_string()
 }
 
+/// What `clm pending a` lists: each requirement of `a` it names, with its state.
 fn pending_ids(d: &Path) -> Vec<String> {
     let graph = clm_model::load(d).0;
     let scan = clm_coverage::scan(d);
     clm_coverage::pending(&graph, &scan.req)
         .into_iter()
         .filter(|p| p.node == "a")
-        .map(|p| p.id)
+        .map(|p| format!("{} {:?}", p.id, p.state))
         .collect()
 }
 
@@ -1218,7 +1219,7 @@ fn cite(id: &str, version: &str) -> String {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn current_and_behind_markers_follow_a_rename() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1233,31 +1234,18 @@ fn current_and_behind_markers_follow_a_rename() {
     write(d, "crates/x/tests/t.rs", &code("a/x", &old, "00000000"));
     git(d, &["init", "-q"]);
     git(d, &["add", "-A"]);
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
     clm_rename::rename(d, "r").unwrap();
     let new = version_of(d, "a/y");
     assert_eq!(
         read(d, "crates/x/tests/t.rs"),
         code("a/y", &new, "00000000")
     );
-    assert_eq!(pending_ids(d), ["a/y"]);
+    assert_eq!(pending_ids(d), ["a/y Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
-fn a_behind_marker_stays_behind() {
-    let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
-    let d = dir.path();
-    write(d, "crates/x/tests/t.rs", &cite("a/x", "00000000"));
-    git(d, &["init", "-q"]);
-    git(d, &["add", "-A"]);
-    clm_rename::rename(d, "r").unwrap();
-    assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/y", "00000000"));
-    assert_eq!(pending_ids(d), ["a/y"]);
-}
-
-#[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_reworded_requirement_keeps_its_marker_current() {
     let dir = markers_repo(
         "the sprocket of a component",
@@ -1276,7 +1264,7 @@ fn a_reworded_requirement_keeps_its_marker_current() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn other_requirements_markers_and_bare_markers_are_handled() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1501,7 +1489,7 @@ fn items_by_the_components_key() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_marker_outside_a_test_is_rewritten() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();

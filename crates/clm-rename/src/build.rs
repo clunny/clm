@@ -998,25 +998,3 @@ fn leftovers(
     hits.sort_by(|a, b| (&a.file, a.line, &a.old).cmp(&(&b.file, b.line, &b.old)));
     Ok(hits)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    // req:rename/marker-rewrite@f5ba4d47
-    fn a_marker_only_outside_a_test_is_read() {
-        let marker = clm_coverage::Marker {
-            id: "a/x".into(),
-            version: None,
-            path: PathBuf::from("src/lib.rs"),
-            line: 1,
-        };
-        let scan = clm_coverage::Scan {
-            req: Vec::new(),
-            outside: vec![marker.clone()],
-            remove_by: Vec::new(),
-        };
-        assert_eq!(every_marker(scan).collect::<Vec<_>>(), vec![marker]);
-    }
-}

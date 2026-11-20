@@ -92,7 +92,7 @@ fn a_refusal_exits_one_and_writes_nothing() {
 
 #[test]
 fn a_call_writes_what_the_command_prints_and_returns_its_status() {
-    // req:rename/commands-in-crate@8b0741b4
+    // req:rename/commands-in-crate@50562507
     let dir = repo(
         "---\nstatus: proposed\nrenames:\n  - requirement: a/x\n    to: y\n---\n\n## Intent\nr\n",
     );
@@ -121,7 +121,7 @@ fn a_call_writes_what_the_command_prints_and_returns_its_status() {
 
 #[test]
 fn arguments_it_cant_parse_return_two_with_the_usage_error() {
-    // req:rename/commands-in-crate@8b0741b4
+    // req:rename/commands-in-crate@50562507
     let dir = repo(
         "---\nstatus: proposed\nrenames:\n  - requirement: a/x\n    to: y\n---\n\n## Intent\nr\n",
     );
@@ -165,7 +165,15 @@ fn nothing_committed() {
     let d = dir.path();
     git(
         d,
-        &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c"],
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "c",
+        ],
     );
     let c = git(d, &["rev-parse", "HEAD"]);
     let out = clm(d, &["rename", "r"]);
