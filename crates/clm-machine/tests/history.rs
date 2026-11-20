@@ -394,8 +394,8 @@ fn a_share_is_never_below_zero() {
     let sample = Sample::of(1, &judged(&r, &Record::default(), &[], 3));
     assert_eq!(sample.memory, Some(0.0));
     assert_eq!(sample.disk, Some(0.0));
-    // Nor is CPU's share below 0, whatever load the system gives.
-    for load in [-2.0, f64::NAN] {
+    // Nor is CPU's share below 0, or other than a number, whatever load the system gives.
+    for load in [-2.0, f64::NAN, f64::INFINITY] {
         r.load1 = Some(load);
         let sample = Sample::of(1, &judged(&r, &Record::default(), &[], 3));
         assert_eq!(sample.cpu, Some(0.0), "load {load}");
@@ -456,4 +456,12 @@ fn a_history_file_that_cannot_be_read_counts_as_empty() {
     let snapshot = clm_machine::read(dir.path(), 3, 4, now);
     assert_eq!(snapshot.history.len(), 1);
     assert_eq!(snapshot.history[0].time, now);
+    // What can't be written is left alone, with no temporary file beside it.
+    let clm_dir = common(dir.path()).join("clm");
+    assert!(clm_dir.join("machine-samples").is_dir());
+    let names: Vec<String> = fs::read_dir(&clm_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(names.iter().all(|n| !n.starts_with(".tmp")), "{names:?}");
 }

@@ -93,7 +93,11 @@ impl Sample {
 /// `share`, or 0 when it is below 0 or no number, so a share `Sample::of` takes, and so every
 /// share written, never reads `-0.0000`, `NaN` or a sign.
 fn at_least_zero(share: f64) -> f64 {
-    if share > 0.0 { share } else { 0.0 }
+    if share.is_finite() && share > 0.0 {
+        share
+    } else {
+        0.0
+    }
 }
 
 /// A share as the history writes one: one or more digits, optionally a point and one or more
