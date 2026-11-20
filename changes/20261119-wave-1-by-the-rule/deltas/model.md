@@ -1,0 +1,867 @@
+---
+component: model
+base: { contract: "46d32a79ada6813d" }
+---
+
+## MODIFIED Contract
+Loads a repository's `specs/`, `changes/`, `backlog/` and `docs/decisions/`, and its root `ARCHITECTURE.md` and `CAPABILITIES.md` (docs/spec-format.md), from a directory (`load(root)`) or from a map of repo-relative paths to contents (`load_files(files)`), with the same result: a graph and every violation found. The graph holds the components (each with its frontmatter, Contract, Design, requirements, assets, parent and content hashes), the changes with their deltas, the backlog items, the decisions, the two human layers' entries as requirements with IDs `architecture/<slug>` and `capability/<slug>` (`human-layers`), and CLM's carried constraints (`carried-constraints`). A violation is a path, the ID of the requirement whose rule it breaks and a message, and prints as `<path>: <rule>: <message>` (`violation-line`). A file with no `---` frontmatter block, or whose frontmatter its kind's parser refuses (a key the kind doesn't know, a key every record of the kind must hold left out, a value of the wrong type or outside the key's listed values), is reported and left out of the graph. A record that parses and then breaks a rule, one that turns on another key's value or on another element of the graph among them, is reported and stays, unless its requirement says it is not loaded. The model offers no query of whether a component is optional: `optional` is read by its own rules alone (`optional-nodes`).
+
+A component's assets are the files under `specs/<component path>/assets/` (`node-assets`). A component may name its test files with `tests` (`test-ownership-keys`), the rules its files are exempt from for a time with `exemptions`, each naming the backlog item that ends it (`exemptions`), and, on the root alone, the code no component owns yet with `outside` (`outside-globs`) and the files every build may edit with `wiring` (`wiring-globs`). `architecture` is a component ID no component may take, and component `capability` is the capability layer's own (`reserved-ids`).
+
+The graph offers `requirement(id)`, a component's requirement or a layer's entry; `entry(id)`, an entry alone; `requirements()`, every component's requirements, then the architecture entries, then the capabilities; `effective_serves(id)`, the entries a rule serves (`serves`); `heading(layer)`, the heading a layer's file writes its entries under; `capability_node()` and `capability_tests_node()` (`reserved-ids`, `capability-tests-component`); `backlog_node_known(id)` (`backlog-components`); the root's `outside()` and `wiring()`, absent when the root doesn't set the key; and `declared_frontmatter_keys()`, the component frontmatter keys live changes declare (`declared-frontmatter-keys`). A requirement gives its `id`, `text`, `hash` and `version()` (`content-hash`), its `needs` (`requirement-needs`) and `serves`, and, for an entry, its `enforced_by` rules and its `#### Untested` text.
+
+The model offers the checks loading runs, so another component judges by the same rules: `parse_node(id, path, text, declared)` and `check_graph(graph)` (`graph-check`), `check_node_frontmatter(id, path, frontmatter_text, declared)`, which gives the parsed frontmatter with the root rules' violations, or the violations of the rules the text alone decides (`optional-nodes`), and `check_exemptions(value)` (`exemptions`). It offers the parse of one record's text, `parse_change_frontmatter(text)` (`parse-changes`) and `parse_backlog_item(slug, text)` (`parse-backlog-item`); `content_hash(text)` and `asset_hash(bytes)`; `split_frontmatter(text)`, a file's `---` block and the rest; the `outline` it reads a spec's sections, requirement blocks and code fences by; `carried()`; `Layer`, with each layer's ID prefix and file; `Priority`, `P1` the highest; whether a change is pending, `ChangeStatus::is_pending`; the term lists `STATUS_TERMS`, `CHANGE_STATUS_TERMS`, `BACKLOG_KIND_TERMS` and `CHANGE_KEYS` (`term-lists`); and `ROOT_ID` and `ARCHIVE_DIR`, the root's ID and the archive's directory name. It builds for `wasm32-unknown-unknown`, so the `web` Worker can use it.
+
+## MODIFIED Requirements
+
+### Requirement: parse-node-specs <!-- base: f87bf5ee8732f393 -->
+The model SHALL load every `specs/**/SPEC.md` that isn't inside an `assets/` directory as a component whose ID is its directory path under `specs/`, dot-separated, with `specs/SPEC.md` as root `clm`. A component's Contract and Design SHALL be the text of its `## Contract` and `## Design` sections, and its requirements the `### Requirement:` blocks of its `## Requirements` section; a heading inside a code fence is text and starts nothing. Loading SHALL report as `model/parse-node-specs`: a missing `specs/SPEC.md`, naming that path; a component whose parent, other than the root, has no `SPEC.md` or is an ID `reserved-ids` refuses, naming the component's file and the parent; and a `SPEC.md` with no `---` frontmatter block, or whose bytes aren't UTF-8, naming the file, which loads no component.
+
+#### Scenario: nested node
+- GIVEN `specs/check/drift/SPEC.md`
+- WHEN the model loads `specs/`
+- THEN a component `check.drift` exists with parent `check`
+
+#### Scenario: spec inside assets
+- GIVEN `specs/a/SPEC.md` and `specs/a/assets/SPEC.md`
+- WHEN the model loads `specs/`
+- THEN component `a` exists, no component `a.assets` exists, and `SPEC.md` is one of `a`'s assets
+
+#### Scenario: parent without a spec
+- GIVEN `specs/SPEC.md` and `specs/a/b/SPEC.md`, with no `specs/a/SPEC.md`
+- WHEN the model loads `specs/`
+- THEN loading reports `model/parse-node-specs` for `specs/a/b/SPEC.md`, naming `a`
+
+#### Scenario: no root spec
+- GIVEN `specs/a/SPEC.md` and no `specs/SPEC.md`
+- WHEN the model loads `specs/`
+- THEN loading reports `model/parse-node-specs` for `specs/SPEC.md`
+
+#### Scenario: no frontmatter
+- GIVEN a `SPEC.md` text for component `a` that starts with no `---` block, and a tree whose `specs/c/SPEC.md` isn't UTF-8
+- WHEN the component parser runs on the first, and the model loads the tree
+- THEN the parser gives no component and one `model/parse-node-specs` violation, and loading reports `model/parse-node-specs` for `specs/c/SPEC.md` and holds no component `c`
+
+#### Scenario: sections and fences
+- GIVEN a `SPEC.md` whose `## Contract` holds a code fence containing `### Requirement: fake`, whose `## Design` reads `The design.`, and whose `## Requirements` holds `### Requirement: real`
+- WHEN the model loads it
+- THEN the component's Contract holds the fenced line, its Design is `The design.`, and its one requirement is `real`
+
+### Requirement: valid-frontmatter <!-- base: b4618360ae369e9c -->
+The model SHALL reject a component whose frontmatter is missing `title`, `status` or `owners`, has an unknown key, or has a `status` outside `unbuilt|active|deprecated`. A `status` that is the word `plain-terms-renames` replaced with `unbuilt` SHALL load as `unbuilt` (`renamed-words-still-load`). A key is unknown when the model doesn't know it and no live change declares it in `frontmatter_keys` (`parse-changes`, `declared-frontmatter-keys`). A live change is one outside `changes/archive/` whose status isn't `abandoned`. A declaration names a top-level key only. A change whose `change.md` doesn't parse declares nothing. A key the model doesn't know but a live change declares SHALL be accepted on any component with any value, which the parsed frontmatter leaves out; the component's frontmatter hash still covers its line. A key the model knows SHALL be validated whether or not a change declares it. The model SHALL accept and ignore `significant` and `capabilities`, whatever their values, keys of trees from before `yes-no-review` and `serves`. `serves` is a key the model knows (`serves`), and `test_depends_on` is one it doesn't, refused as any unknown key is.
+
+#### Scenario: legacy significant
+- GIVEN a SPEC.md whose frontmatter has `significant: true`
+- WHEN the model loads `specs/`
+- THEN loading reports nothing
+
+#### Scenario: legacy capabilities
+- GIVEN a SPEC.md whose frontmatter has `capabilities: [x]`
+- WHEN the model loads `specs/`
+- THEN loading reports nothing
+
+#### Scenario: the old status name
+- GIVEN a SPEC.md whose `status` is the word `plain-terms-renames` replaced with `unbuilt`
+- WHEN the model loads `specs/`
+- THEN loading reports nothing, and the component's status is `unbuilt`
+
+#### Scenario: bad status
+- GIVEN a SPEC.md with `status: done`
+- WHEN the model loads it
+- THEN loading fails naming the file and the field
+
+#### Scenario: unknown key
+- GIVEN a SPEC.md whose frontmatter has `colour: blue`, and no live change declaring `colour`
+- WHEN the model loads `specs/`
+- THEN loading fails naming the file and `colour`
+
+#### Scenario: key a live change declares
+- GIVEN a SPEC.md whose frontmatter has `colour: blue`, and `changes/x/change.md` with `status: applied` and `frontmatter_keys: [colour]`
+- WHEN the model loads `specs/` and `changes/`
+- THEN loading reports nothing, the component's parsed frontmatter is as it would be without the `colour` line, and its frontmatter hash differs from that of the same file without the line
+
+#### Scenario: declaration no longer live
+- GIVEN the same SPEC.md, and the change declaring `colour` archived as `changes/archive/x/`, or outside the archive with `status: abandoned`
+- WHEN the model loads `specs/` and `changes/`
+- THEN loading fails naming the file and `colour`
+
+#### Scenario: declared key the model knows
+- GIVEN a SPEC.md with `optional: maybe`, and a live change with `frontmatter_keys: [optional]`
+- WHEN the model loads `specs/` and `changes/`
+- THEN loading fails naming the file and `optional`, as it does with no declaration
+
+#### Scenario: test dependencies retired
+- GIVEN `specs/a/SPEC.md` with `test_depends_on: [b]`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/a/SPEC.md` and `test_depends_on`
+
+### Requirement: content-hash <!-- base: 92d3746953b11336 -->
+The model SHALL give each requirement, contract, design and frontmatter a hash that does not change when only trailing whitespace or line endings change, and always changes when any other text changes, a requirement's `#### Serves` block included. A requirement's *version* SHALL be the first 8 hex digits of its hash, as `clm hashes <component>` prints it, which is what a test marker cites (`versioned-markers`), and SHALL leave out its `#### Serves` block (`serves`). A requirement's hash SHALL be the first 8 hex digits of the content hash of its block less its `#### Serves` block (the lines from that block's heading to its end), followed by the last 8 hex digits of the content hash of its whole block (`serves-in-the-base`): a requirement with no `#### Serves` block hashes as its block's content hash, and an edit to only the block moves the hash but not the version.
+
+#### Scenario: whitespace-insensitive
+- GIVEN a requirement and a copy differing only in CRLF vs LF
+- WHEN both are hashed
+- THEN the hashes are equal
+
+#### Scenario: version
+- GIVEN a requirement whose hash `clm hashes` prints as `0123456789abcdef`
+- WHEN the model gives its version
+- THEN it is `01234567`
+
+#### Scenario: serves block
+- GIVEN a requirement and a copy differing only by a `#### Serves` block
+- WHEN both are hashed
+- THEN their versions are equal and their hashes differ, and the one without the block hashes as its block's content hash
+
+### Requirement: parse-changes <!-- base: d4cfec662e0f3bbe -->
+The model SHALL load every `changes/<id>/` and `changes/archive/<id>/` directory's `change.md`, `deltas/*.md` and `assets/<node-id>/**`. It SHALL reject a `change.md` whose frontmatter lacks a valid `status` (`proposed|approved|applied|implementing|done|abandoned`), or has keys other than that plus `human_burdens` (a list of short lines, default empty: what the change spends of the human's money or time, or can't undo, `gate/needs-review`), `author`, `from` (the backlog item it was promoted from), `resolves` (a list of backlog slugs the change resolves), `priority` (`P1` to `P5`, `P1` the highest, default `P5`, `priority-caps`), `frontmatter_keys` (a list of component frontmatter keys the change adds, default empty, `declared-frontmatter-keys`), `renames` (the renames the change records, default empty, `rename-records`) and `removes_capabilities` (a list of capability slugs, default empty: the entries of `CAPABILITIES.md` that the change's branch removes by hand, which the graph SHALL expose on the change's frontmatter as `removes_capabilities`, each slug once, a bare key declaring none as a bare `frontmatter_keys` does, `check.coverage/removed-capabilities`). It SHALL reject a `removes_capabilities` entry that isn't a slug an entry could have (lowercase ASCII letters, digits and `-`, and not empty, `human-layers`), naming the file and the entry, and SHALL accept one whose capability `CAPABILITIES.md` still holds or never held, since the key only declares and whether the capability is gone is read from that file. It SHALL reject any other `priority` value, and a `frontmatter_keys` entry that isn't a lowercase key name (a lowercase letter, then lowercase letters, digits and `_`). It SHALL read the key that is the word `plain-terms-renames` replaced with `human_burdens` as `human_burdens`, on a live change and an archived one, since an archived change keeps the keys it was written with (`archive-immutable`, `renamed-words-still-load`), and SHALL reject a `change.md` that sets both, naming both keys. It SHALL also accept and ignore `after` and `prefer_after`, which changes recorded while changes were ordered against each other. It SHALL reject `gate` on a live change, naming the key, and accept and ignore it on an archived one (`yes-no-review`). Files in a change's directory other than `change.md`, `deltas/*.md` and `assets/<node-id>/**`, a `plan.md` among them, are not parsed. A `resolves` entry MAY name a backlog item that no longer exists (`task-deletes-fixed-items`). It SHALL reject a delta whose frontmatter names no component, by `component` or by the old key (`component-keys`), that sets both `create: true` and `remove: true`, that sets `remove: true` and has a section other than `REMOVED Requirements` or `REMOVED Assets` or whose change holds files under `assets/<node-id>/` for its component, or that has a section other than `Frontmatter`, `Contract`, `Design`, `MODIFIED Frontmatter`, `MODIFIED Contract`, `MODIFIED Design`, `ADDED`/`MODIFIED`/`REMOVED Requirements` or `REMOVED Assets`. Text in a frontmatter section outside its ```` ```yaml ```` fence is rationale and is ignored, and a `## Frontmatter` or `## MODIFIED Frontmatter` section with no such fence SHALL be reported. A change whose `change.md` is missing, which is reported at the change's directory, `changes/<id>` or `changes/archive/<id>`, or has no `---` frontmatter block, or holds frontmatter this requirement rejects, SHALL be reported and not loaded, except that a live change setting `gate` is reported and stays loaded. A file under the change's `assets/` that isn't under `assets/<component-id>/`, or whose component the change has no delta for, SHALL be reported, naming the file or the component. Each line of a `## REMOVED Assets` section that starts `- ` SHALL be `` - `<path>` <!-- base: <hash> --> ``, its path relative to the component's `assets/` with no empty, `.` or `..` segment and no leading `/`: a line whose text before any `<!--` is such a path in backticks and that holds no comment of the form `<!-- base: <hash> -->` SHALL be reported naming the path, and a line whose text before any `<!--` is anything else SHALL be reported quoting the line. The base is what follows `base:` in the comment, trimmed, an empty one included. A line of the section that doesn't start `- ` is ignored. A delta MAY record the hashes it was written against, `base` in its frontmatter (`frontmatter`, `contract`, `design`, and `assets` by path) and a `<!-- base: <hash> -->` comment on a requirement's heading, and the model SHALL expose them on the delta. A change SHALL be *pending* while its status is `proposed` or `approved`. The model SHALL offer the parse of one `change.md`'s text alone, `parse_change_frontmatter`, which gives its frontmatter, or nothing when the text has no `---` block or its frontmatter breaks any rule this requirement states of `change.md`'s keys and their values (`status`, the keys it may set, `priority`, `frontmatter_keys`, `removes_capabilities`, both burdens keys set); it differs from loading in two things, checking nothing of `renames`, not even that it is a list (`rename-records`), and accepting `gate` wherever the change lies.
+
+#### Scenario: unknown delta section
+- GIVEN a delta with a `## RENAMED Requirements` section
+- WHEN the model loads `changes/`
+- THEN loading reports the file and the section name
+
+#### Scenario: create and remove
+- GIVEN a delta for `a` with `create: true` and `remove: true`
+- WHEN the model loads `changes/`
+- THEN loading reports the file, `create` and `remove`
+
+#### Scenario: removal with a modified section
+- GIVEN a delta for `a` with `remove: true` and a `## MODIFIED Design` section
+- WHEN the model loads `changes/`
+- THEN loading reports the file and the section name
+
+#### Scenario: archived change
+- GIVEN `changes/archive/x/change.md` with `status: done`
+- WHEN the model loads `changes/`
+- THEN change `x` is loaded and marked as archived
+
+#### Scenario: burdens
+- GIVEN `changes/x/change.md` with `human_burdens: [a paid model run on every land]` and `changes/y/change.md` with no `human_burdens`
+- WHEN the model loads `changes/`
+- THEN `x`'s burdens are that one line and `y`'s are empty
+
+#### Scenario: the old burdens key
+- GIVEN `changes/archive/w/change.md` whose key the word `plain-terms-renames` replaced with `human_burdens` holds `[a paid model run]`, and `changes/x/change.md` setting both that key and `human_burdens`
+- WHEN the model loads `changes/`
+- THEN `w`'s burdens are that one line, and loading reports `changes/x/change.md` naming both keys
+
+#### Scenario: gate on a live change
+- GIVEN `changes/x/change.md` and `changes/archive/w/change.md`, each with `gate: HARD`
+- WHEN the model loads `changes/`
+- THEN loading reports `changes/x/change.md` naming `gate`, and `w` is loaded
+
+#### Scenario: resolves a deleted item
+- GIVEN `changes/x/change.md`, outside the archive, with `resolves: [gone]` and no `backlog/gone.md`
+- WHEN the model loads `changes/`
+- THEN change `x` is loaded with `resolves` `[gone]`, and loading reports nothing
+
+#### Scenario: order keys ignored
+- GIVEN `changes/x/change.md` with `prefer_after: [y]` and `changes/archive/w/change.md` with `after: [nope]`, where no change `y` or `nope` exists
+- WHEN the model loads `changes/`
+- THEN both changes are loaded and loading reports nothing
+
+#### Scenario: change assets
+- GIVEN `changes/x/assets/a/m.html` and a delta for `a` with `## REMOVED Assets` listing `old.png`
+- WHEN the model loads `changes/`
+- THEN change `x` holds `m.html` as a new or modified asset of `a`, and `old.png` as a removed one
+
+#### Scenario: change priority
+- GIVEN `changes/x/change.md` with `priority: P2`, `changes/y/change.md` with no `priority`, and `changes/z/change.md` with `priority: P0`
+- WHEN the model loads `changes/`
+- THEN `x` is loaded with priority `P2`, `y` with priority `P5`, and loading reports `z`'s `change.md` and `P0`
+
+#### Scenario: declared frontmatter keys
+- GIVEN `changes/x/change.md` with `frontmatter_keys: [colour, size_hint]`, `changes/y/change.md` with no `frontmatter_keys`, and `changes/z/change.md` with `frontmatter_keys: [Colour]`
+- WHEN the model loads `changes/`
+- THEN `x` is loaded declaring `colour` and `size_hint`, `y` declaring none, and loading reports `z`'s `change.md` and `Colour`
+
+#### Scenario: removed capabilities
+- GIVEN `changes/x/change.md` with `removes_capabilities: [watch, old-runner]`, `changes/y/change.md` with no `removes_capabilities`, and `changes/z/change.md` with `removes_capabilities: [capability/watch]`
+- WHEN the model loads `changes/`
+- THEN `x` is loaded removing the capabilities `watch` and `old-runner`, `y` removing none, and loading reports `z`'s `change.md` and `capability/watch`
+
+#### Scenario: renames
+- GIVEN `changes/x/change.md` with `renames` holding one `term: sprocket` entry with `to: cogs`, and `changes/y/change.md` with no `renames`
+- WHEN the model loads `changes/`
+- THEN `x` is loaded with that one rename and `y` with none
+
+#### Scenario: a rejected change
+- GIVEN `changes/z/change.md` with `priority: P0`
+- WHEN the model loads `changes/`
+- THEN loading reports `changes/z/change.md`, and the graph holds no change `z`
+
+#### Scenario: assets with no delta
+- GIVEN change `c` with a delta for `a`, a file `changes/c/assets/loose.png` and a file `changes/c/assets/zzz/m.png`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/parse-changes` twice, once for `changes/c/assets/loose.png` and once naming `zzz`
+
+#### Scenario: removed asset lines
+- GIVEN a delta whose `## REMOVED Assets` holds `` - `old.png` `` with no base, and deltas whose line names in turn `../SPEC.md`, `/etc/x`, an empty path, `a/./b` and `a//b`, each with a base
+- WHEN the model loads `changes/`
+- THEN loading reports `model/parse-changes` for each, the first naming `old.png`
+
+#### Scenario: bases
+- GIVEN a delta for `a` with `base: { contract: abc, assets: { m.html: abc } }`, removing requirement `x` under the heading `### Requirement: x <!-- base: def -->`, in a change with `status: proposed`
+- WHEN the model loads `changes/`
+- THEN the delta's Contract base is `abc`, its base for asset `m.html` is `abc`, the removed requirement's base is `def`, and the change is pending
+
+#### Scenario: one change.md alone
+- GIVEN the text of a `change.md` with `status: proposed` and `gate: HARD`, and one with `status: nope`
+- WHEN `parse_change_frontmatter` reads each
+- THEN the first gives its frontmatter with status `proposed`, and the second gives nothing
+
+#### Scenario: a frontmatter section with no fence
+- GIVEN a delta for `b` with `create: true` whose `## Frontmatter` section holds `title: B` and no ```` ```yaml ```` fence
+- WHEN the model loads `changes/`
+- THEN loading reports `model/parse-changes` for the delta, naming `Frontmatter`
+
+### Requirement: parse-backlog <!-- base: 18344ef2ccd2c230 -->
+The model SHALL load every `backlog/<slug>.md` as a backlog item with frontmatter `title` (required), `kind` (`idea|deferred|question|bug|human-task|workaround`, required), `components` (component IDs, default empty, which an item may still write under the old key, `component-keys`), `origin` (a change ID, optional), `priority` (`P1` to `P5`, `P1` the highest, default `P5`, `priority-caps`), `blocks` (requirement IDs `<component>/<slug>`, or human-layer entry IDs `architecture/<slug>` and `capability/<slug>`, default empty: the requirements that can't be built until the item is resolved, `requirement-blocks`) and `requirement` (`<component>/<slug>@<version>`, required on a `workaround` item and rejected on any other kind: the requirement a build found hard to build, at the version it built, `workaround-flags`), `issues` (a list of positive whole numbers, default empty: the host's issues the item was taken in from, `issues-enter-through-the-backlog`) and `alerts` (a list of positive whole numbers, default empty: the host's dependency alerts the item was taken in from, `dependency-alerts-through-intake`) and `verify_failures` (a list of commit IDs, each 40 lower-case hex digits, default empty: the red `verified` results on `main` the item was taken in from, `verify-after-land`) and `unproven` (a list of `<component>/<slug>@<version>`, the version 8 lower-case hex digits, default empty, accepted on a `bug` item alone: the requirements a mutation pass found unproven at that version, `mutation-after-land`), rejecting unknown keys, any other `priority` value, an `issues` or `alerts` entry that isn't a positive whole number, a `verify_failures` entry that isn't 40 lower-case hex digits, an `unproven` entry of another shape and an `unproven` on an item of another kind. An `unproven` entry MAY name a requirement that no longer exists or a version that is no longer current: it then says nothing. The model SHALL expose each item's `unproven` in the order written. A `blocks` entry, or a workaround item's `requirement`, MAY name a human-layer entry that exists (`human-layers`), whose version is its block's. A `blocks` entry MAY also name a `capability/<slug>` that `CAPABILITIES.md` doesn't hold while a change outside the archive whose `status` is `applied` or `implementing` lists the slug under `removes_capabilities` (`parse-changes`); an `architecture/<slug>` entry has no such allowance. It SHALL reject a `workaround` item whose `requirement` names a requirement that doesn't exist, or whose version isn't the first 8 hex digits of that requirement's current content hash. It SHALL reject an item naming an origin change that doesn't exist, a component that neither exists nor is created by a delta with `create: true` of a change outside the archive, or a `blocks` entry naming a requirement that neither exists, nor is added, under `## ADDED Requirements`, by a delta for its component of a change outside the archive, whatever the change's `status`, as for `components`, nor is removed, under `## REMOVED Requirements`, by a delta for its component of a change outside the archive whose `status` is `applied` or `implementing`; a delta that failed to load adds and removes nothing. Once that change is archived, such an entry is rejected as any entry naming nothing is. A `kind` that is the word `plain-terms-renames` replaced with `human-task` or `workaround` SHALL load as that kind, so an item from before that rename still loads (`renamed-words-still-load`). A `human-task` item is a step only a person can take, such as creating an account or setting a secret. A `workaround` item is a build's flag that a requirement was hard to build.
+
+#### Scenario: unknown node
+- GIVEN `backlog/x.md` with `components: [ghost]`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` and `ghost`
+
+#### Scenario: node a live change creates
+- GIVEN `backlog/x.md` with `components: [n]`, no `specs/n/SPEC.md`, and `changes/c/` with `status: proposed` and a delta for `n` with `create: true`
+- WHEN the model loads
+- THEN item `x` is loaded with components `[n]`, and loading reports nothing
+
+#### Scenario: node an archived change created
+- GIVEN `backlog/x.md` with `components: [n]`, no `specs/n/SPEC.md`, and a delta for `n` with `create: true` only under `changes/archive/`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` and `n`
+
+#### Scenario: human step
+- GIVEN `backlog/x.md` with `kind: human-task`
+- WHEN the model loads
+- THEN item `x` is loaded with kind `human-task`
+
+#### Scenario: the old kind names
+- GIVEN `backlog/h.md` whose `kind` is the word `plain-terms-renames` replaced with `human-task`, and `backlog/workaround-a-x-1.md` whose `kind` is the word `plain-terms-renames` replaced with `workaround`, with `requirement: a/x@3fa2c9d1` at `a/x`'s version
+- WHEN the model loads
+- THEN `h` is loaded with kind `human-task` and `workaround-a-x-1` with kind `workaround`, and loading reports nothing
+
+#### Scenario: item priority
+- GIVEN `backlog/x.md` with `priority: P1`, `backlog/y.md` with no `priority`, and `backlog/z.md` with `priority: high`
+- WHEN the model loads
+- THEN `x` is loaded with priority `P1`, `y` with priority `P5`, and loading reports `backlog/z.md` and `high`
+
+#### Scenario: blocks
+- GIVEN `backlog/x.md` with `blocks: [a/x, a/y]` where both requirements exist, and `backlog/z.md` with `blocks: [a/ghost]`
+- WHEN the model loads
+- THEN `x` is loaded blocking `a/x` and `a/y`, and loading reports `backlog/z.md` and `a/ghost`
+
+#### Scenario: blocks a requirement a change outside the archive adds
+- GIVEN `backlog/x.md` with `blocks: [a/new]`, component `a` with no requirement `new`, and `changes/c/` with `status: proposed` and a delta for `a` whose `## ADDED Requirements` holds `### Requirement: new`
+- WHEN the model loads
+- THEN item `x` is loaded blocking `a/new`, and loading reports nothing
+
+#### Scenario: blocks a requirement of a node a change outside the archive creates
+- GIVEN `backlog/x.md` with `blocks: [n/y]`, no `specs/n/SPEC.md`, and `changes/c/` with `status: proposed` and a delta for `n` with `create: true` whose `## ADDED Requirements` holds `### Requirement: y`
+- WHEN the model loads
+- THEN item `x` is loaded blocking `n/y`, and loading reports nothing
+
+#### Scenario: blocks a requirement only an archived change added
+- GIVEN `backlog/x.md` with `blocks: [a/old]`, component `a` with no requirement `old`, and a delta for `a` adding `### Requirement: old` only under `changes/archive/`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` and `a/old`
+
+#### Scenario: blocks a requirement a change only modifies
+- GIVEN `backlog/x.md` with `blocks: [a/ghost]`, component `a` with no requirement `ghost`, and `changes/c/` with a delta for `a` whose `## MODIFIED Requirements` holds `### Requirement: ghost`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` and `a/ghost`
+
+#### Scenario: blocks a requirement a rejected delta adds
+- GIVEN `backlog/x.md` with `blocks: [a/new]`, component `a` with no requirement `new`, and `changes/c/` with a delta for `a` whose `## ADDED Requirements` holds `### Requirement: new` and whose `## MODIFIED Design` holds `### Requirement: z`
+- WHEN the model loads
+- THEN loading reports the delta's `model/misplaced-delta-text`, and reports `backlog/x.md` and `a/new`
+
+#### Scenario: blocks a requirement an applied change removed
+- GIVEN `backlog/q.md` with `kind: question` and `blocks: [a/gone]`, component `a` with no requirement `gone`, and `changes/c/` with `status: applied` and a delta for `a` whose `## REMOVED Requirements` holds `### Requirement: gone`
+- WHEN the model loads
+- THEN item `q` is loaded blocking `a/gone`, and loading reports nothing
+
+#### Scenario: blocks a requirement a change not yet applied removes
+- GIVEN the same, with `changes/c/` at `status: approved`
+- WHEN the model loads
+- THEN loading reports `backlog/q.md` and `a/gone`
+
+#### Scenario: blocks a requirement only an archived change removed
+- GIVEN the same, with the change under `changes/archive/` at `status: applied`
+- WHEN the model loads
+- THEN loading reports `backlog/q.md` and `a/gone`
+
+#### Scenario: blocks a removed capability
+- GIVEN `backlog/q.md` with `blocks: [capability/gone]`, a `CAPABILITIES.md` with no entry `gone`, and `changes/c/` with `status: applied` and `removes_capabilities: [gone]`
+- WHEN the model loads, and again with `changes/c/` at `status: proposed`
+- THEN the first reports nothing, and the second reports `backlog/q.md` and `capability/gone`
+
+#### Scenario: blocks a human-layer entry
+- GIVEN `backlog/x.md` with `blocks: [capability/approve]`, and `CAPABILITIES.md` whose `## Capabilities` holds `### Capability: approve`
+- WHEN the model loads
+- THEN loading reports nothing
+
+#### Scenario: workaround flag
+- GIVEN `backlog/workaround-a-x-1.md` with `kind: workaround` and `requirement: a/x@3fa2c9d1`, where `a/x` exists and its version is `3fa2c9d1`
+- WHEN the model loads
+- THEN item `workaround-a-x-1` is loaded with kind `workaround` and requirement `a/x` at `3fa2c9d1`, and loading reports nothing
+
+#### Scenario: flag at an old version
+- GIVEN `backlog/workaround-a-x-1.md` with `kind: workaround` and `requirement: a/x@00000000`, where `a/x`'s version is `3fa2c9d1`
+- WHEN the model loads
+- THEN loading reports `backlog/workaround-a-x-1.md`, `a/x` and `3fa2c9d1`
+
+#### Scenario: flag on a removed requirement
+- GIVEN `backlog/workaround-a-x-1.md` with `requirement: a/x@3fa2c9d1` and component `a` with no requirement `x`
+- WHEN the model loads
+- THEN loading reports `backlog/workaround-a-x-1.md` and `a/x`
+
+#### Scenario: flag without a requirement
+- GIVEN `backlog/f.md` with `kind: workaround` and no `requirement`
+- WHEN the model loads
+- THEN loading reports `backlog/f.md` and `requirement`
+
+#### Scenario: requirement on another kind
+- GIVEN `backlog/i.md` with `kind: idea` and `requirement: a/x@3fa2c9d1`
+- WHEN the model loads
+- THEN loading reports `backlog/i.md` and `requirement`
+
+#### Scenario: taken in from issues
+- GIVEN `backlog/x.md` with `kind: bug` and `issues: [73, 91]`
+- WHEN the model loads
+- THEN item `x` is loaded with issues `[73, 91]`, and loading reports nothing
+
+#### Scenario: taken in from a red run
+- GIVEN `backlog/x.md` with `kind: bug` and `verify_failures` naming one 40-hex commit ID
+- WHEN the backlog loads
+- THEN item `x` is loaded with that commit in its verify failures, and loading reports nothing
+
+#### Scenario: short commit refused
+- GIVEN `backlog/x.md` with `kind: bug` and `verify_failures: ["abc123"]`
+- WHEN the backlog loads
+- THEN loading reports `backlog/x.md` and `verify_failures`
+
+#### Scenario: taken in from alerts
+- GIVEN `backlog/x.md` with `kind: bug` and `alerts: [4]`
+- WHEN the model loads
+- THEN item `x` is loaded with alerts `[4]` and no issues, and loading reports nothing
+
+#### Scenario: an alert that isn't a number
+- GIVEN `backlog/x.md` with `kind: bug` and `alerts: [0]`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` and `alerts`
+
+#### Scenario: an issue that isn't a number
+- GIVEN `backlog/x.md` with `kind: bug` and `issues: ["#73"]`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` and `issues`
+
+#### Scenario: named unproven
+- GIVEN `backlog/u.md` with `kind: bug` and `unproven: [a/x@0123abcd]`, `a/x` existing at another version
+- WHEN the model loads it
+- THEN the item holds that entry, and loading reports nothing
+
+#### Scenario: unproven on another kind
+- GIVEN `backlog/u.md` with `kind: idea` and `unproven: [a/x@0123abcd]`
+- WHEN the model loads it
+- THEN loading fails naming the file and `unproven`
+
+#### Scenario: unproven without a version
+- GIVEN `backlog/u.md` with `kind: bug` and `unproven: [a/x]`
+- WHEN the model loads it
+- THEN loading fails naming the file and `unproven`
+
+### Requirement: node-assets <!-- base: e54a1acbc5be9c98 -->
+The model SHALL load every file under `specs/<component path>/assets/` as an asset of that component, keyed by its path relative to `assets/`, with a content hash: `content_hash` of its text when it is UTF-8, otherwise the first 8 bytes of the SHA-256 of its bytes, in hex, which the model offers as `asset_hash`. Loading SHALL report as `model/node-assets`, naming the file: a file under the root's `specs/assets/`, since the root component has no assets; and a file under the `assets/` of a directory that holds no `SPEC.md`, naming the component it would belong to.
+
+#### Scenario: asset hash
+- GIVEN `specs/a/assets/mockups/m.html` with text `<p>x</p>`
+- WHEN the model loads `specs/`
+- THEN component `a` has asset `mockups/m.html` with hash `content_hash("<p>x</p>")`
+
+#### Scenario: root assets
+- GIVEN `specs/SPEC.md` and `specs/assets/m.png`
+- WHEN the model loads `specs/`
+- THEN loading reports `model/node-assets` for `specs/assets/m.png`, and the root has no asset
+
+#### Scenario: assets of a missing component
+- GIVEN `specs/SPEC.md` and `specs/ghost/assets/m.png`, with no `specs/ghost/SPEC.md`
+- WHEN the model loads `specs/`
+- THEN loading reports `model/node-assets`, naming `ghost`
+
+### Requirement: load-from-files <!-- base: 5011a677f20d4f18 -->
+The model SHALL read, from a directory, every file under `specs/`, `changes/`, `backlog/` and `docs/decisions/`, and the root files `ARCHITECTURE.md` and `CAPABILITIES.md` when they exist (`human-layers`). It SHALL load the graph from an in-memory map of repo-relative paths to file contents (`load_files`), giving the same graph, assets included, and the same violations as `load` gives for a directory holding those files. A file under those directories that can't be read, a link to a directory among them, SHALL be reported as `model/load-from-files`, naming it, with a message starting `unreadable`, and the rest SHALL load; a path of the map outside those directories and root files is not read.
+
+#### Scenario: same as disk
+- GIVEN a directory with a valid component with an asset, an invalid component, a change, an `ARCHITECTURE.md` and a `CAPABILITIES.md` with entries, and a map holding the same paths and contents
+- WHEN the graph is loaded from each
+- THEN the two graphs and the two violation lists are equal
+
+#### Scenario: unreadable file
+- GIVEN a directory whose change `x` holds, beside its valid `change.md`, a link to a directory and a link to a file that doesn't exist
+- WHEN the graph is loaded from the directory
+- THEN loading reports two `model/load-from-files` violations, each message starting `unreadable`, and change `x` is loaded
+
+#### Scenario: paths outside the loaded directories
+- GIVEN a map that loads with no violation, and the same map with `src/SPEC.md` added
+- WHEN the graph is loaded from each
+- THEN the two graphs are equal and neither reports a violation
+
+### Requirement: optional-nodes <!-- base: 37ade64d21bba5da -->
+A component's frontmatter MAY set `optional` to `true` or `false`, and its absence SHALL mean `false`. A component is *optional* when it or any of its ancestors sets `optional: true`, and *required* otherwise. The model SHALL reject a component whose `optional` is any other value, naming the file and the field, and SHALL reject `optional: true` on the root component. The model SHALL expose one check of a component's frontmatter, which takes the component's ID (`declared-frontmatter-keys`): it runs every rule the frontmatter's text alone decides and then, when they pass, the root rules (`optional: true` on the root, and `outside` or `wiring` on any other component, `outside-globs`, `wiring-globs`), and loading SHALL run it for every component, so `apply` refuses a delta's frontmatter by exactly the rules loading uses. The root rules SHALL be violations that keep the component loaded with its parsed frontmatter, and SHALL run only once the frontmatter's other rules pass, so a bad `optional` value or any other frontmatter error is reported alone. It SHALL reject a `depends_on` entry from a required component to an optional one, naming both components, so CLM works without its optional parts (`web-optional`).
+
+#### Scenario: bad value
+- GIVEN a SPEC.md whose frontmatter has `optional: maybe`
+- WHEN the model loads it
+- THEN loading fails naming the file and `optional`
+
+#### Scenario: required depends on optional
+- GIVEN component `a` with `optional: true` and component `b`, without the flag, with `depends_on: [a]`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `b` and `a`
+
+#### Scenario: optional depends on required
+- GIVEN component `a` with `optional: true` and `depends_on: [b]`, and component `b` without the flag
+- WHEN the model loads `specs/`
+- THEN loading reports nothing
+
+#### Scenario: inherited from an ancestor
+- GIVEN component `a` with `optional: true`, its child `a.x` without the flag, and component `b` with `depends_on: [a.x]`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `b` and `a.x`
+
+#### Scenario: optional root
+- GIVEN `specs/SPEC.md` with `optional: true`
+- WHEN the model loads `specs/`
+- THEN loading fails naming the file and `optional`
+
+#### Scenario: root rule in the exposed check
+- GIVEN frontmatter text that is valid apart from `optional: true`
+- WHEN the model's frontmatter check runs on it for component `clm`, and again for component `a`
+- THEN the first reports one violation under `model/optional-nodes` naming `optional` and still gives the parsed frontmatter, and the second passes
+
+#### Scenario: other rules for any node
+- GIVEN frontmatter text that is valid apart from `optional: maybe`, and again apart from an undeclared key `shape: round`
+- WHEN the model's frontmatter check runs on each for component `a`
+- THEN each fails with one violation naming `specs/a/SPEC.md` and the key
+
+### Requirement: misplaced-delta-text <!-- base: 4bb4e87b4ab6101b -->
+The model SHALL reject a delta that holds a non-blank line after its frontmatter's closing `---` and before its first section heading (its first `## ` line outside a code fence), or a `### Requirement:` heading, outside a code fence, in a section other than `## ADDED Requirements`, `## MODIFIED Requirements` or `## REMOVED Requirements`. Every non-blank line before the first section counts, fence markers and HTML comments included, and a delta with no section at all and a non-blank line after its frontmatter is rejected the same way. A `### Requirement:` heading counts in every other section, the frontmatter sections' rationale included; one inside a code fence is text and doesn't count. The text before the first section SHALL be one `model/misplaced-delta-text` violation, and each section holding such a heading SHALL be one more, however many it holds; each violation's path is the delta's file and its message names the 1-based line number in the file of the first such line and, for a heading, the section that holds it; and the delta SHALL not be loaded. The rule reports independently of the delta's other rules, so a section that another rule also rejects, such as an unknown section or one a `remove: true` delta may not hold, is reported by both. The rule is checked on every delta of a change outside the archive; a delta under `changes/archive/<id>/` SHALL be loaded as it was when the change landed, its text before the first section ignored, since the archive is never edited (`archive-immutable`).
+
+#### Scenario: requirement under a design section
+- GIVEN a delta for `a` whose `## MODIFIED Design` section holds a paragraph and then `### Requirement: x` with a `#### Scenario:`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/misplaced-delta-text`, the delta's file, `MODIFIED Design` and the line number of `### Requirement: x`, and the delta isn't loaded
+
+#### Scenario: requirement under a contract section
+- GIVEN a delta for `a` with `create: true` whose `## Contract` section holds `### Requirement: x` and whose `## Design` section holds `### Requirement: y`
+- WHEN the model loads `changes/`
+- THEN loading reports two `model/misplaced-delta-text` violations, one naming `Contract` and `x`'s line, one naming `Design` and `y`'s line
+
+#### Scenario: two headings in one section
+- GIVEN a delta for `a` whose `## MODIFIED Design` section holds `### Requirement: x` and later `### Requirement: y`
+- WHEN the model loads `changes/`
+- THEN loading reports one `model/misplaced-delta-text` violation, naming `MODIFIED Design` and `x`'s line
+
+#### Scenario: text before the first section
+- GIVEN a delta for `a` with one line of text after its frontmatter and then `## ADDED Requirements` holding `### Requirement: x`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/misplaced-delta-text`, the delta's file and that line's number, and the delta isn't loaded
+
+#### Scenario: heading in a code fence
+- GIVEN a delta for `a` whose `## MODIFIED Design` section holds a ```` ```markdown ```` fence containing `### Requirement: x`
+- WHEN the model loads `changes/`
+- THEN loading reports nothing for the delta, and its design holds the fence
+
+#### Scenario: blank lines before the first section
+- GIVEN a delta for `a` with blank lines after its frontmatter and then `## ADDED Requirements` holding `### Requirement: x`
+- WHEN the model loads `changes/`
+- THEN loading reports nothing for the delta, and it adds `x`
+
+#### Scenario: archived delta with text before its first section
+- GIVEN an archived change `changes/archive/x/` whose delta for `a` has a paragraph after its frontmatter and then `## MODIFIED Design`
+- WHEN the model loads `changes/`
+- THEN loading reports nothing for the delta, and change `x` is loaded and marked as archived
+
+### Requirement: outside-globs <!-- base: 013b7044de2c6e05 -->
+The root component's frontmatter MAY set `outside` to a list of globs, written as a component's `paths` are: the code in the repository that no component owns yet, while it is adopted a part at a time (`incremental-adoption`). The model SHALL expose the root's `outside` as absent when the key is absent, and otherwise as the list in the order written, empty for `[]`. It SHALL reject, as `model/outside-globs` naming the file and `outside`, an `outside` key on any component but the root (judged by component ID when the graph loads), and an `outside` whose value isn't a list of non-empty strings, a YAML null included. The model's frontmatter check (`optional-nodes`), which loading runs and `apply` runs on a delta, SHALL reject `outside` on any component but `clm`, as loading does, and an `outside` of the wrong shape on any component, the root included.
+
+#### Scenario: globs on the root
+- GIVEN `specs/SPEC.md` whose frontmatter has `outside: ["src/web/**", "README.md"]`
+- WHEN the model loads `specs/`
+- THEN the root's `outside` is `src/web/**` then `README.md`
+
+#### Scenario: empty list
+- GIVEN `specs/SPEC.md` whose frontmatter has `outside: []`
+- WHEN the model loads `specs/`
+- THEN the root's `outside` is present and empty, and loading reports nothing
+
+#### Scenario: no key
+- GIVEN `specs/SPEC.md` whose frontmatter has no `outside`
+- WHEN the model loads `specs/`
+- THEN the root's `outside` is absent and loading reports nothing
+
+#### Scenario: on another node
+- GIVEN `specs/a/SPEC.md` whose frontmatter has `outside: ["src/**"]`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/a/SPEC.md` and `outside`
+
+#### Scenario: bad value
+- GIVEN `specs/SPEC.md` whose frontmatter has `outside: "src/**"`, `outside: [""]` or `outside:` with no value
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/SPEC.md` and `outside`
+
+### Requirement: delta-section-fit <!-- base: c678a1c338e8b563 -->
+The model SHALL reject a delta section that its kind of delta can't apply. A delta with neither `create: true` nor `remove: true` edits an existing component and SHALL hold no `## Frontmatter`, `## Contract` or `## Design` section, which only a `create: true` delta writes. A delta with `create: true` writes a new component whole and SHALL hold no `## MODIFIED Frontmatter`, `## MODIFIED Contract`, `## MODIFIED Design`, `## MODIFIED Requirements`, `## REMOVED Requirements` or `## REMOVED Assets` section, which only edit a component that exists. A `## MODIFIED Contract` or `## MODIFIED Design` section SHALL hold a non-blank line, since it replaces the section's whole body; any line with a non-whitespace character counts, HTML comments and fence markers included. Each such section SHALL be one `model/delta-section-fit` violation, whose path is the delta's file and whose message names the section and the 1-based line number in the file of its heading, and says what is wrong: for a create-only section, that it needs `create: true` and that `## MODIFIED <name>` edits an existing component's; for an edit-only section, that a `create: true` delta writes its component whole; for an empty section, that it is empty. A section that is both edit-only and empty is reported once, as edit-only. A section this rule rejects is judged no further by `parse-changes` (a stray `## Frontmatter` without a ```` ```yaml ```` fence is reported once, by this rule), while `requirement-text-under-a-heading` still judges it, so a `create: true` delta's `## MODIFIED Requirements` holding text before its first heading is reported by both. The delta SHALL not be loaded. A `remove: true` delta's sections stay judged by `parse-changes` alone, so this rule never reports a section that rule rejects. The rule is checked on every delta the model loads, in `changes/<id>/` and `changes/archive/<id>/` alike.
+
+#### Scenario: stray Contract under MODIFIED Contract
+- GIVEN a delta for `a`, without `create: true`, holding `## MODIFIED Contract` with no text and then `## Contract` with a paragraph
+- WHEN the model loads `changes/`
+- THEN loading reports two `model/delta-section-fit` violations, one naming `MODIFIED Contract`, its heading's line and that it is empty, one naming `Contract`, its heading's line, `create: true` and `## MODIFIED Contract`, and the delta isn't loaded
+
+#### Scenario: Design without create
+- GIVEN a delta for `a`, without `create: true`, holding `## Design` with a paragraph
+- WHEN the model loads `changes/`
+- THEN loading reports `model/delta-section-fit`, the delta's file, `Design` and its heading's line, and the delta isn't loaded
+
+#### Scenario: Frontmatter without create
+- GIVEN a delta for `a`, without `create: true`, holding `## Frontmatter` with a ```` ```yaml ```` fence
+- WHEN the model loads `changes/`
+- THEN loading reports `model/delta-section-fit` naming `Frontmatter`, and the delta isn't loaded
+
+#### Scenario: edit section in a create delta
+- GIVEN a delta for `b` with `create: true` holding `## Frontmatter`, `## Contract` and `## MODIFIED Requirements` with `### Requirement: x <!-- base: <hash> -->`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/delta-section-fit` naming `MODIFIED Requirements` and its heading's line, and the delta isn't loaded
+
+#### Scenario: stray Frontmatter without a fence
+- GIVEN a delta for `a`, without `create: true`, holding `## Frontmatter` with a line of text and no fence
+- WHEN the model loads `changes/`
+- THEN loading reports one violation for the section, `model/delta-section-fit` naming `Frontmatter`, and no `model/parse-changes` violation for its missing fence
+
+#### Scenario: edit section with stray text in a create delta
+- GIVEN a delta for `b` with `create: true` holding `## Frontmatter` and `## MODIFIED Requirements` with a line of text before `### Requirement: x <!-- base: <hash> -->`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/delta-section-fit` and `model/requirement-text-under-a-heading`, both naming `MODIFIED Requirements`
+
+#### Scenario: blank MODIFIED Design
+- GIVEN a delta for `a` whose `## MODIFIED Design` heading is followed only by blank lines before `## ADDED Requirements`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/delta-section-fit` naming `MODIFIED Design`, its heading's line and that it is empty, and the delta isn't loaded
+
+#### Scenario: well-formed deltas
+- GIVEN a delta for `a` holding `## MODIFIED Contract` with a paragraph, and a delta for `b` with `create: true` holding `## Frontmatter`, `## Contract`, `## Design` and `## ADDED Requirements`
+- WHEN the model loads `changes/`
+- THEN loading reports nothing for either delta
+
+#### Scenario: removal delta judged once
+- GIVEN a delta for `a` with `remove: true` holding a `## Contract` section
+- WHEN the model loads `changes/`
+- THEN loading reports the `model/parse-changes` violation for `## Contract` and no `model/delta-section-fit` violation
+
+### Requirement: graph-check <!-- base: e0dbe7bcd6eebbc1 -->
+The model SHALL offer the two checks loading runs, so a caller holding a graph checks it by exactly the rules loading uses:
+
+- its component parser, `parse_node`: given a component's ID, its `SPEC.md` path and text, and the frontmatter keys live changes declare, it SHALL return the component, if one loads, with no assets, and every violation loading reports for that file from the rules that one file decides, the root rules included;
+- its graph check, `check_graph`: given a graph, it SHALL return every violation loading reports from these rules, which join a component, a requirement, a backlog item or an architecture entry to another element of the graph: `dependency-dag`, `optional-nodes`' rule that a required component doesn't depend on an optional one, `requirement-needs`' rules across requirements, `serves`' check that each ID names an entry, `human-layers`' check of each `#### Enforced by` ID, and `parse-backlog`'s checks of an item's `origin`, `components` and `blocks`, and of a `workaround` item's `requirement`, against the graph.
+
+Which `SPEC.md` files exist, the root's and each parent's (`parse-node-specs`), is neither's to judge, since it is read from the files and not from the graph, and nor are `carried-constraints`' rules of an entry's `#### Carries`, `#### Guarantee` and `#### Replaces` blocks, which loading reads from `ARCHITECTURE.md`'s text; `apply` checks parents itself (`apply/create-node`, `apply/remove-node`).
+
+#### Scenario: graph check on a loaded graph
+- GIVEN component `a` with `optional: true`, component `b` with `depends_on: [a, gone]`, and a backlog item whose `blocks` names `a/none`
+- WHEN the model loads `specs/` and `backlog/`, and its graph check runs on the graph that loads
+- THEN the graph check reports `b`'s `model/optional-nodes` and `model/dependency-dag` violations and the item's `model/parse-backlog` violation, each as loading reports it
+
+#### Scenario: node parser as loading parses
+- GIVEN a `SPEC.md` text for component `a` with two `### Requirement: foo` blocks
+- WHEN the component parser runs on it, and the model loads a tree holding it as `specs/a/SPEC.md`
+- THEN both report the same `model/unique-requirement-ids` violation naming `a/foo`
+
+#### Scenario: graph check on an edited graph
+- GIVEN a loaded graph with component `a` and component `b` with `depends_on: [a]`, which reports nothing
+- WHEN `a` is removed from the graph in memory and the graph check runs on it
+- THEN it reports `model/dependency-dag` for `b`, naming `a`
+
+#### Scenario: graph check covers enforcement and flags
+- GIVEN a loaded graph that reports nothing, holding an architecture entry whose `#### Enforced by` names `a/y` and a `workaround` item whose `requirement` is `a/x` at its version
+- WHEN `a/y` is removed from the graph in memory and `a/x`'s hash is replaced there by another, and the graph check runs on it
+- THEN it reports `model/human-layers` for the entry, naming `a/y`, and `model/parse-backlog` for the item, naming `a/x`
+
+### Requirement: human-layers <!-- base: c4f90bbc659ae215 -->
+The model SHALL load the two human layers from the repository root: the entries of `ARCHITECTURE.md`, its architectural constraints, are its `### Constraint: <slug>` blocks inside its `## Constraints` section, and the entries of `CAPABILITIES.md` are its `### Capability: <slug>` blocks inside its `## Capabilities` section. The graph SHALL expose, per layer, the heading its file's entries use: `### Constraint:` and `### Capability:`. The model SHALL give, for an ID, the layer its prefix names, none for any other ID, and each layer's file. Each block runs to the next entry heading or to its section's end, as a component's requirement does, and headings inside code fences don't count; the preamble and any other section are prose the model doesn't read. An entry's ID is `architecture/<slug>` or `capability/<slug>`, its hash is `content_hash` of its block and its version the first 8 hex digits of that, as for a rule (`content-hash`). The graph SHALL expose the entries per layer in file order; `Graph::requirement` SHALL find an entry by its ID, `Graph::entry` SHALL find an entry and never a component's requirement, and `Graph::requirements` SHALL list every component's requirements by component ID, then the architecture entries, then the capabilities. A file that is absent has no entries and gives no violation; one that holds no such section has no entries either, and gives a violation only for an entry heading outside it. The model SHALL report as `model/human-layers`, naming the file and the slug: a slug that is empty or holds anything but lowercase ASCII letters, digits and `-`, which no ID could name; a slug used twice in one file; an entry with no `#### Scenario:`; an architecture entry whose text holds neither `SHALL` nor `MUST`; a capability without exactly one `#### Why` block; an entry heading of the file's kind outside its section, so an entry never silently doesn't count; and a `#### Needs` or `#### Serves` block inside an entry. An architecture entry MAY hold one `#### Enforced by` block, a bullet list of `- <component>/<slug>` lines shaped like `#### Needs` (`requirement-needs`), each naming a component's requirement, the rules that enforce the entry; and any entry MAY hold one `#### Untested` block, prose saying what of the entry no program checks and why (`human-layer-proof`). Both blocks are part of the entry's block, so of its hash and version, unlike a rule's `#### Serves`. The graph SHALL expose each entry's enforcing rules, in block order, whether it holds `#### Untested`, and that block's text, trimmed, which `effort/architecture-report` shows. The model SHALL also report as `model/human-layers`, naming the file and the slug: an `#### Enforced by` block in a capability; a second block of either kind in one entry; an empty block; an `#### Enforced by` line that isn't a `- <id>` bullet; and an `#### Enforced by` ID that names a human-layer entry, or names no requirement the graph holds and none that a delta for its component of a change outside the archive adds under `## ADDED Requirements`. A change counts whatever its `status`, and a delta that failed to load adds nothing, as for a backlog item's `blocks` (`parse-backlog`); an ID a change removes is reported on the graph it would leave (`apply/resulting-graph`). A file that isn't UTF-8 is reported the same way and has no entries.
+
+#### Scenario: entries load
+- GIVEN an `ARCHITECTURE.md` whose `## Constraints` holds `### Constraint: git-is-truth` with a SHALL statement and a scenario, and a `CAPABILITIES.md` whose `## Capabilities` holds `### Capability: approve` with a statement, a `#### Why` and a scenario
+- WHEN the model loads
+- THEN the graph holds `architecture/git-is-truth` and `capability/approve`, each at the version of its block's content hash, `Graph::requirement` finds both, the architecture layer's heading is `### Constraint:`, and loading reports nothing
+
+#### Scenario: enforcement blocks
+- GIVEN an `ARCHITECTURE.md` entry `x` with an `#### Enforced by` block naming `a/y` and `b/z`, rules of components `a` and `b`, and an `#### Untested` paragraph, and a capability `c` with an `#### Untested` paragraph
+- WHEN the model loads
+- THEN the graph gives `x`'s enforcing rules as `a/y` then `b/z`, says `x` and `c` hold `#### Untested`, gives `x`'s untested text as its paragraph, trimmed, and loading reports nothing
+
+#### Scenario: bad enforcement
+- GIVEN an architecture entry whose `#### Enforced by` names `a/gone`, which no component holds, and a capability with an `#### Enforced by` block
+- WHEN the model loads
+- THEN loading reports `model/human-layers` for each, naming `ARCHITECTURE.md` and the entry's slug with `a/gone`, and `CAPABILITIES.md` and the capability's slug
+
+#### Scenario: enforcement named before apply
+- GIVEN an architecture entry whose `#### Enforced by` names `a/new`, which component `a` doesn't hold, and a `proposed` change whose delta for `a` adds `new` under `## ADDED Requirements`
+- WHEN the model loads
+- THEN loading reports no `model/human-layers` violation, and the entry's enforcing rules are `a/new`
+
+#### Scenario: free-form architecture
+- GIVEN an `ARCHITECTURE.md` with a `## Layer 1 invariants` section of bullet items and no `## Constraints` section
+- WHEN the model loads
+- THEN the graph has no architecture entries and loading reports nothing
+
+#### Scenario: entry outside its section
+- GIVEN a `CAPABILITIES.md` with `### Capability: x` under `## Why we exist`
+- WHEN the model loads
+- THEN loading reports `model/human-layers`, `CAPABILITIES.md` and `x`
+
+#### Scenario: entry heading and no section
+- GIVEN a `CAPABILITIES.md` with `### Capability: x` and no `## Capabilities` section
+- WHEN the model loads
+- THEN the graph has no capability entries, and loading reports `model/human-layers`, `CAPABILITIES.md` and `x`
+
+#### Scenario: capability without why
+- GIVEN a `CAPABILITIES.md` whose entry `x` has a scenario and no `#### Why`
+- WHEN the model loads
+- THEN loading reports `model/human-layers`, `CAPABILITIES.md` and `x`
+
+#### Scenario: layers by ID
+- GIVEN the graph of "entries load"
+- WHEN the model is asked for the layer of `capability/x` and of `land/x`, for the capability layer's file, and `Graph::entry` for `capability/approve` and for a component's requirement
+- THEN the layers are the capability layer and none, the file is `CAPABILITIES.md`, and `Graph::entry` finds the capability and nothing for the requirement
+
+### Requirement: reserved-ids <!-- base: 5ee107778a055cfa -->
+The model SHALL reject a top-level component whose ID is `architecture` (`specs/architecture/SPEC.md`), the prefix of the architecture entries' IDs (`human-layers`), as `model/reserved-ids` naming the file, and SHALL NOT load it; its children are then reported as components whose parent has no `SPEC.md` (`parse-node-specs`). A top-level component `capability` (`specs/capability/SPEC.md`) SHALL load as the capability layer's component: the capabilities, the entries of `CAPABILITIES.md`, are placed on it, so they are pending on it and a build of it builds their tests (`human-layer-proof`). The graph SHALL say which component that is, if any, as `capability_node()`; the component's own requirements stay empty and `Graph::requirements` lists the capabilities after the architecture entries (`human-layers`). Its `SPEC.md` holds frontmatter, a Contract and a Design, and a `### Requirement:` in it SHALL be reported as `model/reserved-ids` naming the file and the slug, since a capability is written in `CAPABILITIES.md`.
+
+#### Scenario: reserved node
+- GIVEN `specs/architecture/SPEC.md`
+- WHEN the model loads `specs/`
+- THEN loading reports `model/reserved-ids` and `specs/architecture/SPEC.md`, and the graph has no component `architecture`
+
+#### Scenario: capability node
+- GIVEN `specs/capability/SPEC.md` with frontmatter, a Contract and a Design, and a `CAPABILITIES.md` with entries `a` and `b`
+- WHEN the model loads
+- THEN the graph has component `capability`, which it names as the component the capabilities `capability/a` and `capability/b` are placed on, and loading reports nothing
+
+#### Scenario: requirement in the capability node
+- GIVEN `specs/capability/SPEC.md` holding `### Requirement: x`
+- WHEN the model loads
+- THEN loading reports `model/reserved-ids`, `specs/capability/SPEC.md` and `x`
+
+### Requirement: term-lists <!-- base: 28b92c61260e344a -->
+The model SHALL offer `STATUS_TERMS`, `CHANGE_STATUS_TERMS` and `BACKLOG_KIND_TERMS`, holding each component status, change status and backlog kind loading accepts with the word CLM writes for it in a file (`unbuilt`, `applied`, `bug`), and never a word it only reads, such as one `plain-terms-renames` replaced (`renamed-words-still-load`), and `CHANGE_KEYS`, the keys a live change's `change.md` frontmatter may set: those `parse-changes` names, without `after`, `prefer_after` and `gate`, which it accepts only to ignore or reject, and without the old key it reads as `human_burdens`. Each list SHALL hold every status, kind or key loading accepts for its term, each once, so a new term can't escape the glossary check (`clm/glossary-covers-terms`).
+
+#### Scenario: lists match the types
+- GIVEN the model
+- WHEN each list is read
+- THEN every component status, change status and backlog kind loading accepts appears once with the word CLM writes for it, the lists hold no word `plain-terms-renames` replaced, and `CHANGE_KEYS` holds every key `parse-changes` names but the three ignored or rejected ones and the old burdens key
+
+### Requirement: rename-records <!-- base: 25a8a149bf0d44da -->
+The model SHALL load a change's `renames` as a list of entries in file order, each a mapping with exactly one of `component`, `requirement` or `term`, naming what is renamed, and `to`, naming its new name, and expose them on the change. On a change outside the archive it SHALL report as `model/rename-records`, naming the `change.md`, a `renames` that isn't a list, and, naming the entry's 1-based position too: an entry with none or more than one of the three keys, without `to`, or with any other key; a value that isn't a non-empty string or holds a line break; a `component` or its `to` that isn't a component ID, or a `to` that differs from its `component` in anything but the last dot-separated segment, since a rename keeps the component's parent; a `requirement` that isn't `<component>/<slug>`, `architecture/<slug>` or `capability/<slug>`, or whose `to` isn't a slug (`[a-z0-9]+(-[a-z0-9]+)*`); a `to` equal to what it renames; and two entries renaming the same thing, or giving two things the same new name. A change with such a violation SHALL NOT be loaded. An archived change's `renames` SHALL be loaded as written, unchecked (`archive-immutable`). Whether a renamed ID exists is `rename/refusals`' to judge.
+
+#### Scenario: valid entries
+- GIVEN `changes/x/change.md` with `renames` holding `component: check.coverage` with `to: check.markers`, `requirement: apply/stale-base` with `to: base-moved`, and `term: sprocket` with `to: cogs`
+- WHEN the model loads `changes/`
+- THEN `x` holds the three renames in that order, and loading reports nothing
+
+#### Scenario: a move, not a rename
+- GIVEN `changes/x/change.md` with `renames` holding `component: check.coverage` with `to: model.coverage`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/rename-records`, `changes/x/change.md` and entry `1`
+
+#### Scenario: two keys in one entry
+- GIVEN `changes/x/change.md` with `renames` holding one entry with `term: sprocket`, `requirement: a/x` and `to: y`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/rename-records`, `changes/x/change.md` and entry `1`
+
+#### Scenario: a reported rename unloads its change
+- GIVEN the change of "a move, not a rename"
+- WHEN the model loads `changes/`
+- THEN the graph holds no change `x`
+
+#### Scenario: renames that aren't a list
+- GIVEN `changes/x/change.md` with `renames: sprocket`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/rename-records` and `changes/x/change.md`, and the graph holds no change `x`
+
+### Requirement: component-keys <!-- base: deb40bca0b6aaca5 -->
+A delta SHALL name the component it edits with the frontmatter key `component`, and a backlog item SHALL list the components it concerns with `components`, the names `plain-terms-renames` gives them. The model SHALL reject a delta of a change outside the archive that sets `node`, and a backlog item in `backlog/` that sets `nodes`, naming the file, the old key and the new one; the item stays loaded with the components `nodes` lists, and the delta is not loaded. It SHALL still load the `node` key of an archived change's delta as its `component`, since the archive keeps what it was written with (`archive-immutable`), and SHALL reject an archived delta that sets both keys, naming both. It SHALL still read `nodes` in a backlog item's frontmatter read from git history rather than loaded from `backlog/`, such as `effort`'s history and the gate's merge base, for the same reason. The loaded delta and item, and what the graph exposes of them, SHALL be the same whichever key an archived delta or a history read used.
+
+#### Scenario: a delta by its new key
+- GIVEN `changes/c/deltas/a.md` with `component: a` and a `## MODIFIED Design` section whose base is node `a`'s Design hash
+- WHEN the model loads `changes/`
+- THEN change `c` holds a delta for `a`, and loading reports nothing
+
+#### Scenario: the old keys refused
+- GIVEN `backlog/x.md` with `nodes: [a]`, and `changes/c/deltas/a.md` with `node: a`
+- WHEN the model loads
+- THEN loading reports `backlog/x.md` with `nodes` and `components`, and `changes/c/deltas/a.md` with `node` and `component`
+
+#### Scenario: the archive keeps its key
+- GIVEN `changes/archive/c/deltas/a.md` with `node: a`
+- WHEN the model loads `changes/`
+- THEN archived change `c` holds a delta for `a`, and loading reports nothing
+
+#### Scenario: what the old keys leave loaded
+- GIVEN the files of "the old keys refused"
+- WHEN the model loads
+- THEN item `x` is loaded with components `[a]`, and change `c` holds no delta
+
+#### Scenario: the archive with both keys
+- GIVEN `changes/archive/c/deltas/a.md` with `component: a` and `node: a`
+- WHEN the model loads `changes/`
+- THEN loading reports `model/parse-changes` once for that file, naming `component` and `node`
+
+### Requirement: says-component <!-- base: eaa8ed18af8f5b1a -->
+The model's messages SHALL say component, components and ancestors, never the old words, as `component-words` defines them: among them `the root component has no assets`, ``asset of component `<id>` ``, ``parent component `<id>` has no SPEC.md``, ``the root component can't be `optional` ``, ``depends on unknown component `<id>` ``, ``required component `<a>` depends on optional component `<b>` ``, ``unknown component `<id>` `` for a backlog item, `edits an existing component's <element>`, a delta that `creates its component or removes it`, and the shapes it names, `<component>/<slug>` and `<component>/<slug>@<version>`. The rules a violation names are requirement IDs and keep their spelling, and a message naming an old key to say it is old (`component-keys`) keeps it.
+
+#### Scenario: an unknown component in an item
+- GIVEN `backlog/x.md` with `components: [ghost]`
+- WHEN the model loads
+- THEN the violation's message reads ``unknown component `ghost` ``
+
+#### Scenario: a required component on an optional one
+- GIVEN component `a` with `optional: true` and component `b` with `depends_on: [a]`
+- WHEN the model loads `specs/`
+- THEN the violation's message names ``required component `b` `` and ``optional component `a` ``
+
+### Requirement: backlog-components <!-- base: 5d7d1e8ff80bd8ea -->
+The graph SHALL say, by `backlog_node_known(id)`, whether a backlog item may name component `id`: true when the component is in the graph, or when a delta with `create: true` of a change outside the archive creates it, and false otherwise. `parse-backlog` SHALL judge an item's `components` by it, so a caller that writes a backlog item refuses the components loading refuses.
+
+#### Scenario: known nodes
+- GIVEN a graph with component `a`, a live change whose delta for `b` has `create: true`, and an archived change whose delta for `c` has `create: true`
+- WHEN `backlog_node_known` is asked about `a`, `b`, `c` and `d`
+- THEN it answers true for `a` and `b`, and false for `c` and `d`
+
+### Requirement: capability-tests-component <!-- base: f2664a6cf06a4b78 -->
+The model SHALL give the component that builds the capability tests as `Graph::capability_tests_node`: the graph's capability component (`reserved-ids`) when it holds one, else its root, the component `clm pending` places `CAPABILITIES.md`'s entries on.
+
+#### Scenario: with the capability node
+- GIVEN a graph with root `clm` and component `capability`
+- WHEN `capability_tests_node` is asked
+- THEN it gives `capability`
+
+#### Scenario: without it
+- GIVEN a graph with root `clm` and no component `capability`
+- WHEN `capability_tests_node` is asked
+- THEN it gives `clm`
+
+### Requirement: parse-backlog-item <!-- base: ac29a1d06e9eac5b -->
+`clm-model` SHALL offer `parse_backlog_item(slug, text)`, which parses one backlog file's text by `parse-backlog`'s rules for its frontmatter keys and values alone, returning the item or the violations, and checks nothing against a graph: not that its components, origin, `blocks` or `requirement` exist.
+
+#### Scenario: a deleted item's components are gone
+- GIVEN the text of a backlog file with `kind: bug`, `components: [ghost]` and `issues: [67]`
+- WHEN `parse_backlog_item("x", text)` runs
+- THEN it returns item `x` with issues `[67]` and no violation
+
+#### Scenario: an unknown key
+- GIVEN the text of a backlog file with `kind: bug` and `colour: red`
+- WHEN `parse_backlog_item("x", text)` runs
+- THEN it returns a violation naming `colour`
+
+### Requirement: carried-constraints <!-- base: 7b7f8a7416fef94c -->
+The model SHALL compile in the text of CLM's own `ARCHITECTURE.md` at this repository's root as it is when the crate is built, and expose its *carried entries*: each architecture entry holding a `#### Carries` block, in file order, with its slug, its tier (the block's one line, `- method`, `- replaceable` or `- default`), its statement (the entry's text from after its heading to its first `####` heading, trimmed) and, for a `replaceable` entry, its `#### Guarantee` block's text, trimmed. A repository whose own `ARCHITECTURE.md` holds an entry with a `#### Carries` block is the *source*, CLM's own, and its graph takes the carried entries from its own file; any other repository's graph, including one with no `ARCHITECTURE.md`, takes them from the compiled copy, so it holds the set its `clm` enforces. Outside the source, an entry of the repository's `ARCHITECTURE.md` MAY hold one `#### Replaces` block of `- <slug>` lines, each naming a carried entry it replaces or drops. `carried()` SHALL give the compiled copy's carried entries without loading any repository, for a caller that runs outside one. The graph SHALL say whether it is the source, and expose the carried entries and, outside the source, the carried entries in force: those no entry's `#### Replaces` names, in the carried order. `#### Carries`, `#### Guarantee` and `#### Replaces` blocks are part of the entry's block, so of its hash, as `#### Enforced by` is (`human-layers`). The model SHALL report as `model/human-layers`, naming `ARCHITECTURE.md` and the entry's slug: a `#### Carries` block that isn't exactly one line naming a tier; a `replaceable` entry without exactly one `#### Guarantee` block, and a `#### Guarantee` block in any other entry; a second `#### Carries` or `#### Replaces` block in one entry; a `#### Replaces` block in the source, or one that is empty; a `#### Replaces` line that isn't a `- <slug>` bullet, that names no carried entry, or that names a `method` entry, naming that slug; and, outside the source, an entry whose slug is a carried entry's slug. It SHALL report as `model/human-layers`, naming `CAPABILITIES.md` and the slug, a capability holding any of the three blocks.
+
+#### Scenario: the source
+- GIVEN an `ARCHITECTURE.md` with entry `a` holding `#### Carries` `- method`, entry `b` holding `#### Carries` `- replaceable` and a `#### Guarantee` paragraph, and entry `c` with no `#### Carries`
+- WHEN the model loads
+- THEN the graph is the source, its carried entries are `a` (`method`) then `b` (`replaceable`, with its guarantee text), `c` is not among them, and loading reports nothing
+
+#### Scenario: a project
+- GIVEN an `ARCHITECTURE.md` with no `#### Carries` block, whose entry `x` holds `#### Replaces` naming `expand-contract` and `yagni`
+- WHEN the model loads
+- THEN the graph is not the source, its carried entries are the compiled copy's, holding `proven-by-tests`, `expand-contract` and `yagni`, the entries in force hold `proven-by-tests` and neither `expand-contract` nor `yagni`, and loading reports nothing
+
+#### Scenario: no architecture file
+- GIVEN a repository with no `ARCHITECTURE.md`
+- WHEN the model loads
+- THEN the entries in force are every carried entry of the compiled copy
+
+#### Scenario: bad replaces
+- GIVEN a project `ARCHITECTURE.md` whose entry `x` holds `#### Replaces` naming `proven-by-tests` and `no-such-entry`, and whose entry `yagni` is its own
+- WHEN the model loads
+- THEN loading reports `model/human-layers` for `x` with `proven-by-tests`, for `x` with `no-such-entry`, and for `yagni`
+
+#### Scenario: bad carries
+- GIVEN a source `ARCHITECTURE.md` with entry `a` holding `#### Carries` `- optional`, entry `b` holding `#### Carries` `- replaceable` and no `#### Guarantee`, entry `c` holding `#### Carries` `- method` and a `#### Guarantee`, and entry `d` holding `#### Replaces`
+- WHEN the model loads
+- THEN loading reports `model/human-layers` for each of `a`, `b`, `c` and `d`
+
+### Requirement: exemptions <!-- base: 1b57cabdc63c21c7 -->
+A component's frontmatter MAY set `exemptions`, a list of entries that each exempt some of the component's own files from one rule `clm check` judges code by, for a time (`temporary-exemptions`). An entry SHALL hold `rule`, one of `undeclared-imports`, `tests-cite-their-owner` and `skipped-tests`; `files`, a non-empty list of non-empty globs written as `paths` are; `until`, `backlog/<slug>` naming the backlog item whose work ends the exemption; and MAY hold `why`, one line saying why the rule can't be met yet. The model SHALL expose each component's entries in the order written, none when the key is absent. The model SHALL offer its check of an `exemptions` value, `check_exemptions`: given the value as parsed YAML, it returns the entries in the order written, or one message per problem, every problem of every entry and not only the first, each in the words loading reports: a message naming `exemptions` for a value that isn't a list, a null included, and a message naming `exemptions` and the entry's position for an entry that isn't a map, lacks `rule`, `files` or `until`, holds another key, names another rule, holds a `files` or `until` of the wrong shape, or holds a `why` that isn't a string. Loading and the model's frontmatter check (`optional-nodes`) SHALL judge a component's `exemptions` by that one check and no other rule, failing under `model/exemptions` with the file and each message the check gives, so a caller that holds entries outside a `SPEC.md`, as `clm survey --components` does (`init/survey-components`), refuses exactly what loading refuses. A glob that matches files other components own exempts nothing there, since an exemption covers only its own component's files. Whether `until` names an item that exists SHALL NOT be judged when loading, which `gate/exemption-names-its-item` and `check.health/exemptions-signal` judge.
+
+#### Scenario: an exemption parsed
+- GIVEN `specs/a/SPEC.md` with `exemptions: [{rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/x, why: "the suite builds the whole app"}]`
+- WHEN the model loads `specs/`
+- THEN `a` holds one exemption from `undeclared-imports` for `tests/test_api.py` until `backlog/x`, and loading reports nothing
+
+#### Scenario: a rule that can't be exempted
+- GIVEN `specs/a/SPEC.md` with an exemption whose `rule` is `paths-disjoint`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/a/SPEC.md`, `exemptions` and `paths-disjoint`
+
+#### Scenario: an exemption with no end
+- GIVEN `specs/a/SPEC.md` with an exemption that has no `until`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/a/SPEC.md`, `exemptions` and `until`
+
+#### Scenario: the exposed check agrees with loading
+- GIVEN an `exemptions` value of two entries whose second has `until: backlog/a/b`
+- WHEN the model's exemptions check runs on the value, and the model loads `specs/a/SPEC.md` holding it
+- THEN the check returns one message naming `exemptions`, entry 2 and `until`, and loading fails under `model/exemptions` naming `specs/a/SPEC.md` with that same message
+
+#### Scenario: a value that isn't a list
+- GIVEN the `exemptions` value `3`, and again a null value
+- WHEN the model's exemptions check runs on the value, and the model loads `specs/a/SPEC.md` holding it
+- THEN for each the check returns one message naming `exemptions`, and loading fails under `model/exemptions` with that same message and reports nothing under `model/valid-frontmatter`
+
+#### Scenario: a why that isn't a string
+- GIVEN an `exemptions` value whose one entry is valid apart from `why: 3`
+- WHEN the model's exemptions check runs on the value
+- THEN it returns one message naming `exemptions`, entry 1 and `why`
+
+#### Scenario: entries from the exposed check
+- GIVEN the `exemptions` value `[{rule: undeclared-imports, files: ["tests/test_api.py"], until: backlog/x}]`
+- WHEN the model's exemptions check runs on the value
+- THEN it returns one exemption from `undeclared-imports` for `tests/test_api.py` until `backlog/x`
+
+### Requirement: wiring-globs <!-- base: 858962622f75e48b -->
+The root component's frontmatter MAY set `wiring` to a list of globs, written as a component's `paths` are: the files that wire every component into one product, such as a dispatch file, a workspace manifest and its lock file, which every component's build may edit whoever owns them (`own-files-at-the-gate`). The model SHALL expose the root's `wiring` as absent when the key is absent, and otherwise as the list in the order written, empty for `[]`. It SHALL reject, as `model/wiring-globs` naming the file and `wiring`, a `wiring` key on any component but the root (judged by component ID when the graph loads), and a `wiring` whose value isn't a list of non-empty strings, a YAML null included. The model's frontmatter check (`optional-nodes`), which loading runs and `apply` runs on a delta, SHALL reject `wiring` on any component but `clm`, as loading does, and a `wiring` of the wrong shape on any component, the root included.
+
+#### Scenario: globs on the root
+- GIVEN `specs/SPEC.md` whose frontmatter has `wiring: ["Cargo.toml", "src/main.rs"]`
+- WHEN the model loads `specs/`
+- THEN the root's `wiring` is `Cargo.toml` then `src/main.rs`
+
+#### Scenario: empty list
+- GIVEN `specs/SPEC.md` whose frontmatter has `wiring: []`
+- WHEN the model loads `specs/`
+- THEN the root's `wiring` is present and empty, and loading reports nothing
+
+#### Scenario: no key
+- GIVEN `specs/SPEC.md` whose frontmatter has no `wiring`
+- WHEN the model loads `specs/`
+- THEN the root's `wiring` is absent and loading reports nothing
+
+#### Scenario: on another component
+- GIVEN `specs/a/SPEC.md` whose frontmatter has `wiring: ["src/**"]`
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/a/SPEC.md` and `wiring`
+
+#### Scenario: bad value
+- GIVEN `specs/SPEC.md` whose frontmatter has `wiring: "src/**"`, `wiring: [""]` or `wiring:` with no value
+- WHEN the model loads `specs/`
+- THEN loading fails naming `specs/SPEC.md` and `wiring`
+
+## REMOVED Requirements
+Its one rule, that `test_depends_on` is an unknown key, is `valid-frontmatter`'s, which takes its scenario under the same name. The rest of it stated an absence, and a removal marker on a field the model no longer has.
+
+### Requirement: test-dependencies-retired <!-- base: 16bae7f640247924 -->
