@@ -263,8 +263,8 @@ pub fn evaluate_by(
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
         let (listed, widened, shortened_then) = read_cuts(&at, &entries, rules, &mut violations)?;
         cut = listed;
-        // Under versions 1 to 5 a shortened requirement is counted as that version counted
-        // its sentences, `shortened_then`, rather than by today's cut.
+        // Under versions 2 to 5 a shortened requirement is counted as that version counted
+        // its sentences, `shortened_then`, rather than by today's cut; version 1 counts none.
         let counted_before_v6 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
         let added = added_exemptions(&at, &entries)?;
         // Read from the two graphs, or from the text when they don't load, under every

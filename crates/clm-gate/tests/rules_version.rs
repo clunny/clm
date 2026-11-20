@@ -256,6 +256,21 @@ fn scenario_a_placement_phrase_across_a_line_under_each_version() {
             "{version}"
         );
     }
+    // two spaces or a tab are no one space either: only today's version matches them
+    for (branch, gap) in [("two", "  "), ("tab", "\t")] {
+        git(d, &["checkout", "-q", "-b", branch, "main"]);
+        write(
+            d,
+            "specs/a/SPEC.md",
+            &a(&format!(
+                "{one} Every test of a's requirements SHALL{gap}sit in a's own files."
+            )),
+        );
+        commit(d, branch);
+        let v5 = evaluate_by(d, "main", branch, false, 5).unwrap();
+        let now = evaluate_by(d, "main", branch, false, RULES).unwrap();
+        assert_eq!((v5.review, now.review), (false, true), "{branch}");
+    }
 }
 
 #[test]
