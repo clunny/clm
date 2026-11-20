@@ -302,22 +302,65 @@ fn commit(
     if !all.iter().any(off_head) && outside.is_empty() && parent.as_deref() == Some(onto) {
         return Ok(Outcome::Done);
     }
-    let edited: BTreeSet<String> =
-        names(root, &["diff", "--name-only", "-z", "--no-renames", "HEAD"])?
-            .iter()
-            .map(|p| place.name(p))
-            .collect();
+    // `--no-relative`, so a `diff.relative` setting never hides a path from the root.
+    let edited: BTreeSet<String> = names(
+        root,
+        &[
+            "diff",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            "--no-relative",
+            "HEAD",
+        ],
+    )?
+    .iter()
+    .map(|p| place.name(p))
+    .collect();
+    // A path the commit writes that `HEAD` doesn't track but the working tree holds is an
+    // untracked file it would write over.
+    let untracked =
+        |name: &str, tracked: bool| !tracked && fs::symlink_metadata(root.join(name)).is_ok();
     let blocked: Vec<String> = touched
         .iter()
-        .map(|p| p.as_str())
-        .chain(outside.iter().map(String::as_str))
-        .filter(|p| edited.contains(*p))
-        .map(|p| format!("uncommitted {p}"))
+        .map(|p| (p.as_str(), untracked(p, head.inside.contains_key(*p))))
+        .chain(moved.iter().zip(&outside).map(|(top, name)| {
+            (
+                name.as_str(),
+                untracked(name, head.outside.contains_key(top)),
+            )
+        }))
+        .filter(|(p, over)| *over || edited.contains(*p))
+        .map(|(p, _)| format!("uncommitted {p}"))
         .collect();
     if !blocked.is_empty() {
         return Ok(Outcome::Left(blocked));
     }
-    for path in &touched {
+    let tip = git(root, &["rev-parse", "HEAD"])?;
+    let written = write(root, place, onto, id, dir, &made, &touched, &target, &moved);
+    if written.is_err() {
+        // Leave the branch at its tip, the files written so far as uncommitted edits, rather
+        // than on `onto` with nothing committed.
+        let _ = git(root, &["reset", "-q", "--mixed", &tip]);
+    }
+    written
+}
+
+/// Writes the regenerated tree into the working tree, under the root (`touched`, from
+/// `dir`) and outside it (`moved`, as `onto` holds them), and commits it on `onto`.
+#[allow(clippy::too_many_arguments)]
+fn write(
+    root: &Path,
+    place: &Root,
+    onto: &str,
+    id: &str,
+    dir: &Path,
+    made: &BTreeMap<String, String>,
+    touched: &BTreeSet<&String>,
+    target: &Listing,
+    moved: &BTreeSet<String>,
+) -> Result<Outcome, Error> {
+    for path in touched {
         let to = root.join(path);
         if made.contains_key(*path) {
             if let Some(parent) = to.parent() {
@@ -340,7 +383,8 @@ fn commit(
         },
     )?;
     // The index now holds `onto`'s entries outside the root: write each one that isn't
-    // `HEAD`'s into the working tree, and remove those `onto` lacks.
+    // `HEAD`'s into the working tree, and remove those `onto` lacks. A submodule's
+    // directory is left, as `git checkout` leaves one.
     let (present, gone): (Vec<&String>, Vec<&String>) =
         moved.iter().partition(|p| target.outside.contains_key(*p));
     if !present.is_empty() {
@@ -359,7 +403,7 @@ fn commit(
     }
     for path in gone {
         let to = root.join(place.name(path));
-        if fs::symlink_metadata(&to).is_ok() {
+        if fs::symlink_metadata(&to).is_ok_and(|m| !m.is_dir()) {
             remove(root, &to)?;
         }
     }

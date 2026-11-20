@@ -3429,9 +3429,54 @@ fn a_file_outside_a_subdirectory_root() {
     main_moves(&r, &[("src/other.rs", "other\n")]);
     let head = git(&r.work, &["rev-parse", "HEAD"]);
 
+    assert_tool_refused(&r, &["not a rename branch ../README.md"]);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+#[test]
+fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
+    // req:sync/regenerate-renames@e831ba37
+    let r = rename_branch_in_tool();
+    write(
+        &tool(&r),
+        "backlog/d.md",
+        "---\ntitle: D\nkind: bug\ncomponents: [a]\n---\nBroken.\n",
+    );
+    commit(&r.work, "Report d");
+    // `main` removes `README.md` outside the root, and changes `src/lib.rs` there.
+    let other = r.work.with_file_name("other");
+    main_moves(&r, &[("src/lib.rs", "one\n2\nthree\n")]);
+    git(&other, &["rm", "-q", "README.md"]);
+    git(&other, &["commit", "-qm", "drop README"]);
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    let main = origin_main(&r);
+
+    let report = sync_tool(&r);
+    assert!(report.ok, "{:?}", report.lines);
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), main);
+    assert!(read(&r.work, "tool/backlog/d.md").contains("Broken."));
+    assert!(!r.work.join("README.md").exists());
+    assert_eq!(read(&r.work, "src/lib.rs"), "one\n2\nthree\n");
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+    // A second run adds nothing.
+    assert!(sync_tool(&r).ok);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+#[test]
+fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
+    // req:sync/regenerate-renames@e831ba37
+    let r = rename_branch_in_tool();
+    main_moves(&r, &[("notes.md", "main's\n")]);
+    write(&r.work, "notes.md", "mine\n");
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
     let report = sync_tool(&r);
 
     assert!(!report.ok, "{:?}", report.lines);
-    assert_eq!(report.lines, ["not a rename branch ../README.md"]);
+    assert_eq!(report.lines, ["uncommitted ../notes.md"]);
     assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+    assert_eq!(read(&r.work, "notes.md"), "mine\n");
 }
