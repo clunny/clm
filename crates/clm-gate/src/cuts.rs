@@ -181,12 +181,41 @@ fn holds_word(text: &str, word: &str) -> Option<usize> {
     })
 }
 
+/// Where `phrase` occurs in `text` as whole words, no letter, digit or `_` on either side,
+/// each two of its words separated by any run of white space, a line break included, or,
+/// when `one_space`, by exactly one space, as rules versions 1 to 5 matched them.
+fn holds_phrase(text: &str, phrase: &str, one_space: bool) -> Option<usize> {
+    let inner = |c: char| c.is_alphanumeric() || c == '_';
+    let mut words = phrase.split(' ');
+    let first = words.next()?;
+    let rest: Vec<&str> = words.collect();
+    text.match_indices(first).map(|(at, _)| at).find(|&at| {
+        if text[..at].chars().next_back().is_some_and(inner) {
+            return false;
+        }
+        let mut end = at + first.len();
+        for word in &rest {
+            let after = &text[end..];
+            let gap = if one_space {
+                usize::from(after.starts_with(' '))
+            } else {
+                after.len() - after.trim_start().len()
+            };
+            if gap == 0 || !after[gap..].starts_with(word) {
+                return false;
+            }
+            end += gap + word.len();
+        }
+        !text[end..].chars().next().is_some_and(inner)
+    })
+}
+
 /// The first placement phrase `sentence` holds, compared without regard to case.
-fn placement_phrase(sentence: &str) -> Option<&'static str> {
+fn placement_phrase(sentence: &str, one_space: bool) -> Option<&'static str> {
     let lower = sentence.to_lowercase();
     PLACEMENT_PHRASES
         .iter()
-        .filter_map(|p| holds_word(&lower, &p.to_lowercase()).map(|at| (at, *p)))
+        .filter_map(|p| holds_phrase(&lower, &p.to_lowercase(), one_space).map(|at| (at, *p)))
         .min()
         .map(|(_, p)| p)
 }
@@ -194,11 +223,16 @@ fn placement_phrase(sentence: &str) -> Option<&'static str> {
 /// The first placement phrase of a sentence that places a test: one that holds a phrase and
 /// also the word `test` or `tests`, without regard to case; nothing for any other sentence.
 pub fn places_a_test(sentence: &str) -> Option<&'static str> {
+    placing(sentence, false)
+}
+
+/// `places_a_test`, a phrase's words matched only one space apart when `one_space`.
+fn placing(sentence: &str, one_space: bool) -> Option<&'static str> {
     let lower = sentence.to_lowercase();
     if holds_word(&lower, "test").is_none() && holds_word(&lower, "tests").is_none() {
         return None;
     }
-    placement_phrase(sentence)
+    placement_phrase(sentence, one_space)
 }
 
 /// Every sentence of `statement` that isn't empty once trimmed, in order. A sentence ends at a
@@ -232,12 +266,21 @@ pub fn stating_sentences(statement: &str) -> Vec<&str> {
         .collect()
 }
 
-/// How many sentences of `statement` stated something under rules versions 1 to 3: those
-/// holding `SHALL` and no placement phrase at all, whatever else they hold (`rules-version`).
-fn stated_before_v4(statement: &str) -> usize {
+/// How many sentences of `statement` stated something under rules version `rules`, below 6,
+/// which matched a phrase's words only one space apart (`rules-version`): under versions 4
+/// and 5 those holding `SHALL` and placing no test, and under versions 1 to 3 those holding
+/// `SHALL` and no placement phrase at all, whatever else they hold.
+fn stated_under(statement: &str, rules: u32) -> usize {
     sentences(statement)
         .into_iter()
-        .filter(|s| holds_word(s, "SHALL").is_some() && placement_phrase(s).is_none())
+        .filter(|s| {
+            holds_word(s, "SHALL").is_some()
+                && if rules < 4 {
+                    placement_phrase(s, true).is_none()
+                } else {
+                    placing(s, true).is_none()
+                }
+        })
         .count()
 }
 
@@ -414,13 +457,13 @@ pub fn cuts(base: &Graph, head: &Graph, lists: &[TestList]) -> Vec<Cut> {
 }
 
 /// Whether a requirement both graphs hold states fewer sentences at the head than at the
-/// base when counted as rules versions 1 to 3 counted them, every sentence holding a
-/// placement phrase left out (`rules-version`).
-pub(crate) fn shortened_before_v4(base: &Graph, head: &Graph) -> bool {
+/// base when counted as rules version `rules`, below 6, counted them (`rules-version`).
+pub(crate) fn shortened_under(base: &Graph, head: &Graph, rules: u32) -> bool {
     let now = requirements(head);
     requirements(base).iter().any(|(id, (_, r))| {
-        now.get(id)
-            .is_some_and(|(_, h)| stated_before_v4(&outline(h).0) < stated_before_v4(&outline(r).0))
+        now.get(id).is_some_and(|(_, h)| {
+            stated_under(&outline(h).0, rules) < stated_under(&outline(r).0, rules)
+        })
     })
 }
 

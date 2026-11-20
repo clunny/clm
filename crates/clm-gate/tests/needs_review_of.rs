@@ -65,7 +65,7 @@ fn the_gate_decides_review_by_needs_review_of() {
     for decides in [
         "=> { needs_review_of(&paths, setting_changed, &changes) || widened || !cut.is_empty() }",
         "loaded.then(|| !widened_exemptions(&base, &head).is_empty());",
-        "Ok((listed, widened, shortened_before_v4))",
+        "Ok((listed, widened, shortened_then))",
     ] {
         assert!(lib.contains(decides), "lib.rs doesn't hold {decides}");
     }

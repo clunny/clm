@@ -83,8 +83,9 @@ pub fn evaluate_at(repo: &Path, base: &str, head: &str, approved: bool) -> Resul
 /// The version of the rules by which `evaluate_at` decides a branch's kind and whether it
 /// needs review (`rules-version`): 1 before `cuts` made a branch need review, 2 before a
 /// changed outcome did, 3 before a sentence holding a placement phrase and not the word
-/// `test` counted as stating, 4 before paths were read relative to the CLM root, 5 since.
-pub const RULES: u32 = 5;
+/// `test` counted as stating, 4 before paths were read relative to the CLM root, 5 before a
+/// placement phrase matched across a line break, 6 since.
+pub const RULES: u32 = 6;
 
 /// `evaluate_at` as the gate decided under the rules of version `rules` (`rules-version`):
 /// the reading of paths and the review, and with it `gate/approval`, depend on the version.
@@ -260,11 +261,11 @@ pub fn evaluate_by(
         // modifies, a status-only edit included, as the Worker passes them.
         let changes = change_frontmatters(&at, &entries, &new_archived)?;
         let paths: Vec<&str> = entries.iter().map(|&(_, f)| f).collect();
-        let (listed, widened, shortened_before_v4) = read_cuts(&at, &entries, &mut violations)?;
+        let (listed, widened, shortened_then) = read_cuts(&at, &entries, rules, &mut violations)?;
         cut = listed;
-        // Under versions 1 to 3 a shortened requirement counted every sentence holding a
-        // placement phrase as one that places a test.
-        let counted_before_v4 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
+        // Under versions 2 to 5 a shortened requirement is counted as that version counted
+        // its sentences, `shortened_then`, rather than by today's cut; version 1 counts none.
+        let counted_before_v6 = |c: &Cut| !matches!(c, Cut::Shortened { .. });
         let added = added_exemptions(&at, &entries)?;
         // Read from the two graphs, or from the text when they don't load, under every
         // version, so the versions differ only by the cuts.
@@ -283,17 +284,18 @@ pub fn evaluate_by(
             None if rules == 2 => {
                 needs_review_of(&paths, setting_changed, &changes)
                     || widened
-                    || shortened_before_v4
+                    || shortened_then
                     || cut
                         .iter()
-                        .any(|c| counted_before_v4(c) && !matches!(c, Cut::Outcome { .. }))
+                        .any(|c| counted_before_v6(c) && !matches!(c, Cut::Outcome { .. }))
             }
-            // Version 3, before a sentence holding a phrase and no word `test` stated.
-            None if rules == 3 => {
+            // Versions 3 to 5, before a placement phrase matched across a line; version 3
+            // also before a sentence holding a phrase and no word `test` stated.
+            None if rules < 6 => {
                 needs_review_of(&paths, setting_changed, &changes)
                     || widened
-                    || shortened_before_v4
-                    || cut.iter().any(counted_before_v4)
+                    || shortened_then
+                    || cut.iter().any(counted_before_v6)
             }
             // Relaxing a rule, or widening a relaxation, and a cut are always seen by a human.
             None => {
@@ -352,11 +354,13 @@ fn test_list(file: &str) -> Option<&str> {
 /// when the diff touches `specs/` or a `deleted-tests.txt`. Adds a `gate/deleted-tests`
 /// violation for each line a list gains that names no citing test at the head. When either
 /// side's specs don't load, the one cut says so and whether an exemption widened is `None`.
-/// The third value says whether a requirement states fewer sentences as rules versions 1
-/// to 3 counted them (`rules-version`), false when a side doesn't load.
+/// The third value says whether a requirement states fewer sentences as rules version
+/// `rules` counted them, when it is below 6 (`rules-version`), false when a side doesn't
+/// load or `rules` is 6 or above, whose count is the cut's.
 fn read_cuts(
     at: &At,
     entries: &[(char, &str)],
+    rules: u32,
     violations: &mut Vec<Violation>,
 ) -> Result<(Vec<Cut>, Option<bool>, bool), String> {
     let lists: Vec<&str> = entries
@@ -439,8 +443,8 @@ fn read_cuts(
     );
     let loaded = !listed.iter().any(|c| matches!(c, Cut::Unloaded { .. }));
     let widened = loaded.then(|| !widened_exemptions(&base, &head).is_empty());
-    let shortened_before_v4 = loaded && cuts::shortened_before_v4(&base, &head);
-    Ok((listed, widened, shortened_before_v4))
+    let shortened_then = loaded && rules < 6 && cuts::shortened_under(&base, &head, rules);
+    Ok((listed, widened, shortened_then))
 }
 
 /// The text of the root's file at `path` at `rev`, invalid UTF-8 replaced, or `None` when

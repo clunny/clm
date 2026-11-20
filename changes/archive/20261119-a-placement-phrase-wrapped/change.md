@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-placement-phrase-wrapped-across-a-line-is-missed]
 ---
 
