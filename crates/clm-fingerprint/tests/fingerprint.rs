@@ -307,7 +307,7 @@ fn paths_are_bytes() {
 fn parse_ls_tree_reads_each_piece_by_its_shape() {
     // req:gate.fingerprint/fingerprint@a2cadb29
     let listing: &[u8] = b"m t\tone-space\0\xff t i\tnot-utf8\0no tab here\0\
-100644 blob aaa extra\tlong\0100644 blob bbb\t\0160000 commit ccc\tlast";
+100644 blob aaa extra\tlong\x00100644 blob bbb\t\x00160000 commit ccc\tlast";
     let entries = parse_ls_tree(listing);
     let read: Vec<(&str, &str, &str, &[u8])> = entries
         .iter()
