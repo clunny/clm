@@ -161,28 +161,12 @@ fn run_bounded(
             std::thread::sleep((limit - elapsed).min(Duration::from_millis(5)));
         },
     };
-    // The readers get what is left of the limit too: a command that exited in time may
-    // have left a process holding its pipes.
-    let read = |reader: Reader| {
-        let received = match limit {
-            None => reader.recv().ok(),
-            Some(limit) => match reader.recv_timeout(limit.saturating_sub(started.elapsed())) {
-                Ok(received) => Some(received),
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    return Err(Error::TimedOut {
-                        command: command.clone(),
-                        limit,
-                    });
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => None,
-            },
-        };
-        received
-            .unwrap_or_else(|| Err(io::Error::other("reader stopped")))
-            .map_err(spawn)
-    };
-    let stdout = read(stdout)?;
-    let stderr = read(stderr)?;
+    // A command that exited in time may have left a process holding its pipes: its own
+    // bytes are in the pipes' buffers by now, so the streams get a moment to close and the
+    // command's outcome is returned with what they sent by then.
+    let until = limit.map(|_| Instant::now() + STREAMS_AFTER_EXIT);
+    let stdout = collect(&stdout, until).map_err(spawn)?;
+    let stderr = collect(&stderr, until).map_err(spawn)?;
     if status.success() {
         Ok(stdout)
     } else {
@@ -194,20 +178,53 @@ fn run_bounded(
     }
 }
 
+/// How long a bounded run waits for the streams of a command that has exited to close.
+const STREAMS_AFTER_EXIT: Duration = Duration::from_millis(100);
+
 type Reader = mpsc::Receiver<io::Result<Vec<u8>>>;
 
-/// Reads `pipe` to its end on a detached thread, which sends what it read.
+/// Reads `pipe` on a detached thread, which sends each chunk as it reads it and ends,
+/// dropping the sender, at the stream's end or after sending a read error.
 fn drain(pipe: Option<impl Read + Send + 'static>) -> Reader {
     let (send, receive) = mpsc::channel();
     std::thread::spawn(move || {
-        let mut out = Vec::new();
-        let read = match pipe {
-            Some(mut pipe) => pipe.read_to_end(&mut out).map(|_| out),
-            None => Ok(out),
+        let Some(mut pipe) = pipe else {
+            return;
         };
-        let _ = send.send(read);
+        let mut buf = vec![0; 64 * 1024];
+        loop {
+            let sent = match pipe.read(&mut buf) {
+                Ok(0) => return,
+                Ok(n) => send.send(Ok(buf[..n].to_vec())),
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    let _ = send.send(Err(e));
+                    return;
+                }
+            };
+            if sent.is_err() {
+                return;
+            }
+        }
     });
     receive
+}
+
+/// What `reader` sent until its stream ended, or, with `until`, until then at the latest.
+fn collect(reader: &Reader, until: Option<Instant>) -> io::Result<Vec<u8>> {
+    let mut out = Vec::new();
+    loop {
+        let chunk = match until {
+            None => reader.recv().ok(),
+            Some(until) => reader
+                .recv_timeout(until.saturating_duration_since(Instant::now()))
+                .ok(),
+        };
+        match chunk {
+            Some(chunk) => out.extend(chunk?),
+            None => return Ok(out),
+        }
+    }
 }
 
 /// `git <args>` in `root`, its stdout with trailing whitespace trimmed.
