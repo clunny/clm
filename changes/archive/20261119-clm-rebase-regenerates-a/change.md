@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-rebase-regenerates-a-rename-branch-from-the-repository-s-top]
 ---
 

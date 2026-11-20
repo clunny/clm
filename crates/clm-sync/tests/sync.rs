@@ -2948,7 +2948,7 @@ fn rename_branch() -> Repo {
 
 #[test]
 fn main_moved_under_a_rename() {
-    // req:sync/regenerate-renames@0a813763
+    // req:sync/regenerate-renames@e831ba37
     let r = rename_branch();
     // `main` adds a requirement `w` to the node and a backlog item blocking `a/p`.
     main_moves(
@@ -2992,7 +2992,7 @@ fn git_env(w: &Path, g: &Path, args: &[&str]) -> String {
 
 #[test]
 fn a_clone_the_environment_names() {
-    // req:sync/regenerate-renames@0a813763
+    // req:sync/regenerate-renames@e831ba37
     // The child half: the test binary runs itself with the variables set, so no other
     // test in this process sees them.
     if let Ok(work) = std::env::var("CLM_SYNC_TEST_WORK") {
@@ -3025,7 +3025,7 @@ fn a_clone_the_environment_names() {
 
 #[test]
 fn a_defect_report_survives_and_a_second_run_changes_nothing() {
-    // req:sync/regenerate-renames@0a813763
+    // req:sync/regenerate-renames@e831ba37
     let r = rename_branch();
     write(
         &r.work,
@@ -3051,7 +3051,7 @@ fn a_defect_report_survives_and_a_second_run_changes_nothing() {
 
 #[test]
 fn a_hand_edit_on_a_rename_branch() {
-    // req:sync/regenerate-renames@0a813763
+    // req:sync/regenerate-renames@e831ba37
     let r = rename_branch();
     write(&r.work, "src/lib.rs", "one\ntwo\nthree\nfour\n");
     commit(&r.work, "hand edit");
@@ -3066,7 +3066,7 @@ fn a_hand_edit_on_a_rename_branch() {
 
 #[test]
 fn a_rename_main_refuses_leaves_the_branch() {
-    // req:sync/regenerate-renames@0a813763
+    // req:sync/regenerate-renames@e831ba37
     let r = rename_branch();
     // `main` gains a `q` of its own, so `a/p` to `a/q` can no longer be carried out.
     main_moves(
@@ -3369,4 +3369,114 @@ fn spec_changed_in_a_subdirectory_root() {
         ]
     );
     names_pending(&report.lines[3]);
+}
+
+/// [`rename_branch`] in the CLM root `tool/`: `clm rename r` run there and committed.
+fn rename_branch_in_tool() -> Repo {
+    let r = repo_at("spec/r", TOOL);
+    write(&tool(&r), "changes/r/change.md", RENAME_P);
+    git(&r.work, &["add", "-A"]);
+    clm_rename::rename(&tool(&r), "r").unwrap();
+    commit(&r.work, "Rename r");
+    r
+}
+
+#[test]
+fn a_rename_in_a_subdirectory_root() {
+    // req:sync/regenerate-renames@e831ba37
+    let r = rename_branch_in_tool();
+    let version = {
+        let (graph, violations) = clm_model::load(&tool(&r));
+        assert!(violations.is_empty(), "{violations:?}");
+        graph.requirement("a/q").unwrap().version().to_string()
+    };
+    // `main` adds a test under the root citing `a/p` at its current version (the version
+    // `a/q` holds on the branch, since the rename keeps the text), and edits `README.md` at
+    // the repository's top.
+    main_moves(
+        &r,
+        &[
+            ("tool/src/t.rs", &citing("a/p", &version)),
+            ("README.md", "one\n2\nthree\n"),
+        ],
+    );
+    let main = origin_main(&r);
+
+    let report = sync_tool(&r);
+
+    assert!(report.ok, "{:?}", report.lines);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), main);
+    assert_eq!(git(&r.work, &["log", "-1", "--format=%s"]), "Rename r");
+    let cited = read(&r.work, "tool/src/t.rs");
+    assert!(cited.contains(&format!(":a/q@{version}")), "{cited}");
+    assert!(!cited.contains(":a/p"), "{cited}");
+    assert_eq!(read(&r.work, "README.md"), "one\n2\nthree\n");
+    let tracked = git(&r.work, &["ls-tree", "-r", "--name-only", "HEAD"]);
+    assert!(
+        tracked.contains("tool/changes/archive/r/change.md"),
+        "{tracked}"
+    );
+    assert_eq!(git(&tool(&r), &["status", "--porcelain"]), "");
+    assert_eq!(origin_main(&r), main, "never pushes");
+}
+
+#[test]
+fn a_file_outside_a_subdirectory_root() {
+    // req:sync/regenerate-renames@e831ba37
+    let r = rename_branch_in_tool();
+    write(&r.work, "README.md", "one\nTWO\nthree\n");
+    commit(&r.work, "hand edit");
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    assert_tool_refused(&r, &["not a rename branch ../README.md"]);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+#[test]
+fn a_rename_in_a_subdirectory_root_keeps_its_items_and_follows_main_outside() {
+    // req:sync/regenerate-renames@e831ba37
+    let r = rename_branch_in_tool();
+    write(
+        &tool(&r),
+        "backlog/d.md",
+        "---\ntitle: D\nkind: bug\ncomponents: [a]\n---\nBroken.\n",
+    );
+    commit(&r.work, "Report d");
+    // `main` removes `README.md` outside the root, and changes `src/lib.rs` there.
+    let other = r.work.with_file_name("other");
+    main_moves(&r, &[("src/lib.rs", "one\n2\nthree\n")]);
+    git(&other, &["rm", "-q", "README.md"]);
+    git(&other, &["commit", "-qm", "drop README"]);
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    let main = origin_main(&r);
+
+    let report = sync_tool(&r);
+    assert!(report.ok, "{:?}", report.lines);
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD^"]), main);
+    assert!(read(&r.work, "tool/backlog/d.md").contains("Broken."));
+    assert!(!r.work.join("README.md").exists());
+    assert_eq!(read(&r.work, "src/lib.rs"), "one\n2\nthree\n");
+    assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
+    // A second run adds nothing.
+    assert!(sync_tool(&r).ok);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+}
+
+#[test]
+fn an_untracked_file_main_adds_outside_the_root_stops_a_rename() {
+    // req:sync/regenerate-renames@e831ba37
+    let r = rename_branch_in_tool();
+    main_moves(&r, &[("notes.md", "main's\n")]);
+    write(&r.work, "notes.md", "mine\n");
+    let head = git(&r.work, &["rev-parse", "HEAD"]);
+
+    let report = sync_tool(&r);
+
+    assert!(!report.ok, "{:?}", report.lines);
+    assert_eq!(report.lines, ["uncommitted ../notes.md"]);
+    assert_eq!(git(&r.work, &["rev-parse", "HEAD"]), head);
+    assert_eq!(read(&r.work, "notes.md"), "mine\n");
 }
