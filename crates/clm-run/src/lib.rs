@@ -140,7 +140,7 @@ pub struct Item {
     pub diffs: Vec<(String, Option<String>)>,
     /// Obsolete: the markers' locations. Behind: the locations of the markers that cite it
     /// at another version or without one (`stale-markers-keep-behind`), except those of
-    /// `foreign`.
+    /// `foreign` and those in a test of `delete`.
     pub markers: Vec<String>,
     /// Behind, once the root sets `wiring`: the stale markers in a file another component
     /// owns, each with that owner, which this build may not change (`pending-prompt`). An
@@ -149,6 +149,8 @@ pub struct Item {
     pub foreign: Vec<(String, String)>,
     /// Obsolete: the tests among `markers` that an approved `deleted-tests.txt` names
     /// (`land/deleted-tests-approved`), each `<file>::<name>`, which the build deletes.
+    /// Behind: each test in a file the build may change that cites it at any version and
+    /// that an approved list names, whose markers `markers` leaves out.
     pub delete: Vec<String>,
     /// Obsolete: every other test among `markers`, which `clm land` refuses the build to
     /// lose, each `<file>::<name>`; empty when `elsewhere` is set.
@@ -741,6 +743,15 @@ pub fn prompt(job: &Job) -> String {
                  to another requirement or removed it, take its marker off instead of re-citing \
                  it; the requirement that now states it is cited by its own build.\n",
                 item.markers.join(", ")
+            ));
+        }
+        if item.state == "behind" && !item.delete.is_empty() {
+            p.push_str(&format!(
+                "  Delete, and never re-cite, each test of a file you may change that cites it \
+                 and that an approved list names (`land/deleted-tests-approved`), since a change \
+                 lists a test to delete though its requirement stays, such as a duplicate or the \
+                 test of a sentence the requirement lost (`cuts-are-what-a-program-lists`): {}.\n",
+                listing_owned(&item.delete, "and", true)
             ));
         }
         if item.state == "behind" && !item.foreign.is_empty() {
@@ -1468,9 +1479,25 @@ fn job(
         // Obsolete: every marker, since once the root sets `wiring`, `pending` gives each one
         // in a file another component owns to that owner's line, and without it the build may
         // change the file. Behind: those at another version or none, a foreign one apart.
+        // Behind: the tests in files the build may change that cite it at any version and
+        // that an approved list names, which it deletes rather than re-cites
+        // (`cuts-are-what-a-program-lists`).
+        let listed = if p.state == ReqState::Behind {
+            let approved = approved.get_or_insert_with(|| approved_lists(tree));
+            let may_change: Vec<&Marker> = p
+                .markers
+                .iter()
+                .filter(|m| foreign_owner(m).is_none())
+                .collect();
+            listed_tests(tree, &may_change, approved)
+        } else {
+            Vec::new()
+        };
         let (mut own, mut foreign) = (Vec::new(), Vec::new());
         for m in &p.markers {
-            if p.state == ReqState::Behind && m.version == p.version {
+            if p.state == ReqState::Behind
+                && (m.version == p.version || listed.iter().any(|t| t.holds(m)))
+            {
                 continue;
             }
             match foreign_owner(m).filter(|_| p.state == ReqState::Behind) {
@@ -1480,7 +1507,9 @@ fn job(
         }
         let markers = own.iter().map(|m| m.to_string()).collect();
         let mut elsewhere = None;
-        let (delete, keep) = if p.state == ReqState::Obsolete {
+        let (delete, keep) = if p.state == ReqState::Behind {
+            (listed.into_iter().map(|t| t.name).collect(), Vec::new())
+        } else if p.state == ReqState::Obsolete {
             let approved = approved.get_or_insert_with(|| approved_lists(tree));
             if owner_of_id(graph, &p.id) == node {
                 obsolete_tests_in(graph, tree, &p.id, &own)
@@ -1636,6 +1665,46 @@ fn approved_lists(tree: &Path) -> Vec<ListLine> {
         .filter_map(|d| fs::read_to_string(d.join("deleted-tests.txt")).ok())
         .flat_map(|text| list_lines(&text))
         .collect()
+}
+
+/// A test that holds some of a requirement's markers: its `<file>::<name>`, its file and its
+/// lines.
+struct Listed {
+    name: String,
+    path: PathBuf,
+    lines: std::ops::RangeInclusive<usize>,
+}
+
+impl Listed {
+    fn holds(&self, m: &Marker) -> bool {
+        m.path == self.path && self.lines.contains(&m.line)
+    }
+}
+
+/// The tests in the tree at `tree` that hold one of `markers` and that an `approved` line
+/// names, sorted by file and line.
+fn listed_tests(tree: &Path, markers: &[&Marker], approved: &[ListLine]) -> Vec<Listed> {
+    let mut paths: Vec<&PathBuf> = markers.iter().map(|m| &m.path).collect();
+    paths.sort();
+    paths.dedup();
+    let mut listed = Vec::new();
+    for path in paths {
+        let text = fs::read_to_string(tree.join(path)).unwrap_or_default();
+        for t in clm_coverage::tests_in(path, &text)
+            .into_iter()
+            .filter(|t| !t.group)
+        {
+            let test = Listed {
+                name: format!("{}::{}", path.display(), t.name),
+                path: path.clone(),
+                lines: t.first..=t.last,
+            };
+            if markers.iter().any(|m| test.holds(m)) && approved_names(approved, &test.name) {
+                listed.push(test);
+            }
+        }
+    }
+    listed
 }
 
 /// Whether an `approved` line names `test`, `<file>::<name>`, compared by file and
@@ -1929,7 +1998,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_removed_capability() {
-        // req:orchestrator.run/pending-prompt@d236f866
+        // req:orchestrator.run/pending-prompt@e02d8d3a
         let cite = format!("// {}:capability/gone", "req");
         let test = format!("#[test]\nfn old_cap() {{\n    {cite}\n}}\n");
         let p = prompt_for_c(
@@ -1973,7 +2042,7 @@ mod tests {
 
     #[test]
     fn scenario_another_component_s_requirement_whose_own_files_don_t_cite_it() {
-        // req:orchestrator.run/pending-prompt@d236f866
+        // req:orchestrator.run/pending-prompt@e02d8d3a
         let gone = format!("// {}:b/gone\n", "req");
         let lib = format!("//\n//\n//\n{gone}pub fn f() {{}}\n");
         let files = |at: &str, b_cites: &str| {
@@ -2031,7 +2100,7 @@ mod tests {
 
     #[test]
     fn a_wait_on_its_own_id_names_the_other_lines_components_sorted() {
-        // req:orchestrator.run/pending-prompt@d236f866
+        // req:orchestrator.run/pending-prompt@e02d8d3a
         let line = |node: &str, waits_on: &[&str]| Pending {
             id: "b/gone".into(),
             node: node.into(),
@@ -2056,7 +2125,7 @@ mod tests {
 
     #[test]
     fn a_test_that_also_cites_a_held_requirement_loses_only_its_marker() {
-        // req:orchestrator.run/pending-prompt@d236f866
+        // req:orchestrator.run/pending-prompt@e02d8d3a
         let test = format!(
             "#[test]\nfn both() {{\n    // {r}:g/gone\n    // {r}:c/s\n}}\n",
             r = "req"

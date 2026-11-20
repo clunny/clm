@@ -160,7 +160,7 @@ fn names_no_target_directory() {
 
 #[test]
 fn scenario_behind_and_obsolete() {
-    // req:orchestrator.run/pending-prompt@d236f866
+    // req:orchestrator.run/pending-prompt@e02d8d3a
     let p = prompt(&job());
     let pending = p.find("## Pending requirements").unwrap();
     let list = &p[pending..];
@@ -183,7 +183,7 @@ fn scenario_behind_and_obsolete() {
 
 #[test]
 fn scenario_an_obsolete_requirement_s_tests() {
-    // req:orchestrator.run/pending-prompt@d236f866
+    // req:orchestrator.run/pending-prompt@e02d8d3a
     let mut j = job();
     let gone = &mut j.pending[2];
     gone.delete = vec!["t.rs::old_rule".into()];
@@ -219,7 +219,7 @@ fn scenario_an_obsolete_requirement_s_tests() {
 
 #[test]
 fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
-    // req:orchestrator.run/pending-prompt@d236f866
+    // req:orchestrator.run/pending-prompt@e02d8d3a
     let mut j = job();
     j.wiring = true;
     let x = &mut j.pending[0];
@@ -245,7 +245,7 @@ fn scenario_stale_marker_in_a_file_the_build_may_not_change() {
 
 #[test]
 fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wiring() {
-    // req:orchestrator.run/pending-prompt@d236f866
+    // req:orchestrator.run/pending-prompt@e02d8d3a
     let without = prompt(&job());
     assert!(
         without.contains("wherever its file sits, is allowed"),
@@ -263,7 +263,7 @@ fn the_fixed_text_allows_a_re_cite_in_another_components_file_only_without_wirin
 
 #[test]
 fn scenario_blocked_requirement_left_out() {
-    // req:orchestrator.run/pending-prompt@d236f866
+    // req:orchestrator.run/pending-prompt@e02d8d3a
     let p = prompt(&job());
     let list = &p[p.find("## Pending requirements").unwrap()..];
     assert!(!list.contains("- `b/z` unbuilt"), "{list}");
@@ -273,7 +273,7 @@ fn scenario_blocked_requirement_left_out() {
 
 #[test]
 fn a_line_waiting_on_its_own_id_names_the_components_that_cite_it() {
-    // req:orchestrator.run/pending-prompt@d236f866
+    // req:orchestrator.run/pending-prompt@e02d8d3a
     let mut j = job();
     j.blocked = vec![
         Blocked {
