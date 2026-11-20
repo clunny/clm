@@ -264,6 +264,29 @@ fn a_base_that_holds_a_symbolic_link() {
 
 #[test]
 // req:rename/replay@c35e7a83
+fn a_submodule_added() {
+    let (dir, base) = renamed();
+    let d = dir.path();
+    let commit_id = git(d, &["rev-parse", "HEAD"]);
+    let entry = format!("160000,{commit_id},sub");
+    git(d, &["update-index", "--add", "--cacheinfo", &entry]);
+    git(
+        d,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "submodule",
+        ],
+    );
+    assert!(!replays(d, &base, "HEAD").unwrap());
+}
+
+#[test]
+// req:rename/replay@c35e7a83
 fn a_rename_that_refuses_on_the_base() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
