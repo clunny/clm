@@ -1,6 +1,6 @@
 use clm_agent_harness::{AgentHarness, abilities};
 
-// req:agent-harness/abilities@447faacc
+// req:agent-harness/abilities@f6a796d6
 #[test]
 fn codex_cannot_confirm_but_guards() {
     let a = abilities(AgentHarness::Codex);
@@ -10,7 +10,7 @@ fn codex_cannot_confirm_but_guards() {
     assert_eq!(a.build_model, None);
 }
 
-// req:agent-harness/abilities@447faacc
+// req:agent-harness/abilities@f6a796d6
 #[test]
 fn claude_code_builds_on_opus() {
     let a = abilities(AgentHarness::ClaudeCode);
@@ -19,7 +19,7 @@ fn claude_code_builds_on_opus() {
     assert_eq!(a.build_model, Some("opus"));
 }
 
-// req:agent-harness/abilities@447faacc
+// req:agent-harness/abilities@f6a796d6
 #[test]
 fn none_declares_nothing() {
     let a = abilities(AgentHarness::None);
