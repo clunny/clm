@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-rebase-matches-specs-changes-and-backlog-at-the-repository-s-top-in-a-subdirectory-root]
 ---
 

@@ -20,8 +20,13 @@ pub(crate) struct Scratch {
 
 impl Scratch {
     /// `HEAD` checked out detached into a new `sync-*` directory under `TMPDIR` (when set
-    /// in `env` and not empty, made absolute) or the system's temporary directory.
-    pub(crate) fn new(root: &Path, env: &dyn Fn(&str) -> Option<String>) -> Result<Self, Error> {
+    /// in `env` and not empty, made absolute) or the system's temporary directory; its CLM
+    /// root is at `prefix`, the root's place in the repository.
+    pub(crate) fn new(
+        root: &Path,
+        prefix: &str,
+        env: &dyn Fn(&str) -> Option<String>,
+    ) -> Result<Self, Error> {
         let parent = env("TMPDIR")
             .filter(|t| !t.is_empty())
             .map_or_else(std::env::temp_dir, PathBuf::from);
@@ -31,8 +36,6 @@ impl Scratch {
             .tempdir_in(&parent)
             .map_err(|e| crate::io(&parent, e))?;
         let path = dir.path().to_string_lossy().into_owned();
-        // Before the worktree exists, so nothing between making it and owning it can fail.
-        let prefix = git(root, &["rev-parse", "--show-prefix"])?;
         git(
             root,
             &["worktree", "add", "--quiet", "--detach", &path, "HEAD"],
