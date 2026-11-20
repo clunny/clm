@@ -192,7 +192,7 @@ pub fn sync(
     let rules = if !keep {
         String::new()
     } else {
-        format!("{}specs/** merge=clm-keep\n", place.prefix())
+        format!("{} merge=clm-keep\n", place.pattern("specs/**"))
     };
     write(&attributes, &rules)?;
     let config = [
@@ -609,11 +609,19 @@ fn spec_changed(
     if before.capability_blocks != after.capability_blocks {
         paths.push("CAPABILITIES.md");
     }
-    let mut args = vec!["diff", "--no-relative", "--name-only", base, onto, "--"];
+    let mut args = vec![
+        "diff",
+        "--no-relative",
+        "--name-only",
+        "-z",
+        base,
+        onto,
+        "--",
+    ];
     args.extend(&paths);
     out.extend(
-        git(root, &args)?
-            .lines()
+        names(root, &args)?
+            .iter()
             .map(|p| format!("changed {}", place.name(p))),
     );
     let ids: BTreeSet<&String> = before
@@ -976,7 +984,7 @@ pub fn autosync(root: &Path) -> Result<(), Error> {
     // A path is named only if it exists, or is tracked so its deletion is recorded.
     let mut paths = Vec::new();
     for p in SPEC_PATHS {
-        if root.join(p).exists() || exists_at(root, "HEAD", p)? {
+        if root.join(p).exists() || exists_at(root, "HEAD", &format!("./{p}"))? {
             paths.push(p);
         }
     }

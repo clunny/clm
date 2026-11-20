@@ -31,6 +31,39 @@ impl Root {
         format!("{}{path}", self.prefix)
     }
 
+    /// A gitattributes pattern for the root-relative `glob`, matched from the repository's
+    /// top: the prefix with its glob characters and a leading `#` or `!` escaped, written in
+    /// git's C-style quoted form when it holds a character an unquoted pattern can't carry (a
+    /// space, a `"`, a control character).
+    pub(crate) fn pattern(&self, glob: &str) -> String {
+        let mut literal = String::new();
+        for (i, c) in self.prefix.chars().enumerate() {
+            if matches!(c, '*' | '?' | '[' | ']' | '\\') || i == 0 && matches!(c, '#' | '!') {
+                literal.push('\\');
+            }
+            literal.push(c);
+        }
+        literal.push_str(glob);
+        if !literal
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '"')
+        {
+            return literal;
+        }
+        let mut quoted = String::from("\"");
+        for c in literal.chars() {
+            match c {
+                '"' => quoted.push_str("\\\""),
+                '\\' => quoted.push_str("\\\\"),
+                '\t' => quoted.push_str("\\t"),
+                '\n' => quoted.push_str("\\n"),
+                c => quoted.push(c),
+            }
+        }
+        quoted.push('"');
+        quoted
+    }
+
     /// A path as git prints it from the repository's top, named relative to the root:
     /// under it, the prefix taken off; outside it, the shortest path from the root,
     /// climbing out with `../`.

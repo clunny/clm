@@ -32,7 +32,9 @@ pub(crate) fn regenerate(
     let [(id, _)] = added else {
         return Ok(Outcome::Other);
     };
-    // Read root-relative (`paths-under-the-root`), so a root in a subdirectory finds it.
+    // Read root-relative (`paths-under-the-root`), so the rebase of a branch in a
+    // subdirectory root gets past this test; the rename path itself still reads from the
+    // repository's top, which `regenerate-renames` states.
     let live = format!("changes/{id}/change.md");
     let path = if exists_at(root, "HEAD", &format!("./{live}"))? {
         live

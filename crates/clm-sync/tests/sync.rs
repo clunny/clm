@@ -3248,6 +3248,56 @@ fn specs_conflict_in_a_subdirectory_root() {
     assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
 }
 
+#[test]
+fn untracked_delta_in_a_subdirectory_root() {
+    // req:sync/paths-under-the-root@6e985447
+    let r = repo_at("spec/x", TOOL);
+    main_moves(&r, &[("src/other.rs", "other\n")]);
+    write(&r.work, "tool/changes/x/deltas/a.md", "draft\n");
+    assert_tool_refused(&r, &["uncommitted changes/x/deltas/a.md"]);
+}
+
+/// The merge driver's rule names the root's `specs/` however the root's directory is
+/// spelled: read back with `git check-attr` while a conflict outside the root holds the
+/// rebase, for a root whose name holds a space and a glob character.
+#[test]
+fn keep_rule_names_the_roots_specs() {
+    // req:sync/paths-under-the-root@6e985447
+    let prefix = "my [tool]/";
+    let r = repo_at("spec/x", prefix);
+    let root = r.work.join(prefix);
+    write(
+        &root,
+        "changes/y/change.md",
+        "---\nstatus: proposed\n---\n\n# y\n",
+    );
+    write(&root, "changes/y/deltas/a.md", &adds_x());
+    clm_apply::apply(&root, "y").unwrap();
+    write(&r.work, "README.md", "one\nTWO\nthree\n");
+    commit(&r.work, "Apply y");
+    main_moves(&r, &[("README.md", "one\n2\nthree\n")]);
+
+    let report = sync(&root).unwrap();
+    assert_eq!(report.lines, ["conflict ../README.md"]);
+    let attributes = r
+        .work
+        .join(git(&r.work, &["rev-parse", "--git-path", "clm/attributes"]));
+    let file = format!("core.attributesFile={}", attributes.display());
+    let merge = |path: &str| git(&r.work, &["-c", &file, "check-attr", "merge", "--", path]);
+    assert_eq!(
+        merge("my [tool]/specs/a/SPEC.md"),
+        "my [tool]/specs/a/SPEC.md: merge: clm-keep"
+    );
+    assert_eq!(
+        merge("my t/specs/a/SPEC.md"),
+        "my t/specs/a/SPEC.md: merge: unspecified"
+    );
+    assert_eq!(
+        merge("specs/a/SPEC.md"),
+        "specs/a/SPEC.md: merge: unspecified"
+    );
+}
+
 /// On a branch that adds a change, `specs/` keeps `origin/main`'s side: the root's, never a
 /// `specs/` directory at the repository's top, whose conflict is the caller's.
 #[test]
