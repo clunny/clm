@@ -1,5 +1,6 @@
 //! The two keys the ledger's records name, computed without git from the Trees API's
-//! listings: a branch's fingerprint (`clm fingerprint`, `tree-diff-fingerprint`) and a
+//! listings: a branch's fingerprint over the whole repository's tree (`tree-diff-fingerprint`),
+//! which is `clm fingerprint`'s when the CLM root is the repository's top, and a
 //! commit's code key (`clm_ledger::code_key`). Tests run both against `clm`'s own on real
 //! repos.
 
@@ -117,8 +118,10 @@ impl Listing {
     }
 }
 
-/// `clm fingerprint` of the changes from `base` to `head` (`clm_gate::fingerprint_of`),
-/// `None` when either listing is truncated, since an entry left out would change it.
+/// The fingerprint of the changes from `base` to `head` over the whole repository's tree
+/// (`clm_gate::fingerprint_of`), which is what `clm fingerprint` prints when the CLM root is
+/// the repository's top (`web.worker.review/fingerprint-from-trees`), `None` when either
+/// listing is truncated, since an entry left out would change it.
 pub fn fingerprint(base: &Listing, head: &Listing) -> Option<String> {
     (!base.truncated && !head.truncated)
         .then(|| clm_gate::fingerprint_of(&base.entries, &head.entries))
