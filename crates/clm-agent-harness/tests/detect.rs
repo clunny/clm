@@ -9,7 +9,7 @@ fn env(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> {
     move |k| m.get(k).cloned()
 }
 
-// req:agent-harness/detect@5df05d5b
+// req:agent-harness/detect@a89f980b
 #[test]
 fn claude_code_marker() {
     assert_eq!(
@@ -18,7 +18,7 @@ fn claude_code_marker() {
     );
 }
 
-// req:agent-harness/detect@5df05d5b
+// req:agent-harness/detect@a89f980b
 #[test]
 fn codex_inside_claude_code_is_codex() {
     assert_eq!(
@@ -28,7 +28,7 @@ fn codex_inside_claude_code_is_codex() {
     assert_eq!(detect(env(&[(CODEX_MARKER, "t")])), AgentHarness::Codex);
 }
 
-// req:agent-harness/detect@5df05d5b
+// req:agent-harness/detect@a89f980b
 #[test]
 fn codex_marker_is_the_variable_codex_sets() {
     assert_eq!(CODEX_MARKER, "CODEX_THREAD_ID");
@@ -38,7 +38,7 @@ fn codex_marker_is_the_variable_codex_sets() {
     );
 }
 
-// req:agent-harness/detect@5df05d5b
+// req:agent-harness/detect@a89f980b
 #[test]
 fn humans_terminal_is_none() {
     assert_eq!(detect(env(&[])), AgentHarness::None);
@@ -46,19 +46,17 @@ fn humans_terminal_is_none() {
     assert_eq!(detect(env(&[(CODEX_MARKER, "")])), AgentHarness::None);
 }
 
-// req:agent-harness/detect@5df05d5b
+// req:agent-harness/detect@a89f980b
 #[test]
 fn names_round_trip() {
-    for h in [
-        AgentHarness::ClaudeCode,
-        AgentHarness::Codex,
-        AgentHarness::None,
+    for (name, h) in [
+        ("claude-code", AgentHarness::ClaudeCode),
+        ("codex", AgentHarness::Codex),
+        ("none", AgentHarness::None),
     ] {
-        assert_eq!(AgentHarness::from_name(h.name()), Some(h));
+        assert_eq!(AgentHarness::from_name(name), Some(h));
+        assert_eq!(h.name(), name);
     }
-    assert_eq!(AgentHarness::ClaudeCode.name(), "claude-code");
-    assert_eq!(AgentHarness::Codex.name(), "codex");
-    assert_eq!(AgentHarness::None.name(), "none");
     assert_eq!(AgentHarness::from_name("claude"), None);
     assert_eq!(AgentHarness::from_name(""), None);
 }
