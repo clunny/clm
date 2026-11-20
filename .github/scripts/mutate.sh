@@ -19,6 +19,8 @@ root=$PWD
 # a git directory or index inherited from a caller would point them at another repository.
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY
 work=$(mktemp -d)
+# The pass's own temporary directory, which each block's `work` lies under.
+pass_work=$work
 fixture_dirs=
 cleanup() {
   rm -rf "$work"
@@ -133,26 +135,77 @@ rust_tools() {
   rust_ready=true
 }
 
-# Writes `$work/covered`, a `<file>	<line>` line for each line the block's tests run, paths
-# relative to the tree: one run of the block's tests alone, under its filterset, over its test
-# packages, in the tree. A mutant on no such line is one no test citing the requirement could
-# notice, so it is never tried.
-covered_lines() {
-  local report=$work/covered.info real p args=()
-  rm -f "$report"
-  for p in $packages; do args+=(--package "$p"); done
-  (cd "$tree" && cargo llvm-cov nextest --no-rustc-wrapper --no-tests=pass --lcov --output-path "$report" \
-    "${args[@]}" -E "$filterset") ||
-    die "cargo llvm-cov failed to find the lines the tests of requirement $id run"
-  [ -s "$report" ] || die "cargo llvm-cov wrote no report for requirement $id"
-  # Its `SF:` paths are absolute under the tree, as `$tree` names it or as its real path.
+# A `<file>	<line>	<count>` line for each line the lcov reports $@ give a count above 0, paths
+# relative to the tree, the count the sum of those its `DA:` lines give it in them all. Their
+# `SF:` paths are absolute under the tree, as `$tree` names it or as its real path.
+lcov_counts() {
+  local real
   real=$(cd "$tree" && pwd -P)
   a="SF:$tree/" b="SF:$real/" awk -F'[:,]' '
     BEGIN { a = ENVIRON["a"]; b = ENVIRON["b"] }
     index($0, a) == 1 { file = substr($0, length(a) + 1); next }
     index($0, b) == 1 { file = substr($0, length(b) + 1); next }
     /^SF:/ { file = substr($0, 4); next }
-    /^DA:/ && $3 + 0 > 0 { print file "\t" $2 }' "$report" | sort -u >"$work/covered"
+    /^DA:/ { n[file "\t" $2] += $3 }
+    END { for (k in n) if (n[k] > 0) print k "\t" n[k] }' "$@" | sort
+}
+
+# Writes `$work/covered`, a `<file>	<line>	<count>` line for each line the block's tests run:
+# one run of the block's tests alone, under its filterset, over its test packages, in the tree.
+# A mutant on no such line is one no test citing the requirement could notice, so it is never
+# tried.
+covered_lines() {
+  local report=$work/covered.info p args=()
+  rm -f "$report"
+  for p in $packages; do args+=(--package "$p"); done
+  (cd "$tree" && cargo llvm-cov nextest --no-rustc-wrapper --no-tests=pass --lcov --output-path "$report" \
+    "${args[@]}" -E "$filterset") ||
+    die "cargo llvm-cov failed to find the lines the tests of requirement $id run"
+  [ -s "$report" ] || die "cargo llvm-cov wrote no report for requirement $id"
+  lcov_counts "$report" >"$work/covered"
+}
+
+# The report of a run of every test of package $1 in the tree, kept under the package's name for
+# the rest of the pass: a block that starts once it is kept runs none of its own. It is written to
+# a path of the block's job and only then kept, so two blocks at once never write one report.
+package_report() {
+  local kept=$pass_work/package-$1.info out=$work/package-$1.info
+  if ! [ -s "$kept" ]; then
+    rm -f "$out"
+    (cd "$tree" && cargo llvm-cov nextest --no-rustc-wrapper --no-tests=pass --ignore-run-fail --lcov \
+      --output-path "$out" --package "$1") ||
+      die "cargo llvm-cov failed to run every test of package $1 for requirement $id"
+    [ -s "$out" ] || die "cargo llvm-cov wrote no report of package $1's tests for requirement $id"
+    mv -f "$out" "$kept"
+  fi
+}
+
+# The mutants of list $1 by their share, highest first, and in its order among equal shares. A
+# line's share is its count in the block's tests' run over the sum of its counts in the runs of
+# every test of the block's test packages, or 1 when that sum is 0 or the share larger; a
+# mutant's is the highest among the lines of its span the block's tests run. So the mutants of
+# code only the requirement's tests run come first, and those of code every test runs last.
+by_share() {
+  local p reports=()
+  for p in $packages; do
+    package_report "$p"
+    reports+=("$pass_work/package-$p.info")
+  done
+  lcov_counts "${reports[@]}" >"$work/package-counts"
+  awk -F'\t' '
+    FILENAME == ARGV[1] { run[$1 "\t" $2] = $3; next }
+    FILENAME == ARGV[2] { all[$1 "\t" $2] = $3; next }
+    {
+      best = 0
+      for (l = $2; l <= $3; l++) {
+        k = $1 "\t" l
+        if (!(k in run)) continue
+        s = (all[k] + 0 > 0) ? run[k] / all[k] : 1
+        if (s > 1) s = 1
+        if (s > best) best = s
+      }
+      printf "%.17g\t%d\t%s\n", best, FNR, $0
+    }' "$work/covered" "$work/package-counts" "$1" | LC_ALL=C sort -t "$tab" -k1,1gr -k2,2n | cut -f3-
 }
 
 # Writes to $1 a `<file>	<first line>	<last line>	<name>` line for each mutant
@@ -387,7 +440,8 @@ judge_rust() {
   files=("${rust_files[@]}")
   for p in $packages; do mutants_args+=(--test-package "$p"); done
   for f in ${files[@]+"${files[@]}"}; do mutants_args+=(--file "$f"); done
-  # The diff's mutants, and the further ones: the files' others, in the tool's order.
+  # The diff's mutants, and the further ones: the files' others, in the tool's order until
+  # ordered by share.
   list_mutants "$work/all"
   if ! [ -s "$work/all" ]; then
     verdict=not-judged
@@ -416,13 +470,19 @@ judge_rust() {
   # The limit counts only the mutants that may be tried. Cut from a file, not a pipe: a reader
   # that stops at the limit would kill a longer writer with SIGPIPE, and `pipefail` the script.
   tryable "$work/further" >"$work/further-all"
-  head -n "$limit" "$work/further-all" >"$work/further-try"
   caught=0
   missed=0
   if [ -s "$work/diff-try" ]; then
     names_of "$work/diff-try"
     run_mutants "$work/m1" --in-diff "$diff" "${re_args[@]}"
   fi
+  # More than the limit, and the further mutants are to be tried: those of code only the
+  # requirement's tests run first.
+  if [ "$caught" -eq 0 ] && [ "$(lines_in "$work/further-all")" -gt "$limit" ]; then
+    by_share "$work/further-all" >"$work/further-ordered"
+    mv -f "$work/further-ordered" "$work/further-all"
+  fi
+  head -n "$limit" "$work/further-all" >"$work/further-try"
   if [ "$caught" -eq 0 ] && [ -s "$work/further-try" ]; then
     names_of "$work/further-try"
     run_mutants "$work/m2" "${re_args[@]}"
