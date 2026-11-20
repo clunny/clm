@@ -17,7 +17,7 @@ use tempfile::TempDir;
 
 #[test]
 fn scenario_node_prepared() {
-    // req:orchestrator.run/run@5c35d326
+    // req:orchestrator.run/run@9b5c5d12
     let _env = into_process();
     let (r, f) = (repo(), fake());
     let (launcher, p) = launched_in(&r.work, &r.work, &f, "b", &[]);
@@ -63,7 +63,7 @@ fn scenario_node_prepared() {
 
 #[test]
 fn scenario_claimed_elsewhere() {
-    // req:orchestrator.run/run@5c35d326
+    // req:orchestrator.run/run@9b5c5d12
     let _env = into_process();
     let (r, f) = (repo(), fake());
     push_claim(&r.work, "b", 1);
