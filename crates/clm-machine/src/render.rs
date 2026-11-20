@@ -195,3 +195,31 @@ pub fn rows(report: &Report, history: &[Sample], width: usize) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::size;
+
+    // req:machine/machine-report@5f920ce4
+    #[test]
+    fn a_size_is_a_number_and_a_unit() {
+        const K: u64 = 1024;
+        let cases = [
+            (0, "0B"),
+            (512, "512B"),
+            (999, "999B"),
+            (1000, "1.0K"),
+            (10_188, "9.9K"),
+            (10_189, "10K"),
+            (1_023_999, "1000K"),
+            (850 * K * K, "850M"),
+            (12 * K * K * K, "12G"),
+            (4 * K * K * K, "4.0G"),
+            (13 * K * K * K * K / 10, "1.3T"),
+            (5000 * K * K * K * K, "5000T"),
+        ];
+        for (bytes, text) in cases {
+            assert_eq!(size(bytes), text, "{bytes}");
+        }
+    }
+}

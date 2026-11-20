@@ -52,7 +52,7 @@ fn latest() -> Report {
 
 #[test]
 fn scenario_rows_from_the_history() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let history = [
         sample(1, Some(0.2)),
         sample(2, Some(0.3)),
@@ -70,6 +70,7 @@ fn scenario_rows_from_the_history() {
     assert!(lines[1].starts_with("\x1b[32m"), "ok is green");
     assert!(lines[1].ends_with("\x1b[32m 4.0G avail\x1b[0m"));
     assert!(lines[2].starts_with("\x1b[31m"), "critical is rose");
+    assert!(lines[2].ends_with("\x1b[31m 20G free critical\x1b[0m"));
     for line in &lines {
         assert!(line.ends_with("\x1b[0m"));
     }
@@ -77,7 +78,7 @@ fn scenario_rows_from_the_history() {
 
 #[test]
 fn scenario_cells_keep_their_state() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let history = [
         sample_in(1, Some(0.9), State::Critical),
         sample_in(2, Some(0.7), State::Warn),
@@ -98,7 +99,7 @@ fn scenario_cells_keep_their_state() {
 
 #[test]
 fn scenario_the_newest_fit() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let history: Vec<Sample> = (0..180)
         .map(|i| sample(i, Some(i as f64 / 180.0)))
         .collect();
@@ -118,7 +119,7 @@ fn scenario_the_newest_fit() {
 
 #[test]
 fn scenario_unknown_cpu() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let mut r = readings();
     (r.load1, r.load5) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -128,11 +129,26 @@ fn scenario_unknown_cpu() {
     assert!(cpu.starts_with("\x1b[2m"), "unknown is dimmed");
     assert!(cpu.ends_with("\x1b[2m - unknown\x1b[0m"));
     assert_eq!(plain(cpu), "cpu  ▄  - unknown");
+    // The blank cell is coloured by the state its sample recorded, as any other.
+    assert_eq!(
+        cpu,
+        "\x1b[2mcpu  \x1b[0m\x1b[32m▄\x1b[0m\x1b[2m \x1b[0m\x1b[2m - unknown\x1b[0m"
+    );
+}
+
+#[test]
+fn the_cpu_figure_needs_only_the_minute_load() {
+    // req:machine/machine-history@c34a107b
+    let mut r = readings();
+    (r.load1, r.load5) = (Some(12.0), None);
+    let report = judged(&r, &Record::default(), &[], 3);
+    let out = clm_machine::rows(&report, &[sample(1, Some(0.75))], 40);
+    assert_eq!(plain(out.lines().next().unwrap()), "cpu  ▆ 1.5× unknown");
 }
 
 #[test]
 fn a_chart_cell_is_the_share_times_eight_rounded_up() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let shares = [0.0, 0.01, 0.125, 0.126, 0.5, 0.9, 1.0, 1.7];
     let history: Vec<Sample> = shares
         .iter()
@@ -170,7 +186,7 @@ fn samples(dir: &std::path::Path) -> Vec<String> {
 
 #[test]
 fn scenario_thirty_minutes_kept() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     // 180 samples ten seconds apart would span 30 minutes: the oldest is taken 30 minutes
@@ -190,7 +206,7 @@ fn scenario_thirty_minutes_kept() {
 
 #[test]
 fn samples_older_than_thirty_minutes_are_dropped() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     write_history(dir.path(), now, 3, 31 * 60, 60);
@@ -201,7 +217,7 @@ fn samples_older_than_thirty_minutes_are_dropped() {
 
 #[test]
 fn scenario_two_runs_at_once() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     write_history(dir.path(), now, 5, 2, 20);
@@ -218,7 +234,7 @@ fn scenario_two_runs_at_once() {
 
 #[test]
 fn scenario_samples_written_before_states() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     let path = common(dir.path()).join("clm/machine-samples");
@@ -251,7 +267,7 @@ fn scenario_samples_written_before_states() {
 
 #[test]
 fn a_sample_keeps_the_state_it_was_judged_at_through_the_file() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     let path = common(dir.path()).join("clm/machine-samples");
@@ -278,7 +294,7 @@ fn a_sample_keeps_the_state_it_was_judged_at_through_the_file() {
 
 #[test]
 fn a_sample_line_with_an_unknown_state_word_is_no_sample() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     let path = common(dir.path()).join("clm/machine-samples");
@@ -291,11 +307,15 @@ fn a_sample_line_with_an_unknown_state_word_is_no_sample() {
     .unwrap();
     let snapshot = clm_machine::read(dir.path(), 3, 4, now);
     assert_eq!(snapshot.history.len(), 1);
+    assert_eq!(snapshot.history[0].time, now);
+    let kept = samples(dir.path());
+    assert_eq!(kept.len(), 1);
+    assert!(kept[0].starts_with(&clm_machine::format_time(now)));
 }
 
 #[test]
 fn scenario_damaged_history() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let path = common(dir.path()).join("clm/machine-samples");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -315,11 +335,149 @@ fn scenario_damaged_history() {
 
 #[test]
 fn samples_from_a_clock_since_stepped_back_are_dropped() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let now = clm_git::now();
     write_history(dir.path(), now + 3600, 3, 0, 10);
     let snapshot = clm_machine::read(dir.path(), 3, 4, now);
     assert_eq!(snapshot.history.len(), 1);
     assert_eq!(snapshot.history[0].time, now);
+}
+
+#[test]
+fn scenario_a_share_that_is_no_number() {
+    // req:machine/machine-history@c34a107b
+    let dir = repo();
+    let now = clm_git::now();
+    let path = common(dir.path()).join("clm/machine-samples");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lines: String = ["NaN", "inf", "-0.5", "1e3"]
+        .iter()
+        .enumerate()
+        .map(|(i, share)| {
+            let t = clm_machine::format_time(now - 60 + i as u64 * 10);
+            format!("{t} {share} ok 0.3000 ok 0.4000 ok\n")
+        })
+        .collect();
+    fs::write(&path, lines).unwrap();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, now);
+    assert_eq!(snapshot.history.len(), 1);
+    assert_eq!(snapshot.history[0].time, now);
+    let out = clm_machine::rows(&snapshot.report, &snapshot.history, 40);
+    assert_eq!(out.lines().count(), 3);
+    let kept = samples(dir.path());
+    assert_eq!(kept.len(), 1);
+    assert!(kept[0].starts_with(&clm_machine::format_time(now)));
+}
+
+#[test]
+fn a_share_is_read_only_as_digits_or_a_dash() {
+    // req:machine/machine-history@c34a107b
+    let dir = repo();
+    let now = clm_git::now();
+    let path = common(dir.path()).join("clm/machine-samples");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let t = |ago: u64| clm_machine::format_time(now - ago);
+    // Readable: digits alone, digits and a point and digits, a dash, and fields set apart
+    // by tabs and runs of spaces.
+    let good = format!(
+        "{} 1 ok 0.3000 ok - unknown\n{}\t0.25\tok  0.3 ok\t\t0.4000   ok\n",
+        t(100),
+        t(90)
+    );
+    // Not shares: a point with no digits after or before it, a sign, an exponent.
+    let bad: String = ["1.", ".5", "+0.5", "0.5e1", "--", "0x1"]
+        .iter()
+        .map(|share| format!("{} {share} ok 0.3000 ok 0.4000 ok\n", t(80)))
+        .collect();
+    fs::write(&path, format!("{good}{bad}")).unwrap();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, now);
+    let times: Vec<u64> = snapshot.history.iter().map(|s| s.time).collect();
+    assert_eq!(times, vec![now - 100, now - 90, now]);
+    assert_eq!(snapshot.history[0].cpu, Some(1.0));
+    assert_eq!(snapshot.history[0].disk, None);
+    assert_eq!(snapshot.history[1].cpu, Some(0.25));
+}
+
+#[test]
+fn a_share_is_never_below_zero() {
+    // req:machine/machine-history@c34a107b
+    // Memory and disk whose available exceeds their total load nothing: their share is 0.
+    let mut r = readings();
+    r.memory = space(16 * GIB, 20 * GIB);
+    r.disk = space(100 * GIB, 120 * GIB);
+    let sample = Sample::of(1, &judged(&r, &Record::default(), &[], 3));
+    assert_eq!(sample.memory, Some(0.0));
+    assert_eq!(sample.disk, Some(0.0));
+    // Nor is CPU's share below 0, or other than a number, whatever load the system gives.
+    for load in [-2.0, f64::NAN, f64::INFINITY] {
+        r.load1 = Some(load);
+        let sample = Sample::of(1, &judged(&r, &Record::default(), &[], 3));
+        let share = sample.cpu.expect("a share");
+        assert!(share.is_finite() && share >= 0.0, "load {load}: {share}");
+    }
+    // A total of 0 gives no share.
+    r.memory = space(0, 0);
+    r.disk = space(0, 0);
+    let sample = Sample::of(1, &judged(&r, &Record::default(), &[], 3));
+    assert_eq!((sample.memory, sample.disk), (None, None));
+}
+
+#[test]
+fn scenario_the_sample_holds_the_shares() {
+    // req:machine/machine-history@c34a107b
+    let mut r = readings();
+    r.load1 = Some(12.0);
+    r.memory = space(16 * GIB, 4 * GIB);
+    r.disk = space(100 * GIB, 20 * GIB);
+    let sample = Sample::of(7, &judged(&r, &Record::default(), &[], 3));
+    assert_eq!(sample.time, 7);
+    assert!((sample.cpu.unwrap() - 0.75).abs() < 1e-9);
+    assert!((sample.memory.unwrap() - 0.75).abs() < 1e-9);
+    assert!((sample.disk.unwrap() - 0.8).abs() < 1e-9);
+    // With no load average CPU has no share.
+    r.load1 = None;
+    assert_eq!(
+        Sample::of(7, &judged(&r, &Record::default(), &[], 3)).cpu,
+        None
+    );
+}
+
+#[test]
+fn scenario_a_reset_ends_each_run() {
+    // req:machine/machine-history@c34a107b
+    let history = [
+        sample_in(1, Some(0.9), State::Critical),
+        sample_in(2, Some(0.9), State::Critical),
+        sample_in(3, Some(0.2), State::Ok),
+    ];
+    let out = clm_machine::rows(
+        &judged(&readings(), &Record::default(), &[], 3),
+        &history,
+        40,
+    );
+    assert_eq!(
+        out.lines().next().unwrap(),
+        "\x1b[32mcpu  \x1b[0m\x1b[31m██\x1b[0m\x1b[32m▂\x1b[0m\x1b[32m 0.1×\x1b[0m"
+    );
+}
+
+#[test]
+fn a_history_file_that_cannot_be_read_counts_as_empty() {
+    // req:machine/machine-history@c34a107b
+    let dir = repo();
+    // A directory where the file belongs can be neither read nor replaced.
+    fs::create_dir_all(common(dir.path()).join("clm/machine-samples")).unwrap();
+    let now = clm_git::now();
+    let snapshot = clm_machine::read(dir.path(), 3, 4, now);
+    assert_eq!(snapshot.history.len(), 1);
+    assert_eq!(snapshot.history[0].time, now);
+    // What can't be written is left alone, with no temporary file beside it.
+    let clm_dir = common(dir.path()).join("clm");
+    assert!(clm_dir.join("machine-samples").is_dir());
+    let names: Vec<String> = fs::read_dir(&clm_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(names.iter().all(|n| !n.starts_with(".tmp")), "{names:?}");
 }

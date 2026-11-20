@@ -23,7 +23,7 @@ fn clone_with_build() -> (tempfile::TempDir, tempfile::TempDir, std::path::PathB
 
 #[test]
 fn scenario_measured_and_kept() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let (dir, _holder, tree) = clone_with_build();
     let record_path = common(dir.path()).join("clm/machine");
     let t = clm_git::now();
@@ -43,7 +43,7 @@ fn scenario_measured_and_kept() {
 
 #[test]
 fn scenario_due_again() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let (dir, _holder, tree) = clone_with_build();
     let t = clm_git::now();
     let first = json(dir.path(), t);
@@ -52,18 +52,27 @@ fn scenario_due_again() {
     let again = json(dir.path(), t + 11 * 60);
     let bytes = again["disk"]["builds"][0]["bytes"].as_u64().unwrap();
     assert!(bytes < 3 * MIB, "bytes {bytes}");
-    assert_ne!(again["disk"]["measured"], first["disk"]["measured"]);
+    assert_eq!(
+        again["disk"]["measured"],
+        clm_machine::format_time(t + 11 * 60)
+    );
     // The peak never falls.
     assert_eq!(again["disk"]["peak"].as_u64(), Some(peak));
     // Not due ten minutes after that: a second measurement would change nothing, and the
     // record keeps the time it has.
     let later = json(dir.path(), t + 11 * 60 + 599);
     assert_eq!(later["disk"]["measured"], again["disk"]["measured"]);
+    // Ten minutes old exactly, it is due.
+    let due = json(dir.path(), t + 11 * 60 + 600);
+    assert_eq!(
+        due["disk"]["measured"],
+        clm_machine::format_time(t + 11 * 60 + 600)
+    );
 }
 
 #[test]
 fn scenario_hard_links_once() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let dir = repo();
     let (_holder, tree) = build(dir.path(), "a");
     let empty = json(dir.path(), clm_git::now());
@@ -79,7 +88,7 @@ fn scenario_hard_links_once() {
 
 #[test]
 fn scenario_damaged_record() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let (dir, _holder, _tree) = clone_with_build();
     let record_path = common(dir.path()).join("clm/machine");
     fs::create_dir_all(record_path.parent().unwrap()).unwrap();
@@ -94,7 +103,7 @@ fn scenario_damaged_record() {
 
 #[test]
 fn a_place_without_a_worktree_is_unmeasured() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let dir = repo();
     clm_orchestrator::take_place(
         dir.path(),
@@ -114,7 +123,7 @@ fn a_place_without_a_worktree_is_unmeasured() {
 
 #[test]
 fn a_record_round_trips_and_its_peak_only_rises() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let record = Record {
         measured: Some(1_700_000_000),
         peak: Some(900),
@@ -130,10 +139,30 @@ fn a_record_round_trips_and_its_peak_only_rises() {
 
 #[test]
 fn a_record_dated_in_the_future_is_due() {
-    // req:machine/build-measure@322d7d46
-    let (dir, _holder, _tree) = clone_with_build();
+    // req:machine/build-measure@25e6eaf6
+    let (dir, _holder, tree) = clone_with_build();
     let t = clm_git::now();
     json(dir.path(), t + 3600);
+    fs::remove_file(tree.join("three")).unwrap();
     let again = json(dir.path(), t);
     assert_eq!(again["disk"]["measured"], clm_machine::format_time(t));
+    let bytes = again["disk"]["builds"][0]["bytes"].as_u64().unwrap();
+    assert!(bytes < 3 * MIB, "measured again: bytes {bytes}");
+}
+
+#[test]
+fn a_record_that_cannot_be_read_counts_as_none() {
+    // req:machine/build-measure@25e6eaf6
+    let (dir, _holder, _tree) = clone_with_build();
+    // A directory where the record belongs can be neither read nor replaced.
+    let record_path = common(dir.path()).join("clm/machine");
+    fs::create_dir_all(&record_path).unwrap();
+    let t = clm_git::now();
+    let first = json(dir.path(), t);
+    assert!(first["disk"]["peak"].as_u64().unwrap() >= 3 * MIB);
+    assert_eq!(first["disk"]["measured"], clm_machine::format_time(t));
+    // Nothing was kept, so the next run measures again.
+    let again = json(dir.path(), t + 60);
+    assert_eq!(again["disk"]["measured"], clm_machine::format_time(t + 60));
+    assert!(record_path.is_dir());
 }

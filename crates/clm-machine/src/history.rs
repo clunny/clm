@@ -33,14 +33,14 @@ impl Sample {
         let used = |space: Option<crate::Space>| {
             space
                 .filter(|s| s.total > 0)
-                .map(|s| 1.0 - s.available as f64 / s.total as f64)
+                .map(|s| at_least_zero(1.0 - s.available as f64 / s.total as f64))
         };
         Sample {
             time,
             cpu: report
                 .cpu
                 .load1
-                .map(|load| load / report.cpu.cores.max(1) as f64 / 2.0),
+                .map(|load| at_least_zero(load / report.cpu.cores.max(1) as f64 / 2.0)),
             memory: used(report.memory.space),
             disk: used(report.disk.space),
             cpu_state: report.cpu.state,
@@ -69,7 +69,7 @@ impl Sample {
         let mut reading = || -> Option<(Option<f64>, State)> {
             let share = match fields.next()? {
                 "-" => None,
-                text => Some(text.parse().ok()?),
+                text => Some(parse_share(text)?),
             };
             Some((share, State::from_word(fields.next()?)?))
         };
@@ -88,6 +88,27 @@ impl Sample {
             disk_state,
         })
     }
+}
+
+/// `share`, or 0 when it is below 0 or no number, so a share `Sample::of` takes, and so every
+/// share written, never reads `-0.0000`, `NaN` or a sign.
+fn at_least_zero(share: f64) -> f64 {
+    if share.is_finite() && share > 0.0 {
+        share
+    } else {
+        0.0
+    }
+}
+
+/// A share as the history writes one: one or more digits, optionally a point and one or more
+/// digits. `NaN`, `inf`, a sign or an exponent is no share.
+fn parse_share(text: &str) -> Option<f64> {
+    let digits = |part: &str| !part.is_empty() && part.bytes().all(|c| c.is_ascii_digit());
+    let well_formed = match text.split_once('.') {
+        Some((whole, fraction)) => digits(whole) && digits(fraction),
+        None => digits(text),
+    };
+    well_formed.then(|| text.parse().ok()).flatten()
 }
 
 /// The history at `path` after this run: the file's samples within 30 minutes of `now`, plus
