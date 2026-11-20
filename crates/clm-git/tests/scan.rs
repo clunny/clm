@@ -79,9 +79,9 @@ fn matches(krate: &str, text: &str) -> Vec<usize> {
     if !MAY_START.contains(&krate) {
         at.extend(s.match_indices("process::Command").map(|(i, _)| i));
         at.extend(s.match_indices("process::{").filter_map(|(i, _)| {
-            let inside = &s[i..];
-            let end = inside.find('}').unwrap_or(inside.len());
-            inside[..end].contains("Command").then_some(i)
+            group(&s[i + "process::".len()..])
+                .contains("Command")
+                .then_some(i)
         }));
         at.extend(
             s.match_indices("Command::new(")
@@ -93,6 +93,22 @@ fn matches(krate: &str, text: &str) -> Vec<usize> {
     found.sort_unstable();
     found.dedup();
     found
+}
+
+/// The text of the brace group `s` starts with, up to the brace that closes it.
+fn group(s: &str) -> &str {
+    let mut depth = 0;
+    for (i, c) in s.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 {
+            return &s[..i];
+        }
+    }
+    s
 }
 
 fn rust_files(dir: &Path) -> Vec<PathBuf> {
@@ -207,6 +223,10 @@ fn a_wrapper_that_takes_the_program() {
         ),
         ("b", "use std::fs;\nuse std::process::{Child, Command};\n"),
         ("c", "\nuse std::os::unix::process::CommandExt;\n"),
+        (
+            "d",
+            "use std::{\n    process::{Child, ExitStatus},\n    fs,\n};\nuse std::process::{\n    io::{Read},\n    Command,\n};\n",
+        ),
         ("clm-run", "use std::process::{Child, Command};\n"),
     ]);
     assert_eq!(
@@ -214,7 +234,8 @@ fn a_wrapper_that_takes_the_program() {
         [
             "crates/a/src/lib.rs:2",
             "crates/b/src/lib.rs:2",
-            "crates/c/src/lib.rs:2"
+            "crates/c/src/lib.rs:2",
+            "crates/d/src/lib.rs:5"
         ]
     );
 }
@@ -249,7 +270,7 @@ fn a_crate_that_runs_other_programs() {
 }
 
 #[test]
-fn the_whole_workspace_is_read() {
+fn the_workspace_runs_git_only_through_the_layer() {
     // req:vcs/one-git-layer@672cd7c7
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let found = scan(&workspace);

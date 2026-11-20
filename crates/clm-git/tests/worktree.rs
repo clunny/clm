@@ -103,12 +103,20 @@ fn never_removable() {
     // req:vcs/remove-worktree@42607e4b
     let (dir, w) = setup();
     let root = dir.path().join("r");
-    let parent = dir.path().to_path_buf();
-    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o500)).unwrap();
+    /// Gives the owner write permission back on drop, so a failing test leaves a removable
+    /// directory.
+    struct Locked<'a>(&'a Path);
+    impl Drop for Locked<'_> {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(self.0, std::fs::Permissions::from_mode(0o700));
+        }
+    }
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let locked = Locked(dir.path());
     let started = Instant::now();
     let result = remove_worktree(&root, &w);
     let took = started.elapsed();
-    std::fs::set_permissions(&parent, std::fs::Permissions::from_mode(0o700)).unwrap();
+    drop(locked);
     let err = result.unwrap_err();
     assert!(err.to_string().contains("git worktree remove"), "{err}");
     assert!(

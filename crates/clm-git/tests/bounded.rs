@@ -128,6 +128,15 @@ fn a_command_that_exits_but_leaves_the_pipes_open() {
 }
 
 #[test]
+fn what_a_child_writes_after_the_command_exits_is_kept() {
+    // req:vcs/bounded-runs@44e9c483
+    let (_bin, path) = fake_gh("echo done\n(sleep 0.02; echo later; exec sleep 30) &\nexit 0\n");
+    let root = tempfile::tempdir().unwrap();
+    let out = gh_within(root.path(), &path, &["api", "x"], Duration::from_secs(10));
+    assert_eq!(out.unwrap(), b"done\nlater\n");
+}
+
+#[test]
 fn a_command_that_fails_but_leaves_the_pipes_open() {
     // req:vcs/bounded-runs@44e9c483
     let (_bin, path) = fake_gh("echo nope >&2\nsleep 30 &\nexit 1\n");

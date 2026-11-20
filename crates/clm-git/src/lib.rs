@@ -184,26 +184,27 @@ const STREAMS_AFTER_EXIT: Duration = Duration::from_millis(100);
 type Reader = mpsc::Receiver<io::Result<Vec<u8>>>;
 
 /// Reads `pipe` on a detached thread, which sends each chunk as it reads it and ends,
-/// dropping the sender, at the stream's end or after sending a read error.
+/// dropping the sender, at the stream's end or after a read error, which it sends.
 fn drain(pipe: Option<impl Read + Send + 'static>) -> Reader {
     let (send, receive) = mpsc::channel();
     std::thread::spawn(move || {
         let Some(mut pipe) = pipe else {
             return;
         };
+        // Once the call has returned, the bytes are read and dropped until the stream ends:
+        // closing the read end early would kill a process still writing to it.
         let mut buf = vec![0; 64 * 1024];
         loop {
-            let sent = match pipe.read(&mut buf) {
+            match pipe.read(&mut buf) {
                 Ok(0) => return,
-                Ok(n) => send.send(Ok(buf[..n].to_vec())),
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Ok(n) => {
+                    let _ = send.send(Ok(buf[..n].to_vec()));
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
                 Err(e) => {
                     let _ = send.send(Err(e));
                     return;
                 }
-            };
-            if sent.is_err() {
-                return;
             }
         }
     });
