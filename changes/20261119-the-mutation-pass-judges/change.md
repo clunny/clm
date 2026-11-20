@@ -35,7 +35,9 @@ Plan work under the freeze (`backlog/a-passing-check-proves-less-than-the-spec-c
 - A line the block's run counts more often than the package's runs (a test whose loop count varies) has share 1, not more.
 - Counts include the processes a test starts (the `clm` binary the root's tests run), in both runs alike.
 - StrykerJS's further mutants are chosen by StrykerJS as now; nothing has shown the same problem there (`yagni`).
-- Two blocks running at once may both make the same package's run before either keeps it; the rule asks only that a later block reuse it.
+- Two blocks running at once may both make the same package's run before either keeps it: each writes its report to a path of its own job and only then keeps it, so neither overwrites the other's while it reads it; a block that starts later reuses the kept one.
+- From the builder check, for the build: whether further mutants may be tried is decided after the diff's run, so a diff mutant caught makes no package run; the kept report lives in the pass's temporary directory, not the block's, written to a temporary name and moved into place; shares are ordered by a stable sort to a file and then cut, as the further list already is, so a long list can't end the script with `SIGPIPE`; the fake `cargo` in `crates/clm/tests/ci_suite/ci_check.rs` tells the package run by its missing `-E` and gets per-line counts and an exit status for it alone; `cargo-llvm-cov` 0.9.1 takes `--ignore-run-fail` for `nextest`, writing a report and exiting 0 when a test fails and non-zero when the build does.
+- The choice and what it rejected are recorded in `docs/decisions/mutation-after-land.md`.
 
 ## What the requirements no longer state
 
