@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-mutation-pass-can-t-judge-a-rule-whose-code-lives-in-a-test]
 ---
 
