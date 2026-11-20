@@ -54,14 +54,14 @@ fn renamed() -> (TempDir, String) {
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn an_untouched_rename_branch() {
     let (dir, base) = renamed();
     assert!(replays(dir.path(), &base, "HEAD").unwrap());
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn a_marker_held_back_by_code_that_names_an_old_entry_replays() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -106,7 +106,7 @@ fn a_marker_held_back_by_code_that_names_an_old_entry_replays() {
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn an_extra_edit() {
     let (dir, base) = renamed();
     let d = dir.path();
@@ -116,7 +116,7 @@ fn an_extra_edit() {
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn a_defect_report_filed() {
     let (dir, base) = renamed();
     let d = dir.path();
@@ -126,7 +126,7 @@ fn a_defect_report_filed() {
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn an_edit_of_the_spec_is_not_the_rename() {
     let (dir, base) = renamed();
     let d = dir.path();
@@ -141,7 +141,7 @@ fn an_edit_of_the_spec_is_not_the_rename() {
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn no_added_change_is_no_replay() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -155,7 +155,7 @@ fn no_added_change_is_no_replay() {
 }
 
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
 fn a_change_without_renames_is_no_replay() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -173,7 +173,7 @@ fn a_change_without_renames_is_no_replay() {
 }
 
 #[test]
-// req:rename/other-deltas@e4bc7840
+// req:rename/other-deltas@1f0dee44
 fn a_rename_branch_that_rebased_another_delta() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
@@ -213,8 +213,159 @@ fn a_rename_branch_that_rebased_another_delta() {
     assert!(replays(d, &base, "HEAD").unwrap());
 }
 
+#[cfg(unix)]
 #[test]
-// req:rename/replay@0ad1f1c7
+// req:rename/replay@c35e7a83
+fn a_symbolic_link_added() {
+    let (dir, base) = renamed();
+    let d = dir.path();
+    std::os::unix::fs::symlink("README.md", d.join("l")).unwrap();
+    commit(d, "link");
+    assert!(!replays(d, &base, "HEAD").unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+// req:rename/replay@c35e7a83
+fn a_mode_changed() {
+    use std::os::unix::fs::PermissionsExt;
+    let (dir, base) = renamed();
+    let d = dir.path();
+    let lib = d.join("crates/x/src/lib.rs");
+    fs::set_permissions(&lib, fs::Permissions::from_mode(0o755)).unwrap();
+    commit(d, "mode");
+    let mode = git(d, &["ls-tree", "HEAD", "crates/x/src/lib.rs"]);
+    assert!(mode.starts_with("100755"), "{mode}");
+    assert!(!replays(d, &base, "HEAD").unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+// req:rename/replay@c35e7a83
+fn an_executable_file_in_the_base_replays() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    git(d, &["init", "-q"]);
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", A);
+    write(d, "run.sh", "#!/bin/sh\n");
+    fs::set_permissions(d.join("run.sh"), fs::Permissions::from_mode(0o755)).unwrap();
+    commit(d, "base");
+    let base = git(d, &["rev-parse", "HEAD"]);
+    write(d, "changes/r/change.md", CHANGE);
+    git(d, &["add", "-A"]);
+    rename(d, "r").unwrap();
+    commit(d, "rename");
+    assert!(replays(d, &base, "HEAD").unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+// req:rename/replay@c35e7a83
+fn a_base_that_holds_a_symbolic_link() {
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    git(d, &["init", "-q"]);
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", A);
+    std::os::unix::fs::symlink("README.md", d.join("l")).unwrap();
+    commit(d, "base");
+    let base = git(d, &["rev-parse", "HEAD"]);
+    write(d, "changes/r/change.md", CHANGE);
+    git(d, &["add", "-A"]);
+    rename(d, "r").unwrap();
+    commit(d, "rename");
+    assert!(replays(d, &base, "HEAD").unwrap());
+    fs::remove_file(d.join("l")).unwrap();
+    std::os::unix::fs::symlink("ARCHITECTURE.md", d.join("l")).unwrap();
+    commit(d, "repoint");
+    assert!(!replays(d, &base, "HEAD").unwrap());
+}
+
+#[test]
+// req:rename/replay@c35e7a83
+fn a_submodule_added() {
+    let (dir, base) = renamed();
+    let d = dir.path();
+    let commit_id = git(d, &["rev-parse", "HEAD"]);
+    let entry = format!("160000,{commit_id},sub");
+    git(d, &["update-index", "--add", "--cacheinfo", &entry]);
+    git(
+        d,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-qm",
+            "submodule",
+        ],
+    );
+    assert!(!replays(d, &base, "HEAD").unwrap());
+}
+
+#[test]
+// req:rename/replay@c35e7a83
+fn a_rename_that_refuses_on_the_base() {
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    git(d, &["init", "-q"]);
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", A);
+    commit(d, "base");
+    let base = git(d, &["rev-parse", "HEAD"]);
+    write(
+        d,
+        "changes/r/change.md",
+        &CHANGE.replace("requirement: a/x", "requirement: a/none"),
+    );
+    commit(d, "change");
+    assert!(!replays(d, &base, "HEAD").unwrap());
+}
+
+/// A git repository whose CLM root is `tool/`, with a base commit, `HEAD` after
+/// `clm rename` ran in `tool/` and was committed, and the base's ID.
+fn renamed_in_a_subdirectory() -> (TempDir, String) {
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    git(d, &["init", "-q"]);
+    write(d, "README.md", "top\n");
+    let t = d.join("tool");
+    write(&t, "specs/SPEC.md", ROOT);
+    write(&t, "specs/a/SPEC.md", A);
+    write(&t, "notes.txt", "a/x\n");
+    commit(d, "base");
+    let base = git(d, &["rev-parse", "HEAD"]);
+    write(&t, "changes/r/change.md", CHANGE);
+    git(d, &["add", "-A"]);
+    rename(&t, "r").unwrap();
+    commit(d, "rename");
+    (dir, base)
+}
+
+#[test]
+// req:rename/replay@c35e7a83
+fn a_subdirectory_root() {
+    let (dir, base) = renamed_in_a_subdirectory();
+    let t = dir.path().join("tool");
+    assert!(t.join("changes/archive/r/change.md").exists());
+    assert!(replays(&t, &base, "HEAD").unwrap());
+}
+
+#[test]
+// req:rename/replay@c35e7a83
+fn a_file_outside_a_subdirectory_root() {
+    let (dir, base) = renamed_in_a_subdirectory();
+    let d = dir.path();
+    write(d, "README.md", "top, edited\n");
+    commit(d, "outside");
+    assert!(!replays(&d.join("tool"), &base, "HEAD").unwrap());
+}
+
+#[test]
+// req:rename/replay@c35e7a83
 fn two_added_changes_are_no_replay() {
     let (dir, base) = renamed();
     let d = dir.path();

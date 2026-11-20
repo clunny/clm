@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [rename-replay-reads-the-repository-s-top-not-the-clm-root]
 ---
 

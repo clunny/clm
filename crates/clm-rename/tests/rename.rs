@@ -213,7 +213,7 @@ fn references_repo() -> TempDir {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn references_across_the_repository() {
     let dir = references_repo();
     let d = dir.path();
@@ -228,7 +228,7 @@ fn references_across_the_repository() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn an_ambiguous_slug_stays() {
     let dir = references_repo();
     let d = dir.path();
@@ -243,7 +243,7 @@ fn an_ambiguous_slug_stays() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn a_decision_with_the_slug_makes_it_ambiguous() {
     let dir = references_repo();
     let d = dir.path();
@@ -257,7 +257,103 @@ fn a_decision_with_the_slug_makes_it_ambiguous() {
 }
 
 #[test]
-// req:rename/component-rename@4e038ba9
+// req:rename/refusals@d7194f56
+fn a_block_style_list_in_a_component() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "specs/c/SPEC.md", &node("", "d", &[("z", "Z SHALL.")]));
+    write(
+        d,
+        "specs/b/SPEC.md",
+        &node("depends_on:\n  - a\n  - c\n", "d", &[("w", "W SHALL.")]),
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: d\n", ""),
+    );
+    let before = snapshot(d);
+    let why = rename(d, "r").unwrap_err().to_string();
+    assert!(why.contains("`b`") && why.contains("`depends_on`"), "{why}");
+    assert_eq!(snapshot(d), before);
+}
+
+#[test]
+// req:rename/refusals@d7194f56
+fn a_directory_in_the_changes_deltas() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "changes/r/deltas/a.md", "not a delta\n");
+    write(d, "changes/r/deltas/sub/z.md", "nor this\n");
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - requirement: a/x\n    to: y\n", ""),
+    );
+    let before = snapshot(d);
+    let failure = rename(d, "r").unwrap_err();
+    assert_eq!(failure.exit_code(), 1);
+    assert!(
+        failure.to_string().contains("changes/r/deltas/sub"),
+        "{failure}"
+    );
+    assert_eq!(snapshot(d), before);
+}
+
+#[test]
+// req:rename/refusals@d7194f56
+fn another_change_with_a_delta_for_a_descendant_refuses() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "specs/a/c/SPEC.md", &node("", "d", &[("y", "Y SHALL.")]));
+    write(
+        d,
+        "changes/y/change.md",
+        "---\nstatus: approved\n---\n\n## Intent\nY.\n",
+    );
+    write(
+        d,
+        "changes/y/deltas/a.c.md",
+        "---\ncomponent: a.c\n---\n## ADDED Requirements\n### Requirement: more\nMore SHALL hold.\n\n#### Scenario: holds\n- ok\n",
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: b\n", ""),
+    );
+    let before = snapshot(d);
+    let why = rename(d, "r").unwrap_err().to_string();
+    assert!(why.contains("change `y`") && why.contains("`a.c`"), "{why}");
+    assert_eq!(snapshot(d), before);
+}
+
+/// Every file under `d` outside `.git`, with its bytes.
+fn snapshot(d: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
+    let mut files = Vec::new();
+    let mut dirs = vec![d.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.file_name().is_some_and(|n| n == ".git") {
+                continue;
+            }
+            if path.is_dir() {
+                dirs.push(path);
+            } else {
+                let bytes = fs::read(&path).unwrap();
+                files.push((path.strip_prefix(d).unwrap().to_path_buf(), bytes));
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+#[test]
+// req:rename/refusals@d7194f56
 fn a_component_and_its_own_rule_are_not_renamed_together() {
     let dir = repo();
     let d = dir.path();
@@ -274,7 +370,7 @@ fn a_component_and_its_own_rule_are_not_renamed_together() {
 }
 
 #[test]
-// req:rename/component-rename@4e038ba9
+// req:rename/finish@0b510be8
 fn deltas_already_in_the_change_are_replaced() {
     let dir = repo();
     let d = dir.path();
@@ -318,7 +414,7 @@ fn a_capability_entry() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn a_components_bare_name_is_a_word() {
     let dir = repo();
     let d = dir.path();
@@ -348,7 +444,7 @@ fn a_components_bare_name_is_a_word() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn archived_changes_and_decisions_keep_their_names() {
     let dir = references_repo();
     let d = dir.path();
@@ -388,7 +484,7 @@ fn terms_repo(term: &str, to: &str) -> TempDir {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn a_word_in_prose() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -406,7 +502,7 @@ fn a_word_in_prose() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn part_of_an_id_or_a_path_is_not_a_term() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -428,7 +524,7 @@ fn part_of_an_id_or_a_path_is_not_a_term() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn a_term_before_punctuation_and_a_following_dot_path() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -446,7 +542,7 @@ fn a_term_before_punctuation_and_a_following_dot_path() {
 }
 
 #[test]
-// req:rename/references@659c44f9
+// req:rename/references@dd6cdde7
 fn several_renames_apply_together() {
     let dir = repo();
     let d = dir.path();
@@ -487,7 +583,7 @@ fn several_renames_apply_together() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn a_heading_is_left_alone() {
     let dir = repo();
     let d = dir.path();
@@ -508,7 +604,7 @@ fn a_heading_is_left_alone() {
 }
 
 #[test]
-// req:rename/term-swap@b6300332
+// req:rename/term-swap@f4c62d32
 fn needs_lines_are_not_swapped() {
     let dir = repo();
     let d = dir.path();
@@ -536,7 +632,55 @@ fn needs_lines_are_not_swapped() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/term-swap@f4c62d32
+fn a_term_in_fenced_code() {
+    let dir = terms_repo("sprocket", "cogs");
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node(
+            "",
+            "Run:\n\n```sh\nprint the sprocket\n```\n",
+            &[("q", "Q SHALL.")],
+        ),
+    );
+    rename(d, "r").unwrap();
+    assert!(read(d, "specs/e/SPEC.md").contains("```sh\nprint the cogs\n```"));
+}
+
+#[test]
+// req:rename/term-swap@f4c62d32
+fn a_heading_in_fenced_code() {
+    let dir = repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/a/SPEC.md",
+        &node(
+            "",
+            "d",
+            &[(
+                "x",
+                "X SHALL hold.\n\n```md\n# the sprocket\n#### Needs\n```\nprint the sprocket",
+            )],
+        ),
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - term: sprocket\n    to: cogs\n", ""),
+    );
+    rename(d, "r").unwrap();
+    let spec = read(d, "specs/a/SPEC.md");
+    assert!(
+        spec.contains("```md\n# the cogs\n#### Needs\n```\nprint the cogs\n"),
+        "{spec}"
+    );
+}
+
+#[test]
+// req:rename/refusals@d7194f56
 fn a_term_that_is_nowhere_refuses_and_writes_nothing() {
     let dir = terms_repo("grommet stub", "spare part");
     let d = dir.path();
@@ -549,7 +693,7 @@ fn a_term_that_is_nowhere_refuses_and_writes_nothing() {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn done_and_archived() {
     let dir = references_repo();
     let d = dir.path();
@@ -624,7 +768,7 @@ fn slug_repo(owns: &str) -> TempDir {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn a_bare_slug_is_left_as_a_code_span_only() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -643,7 +787,7 @@ fn a_bare_slug_is_left_as_a_code_span_only() {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn an_ambiguous_slug_is_not_reported() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -664,7 +808,7 @@ fn an_ambiguous_slug_is_not_reported() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn code_that_still_names_a_rewritten_entry_leaves_the_requirement_behind() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -678,11 +822,11 @@ fn code_that_still_names_a_rewritten_entry_leaves_the_requirement_behind() {
     );
     assert!(read(d, "specs/a/SPEC.md").contains("(`cogs-scoped-context`)"));
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_held_back_marker_still_takes_the_new_id() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -693,11 +837,11 @@ fn a_held_back_marker_still_takes_the_new_id() {
     write(d, "plugin/skills/s/SKILL.md", "`sprocket-scoped-context`\n");
     rename(d, "r").unwrap();
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/y", &old));
-    assert_eq!(pending_ids(d), ["a/y"]);
+    assert_eq!(pending_ids(d), ["a/y Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn code_that_still_names_a_rewritten_id_leaves_the_requirement_behind() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -718,11 +862,11 @@ fn code_that_still_names_a_rewritten_id_leaves_the_requirement_behind() {
     );
     rename(d, "r").unwrap();
     assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_file_holding_a_marker_of_the_requirement_holds_it_back() {
     let dir = slug_repo("crates/y/**");
     let d = dir.path();
@@ -733,11 +877,11 @@ fn a_file_holding_a_marker_of_the_requirement_holds_it_back() {
         &format!("# {}a/x@{old}\nuse `sprocket-scoped-context`\n", "req:"),
     );
     rename(d, "r").unwrap();
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn another_components_code_naming_it_does_not_hold_the_marker_back() {
     let dir = slug_repo("crates/**");
     let d = dir.path();
@@ -757,7 +901,7 @@ fn another_components_code_naming_it_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_term_left_in_the_code_does_not_hold_the_marker_back() {
     let dir = repo();
     let d = dir.path();
@@ -789,7 +933,7 @@ fn a_term_left_in_the_code_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_term_spelt_like_a_rewritten_slug_does_not_hold_the_marker_back() {
     let dir = repo();
     let d = dir.path();
@@ -819,7 +963,7 @@ fn a_term_spelt_like_a_rewritten_slug_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn the_report_is_in_record_order_and_sorted() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -846,7 +990,7 @@ fn the_report_is_in_record_order_and_sorted() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_change_that_is_not_proposed_is_refused() {
     let dir = repo();
     let d = dir.path();
@@ -862,7 +1006,7 @@ fn a_change_that_is_not_proposed_is_refused() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_target_that_exists_refuses_and_writes_nothing() {
     let dir = repo();
     let d = dir.path();
@@ -879,7 +1023,7 @@ fn a_target_that_exists_refuses_and_writes_nothing() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_move_the_model_rejects_names_its_rule_and_entry() {
     let dir = repo();
     let d = dir.path();
@@ -897,7 +1041,7 @@ fn a_move_the_model_rejects_names_its_rule_and_entry() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_loaded_change_with_a_violation_is_refused() {
     let dir = repo();
     let d = dir.path();
@@ -911,7 +1055,7 @@ fn a_loaded_change_with_a_violation_is_refused() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/finish@0b510be8
 fn the_archived_record_loads_and_keeps_its_renames() {
     let dir = repo();
     let d = dir.path();
@@ -929,7 +1073,7 @@ fn the_archived_record_loads_and_keeps_its_renames() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_change_without_renames_and_a_missing_name_refuse() {
     let dir = repo();
     let d = dir.path();
@@ -982,7 +1126,7 @@ fn contested_by(delta: &str) -> (TempDir, String) {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_that_modifies_the_requirement_refuses() {
     let (dir, source) = contested_by(
         "---\ncomponent: a\n---\n## MODIFIED Requirements\n### Requirement: old <!-- base: BASE -->\nOld SHALL hold more.\n\n#### Scenario: holds\n- ok\n",
@@ -996,7 +1140,7 @@ fn another_change_that_modifies_the_requirement_refuses() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_that_removes_the_requirement_refuses() {
     let (dir, _) = contested_by(
         "---\ncomponent: a\n---\n## REMOVED Requirements\n### Requirement: old <!-- base: BASE -->\n",
@@ -1006,7 +1150,7 @@ fn another_change_that_removes_the_requirement_refuses() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_with_a_delta_for_the_component_refuses() {
     let (dir, source) = contested();
     let d = dir.path();
@@ -1029,7 +1173,7 @@ fn another_change_with_a_delta_for_the_component_refuses() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn another_change_adding_a_requirement_to_the_node_does_not_refuse() {
     let (dir, _) = contested_by(
         "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: more\nMore SHALL hold.\n\n#### Scenario: holds\n- ok\n",
@@ -1059,13 +1203,14 @@ fn version_of(d: &Path, id: &str) -> String {
         .to_string()
 }
 
+/// What `clm pending a` lists: each requirement of `a` it names, with its state.
 fn pending_ids(d: &Path) -> Vec<String> {
     let graph = clm_model::load(d).0;
     let scan = clm_coverage::scan(d);
     clm_coverage::pending(&graph, &scan.req)
         .into_iter()
         .filter(|p| p.node == "a")
-        .map(|p| p.id)
+        .map(|p| format!("{} {:?}", p.id, p.state))
         .collect()
 }
 
@@ -1074,7 +1219,7 @@ fn cite(id: &str, version: &str) -> String {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn current_and_behind_markers_follow_a_rename() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1089,31 +1234,18 @@ fn current_and_behind_markers_follow_a_rename() {
     write(d, "crates/x/tests/t.rs", &code("a/x", &old, "00000000"));
     git(d, &["init", "-q"]);
     git(d, &["add", "-A"]);
-    assert_eq!(pending_ids(d), ["a/x"]);
+    assert_eq!(pending_ids(d), ["a/x Behind"]);
     clm_rename::rename(d, "r").unwrap();
     let new = version_of(d, "a/y");
     assert_eq!(
         read(d, "crates/x/tests/t.rs"),
         code("a/y", &new, "00000000")
     );
-    assert_eq!(pending_ids(d), ["a/y"]);
+    assert_eq!(pending_ids(d), ["a/y Behind"]);
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
-fn a_behind_marker_stays_behind() {
-    let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
-    let d = dir.path();
-    write(d, "crates/x/tests/t.rs", &cite("a/x", "00000000"));
-    git(d, &["init", "-q"]);
-    git(d, &["add", "-A"]);
-    clm_rename::rename(d, "r").unwrap();
-    assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/y", "00000000"));
-    assert_eq!(pending_ids(d), ["a/y"]);
-}
-
-#[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_reworded_requirement_keeps_its_marker_current() {
     let dir = markers_repo(
         "the sprocket of a component",
@@ -1132,7 +1264,7 @@ fn a_reworded_requirement_keeps_its_marker_current() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn other_requirements_markers_and_bare_markers_are_handled() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1154,7 +1286,7 @@ fn other_requirements_markers_and_bare_markers_are_handled() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn an_archived_change_and_the_changes_own_old_deltas_do_not_refuse() {
     let (dir, _) = contested();
     let d = dir.path();
@@ -1179,7 +1311,7 @@ fn an_archived_change_and_the_changes_own_old_deltas_do_not_refuse() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn an_applied_change_does_not_refuse() {
     let (dir, _) = contested_by(
         "---\ncomponent: a\n---\n## REMOVED Requirements\n### Requirement: old <!-- base: BASE -->\n",
@@ -1194,7 +1326,7 @@ fn an_applied_change_does_not_refuse() {
 }
 
 #[test]
-// req:rename/refusals@8232ad18
+// req:rename/refusals@d7194f56
 fn a_missing_component_and_an_existing_requirement_refuse() {
     let dir = repo();
     let d = dir.path();
@@ -1236,7 +1368,7 @@ fn flag(version: &str) -> String {
 }
 
 #[test]
-// req:rename/flag-rerecord@d115e4a4
+// req:rename/flag-rerecord@3f249b07
 fn a_flag_on_a_reworded_requirement_stays_current() {
     let (dir, old) = flag_repo("  - term: sprocket\n    to: cogs\n");
     let d = dir.path();
@@ -1248,7 +1380,7 @@ fn a_flag_on_a_reworded_requirement_stays_current() {
 }
 
 #[test]
-// req:rename/flag-rerecord@d115e4a4
+// req:rename/flag-rerecord@3f249b07
 fn a_flag_on_a_renamed_requirement_follows_it() {
     let (dir, old) = flag_repo("  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1261,7 +1393,7 @@ fn a_flag_on_a_renamed_requirement_follows_it() {
 }
 
 #[test]
-// req:rename/flag-rerecord@d115e4a4
+// req:rename/flag-rerecord@3f249b07
 fn a_flag_at_an_older_version_keeps_it() {
     let (dir, _) = flag_repo("  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1270,6 +1402,51 @@ fn a_flag_at_an_older_version_keeps_it() {
     clm_rename::rename(d, "r").unwrap();
     let want = flag("00000000").replace("requirement: a/x@", "requirement: a/y@");
     assert_eq!(read(d, "backlog/f.md"), want);
+}
+
+#[test]
+// req:rename/flag-rerecord@3f249b07
+fn a_quoted_flag() {
+    for quote in ["\"", "'"] {
+        let text = |v: &str| {
+            flag(v).replace(
+                &format!("requirement: a/x@{v}"),
+                &format!("requirement:  {quote}a/x@{v}{quote}"),
+            )
+        };
+        let dir = markers_repo("d", "  - term: sprocket\n    to: cogs\n");
+        let d = dir.path();
+        let old = version_of(d, "a/x");
+        write(d, "backlog/f.md", &text(&old));
+        git(d, &["init", "-q"]);
+        git(d, &["add", "-A"]);
+        clm_rename::rename(d, "r").unwrap();
+        let new = version_of(d, "a/x");
+        assert_ne!(new, old);
+        assert_eq!(read(d, "backlog/f.md"), text(&new));
+        assert!(violations(d).iter().all(|v| !v.path.starts_with("backlog")));
+    }
+}
+
+#[test]
+// req:rename/flag-rerecord@3f249b07
+fn a_quoted_flag_on_a_renamed_requirement() {
+    let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
+    let d = dir.path();
+    let old = version_of(d, "a/x");
+    let text = |id: &str, v: &str| {
+        flag(v).replace(
+            &format!("requirement: a/x@{v}"),
+            &format!("requirement:  '{id}@{v}' # flaky"),
+        )
+    };
+    write(d, "backlog/f.md", &text("a/x", &old));
+    git(d, &["init", "-q"]);
+    git(d, &["add", "-A"]);
+    clm_rename::rename(d, "r").unwrap();
+    let new = version_of(d, "a/y");
+    assert_ne!(new, old);
+    assert_eq!(read(d, "backlog/f.md"), text("a/y", &new));
 }
 
 fn component_repo(items: &[(&str, &str)]) -> TempDir {
@@ -1306,7 +1483,7 @@ fn component_repo(items: &[(&str, &str)]) -> TempDir {
 }
 
 #[test]
-// req:rename/component-key@82737665
+// req:rename/component-key@ad92e97c
 fn deltas_name_their_component() {
     let dir = component_repo(&[]);
     let d = dir.path();
@@ -1324,7 +1501,7 @@ fn deltas_name_their_component() {
 }
 
 #[test]
-// req:rename/component-key@82737665
+// req:rename/references@dd6cdde7
 fn items_by_the_components_key() {
     let dir = component_repo(&[("x", "components: [a.b]")]);
     let d = dir.path();
@@ -1333,7 +1510,7 @@ fn items_by_the_components_key() {
 }
 
 #[test]
-// req:rename/marker-rewrite@f5ba4d47
+// req:rename/marker-rewrite@2fec649c
 fn a_marker_outside_a_test_is_rewritten() {
     let dir = markers_repo("d", "  - requirement: a/x\n    to: y\n");
     let d = dir.path();
@@ -1349,4 +1526,149 @@ fn a_marker_outside_a_test_is_rewritten() {
     let new = version_of(d, "a/y");
     assert_eq!(read(d, "src/lib.rs"), code("a/y", &format!("@{new}")));
     assert_eq!(read(d, "src/bare.rs"), code("a/y", ""));
+}
+
+#[test]
+// req:rename/undo-on-failure@09708a89
+fn a_write_after_the_apply_fails() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(
+        d,
+        "backlog/q.md",
+        "---\ntitle: Q\nkind: question\ncomponents: [a]\n---\n\nWhich?\n",
+    );
+    write(d, "changes/r/deltas/old.md", "not a delta\n");
+    let source = change("  - requirement: a/x\n    to: y\n", "resolves: [q]\n");
+    write(d, "changes/r/change.md", &source);
+    let old = version_of(d, "a/x");
+    write(d, "crates/x/tests/t.rs", &cite("a/x", &old));
+    let test = d.join("crates/x/tests/t.rs");
+    let mut perms = fs::metadata(&test).unwrap().permissions();
+    perms.set_readonly(true);
+    fs::set_permissions(&test, perms).unwrap();
+    let spec = read(d, "specs/a/SPEC.md");
+    let failure = rename(d, "r").unwrap_err();
+    assert_eq!(failure.exit_code(), 1, "{failure}");
+    assert!(
+        failure.to_string().contains("crates/x/tests/t.rs"),
+        "{failure}"
+    );
+    assert_eq!(read(d, "specs/a/SPEC.md"), spec);
+    assert_eq!(read(d, "changes/r/change.md"), source);
+    let deltas: Vec<_> = fs::read_dir(d.join("changes/r/deltas"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(deltas, ["old.md"]);
+    assert_eq!(read(d, "changes/r/deltas/old.md"), "not a delta\n");
+    assert!(d.join("backlog/q.md").exists());
+    assert!(!d.join("changes/archive").exists());
+    assert_eq!(read(d, "crates/x/tests/t.rs"), cite("a/x", &old));
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_reference_in_fenced_code() {
+    let dir = references_repo();
+    let d = dir.path();
+    write(
+        d,
+        "specs/e/SPEC.md",
+        &node(
+            "",
+            "Example:\n\n  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/x`",
+            &[("q", "Q SHALL.")],
+        ),
+    );
+    rename(d, "r").unwrap();
+    let e = read(d, "specs/e/SPEC.md");
+    assert!(
+        e.contains("  ~~~\n  see `a/x`\n  ~~~\n\nsee `a/y`\n"),
+        "{e}"
+    );
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_list_in_block_style() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(d, "specs/c/SPEC.md", &node("", "d", &[("z", "Z SHALL.")]));
+    let item = "---\ntitle: T\nkind: idea\ncomponents:\n  - a\n  - c\nblocks:\n  - \"a/x\"\n---\n\nbody names a\n";
+    write(d, "backlog/x.md", item);
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: d\n", ""),
+    );
+    rename(d, "r").unwrap();
+    assert_eq!(
+        read(d, "backlog/x.md"),
+        item.replace("  - a\n", "  - d\n")
+            .replace("\"a/x\"", "\"d/x\"")
+    );
+    assert!(violations(d).is_empty(), "{:?}", violations(d));
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_key_that_holds_no_reference() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(
+        d,
+        "specs/b/SPEC.md",
+        &node(
+            "successor: \"a\"\ndepends_on: [a]\n",
+            "d",
+            &[("z", "Z SHALL.")],
+        ),
+    );
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - component: a\n    to: d\n", ""),
+    );
+    rename(d, "r").unwrap();
+    let b = read(d, "specs/b/SPEC.md");
+    assert!(b.contains("successor: \"a\"\ndepends_on: [d]\n"), "{b}");
+}
+
+#[test]
+// req:rename/references@dd6cdde7
+fn a_marker_in_the_archive() {
+    let dir = repo();
+    let d = dir.path();
+    write(d, "specs/a/SPEC.md", &node("", "d", &[("x", "X SHALL.")]));
+    write(
+        d,
+        "changes/archive/old/change.md",
+        "---\nstatus: done\n---\n\n## Intent\nOld.\n",
+    );
+    write(
+        d,
+        "changes/archive/old/deltas/a.md",
+        "---\ncomponent: a\n---\n## ADDED Requirements\n### Requirement: x\nX SHALL.\n\n#### Scenario: holds\n- ok\n",
+    );
+    let test = |id: &str| format!("// {}{id}\n#[test]\nfn t() {{}} // a/x stays\n", "req:");
+    write(d, "changes/archive/old/assets/a/t.rs", &test("a/x"));
+    write(d, "docs/decisions/d.txt", "`a/x`\n");
+    write(
+        d,
+        "changes/r/change.md",
+        &change("  - requirement: a/x\n    to: y\n", ""),
+    );
+    rename(d, "r").unwrap();
+    assert_eq!(read(d, "changes/archive/old/assets/a/t.rs"), test("a/y"));
+    assert_eq!(read(d, "docs/decisions/d.txt"), "`a/x`\n");
+    let graph = clm_model::load(d).0;
+    let scan = clm_coverage::scan(d);
+    assert!(!scan.req.is_empty());
+    for marker in scan.req.iter().chain(&scan.outside) {
+        assert!(graph.requirement(&marker.id).is_some(), "{}", marker.id);
+    }
 }

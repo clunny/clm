@@ -69,18 +69,65 @@ impl Edits {
         std::mem::take(&mut *self.seen.borrow_mut())
     }
 
-    /// A frontmatter or backlog value line, `key: value`, with each ID in the value of one of
-    /// `keys` renamed; any other line as it was. A recorded version (`id@8hex`) keeps its
-    /// version.
+    /// Frontmatter text with each ID in the value of one of `keys` renamed, whether the value
+    /// is on the key's line (`key: [a, b]`, quoted or bare) or, in block style, on the lines
+    /// below it that continue it (`  - a`); any other line as it was. A recorded version
+    /// (`id@8hex`) keeps its version.
     pub(crate) fn values(&self, text: &str, keys: &[&str]) -> String {
+        let mut within = false;
         text.split_inclusive('\n')
-            .map(|line| match line.split_once(':') {
-                Some((key, value)) if keys.contains(&key) => {
-                    format!("{key}:{}", self.tokens(value))
+            .map(|line| {
+                if line.starts_with([' ', '\t', '-']) {
+                    return if within {
+                        self.tokens(line)
+                    } else {
+                        line.to_string()
+                    };
                 }
-                _ => line.to_string(),
+                match line.split_once(':') {
+                    Some((key, value)) if keys.contains(&key) => {
+                        within = true;
+                        format!("{key}:{}", self.tokens(value))
+                    }
+                    _ => {
+                        within = false;
+                        line.to_string()
+                    }
+                }
             })
             .collect()
+    }
+
+    /// The first of `keys` in frontmatter `text` whose value spans more than one line and
+    /// names a renamed ID, which a delta can't modify (`apply/frontmatter`).
+    pub(crate) fn spanning<'k>(&self, text: &str, keys: &[&'k str]) -> Option<&'k str> {
+        let mut at: Option<(&'k str, String, usize)> = None;
+        let mut found = None;
+        let mut close = |at: Option<(&'k str, String, usize)>| {
+            if let Some((key, value, lines)) = at
+                && lines > 1
+                && self.tokens(&value) != value
+            {
+                found = found.or(Some(key));
+            }
+        };
+        for line in text.lines() {
+            if line.starts_with([' ', '\t', '-']) {
+                if let Some((_, value, lines)) = &mut at {
+                    value.push_str(line);
+                    *lines += 1;
+                }
+                continue;
+            }
+            close(at.take());
+            if let Some((key, value)) = line.split_once(':')
+                && let Some(key) = keys.iter().find(|k| **k == key)
+            {
+                at = Some((key, value.to_string(), 1));
+            }
+        }
+        close(at);
+        found
     }
 
     fn tokens(&self, value: &str) -> String {
@@ -105,7 +152,8 @@ impl Edits {
     /// Spec text with references and terms rewritten (`references`, `term-swap`). Headings,
     /// except those in `headings`, which are replaced whole, are left alone, as are the
     /// lines of fenced code for references; the ID lines of `Needs`, `Serves` and
-    /// `Enforced by` blocks are references, never swapped.
+    /// `Enforced by` blocks are references, never swapped. A line of fenced code is never a
+    /// heading, so its terms are swapped and it starts or ends no block.
     pub(crate) fn body(&self, text: &str, headings: &BTreeMap<String, String>) -> String {
         let mut out = String::new();
         let (mut fenced, mut ids) = (false, false);
@@ -116,7 +164,7 @@ impl Edits {
             if marker.starts_with("```") || marker.starts_with("~~~") {
                 fenced = !fenced;
                 out.push_str(line);
-            } else if content.starts_with('#') {
+            } else if content.starts_with('#') && !fenced {
                 ids = matches!(
                     content.trim_end(),
                     "#### Needs" | "#### Serves" | "#### Enforced by"

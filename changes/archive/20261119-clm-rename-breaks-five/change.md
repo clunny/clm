@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [clm-rename-breaks-five-of-its-own-requirements-at-the-edges]
 ---
 
