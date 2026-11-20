@@ -316,3 +316,24 @@ fn reads_at_a_revision_name_the_roots_file() {
         out.cuts
     );
 }
+
+#[test]
+fn a_spec_changed_on_both_sides_is_named_from_the_root() {
+    // req:gate/paths-under-the-root@6ac586a5
+    let dir = repo("");
+    let d = dir.path();
+    git(d, &["checkout", "-q", "main"]);
+    write(d, "tool/specs/a/SPEC.md", &format!("{A}\nmain's\n"));
+    commit(d, "main moves");
+    git(d, &["checkout", "-q", "pr"]);
+    write(d, "tool/specs/a/SPEC.md", &format!("the branch's\n{A}"));
+    commit(d, "the branch moves");
+    let out = evaluate_at(&d.join("tool"), "main", "HEAD", true).unwrap();
+    let paths: Vec<String> = out
+        .violations
+        .iter()
+        .filter(|v| v.rule == "gate/up-to-date")
+        .map(|v| v.path.display().to_string())
+        .collect();
+    assert_eq!(paths, ["specs/a/SPEC.md"], "{:?}", out.violations);
+}
