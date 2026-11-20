@@ -720,7 +720,8 @@ pub fn entries(files: &FileMap) -> Vec<clm_gate::Entry> {
         .collect()
 }
 
-/// `clm fingerprint` of `head` against `base`, over the entries the fake lists for them.
+/// The fingerprint of `head` against `base` over the entries the fake lists for them, the
+/// whole repository's tree, as `keys::fingerprint` computes it.
 pub fn fingerprint_of(base: &FileMap, head: &FileMap) -> String {
     clm_gate::fingerprint_of(&entries(base), &entries(head))
 }
