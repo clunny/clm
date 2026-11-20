@@ -289,7 +289,7 @@ pub struct Comparison {
     pub decisions: Vec<Record>,
     pub backlog: Vec<Record>,
     pub documents: Vec<Document>,
-    /// `clm fingerprint` of the branch, `None` when a listing was truncated.
+    /// The branch's fingerprint (`Trees::fingerprint`), `None` when a listing was truncated.
     pub fingerprint: Option<String>,
     /// The head's code key, `None` when GitHub truncated its tree.
     pub code_key: Option<String>,
@@ -638,8 +638,9 @@ pub struct Trees {
 }
 
 impl Trees {
-    /// `clm fingerprint` of the branch (`web.worker.review/fingerprint-from-trees`), `None` when
-    /// either listing is truncated.
+    /// The branch's fingerprint over the whole repository's tree, which is what
+    /// `clm fingerprint` prints when the CLM root is the repository's top
+    /// (`web.worker.review/fingerprint-from-trees`), `None` when either listing is truncated.
     pub fn fingerprint(&self) -> Option<String> {
         keys::fingerprint(&self.base, &self.head)
     }
