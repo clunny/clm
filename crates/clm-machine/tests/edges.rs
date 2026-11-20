@@ -21,7 +21,7 @@ fn plain(line: &str) -> String {
 
 #[test]
 fn a_row_is_cut_to_a_narrow_width() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let mut r = readings();
     r.load5 = Some(40.0);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -42,7 +42,7 @@ fn a_row_is_cut_to_a_narrow_width() {
 
 #[test]
 fn the_sample_holds_the_shares() {
-    // req:machine/machine-history@67a1a6a6
+    // req:machine/machine-history@c34a107b
     let dir = repo();
     let snapshot = clm_machine::read(dir.path(), 3, 4, clm_git::now());
     let report = &snapshot.report;
@@ -57,7 +57,7 @@ fn the_sample_holds_the_shares() {
 
 #[test]
 fn a_reading_the_system_refuses_is_unknown() {
-    // req:machine/machine-report@5f920ce4
+    // req:machine/machine-report@ec4a0cdd
     let mut r = readings();
     (r.memory, r.disk) = (None, None);
     let report = judged(&r, &Record::default(), &[], 3);
@@ -68,7 +68,7 @@ fn a_reading_the_system_refuses_is_unknown() {
 
 #[test]
 fn a_sparse_file_takes_the_blocks_it_has() {
-    // req:machine/build-measure@322d7d46
+    // req:machine/build-measure@25e6eaf6
     let dir = repo();
     let (_holder, tree) = build(dir.path(), "a");
     fs::File::create(tree.join("sparse"))
