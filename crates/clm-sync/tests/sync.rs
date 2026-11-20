@@ -3248,6 +3248,33 @@ fn specs_conflict_in_a_subdirectory_root() {
     assert_eq!(git(&r.work, &["status", "--porcelain"]), "");
 }
 
+/// On a branch that adds a change, `specs/` keeps `origin/main`'s side: the root's, never a
+/// `specs/` directory at the repository's top, whose conflict is the caller's.
+#[test]
+fn a_top_level_specs_conflict_is_reported() {
+    // req:sync/paths-under-the-root@6e985447
+    let r = repo_at("spec/x", TOOL);
+    write(&r.work, "specs/notes.md", "one\ntwo\nthree\n");
+    commit(&r.work, "notes");
+    git(&r.work, &["push", "-q", "origin", "HEAD:main"]);
+    let root = tool(&r);
+    write(
+        &root,
+        "changes/y/change.md",
+        "---\nstatus: proposed\n---\n\n# y\n",
+    );
+    write(&root, "changes/y/deltas/a.md", &adds_x());
+    clm_apply::apply(&root, "y").unwrap();
+    write(&r.work, "specs/notes.md", "one\nTWO\nthree\n");
+    commit(&r.work, "Apply y");
+    main_moves(&r, &[("specs/notes.md", "one\n2\nthree\n")]);
+
+    let report = sync_tool(&r);
+    assert!(!report.ok);
+    assert_eq!(report.lines, ["conflict ../specs/notes.md"]);
+    assert!(rebasing(&r), "the rebase is left in progress");
+}
+
 #[test]
 fn a_conflict_outside_the_root() {
     // req:sync/paths-under-the-root@6e985447
