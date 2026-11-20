@@ -57,5 +57,53 @@ fn refuses_unfinished_change_or_existing_target() {
     fs::create_dir_all(d.join("changes/archive/x")).unwrap();
     let v = archive(d, "x").unwrap_err();
     assert_eq!(v[0].rule, "apply/archive-command");
+    assert!(v[0].message.contains("changes/archive/x"), "{v:?}");
     assert!(d.join("changes/x/change.md").is_file());
+}
+
+#[test]
+fn the_archive_holds_the_same_change() {
+    // req:apply/archive-command@08442b52
+    let dir = repo("done");
+    let d = dir.path();
+    fs::create_dir_all(d.join("changes/archive/x")).unwrap();
+    fs::write(
+        d.join("changes/archive/x/change.md"),
+        "---\nstatus: done\n---\n",
+    )
+    .unwrap();
+    let lines: Vec<String> = archive(d, "x")
+        .unwrap_err()
+        .iter()
+        .map(|v| v.to_string())
+        .collect();
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("apply/archive-command") && l.contains("changes/archive/x")),
+        "{lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|l| l.contains("no unarchived change")),
+        "{lines:?}"
+    );
+    assert!(d.join("changes/x/change.md").is_file());
+}
+
+#[test]
+fn no_such_change() {
+    // req:apply/archive-command@08442b52
+    let dir = repo("done");
+    let lines: Vec<String> = archive(dir.path(), "nope")
+        .unwrap_err()
+        .iter()
+        .map(|v| v.to_string())
+        .collect();
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("apply/archive-command")
+                && l.contains("no unarchived change `nope`")),
+        "{lines:?}"
+    );
 }

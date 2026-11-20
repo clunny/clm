@@ -326,6 +326,7 @@ fn backlog_and_archive_commands() {
     );
     let (code, out) = clm(dir.path(), &["archive", "c"]);
     assert_eq!(code, Some(0), "{out}");
+    assert_eq!(out, "archived c -> changes/archive/c\n");
     assert!(dir.path().join("changes/archive/c/change.md").is_file());
 }
 

@@ -137,6 +137,15 @@ pub fn archive(root: &Path, id: &str) -> Result<PathBuf, Vec<Violation>> {
             message,
         )])
     };
+    let to = PathBuf::from("changes")
+        .join(clm_model::ARCHIVE_DIR)
+        .join(id);
+    // Read on disk before the graph: a change both live and archived loads only as the
+    // archived one, which would read as no live change (`archive-command`).
+    let live = root.join("changes").join(id).join("change.md").is_file();
+    if live && root.join(&to).exists() {
+        return refuse(format!("{} already exists", to.display()));
+    }
     let Some(change) = graph.changes.get(id).filter(|c| !c.archived) else {
         return refuse(format!("no unarchived change `{id}`"));
     };
@@ -145,12 +154,6 @@ pub fn archive(root: &Path, id: &str) -> Result<PathBuf, Vec<Violation>> {
             "change `{id}` is {:?}; only done or abandoned changes can be archived",
             change.frontmatter.status
         ));
-    }
-    let to = PathBuf::from("changes")
-        .join(clm_model::ARCHIVE_DIR)
-        .join(id);
-    if root.join(&to).exists() {
-        return refuse(format!("{} already exists", to.display()));
     }
     fs::create_dir_all(root.join("changes").join(clm_model::ARCHIVE_DIR))
         .and_then(|_| fs::rename(root.join("changes").join(id), root.join(&to)))
