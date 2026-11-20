@@ -1,5 +1,9 @@
 //! No crate but `clm-git` starts `git`, `gh` or `az`, and none but six starts any process
 //! at all (vcs/one-git-layer).
+// The workspace test reads every crate's manifest and source:
+// clm:reads crates/*/Cargo.toml
+// clm:reads crates/*/build.rs
+// clm:reads crates/*/src/**
 
 use std::path::{Path, PathBuf};
 
@@ -267,6 +271,28 @@ fn a_crate_that_runs_other_programs() {
         "fn main() {\n    std::process::Command::new(\"git\");\n}\n",
     );
     assert_eq!(scan(ws.path()).findings, ["crates/clm-land/build.rs:2"]);
+}
+
+#[test]
+fn a_bare_command_outside_the_six() {
+    // req:vcs/one-git-layer@672cd7c7
+    // `Command::new(` alone, after characters of more than one byte, in a crate outside the
+    // six; the same in a directory under `crates/` with no `Cargo.toml`, which isn't a crate.
+    let source = format!(
+        "// {}\nfn f(name: &str) {{\n    Command::new(name);\n}}\n",
+        "é".repeat(40)
+    );
+    let source = source.as_str();
+    let ws = fixture(&[
+        ("a", source),
+        ("clm-check", source),
+        ("clm-loop", source),
+        ("clm-verify", source),
+    ]);
+    write(&ws.path().join("crates/left/src/lib.rs"), source);
+    let found = scan(ws.path());
+    assert_eq!(found.findings, ["crates/a/src/lib.rs:3"]);
+    assert_eq!(found.crates, ["a", "clm-check", "clm-loop", "clm-verify"]);
 }
 
 #[test]
