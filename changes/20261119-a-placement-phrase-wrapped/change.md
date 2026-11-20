@@ -40,3 +40,7 @@ A placement phrase (`SHALL sit`, `sat in`, `is left in`) is found however the st
 
 - A phrase's words separated by a tab or by several spaces on one line match too; nothing in the specs writes them so, and treating them alike keeps one rule.
 - A sentence whose phrase spans a line and holds `test` only on another line still holds both, since the sentence is the unit, not the line.
+
+## Open questions
+
+- No `check.health` test proves the `test-placement` signal on a wrapped sentence: the signal takes the fix through `clm_gate::places_a_test` with no code of its own changing, and `gate`'s scenario proves the match. A health scenario would make `check.health/rule-signals` pending for a test alone, so none is added.
