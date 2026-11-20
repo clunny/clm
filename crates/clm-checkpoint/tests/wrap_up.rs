@@ -320,7 +320,7 @@ fn propose_y(r: &Repo) -> String {
 
 #[test]
 fn scenario_landed_work_cleaned_up() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let (wt, tip) = impl_worktree(&r, "x/a");
     // Claude Code locks the worktrees it makes.
@@ -363,10 +363,81 @@ fn scenario_landed_work_cleaned_up() {
     }
 }
 
+/// The landed `impl/x/a` of "landed work cleaned up", its worktree in
+/// `.claude/worktrees/agent-x-a` locked as Claude Code locks a subagent's, naming process
+/// `pid`. Returns the worktree's path.
+fn landed_build_locked_by(r: &Repo, pid: u32) -> PathBuf {
+    let (wt, tip) = impl_worktree(r, "x/a");
+    let reason = format!("claude agent agent-1 (pid {pid} start 1)");
+    git(
+        &r.work,
+        &[
+            "worktree",
+            "lock",
+            "--reason",
+            &reason,
+            wt.to_str().unwrap(),
+        ],
+    );
+    land_code(r, "impl/x/a", &tip);
+    wt
+}
+
+#[test]
+fn scenario_a_running_subagents_worktree_kept() {
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
+    let r = repo();
+    // This test's own process is running.
+    let wt = landed_build_locked_by(&r, std::process::id());
+
+    let (code, out) = checkpoint(&r.work);
+    assert!(wt.exists(), "{out}");
+    let list = git(&r.work, &["worktree", "list", "--porcelain"]);
+    let entry = list
+        .split("\n\n")
+        .find(|e| e.contains("agent-x-a"))
+        .unwrap_or_else(|| panic!("{list}"));
+    assert!(entry.contains("branch refs/heads/impl/x/a"), "{list}");
+    assert!(exists(&r.work, "refs/heads/impl/x/a"), "{out}");
+    let shown = wt.display().to_string();
+    assert!(
+        !out.lines()
+            .any(|l| l.starts_with("removed ") && l.contains(&shown)),
+        "{out}"
+    );
+    assert!(!out.lines().any(|l| l == "removed impl/x/a"), "{out}");
+    assert!(out.ends_with("wrap-up ok\n"), "{out}");
+    assert_eq!(code, Some(0), "{out}");
+}
+
+/// Unix only: elsewhere a lock naming a process ID is held whether or not it runs
+/// (`vcs/held-lock`).
+#[cfg(unix)]
+#[test]
+fn scenario_an_ended_sessions_worktree_removed() {
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
+    let r = repo();
+    let mut child = Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    let wt = landed_build_locked_by(&r, pid);
+
+    let (code, out) = checkpoint(&r.work);
+    assert!(!wt.exists(), "{out}");
+    assert!(!exists(&r.work, "refs/heads/impl/x/a"), "{out}");
+    for line in [
+        format!("removed {}", wt.display()),
+        "removed impl/x/a".into(),
+    ] {
+        assert!(out.lines().any(|l| l == line), "{line}: {out}");
+    }
+    assert_eq!(code, Some(0), "{out}");
+}
+
 #[cfg(unix)]
 #[test]
 fn scenario_builds_worktree_git_cant_remove() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let (wt, tip) = impl_worktree(&r, "x/a");
     land_code(&r, "impl/x/a", &tip);
@@ -408,7 +479,7 @@ fn scenario_builds_worktree_git_cant_remove() {
 
 #[test]
 fn land_off_main_is_ignored() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let tip = spec_branch(&r, "spec/z", true);
     // A `landed` record whose commit never reached `origin/main`.
@@ -423,7 +494,7 @@ fn land_off_main_is_ignored() {
 
 #[test]
 fn scenario_live_claim_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     push_claim(&r.work, "x/b", 0);
     let (code, out) = checkpoint(&r.work);
@@ -433,7 +504,7 @@ fn scenario_live_claim_kept() {
 
 #[test]
 fn scenario_merged_without_a_record() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     // Never pushed, merged into `origin/main` by a merge commit, as a GitHub pull request
     // merged it before the cutover: no `landed` record names it.
@@ -452,7 +523,7 @@ fn scenario_merged_without_a_record() {
 
 #[test]
 fn landed_without_a_record_on_origin_is_removed() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let tip = spec_branch(&r, "spec/g", true);
     let merge = merge_commit(&r, &tip);
@@ -469,7 +540,7 @@ fn landed_without_a_record_on_origin_is_removed() {
 
 #[test]
 fn scenario_branches_from_main_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     // At an older commit on `origin/main`'s first-parent chain, with no commits of its own.
     git(&r.work, &["branch", "spec/m", "origin/main"]);
@@ -590,7 +661,7 @@ fn pushed_ledger_is_safe() {
 
 #[test]
 fn a_branch_deleted_on_origin_is_not_open() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     spec_branch(&r, "spec/d", true);
     // Deleted on `origin` by someone else: the clone's remote-tracking ref must be pruned.
@@ -646,7 +717,7 @@ fn checkpoint_reports_no_review() {
 
 #[test]
 fn recreated_branch_with_an_old_land_is_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let tip = spec_branch(&r, "spec/z", true);
     land(&r, "spec/z", &tip, false, &[]);
@@ -689,7 +760,7 @@ fn scenario_unrecorded_land() {
 
 #[test]
 fn build_worktree_merged_without_a_record_is_removed() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let (wt, tip) = impl_worktree(&r, "x/a");
     let merge = merge_commit(&r, &tip);
@@ -706,7 +777,7 @@ fn build_worktree_merged_without_a_record_is_removed() {
 
 #[test]
 fn landed_at_an_older_tip_is_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let old = spec_branch(&r, "spec/z", true);
     land(&r, "spec/z", &old, false, &[]);
@@ -757,7 +828,7 @@ fn dirty_landed_build_worktree_is_kept_and_reported_elsewhere() {
 
 #[test]
 fn main_checkout_on_a_landed_branch_switches_to_main() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let y = propose_y(&r);
     land(&r, "spec/y", &y, false, &["y"]);
@@ -774,7 +845,7 @@ fn main_checkout_on_a_landed_branch_switches_to_main() {
 
 #[test]
 fn main_checkout_on_a_builds_branch_switches_to_main() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     git(
         &r.work,
@@ -793,7 +864,7 @@ fn main_checkout_on_a_builds_branch_switches_to_main() {
 
 #[test]
 fn dirty_main_checkout_on_a_builds_branch_is_left() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     git(
         &r.work,
@@ -830,7 +901,7 @@ fn dirty_main_checkout_on_a_landed_branch_is_left() {
 
 #[test]
 fn scenario_abandoned_autosync_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     git(
         &r.work,
@@ -848,7 +919,7 @@ fn scenario_abandoned_autosync_kept() {
 
 #[test]
 fn archived_change_releases_its_autosync() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     write(&r.work, "changes/archive/q/change.md", &change("done"));
     push_main(&r.work, "archive q");
@@ -1179,7 +1250,7 @@ fn a_hosts_refusal_while_it_holds_the_tip_is_gits_failure() {
 
 #[test]
 fn runs_from_inside_a_worktree() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let (wt, _) = impl_worktree(&r, "x/b");
     let (done, tip) = impl_worktree(&r, "x/a");
@@ -1193,7 +1264,7 @@ fn runs_from_inside_a_worktree() {
 
 #[test]
 fn the_callers_own_landed_worktree_is_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let (wt, tip) = impl_worktree(&r, "x/a");
     land_code(&r, "impl/x/a", &tip);
@@ -1206,7 +1277,7 @@ fn the_callers_own_landed_worktree_is_kept() {
 
 #[test]
 fn landed_worktree_outside_the_shelf_is_left_alone() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let elsewhere = TempDir::new().unwrap();
     let (wt, tip) = worktree(&r, &elsewhere.path().join("mine"), "spec/m");
@@ -1298,7 +1369,7 @@ fn own_checkout_and_its_branch_are_the_sessions_own() {
 
 #[test]
 fn scenario_builds_abandoned_branch() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     git(&r.work, &["branch", "worktree-agent-1", "origin/main"]);
     spec_branch(&r, "worktree-agent-2", false);
@@ -1330,7 +1401,7 @@ fn scenario_builds_abandoned_branch() {
 
 #[test]
 fn scenario_humans_worktree_kept() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let (wt, tip) = worktree_at(&r, "p3", "a");
     land_code(&r, "impl/a", &tip);
@@ -1346,7 +1417,7 @@ fn scenario_humans_worktree_kept() {
 
 #[test]
 fn only_impl_worktrees_in_claude_worktrees_agent_dirs_are_builds() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     // `agent-1` outside `.claude/worktrees/`, on a landed `impl/a`.
     let outside = r.work.join("other/worktrees/agent-1");
@@ -1366,7 +1437,7 @@ fn only_impl_worktrees_in_claude_worktrees_agent_dirs_are_builds() {
 
 #[test]
 fn git_failure_exits_2() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let dir = TempDir::new().unwrap();
     let (code, out) = checkpoint(dir.path());
     assert_eq!(code, Some(2), "{out}");
@@ -1411,7 +1482,7 @@ fn propose_claim(r: &Repo, slug: &str) {
 
 #[test]
 fn scenario_done_backlog_claims_removed() {
-    // req:orchestrator.checkpoint/checkpoint@3d2718a5
+    // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
     let w = &r.work;
     for slug in ["r", "s", "t"] {
