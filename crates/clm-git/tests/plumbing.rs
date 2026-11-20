@@ -6,13 +6,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn the_remote_is_origin() {
-    // req:vcs/remote-name@bd3b825d
+    // req:vcs/remote-name@9593dcef
     assert_eq!(REMOTE, "origin");
 }
 
 #[test]
 fn fetch_fetches_the_remote() {
-    // req:vcs/remote-name@bd3b825d
+    // req:vcs/fetch-tries-again@3a1fd640
     let dir = tempfile::tempdir().unwrap();
     let origin = dir.path().join("origin");
     std::fs::create_dir(&origin).unwrap();

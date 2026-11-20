@@ -7,7 +7,7 @@ use common::repo;
 
 #[test]
 fn same_as_git_otherwise() {
-    // req:vcs/git-isolated@5e69c07c
+    // req:vcs/git-isolated@e3216e6d
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("a", "a\n")]);
     assert_eq!(

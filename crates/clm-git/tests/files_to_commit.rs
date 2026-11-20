@@ -10,7 +10,7 @@ fn paths(names: &[&str]) -> Vec<PathBuf> {
 
 #[test]
 fn tracked_and_untracked_not_ignored() {
-    // req:vcs/files-to-commit@fb39736c
+    // req:vcs/files-to-commit@886eb772
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("src/a.rs", ""), (".gitignore", "build/\n")]);
     std::fs::write(dir.path().join("notes.txt"), "n").unwrap();
@@ -21,8 +21,18 @@ fn tracked_and_untracked_not_ignored() {
 }
 
 #[test]
+fn relative_to_the_root_sorted() {
+    // req:vcs/files-to-commit@886eb772
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path(), &[("sub/b.rs", "")]);
+    std::fs::write(dir.path().join("sub/a.rs"), "").unwrap();
+    let found = files_to_commit(&dir.path().join("sub")).unwrap();
+    assert_eq!(found, paths(&["a.rs", "b.rs"]));
+}
+
+#[test]
 fn a_file_both_staged_and_changed_once() {
-    // req:vcs/files-to-commit@fb39736c
+    // req:vcs/files-to-commit@886eb772
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("src/a.rs", "one\n")]);
     std::fs::write(dir.path().join("src/a.rs"), "two\n").unwrap();
@@ -31,7 +41,7 @@ fn a_file_both_staged_and_changed_once() {
 
 #[test]
 fn a_deleted_file_is_listed_and_tracked_files_ignore_untracked() {
-    // req:vcs/files-to-commit@fb39736c
+    // req:vcs/files-to-commit@886eb772
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("gone.rs", ""), ("kept.rs", "")]);
     std::fs::remove_file(dir.path().join("gone.rs")).unwrap();
@@ -49,7 +59,7 @@ fn a_deleted_file_is_listed_and_tracked_files_ignore_untracked() {
 #[cfg(unix)]
 #[test]
 fn a_name_that_is_not_utf8() {
-    // req:vcs/files-to-commit@fb39736c
+    // req:vcs/files-to-commit@886eb772
     use std::os::unix::ffi::OsStrExt;
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("a.rs", "")]);
@@ -62,7 +72,7 @@ fn a_name_that_is_not_utf8() {
 
 #[test]
 fn info_exclude_and_subdirectory_root() {
-    // req:vcs/files-to-commit@fb39736c
+    // req:vcs/files-to-commit@886eb772
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("top.rs", ""), ("sub/a.rs", "")]);
     std::fs::write(dir.path().join(".git/info/exclude"), "hidden.txt\n").unwrap();
@@ -74,7 +84,7 @@ fn info_exclude_and_subdirectory_root() {
 
 #[test]
 fn a_conflicted_file_once() {
-    // req:vcs/files-to-commit@fb39736c
+    // req:vcs/files-to-commit@886eb772
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("x.rs", "base\n")]);
     sh(dir.path(), &["switch", "-q", "-c", "other"]);

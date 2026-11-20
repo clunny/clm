@@ -54,7 +54,7 @@ fn listings(root: &Path) -> usize {
 
 #[test]
 fn a_listing_that_meets_a_worktree_being_added_goes_on() {
-    // req:vcs/worktrees-tries-again@17533c62
+    // req:vcs/worktrees-tries-again@c983d508
     let (_dir, root, linked) = repo_with("once");
     let start = Instant::now();
     let list = clm_git::worktrees(&root).unwrap();
@@ -71,7 +71,7 @@ fn a_listing_that_meets_a_worktree_being_added_goes_on() {
 
 #[test]
 fn a_listing_that_keeps_failing_returns_the_last_error() {
-    // req:vcs/worktrees-tries-again@17533c62
+    // req:vcs/worktrees-tries-again@c983d508
     let (_dir, root, _linked) = repo_with("always");
     let start = Instant::now();
     let err = clm_git::worktrees(&root).unwrap_err().to_string();

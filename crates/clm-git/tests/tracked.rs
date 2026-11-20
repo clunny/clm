@@ -11,7 +11,7 @@ fn paths(names: &[&str]) -> Vec<PathBuf> {
 
 #[test]
 fn globs_match_by_git_rules() {
-    // req:vcs/tracked-files@8462e6d9
+    // req:vcs/tracked-files@ca4babf8
     let dir = tempfile::tempdir().unwrap();
     repo(
         dir.path(),
@@ -28,7 +28,7 @@ fn globs_match_by_git_rules() {
 
 #[test]
 fn paths_are_relative_to_root() {
-    // req:vcs/tracked-files@8462e6d9
+    // req:vcs/tracked-files@ca4babf8
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("top.rs", ""), ("src/a/x.rs", "")]);
     let src = dir.path().join("src");
@@ -38,8 +38,28 @@ fn paths_are_relative_to_root() {
 }
 
 #[test]
+fn relative_to_the_root_in_git_s_order() {
+    // req:vcs/tracked-files@ca4babf8
+    let dir = tempfile::tempdir().unwrap();
+    repo(
+        dir.path(),
+        &[("src/a/x.rs", ""), ("src/a/b/y.rs", ""), ("src/b/z.rs", "")],
+    );
+    let found = tracked_files(&dir.path().join("src")).unwrap();
+    assert_eq!(found, paths(&["a/b/y.rs", "a/x.rs", "b/z.rs"]));
+}
+
+#[test]
+fn outside_a_repository() {
+    // req:vcs/tracked-files@ca4babf8
+    let dir = tempfile::tempdir().unwrap();
+    assert!(tracked_files(dir.path()).is_err());
+    assert!(tracked_matching(dir.path(), &["*".to_string()]).is_err());
+}
+
+#[test]
 fn no_globs_runs_no_git() {
-    // req:vcs/tracked-files@8462e6d9
+    // req:vcs/tracked-files@ca4babf8
     let dir = tempfile::tempdir().unwrap();
     assert!(tracked_matching(dir.path(), &[]).unwrap().is_empty());
     assert!(tracked_files(dir.path()).is_err());
@@ -47,7 +67,7 @@ fn no_globs_runs_no_git() {
 
 #[test]
 fn a_conflicted_file_once() {
-    // req:vcs/tracked-files@8462e6d9
+    // req:vcs/tracked-files@ca4babf8
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("src/a/x.rs", "base\n")]);
     sh(dir.path(), &["switch", "-q", "-c", "other"]);
@@ -71,7 +91,7 @@ fn a_conflicted_file_once() {
 #[cfg(unix)]
 #[test]
 fn a_name_that_is_not_utf8() {
-    // req:vcs/tracked-files@8462e6d9
+    // req:vcs/tracked-files@ca4babf8
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
     let dir = tempfile::tempdir().unwrap();
