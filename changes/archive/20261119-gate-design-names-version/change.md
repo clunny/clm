@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [gate-design-names-version-5-alone-for-root-relative-paths]
 ---
 
