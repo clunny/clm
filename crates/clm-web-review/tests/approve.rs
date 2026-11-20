@@ -116,6 +116,7 @@ const GIT: &str = "https://api.github.com/repos/o/a/git";
 #[test]
 fn approve_spec_branch() {
     // req:web.worker.review/approve@4584ce53
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
     let (fake, cookie) = setup();
     assert_eq!(approve(&fake, &cookie, "spec/x"), 200);
     assert_eq!(
@@ -231,7 +232,7 @@ fn approve_refuses_a_missing_or_odd_branch() {
 #[test]
 fn truncated_listing() {
     // req:web.worker.review/approve@4584ce53
-    // req:web.worker.review/fingerprint-from-trees@24bcb92e
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
     // With the merge base's listing truncated there's no fingerprint to approve.
     let mut repo = repo();
     repo.truncated_trees.insert("111".into());

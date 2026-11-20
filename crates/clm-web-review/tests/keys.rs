@@ -67,7 +67,8 @@ fn trees_api(dir: &Path, rev: &str) -> serde_json::Value {
 
 #[test]
 fn same_as_the_cli() {
-    // req:web.worker.review/fingerprint-from-trees@24bcb92e
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
+    // The CLM root is the top of the git repository: `specs/SPEC.md` sits at its top.
     let dir = repo();
     let d = dir.path();
     git(d, &["config", "core.abbrev", "16"]);
@@ -109,7 +110,7 @@ fn same_as_the_cli() {
 
 #[test]
 fn truncated_listing_has_no_fingerprint() {
-    // req:web.worker.review/fingerprint-from-trees@24bcb92e
+    // req:web.worker.review/fingerprint-from-trees@c44557f5
     let dir = repo();
     let d = dir.path();
     write(d, &[("a.txt", b"a\n")]);
