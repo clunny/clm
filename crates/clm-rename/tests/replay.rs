@@ -242,6 +242,27 @@ fn a_mode_changed() {
 #[cfg(unix)]
 #[test]
 // req:rename/replay@c35e7a83
+fn an_executable_file_in_the_base_replays() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    git(d, &["init", "-q"]);
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", A);
+    write(d, "run.sh", "#!/bin/sh\n");
+    fs::set_permissions(d.join("run.sh"), fs::Permissions::from_mode(0o755)).unwrap();
+    commit(d, "base");
+    let base = git(d, &["rev-parse", "HEAD"]);
+    write(d, "changes/r/change.md", CHANGE);
+    git(d, &["add", "-A"]);
+    rename(d, "r").unwrap();
+    commit(d, "rename");
+    assert!(replays(d, &base, "HEAD").unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+// req:rename/replay@c35e7a83
 fn a_base_that_holds_a_symbolic_link() {
     let dir = TempDir::new().unwrap();
     let d = dir.path();
