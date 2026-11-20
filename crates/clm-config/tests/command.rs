@@ -76,11 +76,6 @@ fn clm_config_get(cwd: &Path, key: &str) -> Output {
     clm_in(cwd, &["config", "get", key], &[])
 }
 
-/// The root of this repository.
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
-
 fn write(root: &Path, rel: &str, content: &str) {
     let path = root.join(rel);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -89,7 +84,7 @@ fn write(root: &Path, rel: &str, content: &str) {
 
 #[test]
 fn a_command_called_in_a_test() {
-    // req:config/commands-in-crate@ecba0654
+    // req:config/commands-in-crate@3ecfa0a8
     let dir = TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
     write(&root, "specs/SPEC.md", "");
@@ -109,12 +104,28 @@ fn a_command_called_in_a_test() {
     assert!(out.stdout.is_empty());
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.starts_with("clm config: "), "{stderr}");
-    assert!(stderr.ends_with('\n'), "{stderr}");
+    // The TOML parser's wording ends in a line break of its own, and the call adds one.
+    assert!(stderr.ends_with("\n\n"), "{stderr:?}");
+
+    // An error the parser doesn't word ends in the call's line break alone.
+    write(&root, "clm.toml", "");
+    let out = clm_in(
+        &root,
+        &["config", "get", "defects"],
+        &[("CLM_DEFECTS", "always".into())],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert!(stderr.starts_with("clm config: "), "{stderr}");
+    assert!(
+        stderr.ends_with('\n') && !stderr.ends_with("\n\n"),
+        "{stderr:?}"
+    );
 }
 
 #[test]
 fn arguments_it_cannot_parse() {
-    // req:config/commands-in-crate@ecba0654
+    // req:config/commands-in-crate@3ecfa0a8
     let dir = TempDir::new().unwrap();
     for args in [
         &["config", "get", "defects", "--nope"][..],
@@ -167,7 +178,7 @@ fn config_list_in_repo(clm_toml: &str, local: &str) -> (Output, PathBuf) {
 
 #[test]
 fn config_get_from_the_repository() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     let dir = TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
     write(&root, "specs/SPEC.md", "");
@@ -189,7 +200,7 @@ fn config_get_from_the_repository() {
 
 #[test]
 fn config_get_detectors_prints_their_names() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let dir = TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
     write(&root, "specs/SPEC.md", "");
@@ -216,9 +227,16 @@ fn config_get_detectors_prints_their_names() {
 
 #[test]
 fn config_get_default_outside_a_repository() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     let dir = TempDir::new().unwrap();
     write(dir.path(), "clm.toml", "defects = \"backlog\"\n");
+    write(dir.path(), "clm.local.toml", "max_builds = 5\n");
+    let out = clm_config_get(dir.path(), "defects");
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "ask\tdefault\n");
+    let out = clm_config_get(dir.path(), "max_builds");
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "3\tdefault\n");
     let out = clm_config_get(dir.path(), "autosync");
     assert_eq!(out.status.code(), Some(0));
     assert_eq!(String::from_utf8(out.stdout).unwrap(), "true\tdefault\n");
@@ -226,21 +244,21 @@ fn config_get_default_outside_a_repository() {
 
 #[test]
 fn config_get_host_defaults_to_github() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     let (out, _) = config_get_in_repo(None, "host");
     assert_eq!(out, "github\tdefault\n");
 }
 
 #[test]
 fn config_get_host_from_the_repository() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     let (out, path) = config_get_in_repo(Some("host = \"git\"\n"), "host");
     assert_eq!(out, format!("git\t{}\n", path.display()));
 }
 
 #[test]
 fn config_get_host_azure() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     let (out, path) = config_get_in_repo(Some("host = \"azure\"\n"), "host");
     assert_eq!(out, format!("azure\t{}\n", path.display()));
 }
@@ -296,10 +314,10 @@ fn config_get_land_defaults_to_nothing() {
 #[test]
 fn this_repositorys_clm_toml() {
     // req:config/land-check-setting@1baa537e
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     // req:config/affected-setting@7b51c4ec
-    // req:config/health-lcov-here@62a2a08d
-    // req:config/verify-here@fb827562
+    // req:config/health-lcov-here@cfdc2778
+    // req:config/verify-here@6b59481f
     // This repository's `clm.toml`, in a fresh repository, so a `clm.local.toml` in the
     // developer's clone can't change the answer.
     let text =
@@ -331,8 +349,8 @@ fn this_repositorys_clm_toml() {
 
 #[test]
 fn config_get_in_a_linked_worktree_reads_the_main_worktrees_local_file() {
-    // req:config/local-settings@6ef008e6
-    // req:config/max-builds-setting@11205a64
+    // req:config/local-settings@414744c0
+    // req:config/max-builds-setting@6ceda93f
     let dir = TempDir::new().unwrap();
     let base = dir.path().canonicalize().unwrap();
     let main = base.join("main");
@@ -437,7 +455,7 @@ fn config_get_health_from_the_repository() {
 
 #[test]
 fn config_get_component_size_defaults() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", "");
     fs::create_dir(dir.path().join(".git")).unwrap();
@@ -456,7 +474,7 @@ fn config_get_component_size_defaults() {
 
 #[test]
 fn config_get_component_size_from_the_repository() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let dir = TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
     write(&root, "specs/SPEC.md", "");
@@ -480,7 +498,7 @@ fn config_get_component_size_from_the_repository() {
 
 #[test]
 fn config_get_max_builds() {
-    // req:config/max-builds-setting@11205a64
+    // req:config/max-builds-setting@6ceda93f
     let (out, _) = config_get_in_repo(None, "max_builds");
     assert_eq!(out, "3\tdefault\n");
     let (out, path) = config_get_in_repo(Some("max_builds = 2\n"), "max_builds");
@@ -502,7 +520,7 @@ fn config_get_affected() {
 
 #[test]
 fn config_get_unknown_key_exits_1() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     let dir = TempDir::new().unwrap();
     let out = clm_config_get(dir.path(), "colour");
     assert_eq!(out.status.code(), Some(1));
@@ -512,7 +530,7 @@ fn config_get_unknown_key_exits_1() {
 #[cfg(unix)]
 #[test]
 fn config_get_rejects_a_variable_that_is_not_utf8() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     use std::os::unix::ffi::OsStrExt;
     let dir = TempDir::new().unwrap();
     let out = clm_in(
@@ -525,11 +543,68 @@ fn config_get_rejects_a_variable_that_is_not_utf8() {
     );
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("CLM_DEFECTS"));
+    for (var, key, bytes) in [
+        ("CLM_AUTOSYNC", "autosync", &b"true\xff"[..]),
+        ("CLM_MAX_BUILDS", "max_builds", &b"2\xff"[..]),
+        ("CLM_WRITER", "writer", &b"bob\xff"[..]),
+    ] {
+        let out = clm_in(
+            dir.path(),
+            &["config", "get", key],
+            &[(var, std::ffi::OsStr::from_bytes(bytes).into())],
+        );
+        assert_eq!(out.status.code(), Some(1), "{var}");
+        assert!(String::from_utf8_lossy(&out.stderr).contains(var), "{var}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_config_dir_that_is_not_utf8_names_the_replaced_directory() {
+    // req:config/invalid-settings@0edd866f
+    use std::os::unix::ffi::OsStrExt;
+    let dir = TempDir::new().unwrap();
+    let base = dir.path().canonicalize().unwrap();
+    let not_utf8 = |name: &[u8]| -> OsString {
+        let mut bytes = base.as_os_str().as_bytes().to_vec();
+        bytes.push(b'/');
+        bytes.extend_from_slice(name);
+        std::ffi::OsStr::from_bytes(&bytes).into()
+    };
+    let replaced = base.join("x\u{fffd}");
+    write(&replaced, "clm/config.toml", "defects = \"off\"\n");
+    write(
+        &replaced,
+        ".config/clm/config.toml",
+        "defects = \"backlog\"\n",
+    );
+    let get = |vars: &[(&str, OsString)]| {
+        let out = clm_in(dir.path(), &["config", "get", "defects"], vars);
+        assert_eq!(out.status.code(), Some(0), "{vars:?}");
+        String::from_utf8(out.stdout).unwrap()
+    };
+    // `XDG_CONFIG_HOME`, then `HOME` with `XDG_CONFIG_HOME` empty: each read as the replaced value.
+    assert_eq!(
+        get(&[("XDG_CONFIG_HOME", not_utf8(b"x\xff"))]),
+        format!("off\t{}\n", replaced.join("clm/config.toml").display())
+    );
+    assert_eq!(
+        get(&[("XDG_CONFIG_HOME", "".into()), ("HOME", not_utf8(b"x\xff"))]),
+        format!(
+            "backlog\t{}\n",
+            replaced.join(".config/clm/config.toml").display()
+        )
+    );
+    // A replaced directory that holds no file is skipped.
+    assert_eq!(
+        get(&[("XDG_CONFIG_HOME", not_utf8(b"y\xff"))]),
+        "ask\tdefault\n"
+    );
 }
 
 #[test]
 fn config_get_exits_1_when_settings_cannot_load() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", "");
     write(dir.path(), "clm.toml", "defect = \"off\"\n");
@@ -544,7 +619,7 @@ fn config_get_exits_1_when_settings_cannot_load() {
 
 #[test]
 fn config_get_prints_each_upgrade_key_with_its_file() {
-    // req:config/upgrade-settings@ec4b2181
+    // req:config/upgrade-settings@d1586c03
     let dir = TempDir::new().unwrap();
     let root = dir.path().canonicalize().unwrap();
     write(&root, "specs/SPEC.md", "");
@@ -571,7 +646,7 @@ fn config_get_prints_each_upgrade_key_with_its_file() {
 
 #[test]
 fn config_list_prints_every_key_with_its_layer() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let (out, root) = config_list_in_repo("defects = \"backlog\"\n", "max_builds = 5\n");
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8(out.stdout).unwrap();
@@ -596,7 +671,7 @@ fn config_list_prints_every_key_with_its_layer() {
 
 #[test]
 fn config_list_prints_a_line_per_env_variable() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let (out, root) = config_list_in_repo("[env]\nA = \"1\"\n", "[env]\nB = \"2\"\n");
     assert_eq!(out.status.code(), Some(0));
     let stdout = String::from_utf8(out.stdout).unwrap();
@@ -616,7 +691,7 @@ fn config_list_prints_a_line_per_env_variable() {
 
 #[test]
 fn config_list_of_an_invalid_edit_prints_nothing_and_fails() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let (out, _) = config_list_in_repo("", "max_builds = 0\n");
     assert_eq!(out.status.code(), Some(1));
     assert!(out.stdout.is_empty());
@@ -627,7 +702,7 @@ fn config_list_of_an_invalid_edit_prints_nothing_and_fails() {
 
 #[test]
 fn every_key_config_list_prints_is_one_config_get_accepts() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let dir = TempDir::new().unwrap();
     for key in clm_config::KEYS {
         let out = clm_config_get(dir.path(), key);
@@ -646,22 +721,11 @@ fn config_get_build_prints_the_setup_and_the_file() {
 
 #[test]
 fn config_get_env_prints_a_line_per_variable() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     let (out, file) = config_get_in_repo(Some("[env]\nB = \"2\"\nA = \"1\"\n"), "env");
     assert_eq!(out, format!("A=1\t{0}\nB=2\t{0}\n", file.display()));
     let (out, _) = config_get_in_repo(None, "env");
     assert_eq!(out, "\tdefault\n");
-}
-
-#[test]
-fn this_repository_names_the_retired_terms_detector() {
-    // req:config/retired-terms-detector@1e881e15
-    let out = clm_config_get(&repo_root(), "detectors");
-    let stdout = String::from_utf8(out.stdout).unwrap();
-    assert!(
-        stdout.starts_with("unused-dependencies,unreferenced-public-items,retired-terms\t"),
-        "{stdout}"
-    );
 }
 
 #[test]

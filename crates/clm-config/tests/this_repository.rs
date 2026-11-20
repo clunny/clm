@@ -1,24 +1,12 @@
-//! This repository's own detectors, as its `clm.toml` names them (`unreferenced-detector`,
-//! `retired-terms-detector`).
+//! This repository's own `unreferenced-public-items` detector, as its `clm.toml` names it
+//! (`unreferenced-detector`).
 
 // clm:reads clm.toml
 // clm:reads specs/**
 // clm:reads backlog/**
-// clm:reads ARCHITECTURE.md
-// clm:reads CAPABILITIES.md
-// clm:reads CLAUDE.md
-// clm:reads AGENTS.md
-// clm:reads README.md
-// clm:reads docs/guide/**
-// clm:reads docs/spec-format.md
-// clm:reads plugin/**
-// clm:reads web/src/**
-// clm:reads scripts/retired-terms.sh
-// clm:reads scripts/retired-terms.txt
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::TempDir;
 
@@ -97,7 +85,7 @@ fn crate_node_slug(krate: &str) -> String {
 
 #[test]
 fn unreferenced_detector_is_named_here() {
-    // req:config/unreferenced-detector@d9f516a5
+    // req:config/unreferenced-detector@85fc8b30
     let names: Vec<_> = this_repository_detectors()
         .into_iter()
         .map(|d| d.name)
@@ -138,7 +126,7 @@ fn unreferenced_detector_is_named_here() {
 
 #[test]
 fn unreferenced_allow_list_gives_every_entry_a_reason() {
-    // req:config/unreferenced-detector@d9f516a5
+    // req:config/unreferenced-detector@85fc8b30
     let lines = unreferenced_command_lines();
     let mut lines = lines.iter().filter(|l| !l.is_empty());
     assert_eq!(
@@ -202,27 +190,5 @@ fn unreferenced_allow_list_gives_every_entry_a_reason() {
     assert!(
         after_pair || reason.is_empty(),
         "no pairs after the last comment"
-    );
-}
-
-#[test]
-fn the_retired_terms_detector_passes_here() {
-    // req:config/retired-terms-detector@1e881e15
-    // The detector's command as `clm check` runs it, from the repository's root.
-    let detector = this_repository_detectors()
-        .into_iter()
-        .find(|d| d.name == "retired-terms")
-        .expect("retired-terms detector");
-    let out = Command::new(&detector.command[0])
-        .args(&detector.command[1..])
-        .current_dir(repo_root())
-        .output()
-        .unwrap();
-    assert_eq!(
-        out.status.code(),
-        Some(0),
-        "{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
     );
 }

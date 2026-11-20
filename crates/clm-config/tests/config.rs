@@ -82,7 +82,7 @@ fn files() -> Fixture {
 
 #[test]
 fn repository_over_user() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = files();
     let s = f.load(&[]).unwrap();
     assert_eq!(s.defects.value, Defects::Backlog);
@@ -93,7 +93,7 @@ fn repository_over_user() {
 
 #[test]
 fn variable_over_files() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = files();
     let s = f
         .load(&[("CLM_DEFECTS", "ask"), ("CLM_AUTOSYNC", "0")])
@@ -106,7 +106,7 @@ fn variable_over_files() {
 
 #[test]
 fn autosync_variable_accepts_true_and_false_spellings() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = Fixture::new(Some("autosync = false\n"), None);
     for (v, want) in [("0", false), ("false", false), ("1", true), ("true", true)] {
         let s = f.load(&[("CLM_AUTOSYNC", v)]).unwrap();
@@ -116,7 +116,7 @@ fn autosync_variable_accepts_true_and_false_spellings() {
 
 #[test]
 fn no_files_gives_defaults() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = Fixture::new(None, None);
     let s = f.load(&[]).unwrap();
     assert_eq!(s.defects.value, Defects::Ask);
@@ -127,7 +127,7 @@ fn no_files_gives_defaults() {
 
 #[test]
 fn no_root_reads_only_the_user_file() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = files();
     let env = HashMap::from([(
         "XDG_CONFIG_HOME".to_string(),
@@ -140,7 +140,7 @@ fn no_root_reads_only_the_user_file() {
 
 #[test]
 fn home_fallback_when_xdg_unset_or_empty() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let dir = TempDir::new().unwrap();
     let file = dir.path().join(".config/clm/config.toml");
     fs::create_dir_all(file.parent().unwrap()).unwrap();
@@ -159,10 +159,29 @@ fn home_fallback_when_xdg_unset_or_empty() {
 
 #[test]
 fn no_home_no_user_file() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let s = load_with(None, &HashMap::new()).unwrap();
     assert_eq!(s.defects.layer, Layer::Default);
     assert_eq!(s.autosync.layer, Layer::Default);
+    for key in clm_config::KEYS {
+        for line in s.lines(key).unwrap() {
+            assert!(line.ends_with("\tdefault"), "{key}: {line}");
+        }
+    }
+}
+
+#[test]
+fn a_user_config_dir_that_is_a_file_fails_naming_the_file() {
+    // req:config/invalid-settings@0edd866f
+    let dir = TempDir::new().unwrap();
+    let xdg = dir.path().join("xdg");
+    fs::write(&xdg, "").unwrap();
+    let env = HashMap::from([("XDG_CONFIG_HOME".to_string(), xdg.display().to_string())]);
+    let e = load_with(None, &env).unwrap_err();
+    assert_eq!(
+        e.source,
+        Some(xdg.join("clm/config.toml").display().to_string())
+    );
 }
 
 fn error(f: &Fixture, vars: &[(&str, &str)]) -> String {
@@ -171,7 +190,7 @@ fn error(f: &Fixture, vars: &[(&str, &str)]) -> String {
 
 #[test]
 fn unknown_key_names_file_and_key() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let f = Fixture::new(None, Some("defect = \"off\"\n"));
     let e = error(&f, &[]);
     assert!(e.contains("clm.toml"), "{e}");
@@ -180,7 +199,7 @@ fn unknown_key_names_file_and_key() {
 
 #[test]
 fn bad_defects_variable() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let e = error(&Fixture::new(None, None), &[("CLM_DEFECTS", "always")]);
     assert!(e.contains("CLM_DEFECTS"), "{e}");
     assert!(e.contains("always"), "{e}");
@@ -189,7 +208,7 @@ fn bad_defects_variable() {
 
 #[test]
 fn bad_autosync_variable() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let e = error(&Fixture::new(None, None), &[("CLM_AUTOSYNC", "yes")]);
     assert!(e.contains("CLM_AUTOSYNC"), "{e}");
     assert!(e.contains("`autosync`"), "{e}");
@@ -197,7 +216,7 @@ fn bad_autosync_variable() {
 
 #[test]
 fn empty_variable_is_set_and_invalid() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let f = Fixture::new(None, None);
     assert!(error(&f, &[("CLM_AUTOSYNC", "")]).contains("CLM_AUTOSYNC"));
     assert!(error(&f, &[("CLM_DEFECTS", "")]).contains("CLM_DEFECTS"));
@@ -205,14 +224,18 @@ fn empty_variable_is_set_and_invalid() {
 
 #[test]
 fn unparseable_file() {
-    // req:config/invalid-settings@ec741034
-    let e = error(&Fixture::new(None, Some("defects = \n")), &[]);
-    assert!(e.contains("clm.toml"), "{e}");
+    // req:config/invalid-settings@0edd866f
+    let f = Fixture::new(None, Some("defects = \n"));
+    let e = f.load(&[]).unwrap_err();
+    assert_eq!(e.source, Some(f.repo_file().display().to_string()));
+    // It says why, and names no key at fault.
+    assert!(e.message.contains("TOML parse error"), "{}", e.message);
+    assert!(!e.message.contains("`defects`"), "{}", e.message);
 }
 
 #[test]
 fn bad_value_in_user_file() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let e = error(&Fixture::new(Some("defects = \"always\"\n"), None), &[]);
     assert!(e.contains("config.toml"), "{e}");
     assert!(e.contains("defects"), "{e}");
@@ -220,7 +243,7 @@ fn bad_value_in_user_file() {
 
 #[test]
 fn bad_type_in_repository_file() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let e = error(&Fixture::new(None, Some("autosync = \"no\"\n")), &[]);
     assert!(e.contains("clm.toml"), "{e}");
     assert!(e.contains("autosync"), "{e}");
@@ -228,7 +251,7 @@ fn bad_type_in_repository_file() {
 
 #[test]
 fn get_gives_value_and_layer() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     let f = files();
     let s = f.load(&[]).unwrap();
     let (value, layer) = s.get("defects").unwrap();
@@ -241,7 +264,7 @@ fn get_gives_value_and_layer() {
 
 #[test]
 fn get_unknown_key() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     let s = Fixture::new(None, None).load(&[]).unwrap();
     let e = s.get("colour").unwrap_err().to_string();
     assert!(e.contains("colour"), "{e}");
@@ -249,7 +272,7 @@ fn get_unknown_key() {
 
 #[test]
 fn error_keeps_its_source_apart_from_its_message() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     let f = Fixture::new(None, Some("defect = \"off\"\n"));
     let e = f.load(&[]).unwrap_err();
     assert_eq!(e.source, Some(f.repo_file().display().to_string()));
@@ -273,7 +296,7 @@ fn error_keeps_its_source_apart_from_its_message() {
 
 #[test]
 fn detectors_from_the_repository() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(
         None,
         Some("[[detectors]]\nname = \"machete\"\ncommand = [\"cargo\", \"machete\"]\n"),
@@ -294,7 +317,7 @@ fn detectors_from_the_repository() {
 
 #[test]
 fn detectors_keep_their_hint() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(
         None,
         Some("[[detectors]]\nname = \"m\"\ncommand = [\"m\"]\nhint = \"install m\"\n"),
@@ -305,7 +328,7 @@ fn detectors_keep_their_hint() {
 
 #[test]
 fn detectors_default_to_none() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let s = Fixture::new(None, Some("defects = \"off\"\n"))
         .load(&[])
         .unwrap();
@@ -317,7 +340,7 @@ fn detectors_default_to_none() {
 
 #[test]
 fn detectors_in_the_user_file_fail() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(
         Some("defects = \"off\"\n[[detectors]]\nname = \"m\"\ncommand = [\"m\"]\n"),
         None,
@@ -329,7 +352,7 @@ fn detectors_in_the_user_file_fail() {
 
 #[test]
 fn detector_with_an_empty_command_fails() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(None, Some("[[detectors]]\nname = \"m\"\ncommand = []\n"));
     let e = error(&f, &[]);
     assert!(e.contains("clm.toml"), "{e}");
@@ -341,7 +364,7 @@ fn detector_with_an_empty_command_fails() {
 
 #[test]
 fn detector_with_an_empty_name_fails() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(
         None,
         Some("[[detectors]]\nname = \"\"\ncommand = [\"m\"]\n"),
@@ -353,7 +376,7 @@ fn detector_with_an_empty_name_fails() {
 
 #[test]
 fn detector_without_a_name_fails() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(None, Some("[[detectors]]\ncommand = [\"m\"]\n"));
     let e = error(&f, &[]);
     assert!(e.contains("clm.toml"), "{e}");
@@ -362,7 +385,7 @@ fn detector_without_a_name_fails() {
 
 #[test]
 fn detector_with_an_unknown_key_fails() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(
         None,
         Some("[[detectors]]\nname = \"m\"\ncommand = [\"m\"]\ncmd = \"m\"\n"),
@@ -374,7 +397,7 @@ fn detector_with_an_unknown_key_fails() {
 
 #[test]
 fn detectors_have_no_variable() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let s = Fixture::new(None, None)
         .load(&[("CLM_DETECTORS", "m")])
         .unwrap();
@@ -384,7 +407,7 @@ fn detectors_have_no_variable() {
 
 #[test]
 fn get_detectors_gives_their_names() {
-    // req:config/repository-only@d2cdaefd
+    // req:config/repository-only@7d22b59c
     let f = Fixture::new(
         None,
         Some(
@@ -401,11 +424,17 @@ fn get_detectors_gives_their_names() {
     let (value, layer) = s.get("detectors").unwrap();
     assert_eq!(value, "");
     assert_eq!(*layer, Layer::Default);
+
+    let f = Fixture::new(None, Some("detectors = []\n"));
+    let s = f.load(&[]).unwrap();
+    let (value, layer) = s.get("detectors").unwrap();
+    assert_eq!(value, "");
+    assert_eq!(*layer, Layer::File(f.repo_file()));
 }
 
 #[test]
 fn layer_display_is_the_config_get_format() {
-    // req:config/config-get@e2bb5643
+    // req:config/config-get@5eb24ce0
     assert_eq!(Layer::Env("CLM_DEFECTS").to_string(), "env CLM_DEFECTS");
     assert_eq!(Layer::File("/r/clm.toml".into()).to_string(), "/r/clm.toml");
     assert_eq!(Layer::Default.to_string(), "default");
@@ -414,7 +443,7 @@ fn layer_display_is_the_config_get_format() {
 #[cfg(unix)]
 #[test]
 fn process_env_keeps_a_variable_that_is_not_utf8_set() {
-    // req:config/invalid-settings@ec741034
+    // req:config/invalid-settings@0edd866f
     use std::os::unix::ffi::OsStrExt;
     // No other test in this binary reads the process environment.
     unsafe {
@@ -438,7 +467,7 @@ fn process_env_keeps_a_variable_that_is_not_utf8_set() {
 
 #[test]
 fn host_defaults_to_github() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     for repo in [None, Some("defects = \"off\"\n")] {
         let s = Fixture::new(None, repo).load(&[]).unwrap();
         assert_eq!(s.host.value, Host::Github);
@@ -451,7 +480,7 @@ fn host_defaults_to_github() {
 
 #[test]
 fn host_from_the_repository() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     for (text, want) in [
         ("none", Host::None),
         ("git", Host::Git),
@@ -468,7 +497,7 @@ fn host_from_the_repository() {
 
 #[test]
 fn unknown_host_fails() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     for bad in ["host = \"gitlab\"\n", "host = 1\n"] {
         let f = Fixture::new(None, Some(bad));
         let e = f.load(&[]).unwrap_err();
@@ -479,7 +508,7 @@ fn unknown_host_fails() {
 
 #[test]
 fn host_in_the_user_file_fails() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     let e = error(&Fixture::new(Some("host = \"none\"\n"), None), &[]);
     assert!(e.contains("config.toml"), "{e}");
     assert!(e.contains("unknown field `host`"), "{e}");
@@ -487,7 +516,7 @@ fn host_in_the_user_file_fails() {
 
 #[test]
 fn host_has_no_variable() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     let s = Fixture::new(None, None)
         .load(&[("CLM_HOST", "none")])
         .unwrap();
@@ -759,7 +788,7 @@ fn writer_unset_is_left_to_the_caller() {
 
 #[test]
 fn local_over_repository() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = Fixture::new(None, Some("defects = \"backlog\"\nhost = \"github\"\n"))
         .local("defects = \"off\"\n");
     let s = f.load(&[]).unwrap();
@@ -771,7 +800,7 @@ fn local_over_repository() {
 
 #[test]
 fn variable_over_local() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = files().local("defects = \"off\"\nautosync = true\n");
     let s = f
         .load(&[("CLM_DEFECTS", "ask"), ("CLM_AUTOSYNC", "0")])
@@ -784,7 +813,7 @@ fn variable_over_local() {
 
 #[test]
 fn local_over_user() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = Fixture::new(Some("autosync = false\n"), None).local("autosync = true\n");
     let s = f.load(&[]).unwrap();
     assert!(s.autosync.value);
@@ -793,7 +822,7 @@ fn local_over_user() {
 
 #[test]
 fn tables_dont_merge() {
-    // req:config/layers@36207631
+    // req:config/layers@815f52f6
     let f = Fixture::new(
         None,
         Some(
@@ -821,7 +850,7 @@ fn tables_dont_merge() {
 
 #[test]
 fn local_file_takes_every_key() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let f = Fixture::new(None, Some("[land]\ncheck = \"scripts/clm-check.sh\"\n")).local(
         "autosync = false\nmax_builds = 9\ndefects = \"off\"\nwriter = \"bob\"\nhost = \"git\"\n\
          approval = \"other\"\n[land]\ncheck = \"scripts/quick.sh\"\n\
@@ -848,7 +877,7 @@ fn local_file_takes_every_key() {
 
 #[test]
 fn invalid_local_file_names_it() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     for (text, key) in [
         ("defect = \"off\"\n", "defect"),
         ("defects = \"always\"\n", "defects"),
@@ -869,7 +898,7 @@ fn invalid_local_file_names_it() {
 
 #[test]
 fn no_local_file_adds_no_layer() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let f = Fixture::new(None, Some("defects = \"backlog\"\n"));
     let s = f.load(&[]).unwrap();
     assert_eq!(s.defects.value, Defects::Backlog);
@@ -878,11 +907,11 @@ fn no_local_file_adds_no_layer() {
 
 #[test]
 fn repository_only_keys_set_locally_fail_naming_the_local_file() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     // req:config/approval-setting@ee7ad72c
     // req:config/land-check-setting@1baa537e
-    // req:config/component-size-setting@8f8238ab
-    // req:config/repository-only@d2cdaefd
+    // req:config/component-size-setting@37267c0c
+    // req:config/repository-only@7d22b59c
     for (text, key) in [
         ("host = \"gitlab\"\n", "host"),
         ("approval = \"self\"\n", "approval"),
@@ -959,7 +988,7 @@ fn no_user_load(root: &Path) -> Settings {
 
 #[test]
 fn local_file_read_from_a_linked_worktree() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let (_dir, main, linked) = worktrees();
     fs::write(main.join("clm.local.toml"), "defects = \"off\"\n").unwrap();
     // A file the linked worktree's own directory holds is never read.
@@ -974,7 +1003,7 @@ fn local_file_read_from_a_linked_worktree() {
 
 #[test]
 fn local_file_in_a_subdirectory_repository() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let (_dir, main, linked) = worktrees();
     fs::write(main.join("tool/clm.local.toml"), "defects = \"off\"\n").unwrap();
     fs::write(main.join("clm.local.toml"), "defects = \"ask\"\n").unwrap();
@@ -988,7 +1017,7 @@ fn local_file_in_a_subdirectory_repository() {
 
 #[test]
 fn unreadable_gitdir_reads_beside_the_root() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let dir = TempDir::new().unwrap();
     let root = dir.path().join("r");
     fs::create_dir_all(&root).unwrap();
@@ -999,11 +1028,23 @@ fn unreadable_gitdir_reads_beside_the_root() {
         assert_eq!(s.defects.value, Defects::Off, "{git_file}");
         assert_eq!(s.defects.layer, Layer::File(root.join("clm.local.toml")));
     }
+    // A git directory with no `commondir`, then one whose `commondir` names no directory.
+    let gitdir = dir.path().join("main.git/worktrees/r");
+    fs::create_dir_all(&gitdir).unwrap();
+    fs::write(root.join(".git"), format!("gitdir: {}\n", gitdir.display())).unwrap();
+    for commondir in [None, Some("../../no-such-dir\n")] {
+        if let Some(text) = commondir {
+            fs::write(gitdir.join("commondir"), text).unwrap();
+        }
+        let s = no_user_load(&root);
+        assert_eq!(s.defects.value, Defects::Off, "{commondir:?}");
+        assert_eq!(s.defects.layer, Layer::File(root.join("clm.local.toml")));
+    }
 }
 
 #[test]
 fn bare_common_dir_has_no_local_layer() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let dir = TempDir::new().unwrap();
     let base = dir.path().canonicalize().unwrap();
     let wt = base.join("repo.git/worktrees/w");
@@ -1020,7 +1061,7 @@ fn bare_common_dir_has_no_local_layer() {
 
 #[test]
 fn max_builds_defaults_to_3() {
-    // req:config/max-builds-setting@11205a64
+    // req:config/max-builds-setting@6ceda93f
     let s = Fixture::new(None, None).load(&[]).unwrap();
     assert_eq!(s.max_builds.value, 3);
     let (value, layer) = s.get("max_builds").unwrap();
@@ -1030,7 +1071,7 @@ fn max_builds_defaults_to_3() {
 
 #[test]
 fn max_builds_in_the_layers_order() {
-    // req:config/max-builds-setting@11205a64
+    // req:config/max-builds-setting@6ceda93f
     let f = Fixture::new(Some("max_builds = 7\n"), None);
     let s = f.load(&[]).unwrap();
     assert_eq!(s.max_builds.value, 7);
@@ -1055,7 +1096,7 @@ fn max_builds_in_the_layers_order() {
 
 #[test]
 fn max_builds_must_be_a_whole_number_of_at_least_1() {
-    // req:config/max-builds-setting@11205a64
+    // req:config/max-builds-setting@6ceda93f
     for bad in ["0", "-1", "1.5", "\"3\"", "true"] {
         let text = format!("max_builds = {bad}\n");
         for f in [
@@ -1080,7 +1121,7 @@ fn max_builds_must_be_a_whole_number_of_at_least_1() {
 
 #[test]
 fn bad_max_builds_variable() {
-    // req:config/max-builds-setting@11205a64
+    // req:config/max-builds-setting@6ceda93f
     for bad in ["many", "0", "", "-1", "+2", " 2", "1.0"] {
         let e = Fixture::new(None, None)
             .load(&[("CLM_MAX_BUILDS", bad)])
@@ -1106,7 +1147,7 @@ fn this_repository_ignores_local_and_session_files() {
 
 #[test]
 fn this_repository_verifies_the_whole_suite_after_lands() {
-    // req:config/verify-here@fb827562
+    // req:config/verify-here@6b59481f
     let text =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
     let f = Fixture::new(None, Some(&text));
@@ -1121,7 +1162,7 @@ fn this_repository_verifies_the_whole_suite_after_lands() {
 
 #[test]
 fn this_repository_names_the_retired_terms_detector_last() {
-    // req:config/retired-terms-detector@1e881e15
+    // req:config/retired-terms-detector@bd870e74
     let text =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../clm.toml")).unwrap();
     let f = Fixture::new(None, Some(&text));
@@ -1155,7 +1196,7 @@ fn this_repositorys_build() -> (String, Layer, Fixture) {
 
 #[test]
 fn this_repository_installs_each_packages_dependencies() {
-    // req:config/build-setup-here@c69fd4cb
+    // req:config/build-setup-here@33a245ec
     let (value, layer, f) = this_repositorys_build();
     assert_eq!(value, format!("setup={SETUP}"));
     assert_eq!(layer, Layer::File(f.repo_file()));
@@ -1163,7 +1204,7 @@ fn this_repository_installs_each_packages_dependencies() {
 
 #[test]
 fn every_tracked_package_json_directory_is_set_up() {
-    // req:config/build-setup-here@c69fd4cb
+    // req:config/build-setup-here@33a245ec
     let (value, _, _) = this_repositorys_build();
     let words = value
         .split_once("for d in ")
@@ -1195,7 +1236,7 @@ fn every_tracked_package_json_directory_is_set_up() {
 
 #[test]
 fn relative_gitdir_finds_the_main_worktree() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let (_dir, main, linked) = worktrees();
     let gitdir = fs::read_to_string(linked.join(".git")).unwrap();
     let abs = Path::new(gitdir.trim().strip_prefix("gitdir: ").unwrap());
@@ -1208,7 +1249,7 @@ fn relative_gitdir_finds_the_main_worktree() {
 
 #[test]
 fn max_builds_takes_any_whole_number() {
-    // req:config/max-builds-setting@11205a64
+    // req:config/max-builds-setting@6ceda93f
     let s = Fixture::new(None, Some("max_builds = 5000000000\n"))
         .load(&[("CLM_MAX_BUILDS", "6000000000")])
         .unwrap();
@@ -1622,7 +1663,7 @@ fn effort_setting_from_user_file() {
 
 #[test]
 fn component_size_the_new_name() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let f = Fixture::new(None, Some("[component_size]\ncode_tokens = 60000\n"));
     let s = f.load(&[]).unwrap();
     let (value, layer) = s.get("component_size").unwrap();
@@ -1632,7 +1673,7 @@ fn component_size_the_new_name() {
 
 #[test]
 fn component_size_defaults() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let s = Fixture::new(None, None).load(&[]).unwrap();
     let (value, layer) = s.get("component_size").unwrap();
     assert_eq!(value, "spec_tokens=12000,code_tokens=40000");
@@ -1641,7 +1682,7 @@ fn component_size_defaults() {
 
 #[test]
 fn component_size_old_name_refused_in_either_file() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     for (text, local) in [
         ("[node_size]\nspec_tokens = 20000\n", false),
         ("node_size = 5\n", false),
@@ -1666,7 +1707,7 @@ fn component_size_old_name_refused_in_either_file() {
 
 #[test]
 fn component_size_old_name_is_an_unknown_key_to_get() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let s = Fixture::new(None, None).load(&[]).unwrap();
     let e = s.get("node_size").unwrap_err();
     assert!(
@@ -1678,7 +1719,7 @@ fn component_size_old_name_is_an_unknown_key_to_get() {
 
 #[test]
 fn component_size_errors_name_component_size() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     for (text, needle) in [
         ("component_size = 5\n", "not 5"),
         ("[component_size]\ntokens = 5\n", "`tokens`"),
@@ -1695,7 +1736,7 @@ fn component_size_errors_name_component_size() {
 
 #[test]
 fn component_size_in_the_user_file_fails() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let e = error(
         &Fixture::new(Some("[component_size]\nspec_tokens = 1\n"), None),
         &[],
@@ -1706,7 +1747,7 @@ fn component_size_in_the_user_file_fails() {
 
 #[test]
 fn component_size_empty_table_is_from_the_file() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let f = Fixture::new(None, Some("[component_size]\n"));
     let s = f.load(&[]).unwrap();
     assert_eq!(s.node_size.value, NodeSize::default());
@@ -1715,7 +1756,7 @@ fn component_size_empty_table_is_from_the_file() {
 
 #[test]
 fn component_size_has_no_variable() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let s = Fixture::new(None, None)
         .load(&[("CLM_COMPONENT_SIZE", "spec_tokens=1")])
         .unwrap();
@@ -1725,7 +1766,7 @@ fn component_size_has_no_variable() {
 
 #[test]
 fn component_size_old_name_in_the_user_file_fails() {
-    // req:config/component-size-setting@8f8238ab
+    // req:config/component-size-setting@37267c0c
     let e = error(
         &Fixture::new(Some("[node_size]\nspec_tokens = 1\n"), None),
         &[],
@@ -1736,7 +1777,7 @@ fn component_size_old_name_in_the_user_file_fails() {
 
 #[test]
 fn upgrade_keys_are_set_in_their_own_layer() {
-    // req:config/upgrade-settings@ec4b2181
+    // req:config/upgrade-settings@d1586c03
     let f = Fixture::new(
         None,
         Some("upgraded = \"20261105-clm-upgrade\"\ndeclined_migrations = [\"n\", \"m\"]\n"),
@@ -1756,7 +1797,7 @@ fn upgrade_keys_are_set_in_their_own_layer() {
 
 #[test]
 fn unset_upgrade_keys_print_as_keys_with_no_default() {
-    // req:config/upgrade-settings@ec4b2181
+    // req:config/upgrade-settings@d1586c03
     let s = Fixture::new(None, None).load(&[]).unwrap();
     for key in ["upgraded", "declined_migrations", "skip_migrations"] {
         let (value, layer) = s.get(key).unwrap();
@@ -1767,7 +1808,7 @@ fn unset_upgrade_keys_print_as_keys_with_no_default() {
 
 #[test]
 fn upgrade_keys_in_the_wrong_layer_or_type_fail_naming_file_and_key() {
-    // req:config/upgrade-settings@ec4b2181
+    // req:config/upgrade-settings@d1586c03
     // (user file, repository file, local file, file that fails, key)
     type Case = (
         Option<&'static str>,
@@ -1841,7 +1882,7 @@ fn upgrade_keys_in_the_wrong_layer_or_type_fail_naming_file_and_key() {
 
 #[test]
 fn local_settings_path_is_the_path_loading_reads() {
-    // req:config/local-settings-path@9aa79835
+    // req:config/local-settings-path@2d3dd938
     let (_dir, main, linked) = worktrees();
     // The file doesn't exist, and the path is still the main worktree's.
     assert_eq!(
@@ -1862,7 +1903,7 @@ fn local_settings_path_is_the_path_loading_reads() {
 
 #[test]
 fn local_settings_path_of_a_bare_common_dir_is_none() {
-    // req:config/local-settings-path@9aa79835
+    // req:config/local-settings-path@2d3dd938
     let dir = TempDir::new().unwrap();
     let base = dir.path().canonicalize().unwrap();
     let wt = base.join("repo.git/worktrees/w");
@@ -1876,7 +1917,7 @@ fn local_settings_path_of_a_bare_common_dir_is_none() {
 
 #[test]
 fn local_file_takes_skip_migrations_but_not_the_repository_state_keys() {
-    // req:config/local-settings@6ef008e6
+    // req:config/local-settings@414744c0
     let f = Fixture::new(None, None).local("skip_migrations = [\"x\"]\n");
     assert_eq!(f.load(&[]).unwrap().get("skip_migrations").unwrap().0, "x");
     for key in ["upgraded = \"y\"\n", "declined_migrations = [\"y\"]\n"] {
@@ -2123,7 +2164,7 @@ fn verify_in_the_user_file_fails() {
 
 #[test]
 fn list_has_a_line_for_every_key_in_order() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let f = Fixture::new(None, Some("defects = \"backlog\"\n")).local("max_builds = 5\n");
     let lines = f.load(&[]).unwrap().list().unwrap();
     let keys: Vec<&str> = lines
@@ -2162,7 +2203,7 @@ fn list_has_a_line_for_every_key_in_order() {
 
 #[test]
 fn list_has_a_line_per_env_variable_between_build_and_verify() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let f = Fixture::new(None, Some("[env]\nA = \"1\"\n")).local("[env]\nB = \"2\"\n");
     let lines = f.load(&[]).unwrap().list().unwrap();
     assert_eq!(lines.len(), 19);
@@ -2180,7 +2221,7 @@ fn list_has_a_line_per_env_variable_between_build_and_verify() {
 
 #[test]
 fn every_listed_key_is_one_get_accepts_and_prints_the_same() {
-    // req:config/config-list@7bccae0d
+    // req:config/config-list@533a9ec0
     let s = Fixture::new(None, None).load(&[]).unwrap();
     let mut listed = s.list().unwrap().into_iter();
     for key in clm_config::KEYS {
@@ -2268,7 +2309,7 @@ const VERIFY_X: &str = "[verify]\ncheck = \"x\"\nmode = \"local\"\n";
 
 #[test]
 fn committed_text_is_read_instead_of_the_working_file() {
-    // req:config/committed-settings@33f3996e
+    // req:config/committed-settings@9859644a
     let f = Fixture::new(None, Some("defects = \"off\"\n"));
     let s = load_committed_from(&f, Some(VERIFY_X)).unwrap();
     assert_eq!(s.verify.value.unwrap().check, "x");
@@ -2278,7 +2319,7 @@ fn committed_text_is_read_instead_of_the_working_file() {
 
 #[test]
 fn no_committed_text_leaves_the_repository_layer_absent() {
-    // req:config/committed-settings@33f3996e
+    // req:config/committed-settings@9859644a
     let f = Fixture::new(None, Some(VERIFY_X));
     let s = load_committed_from(&f, None).unwrap();
     assert_eq!(s.verify.value, None);
@@ -2287,7 +2328,7 @@ fn no_committed_text_leaves_the_repository_layer_absent() {
 
 #[test]
 fn the_clones_file_still_wins_over_committed_text() {
-    // req:config/committed-settings@33f3996e
+    // req:config/committed-settings@9859644a
     let f = Fixture::new(None, None).local("[verify]\ncheck = \"y\"\nmode = \"local\"\n");
     let s = load_committed_from(&f, Some(VERIFY_X)).unwrap();
     assert_eq!(s.verify.value.unwrap().check, "y");
@@ -2296,7 +2337,7 @@ fn the_clones_file_still_wins_over_committed_text() {
 
 #[test]
 fn an_error_in_committed_text_names_the_source_and_key() {
-    // req:config/committed-settings@33f3996e
+    // req:config/committed-settings@9859644a
     let f = Fixture::new(None, None);
     for bad in ["max_builds = 0\n", "defect = \"off\"\n", "= not toml"] {
         let e = load_committed_from(&f, Some(bad)).unwrap_err();
@@ -2313,7 +2354,7 @@ fn an_error_in_committed_text_names_the_source_and_key() {
 
 #[test]
 fn env_local_overrides_one_variable() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     let f = Fixture::new(
         None,
         Some("[env]\nRELAY_SERVER_IMAGE = \"relay:amd64\"\nRUST_LOG = \"info\"\n"),
@@ -2334,7 +2375,7 @@ fn env_local_overrides_one_variable() {
 
 #[test]
 fn env_unset_is_empty_and_default() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     let s = Fixture::new(None, Some("")).load(&[]).unwrap();
     assert!(s.env.is_empty());
     assert_eq!(s.lines("env").unwrap(), ["\tdefault"]);
@@ -2342,7 +2383,7 @@ fn env_unset_is_empty_and_default() {
 
 #[test]
 fn env_that_is_not_valid_fails_naming_the_file() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     for bad in [
         "[env]\nCLM_SLOT = \"4\"\n",
         "[env]\nCI = \"1\"\n",
@@ -2372,7 +2413,7 @@ fn env_that_is_not_valid_fails_naming_the_file() {
 
 #[test]
 fn env_in_the_user_file_fails() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     let e = Fixture::new(Some("[env]\nA = \"1\"\n"), None)
         .load(&[])
         .unwrap_err();
@@ -2382,7 +2423,7 @@ fn env_in_the_user_file_fails() {
 
 #[test]
 fn committed_env_reads_the_text_and_the_local_file_and_nothing_else() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     let f = Fixture::new(None, Some("[env]\nZ = \"from the working file\"\n"))
         .local("[env]\nB = \"2\"\n");
     let got = clm_config::committed_env(
@@ -2408,11 +2449,32 @@ fn committed_env_reads_the_text_and_the_local_file_and_nothing_else() {
         clm_config::committed_env(&f.root(), Some("= not toml"), "abc123:clm.toml").unwrap_err();
     assert!(e.to_string().contains("abc123:clm.toml"), "{e}");
     assert!(e.to_string().contains("env"), "{e}");
+
+    // No other key of `clm.local.toml` is read, and one it can't read is none.
+    let f = Fixture::new(None, None).local("max_builds = 0\nno_such_key = 1\n[env]\nB = \"2\"\n");
+    let got = clm_config::committed_env(&f.root(), Some("[env]\nA = \"1\"\n"), "c:clm.toml");
+    let got: Vec<_> = got
+        .unwrap()
+        .into_iter()
+        .map(|(n, s)| (n, s.value, s.layer))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("A".into(), "1".into(), Layer::File("c:clm.toml".into())),
+            ("B".into(), "2".into(), Layer::File(f.local_file())),
+        ]
+    );
+    let f = Fixture::new(None, None);
+    fs::create_dir(f.local_file()).unwrap();
+    let got = clm_config::committed_env(&f.root(), Some("[env]\nA = \"1\"\n"), "c:clm.toml");
+    let names: Vec<_> = got.unwrap().into_iter().map(|(n, _)| n).collect();
+    assert_eq!(names, ["A"]);
 }
 
 #[test]
 fn env_is_in_byte_order_of_the_names_across_files() {
-    // req:config/env-setting@000d4bed
+    // req:config/env-setting@96525d60
     let f = Fixture::new(None, Some("[env]\nZ = \"1\"\nb = \"1\"\n")).local("[env]\nA = \"2\"\n");
     let names: Vec<String> = f
         .load(&[])
@@ -2426,9 +2488,42 @@ fn env_is_in_byte_order_of_the_names_across_files() {
 
 #[test]
 fn host_from_the_local_file() {
-    // req:config/host-setting@5ef6c885
+    // req:config/host-setting@61abfd0c
     let f = Fixture::new(None, Some("host = \"github\"\n")).local("host = \"none\"\n");
     let s = f.load(&[]).unwrap();
     assert_eq!(s.host.value, Host::None);
     assert_eq!(s.host.layer, Layer::File(f.local_file()));
+}
+
+#[test]
+fn verify_and_land_come_whole_from_the_local_file() {
+    // req:config/layers@815f52f6
+    let f = Fixture::new(
+        None,
+        Some(
+            "[land]\ncheck = \"a\"\ntarget_cap_gb = 4\n\
+             [verify]\ncheck = \"x\"\nmode = \"local\"\ntriggers = [\"queue-drained\"]\n",
+        ),
+    )
+    .local("[land]\ncheck = \"b\"\n[verify]\ncheck = \"y\"\nmode = \"local\"\n");
+    let s = f.load(&[]).unwrap();
+    assert_eq!(s.get("land").unwrap().0, "check=b");
+    assert_eq!(s.get("verify").unwrap().0, "mode=local,check=y");
+    assert_eq!(s.verify.layer, Layer::File(f.local_file()));
+}
+
+#[test]
+fn upgrade_keys_have_no_variable() {
+    // req:config/upgrade-settings@d1586c03
+    let s = Fixture::new(None, None)
+        .load(&[
+            ("CLM_UPGRADED", "x"),
+            ("CLM_DECLINED_MIGRATIONS", "x"),
+            ("CLM_SKIP_MIGRATIONS", "x"),
+        ])
+        .unwrap();
+    for key in ["upgraded", "declined_migrations", "skip_migrations"] {
+        let (value, layer) = s.get(key).unwrap();
+        assert_eq!((value.as_str(), layer), ("", &Layer::Default), "{key}");
+    }
 }

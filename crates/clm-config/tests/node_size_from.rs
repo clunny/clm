@@ -2,7 +2,7 @@ use clm_config::{NodeSize, node_size_from};
 
 #[test]
 fn partial_table() {
-    // req:config/component-size-from-text@37254aae
+    // req:config/component-size-setting@37267c0c
     assert_eq!(
         node_size_from("[component_size]\ncode_tokens = 60000\n").unwrap(),
         NodeSize {
@@ -14,7 +14,7 @@ fn partial_table() {
 
 #[test]
 fn no_table() {
-    // req:config/component-size-from-text@37254aae
+    // req:config/component-size-setting@37267c0c
     let size = node_size_from("[land]\ncheck = \"scripts/clm-check.sh\"\n").unwrap();
     assert_eq!(size, NodeSize::default());
     assert_eq!(
@@ -27,7 +27,7 @@ fn no_table() {
 
 #[test]
 fn invalid_value() {
-    // req:config/component-size-from-text@37254aae
+    // req:config/component-size-setting@37267c0c
     let e = node_size_from("[component_size]\nspec_tokens = 0\n").unwrap_err();
     assert_eq!(e.source.as_deref(), Some("clm.toml"));
     assert!(e.message.contains("`component_size`"), "{}", e.message);
@@ -35,7 +35,7 @@ fn invalid_value() {
 
 #[test]
 fn fails_wherever_loading_the_repository_file_does() {
-    // req:config/component-size-from-text@37254aae
+    // req:config/component-size-setting@37267c0c
     let valid = "[component_size]\ncode_tokens = 60000\n";
     for (extra, names) in [
         ("colour = \"red\"\n", "colour"),
@@ -61,14 +61,7 @@ fn fails_wherever_loading_the_repository_file_does() {
 
 #[test]
 fn component_size_from_text() {
-    // req:config/component-size-setting@8f8238ab
-    assert_eq!(
-        node_size_from("[component_size]\ncode_tokens = 60000\n").unwrap(),
-        NodeSize {
-            spec_tokens: 12000,
-            code_tokens: 60000
-        }
-    );
+    // req:config/component-size-setting@37267c0c
     let e = node_size_from("[node_size]\nspec_tokens = 1\n").unwrap_err();
     assert_eq!(e.source.as_deref(), Some("clm.toml"));
     assert!(e.message.contains("`component_size`") && e.message.contains("`node_size`"));
