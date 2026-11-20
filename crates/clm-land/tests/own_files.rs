@@ -40,7 +40,7 @@ const BOTH: [(&str, &str); 2] = [
 
 #[test]
 fn another_components_source_refuses_the_land() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     let old = f.remote("main");
@@ -58,7 +58,7 @@ fn another_components_source_refuses_the_land() {
 
 #[test]
 fn the_builds_pre_check_prints_the_same_line() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     f.git(&f.work(), &["checkout", "-q", "impl/a"]);
@@ -73,7 +73,7 @@ fn the_builds_pre_check_prints_the_same_line() {
 
 #[test]
 fn its_own_files_land() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch("impl/a", &BOTH[..1]);
     clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])).unwrap();
@@ -82,7 +82,7 @@ fn its_own_files_land() {
 
 #[test]
 fn a_branch_of_another_name_is_not_refused() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch("tidy-b", &BOTH);
     clm_land::land(&f.work(), Some("tidy-b"), &f.env(&[])).unwrap();
@@ -100,7 +100,7 @@ fn push_specs(f: &Fixture, files: &[(&str, &str)]) {
 
 #[test]
 fn a_root_with_no_wiring_refuses_nothing() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = Fixture::new("");
     push_specs(
         &f,
@@ -119,7 +119,7 @@ fn a_root_with_no_wiring_refuses_nothing() {
 
 #[test]
 fn an_archive_branch_is_not_held_even_when_a_component_is_named_archive() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = Fixture::new("");
     push_specs(
         &f,
@@ -141,7 +141,7 @@ fn an_archive_branch_is_not_held_even_when_a_component_is_named_archive() {
 
 #[test]
 fn a_detached_head_is_checked_as_before() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     f.git(&f.work(), &["checkout", "-q", "--detach", "impl/a"]);
@@ -152,7 +152,7 @@ fn a_detached_head_is_checked_as_before() {
 
 #[test]
 fn the_refusal_names_the_owner_and_what_to_do() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch("impl/a", &BOTH);
     let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
@@ -170,7 +170,7 @@ fn the_refusal_names_the_owner_and_what_to_do() {
 
 #[test]
 fn each_foreign_file_gets_its_own_line() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = with_specs();
     f.branch(
         "impl/a",
@@ -199,7 +199,7 @@ fn each_foreign_file_gets_its_own_line() {
 
 #[test]
 fn a_component_named_archive_is_held_on_its_own_branch() {
-    // req:land/build-holds-own-files@f67d768f
+    // req:land/build-holds-own-files@1a91f599
     let f = Fixture::new("");
     push_specs(
         &f,
@@ -220,4 +220,36 @@ fn a_component_named_archive_is_held_on_its_own_branch() {
         why.starts_with("crates/b/src/lib.rs: land/build-holds-own-files: owned by `b`;"),
         "{why}"
     );
+}
+
+#[test]
+fn a_file_outside_the_root_names_no_owner() {
+    // req:land/build-holds-own-files@1a91f599
+    let f = Fixture::nested();
+    push_specs(
+        &f,
+        &[
+            ("specs/SPEC.md", &root()),
+            ("specs/a/SPEC.md", &component("A", "crates/a/**")),
+            ("crates/a/src/lib.rs", "a\n"),
+        ],
+    );
+    f.branch(
+        "impl/a",
+        &[("crates/a/src/lib.rs", "a2\n"), ("../b", "b\n")],
+    );
+    let line = "../b: land/build-holds-own-files: outside the CLM root, which no build of the \
+                root's components may change. Leave the requirement unbuilt and add a question \
+                item that blocks it";
+    let old = f.remote("main");
+    let why = refused(clm_land::land(&f.work(), Some("impl/a"), &f.env(&[])));
+    assert_eq!(why, line);
+    assert_eq!(f.remote("main"), old);
+    assert!(f.records().is_empty());
+    // The build's pre-check prints the same line.
+    f.git(&f.work(), &["checkout", "-q", "impl/a"]);
+    let why = refused(clm_land::check_only(&f.work(), None, &f.env(&[])));
+    assert_eq!(why, line);
+    assert!(f.lines("check.log").is_empty());
+    assert!(f.lines("clm-check.log").is_empty());
 }

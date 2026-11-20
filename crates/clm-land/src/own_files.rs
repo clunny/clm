@@ -24,13 +24,20 @@ pub(crate) fn check(repo: &Repo, branch: &str, base: &str, head: &str) -> Result
     }
     let lines: Vec<String> = foreign
         .iter()
-        .map(|f| {
-            format!(
+        .map(|f| match f.owner.as_str() {
+            // No component's: outside the CLM root (`gate/paths-under-the-root`).
+            "" => format!(
+                "{}: land/build-holds-own-files: outside the CLM root, which no build of the \
+                 root's components may change. Leave the requirement unbuilt and add a question \
+                 item that blocks it",
+                f.path
+            ),
+            _ => format!(
                 "{}: land/build-holds-own-files: owned by `{}`; impl/{component} changes its own \
                  files, the wiring and a capability test it serves. Build this in `{}`, or leave \
                  the requirement unbuilt and add a question item that blocks it",
                 f.path, f.owner, f.owner
-            )
+            ),
         })
         .collect();
     Err(Error::Refused(lines.join("\n")))

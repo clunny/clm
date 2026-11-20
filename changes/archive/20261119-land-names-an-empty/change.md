@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [land-names-an-empty-owner-for-a-file-outside-the-clm-root]
 ---
 
