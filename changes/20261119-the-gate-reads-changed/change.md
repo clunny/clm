@@ -20,7 +20,7 @@ The gate reads the paths a branch changes relative to the CLM root, as the appro
 
 ## Outcome
 
-- `gate/paths-under-the-root` (added): every changed path is read relative to the CLM root; a file outside it is named with `../` and counts as code, so a spec branch carrying one is `mixed`; `files-outside-spec-paths` returns it in that form. Five scenarios, all with the root at `tool/`.
+- `gate/paths-under-the-root` (added): every changed path is read relative to the CLM root; a file outside it is named with `../` and counts as code, so a spec branch carrying one is `mixed`; `files-outside-spec-paths` returns it in that form, and `foreign_files` returns it with an empty owner, so `land/build-holds-own-files` refuses a build branch that changes one (`path-ownership`), though no component owns it and `check/unowned-files` never sees it (architecture audit). Six scenarios, all with the root at `tool/`.
 - `gate/approval-setting` (modified): `clm.toml` is the root's file, read with `git show <rev>:./clm.toml` in the root. At a repository's top nothing changes; no sentence holding `SHALL` is lost.
 - `gate/rules-version` (modified): `RULES` is 5. Version 5 reads paths as `paths-under-the-root` states; versions 1 to 4 read them as `git diff` prints them, as the gate did, so a land judged in a subdirectory root before this change is judged again as it was (`audit-by-the-rules-in-force`). In such a repository the kind, the cuts and the violations under versions 1 to 4 are those that reading gives; at a repository's top every version gives the same kind, as before. New scenario *a subdirectory root under each version*.
 - `gate`'s Design gains **Paths under the root** and names version 5.
@@ -35,7 +35,6 @@ The gate reads the paths a branch changes relative to the CLM root, as the appro
 ## Edge cases and workarounds
 
 - A path outside the root that climbs more than one level (`../../x`) can't occur: the root is under the repository's top, and git prints only paths under the top.
-- `foreign_files` skips a file outside the root, as it skips any file no component owns; a build branch that changes one is then `code` or `mixed` by the gate, not refused by `land/build-holds-own-files`.
 - `gate/up-to-date`'s check of `specs/` changed on both sides names the root's `specs/` files.
 
 ## What the requirements no longer state
@@ -44,4 +43,4 @@ Nothing: no sentence holding `SHALL` is removed. `approval-setting`'s "the path 
 
 ## Open questions
 
-None.
+- **`#### Enforced by`** (architecture audit). `gate/paths-under-the-root` serves `approval-policy` and `humans-review-intent`, and neither entry's `#### Enforced by` block names it. Adding it is an `ARCHITECTURE.md` edit, which would make this branch need review for a list entry, so it is left for a human to add when next editing those entries; the rule is checked and gates whether or not the entry names it.
