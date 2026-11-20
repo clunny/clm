@@ -26,7 +26,7 @@ fn bundle(architecture: &str) -> String {
 
 #[test]
 fn a_project_gets_the_carried_section() {
-    // req:context/bundle-carries-constraints@ff31b1a3
+    // req:context/bundle-carries-constraints@377069d7
     let out = bundle(PROJECT);
     let at = |needle: &str| {
         out.find(needle)
@@ -37,15 +37,19 @@ fn a_project_gets_the_carried_section() {
     assert!(at("### Constraint: proven-by-tests (method)") > at("# CLM's constraints"));
     assert!(out.contains("### Constraint: yagni (default)"));
     assert!(!out.contains("### Constraint: expand-contract"));
-    assert!(out.contains("clm guide constraints"));
-    assert!(out.contains("kept in CLM's repository"));
+    // The section's first line says what it holds, where tiers are explained and where the
+    // names it doesn't list are kept.
+    let first = out[at("# CLM's constraints")..].lines().nth(2).unwrap();
+    assert!(first.contains("from the `clm` that runs"), "{first}");
+    assert!(first.contains("clm guide constraints"), "{first}");
+    assert!(first.contains("kept in CLM's repository"), "{first}");
     let method = at("### Constraint: proven-by-tests (method)");
     assert!(!out[method..method + out[method..].find("\n### ").unwrap()].contains("Guarantee:"));
 }
 
 #[test]
 fn a_replaceable_entry_prints_its_guarantee_and_statement() {
-    // req:context/bundle-carries-constraints@ff31b1a3
+    // req:context/bundle-carries-constraints@377069d7
     let out = bundle("## Constraints\n");
     let entry = clm_model::carried()
         .into_iter()
@@ -58,21 +62,21 @@ fn a_replaceable_entry_prints_its_guarantee_and_statement() {
 
 #[test]
 fn the_source_gets_no_section() {
-    // req:context/bundle-carries-constraints@ff31b1a3
+    // req:context/bundle-carries-constraints@377069d7
     let out = bundle(SOURCE);
     assert!(!out.contains("# CLM's constraints"));
 }
 
 #[test]
 fn a_project_without_the_file_gets_the_section_first() {
-    // req:context/bundle-carries-constraints@ff31b1a3
+    // req:context/bundle-carries-constraints@377069d7
     let out = clm_context::bundle_from(&graph("## Constraints\n"), None, "a").unwrap();
     assert!(out.starts_with("# CLM's constraints"), "{out}");
 }
 
 #[test]
 fn bundle_from_matches_the_checkout() {
-    // req:context/bundle-carries-constraints@ff31b1a3
+    // req:context/bundle-from-text@418dfef8
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("ARCHITECTURE.md"), PROJECT).unwrap();
     let g = graph(PROJECT);
@@ -82,7 +86,7 @@ fn bundle_from_matches_the_checkout() {
 
 #[test]
 fn section_precedes_served_capabilities_in_carried_order() {
-    // req:context/bundle-carries-constraints@ff31b1a3
+    // req:context/bundle-carries-constraints@377069d7
     let root = "---\ntitle: Root\nstatus: active\nowners: []\n---\n\n## Contract\nr\n";
     let a = "---\ntitle: A\nstatus: active\nowners: []\nserves: [capability/c]\n---\n\n## Contract\nc\n\n## Requirements\n\n### Requirement: p\nIt SHALL p.\n\n#### Scenario: s\n- ok\n";
     let caps =

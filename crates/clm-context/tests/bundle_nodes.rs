@@ -18,6 +18,7 @@ fn node(title: &str, deps: &str) -> String {
 
 #[test]
 fn spine_then_dependencies_off_the_spine() {
+    // req:context/bundle-components@29ea8d19
     let dir = tempfile::TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", &node("Root", ""));
     write(dir.path(), "specs/z/SPEC.md", &node("Z", ""));

@@ -50,7 +50,7 @@ fn bundle(graph: &Graph) -> String {
 
 #[test]
 fn bundle_holds_served_capabilities() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     // `serves` names `a` and an architecture ID; a rule's `#### Serves` block names `b`.
     let g = graph(
         &capabilities(&["a", "b", "c"]),
@@ -74,7 +74,7 @@ fn bundle_holds_served_capabilities() {
 
 #[test]
 fn overridden_node_default_adds_nothing() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let g = graph(&capabilities(&["a", "b"]), "capability/a", SERVES_B);
     let out = bundle(&g);
     assert!(out.contains("B-TEXT"), "{out}");
@@ -83,7 +83,7 @@ fn overridden_node_default_adds_nothing() {
 
 #[test]
 fn served_capabilities_follow_file_order_and_appear_once() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let g = graph(
         &capabilities(&["a", "b", "c"]),
         "capability/b, capability/a",
@@ -99,7 +99,7 @@ fn served_capabilities_follow_file_order_and_appear_once() {
 
 #[test]
 fn no_served_section_when_none() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let g = graph(&capabilities(&["a"]), "architecture/x", PLAIN);
     let out = bundle(&g);
     assert!(!out.contains("# Capabilities served"), "{out}");
@@ -124,7 +124,7 @@ fn holds_every_capability(out: &str) {
 
 #[test]
 fn capability_node_gets_every_capability() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let g = root_graph(true);
     holds_every_capability(
         &clm_context::bundle_from(&g, Some(ARCHITECTURE), "capability").unwrap(),
@@ -156,14 +156,14 @@ fn root_graph(with_capability_node: bool) -> Graph {
 
 #[test]
 fn root_without_capability_node_gets_every_capability() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let g = root_graph(false);
     holds_every_capability(&clm_context::bundle_from(&g, Some(ARCHITECTURE), "clm").unwrap());
 }
 
 #[test]
 fn root_beside_a_capability_node_gets_only_what_it_serves() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let g = root_graph(true);
     let out = clm_context::bundle_from(&g, Some(ARCHITECTURE), "clm").unwrap();
     assert!(out.contains("A-TEXT"), "{out}");
@@ -179,4 +179,45 @@ fn hash_moves_with_a_served_capability() {
     let c_edited = capabilities(&["a", "c"]).replace("C-TEXT", "C-TEXT, reworded");
     assert_ne!(hash(&a_edited), before);
     assert_eq!(hash(&c_edited), before);
+}
+
+/// The IDs `served_capabilities` returns for node `id` of `g`.
+fn served_ids(g: &Graph, id: &str) -> Vec<String> {
+    clm_context::served_capabilities(g, &g.nodes[id])
+        .into_iter()
+        .map(|c| c.id.clone())
+        .collect()
+}
+
+#[test]
+fn served_capabilities_are_the_blocks_in_bundle_order() {
+    // req:context/bundle-components@29ea8d19
+    // `n`'s requirements serve `b` and then `a`, each by its own `#### Serves` block.
+    let serves_a = "### Requirement: q\nIt SHALL q.\n\n#### Scenario: s\n- ok\n\n#### Serves\n- capability/a\n";
+    let g = graph(
+        &capabilities(&["a", "b", "c"]),
+        "architecture/x",
+        &format!("{SERVES_B}\n{serves_a}"),
+    );
+    assert_eq!(served_ids(&g, "n"), ["capability/a", "capability/b"]);
+    let out = bundle(&g);
+    assert!(
+        out.find("A-TEXT").unwrap() < out.find("B-TEXT").unwrap(),
+        "{out}"
+    );
+
+    // The component that builds the capability tests: every entry, in the file's order.
+    assert_eq!(
+        served_ids(&root_graph(true), "capability"),
+        ["capability/a", "capability/b"]
+    );
+    assert_eq!(
+        served_ids(&root_graph(false), "clm"),
+        ["capability/a", "capability/b"]
+    );
+
+    // No `# Capabilities served` section, no entries.
+    let g = graph(&capabilities(&["a"]), "architecture/x", PLAIN);
+    assert!(!bundle(&g).contains("# Capabilities served"));
+    assert!(served_ids(&g, "n").is_empty());
 }
