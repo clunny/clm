@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-running-subagent-s-clean-worktree-is-removed-under-it]
 ---
 
