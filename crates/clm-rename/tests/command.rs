@@ -63,7 +63,7 @@ fn repo(change: &str) -> TempDir {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn the_command_prints_what_it_did_and_exits_zero() {
     let dir = repo(
         "---\nstatus: proposed\nrenames:\n  - requirement: a/x\n    to: y\n---\n\n## Intent\nr\n",
@@ -142,5 +142,77 @@ fn arguments_it_cant_parse_return_two_with_the_usage_error() {
         String::from_utf8(out.stdout)
             .unwrap()
             .contains("Usage: clm rename")
+    );
+}
+
+const RENAME: &str =
+    "---\nstatus: proposed\nrenames:\n  - requirement: a/x\n    to: y\n---\n\n## Intent\nr\n";
+
+fn git(d: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .current_dir(d)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+#[test]
+// req:rename/finish@0b510be8
+fn nothing_committed() {
+    let dir = repo(RENAME);
+    let d = dir.path();
+    git(
+        d,
+        &["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c"],
+    );
+    let c = git(d, &["rev-parse", "HEAD"]);
+    let out = clm(d, &["rename", "r"]);
+    assert_eq!(out.status, Some(0));
+    assert_eq!(git(d, &["rev-parse", "HEAD"]), c);
+    let status = git(d, &["status", "--porcelain"]);
+    assert!(status.contains("specs/a/SPEC.md"), "{status}");
+    assert!(status.contains("changes/r/change.md"), "{status}");
+    assert!(status.contains("changes/archive/"), "{status}");
+}
+
+#[test]
+// req:rename/finish@0b510be8
+fn a_tree_that_is_no_checkout() {
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", A);
+    write(d, "notes.txt", "see a/x\n");
+    write(d, "target/built.txt", "a/x\n");
+    write(d, "sub/.git/x.txt", "a/x\n");
+    write(d, "changes/r/change.md", RENAME);
+    let out = clm(d, &["rename", "r"]);
+    assert_eq!(String::from_utf8(out.stderr).unwrap(), "");
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "renamed a/x -> a/y\nstill names a/x notes.txt:1\n"
+    );
+    assert_eq!(out.status, Some(0));
+}
+
+#[test]
+// req:rename/finish@0b510be8
+fn git_failing_exits_two_with_its_message() {
+    let dir = TempDir::new().unwrap();
+    let d = dir.path();
+    write(d, "specs/SPEC.md", ROOT);
+    write(d, "specs/a/SPEC.md", A);
+    write(d, "changes/r/change.md", RENAME);
+    write(d, ".git", "gitdir: /nonexistent-clm-gitdir\n");
+    let out = clm(d, &["rename", "r"]);
+    let stderr = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(out.status, Some(2), "{stderr}");
+    assert!(stderr.contains("nonexistent-clm-gitdir"), "{stderr}");
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), "");
+    assert_eq!(
+        fs::read_to_string(d.join("changes/r/change.md")).unwrap(),
+        RENAME
     );
 }

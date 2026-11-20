@@ -370,7 +370,7 @@ fn a_component_and_its_own_rule_are_not_renamed_together() {
 }
 
 #[test]
-// req:rename/component-rename@4e038ba9
+// req:rename/finish@0b510be8
 fn deltas_already_in_the_change_are_replaced() {
     let dir = repo();
     let d = dir.path();
@@ -693,7 +693,7 @@ fn a_term_that_is_nowhere_refuses_and_writes_nothing() {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn done_and_archived() {
     let dir = references_repo();
     let d = dir.path();
@@ -768,7 +768,7 @@ fn slug_repo(owns: &str) -> TempDir {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn a_bare_slug_is_left_as_a_code_span_only() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -787,7 +787,7 @@ fn a_bare_slug_is_left_as_a_code_span_only() {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn an_ambiguous_slug_is_not_reported() {
     let dir = slug_repo("plugin/**");
     let d = dir.path();
@@ -963,7 +963,7 @@ fn a_term_spelt_like_a_rewritten_slug_does_not_hold_the_marker_back() {
 }
 
 #[test]
-// req:rename/finish@90976f4b
+// req:rename/finish@0b510be8
 fn the_report_is_in_record_order_and_sorted() {
     let dir = terms_repo("sprocket", "cogs");
     let d = dir.path();
@@ -1055,7 +1055,7 @@ fn a_loaded_change_with_a_violation_is_refused() {
 }
 
 #[test]
-// req:rename/refusals@d7194f56
+// req:rename/finish@0b510be8
 fn the_archived_record_loads_and_keeps_its_renames() {
     let dir = repo();
     let d = dir.path();
