@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [the-gate-s-placement-rule-skips-a-behaviour-sentence-that-holds]
 ---
 
