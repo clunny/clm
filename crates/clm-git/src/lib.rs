@@ -681,7 +681,7 @@ type Pid = u32;
 fn lock_pid(reason: &str) -> Option<Pid> {
     let (at, _) = reason.match_indices("pid ").find(|&(i, _)| {
         let before = reason[..i].chars().next_back();
-        before.is_none_or(|c| !c.is_alphanumeric())
+        before.is_none_or(|c| !c.is_alphabetic() && !c.is_ascii_digit())
             && reason[i + 4..].starts_with(|c: char| c.is_ascii_digit())
     })?;
     let digits = &reason[at + 4..];
@@ -956,6 +956,8 @@ mod tests {
         assert_eq!(lock_pid("pid 5 pid 3"), Some(5));
         assert_eq!(lock_pid("pid  5"), None);
         assert_eq!(lock_pid("2pid 5"), None);
+        assert_eq!(lock_pid("épid 5"), None);
+        assert_eq!(lock_pid("²pid 5"), Some(5));
         assert_eq!(lock_pid("rapid 1"), None);
         assert_eq!(lock_pid("pid 0"), None);
         assert_eq!(lock_pid("pid 99999999999999999999"), None);

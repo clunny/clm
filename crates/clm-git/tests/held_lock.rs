@@ -49,15 +49,23 @@ fn a_running_process_holds_its_lock() {
     assert!(!entry(&list, &root).held, "{list:?}");
 }
 
+/// Unix only: elsewhere a lock naming a process ID is held whether or not it runs.
+#[cfg(unix)]
 #[test]
 fn an_ended_process_holds_no_lock() {
     // req:vcs/held-lock@c8d3683a
+    let dir = tempfile::tempdir().unwrap();
+    let (root, paths) = locked_worktrees(dir.path(), &[Some("placeholder")]);
+    let p = paths[0].to_str().unwrap();
+    sh(&root, &["worktree", "unlock", p]);
+    // The child is reaped just before the listing, so its ID has little time to be reused.
     let mut child = std::process::Command::new("true").spawn().unwrap();
     let pid = child.id();
     child.wait().unwrap();
-    let dir = tempfile::tempdir().unwrap();
-    let reason = agent_reason(pid);
-    let (root, paths) = locked_worktrees(dir.path(), &[Some(&reason)]);
+    sh(
+        &root,
+        &["worktree", "lock", "--reason", &agent_reason(pid), p],
+    );
     let list = worktrees(&root).unwrap();
     let w = entry(&list, &paths[0]);
     assert!(w.locked && !w.held, "{w:?}");
