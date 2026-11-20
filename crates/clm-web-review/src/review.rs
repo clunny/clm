@@ -638,7 +638,7 @@ pub struct Trees {
 }
 
 impl Trees {
-    /// `clm fingerprint` of the branch (`web.worker/fingerprint-from-trees`), `None` when
+    /// `clm fingerprint` of the branch (`web.worker.review/fingerprint-from-trees`), `None` when
     /// either listing is truncated.
     pub fn fingerprint(&self) -> Option<String> {
         keys::fingerprint(&self.base, &self.head)
