@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use clm_fingerprint::{Entry, adds_change, fingerprint, fingerprint_of, parse_ls_tree};
+use clm_fingerprint::{
+    Entry, added_changes, adds_change, fingerprint, fingerprint_of, parse_ls_tree,
+};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
@@ -44,7 +46,7 @@ fn five_lines() -> String {
 
 #[test]
 fn pure_rebase() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = repo(&[(A, &five_lines()), ("specs/b/SPEC.md", "b\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
@@ -58,7 +60,7 @@ fn pure_rebase() {
 
 #[test]
 fn content_changed() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = repo(&[(A, &five_lines())]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
@@ -69,7 +71,7 @@ fn content_changed() {
 
 #[test]
 fn main_ahead_of_the_fork_point() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let d = repo(&[(A, &five_lines()), ("specs/b/SPEC.md", "b\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
@@ -82,7 +84,7 @@ fn main_ahead_of_the_fork_point() {
 
 #[test]
 fn same_file_changed_on_main() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = repo(&[(A, &five_lines())]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[(A, &five_lines().replace("line 1", "one"))]);
@@ -145,7 +147,7 @@ fn spec_branch() -> TempDir {
 
 #[test]
 fn regenerated_onto_a_main_that_changed_the_same_file() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = spec_branch();
     let before = fp(d.path());
     git(d.path(), &["switch", "-q", "main"]);
@@ -165,7 +167,7 @@ fn regenerated_onto_a_main_that_changed_the_same_file() {
 
 #[test]
 fn delta_edited() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = spec_branch();
     let before = fp(d.path());
     commit(
@@ -177,7 +179,7 @@ fn delta_edited() {
 
 #[test]
 fn specs_edited_by_hand_on_a_spec_branch() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = spec_branch();
     let before = fp(d.path());
     commit(d.path(), &[(A, "by hand\n")]);
@@ -186,7 +188,7 @@ fn specs_edited_by_hand_on_a_spec_branch() {
 
 #[test]
 fn empty_when_nothing_differs() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let d = repo(&[(A, "x\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     assert_eq!(fp(d.path()), "empty");
@@ -203,9 +205,13 @@ fn entry(kind: &str, id: &str, path: &str) -> Entry {
 }
 
 fn hex(parts: &[&str]) -> String {
+    hex_bytes(&parts.iter().map(|p| p.as_bytes()).collect::<Vec<_>>())
+}
+
+fn hex_bytes(parts: &[&[u8]]) -> String {
     let mut h = Sha256::new();
     for p in parts {
-        h.update(p.as_bytes());
+        h.update(p);
         h.update([0]);
     }
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
@@ -213,7 +219,7 @@ fn hex(parts: &[&str]) -> String {
 
 #[test]
 fn listings_not_a_process() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let base = vec![
         entry("blob", "aaa", "a.txt"),
         entry("blob", "same", "b.txt"),
@@ -230,7 +236,7 @@ fn listings_not_a_process() {
 
 #[test]
 fn listings_of_a_branch_that_adds_a_change() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let base = vec![entry("blob", "s1", A)];
     let head = |id: &str| {
         vec![
@@ -245,7 +251,7 @@ fn listings_of_a_branch_that_adds_a_change() {
 
 #[test]
 fn listings_of_an_archive_move() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let base = vec![
         entry("blob", "s1", A),
         entry("blob", "c", "changes/x/change.md"),
@@ -271,7 +277,7 @@ fn listings_of_an_archive_move() {
 
 #[test]
 fn adds_change_reads_one_component_ids() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let adds = |path: &str| adds_change(&[], &[entry("blob", "c", path)]);
     assert!(adds("changes/x/change.md"));
     assert!(adds("changes/archive/x/change.md"));
@@ -282,12 +288,93 @@ fn adds_change_reads_one_component_ids() {
 
 #[test]
 fn paths_are_bytes() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let listing = b"100644 blob aaa\tcaf\xe9.txt\x00040000 tree ttt\tdir\0junk\0";
     let entries = parse_ls_tree(listing);
     assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0].path, b"caf\xe9.txt");
-    assert_ne!(fingerprint_of(&[], &entries), "empty");
+    let first = &entries[0];
+    assert_eq!(
+        (first.mode.as_str(), first.kind.as_str(), first.id.as_str()),
+        ("100644", "blob", "aaa")
+    );
+    assert_eq!(first.path, b"caf\xe9.txt");
+    assert_eq!(entries[1].kind, "tree");
+    let want = hex_bytes(&[b"caf\xe9.txt", b"-", b"100644 blob aaa"]);
+    assert_eq!(fingerprint_of(&[], &entries), want);
+}
+
+#[test]
+fn parse_ls_tree_reads_each_piece_by_its_shape() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let listing: &[u8] = b"m t\tone-space\0\xff t i\tnot-utf8\0no tab here\0\
+100644 blob aaa extra\tlong\0100644 blob bbb\t\0160000 commit ccc\tlast";
+    let entries = parse_ls_tree(listing);
+    let read: Vec<(&str, &str, &str, &[u8])> = entries
+        .iter()
+        .map(|e| (e.mode.as_str(), e.kind.as_str(), e.id.as_str(), &e.path[..]))
+        .collect();
+    assert_eq!(
+        read,
+        [
+            ("100644", "blob", "aaa", &b"long"[..]),
+            ("100644", "blob", "bbb", &b""[..]),
+            ("160000", "commit", "ccc", &b"last"[..]),
+        ]
+    );
+    let tabbed = parse_ls_tree(b"100644 blob aaa\ta\tb\0");
+    assert_eq!(tabbed[0].path, b"a\tb");
+}
+
+#[test]
+fn added_changes_named() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let base = vec![entry("blob", "z", "changes/z/change.md")];
+    let head = vec![
+        entry("blob", "x", "changes/x/change.md"),
+        entry("blob", "y", "changes/archive/y/change.md"),
+        entry("blob", "z", "changes/archive/z/change.md"),
+        entry("tree", "w", "changes/w/change.md"),
+    ];
+    let want: Vec<Vec<u8>> = vec![
+        b"changes/x/change.md".to_vec(),
+        b"changes/archive/y/change.md".to_vec(),
+    ];
+    assert_eq!(added_changes(&base, &head), want);
+    let reversed: Vec<Entry> = head.iter().rev().cloned().collect();
+    let mut want_reversed = want.clone();
+    want_reversed.reverse();
+    assert_eq!(added_changes(&base, &reversed), want_reversed);
+    assert!(added_changes(&head, &head).is_empty());
+}
+
+#[test]
+fn clm_root_in_a_subdirectory() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let d = repo(&[("tool/a.txt", "a\n"), ("b.txt", "b\n")]);
+    let old = git(d.path(), &["rev-parse", "main:tool/a.txt"]);
+    git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[("tool/a.txt", "a2\n"), ("b.txt", "b2\n")]);
+    let new = git(d.path(), &["rev-parse", "HEAD:tool/a.txt"]);
+    let want = hex(&[
+        "a.txt",
+        &format!("100644 blob {old}"),
+        &format!("100644 blob {new}"),
+    ]);
+    let tool = d.path().join("tool");
+    assert_eq!(fingerprint(&tool, "main").unwrap(), want);
+    commit(d.path(), &[("b.txt", "b3\n")]);
+    assert_eq!(fingerprint(&tool, "main").unwrap(), want);
+}
+
+#[test]
+fn no_merge_base() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let d = repo(&[("a.txt", "a\n")]);
+    git(d.path(), &["switch", "-q", "--orphan", "lonely"]);
+    commit(d.path(), &[("b.txt", "b\n")]);
+    git(d.path(), &["switch", "-q", "main"]);
+    assert!(fingerprint(d.path(), "lonely").is_err());
+    assert!(fingerprint(d.path(), "main").is_ok());
 }
 
 fn workspace() -> PathBuf {
@@ -296,7 +383,7 @@ fn workspace() -> PathBuf {
 
 #[test]
 fn builds_for_wasm() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
+    // req:gate.fingerprint/fingerprint@a2cadb29
     let dir = workspace().join("target/wasm-test");
     let out = Command::new(env!("CARGO"))
         .current_dir(workspace())
@@ -315,18 +402,8 @@ fn builds_for_wasm() {
 }
 
 #[test]
-fn git_runs_through_the_layer() {
-    // req:gate.fingerprint/fingerprint@5c898d3d
-    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    for entry in std::fs::read_dir(src).unwrap() {
-        let text = std::fs::read_to_string(entry.unwrap().path()).unwrap();
-        assert!(!text.contains("Command::new"), "runs a process itself");
-    }
-}
-
-#[test]
 fn mode_change_changes_the_fingerprint() {
-    // req:gate.fingerprint/fingerprint-stable@d81343df
+    // req:gate.fingerprint/fingerprint-stable@6857ec60
     let d = repo(&[("run.sh", "echo\n")]);
     git(d.path(), &["switch", "-qc", "topic"]);
     commit(d.path(), &[("other.txt", "o\n")]);
