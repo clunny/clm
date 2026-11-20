@@ -333,6 +333,7 @@ fn enforcement_block_rules() {
 #[test]
 fn reserved_node_ids_rejected() {
     // req:model/reserved-ids@13b0272d
+    // req:model/parse-node-specs@6f4cc5af
     let path = "specs/architecture/SPEC.md";
     let graph = one_violation(
         &[(path, ROOT)],
@@ -363,6 +364,10 @@ fn reserved_node_ids_rejected() {
             ),
         ],
         "{violations:?}"
+    );
+    assert!(
+        violations[1].message.contains("`architecture`"),
+        "the child names its refused parent: {violations:?}"
     );
     assert!(graph.nodes.contains_key("architecture.x"));
     // Only the top level is reserved.

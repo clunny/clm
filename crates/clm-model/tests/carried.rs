@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use clm_model::{Files, Graph, Tier, Violation, carried, load_files};
+use clm_model::{Files, Graph, Tier, Violation, carried, content_hash, load_files};
 
 const ROOT: &str = "---\ntitle: T\nstatus: active\nowners: []\n---\n\n## Contract\nc\n";
 
@@ -72,6 +72,26 @@ fn the_source() {
         carried.entries[1].guarantee.as_deref(),
         Some("It stays green.")
     );
+}
+
+#[test]
+fn the_blocks_are_part_of_the_hash() {
+    // req:model/carried-constraints@9b521f2b
+    let b = entry(
+        "b",
+        "#### Carries\n- replaceable\n\n#### Guarantee\nIt stays green.\n\n",
+    );
+    let (graph, violations) = load(Some(&arch(std::slice::from_ref(&b))), None);
+    assert!(violations.is_empty(), "{violations:?}");
+    let got = graph.requirement("architecture/b").unwrap();
+    assert_eq!(got.hash, content_hash(&b));
+    assert!(got.text.contains("#### Carries") && got.text.contains("#### Guarantee"));
+    let x = entry("x", "#### Replaces\n- yagni\n\n");
+    let (graph, violations) = load(Some(&arch(std::slice::from_ref(&x))), None);
+    assert!(violations.is_empty(), "{violations:?}");
+    let got = graph.requirement("architecture/x").unwrap();
+    assert_eq!(got.hash, content_hash(&x));
+    assert!(got.text.contains("#### Replaces"));
 }
 
 #[test]

@@ -42,3 +42,65 @@ fn a_required_component_on_an_optional_one() {
     assert!(v[0].message.contains("required component `b`"), "{v:?}");
     assert!(v[0].message.contains("optional component `a`"), "{v:?}");
 }
+
+/// The one violation loading `files` with the root gives says `words`.
+fn says(files: &[(&str, &str)], words: &str) {
+    let mut all = vec![("specs/SPEC.md", ROOT)];
+    all.extend_from_slice(files);
+    let v = load(&all);
+    assert_eq!(v.len(), 1, "{words}: {v:?}");
+    assert!(v[0].message.contains(words), "{words}: {v:?}");
+}
+
+// req:model/says-component@e37a6f5e
+#[test]
+fn the_messages_it_names() {
+    let a = spec("");
+    says(
+        &[("specs/assets/m.png", "x")],
+        "the root component has no assets",
+    );
+    says(
+        &[("specs/ghost/assets/m.png", "x")],
+        "asset of component `ghost`",
+    );
+    says(
+        &[("specs/a/b/SPEC.md", &a)],
+        "parent component `a` has no SPEC.md",
+    );
+    let root = ROOT.replace("owners: []\n", "owners: []\noptional: true\n");
+    let v = load(&[("specs/SPEC.md", &root)]);
+    assert_eq!(v.len(), 1, "{v:?}");
+    assert!(
+        v[0].message
+            .contains("the root component can't be `optional`"),
+        "{v:?}"
+    );
+    says(
+        &[("specs/a/SPEC.md", &spec("depends_on: [ghost]\n"))],
+        "depends on unknown component `ghost`",
+    );
+    let change = "---\nstatus: proposed\n---\n";
+    says(
+        &[
+            ("specs/a/SPEC.md", &a),
+            ("changes/c/change.md", change),
+            (
+                "changes/c/deltas/a.md",
+                "---\ncomponent: a\n---\n## Design\nd2\n",
+            ),
+        ],
+        "edits an existing component's Design",
+    );
+    says(
+        &[
+            ("specs/a/SPEC.md", &a),
+            ("changes/c/change.md", change),
+            (
+                "changes/c/deltas/a.md",
+                "---\ncomponent: a\ncreate: true\nremove: true\n---\n",
+            ),
+        ],
+        "creates its component or removes it",
+    );
+}

@@ -95,10 +95,47 @@ fn bad_status_names_file_and_field() {
 #[test]
 fn missing_required_field_is_rejected() {
     // req:model/valid-frontmatter@c5652d9e
-    let dir = repo(&[("SPEC.md", spec("title: T\nstatus: specd", ""))]);
-    let (_, violations) = load(dir.path());
-    assert_eq!(rules(&violations), ["model/valid-frontmatter"]);
-    assert!(violations[0].message.contains("owners"), "{violations:?}");
+    for (fm, missing) in [
+        ("title: T\nstatus: specd", "owners"),
+        ("status: specd\nowners: []", "title"),
+        ("title: T\nowners: []", "status"),
+    ] {
+        let dir = repo(&[("SPEC.md", spec(fm, ""))]);
+        let (_, violations) = load(dir.path());
+        assert_eq!(rules(&violations), ["model/valid-frontmatter"], "{missing}");
+        assert_eq!(violations[0].path, Path::new("specs/SPEC.md"));
+        assert!(violations[0].message.contains(missing), "{violations:?}");
+    }
+}
+
+#[test]
+fn a_change_without_its_change_md() {
+    // req:model/parse-changes@e4c8b4b0
+    let dir = repo(&[("SPEC.md", node(""))]);
+    for place in ["changes/x/deltas", "changes/archive/w/deltas"] {
+        fs::create_dir_all(dir.path().join(place)).unwrap();
+        let delta = "---\ncomponent: clm\n---\n## MODIFIED Design\nd\n";
+        fs::write(dir.path().join(place).join("clm.md"), delta).unwrap();
+    }
+    let c = dir.path().join("changes/y");
+    fs::create_dir_all(&c).unwrap();
+    fs::write(c.join("change.md"), "status: proposed\n").unwrap();
+    let (graph, violations) = load(dir.path());
+    assert!(graph.changes.is_empty(), "{:?}", graph.changes.keys());
+    let mut paths: Vec<_> = violations
+        .iter()
+        .inspect(|v| assert_eq!(v.rule, "model/parse-changes"))
+        .map(|v| v.path.clone())
+        .collect();
+    paths.sort();
+    assert_eq!(
+        paths,
+        [
+            Path::new("changes/archive/w"),
+            Path::new("changes/x"),
+            Path::new("changes/y/change.md"),
+        ]
+    );
 }
 
 fn budgeted(budget: &str) -> TempDir {

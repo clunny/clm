@@ -738,9 +738,12 @@ fn an_alert_that_isnt_a_number() {
 fn named_unproven() {
     // req:model/parse-backlog@895ffaf8
     let text = "---\ntitle: T\nkind: bug\nunproven: [sync/y@89abcdef, a/x@0123abcd]\n---\n";
-    let dir = repo(&[("backlog/u.md", text)]);
+    // `a/x` exists at another version; `sync/y` doesn't exist at all.
+    assert_ne!(version_of_a_x(), "0123abcd");
+    let dir = repo(&[("specs/a/SPEC.md", WITH_REQS), ("backlog/u.md", text)]);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
+    assert!(graph.requirement("a/x").is_some());
     let got: Vec<(&str, &str)> = graph.backlog["u"]
         .frontmatter
         .unproven
