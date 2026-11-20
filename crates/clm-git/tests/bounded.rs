@@ -34,7 +34,7 @@ fn gh_within(
 
 #[test]
 fn a_command_that_finishes_in_time() {
-    // req:vcs/bounded-runs@9e2c536e
+    // req:vcs/bounded-runs@44e9c483
     let (_bin, path) = fake_gh("echo '{\"state\":\"MERGED\"}'\n");
     let root = tempfile::tempdir().unwrap();
     let out = gh_within(
@@ -48,7 +48,7 @@ fn a_command_that_finishes_in_time() {
 
 #[test]
 fn stdin_is_fed_within_a_limit() {
-    // req:vcs/bounded-runs@9e2c536e
+    // req:vcs/bounded-runs@44e9c483
     let (_bin, path) = fake_gh("cat\n");
     let root = tempfile::tempdir().unwrap();
     let env = [("PATH", path.as_os_str())];
@@ -63,7 +63,7 @@ fn stdin_is_fed_within_a_limit() {
 
 #[test]
 fn a_command_that_stalls() {
-    // req:vcs/bounded-runs@9e2c536e
+    // req:vcs/bounded-runs@44e9c483
     let root = tempfile::tempdir().unwrap();
     let pid_file = root.path().join("pid");
     let (_bin, path) = fake_gh(&format!(
@@ -93,7 +93,7 @@ fn a_command_that_stalls() {
 
 #[test]
 fn a_child_keeps_the_pipes_open() {
-    // req:vcs/bounded-runs@9e2c536e
+    // req:vcs/bounded-runs@44e9c483
     let (_bin, path) = fake_gh("sleep 30 &\nsleep 30\n");
     let root = tempfile::tempdir().unwrap();
     let start = Instant::now();
@@ -114,28 +114,52 @@ fn a_child_keeps_the_pipes_open() {
 
 #[test]
 fn a_command_that_exits_but_leaves_the_pipes_open() {
-    // req:vcs/bounded-runs@9e2c536e
-    let (_bin, path) = fake_gh("sleep 30 &\necho started\n");
+    // req:vcs/bounded-runs@44e9c483
+    let (_bin, path) = fake_gh("echo done\nsleep 30 &\nexit 0\n");
     let root = tempfile::tempdir().unwrap();
     let start = Instant::now();
-    let err = gh_within(
-        root.path(),
-        &path,
-        &["api", "x"],
-        Duration::from_millis(300),
-    )
-    .unwrap_err();
+    let out = gh_within(root.path(), &path, &["api", "x"], Duration::from_secs(10));
     assert!(
         start.elapsed() < Duration::from_secs(2),
         "{:?}",
         start.elapsed()
     );
-    assert_eq!(err.to_string(), "gh api x: timed out after 300ms");
+    assert_eq!(out.unwrap(), b"done\n");
+}
+
+#[test]
+fn what_a_child_writes_after_the_command_exits_is_kept() {
+    // req:vcs/bounded-runs@44e9c483
+    let (_bin, path) = fake_gh("echo done\n(sleep 0.02; echo later; exec sleep 30) &\nexit 0\n");
+    let root = tempfile::tempdir().unwrap();
+    let out = gh_within(root.path(), &path, &["api", "x"], Duration::from_secs(10));
+    assert_eq!(out.unwrap(), b"done\nlater\n");
+}
+
+#[test]
+fn a_command_that_fails_but_leaves_the_pipes_open() {
+    // req:vcs/bounded-runs@44e9c483
+    let (_bin, path) = fake_gh("echo nope >&2\nsleep 30 &\nexit 1\n");
+    let root = tempfile::tempdir().unwrap();
+    let start = Instant::now();
+    let err = gh_within(root.path(), &path, &["api", "x"], Duration::from_secs(10)).unwrap_err();
+    assert!(
+        start.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        start.elapsed()
+    );
+    match err {
+        Error::Failed { status, stderr, .. } => {
+            assert_eq!(status.code(), Some(1));
+            assert_eq!(stderr, "nope");
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 #[test]
 fn no_time_left() {
-    // req:vcs/bounded-runs@9e2c536e
+    // req:vcs/bounded-runs@44e9c483
     let root = tempfile::tempdir().unwrap();
     let ran = root.path().join("ran");
     let (_bin, path) = fake_gh(&format!("touch '{}'\n", ran.display()));
@@ -146,7 +170,7 @@ fn no_time_left() {
 
 #[test]
 fn failures_within_the_limit() {
-    // req:vcs/bounded-runs@9e2c536e
+    // req:vcs/bounded-runs@44e9c483
     let dir = tempfile::tempdir().unwrap();
     let err = run_within(
         dir.path(),

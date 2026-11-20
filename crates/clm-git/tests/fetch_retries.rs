@@ -66,7 +66,7 @@ fn calls(clone: &Path, what: &str) -> usize {
 
 #[test]
 fn a_fetch_that_loses_a_ref_race_goes_on() {
-    // req:vcs/fetch-retries@a74172a3
+    // req:vcs/fetch-retries@2629af1f
     let (_dir, clone) = clone_with("once");
     let start = Instant::now();
     fetch_retrying(&clone, &["fetch", REMOTE]).unwrap();
@@ -78,7 +78,7 @@ fn a_fetch_that_loses_a_ref_race_goes_on() {
 
 #[test]
 fn a_fetch_that_keeps_failing_with_origin_reachable_is_a_git_error() {
-    // req:vcs/fetch-retries@a74172a3
+    // req:vcs/fetch-retries@2629af1f
     let (_dir, clone) = clone_with("always");
     let start = Instant::now();
     let err = fetch_retrying(&clone, &["fetch", REMOTE]).unwrap_err();
@@ -91,7 +91,7 @@ fn a_fetch_that_keeps_failing_with_origin_reachable_is_a_git_error() {
 
 #[test]
 fn an_unreachable_origin_is_offline() {
-    // req:vcs/fetch-retries@a74172a3
+    // req:vcs/fetch-retries@2629af1f
     let (dir, clone) = clone_with("");
     sh(
         &clone,
@@ -104,6 +104,23 @@ fn an_unreachable_origin_is_offline() {
     );
     let err = fetch_retrying(&clone, &["fetch", REMOTE]).unwrap_err();
     assert!(matches!(err, FetchError::Offline), "{err}");
+}
+
+#[test]
+fn what_being_offline_says() {
+    // req:vcs/fetch-retries@2629af1f
+    let (dir, clone) = clone_with("");
+    sh(
+        &clone,
+        &[
+            "remote",
+            "set-url",
+            REMOTE,
+            dir.path().join("missing").to_str().unwrap(),
+        ],
+    );
+    let err = fetch_retrying(&clone, &["fetch", REMOTE]).unwrap_err();
+    assert_eq!(err.to_string(), "origin can't be reached");
 }
 
 /// A branch `b` on the bare origin that the clone hasn't fetched.
@@ -124,7 +141,7 @@ fn push_branch_b(dir: &Path, clone: &Path) {
 
 #[test]
 fn a_plain_fetch_that_loses_a_ref_race_goes_on() {
-    // req:vcs/fetch-tries-again@041de3a5
+    // req:vcs/fetch-tries-again@3a1fd640
     let (dir, clone) = clone_with("once");
     push_branch_b(dir.path(), &clone);
     let start = Instant::now();
@@ -136,7 +153,7 @@ fn a_plain_fetch_that_loses_a_ref_race_goes_on() {
 
 #[test]
 fn a_plain_fetch_that_keeps_failing_returns_the_last_error() {
-    // req:vcs/fetch-tries-again@041de3a5
+    // req:vcs/fetch-tries-again@3a1fd640
     let (_dir, clone) = clone_with("always");
     let start = Instant::now();
     let err = clm_git::fetch(&clone).unwrap_err();

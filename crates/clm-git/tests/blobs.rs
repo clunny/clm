@@ -23,7 +23,7 @@ fn fixture(dir: &std::path::Path) {
 
 #[test]
 fn a_commits_files() {
-    // req:vcs/tree-blobs@850f6eda
+    // req:vcs/tree-blobs@64d47a59
     let dir = tempfile::tempdir().unwrap();
     fixture(dir.path());
     let got = tree_blobs(&dir.path().join("sub"), "HEAD", &|_| true).unwrap();
@@ -35,7 +35,7 @@ fn a_commits_files() {
 
 #[test]
 fn only_the_kept_paths() {
-    // req:vcs/tree-blobs@850f6eda
+    // req:vcs/tree-blobs@64d47a59
     let dir = tempfile::tempdir().unwrap();
     fixture(dir.path());
     let got = tree_blobs(dir.path(), "HEAD", &|p| p.starts_with("sub/")).unwrap();
@@ -45,7 +45,7 @@ fn only_the_kept_paths() {
 
 #[test]
 fn a_missing_blob_and_a_bad_commit() {
-    // req:vcs/tree-blobs@850f6eda
+    // req:vcs/tree-blobs@64d47a59
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[("a.txt", "lost\n")]);
     assert!(tree_blobs(dir.path(), "nope", &|_| true).is_err());

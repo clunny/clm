@@ -45,7 +45,7 @@ fn named_clone(dir: &Path) -> (std::path::PathBuf, std::path::PathBuf) {
 
 #[test]
 fn commands_follow_their_own_clone() {
-    // req:vcs/git-follows-its-clone@a8190b8f
+    // req:vcs/git-follows-its-clone@db9edd45
     let dir = tempfile::tempdir().unwrap();
     let (w, g) = named_clone(dir.path());
     std::fs::write(w.join("a"), "a").unwrap();

@@ -422,7 +422,6 @@ name = "clm-git"
 version = "0.26.0"
 dependencies = [
  "tempfile",
- "toml",
 ]
 
 [[package]]

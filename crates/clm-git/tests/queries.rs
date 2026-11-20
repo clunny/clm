@@ -5,7 +5,7 @@ use common::{commit, repo, sh};
 
 #[test]
 fn ancestry() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     let a = sh(dir.path(), &["rev-parse", "HEAD"]);
@@ -16,7 +16,7 @@ fn ancestry() {
 
 #[test]
 fn ancestry_of_an_unknown_revision_is_an_error() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     assert!(is_ancestor(dir.path(), "HEAD", "no-such-rev").is_err());
@@ -24,7 +24,7 @@ fn ancestry_of_an_unknown_revision_is_an_error() {
 
 #[test]
 fn current_branch_names_the_branch() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     sh(dir.path(), &["switch", "-q", "-c", "impl/a"]);
@@ -36,7 +36,7 @@ fn current_branch_names_the_branch() {
 
 #[test]
 fn detached_head_has_no_branch() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     sh(dir.path(), &["switch", "-q", "--detach", "HEAD"]);
@@ -45,7 +45,7 @@ fn detached_head_has_no_branch() {
 
 #[test]
 fn locked_worktree() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("repo");
     std::fs::create_dir(&root).unwrap();
@@ -117,7 +117,7 @@ fn locked_worktree() {
 
 #[test]
 fn fetch_brings_origin_up_to_date() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/fetch-tries-again@3a1fd640
     let dir = tempfile::tempdir().unwrap();
     let origin = dir.path().join("origin");
     std::fs::create_dir(&origin).unwrap();
@@ -139,7 +139,7 @@ fn fetch_brings_origin_up_to_date() {
 
 #[test]
 fn extracted_tree_is_the_committed_text() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     let origin = dir.path().join("origin");
     std::fs::create_dir(&origin).unwrap();
@@ -174,7 +174,7 @@ fn extracted_tree_is_the_committed_text() {
 
 #[test]
 fn extracting_an_unknown_revision_is_an_error() {
-    // req:vcs/repo-queries@e04fba5e
+    // req:vcs/repo-queries@c3e5709c
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     assert!(extract_tree(dir.path(), "no-such-rev").is_err());

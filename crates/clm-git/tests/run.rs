@@ -77,7 +77,7 @@ fn run_fails_like_git() {
 
 #[test]
 fn git_returns_trimmed_stdout() {
-    // req:vcs/run-git@32c20165
+    // req:vcs/run-git@e6481a3b
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     assert_eq!(
@@ -88,7 +88,7 @@ fn git_returns_trimmed_stdout() {
 
 #[test]
 fn failure_names_the_command_and_holds_stderr() {
-    // req:vcs/run-git@32c20165
+    // req:vcs/run-git@e6481a3b
     let dir = tempfile::tempdir().unwrap();
     let err = git(dir.path(), &["status"]).unwrap_err();
     assert!(matches!(err, Error::Failed { .. }));
@@ -99,8 +99,33 @@ fn failure_names_the_command_and_holds_stderr() {
 }
 
 #[test]
+fn the_failure_s_fields() {
+    // req:vcs/run-git@e6481a3b
+    let dir = tempfile::tempdir().unwrap();
+    let real = std::process::Command::new("git")
+        .arg("status")
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let Error::Failed {
+        command,
+        status,
+        stderr,
+    } = git(dir.path(), &["status"]).unwrap_err()
+    else {
+        panic!("not Failed");
+    };
+    assert_eq!(command, "git status");
+    assert_ne!(status.code(), Some(0));
+    assert_eq!(status.code(), real.status.code());
+    assert!(stderr.contains("not a git repository"), "{stderr}");
+    assert!(!stderr.ends_with('\n'), "{stderr:?}");
+    assert_eq!(stderr, String::from_utf8_lossy(&real.stderr).trim());
+}
+
+#[test]
 fn failure_without_stderr_shows_the_status() {
-    // req:vcs/run-git@32c20165
+    // req:vcs/run-git@e6481a3b
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path(), &[]);
     // `diff --quiet` with a change exits 1 and prints nothing.
@@ -114,7 +139,7 @@ fn failure_without_stderr_shows_the_status() {
 
 #[test]
 fn a_program_that_cannot_start_is_a_spawn_error() {
-    // req:vcs/run-git@32c20165
+    // req:vcs/run-git@e6481a3b
     let dir = tempfile::tempdir().unwrap();
     let err = run(
         dir.path(),

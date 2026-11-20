@@ -8,7 +8,7 @@ use common::sh;
 
 #[test]
 fn bare_repository_beside_a_named_clone() {
-    // req:vcs/git-isolated@5e69c07c
+    // req:vcs/git-isolated@e3216e6d
     let dir = tempfile::tempdir().unwrap();
     let w = dir.path().join("w");
     let g = dir.path().join("g");

@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [run-within-can-report-a-timeout-for-a-command-that-exited-in]
 ---
 

@@ -4,7 +4,7 @@ mod exec;
 
 #[test]
 fn gh_runs_the_first_gh_on_path() {
-    // req:vcs/run-git@32c20165
+    // req:vcs/run-git@e6481a3b
     let bin = tempfile::tempdir().unwrap();
     let fake = bin.path().join("gh");
     exec::write_exec(&fake, "#!/bin/sh\necho '{\"state\":\"MERGED\"}'\n");

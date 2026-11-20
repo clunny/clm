@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn git_leaves_the_directory() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     // Alone in its file: it puts a fake `git` first on this process's `PATH`.
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("r");

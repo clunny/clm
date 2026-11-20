@@ -6,6 +6,7 @@ use clm_git::{Error, remove_worktree};
 use common::{repo, sh};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 fn setup() -> (tempfile::TempDir, std::path::PathBuf) {
     let dir = tempfile::tempdir().unwrap();
@@ -26,7 +27,7 @@ fn mode(p: &Path) -> u32 {
 
 #[test]
 fn unwritable_directory_removed() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     let (dir, w) = setup();
     let root = dir.path().join("r");
     sh(&root, &["worktree", "lock", w.to_str().unwrap()]);
@@ -42,7 +43,7 @@ fn unwritable_directory_removed() {
 
 #[test]
 fn symbolic_link_not_followed() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     let (dir, w) = setup();
     let root = dir.path().join("r");
     let d = dir.path().join("d");
@@ -59,7 +60,7 @@ fn symbolic_link_not_followed() {
 
 #[test]
 fn git_refuses() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     let (dir, w) = setup();
     let root = dir.path().join("r");
     std::fs::write(w.join("untracked.txt"), "u").unwrap();
@@ -70,7 +71,7 @@ fn git_refuses() {
 
 #[test]
 fn still_on_disk_displays_path() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     let e = Error::StillOnDisk {
         path: "/x/w".into(),
     };
@@ -79,7 +80,7 @@ fn still_on_disk_displays_path() {
 
 #[test]
 fn removable_only_later() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     let (dir, w) = setup();
     let root = dir.path().join("r");
     let parent = dir.path().to_path_buf();
@@ -98,8 +99,37 @@ fn removable_only_later() {
 }
 
 #[test]
+fn never_removable() {
+    // req:vcs/remove-worktree@42607e4b
+    let (dir, w) = setup();
+    let root = dir.path().join("r");
+    /// Gives the owner write permission back on drop, so a failing test leaves a removable
+    /// directory.
+    struct Locked<'a>(&'a Path);
+    impl Drop for Locked<'_> {
+        fn drop(&mut self) {
+            let _ = std::fs::set_permissions(self.0, std::fs::Permissions::from_mode(0o700));
+        }
+    }
+    std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o500)).unwrap();
+    let locked = Locked(dir.path());
+    let started = Instant::now();
+    let result = remove_worktree(&root, &w);
+    let took = started.elapsed();
+    drop(locked);
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("git worktree remove"), "{err}");
+    assert!(
+        took >= Duration::from_secs(5) && took < Duration::from_secs(8),
+        "{took:?}"
+    );
+    assert!(w.exists());
+    assert!(!sh(&root, &["worktree", "list"]).contains("/w "));
+}
+
+#[test]
 fn not_a_worktree() {
-    // req:vcs/remove-worktree@ca5e9717
+    // req:vcs/remove-worktree@42607e4b
     let (dir, _w) = setup();
     let root = dir.path().join("r");
     let d = dir.path().join("d");
