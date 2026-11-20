@@ -34,6 +34,8 @@ resolves: [rename-replay-reads-the-repository-s-top-not-the-clm-root]
 
 - A new file under the root's `backlog/` is still left out of the comparison; a new file under a `backlog/` outside the root is an entry outside the root and makes `replays` false.
 - A submodule or symbolic link outside the root is compared as any entry outside it, by path, mode and object ID.
+- `rename/replay` is already `behind` from `20261119-clm-rename-breaks-five` (modes, symbolic links, submodules, a refusal on the base), so one build of `rename` catches up both changes' text of it, and its tests cite the version this change gives it (builder check).
+- `gate/files-outside-spec-paths` asks `replays` whatever `RULES` says, so in a subdirectory root it lists nothing for a clean rename branch once this is built; that is the intended effect, and that function's answer is not audited by version (builder check).
 
 ## What the requirements no longer state
 
