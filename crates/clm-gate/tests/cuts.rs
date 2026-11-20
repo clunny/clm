@@ -52,7 +52,7 @@ const X: &str = "X SHALL hold.";
 
 #[test]
 fn scenario_from_two_graphs() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
     let found = cuts(&base, &head, &[]);
@@ -75,7 +75,7 @@ fn scenario_from_two_graphs() {
 
 #[test]
 fn a_gone_requirement_and_its_order() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let two = format!(
         "{}{}",
         requirement("x", X, &["first"]),
@@ -101,7 +101,7 @@ fn a_gone_requirement_and_its_order() {
 
 #[test]
 fn moved_to_another_component() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[
         ("a", "", requirement("x", X, &["the chain"])),
         ("b", "", requirement("y", X, &["other"])),
@@ -115,7 +115,7 @@ fn moved_to_another_component() {
 
 #[test]
 fn two_requirements_merged() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[(
         "a",
         "",
@@ -134,7 +134,7 @@ fn two_requirements_merged() {
 
 #[test]
 fn a_name_another_requirement_already_held() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[
         ("a", "", requirement("x", X, &["s", "not switched on"])),
         ("b", "", requirement("y", X, &["not switched on"])),
@@ -151,7 +151,7 @@ fn a_name_another_requirement_already_held() {
 
 #[test]
 fn a_renamed_scenario_is_listed() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first", "the second one"]))]);
     assert_eq!(
@@ -162,7 +162,7 @@ fn a_renamed_scenario_is_listed() {
 
 #[test]
 fn sentences_that_state_and_sentences_that_place() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     assert_eq!(
         stating_sentences(
             "The command SHALL print the list. It SHALL exit 1 when the list is empty."
@@ -210,7 +210,7 @@ fn sentences_that_state_and_sentences_that_place() {
 
 #[test]
 fn a_phrase_places_a_test_only_beside_the_word_test() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     // a phrase and neither word: a sentence of behaviour, which states
     assert_eq!(
         places_a_test("The directory SHALL be deleted once nothing else is left in it."),
@@ -248,8 +248,35 @@ fn a_phrase_places_a_test_only_beside_the_word_test() {
 }
 
 #[test]
+fn a_phrase_matches_across_any_run_of_white_space() {
+    // req:gate/cuts@3b7d6e89
+    // a line break between two of its words, as a reflowed statement holds it
+    assert_eq!(
+        places_a_test("Every test of a's requirements SHALL\nsit in a's own files."),
+        Some("SHALL sit")
+    );
+    // any run of Unicode white space, a tab, spaces and a no-break space among it
+    assert_eq!(
+        places_a_test("The test is\t \n  left\u{a0}in `t.rs`."),
+        Some("is left in")
+    );
+    assert_eq!(places_a_test("The tests sat  \n in a."), Some("sat in"));
+    // a wrapped phrase places a test, so the sentence doesn't state
+    assert_eq!(
+        stating_sentences(
+            "The command SHALL print the list.\nEvery test of a's requirements SHALL\nsit in a's own files."
+        ),
+        ["The command SHALL print the list."]
+    );
+    // the words still match whole: no run of white space joins `is left` to `intact`
+    assert_eq!(places_a_test("The test SHALL be\nis left\nintact."), None);
+    // nor do words with no white space between them
+    assert_eq!(places_a_test("The test SHALLsit in a."), None);
+}
+
+#[test]
 fn sentences_are_every_sentence_that_isnt_empty() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     assert_eq!(
         sentences("It reads `a.b` first. Then it SHALL stop!\nWhy?  It SHALL not? "),
         [
@@ -265,7 +292,7 @@ fn sentences_are_every_sentence_that_isnt_empty() {
 
 #[test]
 fn a_lost_sentence_and_a_reworded_one() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let two = "The command SHALL print the list. It SHALL exit 1 when the list is empty.";
     let base = graph(&[("a", "", requirement("x", two, &["s"]))]);
     let head = graph(&[(
@@ -298,7 +325,7 @@ fn a_lost_sentence_and_a_reworded_one() {
 
 #[test]
 fn list_lines_read_file_and_name() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let text = "# tests to delete\n\nDELETE tests/t.rs::two\tmerged into a/y\r\nremove the old ones\nDELETE b.rs::mod::three\n";
     let found: Vec<(String, String)> = list_lines(text)
         .into_iter()
@@ -315,7 +342,7 @@ fn list_lines_read_file_and_name() {
 
 #[test]
 fn tests_a_list_adds() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let g = graph(&[("a", "", requirement("x", X, &["s"]))]);
     let lists = [
         TestList {
@@ -346,7 +373,7 @@ fn tests_a_list_adds() {
 
 #[test]
 fn the_unloaded_line() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let cut = Cut::Unloaded {
         revision: "abc123".into(),
     };
@@ -358,7 +385,7 @@ fn the_unloaded_line() {
 
 #[test]
 fn cuts_or_unloaded_lists_by_the_rule_for_specs_that_dont_load() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[("a", "", requirement("x", X, &["first", "second"]))]);
     let head = graph(&[("a", "", requirement("x", X, &["first"]))]);
     let broken = [clm_model::Violation {
@@ -465,7 +492,7 @@ const EXITS_1: &str = "- GIVEN a test renamed in its file\n- WHEN the land runs\
 
 #[test]
 fn a_changed_outcome_from_two_graphs() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let changed =
         ["specs/a/SPEC.md: gate/cut: scenario \"a renamed test\" of a/x changes its outcome"];
     let base = [("a renamed test", EXITS_1)];
@@ -499,7 +526,7 @@ fn a_changed_outcome_from_two_graphs() {
 
 #[test]
 fn an_outcome_runs_from_its_then_line_to_the_blocks_end() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let changed = |name: &str| {
         vec![format!(
             "specs/a/SPEC.md: gate/cut: scenario \"{name}\" of a/x changes its outcome"
@@ -550,7 +577,7 @@ fn an_outcome_runs_from_its_then_line_to_the_blocks_end() {
 
 #[test]
 fn scenarios_of_one_name_compare_by_their_place_among_it() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let line =
         ["specs/a/SPEC.md: gate/cut: scenario \"not switched on\" of a/x changes its outcome"];
     let first = ("not switched on", "- THEN it exits 0");
@@ -570,7 +597,7 @@ fn scenarios_of_one_name_compare_by_their_place_among_it() {
 
 #[test]
 fn changed_outcomes_follow_gone_scenarios_and_precede_shortened_requirements() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let t = "- THEN t";
     let u = "- THEN u";
     let base = graph(&[
@@ -610,7 +637,7 @@ fn changed_outcomes_follow_gone_scenarios_and_precede_shortened_requirements() {
 
 #[test]
 fn a_moved_scenario_is_not_compared() {
-    // req:gate/cuts@35c052d4
+    // req:gate/cuts@3b7d6e89
     let base = graph(&[
         ("a", "", raw("x", X, &[("the chain", "- THEN t")])),
         ("b", "", raw("y", X, &[("other", "- THEN t")])),
