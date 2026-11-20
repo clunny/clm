@@ -10,10 +10,14 @@ fn claude_code_ask_is_permission_json() {
     assert_eq!(r.exit_code, 0);
     assert_eq!(r.stderr, "");
     let v: serde_json::Value = serde_json::from_str(&r.stdout).unwrap();
-    let o = &v["hookSpecificOutput"];
-    assert_eq!(o["hookEventName"], "PreToolUse");
-    assert_eq!(o["permissionDecision"], "ask");
-    assert_eq!(o["permissionDecisionReason"], "confirm clm approve");
+    assert_eq!(
+        v,
+        serde_json::json!({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "ask",
+            "permissionDecisionReason": "confirm clm approve",
+        }})
+    );
 }
 
 // req:agent-harness/hook-events@5826f443
@@ -85,6 +89,9 @@ fn the_reason_comes_first() {
             "{}",
             r.stderr
         );
+        let rest = &r.stderr["confirm clm approve\n".len()..];
+        assert!(rest.contains("can't ask the human"), "{rest}");
+        assert!(rest.contains("own terminal"), "{rest}");
         assert_eq!(r.stdout, "");
         assert_eq!(r.exit_code, 2);
     }
