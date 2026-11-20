@@ -775,6 +775,16 @@ fn scenario_a_listed_test_of_a_requirement_that_stays() {
     );
     assert!(list.contains(": crates/b/t.rs:3."), "{list}");
     assert!(!list.contains("crates/c/t.rs:3"), "{list}");
+    // A `wiring` glob lets every build change `c`'s file, so its listed test goes too.
+    let p = prompt(
+        &listed_test_of_a_requirement_that_stays("wiring: [\"crates/c/t.rs\"]\n"),
+        &fake(),
+        "b",
+        &[],
+    );
+    let list = &p[p.find("## Pending requirements").unwrap()..];
+    assert!(list.contains(" and `crates/c/t.rs::dup`."), "{list}");
+    assert!(!list.contains("in `c`'s file"), "{list}");
 }
 
 #[test]

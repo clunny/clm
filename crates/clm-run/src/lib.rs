@@ -750,7 +750,9 @@ pub fn prompt(job: &Job) -> String {
                 "  Delete, and never re-cite, each test of a file you may change that cites it \
                  and that an approved list names (`land/deleted-tests-approved`), since a change \
                  lists a test to delete though its requirement stays, such as a duplicate or the \
-                 test of a sentence the requirement lost (`cuts-are-what-a-program-lists`): {}.\n",
+                 test of a sentence the requirement lost (`cuts-are-what-a-program-lists`): {}. \
+                 When no other test cites it once they are gone, write one that proves its \
+                 current text.\n",
                 listing_owned(&item.delete, "and", true)
             ));
         }
@@ -1443,7 +1445,7 @@ fn job(
     let mut history = History::new(root, rev, &spec);
     let mut items = Vec::new();
     let mut blocked = Vec::new();
-    // The approved lists' lines, read once the first obsolete requirement needs them.
+    // The approved lists' lines, read once the first behind or obsolete requirement needs them.
     let mut approved: Option<Vec<ListLine>> = None;
     // Once the root sets `wiring`, the component that owns a marker's file when that isn't
     // `node` and no `wiring` glob lets every build edit it: the files `clm land` refuses
