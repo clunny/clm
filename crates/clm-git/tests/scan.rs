@@ -283,11 +283,16 @@ fn a_bare_command_outside_the_six() {
         "é".repeat(40)
     );
     let source = source.as_str();
-    let ws = fixture(&[("a", source), ("clm-loop", source)]);
+    let ws = fixture(&[
+        ("a", source),
+        ("clm-check", source),
+        ("clm-loop", source),
+        ("clm-verify", source),
+    ]);
     write(&ws.path().join("crates/left/src/lib.rs"), source);
     let found = scan(ws.path());
     assert_eq!(found.findings, ["crates/a/src/lib.rs:3"]);
-    assert_eq!(found.crates, ["a", "clm-loop"]);
+    assert_eq!(found.crates, ["a", "clm-check", "clm-loop", "clm-verify"]);
 }
 
 #[test]
