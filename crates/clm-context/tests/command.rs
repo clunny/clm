@@ -104,7 +104,7 @@ fn repo() -> TempDir {
 
 #[test]
 fn dependency_contract_only() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let dir = repo();
     write(dir.path(), "specs/b/assets/bm.html", "BM-CONTENT\n");
     let out = clm_context(dir.path(), &["a"]);
@@ -142,7 +142,7 @@ fn dependency_contract_only() {
 
 #[test]
 fn assets_listed_not_included() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let dir = repo();
     write(dir.path(), "specs/a/assets/mockups/m.html", "M-CONTENT\n");
     write(dir.path(), "specs/a/assets/b.png", "B-CONTENT\n");
@@ -169,7 +169,7 @@ fn assets_listed_not_included() {
 
 #[test]
 fn spine_assets_stay_out() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let dir = repo();
     write(dir.path(), "specs/a/assets/m.html", "M\n");
     write(dir.path(), "specs/a/n/assets/x.bin", "X\n");
@@ -210,7 +210,7 @@ fn bundle_from_equals_checkout() {
 #[test]
 fn bundle_from_equals_checkout_with_capabilities() {
     // req:context/bundle-from-text@418dfef8
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let dir = repo();
     write(
         dir.path(),
@@ -243,7 +243,7 @@ fn bundle_from_equals_checkout_with_capabilities() {
 
 #[test]
 fn nested_node_sees_its_spine_in_order() {
-    // req:context/bundle-contents@1db0ecd6
+    // req:context/bundle-contents@ffb0697c
     let dir = repo();
     let text = stdout(&clm_context(dir.path(), &["a.n"]));
     let pos = |s: &str| {
@@ -255,6 +255,38 @@ fn nested_node_sees_its_spine_in_order() {
     assert!(pos("A-DESIGN") < pos("N-CONTRACT"));
     assert!(pos("N-DESIGN") < pos("N-REQ"));
     assert!(!text.contains("A-REQ"), "{text}");
+}
+
+#[test]
+fn no_architecture_file_no_heading() {
+    // req:context/bundle-contents@ffb0697c
+    let dir = repo();
+    fs::remove_file(dir.path().join("ARCHITECTURE.md")).unwrap();
+    let out = clm_context(dir.path(), &["a"]);
+    assert_eq!(out.status.code(), Some(0));
+    let text = stdout(&out);
+    assert!(!text.lines().any(|l| l == "# ARCHITECTURE.md"), "{text}");
+    assert!(text.contains("A-CONTRACT"), "{text}");
+}
+
+#[test]
+fn dependencies_left_after_the_ancestors() {
+    // req:context/bundle-contents@ffb0697c
+    let dir = repo();
+    // `a.n` depends on `a`, its parent, and nothing else: no dependency is left.
+    node(dir.path(), "a/n", "N", "a");
+    let text = stdout(&clm_context(dir.path(), &["a.n"]));
+    assert!(text.lines().any(|l| l == "# Ancestors"), "{text}");
+    assert!(!text.lines().any(|l| l == "# Dependencies"), "{text}");
+    assert_eq!(text.matches("A-CONTRACT").count(), 1, "{text}");
+
+    // With `b` as well, `b` alone is printed under `# Dependencies`, `a` stays an ancestor.
+    node(dir.path(), "a/n", "N", "a, b");
+    let text = stdout(&clm_context(dir.path(), &["a.n"]));
+    let deps = text.find("\n# Dependencies\n").expect(&text);
+    assert!(text[deps..].contains("## b: B\n\n### Contract\n\nB-CONTRACT"), "{text}");
+    assert!(!text[deps..].contains("## a: A"), "{text}");
+    assert_eq!(text.matches("A-CONTRACT").count(), 1, "{text}");
 }
 
 #[test]
