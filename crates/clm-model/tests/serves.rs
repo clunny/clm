@@ -130,7 +130,7 @@ fn serves_block_outside_requirement_rejected() {
 
 #[test]
 fn legacy_capabilities_is_ignored() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let (graph, violations) = load(&spec("\ncapabilities: [x, y]", &[&req("x", "")]));
     assert!(violations.is_empty(), "{violations:?}");
     assert!(graph.nodes["a"].frontmatter.serves.is_empty());
@@ -138,7 +138,7 @@ fn legacy_capabilities_is_ignored() {
 
 #[test]
 fn graph_check_reports_serves_on_an_edited_graph() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let (mut graph, violations) = load(&spec("\nserves: [capability/approve]", &[&req("x", "")]));
     assert!(violations.is_empty(), "{violations:?}");
     graph.layers.clear();
@@ -149,7 +149,7 @@ fn graph_check_reports_serves_on_an_edited_graph() {
 
 #[test]
 fn serves_block_leaves_version() {
-    // req:model/content-hash@92d37469
+    // req:model/content-hash@76132fe6
     // req:model/serves@3537f5b4
     let plain = load(&spec("", &[&req("x", "")])).0;
     let x = req("x", "\n#### Serves\n- capability/approve\n");
@@ -172,7 +172,7 @@ fn serves_block_leaves_version() {
 
 #[test]
 fn serves_block_between_scenarios_leaves_version() {
-    // req:model/content-hash@92d37469
+    // req:model/content-hash@76132fe6
     let tail = "\n#### Scenario: t\n- ok\n";
     let plain = load(&spec("", &[&req("x", tail)])).0;
     let x = req("x", &format!("\n#### Serves\n- capability/approve\n{tail}"));
@@ -188,7 +188,7 @@ fn serves_block_between_scenarios_leaves_version() {
 
 #[test]
 fn loaded_hash_ignores_line_endings_and_trailing_whitespace() {
-    // req:model/content-hash@92d37469
+    // req:model/content-hash@76132fe6
     let x = req("x", "\n#### Serves\n- capability/approve\n");
     let lf = load(&spec("", &[&x])).0;
     let crlf = load(&spec("", &[&x.replace('\n', " \t\n")]).replace('\n', "\r\n")).0;
@@ -201,7 +201,7 @@ fn loaded_hash_ignores_line_endings_and_trailing_whitespace() {
 
 #[test]
 fn serves_only_edit_moves_hash_not_version() {
-    // req:model/content-hash@92d37469
+    // req:model/content-hash@76132fe6
     // req:model/serves@3537f5b4
     let one = req("x", "\n#### Serves\n- capability/approve\n");
     let two = req("x", "\n#### Serves\n- architecture/single-source\n");
@@ -216,7 +216,7 @@ fn serves_only_edit_moves_hash_not_version() {
 
 #[test]
 fn node_parser_reports_serves_blocks() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let x = req("x", "\n#### Serves\n\n#### Scenario: t\n- ok\n");
     let path = Path::new("specs/a/SPEC.md");
     let (node, violations) =

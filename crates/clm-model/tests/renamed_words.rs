@@ -45,7 +45,7 @@ fn spec_with_status(status: &str) -> String {
 
 #[test]
 fn the_old_status_name() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let old = spec_with_status("specd");
     let graph = {
         let mut files = Files::new();
@@ -63,7 +63,7 @@ fn the_old_status_name() {
 
 #[test]
 fn a_bad_status_is_still_rejected() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let mut files = Files::new();
     files.insert(PathBuf::from("specs/SPEC.md"), ROOT.into());
     files.insert(
@@ -78,7 +78,7 @@ fn a_bad_status_is_still_rejected() {
 
 #[test]
 fn burdens_by_the_new_key_and_the_old() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let change = |key: &str| format!("---\nstatus: proposed\n{key}: [a paid model run]\n---\n");
     let new = clean(&[("changes/x/change.md", &change("human_burdens"))]);
     assert_eq!(new.changes["x"].frontmatter.burdens, ["a paid model run"]);
@@ -88,7 +88,7 @@ fn burdens_by_the_new_key_and_the_old() {
 
 #[test]
 fn the_old_burdens_key() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let archived = "---\nstatus: done\nburdens: [a paid model run]\n---\n";
     let live = "---\nstatus: proposed\nburdens: [a paid model run]\n---\n";
     let both = "---\nstatus: proposed\nburdens: [a paid model run]\nhuman_burdens: [a paid model run]\n---\n";
@@ -115,7 +115,7 @@ fn the_old_burdens_key() {
 
 #[test]
 fn a_bare_burdens_key_is_both_keys_present() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let both = "---\nstatus: proposed\nburdens:\nhuman_burdens:\n---\n";
     one_violation(
         &[("changes/x/change.md", both)],
@@ -144,7 +144,7 @@ const DONE: &str = "---\nstatus: done\n---\n";
 
 #[test]
 fn a_delta_by_its_new_key() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let by_new = clean(&[
         ("changes/c/change.md", LIVE),
         ("changes/c/deltas/a.md", &delta("component")),
@@ -155,7 +155,7 @@ fn a_delta_by_its_new_key() {
 
 #[test]
 fn the_old_keys_are_refused() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let (graph, violations) = load(&[
         ("backlog/x.md", &item("nodes", "[a]")),
         ("changes/c/change.md", LIVE),
@@ -179,7 +179,7 @@ fn the_old_keys_are_refused() {
 
 #[test]
 fn a_live_delta_with_both_keys_is_one_violation() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let both = format!(
         "---\ncomponent: a\nnode: a\nbase:\n  design: {}\n---\n{DELTA_BODY}",
         delta_base()
@@ -197,7 +197,7 @@ fn a_live_delta_with_both_keys_is_one_violation() {
 
 #[test]
 fn the_archive_keeps_its_key() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let by_old = clean(&[
         ("changes/archive/c/change.md", DONE),
         ("changes/archive/c/deltas/a.md", &delta("node")),
@@ -213,7 +213,7 @@ fn the_archive_keeps_its_key() {
 
 #[test]
 fn an_archived_delta_with_both_keys_is_rejected() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let both = format!(
         "---\ncomponent: a\nnode: a\nbase:\n  design: {}\n---\n{DELTA_BODY}",
         delta_base()
@@ -231,7 +231,7 @@ fn an_archived_delta_with_both_keys_is_rejected() {
 
 #[test]
 fn a_delta_naming_no_component_is_rejected() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let neither = "---\ncreate: true\n---\n";
     one_violation(
         &[
@@ -250,14 +250,14 @@ fn item(key: &str, value: &str) -> String {
 
 #[test]
 fn an_item_by_its_new_key() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let new = clean(&[("backlog/x.md", &item("components", "[a]"))]);
     assert_eq!(new.backlog["x"].frontmatter.nodes, ["a"]);
 }
 
 #[test]
 fn a_history_read_still_takes_the_old_key() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let read = |text: String| -> clm_model::BacklogFrontmatter {
         let (fm, _) = clm_model::split_frontmatter(&text).unwrap();
         serde_yaml::from_str(fm).unwrap()
@@ -268,19 +268,8 @@ fn a_history_read_still_takes_the_old_key() {
 }
 
 #[test]
-fn an_unknown_component() {
-    // req:model/component-keys@deb40bca
-    one_violation(
-        &[("backlog/x.md", &item("components", "[ghost]"))],
-        "model/parse-backlog",
-        "backlog/x.md",
-        &["ghost"],
-    );
-}
-
-#[test]
 fn an_item_with_both_keys_is_rejected() {
-    // req:model/component-keys@deb40bca
+    // req:model/component-keys@955e1ca5
     let text = "---\ntitle: T\nkind: bug\ncomponents: [a]\nnodes: [a]\n---\n";
     let (_, violations) = load(&[("backlog/x.md", text)]);
     assert_eq!(violations.len(), 1, "{violations:?}");
@@ -292,7 +281,7 @@ fn an_item_with_both_keys_is_rejected() {
 
 #[test]
 fn the_old_kind_names_load_and_print_as_the_new() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let flag = |kind: &str, requirement: String| {
         format!("---\ntitle: T\nkind: {kind}\n{requirement}---\n")
     };

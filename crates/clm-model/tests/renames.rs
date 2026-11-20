@@ -41,8 +41,8 @@ fn problems(renames: &str) -> Vec<String> {
 
 #[test]
 fn valid_entries_load_in_order() {
-    // req:model/rename-records@25a8a149
-    // req:model/parse-changes@d4cfec66
+    // req:model/rename-records@7aa84f3d
+    // req:model/parse-changes@e4c8b4b0
     let dir = repo(
         "changes",
         "renames:\n  - component: check.coverage\n    to: check.markers\n  - requirement: apply/stale-base\n    to: base-moved\n  - term: sprocket\n    to: cogs\n",
@@ -67,7 +67,7 @@ fn valid_entries_load_in_order() {
 
 #[test]
 fn a_move_is_not_a_rename() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     let p = problems("renames:\n  - component: check.coverage\n    to: model.coverage\n");
     assert_eq!(p.len(), 1);
     assert!(p[0].starts_with("entry 1:"), "{p:?}");
@@ -75,7 +75,7 @@ fn a_move_is_not_a_rename() {
 
 #[test]
 fn two_keys_in_one_entry() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     let p = problems("renames:\n  - term: sprocket\n    requirement: a/x\n    to: y\n");
     assert_eq!(p.len(), 1);
     assert!(p[0].starts_with("entry 1:"), "{p:?}");
@@ -83,7 +83,7 @@ fn two_keys_in_one_entry() {
 
 #[test]
 fn bad_entries_are_reported_by_position() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     for (entry, position) in [
         ("{to: y}", 1),
         ("{term: sprocket}", 1),
@@ -114,7 +114,7 @@ fn bad_entries_are_reported_by_position() {
 
 #[test]
 fn duplicates_are_reported() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     let twice = problems("renames:\n  - term: a\n    to: b\n  - term: a\n    to: c\n");
     assert_eq!(twice.len(), 1);
     assert!(twice[0].starts_with("entry 2:"), "{twice:?}");
@@ -136,7 +136,7 @@ fn duplicates_are_reported() {
 
 #[test]
 fn an_archived_change_is_loaded_unchecked() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     let dir = repo(
         "changes/archive",
         "renames:\n  - component: check.coverage\n    to: model.coverage\n  - term: a\n    to: a\n  - nonsense: 1\n",
@@ -150,7 +150,7 @@ fn an_archived_change_is_loaded_unchecked() {
 
 #[test]
 fn duplicates_are_reported_beside_other_problems() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     let p = problems(
         "renames:\n  - term: a\n    to: A\n  - term: b\n    to: c\n  - {to: y}\n  - term: b\n    to: d\n",
     );
@@ -161,7 +161,7 @@ fn duplicates_are_reported_beside_other_problems() {
 
 #[test]
 fn human_layer_requirements_can_be_renamed() {
-    // req:model/rename-records@25a8a149
+    // req:model/rename-records@7aa84f3d
     let dir = repo(
         "changes",
         "renames:\n  - requirement: architecture/a-b\n    to: c\n  - requirement: capability/d\n    to: e\n",

@@ -26,7 +26,7 @@ fn rules(violations: &[Violation]) -> Vec<&str> {
 
 #[test]
 fn graph_check_on_a_loaded_graph() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", &node("", ""));
     write(dir.path(), "specs/a/SPEC.md", &node("\noptional: true", ""));
@@ -70,7 +70,7 @@ fn graph_check_on_a_loaded_graph() {
 
 #[test]
 fn graph_check_covers_needs_and_backlog_references() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let req = |slug: &str, needs: &str| {
         format!("### Requirement: {slug}\nx\n#### Scenario: s\n- y\n{needs}\n")
     };
@@ -111,7 +111,7 @@ fn graph_check_covers_needs_and_backlog_references() {
 
 #[test]
 fn node_parser_as_loading_parses() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let body = "## Requirements\n\n### Requirement: foo\nx\n#### Scenario: s\n- y\n\n### Requirement: foo\nx\n#### Scenario: s\n- y\n";
     let text = node("", body);
     let path = Path::new("specs/a/SPEC.md");
@@ -129,7 +129,8 @@ fn node_parser_as_loading_parses() {
 
 #[test]
 fn node_parser_without_frontmatter_or_with_a_root_rule() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
+    // req:model/parse-node-specs@6f4cc5af
     let path = Path::new("specs/a/SPEC.md");
     let (parsed, violations) = parse_node("a", path, "no frontmatter", &BTreeSet::new());
     assert!(parsed.is_none());
@@ -144,7 +145,7 @@ fn node_parser_without_frontmatter_or_with_a_root_rule() {
 
 #[test]
 fn graph_check_on_an_edited_graph() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let dir = TempDir::new().unwrap();
     write(dir.path(), "specs/SPEC.md", &node("", ""));
     write(dir.path(), "specs/a/SPEC.md", &node("", ""));

@@ -26,7 +26,7 @@ const DONE: &str = "---\nstatus: done\nfrom: backlog/idea\n---\n";
 
 #[test]
 fn archived_changes_load_and_are_flagged() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let dir = repo(&[
         ("changes/archive/x/change.md", DONE),
         ("changes/y/change.md", "---\nstatus: proposed\n---\n"),
@@ -44,7 +44,7 @@ fn archived_changes_load_and_are_flagged() {
 
 #[test]
 fn backlog_items_are_parsed() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("changes/archive/x/change.md", DONE),
         (
@@ -61,7 +61,7 @@ fn backlog_items_are_parsed() {
 
 #[test]
 fn human_step() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[(
         "backlog/x.md",
         "---\ntitle: Set a secret\nkind: human-task\n---\n",
@@ -75,7 +75,7 @@ fn human_step() {
 
 #[test]
 fn item_priority() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         (
             "backlog/x.md",
@@ -118,7 +118,7 @@ fn item_violations(v: &[Violation]) -> Vec<&Violation> {
 
 #[test]
 fn backlog_may_name_node_a_live_change_creates() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("backlog/x.md", ITEM_N),
         ("changes/c/change.md", PROPOSED),
@@ -131,7 +131,7 @@ fn backlog_may_name_node_a_live_change_creates() {
 
 #[test]
 fn backlog_may_not_name_node_an_archived_change_created() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("backlog/x.md", ITEM_N),
         ("changes/archive/c/change.md", DONE),
@@ -145,7 +145,7 @@ fn backlog_may_not_name_node_an_archived_change_created() {
 
 #[test]
 fn backlog_may_not_name_node_a_live_change_only_modifies() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     // Only a `create: true` delta creates a node; this guards that filter.
     let dir = repo(&[
         ("backlog/x.md", ITEM_N),
@@ -163,7 +163,7 @@ fn backlog_may_not_name_node_a_live_change_only_modifies() {
 
 #[test]
 fn backlog_node_known_answers() {
-    // req:model/backlog-components@5d7d1e8f
+    // req:model/backlog-components@ffe50462
     let create = |n: &str| CREATE_N.replace("component: n", &format!("component: {n}"));
     let dir = repo(&[
         ("specs/a/SPEC.md", NODE),
@@ -198,7 +198,7 @@ const WITH_REQS: &str = "---\ntitle: A\nstatus: active\nowners: []\n---\n## Requ
 
 #[test]
 fn blocks_name_existing_requirements() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
         (
@@ -227,7 +227,7 @@ fn blocking(id: &str) -> String {
 
 #[test]
 fn blocks_a_requirement_a_live_change_adds() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
         ("backlog/x.md", &blocking("a/new")),
@@ -241,7 +241,7 @@ fn blocks_a_requirement_a_live_change_adds() {
 
 #[test]
 fn blocks_a_requirement_of_a_node_a_live_change_creates() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let create = format!(
         "{CREATE_N}\n## ADDED Requirements\n\n### Requirement: y\nY.\n#### Scenario: s\n- y\n"
     );
@@ -257,7 +257,7 @@ fn blocks_a_requirement_of_a_node_a_live_change_creates() {
 
 #[test]
 fn blocks_a_requirement_a_change_adds_whatever_its_status() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let abandoned = "---\nstatus: abandoned\n---\n";
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
@@ -281,7 +281,7 @@ fn reports_block(violations: &[Violation], id: &str) {
 
 #[test]
 fn blocks_a_requirement_only_an_archived_change_added() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
         ("backlog/x.md", &blocking("a/old")),
@@ -297,7 +297,7 @@ fn blocks_a_requirement_only_an_archived_change_added() {
 
 #[test]
 fn blocks_a_requirement_a_change_only_modifies() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let modifies = ADDS_NEW
         .replace("ADDED", "MODIFIED")
         .replace(": new", ": ghost <!-- base: 0123456789abcdef -->");
@@ -314,7 +314,7 @@ fn blocks_a_requirement_a_change_only_modifies() {
 
 #[test]
 fn blocks_a_requirement_another_node_s_delta_adds() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
         ("specs/b/SPEC.md", NODE),
@@ -332,7 +332,7 @@ fn blocks_a_requirement_another_node_s_delta_adds() {
 
 #[test]
 fn blocks_a_requirement_a_rejected_delta_adds() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     // A delta that fails to load adds nothing.
     let rejected = format!("{ADDS_NEW}\n## MODIFIED Design\n### Requirement: z\n");
     let dir = repo(&[
@@ -376,7 +376,7 @@ fn blocking_a_removal(status: &str, archived: bool) -> (clm_model::Graph, Vec<Vi
 
 #[test]
 fn blocks_a_requirement_an_applied_change_removed() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for status in ["applied", "implementing"] {
         let (graph, violations) = blocking_a_removal(status, false);
         assert!(violations.is_empty(), "{status}: {violations:?}");
@@ -386,7 +386,7 @@ fn blocks_a_requirement_an_applied_change_removed() {
 
 #[test]
 fn blocks_a_requirement_a_change_not_yet_applied_removes() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for status in ["proposed", "approved", "done", "abandoned"] {
         let (_, violations) = blocking_a_removal(status, false);
         reports_block(&violations, "a/gone");
@@ -395,14 +395,14 @@ fn blocks_a_requirement_a_change_not_yet_applied_removes() {
 
 #[test]
 fn blocks_a_requirement_only_an_archived_change_removed() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let (_, violations) = blocking_a_removal("applied", true);
     reports_block(&violations, "a/gone");
 }
 
 #[test]
 fn blocks_a_requirement_another_node_s_delta_removes() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
         ("specs/b/SPEC.md", NODE),
@@ -420,7 +420,7 @@ fn blocks_a_requirement_another_node_s_delta_removes() {
 
 #[test]
 fn blocks_a_requirement_a_rejected_delta_removes() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     // A delta that fails to load removes nothing.
     let rejected = format!("{REMOVES_GONE}\n## MODIFIED Design\n### Requirement: z\n");
     let dir = repo(&[
@@ -436,7 +436,7 @@ fn blocks_a_requirement_a_rejected_delta_removes() {
 
 #[test]
 fn blocks_a_requirement_whose_slug_an_applied_change_lists_as_a_capability() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     // `removes_capabilities` allows `capability/<slug>` alone, never a requirement.
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
@@ -464,7 +464,7 @@ fn version_of_a_x() -> String {
 
 #[test]
 fn workaround_flag() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let version = version_of_a_x();
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
@@ -499,7 +499,7 @@ fn reports_item(violations: &[Violation], path: &str, named: &[&str]) {
 
 #[test]
 fn flag_at_an_old_version() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let version = version_of_a_x();
     assert_ne!(version, "00000000");
     let dir = repo(&[
@@ -516,7 +516,7 @@ fn flag_at_an_old_version() {
 
 #[test]
 fn flag_on_a_removed_requirement() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", NODE),
         ("backlog/workaround-a-x-1.md", &flag("a/x@3fa2c9d1")),
@@ -527,7 +527,7 @@ fn flag_on_a_removed_requirement() {
 
 #[test]
 fn flag_without_a_requirement() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[("backlog/f.md", "---\ntitle: F\nkind: workaround\n---\n")]);
     let (graph, violations) = load(dir.path());
     reports_item(&violations, "backlog/f.md", &["requirement"]);
@@ -539,7 +539,7 @@ fn flag_without_a_requirement() {
 
 #[test]
 fn requirement_on_another_kind() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[
         ("specs/a/SPEC.md", WITH_REQS),
         (
@@ -557,7 +557,7 @@ fn requirement_on_another_kind() {
 
 #[test]
 fn malformed_flag_requirement() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for bad in [
         "a/x",
         "a/x@",
@@ -575,7 +575,7 @@ fn malformed_flag_requirement() {
 
 #[test]
 fn backlog_rejects_unknown_node_origin_kind_and_keys() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for (fm, named) in [
         ("title: X\nkind: idea\ncomponents: [ghost]", "ghost"),
         ("title: X\nkind: idea\ncomponents: [ghost]", "ghost"),
@@ -630,7 +630,7 @@ fn decisions_are_parsed_and_supersession_checked() {
 
 #[test]
 fn taken_in_from_issues() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[(
         "backlog/x.md",
         "---\ntitle: T\nkind: bug\nissues: [73, 91]\n---\n",
@@ -642,7 +642,7 @@ fn taken_in_from_issues() {
 
 #[test]
 fn an_issue_that_isnt_a_number() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for bad in ["[\"#73\"]", "[0]", "[-3]", "[1.5]"] {
         let text = format!("---\ntitle: T\nkind: bug\nissues: {bad}\n---\n");
         let dir = repo(&[("backlog/x.md", &text)]);
@@ -658,7 +658,7 @@ fn an_issue_that_isnt_a_number() {
 
 #[test]
 fn taken_in_from_alerts() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let dir = repo(&[(
         "backlog/x.md",
         "---\ntitle: T\nkind: bug\nalerts: [4]\n---\n",
@@ -680,7 +680,7 @@ fn taken_in_from_alerts() {
 
 #[test]
 fn taken_in_from_a_red_run() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let commit = "0123456789abcdef0123456789abcdef01234567";
     let text = format!("---\ntitle: T\nkind: bug\nverify_failures: [\"{commit}\"]\n---\n");
     let dir = repo(&[("backlog/x.md", &text)]);
@@ -696,7 +696,7 @@ fn taken_in_from_a_red_run() {
 
 #[test]
 fn a_short_or_upper_case_commit_is_refused() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for bad in [
         "\"abc123\"",
         "\"\"",
@@ -720,7 +720,7 @@ fn a_short_or_upper_case_commit_is_refused() {
 
 #[test]
 fn an_alert_that_isnt_a_number() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for bad in ["[0]", "[\"#4\"]", "[-1]", "[1.5]"] {
         let text = format!("---\ntitle: T\nkind: bug\nalerts: {bad}\n---\n");
         let dir = repo(&[("backlog/x.md", &text)]);
@@ -736,7 +736,7 @@ fn an_alert_that_isnt_a_number() {
 
 #[test]
 fn named_unproven() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let text = "---\ntitle: T\nkind: bug\nunproven: [sync/y@89abcdef, a/x@0123abcd]\n---\n";
     let dir = repo(&[("backlog/u.md", text)]);
     let (graph, violations) = load(dir.path());
@@ -756,7 +756,7 @@ fn named_unproven() {
 
 #[test]
 fn unproven_on_another_kind() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for kind in ["idea", "deferred", "question", "human-task", "workaround"] {
         let text = format!("---\ntitle: T\nkind: {kind}\nunproven: [a/x@0123abcd]\n---\n");
         let dir = repo(&[("backlog/u.md", &text)]);
@@ -772,7 +772,7 @@ fn unproven_on_another_kind() {
 
 #[test]
 fn unproven_without_a_version() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     for bad in [
         "[a/x]",
         "[a/x@0123ABCD]",
@@ -794,7 +794,7 @@ fn unproven_without_a_version() {
 
 #[test]
 fn a_deleted_items_components_are_gone() {
-    // req:model/parse-backlog-item@ac29a1d0
+    // req:model/parse-backlog-item@02a6bfda
     let item = clm_model::parse_backlog_item(
         "x",
         "---\ntitle: T\nkind: bug\ncomponents: [ghost]\nissues: [67]\n---\n\nBody\n",
@@ -807,7 +807,7 @@ fn a_deleted_items_components_are_gone() {
 
 #[test]
 fn parse_item_reads_the_old_key_and_defaults_issues() {
-    // req:model/parse-backlog-item@ac29a1d0
+    // req:model/parse-backlog-item@02a6bfda
     let item = clm_model::parse_backlog_item("x", "---\ntitle: T\nkind: bug\nnodes: [old]\n---\n")
         .unwrap();
     assert_eq!(item.frontmatter.nodes, vec!["old".to_string()]);
@@ -816,7 +816,7 @@ fn parse_item_reads_the_old_key_and_defaults_issues() {
 
 #[test]
 fn parse_item_unknown_key() {
-    // req:model/parse-backlog-item@ac29a1d0
+    // req:model/parse-backlog-item@02a6bfda
     let violations =
         clm_model::parse_backlog_item("x", "---\ntitle: T\nkind: bug\ncolour: red\n---\n")
             .unwrap_err();
@@ -825,7 +825,7 @@ fn parse_item_unknown_key() {
 
 #[test]
 fn parse_item_reports_a_workaround_without_requirement() {
-    // req:model/parse-backlog-item@ac29a1d0
+    // req:model/parse-backlog-item@02a6bfda
     let violations =
         clm_model::parse_backlog_item("x", "---\ntitle: T\nkind: workaround\n---\n").unwrap_err();
     assert!(violations.iter().any(|v| v.message.contains("requirement")));

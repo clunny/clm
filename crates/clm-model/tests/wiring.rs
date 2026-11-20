@@ -40,7 +40,7 @@ fn rules(violations: &[Violation]) -> Vec<&str> {
 
 #[test]
 fn globs_on_the_root() {
-    // req:model/wiring-globs@85896262
+    // req:model/wiring-globs@ab91e238
     let dir = repo("\nwiring: [\"Cargo.toml\", \"src/main.rs\"]", None);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -53,7 +53,7 @@ fn globs_on_the_root() {
 
 #[test]
 fn empty_list() {
-    // req:model/wiring-globs@85896262
+    // req:model/wiring-globs@ab91e238
     let dir = repo("\nwiring: []", None);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -62,7 +62,7 @@ fn empty_list() {
 
 #[test]
 fn no_key() {
-    // req:model/wiring-globs@85896262
+    // req:model/wiring-globs@ab91e238
     let dir = repo("", None);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -71,7 +71,7 @@ fn no_key() {
 
 #[test]
 fn on_another_component() {
-    // req:model/wiring-globs@85896262
+    // req:model/wiring-globs@ab91e238
     let dir = repo("", Some("\nwiring: [\"src/**\"]"));
     let (_, violations) = load(dir.path());
     assert_eq!(rules(&violations), ["model/wiring-globs"]);
@@ -81,7 +81,7 @@ fn on_another_component() {
 
 #[test]
 fn bad_value() {
-    // req:model/wiring-globs@85896262
+    // req:model/wiring-globs@ab91e238
     for value in [
         " \"src/**\"",
         " [\"\"]",
@@ -101,7 +101,7 @@ fn bad_value() {
 
 #[test]
 fn the_frontmatter_check() {
-    // req:model/wiring-globs@85896262
+    // req:model/wiring-globs@ab91e238
     let none = BTreeSet::new();
     let path = Path::new("specs/a/SPEC.md");
     let root = Path::new("specs/SPEC.md");

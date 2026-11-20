@@ -45,7 +45,7 @@ fn none() -> BTreeSet<String> {
 
 #[test]
 fn root_rule_in_the_exposed_check() {
-    // req:model/optional-nodes@37ade64d
+    // req:model/optional-nodes@6b3b2803
     let fm = format!("{FM}\noptional: true");
     let path = Path::new("specs/SPEC.md");
     let (parsed, violations) = check_node_frontmatter("clm", path, &fm, &none()).unwrap();
@@ -61,7 +61,7 @@ fn root_rule_in_the_exposed_check() {
 
 #[test]
 fn other_errors_are_reported_alone() {
-    // req:model/optional-nodes@37ade64d
+    // req:model/optional-nodes@6b3b2803
     let path = Path::new("specs/SPEC.md");
     for (extra, rule) in [
         ("\noptional: maybe", "model/optional-nodes"),
@@ -83,7 +83,7 @@ fn other_errors_are_reported_alone() {
 
 #[test]
 fn globs_on_the_root() {
-    // req:model/outside-globs@013b7044
+    // req:model/outside-globs@0f9b9d69
     let dir = repo("\noutside: [\"src/web/**\", \"README.md\"]", None);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -95,7 +95,7 @@ fn globs_on_the_root() {
 
 #[test]
 fn empty_list() {
-    // req:model/outside-globs@013b7044
+    // req:model/outside-globs@0f9b9d69
     let dir = repo("\noutside: []", None);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -104,7 +104,7 @@ fn empty_list() {
 
 #[test]
 fn no_key() {
-    // req:model/outside-globs@013b7044
+    // req:model/outside-globs@0f9b9d69
     let dir = repo("", None);
     let (graph, violations) = load(dir.path());
     assert!(violations.is_empty(), "{violations:?}");
@@ -113,7 +113,7 @@ fn no_key() {
 
 #[test]
 fn on_another_node() {
-    // req:model/outside-globs@013b7044
+    // req:model/outside-globs@0f9b9d69
     for value in ["[\"src/**\"]", "[]"] {
         let dir = repo("", Some(&format!("\noutside: {value}")));
         let (graph, violations) = load(dir.path());
@@ -128,7 +128,7 @@ fn on_another_node() {
 
 #[test]
 fn bad_value() {
-    // req:model/outside-globs@013b7044
+    // req:model/outside-globs@0f9b9d69
     for value in [
         " \"src/**\"",
         " [\"\"]",
@@ -147,7 +147,7 @@ fn bad_value() {
 
 #[test]
 fn the_frontmatter_check() {
-    // req:model/outside-globs@013b7044
+    // req:model/outside-globs@0f9b9d69
     let path = Path::new("specs/a/SPEC.md");
     let root = Path::new("specs/SPEC.md");
     let globs = format!("{FM}\noutside: [\"src/**\"]");

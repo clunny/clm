@@ -61,7 +61,7 @@ fn ids(graph: &Graph, layer: Layer) -> Vec<&str> {
 
 #[test]
 fn entries_load_with_ids_and_versions() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let graph = clean(&[
         ("ARCHITECTURE.md", &architecture(GIT_IS_TRUTH)),
         ("CAPABILITIES.md", &capabilities(APPROVE)),
@@ -85,7 +85,7 @@ fn entries_load_with_ids_and_versions() {
 
 #[test]
 fn entries_end_at_the_section_and_skip_fences() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let fenced = format!("{APPROVE}\n```markdown\n### Capability: inside\n```\n");
     let text = format!("{}\n## Later\nprose\n", capabilities(&fenced));
     let graph = clean(&[("CAPABILITIES.md", &text)]);
@@ -96,7 +96,7 @@ fn entries_end_at_the_section_and_skip_fences() {
 
 #[test]
 fn free_form_architecture_has_no_entries() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let old = "# Architecture\n\n## Layer 1 invariants\n\n- **`single-source`**: git holds it.\n- **`no-dead-code`**: remove it.\n\n## Glossary\n\n### Requirement\nA rule.\n";
     let graph = clean(&[("ARCHITECTURE.md", old)]);
     assert!(ids(&graph, Layer::Architecture).is_empty());
@@ -104,7 +104,7 @@ fn free_form_architecture_has_no_entries() {
 
 #[test]
 fn absent_files_have_no_entries() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let graph = clean(&[]);
     assert!(graph.layers.values().all(Vec::is_empty));
     assert_eq!(graph.requirements().count(), 0);
@@ -112,7 +112,7 @@ fn absent_files_have_no_entries() {
 
 #[test]
 fn entry_rules() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     const RULE: &str = "model/human-layers";
     let no_scenario = "### Constraint: x\nIt SHALL hold.\n";
     let no_shall = "### Constraint: x\nIt holds.\n\n#### Scenario: s\n- ok\n";
@@ -168,7 +168,7 @@ fn entry_rules() {
 
 #[test]
 fn non_utf8_layer_reported() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let mut files = files(&[]);
     files.insert(PathBuf::from("CAPABILITIES.md"), vec![0xff, 0xfe]);
     let (graph, violations) = load_files(&files);
@@ -180,7 +180,7 @@ fn non_utf8_layer_reported() {
 
 #[test]
 fn crlf_layer_same_version() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let lf = clean(&[("CAPABILITIES.md", &capabilities(APPROVE))]);
     let crlf = capabilities(APPROVE).replace('\n', "\r\n");
     let crlf = clean(&[("CAPABILITIES.md", &crlf)]);
@@ -218,7 +218,7 @@ const ENFORCED: &str = "### Constraint: x\nIt SHALL hold.\n\n#### Scenario: s\n-
 
 #[test]
 fn enforcement_blocks_load() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let nodes = [rules("a", &["y"]), rules("b", &["z"])];
     let untested_cap = APPROVE.replace("approve", "c") + "\n#### Untested\nNo program sees it.\n";
     let arch = architecture(&format!("{ENFORCED}\n{GIT_IS_TRUTH}"));
@@ -248,7 +248,7 @@ fn enforcement_blocks_load() {
 
 #[test]
 fn bad_enforcement() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let nodes = [rules("a", &["y"])];
     let gone = ENFORCED.replace("- b/z\n", "- a/gone\n");
     let cap = APPROVE.to_string() + "\n#### Enforced by\n- a/y\n";
@@ -288,7 +288,7 @@ fn bad_enforcement() {
 
 #[test]
 fn enforcement_block_rules() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     const RULE: &str = "model/human-layers";
     let nodes = [rules("a", &["y"]), rules("b", &["z"])];
     let base = "### Constraint: x\nIt SHALL hold.\n\n#### Scenario: s\n- ok\n";
@@ -332,7 +332,7 @@ fn enforcement_block_rules() {
 
 #[test]
 fn reserved_node_ids_rejected() {
-    // req:model/reserved-ids@5ee10777
+    // req:model/reserved-ids@13b0272d
     let path = "specs/architecture/SPEC.md";
     let graph = one_violation(
         &[(path, ROOT)],
@@ -376,7 +376,7 @@ const CAPABILITY_NODE: &str = "---\ntitle: Capabilities\nstatus: active\nowners:
 
 #[test]
 fn capability_node_loads() {
-    // req:model/reserved-ids@5ee10777
+    // req:model/reserved-ids@13b0272d
     let a = APPROVE.replace("approve", "a");
     let b = APPROVE.replace("approve", "b");
     let graph = clean(&[
@@ -406,7 +406,7 @@ fn capability_node_loads() {
 
 #[test]
 fn capability_tests_node_names_the_node() {
-    // req:model/capability-tests-component@f2664a6c
+    // req:model/capability-tests-component@598173d9
     let with = clean(&[("specs/capability/SPEC.md", CAPABILITY_NODE)]);
     assert_eq!(with.capability_tests_node(), "capability");
     assert_eq!(clean(&[]).capability_tests_node(), clm_model::ROOT_ID);
@@ -420,7 +420,7 @@ fn capability_tests_node_names_the_node() {
 
 #[test]
 fn requirement_in_capability_node() {
-    // req:model/reserved-ids@5ee10777
+    // req:model/reserved-ids@13b0272d
     let text = format!(
         "{CAPABILITY_NODE}\n## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Scenario: s\n- ok\n"
     );
@@ -450,7 +450,7 @@ fn need_on_entry_rejected() {
 
 #[test]
 fn blocks_may_name_an_entry() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let item = "---\ntitle: T\nkind: question\nblocks: [capability/approve, architecture/single-source]\n---\n";
     clean(&[
         ("ARCHITECTURE.md", &architecture(GIT_IS_TRUTH)),
@@ -479,7 +479,7 @@ fn removing_gone(status: &str) -> String {
 
 #[test]
 fn blocks_a_removed_capability() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let item = "---\ntitle: T\nkind: question\nblocks: [capability/gone]\n---\n";
     for status in ["applied", "implementing"] {
         let graph = clean(&[
@@ -516,7 +516,7 @@ fn blocks_a_removed_capability() {
 
 #[test]
 fn a_removed_entry_allows_no_architecture_block_or_enforcing_rule() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     // `architecture/<slug>` gains nothing from `removes_capabilities`.
     one_violation(
         &[
@@ -552,7 +552,7 @@ fn a_removed_entry_allows_no_architecture_block_or_enforcing_rule() {
 
 #[test]
 fn requirements_lists_entries_last() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     let a = format!(
         "{ROOT}\n## Requirements\n\n### Requirement: x\nIt SHALL.\n\n#### Scenario: s\n- ok\n"
     );
@@ -579,7 +579,7 @@ fn requirements_lists_entries_last() {
 
 #[test]
 fn layer_names() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     assert_eq!(Layer::ALL, [Layer::Architecture, Layer::Capability]);
     assert_eq!(Layer::Architecture.id(), "architecture");
     assert_eq!(Layer::Capability.file(), "CAPABILITIES.md");
@@ -591,7 +591,7 @@ fn layer_names() {
 
 #[test]
 fn load_files_same_as_load() {
-    // req:model/load-from-files@5011a677
+    // req:model/load-from-files@e29f9cdd
     let extra = [
         ("ARCHITECTURE.md", architecture(GIT_IS_TRUTH)),
         ("CAPABILITIES.md", capabilities(APPROVE)),
@@ -617,7 +617,7 @@ fn load_files_same_as_load() {
 
 #[test]
 fn friction_may_flag_an_entry() {
-    // req:model/parse-backlog@18344ef2
+    // req:model/parse-backlog@895ffaf8
     let version = &content_hash(APPROVE)[..8];
     let flag = |v: &str| {
         format!("---\ntitle: T\nkind: friction\nrequirement: capability/approve@{v}\n---\n")
@@ -639,7 +639,7 @@ fn friction_may_flag_an_entry() {
 
 #[test]
 fn node_parser_rejects_a_reserved_id() {
-    // req:model/graph-check@e0dbe7bc
+    // req:model/graph-check@c29a439f
     let path = Path::new("specs/architecture/SPEC.md");
     let (node, violations) = clm_model::parse_node("architecture", path, ROOT, &Default::default());
     assert!(node.is_none());
@@ -674,7 +674,7 @@ fn enforced_by_new(place: &str, status: &str, delta: &str) -> Vec<Violation> {
 
 #[test]
 fn enforcement_named_before_apply() {
-    // req:model/human-layers@c4f90bbc
+    // req:model/human-layers@5097da4e
     for status in ["proposed", "abandoned"] {
         let violations = enforced_by_new("c", status, ADDS_NEW);
         assert!(violations.is_empty(), "{status}: {violations:?}");

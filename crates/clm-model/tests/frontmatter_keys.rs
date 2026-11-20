@@ -39,7 +39,7 @@ fn change(root: &Path, dir: &str, status: &str, keys: &str) {
 
 #[test]
 fn declared_frontmatter_keys_are_parsed() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let dir = repo("");
     change(
         dir.path(),
@@ -63,7 +63,7 @@ fn declared_frontmatter_keys_are_parsed() {
 
 #[test]
 fn removed_capabilities_are_parsed() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let dir = repo("");
     change(
         dir.path(),
@@ -107,7 +107,7 @@ fn removed_capabilities_are_parsed() {
 
 #[test]
 fn malformed_capability_slugs_are_rejected() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     for bad in ["[Watch]", "[\"\"]", "[a_b]", "[a.b]", "watch", "[[a]]"] {
         let dir = repo("");
         change(
@@ -124,7 +124,7 @@ fn malformed_capability_slugs_are_rejected() {
 
 #[test]
 fn a_capability_still_in_the_file_is_accepted() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let dir = repo("");
     write(
         dir.path(),
@@ -147,7 +147,7 @@ fn a_capability_still_in_the_file_is_accepted() {
 
 #[test]
 fn malformed_key_names_are_rejected() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     for bad in [
         "[1st]", "[_x]", "[a-b]", "[\"\"]", "[a.b]", "colour", "[[a]]",
     ] {
@@ -166,7 +166,7 @@ fn malformed_key_names_are_rejected() {
 
 #[test]
 fn unknown_key_is_rejected() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let dir = repo("\ncolour: blue");
     change(
         dir.path(),
@@ -183,7 +183,7 @@ fn unknown_key_is_rejected() {
 
 #[test]
 fn key_a_live_change_declares() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let plain = repo("");
     let plain = &load(plain.path()).0.nodes["clm"];
     for extra in [
@@ -203,7 +203,7 @@ fn key_a_live_change_declares() {
 
 #[test]
 fn declaration_no_longer_live() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     for (dir_name, status) in [("archive/x", "done"), ("x", "abandoned")] {
         let dir = repo("\ncolour: blue");
         change(dir.path(), dir_name, status, "frontmatter_keys: [colour]\n");
@@ -216,7 +216,7 @@ fn declaration_no_longer_live() {
 
 #[test]
 fn unparseable_change_declares_nothing() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let dir = repo("\ncolour: blue");
     change(
         dir.path(),
@@ -233,7 +233,7 @@ fn unparseable_change_declares_nothing() {
 
 #[test]
 fn declared_key_the_model_knows() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let dir = repo("\noptional: maybe");
     change(dir.path(), "x", "applied", "frontmatter_keys: [optional]\n");
     let (_, violations) = load(dir.path());
@@ -260,7 +260,7 @@ fn declared_key_the_model_knows() {
 
 #[test]
 fn declared_keys_of_the_graph() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let dir = repo("");
     change(dir.path(), "a", "proposed", "frontmatter_keys: [colour]\n");
     change(dir.path(), "b", "abandoned", "frontmatter_keys: [size]\n");
@@ -288,7 +288,7 @@ fn declared_keys_of_the_graph() {
 
 #[test]
 fn errors_point_at_the_file_lines() {
-    // req:model/valid-frontmatter@b4618360
+    // req:model/valid-frontmatter@c5652d9e
     let declared = ["colour".to_string()].into();
     let fm = "colour:\n  - a\n  - b\ntitle: T\nowners: [\"@a\"]\nstatus: done";
     let errors =
@@ -298,7 +298,7 @@ fn errors_point_at_the_file_lines() {
 
 #[test]
 fn bare_frontmatter_keys_declare_none() {
-    // req:model/parse-changes@d4cfec66
+    // req:model/parse-changes@e4c8b4b0
     let dir = repo("");
     change(dir.path(), "x", "proposed", "frontmatter_keys:\n");
     let (graph, violations) = load(dir.path());
@@ -308,8 +308,8 @@ fn bare_frontmatter_keys_declare_none() {
 
 #[test]
 fn the_frontmatter_check_apply_shares() {
-    // req:model/valid-frontmatter@b4618360
-    // req:model/optional-nodes@37ade64d
+    // req:model/valid-frontmatter@c5652d9e
+    // req:model/optional-nodes@6b3b2803
     let path = Path::new("specs/a/SPEC.md");
     let declared = ["colour".to_string()].into();
     let with = |extra: &str| format!("{FM}{extra}");

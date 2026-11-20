@@ -56,7 +56,7 @@ const ADDS_X: &str =
 
 #[test]
 fn requirement_under_a_design_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta = "---\ncomponent: clm\n---\n## MODIFIED Design\nA paragraph.\n\n### Requirement: x\nThe model SHALL x.\n\n#### Scenario: s\n- y\n";
     let (graph, violations) = load_delta(delta);
     let found = misplaced(&violations);
@@ -68,7 +68,7 @@ fn requirement_under_a_design_section() {
 
 #[test]
 fn requirement_under_a_contract_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta = "---\ncomponent: a\ncreate: true\n---\n## Frontmatter\n```yaml\ntitle: A\nstatus: specd\nowners: []\n```\n\n## Contract\n### Requirement: x\n\n## Design\nd\n### Requirement: y\n";
     let (graph, violations) = load_delta(delta);
     let found = misplaced(&violations);
@@ -82,7 +82,7 @@ fn requirement_under_a_contract_section() {
 
 #[test]
 fn two_headings_in_one_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta = "---\ncomponent: clm\n---\n## MODIFIED Design\n### Requirement: x\nt\n### Requirement: y\nu\n";
     let found_in = load_delta(delta).1;
     let found = misplaced(&found_in);
@@ -93,7 +93,7 @@ fn two_headings_in_one_section() {
 
 #[test]
 fn text_before_the_first_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta = format!("---\ncomponent: clm\n---\n\nA rationale paragraph.\n\n{ADDS_X}");
     let (graph, violations) = load_delta(&delta);
     let found = misplaced(&violations);
@@ -104,7 +104,7 @@ fn text_before_the_first_section() {
 
 #[test]
 fn every_non_blank_line_before_the_first_section_counts() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     for before in ["<!-- note -->\n", "```\n## Not a section\n```\n"] {
         let delta = format!("---\ncomponent: clm\n---\n{before}{ADDS_X}");
         let violations = load_delta(&delta).1;
@@ -121,7 +121,7 @@ fn every_non_blank_line_before_the_first_section_counts() {
 
 #[test]
 fn heading_in_a_code_fence() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta =
         "---\ncomponent: clm\n---\n## MODIFIED Design\nd\n```markdown\n### Requirement: x\n```\n";
     let (graph, violations) = load_delta(delta);
@@ -135,7 +135,7 @@ fn heading_in_a_code_fence() {
 
 #[test]
 fn blank_lines_before_the_first_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta = format!("---\ncomponent: clm\n---\n\n\n{ADDS_X}");
     let (graph, violations) = load_delta(&delta);
     assert!(violations.is_empty(), "{violations:?}");
@@ -144,7 +144,7 @@ fn blank_lines_before_the_first_section() {
 
 #[test]
 fn reported_beside_the_other_rules() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     // A section another rule rejects is still judged by this one.
     let delta = "---\ncomponent: clm\nremove: true\n---\n## MODIFIED Design\n### Requirement: x\n";
     let violations = load_delta(delta).1;
@@ -157,7 +157,7 @@ fn reported_beside_the_other_rules() {
 
 #[test]
 fn heading_in_frontmatter_rationale_and_an_unknown_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta = "---\ncomponent: clm\n---\n## MODIFIED Frontmatter\nWhy.\n### Requirement: x\n```yaml\ntitle: T\n```\n\n## Odd\n### Requirement: y\n";
     let violations = load_delta(delta).1;
     let found = misplaced(&violations);
@@ -176,7 +176,7 @@ fn heading_in_frontmatter_rationale_and_an_unknown_section() {
 
 #[test]
 fn archived_delta_with_text_before_its_first_section() {
-    // req:model/misplaced-delta-text@4bb4e87b
+    // req:model/misplaced-delta-text@60cf2ee7
     let delta =
         "---\ncomponent: clm\n---\nA paragraph.\n\n## MODIFIED Design\nd\n### Requirement: x\n";
     let (graph, violations) = load_delta_in(delta, true);

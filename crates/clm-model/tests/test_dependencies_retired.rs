@@ -1,4 +1,4 @@
-//! `test_depends_on` is a key the model doesn't know.
+//! `valid-frontmatter`: `test_depends_on` is a key the model does not know.
 
 use std::fs;
 use std::path::Path;
@@ -10,7 +10,7 @@ const FM: &str = "title: T\nstatus: unbuilt\nowners: [\"@a\"]";
 
 #[test]
 fn test_dependencies_retired() {
-    // req:model/test-dependencies-retired@16bae7f6
+    // req:model/valid-frontmatter@c5652d9e
     let dir = TempDir::new().unwrap();
     for (id, extra) in [("", ""), ("a/", "\ntest_depends_on: [b]")] {
         let path = dir.path().join(format!("specs/{id}SPEC.md"));

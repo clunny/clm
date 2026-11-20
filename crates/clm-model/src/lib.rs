@@ -292,7 +292,7 @@ impl Graph {
     /// Whether node `id` or one of its ancestors in the graph sets `optional: true`
     /// (`optional-nodes`). The root's flag is rejected, so it is ignored here, and an ID
     /// not in the graph is required.
-    pub fn is_optional(&self, id: &str) -> bool {
+    fn is_optional(&self, id: &str) -> bool {
         let mut node = self.nodes.get(id);
         while let Some(n) = node {
             if n.frontmatter.optional && n.id != ROOT_ID {
@@ -1264,7 +1264,7 @@ mod tests {
 
     #[test]
     fn known_keys_are_the_frontmatter_fields() {
-        // req:model/valid-frontmatter@b4618360
+        // req:model/valid-frontmatter@c5652d9e
         let msg = serde_yaml::from_str::<Frontmatter>("zz_probe: 1")
             .unwrap_err()
             .to_string();
