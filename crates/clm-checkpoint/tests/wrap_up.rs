@@ -364,10 +364,16 @@ fn scenario_landed_work_cleaned_up() {
 }
 
 /// The landed `impl/x/a` of "landed work cleaned up", its worktree in
-/// `.claude/worktrees/agent-x-a` locked as Claude Code locks a subagent's, naming process
-/// `pid`. Returns the worktree's path.
-fn landed_build_locked_by(r: &Repo, pid: u32) -> PathBuf {
+/// `.claude/worktrees/agent-x-a`. Returns the worktree's path, canonical, as checkpoint
+/// prints it.
+fn landed_build(r: &Repo) -> PathBuf {
     let (wt, tip) = impl_worktree(r, "x/a");
+    land_code(r, "impl/x/a", &tip);
+    wt.canonicalize().unwrap()
+}
+
+/// Locks `wt` as Claude Code locks a subagent's worktree, naming process `pid`.
+fn lock_by(r: &Repo, wt: &Path, pid: u32) {
     let reason = format!("claude agent agent-1 (pid {pid} start 1)");
     git(
         &r.work,
@@ -379,16 +385,15 @@ fn landed_build_locked_by(r: &Repo, pid: u32) -> PathBuf {
             wt.to_str().unwrap(),
         ],
     );
-    land_code(r, "impl/x/a", &tip);
-    wt
 }
 
 #[test]
 fn scenario_a_running_subagents_worktree_kept() {
     // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
+    let wt = landed_build(&r);
     // This test's own process is running.
-    let wt = landed_build_locked_by(&r, std::process::id());
+    lock_by(&r, &wt, std::process::id());
 
     let (code, out) = checkpoint(&r.work);
     assert!(wt.exists(), "{out}");
@@ -399,10 +404,9 @@ fn scenario_a_running_subagents_worktree_kept() {
         .unwrap_or_else(|| panic!("{list}"));
     assert!(entry.contains("branch refs/heads/impl/x/a"), "{list}");
     assert!(exists(&r.work, "refs/heads/impl/x/a"), "{out}");
-    let shown = wt.display().to_string();
     assert!(
         !out.lines()
-            .any(|l| l.starts_with("removed ") && l.contains(&shown)),
+            .any(|l| l.starts_with("removed ") && l.contains("agent-x-a")),
         "{out}"
     );
     assert!(!out.lines().any(|l| l == "removed impl/x/a"), "{out}");
@@ -417,10 +421,12 @@ fn scenario_a_running_subagents_worktree_kept() {
 fn scenario_an_ended_sessions_worktree_removed() {
     // req:orchestrator.checkpoint/checkpoint@9f671f32
     let r = repo();
+    let wt = landed_build(&r);
+    // The child is reaped just before the wrap-up, so its ID has little time to be reused.
     let mut child = Command::new("true").spawn().unwrap();
     let pid = child.id();
     child.wait().unwrap();
-    let wt = landed_build_locked_by(&r, pid);
+    lock_by(&r, &wt, pid);
 
     let (code, out) = checkpoint(&r.work);
     assert!(!wt.exists(), "{out}");
