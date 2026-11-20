@@ -38,39 +38,46 @@ pub(crate) fn places_of(root: &Path, prefix: &str) -> Result<PathBuf, Error> {
     Ok(main.join(prefix).join(".clm"))
 }
 
-/// The tree at a commit, held exclusively until dropped.
+/// The tree at a commit.
 pub(crate) struct Tree {
     /// The CLM root inside the tree.
     pub(crate) dir: PathBuf,
-    _lock: File,
 }
 
 impl Tree {
-    /// Waits for the verify lock, then checks `commit` out, clean of untracked files (files
-    /// git ignores stay, so what the check builds serves the call's mutation pass, until
-    /// `clear` removes them at the call's end: `verify-tree-cleared`).
+    /// Waits for the verify lock, unless the call already holds it, then checks `commit` out,
+    /// clean of untracked files (files git ignores stay, so what the check builds serves the
+    /// call's mutation pass, until `clear` removes them at the call's end:
+    /// `verify-tree-cleared`). The call holds the lock from here until `clear`, so no other
+    /// call cleans or moves the tree between its check and its pass.
     pub(crate) fn at(ctx: &Ctx, commit: &str) -> Result<Tree, Error> {
         let places = places(ctx)?;
-        let lock = lock(&places.join("verify.lock"))?;
+        if ctx.tree_lock.borrow().is_none() {
+            let held = lock(&places.join("verify.lock"))?;
+            *ctx.tree_lock.borrow_mut() = Some(held);
+        }
         let top = places.join("verify-tree");
         checkout(&ctx.root, &top, commit)?;
         ctx.checked_out.set(true);
         Ok(Tree {
             dir: top.join(&ctx.prefix),
-            _lock: lock,
         })
     }
 }
 
 /// Removes from the verify tree every file git doesn't track, those it ignores included, as
-/// `git clean -ffdx` at its top does, under the verify lock taken afresh (`verify-tree-cleared`).
+/// `git clean -ffdx` at its top does, under the verify lock the call holds, which it then
+/// lets go (`verify-tree-cleared`).
 /// Only a tree whose own top git finds there is cleaned: in a tree whose `.git` is gone, git
 /// finds the main worktree around it. A clean that can't be made is said on stderr and
 /// changes nothing else.
 pub(crate) fn clear(ctx: &Ctx) {
     let cleared = || -> Result<(), String> {
         let places = places(ctx).map_err(|e| e.to_string())?;
-        let _lock = lock(&places.join("verify.lock")).map_err(|e| e.to_string())?;
+        let _lock = match ctx.tree_lock.borrow_mut().take() {
+            Some(held) => held,
+            None => lock(&places.join("verify.lock")).map_err(|e| e.to_string())?,
+        };
         let top = places.join("verify-tree");
         own_top(&top)?;
         clm_git::git(&top, &["clean", "--quiet", "-ffdx"]).map_err(|e| e.to_string())?;

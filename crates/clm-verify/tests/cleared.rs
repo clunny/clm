@@ -185,3 +185,72 @@ fn a_call_that_only_judged_a_trigger() {
     assert_eq!(out.code, 3);
     assert!(!tree.join("target").exists());
 }
+
+#[test]
+fn a_call_that_ends_in_an_error() {
+    // req:verify/verify-tree-cleared@f3a40445
+    let (f, base) = with_check("exit 0", "");
+    f.verified(&base, true);
+    // A commit whose `[env]` can't be used: `--commit` refuses it once it has checked it out.
+    let toml = std::fs::read_to_string(f.work().join("clm.toml")).unwrap();
+    let bad = f.land(
+        &[("clm.toml", &format!("{toml}[env]\nCLM_X = \"1\"\n"))],
+        "bad",
+    );
+    f.land(&[("clm.toml", &toml)], "good");
+    let tree = f.verify_tree();
+    f.git(
+        &f.work(),
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            tree.to_str().unwrap(),
+            "main",
+        ],
+    );
+    std::fs::create_dir_all(tree.join("target")).unwrap();
+    std::fs::write(tree.join("target/old"), "old\n").unwrap();
+    let out = common::verify(&f.work(), &clm_verify::Request::Commit(bad), &f.env());
+    assert!(matches!(out, Err(clm_verify::Error::Refused(_))), "{out:?}");
+    assert!(tree.join("specs").is_dir(), "the tree is still checked out");
+    assert!(!tree.join("target").exists());
+}
+
+#[test]
+fn no_other_call_has_the_tree_between_check_and_pass() {
+    // req:verify/verify-tree-cleared@f3a40445
+    let (f, base) = with_check("mkdir -p target && : > target/check", "");
+    f.verified(&base, true);
+    f.land(&[("a.txt", "1\n")], "one");
+    let lock = f.verify_tree().parent().unwrap().join("verify.lock");
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    let memory = f.path("no-such-meminfo");
+    let call = clm_verify::Call {
+        memory: &memory,
+        minute: std::time::Duration::from_secs(60),
+        grace: std::time::Duration::from_secs(10),
+        stop: &stop,
+    };
+    let request = clm_verify::Request::Due {
+        work_done: false,
+        dry_run: false,
+    };
+    let mut free = None;
+    // The outcome is announced after the check and before the pass.
+    let out = clm_verify::verify_with(&f.work(), &request, &f.env(), &call, |_| {
+        let file = std::fs::File::options().write(true).open(&lock).unwrap();
+        free = Some(file.try_lock().is_ok());
+    })
+    .unwrap();
+    assert_eq!(out.code, 0, "{}", out.line);
+    assert_eq!(
+        free,
+        Some(false),
+        "the verify lock was free after the check"
+    );
+    // And let go once the call is done.
+    let file = std::fs::File::options().write(true).open(&lock).unwrap();
+    assert!(file.try_lock().is_ok());
+}

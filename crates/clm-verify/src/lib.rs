@@ -16,7 +16,7 @@ mod tree;
 
 pub use kept::kept_log;
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -153,6 +153,8 @@ pub(crate) struct Ctx<'a> {
     /// Whether this call has checked a commit out into the verify tree, which it then clears
     /// before it returns (`verify-tree-cleared`).
     pub(crate) checked_out: Cell<bool>,
+    /// The verify tree's lock, held from the call's first checkout until it clears the tree.
+    pub(crate) tree_lock: RefCell<Option<std::fs::File>>,
 }
 
 impl<'a> Ctx<'a> {
@@ -186,6 +188,7 @@ impl<'a> Ctx<'a> {
             base,
             prefix,
             checked_out: Cell::new(false),
+            tree_lock: RefCell::new(None),
         }))
     }
 
@@ -248,6 +251,8 @@ pub fn verify_with(
     if ctx.checked_out.get() {
         tree::clear(&ctx);
     }
+    // Filing doesn't use the tree, so another call may have it meanwhile.
+    drop(ctx.tree_lock.take());
     let mut outcome = outcome?;
     // What the pass found reaches `main` as backlog items, whether or not a run was due
     // (`files-unproven`); only a clone in `local` mode holds the right to land them.
