@@ -377,6 +377,73 @@ fn no_merge_base() {
     assert!(fingerprint(d.path(), "main").is_ok());
 }
 
+#[test]
+fn clm_root_reads_its_own_specs_and_changes() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let d = repo(&[("tool/specs/a/SPEC.md", "a\n"), ("x.txt", "x\n")]);
+    git(d.path(), &["switch", "-qc", "adds"]);
+    commit(
+        d.path(),
+        &[
+            ("tool/changes/x/change.md", CHANGE),
+            ("tool/specs/a/SPEC.md", "a2\n"),
+        ],
+    );
+    let change = git(d.path(), &["rev-parse", "HEAD:tool/changes/x/change.md"]);
+    let tool = d.path().join("tool");
+    let want = hex(&["changes/x/change.md", "-", &format!("100644 blob {change}")]);
+    assert_eq!(fingerprint(&tool, "main").unwrap(), want);
+
+    git(d.path(), &["switch", "-qc", "outside", "main"]);
+    commit(
+        d.path(),
+        &[
+            ("changes/y/change.md", CHANGE),
+            ("tool/specs/a/SPEC.md", "a3\n"),
+        ],
+    );
+    let old = git(d.path(), &["rev-parse", "main:tool/specs/a/SPEC.md"]);
+    let new = git(d.path(), &["rev-parse", "HEAD:tool/specs/a/SPEC.md"]);
+    let want = hex(&[
+        "specs/a/SPEC.md",
+        &format!("100644 blob {old}"),
+        &format!("100644 blob {new}"),
+    ]);
+    assert_eq!(fingerprint(&tool, "main").unwrap(), want);
+}
+
+#[test]
+fn error_when_a_tree_cannot_be_listed() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let d = repo(&[("a.txt", "a\n")]);
+    git(d.path(), &["switch", "-qc", "topic"]);
+    commit(d.path(), &[("a.txt", "a2\n")]);
+    assert!(fingerprint(d.path(), "main").is_ok());
+    let tree = git(d.path(), &["rev-parse", "main^{tree}"]);
+    let object = d
+        .path()
+        .join(".git/objects")
+        .join(&tree[..2])
+        .join(&tree[2..]);
+    std::fs::remove_file(object).unwrap();
+    assert!(fingerprint(d.path(), "main").is_err());
+}
+
+#[test]
+fn fingerprint_of_runs_no_process() {
+    // req:gate.fingerprint/fingerprint@a2cadb29
+    let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fingerprint.rs");
+    let text = std::fs::read_to_string(src).unwrap();
+    assert!(
+        !text.contains("process::"),
+        "fingerprint_of's module uses std::process"
+    );
+    assert!(
+        !text.contains("clm_git"),
+        "fingerprint_of's module calls clm-git"
+    );
+}
+
 fn workspace() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
