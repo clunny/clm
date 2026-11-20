@@ -20,7 +20,8 @@ A sentence counts as one that only places a test when it holds a placement phras
 
 ## Outcome
 
-- `gate/cuts`: *places a test* is defined; a *stating sentence* holds `SHALL` and places no test; `clm-gate` offers `sentences(statement)` beside `stating_sentences` and `places_a_test`, which now returns a phrase only for a sentence that also holds `test` or `tests`. New scenario "a sentence of behaviour that holds a phrase". The Contract lists `sentences`.
+- `gate/cuts`: *places a test* is defined; a *stating sentence* holds `SHALL` and places no test; `clm-gate` offers `sentences(statement)` beside `stating_sentences` and `places_a_test`, which now returns a phrase only for a sentence that also holds `test` or `tests`. New scenario "a sentence of behaviour that holds a phrase". The defining sentence is split so the phrases and the word `test` fall in different sentences, so the one that names the phrases is counted. The Contract lists `sentences`.
+- `gate/rules-version`: `RULES` becomes 4, since the change makes some diffs need review that didn't (`audit-by-the-rules-in-force`); versions 1 to 3 decide review from the phrase-only count, the cuts the same under every version. New scenario "a sentence of behaviour that holds a phrase under each version". The Design's list of versions gains version 4.
 - `check.health/rule-signals`: `test-placement` splits a statement with `sentences` and asks `places_a_test` of each. New scenario "a phrase in a sentence of behaviour". The Design names `sentences` among what it takes from `gate`.
 - `docs/decisions/cuts-are-what-a-program-lists.md` is amended to the narrower rule.
 
@@ -31,6 +32,7 @@ A sentence counts as one that only places a test when it holds a placement phras
 
 ## Edge cases and workarounds
 
+- A behaviour sentence that names a `tests` directory and holds a phrase ("... is left in `crates/clm/tests/`") is left out too, since the path holds the word.
 - A sentence of behaviour that holds a placement phrase and the word `test` or `tests` (say, "a test run is left in the queue") is still left out of the count; that residue stays a reader's, as the decision says.
 
 ## What the requirements no longer state
@@ -39,4 +41,4 @@ Nothing: no sentence holding `SHALL` is removed.
 
 ## Open questions
 
-None.
+- `check.health`'s statement reader leaves out lines inside fenced blocks and `gate`'s keeps them, so for a statement holding a fence the two can split sentences differently. No requirement in `specs/` holds a placement phrase inside a fence, so this change leaves both readers as they are.
