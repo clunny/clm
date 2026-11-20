@@ -1040,7 +1040,7 @@ fn hashes_of_a_layer_without_its_node() {
 
 #[test]
 fn hashes_lists_assets_after_requirements() {
-    // req:apply/hash-command@4b76b466
+    // req:apply/hash-command@4b76b466 req:apply/apply-assets@04b6c8ee
     let dir = repo(&[]);
     let d = dir.path();
     write(d, "specs/a/assets/z.txt", "z\n");
