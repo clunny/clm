@@ -1,5 +1,5 @@
 ---
-status: applied
+status: done
 resolves: [a-linked-worktree-of-a-clone-with-a-separate-git-directory-reads]
 ---
 
